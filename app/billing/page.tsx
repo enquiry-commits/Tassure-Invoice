@@ -234,9 +234,9 @@ export default function BillingPage() {
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 320px)', overflowY: 'auto' }}>
           <table className="w-full text-sm border-collapse">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr className="bg-slate-50 border-b border-slate-200">
                 <th className="w-6 px-3 py-3"></th>
                 <th className="text-left px-4 py-3 font-semibold text-slate-700">Company Name</th>
