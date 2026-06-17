@@ -1,0 +1,5186 @@
+{
+  "scraped_at": "2026-06-17T08:19:03.826Z",
+  "total": 518,
+  "invoices": [
+    {
+      "id": "1",
+      "invoiceNo": "02610282",
+      "txnDate": "17/3/26",
+      "customerName": "Fun Bridge Pte Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 24/3/26"
+    },
+    {
+      "id": "2",
+      "invoiceNo": "02610283",
+      "txnDate": "17/3/26",
+      "customerName": "Filmnova Pte. Limited",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 24/3/26"
+    },
+    {
+      "id": "3",
+      "invoiceNo": "02610284",
+      "txnDate": "17/3/26",
+      "customerName": "Golden Range Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 24/3/26"
+    },
+    {
+      "id": "4",
+      "invoiceNo": "02610285",
+      "txnDate": "17/3/26",
+      "customerName": "Gerito Technology Pte Ltd",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 24/3/26"
+    },
+    {
+      "id": "5",
+      "invoiceNo": "02610301",
+      "txnDate": "19/3/26",
+      "customerName": "Hai Hua International Pte. Ltd.",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 26/3/26"
+    },
+    {
+      "id": "6",
+      "invoiceNo": "02610308",
+      "txnDate": "19/3/26",
+      "customerName": "Horakhty Global Holdings Pte. Ltd",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 26/3/26"
+    },
+    {
+      "id": "7",
+      "invoiceNo": "02610309",
+      "txnDate": "19/3/26",
+      "customerName": "Horus Digital Pte Ltd",
+      "totalAmt": 1160,
+      "balance": 1160,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 26/3/26"
+    },
+    {
+      "id": "8",
+      "invoiceNo": "02610312",
+      "txnDate": "19/3/26",
+      "customerName": "Huayu Metal Materials Pte. Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 26/3/26"
+    },
+    {
+      "id": "9",
+      "invoiceNo": "02610313",
+      "txnDate": "19/3/26",
+      "customerName": "Huayukeji Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 26/3/26"
+    },
+    {
+      "id": "10",
+      "invoiceNo": "02610314",
+      "txnDate": "19/3/26",
+      "customerName": "Icomintal Pte Ltd",
+      "totalAmt": 1360,
+      "balance": 1360,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 26/3/26"
+    },
+    {
+      "id": "11",
+      "invoiceNo": "02610315",
+      "txnDate": "19/3/26",
+      "customerName": "Innosavv Media Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 26/3/26"
+    },
+    {
+      "id": "12",
+      "invoiceNo": "02610316",
+      "txnDate": "19/3/26",
+      "customerName": "Iuiga Technologies Pte. Ltd.",
+      "totalAmt": 1260,
+      "balance": 1260,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 26/3/26"
+    },
+    {
+      "id": "13",
+      "invoiceNo": "02610317",
+      "txnDate": "19/3/26",
+      "customerName": "Iuiga One Retail Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 26/3/26"
+    },
+    {
+      "id": "14",
+      "invoiceNo": "02610325",
+      "txnDate": "24/3/26",
+      "customerName": "Jorya International (Singapore) Pte. Ltd.",
+      "totalAmt": 2360,
+      "balance": 2360,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 31/3/26"
+    },
+    {
+      "id": "15",
+      "invoiceNo": "02610329",
+      "txnDate": "24/3/26",
+      "customerName": "Jinxin Health Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 31/3/26"
+    },
+    {
+      "id": "16",
+      "invoiceNo": "02610331",
+      "txnDate": "24/3/26",
+      "customerName": "Jianling Nanyang Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 31/3/26"
+    },
+    {
+      "id": "17",
+      "invoiceNo": "02610333",
+      "txnDate": "24/3/26",
+      "customerName": "Keensync Pte. Ltd.",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 31/3/26"
+    },
+    {
+      "id": "18",
+      "invoiceNo": "02610341",
+      "txnDate": "24/3/26",
+      "customerName": "LSR Globe Pte. Ltd.",
+      "totalAmt": 2060,
+      "balance": 2060,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 31/3/26"
+    },
+    {
+      "id": "19",
+      "invoiceNo": "02610346",
+      "txnDate": "25/3/26",
+      "customerName": "Lookthatpeople Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 1/4/26"
+    },
+    {
+      "id": "20",
+      "invoiceNo": "02610348",
+      "txnDate": "25/3/26",
+      "customerName": "MG Celeste Trading Pte Ltd",
+      "totalAmt": 960,
+      "balance": 960,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 1/4/26"
+    },
+    {
+      "id": "21",
+      "invoiceNo": "02610349",
+      "txnDate": "25/3/26",
+      "customerName": "Moyuan Culture Education Centre Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 1/4/26"
+    },
+    {
+      "id": "22",
+      "invoiceNo": "02610351",
+      "txnDate": "25/3/26",
+      "customerName": "Woodnote Consulting Pte. Ltd.",
+      "totalAmt": 700,
+      "balance": 700,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 1/4/26"
+    },
+    {
+      "id": "23",
+      "invoiceNo": "02610353",
+      "txnDate": "25/3/26",
+      "customerName": "Mnk Tech Service Pte. Ltd",
+      "totalAmt": 960,
+      "balance": 960,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 1/4/26"
+    },
+    {
+      "id": "24",
+      "invoiceNo": "DN26-049",
+      "txnDate": "20/3/26",
+      "customerName": "Shi E Xin Run InternationalTrading Pte Ltd",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 27/3/26"
+    },
+    {
+      "id": "25",
+      "invoiceNo": "DN26-050",
+      "txnDate": "23/3/26",
+      "customerName": "Terracool Technology (S) Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 30/3/26"
+    },
+    {
+      "id": "26",
+      "invoiceNo": "DN26-051",
+      "txnDate": "24/3/26",
+      "customerName": "Richance Pte Ltd",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 31/3/26"
+    },
+    {
+      "id": "27",
+      "invoiceNo": "02610444",
+      "txnDate": "14/4/26",
+      "customerName": "Sayhi Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 57 days"
+    },
+    {
+      "id": "28",
+      "invoiceNo": "02610360",
+      "txnDate": "26/3/26",
+      "customerName": "Meridian International Education & Training Centre",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 2/4/26"
+    },
+    {
+      "id": "29",
+      "invoiceNo": "02610361",
+      "txnDate": "26/3/26",
+      "customerName": "Mascot Cultural & Creative Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 2/4/26"
+    },
+    {
+      "id": "30",
+      "invoiceNo": "02610363",
+      "txnDate": "26/3/26",
+      "customerName": "Menusifu Pte. Ltd.",
+      "totalAmt": 1920,
+      "balance": 1920,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 2/4/26"
+    },
+    {
+      "id": "31",
+      "invoiceNo": "02610448",
+      "txnDate": "14/4/26",
+      "customerName": "Singapore Cambridge Edu & Inves Consult P/L",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 57 days"
+    },
+    {
+      "id": "32",
+      "invoiceNo": "02610449",
+      "txnDate": "14/4/26",
+      "customerName": "SHIMMER GAMES PTE. LTD.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue 57 days"
+    },
+    {
+      "id": "33",
+      "invoiceNo": "02610370",
+      "txnDate": "27/3/26",
+      "customerName": "Openkids International Pte Ltd",
+      "totalAmt": 1200,
+      "balance": 1200,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 3/4/26"
+    },
+    {
+      "id": "34",
+      "invoiceNo": "02610372",
+      "txnDate": "27/3/26",
+      "customerName": "NEWLIFE CONFINEMENT SERVICES PTE. LTD.",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 3/4/26"
+    },
+    {
+      "id": "35",
+      "invoiceNo": "02610380",
+      "txnDate": "30/3/26",
+      "customerName": "Tassure Asia Outsourcez Pte Ltd",
+      "totalAmt": 16377.25,
+      "balance": 16377.25,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 6/4/26"
+    },
+    {
+      "id": "36",
+      "invoiceNo": "02610384",
+      "txnDate": "31/3/26",
+      "customerName": "Openkids International Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 7/4/26"
+    },
+    {
+      "id": "37",
+      "invoiceNo": "02610385",
+      "txnDate": "31/3/26",
+      "customerName": "Petram Pte Ltd",
+      "totalAmt": 1360,
+      "balance": 1360,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 7/4/26"
+    },
+    {
+      "id": "38",
+      "invoiceNo": "02610388",
+      "txnDate": "31/3/26",
+      "customerName": "Pertop Management Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 7/4/26"
+    },
+    {
+      "id": "39",
+      "invoiceNo": "02610389",
+      "txnDate": "31/3/26",
+      "customerName": "Pertop Technology Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 7/4/26"
+    },
+    {
+      "id": "40",
+      "invoiceNo": "02610390",
+      "txnDate": "31/3/26",
+      "customerName": "Q&E Smart Home System & Electrical Engrg Pte Ltd",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 7/4/26"
+    },
+    {
+      "id": "41",
+      "invoiceNo": "02610391",
+      "txnDate": "31/3/26",
+      "customerName": "Qap Leisure Pte. Ltd.",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 7/4/26"
+    },
+    {
+      "id": "42",
+      "invoiceNo": "02610396",
+      "txnDate": "1/4/26",
+      "customerName": "Hong He Yi Pte. Ltd.",
+      "totalAmt": 125.5,
+      "balance": 125.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 8/4/26"
+    },
+    {
+      "id": "43",
+      "invoiceNo": "02610401",
+      "txnDate": "1/4/26",
+      "customerName": "Shi E Xin Run InternationalTrading Pte Ltd",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 8/4/26"
+    },
+    {
+      "id": "44",
+      "invoiceNo": "02610402",
+      "txnDate": "1/4/26",
+      "customerName": "Neostra Investment Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 8/4/26"
+    },
+    {
+      "id": "45",
+      "invoiceNo": "02610409",
+      "txnDate": "7/4/26",
+      "customerName": "Rong Huida Engineering Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 14/4/26"
+    },
+    {
+      "id": "46",
+      "invoiceNo": "02610412",
+      "txnDate": "7/4/26",
+      "customerName": "Stopia Trading Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 14/4/26"
+    },
+    {
+      "id": "47",
+      "invoiceNo": "02610413",
+      "txnDate": "7/4/26",
+      "customerName": "Scentses AndCo Pte. Ltd.",
+      "totalAmt": 1560,
+      "balance": 1560,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 14/4/26"
+    },
+    {
+      "id": "48",
+      "invoiceNo": "02610420",
+      "txnDate": "8/4/26",
+      "customerName": "Han Kun LLP",
+      "totalAmt": 35,
+      "balance": 35,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 15/4/26"
+    },
+    {
+      "id": "49",
+      "invoiceNo": "02610424",
+      "txnDate": "8/4/26",
+      "customerName": "Shou Hang Pte. Ltd.",
+      "totalAmt": 105.5,
+      "balance": 105.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 15/4/26"
+    },
+    {
+      "id": "50",
+      "invoiceNo": "02610425",
+      "txnDate": "8/4/26",
+      "customerName": "Scentses AndCo Pte. Ltd.",
+      "totalAmt": 1560,
+      "balance": 1560,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 15/4/26"
+    },
+    {
+      "id": "51",
+      "invoiceNo": "02610428",
+      "txnDate": "8/4/26",
+      "customerName": "San Yi Lease Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 15/4/26"
+    },
+    {
+      "id": "52",
+      "invoiceNo": "02610431",
+      "txnDate": "9/4/26",
+      "customerName": "Acumen Tech Pte Ltd",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 16/4/26"
+    },
+    {
+      "id": "53",
+      "invoiceNo": "DN26-060",
+      "txnDate": "10/4/26",
+      "customerName": "Bao Ning Shipping Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 17/4/26"
+    },
+    {
+      "id": "54",
+      "invoiceNo": "02610455",
+      "txnDate": "15/4/26",
+      "customerName": "Singapore Xin Zhi Tech Edu Study Abo M Centre P/L",
+      "totalAmt": 265,
+      "balance": 265,
+      "status": "Overdue",
+      "statusRaw": "Overdue 56 days"
+    },
+    {
+      "id": "55",
+      "invoiceNo": "DN26-062",
+      "txnDate": "16/4/26",
+      "customerName": "Ocean Heavy Industries Pte Ltd",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue 55 days"
+    },
+    {
+      "id": "56",
+      "invoiceNo": "02610470",
+      "txnDate": "16/4/26",
+      "customerName": "Alpana Partners Pte. Ltd.",
+      "totalAmt": 700,
+      "balance": 700,
+      "status": "Overdue",
+      "statusRaw": "Overdue 55 days"
+    },
+    {
+      "id": "57",
+      "invoiceNo": "02610472",
+      "txnDate": "16/4/26",
+      "customerName": "Tafa Holding Pte. Ltd.",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Overdue",
+      "statusRaw": "Overdue 55 days"
+    },
+    {
+      "id": "58",
+      "invoiceNo": "02610482",
+      "txnDate": "20/4/26",
+      "customerName": "Tomokaka Holding Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Overdue",
+      "statusRaw": "Overdue 51 days"
+    },
+    {
+      "id": "59",
+      "invoiceNo": "02610489",
+      "txnDate": "21/4/26",
+      "customerName": "Lucky Enterprises Singapore Pte. Ltd.",
+      "totalAmt": 2060,
+      "balance": 2060,
+      "status": "Overdue",
+      "statusRaw": "Overdue 50 days"
+    },
+    {
+      "id": "60",
+      "invoiceNo": "02610491",
+      "txnDate": "21/4/26",
+      "customerName": "Truenorth Management Advisory Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 50 days"
+    },
+    {
+      "id": "61",
+      "invoiceNo": "02610498",
+      "txnDate": "22/4/26",
+      "customerName": "Vega Solutions Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 49 days"
+    },
+    {
+      "id": "62",
+      "invoiceNo": "02610504",
+      "txnDate": "24/4/26",
+      "customerName": "Wangxiaozan ACM Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 47 days"
+    },
+    {
+      "id": "63",
+      "invoiceNo": "02610505",
+      "txnDate": "24/4/26",
+      "customerName": "Wangxiaozan Singapore Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 47 days"
+    },
+    {
+      "id": "64",
+      "invoiceNo": "02610507",
+      "txnDate": "24/4/26",
+      "customerName": "Xinrui Trade Pte Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 47 days"
+    },
+    {
+      "id": "65",
+      "invoiceNo": "02610508",
+      "txnDate": "24/4/26",
+      "customerName": "Xiao Shu Fu Spa Pte Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Overdue",
+      "statusRaw": "Overdue 47 days"
+    },
+    {
+      "id": "66",
+      "invoiceNo": "02610509",
+      "txnDate": "24/4/26",
+      "customerName": "Bao Fortune Shipping (G) Pte. Ltd.",
+      "totalAmt": 105.5,
+      "balance": 105.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue 47 days"
+    },
+    {
+      "id": "67",
+      "invoiceNo": "DN26-068",
+      "txnDate": "27/4/26",
+      "customerName": "Sanit Balwyn Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue 44 days"
+    },
+    {
+      "id": "68",
+      "invoiceNo": "02610513",
+      "txnDate": "27/4/26",
+      "customerName": "World Precision Machinery Limited",
+      "totalAmt": 103.3,
+      "balance": 103.3,
+      "status": "Overdue",
+      "statusRaw": "Overdue 44 days"
+    },
+    {
+      "id": "69",
+      "invoiceNo": "02610514",
+      "txnDate": "27/4/26",
+      "customerName": "ANDA TECHNOLOGY PTE. LTD.",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Overdue",
+      "statusRaw": "Overdue 44 days"
+    },
+    {
+      "id": "70",
+      "invoiceNo": "02610521",
+      "txnDate": "28/4/26",
+      "customerName": "Huako Photo Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Overdue",
+      "statusRaw": "Overdue 43 days"
+    },
+    {
+      "id": "71",
+      "invoiceNo": "02610522",
+      "txnDate": "28/4/26",
+      "customerName": "Xpel Pte. Ltd.",
+      "totalAmt": 2420,
+      "balance": 2420,
+      "status": "Overdue",
+      "statusRaw": "Overdue 43 days"
+    },
+    {
+      "id": "72",
+      "invoiceNo": "02610523",
+      "txnDate": "28/4/26",
+      "customerName": "XINCONNECT PTE. LTD.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue 43 days"
+    },
+    {
+      "id": "73",
+      "invoiceNo": "02610528",
+      "txnDate": "28/4/26",
+      "customerName": "Yufeng Medical Technology Pte Ltd",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Overdue",
+      "statusRaw": "Overdue 43 days"
+    },
+    {
+      "id": "74",
+      "invoiceNo": "02610534",
+      "txnDate": "28/4/26",
+      "customerName": "Comtom Pte. Ltd.",
+      "totalAmt": 2120,
+      "balance": 2120,
+      "status": "Overdue",
+      "statusRaw": "Overdue 43 days"
+    },
+    {
+      "id": "75",
+      "invoiceNo": "02610535",
+      "txnDate": "29/4/26",
+      "customerName": "NxDoor Management Private Limited",
+      "totalAmt": 1760,
+      "balance": 1760,
+      "status": "Overdue",
+      "statusRaw": "Overdue 42 days"
+    },
+    {
+      "id": "76",
+      "invoiceNo": "02610539",
+      "txnDate": "29/4/26",
+      "customerName": "Leenden Biotech Development One Private Ltd",
+      "totalAmt": 960,
+      "balance": 960,
+      "status": "Overdue",
+      "statusRaw": "Overdue 42 days"
+    },
+    {
+      "id": "77",
+      "invoiceNo": "02610540",
+      "txnDate": "29/4/26",
+      "customerName": "Leenden Research And Consulting Private Ltd.",
+      "totalAmt": 860,
+      "balance": 860,
+      "status": "Overdue",
+      "statusRaw": "Overdue 42 days"
+    },
+    {
+      "id": "78",
+      "invoiceNo": "02610541",
+      "txnDate": "29/4/26",
+      "customerName": "NEW TALI MARITIME PTE. LTD.",
+      "totalAmt": 2220,
+      "balance": 2220,
+      "status": "Overdue",
+      "statusRaw": "Overdue 42 days"
+    },
+    {
+      "id": "79",
+      "invoiceNo": "02610544",
+      "txnDate": "30/4/26",
+      "customerName": "Mitrade Foundation Limited",
+      "totalAmt": 2660,
+      "balance": 2660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 41 days"
+    },
+    {
+      "id": "80",
+      "invoiceNo": "02610545",
+      "txnDate": "30/4/26",
+      "customerName": "Faith Capital Glocal Fund VCC",
+      "totalAmt": 1300,
+      "balance": 1300,
+      "status": "Overdue",
+      "statusRaw": "Overdue 41 days"
+    },
+    {
+      "id": "81",
+      "invoiceNo": "02610547",
+      "txnDate": "30/4/26",
+      "customerName": "EVOP (Singapore) International Pte. Ltd.",
+      "totalAmt": 1800,
+      "balance": 1800,
+      "status": "Overdue",
+      "statusRaw": "Overdue 41 days"
+    },
+    {
+      "id": "82",
+      "invoiceNo": "02610549",
+      "txnDate": "30/4/26",
+      "customerName": "ANMED TECHNOLOGIES PTE. LTD.",
+      "totalAmt": 2960,
+      "balance": 2960,
+      "status": "Overdue",
+      "statusRaw": "Overdue 41 days"
+    },
+    {
+      "id": "83",
+      "invoiceNo": "02610551",
+      "txnDate": "30/4/26",
+      "customerName": "Perennial Summit Holdings Pte. Ltd.",
+      "totalAmt": 2100,
+      "balance": 2100,
+      "status": "Overdue",
+      "statusRaw": "Overdue 41 days"
+    },
+    {
+      "id": "84",
+      "invoiceNo": "02610552",
+      "txnDate": "30/4/26",
+      "customerName": "T-Coating Specialist Pte. Ltd.",
+      "totalAmt": 1800,
+      "balance": 1800,
+      "status": "Overdue",
+      "statusRaw": "Overdue 41 days"
+    },
+    {
+      "id": "85",
+      "invoiceNo": "02610553",
+      "txnDate": "30/4/26",
+      "customerName": "Livai Crafting Pte. Ltd.",
+      "totalAmt": 1600,
+      "balance": 1600,
+      "status": "Overdue",
+      "statusRaw": "Overdue 41 days"
+    },
+    {
+      "id": "86",
+      "invoiceNo": "02610555",
+      "txnDate": "30/4/26",
+      "customerName": "PORT AND BRIDGE CAPITAL PTE. LTD.",
+      "totalAmt": 1220,
+      "balance": 1220,
+      "status": "Overdue",
+      "statusRaw": "Overdue 41 days"
+    },
+    {
+      "id": "87",
+      "invoiceNo": "DN26-074",
+      "txnDate": "5/5/26",
+      "customerName": "Tafa Holding Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Overdue",
+      "statusRaw": "Overdue 36 days"
+    },
+    {
+      "id": "88",
+      "invoiceNo": "02610565",
+      "txnDate": "5/5/26",
+      "customerName": "Whale Art Museum Pte. Ltd.",
+      "totalAmt": 1360,
+      "balance": 1360,
+      "status": "Overdue",
+      "statusRaw": "Overdue 36 days"
+    },
+    {
+      "id": "89",
+      "invoiceNo": "02610566",
+      "txnDate": "5/5/26",
+      "customerName": "Iuiga Technologies Pte. Ltd.",
+      "totalAmt": 2455.5,
+      "balance": 2455.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue 36 days"
+    },
+    {
+      "id": "90",
+      "invoiceNo": "DN26-080",
+      "txnDate": "5/5/26",
+      "customerName": "ICON SHIPBROKERS PTE LTD",
+      "totalAmt": 3200,
+      "balance": 3200,
+      "status": "Overdue",
+      "statusRaw": "Overdue 36 days"
+    },
+    {
+      "id": "91",
+      "invoiceNo": "02610567",
+      "txnDate": "6/5/26",
+      "customerName": "Neostra Electronics Pte Ltd",
+      "totalAmt": 1620,
+      "balance": 1620,
+      "status": "Overdue",
+      "statusRaw": "Overdue 35 days"
+    },
+    {
+      "id": "92",
+      "invoiceNo": "02610571",
+      "txnDate": "6/5/26",
+      "customerName": "JFJ Global Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue 35 days"
+    },
+    {
+      "id": "93",
+      "invoiceNo": "02610576",
+      "txnDate": "7/5/26",
+      "customerName": "Ek Derma Lab Pte. Ltd.",
+      "totalAmt": 1260,
+      "balance": 1260,
+      "status": "Overdue",
+      "statusRaw": "Overdue 34 days"
+    },
+    {
+      "id": "94",
+      "invoiceNo": "02610577",
+      "txnDate": "7/5/26",
+      "customerName": "FT AI & Software Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue 34 days"
+    },
+    {
+      "id": "95",
+      "invoiceNo": "02610579",
+      "txnDate": "7/5/26",
+      "customerName": "Kai Xin (RCEP) Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Overdue",
+      "statusRaw": "Overdue 34 days"
+    },
+    {
+      "id": "96",
+      "invoiceNo": "02610580",
+      "txnDate": "7/5/26",
+      "customerName": "Singapore Hua Jin Investment Pte Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Overdue",
+      "statusRaw": "Overdue 34 days"
+    },
+    {
+      "id": "97",
+      "invoiceNo": "02610581",
+      "txnDate": "7/5/26",
+      "customerName": "Traction Marine Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Overdue",
+      "statusRaw": "Overdue 34 days"
+    },
+    {
+      "id": "98",
+      "invoiceNo": "02610583",
+      "txnDate": "7/5/26",
+      "customerName": "Vistachem Singapore (Pte. Ltd.)",
+      "totalAmt": 1660,
+      "balance": 1660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 34 days"
+    },
+    {
+      "id": "99",
+      "invoiceNo": "DN26-081",
+      "txnDate": "11/5/26",
+      "customerName": "Hong Xin Da Pte Ltd",
+      "totalAmt": 10,
+      "balance": 10,
+      "status": "Overdue",
+      "statusRaw": "Overdue 30 days"
+    },
+    {
+      "id": "100",
+      "invoiceNo": "02610592",
+      "txnDate": "12/5/26",
+      "customerName": "NOVA GOLDEN ALPHA PTE. LTD.",
+      "totalAmt": 599.5,
+      "balance": 599.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue 29 days"
+    },
+    {
+      "id": "101",
+      "invoiceNo": "02610598",
+      "txnDate": "12/5/26",
+      "customerName": "Hilink Tech Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Overdue",
+      "statusRaw": "Overdue 29 days"
+    },
+    {
+      "id": "102",
+      "invoiceNo": "02610599",
+      "txnDate": "12/5/26",
+      "customerName": "Mastering Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 29 days"
+    },
+    {
+      "id": "103",
+      "invoiceNo": "02610600",
+      "txnDate": "12/5/26",
+      "customerName": "R&RONG Trading Pte. Ltd.",
+      "totalAmt": 1220,
+      "balance": 1220,
+      "status": "Overdue",
+      "statusRaw": "Overdue 29 days"
+    },
+    {
+      "id": "104",
+      "invoiceNo": "02610602",
+      "txnDate": "13/5/26",
+      "customerName": "Silkway Energy Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Overdue",
+      "statusRaw": "Overdue 28 days"
+    },
+    {
+      "id": "105",
+      "invoiceNo": "02610603",
+      "txnDate": "13/5/26",
+      "customerName": "Taiyau Trading Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Overdue",
+      "statusRaw": "Overdue 28 days"
+    },
+    {
+      "id": "106",
+      "invoiceNo": "02610604",
+      "txnDate": "13/5/26",
+      "customerName": "Sunlight Innovation Pte. Ltd",
+      "totalAmt": 55.5,
+      "balance": 55.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue 28 days"
+    },
+    {
+      "id": "107",
+      "invoiceNo": "02610607",
+      "txnDate": "15/5/26",
+      "customerName": "Aquila Education (Employee) Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Overdue",
+      "statusRaw": "Overdue 26 days"
+    },
+    {
+      "id": "108",
+      "invoiceNo": "02610611",
+      "txnDate": "19/5/26",
+      "customerName": "ANMED TECHNOLOGIES PTE. LTD.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Overdue",
+      "statusRaw": "Overdue 22 days"
+    },
+    {
+      "id": "109",
+      "invoiceNo": "02610614",
+      "txnDate": "20/5/26",
+      "customerName": "YHS (Singapore) Pte Ltd",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Overdue",
+      "statusRaw": "Overdue 21 days"
+    },
+    {
+      "id": "110",
+      "invoiceNo": "02610615",
+      "txnDate": "21/5/26",
+      "customerName": "Fun Bridge Pte Ltd",
+      "totalAmt": 500,
+      "balance": 500,
+      "status": "Overdue",
+      "statusRaw": "Overdue 20 days"
+    },
+    {
+      "id": "111",
+      "invoiceNo": "02610620",
+      "txnDate": "21/5/26",
+      "customerName": "Pine-Top Pte Ltd",
+      "totalAmt": 960,
+      "balance": 960,
+      "status": "Overdue",
+      "statusRaw": "Overdue 20 days"
+    },
+    {
+      "id": "112",
+      "invoiceNo": "02610623",
+      "txnDate": "22/5/26",
+      "customerName": "YHS International Pte. Ltd.",
+      "totalAmt": 600,
+      "balance": 600,
+      "status": "Overdue",
+      "statusRaw": "Overdue 19 days"
+    },
+    {
+      "id": "113",
+      "invoiceNo": "02610624",
+      "txnDate": "22/5/26",
+      "customerName": "Vega Solutions Pte. Ltd.",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Overdue",
+      "statusRaw": "Overdue 19 days"
+    },
+    {
+      "id": "114",
+      "invoiceNo": "02610626",
+      "txnDate": "25/5/26",
+      "customerName": "YHS Beverage Pte Ltd",
+      "totalAmt": 500,
+      "balance": 500,
+      "status": "Overdue",
+      "statusRaw": "Overdue 16 days"
+    },
+    {
+      "id": "115",
+      "invoiceNo": "02610628",
+      "txnDate": "25/5/26",
+      "customerName": "YHS Investment Pte. Ltd.",
+      "totalAmt": 600,
+      "balance": 600,
+      "status": "Overdue",
+      "statusRaw": "Overdue 16 days"
+    },
+    {
+      "id": "116",
+      "invoiceNo": "02610629",
+      "txnDate": "26/5/26",
+      "customerName": "YHS Private Limited",
+      "totalAmt": 500,
+      "balance": 500,
+      "status": "Overdue",
+      "statusRaw": "Overdue 15 days"
+    },
+    {
+      "id": "117",
+      "invoiceNo": "02610630",
+      "txnDate": "26/5/26",
+      "customerName": "YHS Ventures (Cambodia) Pte. Ltd.",
+      "totalAmt": 500,
+      "balance": 500,
+      "status": "Overdue",
+      "statusRaw": "Overdue 15 days"
+    },
+    {
+      "id": "118",
+      "invoiceNo": "02610631",
+      "txnDate": "26/5/26",
+      "customerName": "YHS-Ecom Pte Ltd",
+      "totalAmt": 500,
+      "balance": 500,
+      "status": "Overdue",
+      "statusRaw": "Overdue 15 days"
+    },
+    {
+      "id": "119",
+      "invoiceNo": "DN26-087",
+      "txnDate": "26/5/26",
+      "customerName": "Sanex Eastern Trade Pte. Ltd.",
+      "totalAmt": 25,
+      "balance": 25,
+      "status": "Overdue",
+      "statusRaw": "Overdue 15 days"
+    },
+    {
+      "id": "120",
+      "invoiceNo": "02610640",
+      "txnDate": "3/6/26",
+      "customerName": "Yu An Shipping Pte. Ltd.",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Overdue",
+      "statusRaw": "Overdue 7 days"
+    },
+    {
+      "id": "121",
+      "invoiceNo": "DN26-089",
+      "txnDate": "3/6/26",
+      "customerName": "ICON SHIPBROKERS PTE LTD",
+      "totalAmt": 3200,
+      "balance": 3200,
+      "status": "Overdue",
+      "statusRaw": "Overdue 7 days"
+    },
+    {
+      "id": "122",
+      "invoiceNo": "02610642",
+      "txnDate": "3/6/26",
+      "customerName": "Cyber Shark Games Pte Ltd",
+      "totalAmt": 1000,
+      "balance": 1000,
+      "status": "Overdue",
+      "statusRaw": "Overdue 7 days"
+    },
+    {
+      "id": "123",
+      "invoiceNo": "02610643",
+      "txnDate": "3/6/26",
+      "customerName": "Yu An Bulk Holding Pte Ltd",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Overdue",
+      "statusRaw": "Overdue 7 days"
+    },
+    {
+      "id": "124",
+      "invoiceNo": "02610644",
+      "txnDate": "3/6/26",
+      "customerName": "Unityin Ou",
+      "totalAmt": 94.5,
+      "balance": 94.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue 7 days"
+    },
+    {
+      "id": "125",
+      "invoiceNo": "02610645",
+      "txnDate": "3/6/26",
+      "customerName": "Silver Stream Family Office Pte. Ltd.",
+      "totalAmt": 1000,
+      "balance": 1000,
+      "status": "Overdue",
+      "statusRaw": "Overdue 7 days"
+    },
+    {
+      "id": "126",
+      "invoiceNo": "02610650",
+      "txnDate": "4/6/26",
+      "customerName": "The Next Comms Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue 6 days"
+    },
+    {
+      "id": "127",
+      "invoiceNo": "02610652",
+      "txnDate": "4/6/26",
+      "customerName": "Sagittarius Honor Shipping Pte Ltd",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Overdue",
+      "statusRaw": "Overdue 6 days"
+    },
+    {
+      "id": "128",
+      "invoiceNo": "02610653",
+      "txnDate": "5/6/26",
+      "customerName": "Cicc Intech Pte Ltd",
+      "totalAmt": 105.5,
+      "balance": 105.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue 5 days"
+    },
+    {
+      "id": "129",
+      "invoiceNo": "02610657",
+      "txnDate": "9/6/26",
+      "customerName": "Aries Honor Shipping Pte Ltd",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Overdue",
+      "statusRaw": "Overdue 1 day"
+    },
+    {
+      "id": "130",
+      "invoiceNo": "02610658",
+      "txnDate": "9/6/26",
+      "customerName": "Hong Yang Energy Pte Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 1 day"
+    },
+    {
+      "id": "131",
+      "invoiceNo": "DN26-091",
+      "txnDate": "9/6/26",
+      "customerName": "Neostra Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Overdue",
+      "statusRaw": "Overdue 1 day"
+    },
+    {
+      "id": "132",
+      "invoiceNo": "02610659",
+      "txnDate": "9/6/26",
+      "customerName": "Scentses AndCo Pte. Ltd.",
+      "totalAmt": 318.5,
+      "balance": 318.5,
+      "status": "Overdue",
+      "statusRaw": "Overdue 1 day"
+    },
+    {
+      "id": "133",
+      "invoiceNo": "02610661",
+      "txnDate": "9/6/26",
+      "customerName": "PORT AND BRIDGE CAPITAL PTE. LTD.",
+      "totalAmt": 3000,
+      "balance": 3000,
+      "status": "Overdue",
+      "statusRaw": "Overdue 1 day"
+    },
+    {
+      "id": "134",
+      "invoiceNo": "02610662",
+      "txnDate": "9/6/26",
+      "customerName": "Alita Pte. Ltd.",
+      "totalAmt": 500,
+      "balance": 500,
+      "status": "Overdue",
+      "statusRaw": "Overdue 1 day"
+    },
+    {
+      "id": "135",
+      "invoiceNo": "02610646",
+      "txnDate": "3/6/26",
+      "customerName": "Huohong Pte. Ltd.",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Overdue",
+      "statusRaw": "Overdue 7 days"
+    },
+    {
+      "id": "136",
+      "invoiceNo": "02610394",
+      "txnDate": "31/3/26",
+      "customerName": "Rayfine International Trading Pte. Ltd.",
+      "totalAmt": 2160,
+      "balance": 2160,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 7/4/26\nPartially paid, $2,132.00 due"
+    },
+    {
+      "id": "137",
+      "invoiceNo": "02610415",
+      "txnDate": "7/4/26",
+      "customerName": "Shou Hang Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Overdue",
+      "statusRaw": "Overdue on 14/4/26\nPartially paid, $717.50 due"
+    },
+    {
+      "id": "138",
+      "invoiceNo": "02610537",
+      "txnDate": "29/4/26",
+      "customerName": "Easybook.Com Pte Ltd",
+      "totalAmt": 1660,
+      "balance": 1660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 42 days\nPartially paid, $1,360.00 due"
+    },
+    {
+      "id": "139",
+      "invoiceNo": "02610538",
+      "txnDate": "29/4/26",
+      "customerName": "Easybook Pay Pte. Ltd.",
+      "totalAmt": 1660,
+      "balance": 1660,
+      "status": "Overdue",
+      "statusRaw": "Overdue 42 days\nPartially paid, $1,610.00 due"
+    },
+    {
+      "id": "140",
+      "invoiceNo": "02610665",
+      "txnDate": "10/6/26",
+      "customerName": "Fun Flare Enterprises Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Due today"
+    },
+    {
+      "id": "141",
+      "invoiceNo": "DN26-092",
+      "txnDate": "10/6/26",
+      "customerName": "PT Rongxin International Pte. Ltd.",
+      "totalAmt": 60,
+      "balance": 60,
+      "status": "Open",
+      "statusRaw": "Due today"
+    },
+    {
+      "id": "142",
+      "invoiceNo": "02610668",
+      "txnDate": "11/6/26",
+      "customerName": "Tonly Heavy Industries (Singapore) Pte. Ltd.",
+      "totalAmt": 550,
+      "balance": 550,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "143",
+      "invoiceNo": "02610669",
+      "txnDate": "11/6/26",
+      "customerName": "Wejoy Pte Ltd",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "144",
+      "invoiceNo": "DN26-094",
+      "txnDate": "11/6/26",
+      "customerName": "Fortune Bay Resources Pte Ltd",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "145",
+      "invoiceNo": "02610670",
+      "txnDate": "11/6/26",
+      "customerName": "EcoAI Infra Pte Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "146",
+      "invoiceNo": "02610671",
+      "txnDate": "11/6/26",
+      "customerName": "Meridian International Travel & M.I.C.E. Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "147",
+      "invoiceNo": "02610672",
+      "txnDate": "11/6/26",
+      "customerName": "Ark Partners Management Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "148",
+      "invoiceNo": "02610673",
+      "txnDate": "11/6/26",
+      "customerName": "Baolaipo Electronics Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "149",
+      "invoiceNo": "02610674",
+      "txnDate": "11/6/26",
+      "customerName": "CDL Trading Pte Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "150",
+      "invoiceNo": "02610675",
+      "txnDate": "11/6/26",
+      "customerName": "BTI Venture Lab Pte. Ltd.",
+      "totalAmt": 860,
+      "balance": 860,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "151",
+      "invoiceNo": "02610677",
+      "txnDate": "11/6/26",
+      "customerName": "Din Fung Services Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "152",
+      "invoiceNo": "02610678",
+      "txnDate": "11/6/26",
+      "customerName": "National Tiles Private Limited",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "153",
+      "invoiceNo": "02610679",
+      "txnDate": "11/6/26",
+      "customerName": "ACG Interior & Exhibition Pte Ltd",
+      "totalAmt": 2320,
+      "balance": 2320,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "154",
+      "invoiceNo": "02610680",
+      "txnDate": "11/6/26",
+      "customerName": "British Sports Pte. Ltd.",
+      "totalAmt": 860,
+      "balance": 860,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "155",
+      "invoiceNo": "02610681",
+      "txnDate": "11/6/26",
+      "customerName": "Singao(Xiamen) Agribusiness Development Co., Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "156",
+      "invoiceNo": "02610682",
+      "txnDate": "11/6/26",
+      "customerName": "Goldhill Memorial Centre Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "157",
+      "invoiceNo": "02610683",
+      "txnDate": "11/6/26",
+      "customerName": "Hing Sheng Metal Pte. Ltd.",
+      "totalAmt": 960,
+      "balance": 960,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "158",
+      "invoiceNo": "02610686",
+      "txnDate": "11/6/26",
+      "customerName": "Huixiang Global Logistics Pte. Ltd.",
+      "totalAmt": 1460,
+      "balance": 1460,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "159",
+      "invoiceNo": "02610687",
+      "txnDate": "11/6/26",
+      "customerName": "International LCM Pte Ltd",
+      "totalAmt": 1260,
+      "balance": 1260,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "160",
+      "invoiceNo": "DN26-095",
+      "txnDate": "11/6/26",
+      "customerName": "Wejoy Pte Ltd",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "161",
+      "invoiceNo": "02610690",
+      "txnDate": "11/6/26",
+      "customerName": "JC Wellness Centre Pte. Ltd.",
+      "totalAmt": 1260,
+      "balance": 1260,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "162",
+      "invoiceNo": "02610691",
+      "txnDate": "11/6/26",
+      "customerName": "Kindle Beacon Pte. Ltd.",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "163",
+      "invoiceNo": "02610692",
+      "txnDate": "11/6/26",
+      "customerName": "Kyomirai Singapore Pte. Ltd.",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "164",
+      "invoiceNo": "02610693",
+      "txnDate": "11/6/26",
+      "customerName": "LIFE CORPORATION SERVICES (S) PTE. LTD.",
+      "totalAmt": 1560,
+      "balance": 1560,
+      "status": "Open",
+      "statusRaw": "Due tomorrow"
+    },
+    {
+      "id": "165",
+      "invoiceNo": "02610694",
+      "txnDate": "12/6/26",
+      "customerName": "Youwe Solutions Pte. Ltd.",
+      "totalAmt": 1300,
+      "balance": 1300,
+      "status": "Open",
+      "statusRaw": "Due in 2 days"
+    },
+    {
+      "id": "166",
+      "invoiceNo": "DN26-096",
+      "txnDate": "12/6/26",
+      "customerName": "Meishan Silk Road Trading Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Due in 2 days"
+    },
+    {
+      "id": "167",
+      "invoiceNo": "DN26-098",
+      "txnDate": "12/6/26",
+      "customerName": "Easybook Pay Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Due in 2 days"
+    },
+    {
+      "id": "168",
+      "invoiceNo": "02610698",
+      "txnDate": "15/6/26",
+      "customerName": "Man Sang Resources Pte Ltd",
+      "totalAmt": 1960,
+      "balance": 1960,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "169",
+      "invoiceNo": "02610699",
+      "txnDate": "15/6/26",
+      "customerName": "Mingxin Enterprise Management Pte. Ltd.",
+      "totalAmt": 1940,
+      "balance": 1940,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "170",
+      "invoiceNo": "DN26-100",
+      "txnDate": "15/6/26",
+      "customerName": "LSR Globe Pte. Ltd.",
+      "totalAmt": 200,
+      "balance": 200,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "171",
+      "invoiceNo": "02610700",
+      "txnDate": "15/6/26",
+      "customerName": "One Financials & Investment Pte Ltd",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "172",
+      "invoiceNo": "02610701",
+      "txnDate": "15/6/26",
+      "customerName": "Pacific Primacom Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "173",
+      "invoiceNo": "02610702",
+      "txnDate": "15/6/26",
+      "customerName": "Premier Chinese Academy Pte Ltd",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "174",
+      "invoiceNo": "02610703",
+      "txnDate": "15/6/26",
+      "customerName": "Poseidon Digital Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "175",
+      "invoiceNo": "02610704",
+      "txnDate": "15/6/26",
+      "customerName": "Racingme Information Technology Pte Ltd",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "176",
+      "invoiceNo": "02610706",
+      "txnDate": "15/6/26",
+      "customerName": "To-Asia Enterprise Development Pte. Ltd.",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "177",
+      "invoiceNo": "02610707",
+      "txnDate": "15/6/26",
+      "customerName": "Sin Ho Trading Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "178",
+      "invoiceNo": "02610708",
+      "txnDate": "15/6/26",
+      "customerName": "Skye Far East Asia Pte Ltd",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "179",
+      "invoiceNo": "02610709",
+      "txnDate": "15/6/26",
+      "customerName": "SFS Care Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "180",
+      "invoiceNo": "02610710",
+      "txnDate": "15/6/26",
+      "customerName": "Shaowen Global Supply Chain Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "181",
+      "invoiceNo": "02610711",
+      "txnDate": "15/6/26",
+      "customerName": "Sun Plus One Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Due in 5 days"
+    },
+    {
+      "id": "182",
+      "invoiceNo": "DN26-102",
+      "txnDate": "16/6/26",
+      "customerName": "Silver Stream Family Office Pte. Ltd.",
+      "totalAmt": 132,
+      "balance": 132,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "183",
+      "invoiceNo": "02610712",
+      "txnDate": "16/6/26",
+      "customerName": "Shogun Spa Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "184",
+      "invoiceNo": "02610713",
+      "txnDate": "16/6/26",
+      "customerName": "Shi E Xin Run InternationalTrading Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "185",
+      "invoiceNo": "02610714",
+      "txnDate": "16/6/26",
+      "customerName": "SLM7249 Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "186",
+      "invoiceNo": "02610715",
+      "txnDate": "16/6/26",
+      "customerName": "Sunterra Trading Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "187",
+      "invoiceNo": "02610716",
+      "txnDate": "16/6/26",
+      "customerName": "Fujiden (Singapore) Pte. Ltd.",
+      "totalAmt": 200,
+      "balance": 200,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "188",
+      "invoiceNo": "02610717",
+      "txnDate": "16/6/26",
+      "customerName": "TrizonSoft Pte. Ltd.",
+      "totalAmt": 1020,
+      "balance": 1020,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "189",
+      "invoiceNo": "02610718",
+      "txnDate": "16/6/26",
+      "customerName": "Trizontech Holdings Pte Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "190",
+      "invoiceNo": "02610719",
+      "txnDate": "16/6/26",
+      "customerName": "Comtom Pte. Ltd.",
+      "totalAmt": 55.5,
+      "balance": 55.5,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "191",
+      "invoiceNo": "02610720",
+      "txnDate": "16/6/26",
+      "customerName": "Unionfuture Marine Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "192",
+      "invoiceNo": "02610721",
+      "txnDate": "16/6/26",
+      "customerName": "WALNUT TECH PTE. LTD.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "193",
+      "invoiceNo": "02610722",
+      "txnDate": "16/6/26",
+      "customerName": "Warm Sea Wind Pte. Ltd.",
+      "totalAmt": 1660,
+      "balance": 1660,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "194",
+      "invoiceNo": "02610723",
+      "txnDate": "16/6/26",
+      "customerName": "XGC Singapore Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "195",
+      "invoiceNo": "02610725",
+      "txnDate": "16/6/26",
+      "customerName": "Sun Moon Lighting Private Limited",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "196",
+      "invoiceNo": "02610726",
+      "txnDate": "16/6/26",
+      "customerName": "YT Global Mold Pte. Ltd.",
+      "totalAmt": 1960,
+      "balance": 1960,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "197",
+      "invoiceNo": "02610727",
+      "txnDate": "16/6/26",
+      "customerName": "Authentic Enterprise Management Consulting Pte Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "198",
+      "invoiceNo": "02610728",
+      "txnDate": "16/6/26",
+      "customerName": "Afri S Group Pte Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "199",
+      "invoiceNo": "02610729",
+      "txnDate": "16/6/26",
+      "customerName": "BROTH BEYOND SINGAPORE PTE. LTD.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "200",
+      "invoiceNo": "02610730",
+      "txnDate": "16/6/26",
+      "customerName": "Chinasin Marine Engineering Pte Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "201",
+      "invoiceNo": "02610731",
+      "txnDate": "16/6/26",
+      "customerName": "Chronoai Pte. Ltd.",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "202",
+      "invoiceNo": "02610732",
+      "txnDate": "16/6/26",
+      "customerName": "Dj Beauty Tang Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "203",
+      "invoiceNo": "02610733",
+      "txnDate": "16/6/26",
+      "customerName": "Goohai Shipping Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "204",
+      "invoiceNo": "02610734",
+      "txnDate": "16/6/26",
+      "customerName": "Golden Lotus Information Service Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Due in 6 days"
+    },
+    {
+      "id": "205",
+      "invoiceNo": "02610735",
+      "txnDate": "17/6/26",
+      "customerName": "Sinharbour Int'l Trading Pte Ltd",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Due in 7 days"
+    },
+    {
+      "id": "206",
+      "invoiceNo": "02610736",
+      "txnDate": "17/6/26",
+      "customerName": "Vigorous Metals Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Due in 7 days"
+    },
+    {
+      "id": "207",
+      "invoiceNo": "DN26-103",
+      "txnDate": "17/6/26",
+      "customerName": "Singapore Game Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Due in 7 days"
+    },
+    {
+      "id": "208",
+      "invoiceNo": "02610737",
+      "txnDate": "17/6/26",
+      "customerName": "Meishan Silk Road Trading Pte. Ltd.",
+      "totalAmt": 255.5,
+      "balance": 255.5,
+      "status": "Open",
+      "statusRaw": "Due in 7 days"
+    },
+    {
+      "id": "209",
+      "invoiceNo": "02610277",
+      "txnDate": "17/3/26",
+      "customerName": "GLOBAL INFO TECH (GIT) PTE. LTD.",
+      "totalAmt": 500,
+      "balance": 500,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "210",
+      "invoiceNo": "02610278",
+      "txnDate": "17/3/26",
+      "customerName": "Bao Ning Shipping Pte. Ltd.",
+      "totalAmt": 1100,
+      "balance": 1100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "211",
+      "invoiceNo": "02610279",
+      "txnDate": "17/3/26",
+      "customerName": "To-Asia Enterprise Development Pte. Ltd.",
+      "totalAmt": 210,
+      "balance": 210,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "212",
+      "invoiceNo": "02610280",
+      "txnDate": "17/3/26",
+      "customerName": "Sverigna Pte Ltd",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "213",
+      "invoiceNo": "02610281",
+      "txnDate": "17/3/26",
+      "customerName": "Nasturtium Pte. Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "214",
+      "invoiceNo": "02610286",
+      "txnDate": "17/3/26",
+      "customerName": "Genisys Office System Pte Ltd",
+      "totalAmt": 620,
+      "balance": 620,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "215",
+      "invoiceNo": "02610287",
+      "txnDate": "17/3/26",
+      "customerName": "General Mining Research Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "216",
+      "invoiceNo": "02610288",
+      "txnDate": "17/3/26",
+      "customerName": "Gipfel Services Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "217",
+      "invoiceNo": "02610289",
+      "txnDate": "17/3/26",
+      "customerName": "Golden Plus Food International Pte. Ltd.",
+      "totalAmt": 2060,
+      "balance": 2060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "218",
+      "invoiceNo": "02610290",
+      "txnDate": "17/3/26",
+      "customerName": "Golden Brook Wealth Pte. Ltd.",
+      "totalAmt": 1560,
+      "balance": 1560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "219",
+      "invoiceNo": "02610291",
+      "txnDate": "17/3/26",
+      "customerName": "Gaishi (Singapore) Holding Pte. Ltd.",
+      "totalAmt": 1920,
+      "balance": 1920,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "220",
+      "invoiceNo": "02610292",
+      "txnDate": "17/3/26",
+      "customerName": "Gaiax International Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "221",
+      "invoiceNo": "02610293",
+      "txnDate": "17/3/26",
+      "customerName": "Greatwall Shipping Pte Ltd",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "222",
+      "invoiceNo": "02610294",
+      "txnDate": "17/3/26",
+      "customerName": "HAIYANG NEWS PTE. LTD.",
+      "totalAmt": 791.5,
+      "balance": 791.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "223",
+      "invoiceNo": "02610295",
+      "txnDate": "17/3/26",
+      "customerName": "Bistro Bugis Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "224",
+      "invoiceNo": "02610296",
+      "txnDate": "18/3/26",
+      "customerName": "Xin Chen Future Building Pte. Ltd.",
+      "totalAmt": 665.5,
+      "balance": 665.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "225",
+      "invoiceNo": "02610297",
+      "txnDate": "18/3/26",
+      "customerName": "SK Line Sgp Pte. Ltd.",
+      "totalAmt": 80,
+      "balance": 80,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "226",
+      "invoiceNo": "02610298",
+      "txnDate": "18/3/26",
+      "customerName": "BC2768 Pte. Ltd.",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "227",
+      "invoiceNo": "02610299",
+      "txnDate": "18/3/26",
+      "customerName": "TLC Apparels Singapore Pte. Ltd.",
+      "totalAmt": 1300,
+      "balance": 1300,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "228",
+      "invoiceNo": "02610300",
+      "txnDate": "18/3/26",
+      "customerName": "Gu Xin Builder Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "229",
+      "invoiceNo": "02610302",
+      "txnDate": "19/3/26",
+      "customerName": "Haoyang Technology Pte Ltd",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "230",
+      "invoiceNo": "02610303",
+      "txnDate": "19/3/26",
+      "customerName": "Herb & Fashion Pte Ltd",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "231",
+      "invoiceNo": "02610304",
+      "txnDate": "19/3/26",
+      "customerName": "HS Tech Pte Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "232",
+      "invoiceNo": "02610305",
+      "txnDate": "19/3/26",
+      "customerName": "Horizon Insights Pte. Ltd.",
+      "totalAmt": 1560,
+      "balance": 1560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "233",
+      "invoiceNo": "02610306",
+      "txnDate": "19/3/26",
+      "customerName": "Haiteng Hongfan Pte. Ltd.",
+      "totalAmt": 1220,
+      "balance": 1220,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "234",
+      "invoiceNo": "02610307",
+      "txnDate": "19/3/26",
+      "customerName": "Hongda Overseas Investment Pte. Limited",
+      "totalAmt": 2060,
+      "balance": 2060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "235",
+      "invoiceNo": "02610310",
+      "txnDate": "19/3/26",
+      "customerName": "Higo Ventures Pte. Ltd.",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "236",
+      "invoiceNo": "02610311",
+      "txnDate": "19/3/26",
+      "customerName": "Haipa International Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "237",
+      "invoiceNo": "02610318",
+      "txnDate": "19/3/26",
+      "customerName": "ICON GULF PTE. LTD.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "238",
+      "invoiceNo": "02610319",
+      "txnDate": "20/3/26",
+      "customerName": "Wanzhi Visual Pte. Ltd.",
+      "totalAmt": 14000,
+      "balance": 14000,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "239",
+      "invoiceNo": "02610320",
+      "txnDate": "20/3/26",
+      "customerName": "INFINITIES HOLDING PTE. LTD.",
+      "totalAmt": 55.5,
+      "balance": 55.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "240",
+      "invoiceNo": "02610321",
+      "txnDate": "20/3/26",
+      "customerName": "To-Asia Enterprise Development Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "241",
+      "invoiceNo": "02610322",
+      "txnDate": "20/3/26",
+      "customerName": "Easybook.Com Pte Ltd",
+      "totalAmt": 200,
+      "balance": 200,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "242",
+      "invoiceNo": "02610323",
+      "txnDate": "23/3/26",
+      "customerName": "AI Node Global Pte. Ltd.",
+      "totalAmt": 1800,
+      "balance": 1800,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "243",
+      "invoiceNo": "02610324",
+      "txnDate": "24/3/26",
+      "customerName": "Jiaxing Construction Pte. Ltd.",
+      "totalAmt": 300,
+      "balance": 300,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "244",
+      "invoiceNo": "02610326",
+      "txnDate": "24/3/26",
+      "customerName": "Jiajiafu Trading Pte Ltd",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "245",
+      "invoiceNo": "02610327",
+      "txnDate": "24/3/26",
+      "customerName": "Just Right Design Pte Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "246",
+      "invoiceNo": "02610328",
+      "txnDate": "24/3/26",
+      "customerName": "Jade Alliance Shipping Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "247",
+      "invoiceNo": "02610330",
+      "txnDate": "24/3/26",
+      "customerName": "Neostra Pte. Ltd.",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "248",
+      "invoiceNo": "02610332",
+      "txnDate": "24/3/26",
+      "customerName": "Katyusha Tour Pte Ltd",
+      "totalAmt": 340,
+      "balance": 340,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "249",
+      "invoiceNo": "02610334",
+      "txnDate": "24/3/26",
+      "customerName": "Chang Run Pte Ltd",
+      "totalAmt": 910,
+      "balance": 910,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "250",
+      "invoiceNo": "02610335",
+      "txnDate": "24/3/26",
+      "customerName": "K Y Sub-Assembly Engineering Pte. Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "251",
+      "invoiceNo": "02610336",
+      "txnDate": "24/3/26",
+      "customerName": "King Vantage Resources Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "252",
+      "invoiceNo": "02610337",
+      "txnDate": "24/3/26",
+      "customerName": "UTONG COMMERCIAL LIMITED",
+      "totalAmt": 200,
+      "balance": 200,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "253",
+      "invoiceNo": "02610338",
+      "txnDate": "24/3/26",
+      "customerName": "Upin Dining Private Limited",
+      "totalAmt": 300,
+      "balance": 300,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "254",
+      "invoiceNo": "02610339",
+      "txnDate": "24/3/26",
+      "customerName": "Lantone Systems Pte Ltd",
+      "totalAmt": 700,
+      "balance": 700,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "255",
+      "invoiceNo": "02610340",
+      "txnDate": "24/3/26",
+      "customerName": "Longman Shipping Pte. Limited",
+      "totalAmt": 960,
+      "balance": 960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "256",
+      "invoiceNo": "02610342",
+      "txnDate": "24/3/26",
+      "customerName": "La Vanda Management Pte Ltd",
+      "totalAmt": 1860,
+      "balance": 1860,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "257",
+      "invoiceNo": "02610343",
+      "txnDate": "24/3/26",
+      "customerName": "LBE Engineering Pte Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "258",
+      "invoiceNo": "02610344",
+      "txnDate": "24/3/26",
+      "customerName": "Minyo Int'l Pte Ltd",
+      "totalAmt": 910,
+      "balance": 910,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "259",
+      "invoiceNo": "02610345",
+      "txnDate": "25/3/26",
+      "customerName": "Sygmatic Research Pte. Ltd",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "260",
+      "invoiceNo": "02610347",
+      "txnDate": "25/3/26",
+      "customerName": "Most Engineering Pte Ltd",
+      "totalAmt": 960,
+      "balance": 960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "261",
+      "invoiceNo": "02610350",
+      "txnDate": "25/3/26",
+      "customerName": "Moons' Industries (SEA) Pte Ltd",
+      "totalAmt": 1160,
+      "balance": 1160,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "262",
+      "invoiceNo": "02610352",
+      "txnDate": "25/3/26",
+      "customerName": "Minshun Private Limited",
+      "totalAmt": 900,
+      "balance": 900,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "263",
+      "invoiceNo": "02610354",
+      "txnDate": "25/3/26",
+      "customerName": "Minyo Recruitment Hub Pte. Ltd.",
+      "totalAmt": 860,
+      "balance": 860,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "264",
+      "invoiceNo": "02610355",
+      "txnDate": "25/3/26",
+      "customerName": "MST Process Private Limited",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "265",
+      "invoiceNo": "02610356",
+      "txnDate": "25/3/26",
+      "customerName": "Megastar Marine Services Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "266",
+      "invoiceNo": "02610357",
+      "txnDate": "25/3/26",
+      "customerName": "Megastar Transport Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "267",
+      "invoiceNo": "02610358",
+      "txnDate": "25/3/26",
+      "customerName": "FUSIONSIGHT PTE. LTD.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "268",
+      "invoiceNo": "02680023",
+      "txnDate": "20/3/26",
+      "customerName": "天马微电子股份有限公司",
+      "totalAmt": 205.5,
+      "balance": 205.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "269",
+      "invoiceNo": "02680024",
+      "txnDate": "20/3/26",
+      "customerName": "Inter Power Engineering Pte Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "270",
+      "invoiceNo": "02680025",
+      "txnDate": "20/3/26",
+      "customerName": "CLAIRVOYANT MEDICAL TECHNOLOGY PTE. LTD.",
+      "totalAmt": 55.5,
+      "balance": 55.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "271",
+      "invoiceNo": "02680026",
+      "txnDate": "20/3/26",
+      "customerName": "INFINITIES INVESTMENT PTE. LTD.",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "272",
+      "invoiceNo": "02680027",
+      "txnDate": "20/3/26",
+      "customerName": "INFINITIES HOLDING PTE. LTD.",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "273",
+      "invoiceNo": "DN26-048",
+      "txnDate": "20/3/26",
+      "customerName": "Gipfel Services Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "274",
+      "invoiceNo": "02610440",
+      "txnDate": "13/4/26",
+      "customerName": "Zion Marine Consultants Pte. Ltd.",
+      "totalAmt": 2500,
+      "balance": 2500,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "275",
+      "invoiceNo": "02610441",
+      "txnDate": "13/4/26",
+      "customerName": "Aevum Capital Pte. Ltd.",
+      "totalAmt": 2560,
+      "balance": 2560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "276",
+      "invoiceNo": "DN26-061",
+      "txnDate": "13/4/26",
+      "customerName": "Falcon Insight Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "277",
+      "invoiceNo": "02610442",
+      "txnDate": "13/4/26",
+      "customerName": "To-Asia Enterprise Development Pte. Ltd.",
+      "totalAmt": 15,
+      "balance": 15,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "278",
+      "invoiceNo": "02610443",
+      "txnDate": "14/4/26",
+      "customerName": "Halofun Pte. Ltd.",
+      "totalAmt": 1925.5,
+      "balance": 1925.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "279",
+      "invoiceNo": "02610359",
+      "txnDate": "26/3/26",
+      "customerName": "Matrix Interiors & Contracts Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "280",
+      "invoiceNo": "02610445",
+      "txnDate": "14/4/26",
+      "customerName": "Silver Stream Family Office Pte. Ltd.",
+      "totalAmt": 1560,
+      "balance": 1560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "281",
+      "invoiceNo": "02610362",
+      "txnDate": "26/3/26",
+      "customerName": "Mandi Capital Pte. Ltd.",
+      "totalAmt": 1260,
+      "balance": 1260,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "282",
+      "invoiceNo": "02610446",
+      "txnDate": "14/4/26",
+      "customerName": "Sin Hai Engineering & Trade Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "283",
+      "invoiceNo": "02610364",
+      "txnDate": "26/3/26",
+      "customerName": "Kraf Pte. Ltd.",
+      "totalAmt": 2000,
+      "balance": 2000,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "284",
+      "invoiceNo": "02610447",
+      "txnDate": "14/4/26",
+      "customerName": "Sparkhub Pte. Ltd,",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "285",
+      "invoiceNo": "02610365",
+      "txnDate": "26/3/26",
+      "customerName": "BinQuant Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "286",
+      "invoiceNo": "02610366",
+      "txnDate": "27/3/26",
+      "customerName": "Zestory Pte. Ltd.",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "287",
+      "invoiceNo": "02610367",
+      "txnDate": "27/3/26",
+      "customerName": "Sunlight Innovation Pte. Ltd",
+      "totalAmt": 2000,
+      "balance": 2000,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "288",
+      "invoiceNo": "02610371",
+      "txnDate": "27/3/26",
+      "customerName": "Xin Yang Builder Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "289",
+      "invoiceNo": "02610373",
+      "txnDate": "27/3/26",
+      "customerName": "Alpana Partners Pte. Ltd.",
+      "totalAmt": 350,
+      "balance": 350,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "290",
+      "invoiceNo": "02610450",
+      "txnDate": "14/4/26",
+      "customerName": "LUMINAR GLOBAL HORIZON PTE. LTD.",
+      "totalAmt": 1131,
+      "balance": 1131,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "291",
+      "invoiceNo": "02610451",
+      "txnDate": "14/4/26",
+      "customerName": "STO GLOBAL FAST PTE. LTD.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "292",
+      "invoiceNo": "02610374",
+      "txnDate": "27/3/26",
+      "customerName": "Yinda Technology Singapore Pte. Ltd.",
+      "totalAmt": 1760,
+      "balance": 1760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "293",
+      "invoiceNo": "02610375",
+      "txnDate": "30/3/26",
+      "customerName": "Century Snail Communication Technology Co Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "294",
+      "invoiceNo": "02610376",
+      "txnDate": "30/3/26",
+      "customerName": "UnityIn Pte. Ltd.",
+      "totalAmt": 3360,
+      "balance": 3360,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "295",
+      "invoiceNo": "02610377",
+      "txnDate": "30/3/26",
+      "customerName": "Megastar Shipping Pte Ltd",
+      "totalAmt": 1460,
+      "balance": 1460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "296",
+      "invoiceNo": "02610378",
+      "txnDate": "30/3/26",
+      "customerName": "XSPY PTE. LTD.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "297",
+      "invoiceNo": "02610379",
+      "txnDate": "30/3/26",
+      "customerName": "Xing Han Construction Pte. Ltd.",
+      "totalAmt": 105.5,
+      "balance": 105.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "298",
+      "invoiceNo": "02610381",
+      "txnDate": "30/3/26",
+      "customerName": "NED Mining&Technology Operations Investment Pte. Ltd.",
+      "totalAmt": 1948.5,
+      "balance": 1948.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "299",
+      "invoiceNo": "02610382",
+      "txnDate": "31/3/26",
+      "customerName": "Oriental PAL Shipping Pte Ltd",
+      "totalAmt": 860,
+      "balance": 860,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "300",
+      "invoiceNo": "02610383",
+      "txnDate": "31/3/26",
+      "customerName": "Novozee Pte Ltd",
+      "totalAmt": 305.5,
+      "balance": 305.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "301",
+      "invoiceNo": "02610386",
+      "txnDate": "31/3/26",
+      "customerName": "Panlight Intl Electrical Equipment",
+      "totalAmt": 1460,
+      "balance": 1460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "302",
+      "invoiceNo": "02610387",
+      "txnDate": "31/3/26",
+      "customerName": "PROSPEROUS KEY PTE. LTD.",
+      "totalAmt": 850,
+      "balance": 850,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "303",
+      "invoiceNo": "02610392",
+      "txnDate": "31/3/26",
+      "customerName": "Risheng Construction & Trade Pte Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "304",
+      "invoiceNo": "02610393",
+      "txnDate": "31/3/26",
+      "customerName": "RenRen Hu Yu Pte. Ltd.",
+      "totalAmt": 2060,
+      "balance": 2060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "305",
+      "invoiceNo": "02610395",
+      "txnDate": "31/3/26",
+      "customerName": "Risheng Construction Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "306",
+      "invoiceNo": "02610400",
+      "txnDate": "1/4/26",
+      "customerName": "Sinharbour Technology Pte. Ltd.",
+      "totalAmt": 850,
+      "balance": 850,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "307",
+      "invoiceNo": "02610403",
+      "txnDate": "1/4/26",
+      "customerName": "YF INTERNATIONAL INDUSTRIAL INVESTMENT PTE. LTD.",
+      "totalAmt": 1125.5,
+      "balance": 1125.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "308",
+      "invoiceNo": "02610404",
+      "txnDate": "2/4/26",
+      "customerName": "To-Asia Enterprise Development Pte. Ltd.",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "309",
+      "invoiceNo": "02610405",
+      "txnDate": "6/4/26",
+      "customerName": "Longsight Resources Pte. Ltd.",
+      "totalAmt": 3030,
+      "balance": 3030,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "310",
+      "invoiceNo": "02610406",
+      "txnDate": "6/4/26",
+      "customerName": "Hoong Thye Furniture & Renovation Pte Ltd",
+      "totalAmt": 1750,
+      "balance": 1750,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "311",
+      "invoiceNo": "02610407",
+      "txnDate": "6/4/26",
+      "customerName": "Singapore Haikuang Global Trading Pte, Ltd",
+      "totalAmt": 200,
+      "balance": 200,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "312",
+      "invoiceNo": "02610408",
+      "txnDate": "7/4/26",
+      "customerName": "Haoyang Aerospace Pte. Ltd.",
+      "totalAmt": 1600,
+      "balance": 1600,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "313",
+      "invoiceNo": "02610410",
+      "txnDate": "7/4/26",
+      "customerName": "Romanticism Pte Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "314",
+      "invoiceNo": "02610411",
+      "txnDate": "7/4/26",
+      "customerName": "Sinharbour Int'l Trading Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "315",
+      "invoiceNo": "02610414",
+      "txnDate": "7/4/26",
+      "customerName": "Siong Construction & Engineering Pte Ltd",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "316",
+      "invoiceNo": "02610416",
+      "txnDate": "7/4/26",
+      "customerName": "Spring Mud Pte. Ltd.",
+      "totalAmt": 300,
+      "balance": 300,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "317",
+      "invoiceNo": "02610417",
+      "txnDate": "7/4/26",
+      "customerName": "Sanit Balwyn Pte. Ltd.",
+      "totalAmt": 1175.5,
+      "balance": 1175.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "318",
+      "invoiceNo": "02610418",
+      "txnDate": "8/4/26",
+      "customerName": "Varavest Pte. Ltd",
+      "totalAmt": 1125.5,
+      "balance": 1125.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "319",
+      "invoiceNo": "02610419",
+      "txnDate": "8/4/26",
+      "customerName": "Y&G Manpower Agency Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "320",
+      "invoiceNo": "02610421",
+      "txnDate": "8/4/26",
+      "customerName": "Spring Mud Pte. Ltd.",
+      "totalAmt": 205.5,
+      "balance": 205.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "321",
+      "invoiceNo": "02610422",
+      "txnDate": "8/4/26",
+      "customerName": "Beltroad International Investment Consulting Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "322",
+      "invoiceNo": "02610423",
+      "txnDate": "8/4/26",
+      "customerName": "AI Node Global Pte. Ltd.",
+      "totalAmt": 350,
+      "balance": 350,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "323",
+      "invoiceNo": "02610426",
+      "txnDate": "8/4/26",
+      "customerName": "Singapore Medsense Technology Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "324",
+      "invoiceNo": "02610427",
+      "txnDate": "8/4/26",
+      "customerName": "Shang Yang Tai Pte. Ltd.",
+      "totalAmt": 2060,
+      "balance": 2060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "325",
+      "invoiceNo": "02610429",
+      "txnDate": "8/4/26",
+      "customerName": "Glory Trade Pte. Ltd.",
+      "totalAmt": 960,
+      "balance": 960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "326",
+      "invoiceNo": "02610430",
+      "txnDate": "8/4/26",
+      "customerName": "Summitech International Trading Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "327",
+      "invoiceNo": "02610432",
+      "txnDate": "9/4/26",
+      "customerName": "Hongkong Tuoda Technology Ltd",
+      "totalAmt": 200,
+      "balance": 200,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "328",
+      "invoiceNo": "02610433",
+      "txnDate": "9/4/26",
+      "customerName": "REALPORE ASIA PTE. LTD.",
+      "totalAmt": 1000,
+      "balance": 1000,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "329",
+      "invoiceNo": "02610434",
+      "txnDate": "10/4/26",
+      "customerName": "Cancheng Pte Ltd",
+      "totalAmt": 3220,
+      "balance": 3220,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "330",
+      "invoiceNo": "02610435",
+      "txnDate": "10/4/26",
+      "customerName": "Zhong Healthcare Trading Pte. Ltd.",
+      "totalAmt": 600,
+      "balance": 600,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "331",
+      "invoiceNo": "02610436",
+      "txnDate": "10/4/26",
+      "customerName": "Actelligent Fintech Pte. Ltd.",
+      "totalAmt": 205.5,
+      "balance": 205.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "332",
+      "invoiceNo": "02610437",
+      "txnDate": "10/4/26",
+      "customerName": "Y&G Manpower Agency Pte. Ltd.",
+      "totalAmt": 655.5,
+      "balance": 655.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "333",
+      "invoiceNo": "02610438",
+      "txnDate": "10/4/26",
+      "customerName": "SCIENCE IN SPORT SINGAPORE PTE. LTD",
+      "totalAmt": 900,
+      "balance": 900,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "334",
+      "invoiceNo": "02610439",
+      "txnDate": "10/4/26",
+      "customerName": "Weiot Pte. Ltd.",
+      "totalAmt": 1200,
+      "balance": 1200,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "335",
+      "invoiceNo": "DN26-052",
+      "txnDate": "27/3/26",
+      "customerName": "Gaishi (Singapore) Holding Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "336",
+      "invoiceNo": "DN26-053",
+      "txnDate": "27/3/26",
+      "customerName": "RenRen Hu Yu Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "337",
+      "invoiceNo": "DN26-054",
+      "txnDate": "31/3/26",
+      "customerName": "Capbridge Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "338",
+      "invoiceNo": "DN26-055",
+      "txnDate": "31/3/26",
+      "customerName": "1X Exchange Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "339",
+      "invoiceNo": "DN26-056",
+      "txnDate": "1/4/26",
+      "customerName": "ICON SHIPBROKERS PTE LTD",
+      "totalAmt": 3200,
+      "balance": 3200,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "340",
+      "invoiceNo": "DN26-057",
+      "txnDate": "1/4/26",
+      "customerName": "Firerock Capital Pte Ltd",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "341",
+      "invoiceNo": "DN26-058",
+      "txnDate": "8/4/26",
+      "customerName": "Tonly Heavy Industries (Singapore) Pte. Ltd.",
+      "totalAmt": 440.2,
+      "balance": 440.2,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "342",
+      "invoiceNo": "DN26-059",
+      "txnDate": "10/4/26",
+      "customerName": "Yu An Logistics Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "343",
+      "invoiceNo": "02610452",
+      "txnDate": "15/4/26",
+      "customerName": "ZTT Engineering Pte. Ltd.",
+      "totalAmt": 1860,
+      "balance": 1860,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "344",
+      "invoiceNo": "02610453",
+      "txnDate": "15/4/26",
+      "customerName": "ZYZ Service Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "345",
+      "invoiceNo": "02610454",
+      "txnDate": "15/4/26",
+      "customerName": "Home Of Health Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "346",
+      "invoiceNo": "02610456",
+      "txnDate": "15/4/26",
+      "customerName": "Sagittarius Honor Shipping Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "347",
+      "invoiceNo": "02610457",
+      "txnDate": "15/4/26",
+      "customerName": "Times Shipping Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "348",
+      "invoiceNo": "02610458",
+      "txnDate": "15/4/26",
+      "customerName": "Webeye Pte. Ltd.",
+      "totalAmt": 1925.5,
+      "balance": 1925.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "349",
+      "invoiceNo": "02610459",
+      "txnDate": "15/4/26",
+      "customerName": "The Hashing Company Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "350",
+      "invoiceNo": "02610460",
+      "txnDate": "15/4/26",
+      "customerName": "Tokka Labs Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "351",
+      "invoiceNo": "02610461",
+      "txnDate": "15/4/26",
+      "customerName": "Tonly Heavy Industries (Singapore) Pte. Ltd.",
+      "totalAmt": 1760,
+      "balance": 1760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "352",
+      "invoiceNo": "02610462",
+      "txnDate": "16/4/26",
+      "customerName": "Sagittarius Honor Shipping Pte Ltd",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "353",
+      "invoiceNo": "02610463",
+      "txnDate": "16/4/26",
+      "customerName": "Yu An Bulk Holding Pte Ltd",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "354",
+      "invoiceNo": "02610464",
+      "txnDate": "16/4/26",
+      "customerName": "Satorisys Pte. Ltd.",
+      "totalAmt": 1925.5,
+      "balance": 1925.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "355",
+      "invoiceNo": "02610465",
+      "txnDate": "16/4/26",
+      "customerName": "Beltroad International Investment Consulting Pte. Ltd.",
+      "totalAmt": 1600,
+      "balance": 1600,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "356",
+      "invoiceNo": "02610466",
+      "txnDate": "16/4/26",
+      "customerName": "DEMIRER KABEL PTE. LTD.",
+      "totalAmt": 8560,
+      "balance": 8560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "357",
+      "invoiceNo": "02610467",
+      "txnDate": "16/4/26",
+      "customerName": "Tc Yutaka1 Pte. Ltd.",
+      "totalAmt": 1620,
+      "balance": 1620,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "358",
+      "invoiceNo": "02610468",
+      "txnDate": "16/4/26",
+      "customerName": "Taurusx International Pte. Ltd.",
+      "totalAmt": 1925.5,
+      "balance": 1925.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "359",
+      "invoiceNo": "02610469",
+      "txnDate": "16/4/26",
+      "customerName": "Singapore Game Pte. Ltd.",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "360",
+      "invoiceNo": "DN26-063",
+      "txnDate": "16/4/26",
+      "customerName": "ANDA TECHNOLOGY PTE. LTD.",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "361",
+      "invoiceNo": "02610471",
+      "txnDate": "16/4/26",
+      "customerName": "Upin Dining Private Limited",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "362",
+      "invoiceNo": "02610473",
+      "txnDate": "17/4/26",
+      "customerName": "Fun Flare Enterprises Pte. Ltd.",
+      "totalAmt": 2060,
+      "balance": 2060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "363",
+      "invoiceNo": "02610474",
+      "txnDate": "17/4/26",
+      "customerName": "LYNKORA TECHNOLOGY PTE. LTD.",
+      "totalAmt": 1125.5,
+      "balance": 1125.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "364",
+      "invoiceNo": "02610475",
+      "txnDate": "17/4/26",
+      "customerName": "Yu Fung Construction Pte Ltd",
+      "totalAmt": 80,
+      "balance": 80,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "365",
+      "invoiceNo": "02610476",
+      "txnDate": "17/4/26",
+      "customerName": "Target Capital Management Pte. Ltd.",
+      "totalAmt": 2060,
+      "balance": 2060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "366",
+      "invoiceNo": "02610477",
+      "txnDate": "17/4/26",
+      "customerName": "Target Capital Sg Pte. Ltd.",
+      "totalAmt": 2060,
+      "balance": 2060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "367",
+      "invoiceNo": "02610478",
+      "txnDate": "20/4/26",
+      "customerName": "General Mining Research Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "368",
+      "invoiceNo": "02610479",
+      "txnDate": "20/4/26",
+      "customerName": "Tc Yutaka2 Pte. Ltd.",
+      "totalAmt": 1620,
+      "balance": 1620,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "369",
+      "invoiceNo": "02610480",
+      "txnDate": "20/4/26",
+      "customerName": "Vanda Love Fund Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "370",
+      "invoiceNo": "02610481",
+      "txnDate": "20/4/26",
+      "customerName": "Vanda Love Holding Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "371",
+      "invoiceNo": "02610483",
+      "txnDate": "20/4/26",
+      "customerName": "Tc D-Media Pte. Ltd.",
+      "totalAmt": 1620,
+      "balance": 1620,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "372",
+      "invoiceNo": "02610484",
+      "txnDate": "20/4/26",
+      "customerName": "Tc Yutakab Pte. Ltd.",
+      "totalAmt": 1620,
+      "balance": 1620,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "373",
+      "invoiceNo": "02610485",
+      "txnDate": "20/4/26",
+      "customerName": "Target Capital Holding SG Pte. Ltd.",
+      "totalAmt": 1620,
+      "balance": 1620,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "374",
+      "invoiceNo": "02610486",
+      "txnDate": "20/4/26",
+      "customerName": "Tc Yutakac Pte Ltd",
+      "totalAmt": 1620,
+      "balance": 1620,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "375",
+      "invoiceNo": "02610487",
+      "txnDate": "20/4/26",
+      "customerName": "Tc Yutakad Pte Ltd",
+      "totalAmt": 1620,
+      "balance": 1620,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "376",
+      "invoiceNo": "02610488",
+      "txnDate": "20/4/26",
+      "customerName": "Tc Yutakae Pte Ltd",
+      "totalAmt": 1620,
+      "balance": 1620,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "377",
+      "invoiceNo": "02610490",
+      "txnDate": "21/4/26",
+      "customerName": "Yuhe Consulting Pte. Ltd.",
+      "totalAmt": 1640,
+      "balance": 1640,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "378",
+      "invoiceNo": "02610492",
+      "txnDate": "21/4/26",
+      "customerName": "Ubio Pharmaceutical Pte. Ltd.",
+      "totalAmt": 1460,
+      "balance": 1460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "379",
+      "invoiceNo": "02610493",
+      "txnDate": "21/4/26",
+      "customerName": "AI Node Global Pte. Ltd.",
+      "totalAmt": 105.5,
+      "balance": 105.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "380",
+      "invoiceNo": "02610494",
+      "txnDate": "21/4/26",
+      "customerName": "World Agricultural Machinery (Singapore) Pte. Ltd.",
+      "totalAmt": 2360,
+      "balance": 2360,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "381",
+      "invoiceNo": "02610495",
+      "txnDate": "22/4/26",
+      "customerName": "Vigorous Metals Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "382",
+      "invoiceNo": "02610496",
+      "txnDate": "22/4/26",
+      "customerName": "Yunman Media Pte. Ltd.",
+      "totalAmt": 2500,
+      "balance": 2500,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "383",
+      "invoiceNo": "02610497",
+      "txnDate": "22/4/26",
+      "customerName": "REALPORE ASIA PTE. LTD.",
+      "totalAmt": 150,
+      "balance": 150,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "384",
+      "invoiceNo": "DN26-064",
+      "txnDate": "22/4/26",
+      "customerName": "1X Exchange Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "385",
+      "invoiceNo": "02610368",
+      "txnDate": "24/3/26",
+      "customerName": "Megastar Logistics Pte. Ltd.",
+      "totalAmt": 1560,
+      "balance": 1560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "386",
+      "invoiceNo": "02610369",
+      "txnDate": "24/3/26",
+      "customerName": "Meishan Silk Road Trading Pte. Ltd.",
+      "totalAmt": 1170,
+      "balance": 1170,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "387",
+      "invoiceNo": "DN26-065",
+      "txnDate": "22/4/26",
+      "customerName": "Jilin Qian An Jun Zi Import & Export Pte. Ltd",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "388",
+      "invoiceNo": "02610499",
+      "txnDate": "23/4/26",
+      "customerName": "Access Tanker Marine Pte Ltd",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "389",
+      "invoiceNo": "DN26-066",
+      "txnDate": "23/4/26",
+      "customerName": "TLC Apparels Singapore Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "390",
+      "invoiceNo": "02610500",
+      "txnDate": "24/4/26",
+      "customerName": "Rev Ecodrive Pte. Ltd.",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "391",
+      "invoiceNo": "02610501",
+      "txnDate": "24/4/26",
+      "customerName": "Zhaode Liquor Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "392",
+      "invoiceNo": "02610502",
+      "txnDate": "24/4/26",
+      "customerName": "Wintop International Trading Pte. Ltd.",
+      "totalAmt": 1910,
+      "balance": 1910,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "393",
+      "invoiceNo": "02610503",
+      "txnDate": "24/4/26",
+      "customerName": "Wejoy Pte Ltd",
+      "totalAmt": 1760,
+      "balance": 1760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "394",
+      "invoiceNo": "02610506",
+      "txnDate": "24/4/26",
+      "customerName": "Xinguohe Construction Pte Ltd",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "395",
+      "invoiceNo": "02610511",
+      "txnDate": "24/4/26",
+      "customerName": "Meishan Silk Road Trading Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "396",
+      "invoiceNo": "02610510",
+      "txnDate": "24/4/26",
+      "customerName": "Yu Fung Construction Pte Ltd",
+      "totalAmt": 860,
+      "balance": 860,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "397",
+      "invoiceNo": "DN26-067",
+      "txnDate": "24/4/26",
+      "customerName": "Ai King Robotics Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "398",
+      "invoiceNo": "02610512",
+      "txnDate": "24/4/26",
+      "customerName": "1X Exchange Pte. Ltd.",
+      "totalAmt": 55.5,
+      "balance": 55.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "399",
+      "invoiceNo": "02610515",
+      "txnDate": "27/4/26",
+      "customerName": "Da Guang Scaffolding Engineering Pte. Ltd.",
+      "totalAmt": 530,
+      "balance": 530,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "400",
+      "invoiceNo": "02610516",
+      "txnDate": "27/4/26",
+      "customerName": "Shentong Express Pte. Ltd.",
+      "totalAmt": 765.5,
+      "balance": 765.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "401",
+      "invoiceNo": "02610517",
+      "txnDate": "27/4/26",
+      "customerName": "Alben Investments Pte. Ltd.",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "402",
+      "invoiceNo": "02610518",
+      "txnDate": "27/4/26",
+      "customerName": "Elephant New Energy Technology Pte. Ltd.",
+      "totalAmt": 1960,
+      "balance": 1960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "403",
+      "invoiceNo": "DN26-069",
+      "txnDate": "27/4/26",
+      "customerName": "Meishan Silk Road Trading Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "404",
+      "invoiceNo": "02610519",
+      "txnDate": "28/4/26",
+      "customerName": "Meishan Silk Road Trading Pte. Ltd.",
+      "totalAmt": 55.5,
+      "balance": 55.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "405",
+      "invoiceNo": "02610520",
+      "txnDate": "28/4/26",
+      "customerName": "Ark Partners VCC",
+      "totalAmt": 1400,
+      "balance": 1400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "406",
+      "invoiceNo": "DN26-070",
+      "txnDate": "28/4/26",
+      "customerName": "Premium Facial & Wellness Hub Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "407",
+      "invoiceNo": "02610524",
+      "txnDate": "28/4/26",
+      "customerName": "Yu An Logistics Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "408",
+      "invoiceNo": "02610525",
+      "txnDate": "28/4/26",
+      "customerName": "Yongle Auction Pte. Ltd.",
+      "totalAmt": 2060,
+      "balance": 2060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "409",
+      "invoiceNo": "02610526",
+      "txnDate": "28/4/26",
+      "customerName": "Yu An Shipping Pte. Ltd.",
+      "totalAmt": 960,
+      "balance": 960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "410",
+      "invoiceNo": "02610527",
+      "txnDate": "28/4/26",
+      "customerName": "Yihong Investments Pte. Ltd.",
+      "totalAmt": 5220,
+      "balance": 5220,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "411",
+      "invoiceNo": "02610529",
+      "txnDate": "28/4/26",
+      "customerName": "Yu An (SGP) Holdings Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "412",
+      "invoiceNo": "02610530",
+      "txnDate": "28/4/26",
+      "customerName": "Yu An Bulk Holding Pte Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "413",
+      "invoiceNo": "02610531",
+      "txnDate": "28/4/26",
+      "customerName": "Capbridge Pte. Ltd.",
+      "totalAmt": 1460,
+      "balance": 1460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "414",
+      "invoiceNo": "02610532",
+      "txnDate": "28/4/26",
+      "customerName": "Capbridge Nominee Pte. Ltd.",
+      "totalAmt": 1460,
+      "balance": 1460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "415",
+      "invoiceNo": "02610533",
+      "txnDate": "29/4/26",
+      "customerName": "Core Build Works Pte. Ltd.",
+      "totalAmt": 655.5,
+      "balance": 655.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "416",
+      "invoiceNo": "02610536",
+      "txnDate": "29/4/26",
+      "customerName": "Taomaru Co Pte. Ltd.",
+      "totalAmt": 1360,
+      "balance": 1360,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "417",
+      "invoiceNo": "02610542",
+      "txnDate": "29/4/26",
+      "customerName": "ZELCOS (S) PTE. LTD.",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "418",
+      "invoiceNo": "02610543",
+      "txnDate": "29/4/26",
+      "customerName": "Jin Mu Technology Pte. Ltd.",
+      "totalAmt": 105.5,
+      "balance": 105.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "419",
+      "invoiceNo": "DN26-071",
+      "txnDate": "29/4/26",
+      "customerName": "SLM7249 Pte Ltd",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "420",
+      "invoiceNo": "02610546",
+      "txnDate": "30/4/26",
+      "customerName": "Lantone Systems Pte Ltd",
+      "totalAmt": 505.5,
+      "balance": 505.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "421",
+      "invoiceNo": "02610548",
+      "txnDate": "30/4/26",
+      "customerName": "Canlah Ai Pte. Ltd.",
+      "totalAmt": 1300,
+      "balance": 1300,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "422",
+      "invoiceNo": "02610550",
+      "txnDate": "30/4/26",
+      "customerName": "Enviromental Electric Pte. Ltd.",
+      "totalAmt": 418.5,
+      "balance": 418.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "423",
+      "invoiceNo": "02610554",
+      "txnDate": "30/4/26",
+      "customerName": "Proplus Brand Pte. Ltd.",
+      "totalAmt": 715.5,
+      "balance": 715.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "424",
+      "invoiceNo": "02610556",
+      "txnDate": "30/4/26",
+      "customerName": "ZTT Singapore Pte Ltd",
+      "totalAmt": 5160,
+      "balance": 5160,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "425",
+      "invoiceNo": "02610557",
+      "txnDate": "30/4/26",
+      "customerName": "Man Sang Resources Pte Ltd",
+      "totalAmt": 55.5,
+      "balance": 55.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "426",
+      "invoiceNo": "DN26-072",
+      "txnDate": "30/4/26",
+      "customerName": "1X Exchange Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "427",
+      "invoiceNo": "DN26-073",
+      "txnDate": "30/4/26",
+      "customerName": "Capbridge Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "428",
+      "invoiceNo": "02610558",
+      "txnDate": "30/4/26",
+      "customerName": "YWL Electrical Engineering Pte. Ltd,",
+      "totalAmt": 665.5,
+      "balance": 665.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "429",
+      "invoiceNo": "02610559",
+      "txnDate": "4/5/26",
+      "customerName": "Citynest Pte. Ltd.",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "430",
+      "invoiceNo": "02610560",
+      "txnDate": "4/5/26",
+      "customerName": "Alpha Z Pte. Ltd.",
+      "totalAmt": 1600,
+      "balance": 1600,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "431",
+      "invoiceNo": "02610561",
+      "txnDate": "4/5/26",
+      "customerName": "Asgard Property Pte. Ltd.",
+      "totalAmt": 1720,
+      "balance": 1720,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "432",
+      "invoiceNo": "DN26-075",
+      "txnDate": "5/5/26",
+      "customerName": "Tree Art International Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "433",
+      "invoiceNo": "DN26-076",
+      "txnDate": "5/5/26",
+      "customerName": "Tree Art Paya Lebar Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "434",
+      "invoiceNo": "DN26-077",
+      "txnDate": "5/5/26",
+      "customerName": "Gaiax International Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "435",
+      "invoiceNo": "DN26-078",
+      "txnDate": "5/5/26",
+      "customerName": "DB Ai He Jiu Pte. Ltd.",
+      "totalAmt": 45,
+      "balance": 45,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "436",
+      "invoiceNo": "DN26-079",
+      "txnDate": "5/5/26",
+      "customerName": "Futurum Space Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "437",
+      "invoiceNo": "02610562",
+      "txnDate": "5/5/26",
+      "customerName": "Genisys Office System Pte Ltd",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "438",
+      "invoiceNo": "02610563",
+      "txnDate": "5/5/26",
+      "customerName": "Jin Mu Technology Pte. Ltd.",
+      "totalAmt": 105.5,
+      "balance": 105.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "439",
+      "invoiceNo": "02610564",
+      "txnDate": "4/5/26",
+      "customerName": "Somos Meridian Pte. Ltd.",
+      "totalAmt": 1960,
+      "balance": 1960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "440",
+      "invoiceNo": "02610568",
+      "txnDate": "5/5/26",
+      "customerName": "Jiuding Industrial Pte. Ltd.",
+      "totalAmt": 1960,
+      "balance": 1960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "441",
+      "invoiceNo": "02610569",
+      "txnDate": "5/5/26",
+      "customerName": "Huako Kids Pte. Ltd.",
+      "totalAmt": 1900,
+      "balance": 1900,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "442",
+      "invoiceNo": "02610570",
+      "txnDate": "6/5/26",
+      "customerName": "Tonly Heavy Industries (Singapore) Pte. Ltd.",
+      "totalAmt": 550,
+      "balance": 550,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "443",
+      "invoiceNo": "02610572",
+      "txnDate": "6/5/26",
+      "customerName": "Asia Blockchain Industry Institute Pte. Ltd.",
+      "totalAmt": 200,
+      "balance": 200,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "444",
+      "invoiceNo": "02610573",
+      "txnDate": "7/5/26",
+      "customerName": "Alben Investments Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "445",
+      "invoiceNo": "02610574",
+      "txnDate": "7/5/26",
+      "customerName": "Creative Shapes Pte. Ltd",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "446",
+      "invoiceNo": "02610575",
+      "txnDate": "7/5/26",
+      "customerName": "Dawnbyte Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "447",
+      "invoiceNo": "02610578",
+      "txnDate": "7/5/26",
+      "customerName": "ANHUI CHANGDA FABRICS CO.,LTD.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "448",
+      "invoiceNo": "02610582",
+      "txnDate": "7/5/26",
+      "customerName": "Turbolens Pte Ltd",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "449",
+      "invoiceNo": "02610584",
+      "txnDate": "7/5/26",
+      "customerName": "Wan Sin Construction Pte. Ltd.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "450",
+      "invoiceNo": "02610585",
+      "txnDate": "8/5/26",
+      "customerName": "Airotech Manufacturing Pte. Ltd.",
+      "totalAmt": 2005.5,
+      "balance": 2005.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "451",
+      "invoiceNo": "02610586",
+      "txnDate": "11/5/26",
+      "customerName": "Fun Flare Enterprises Pte. Ltd.",
+      "totalAmt": 3457.5,
+      "balance": 3457.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "452",
+      "invoiceNo": "02610587",
+      "txnDate": "11/5/26",
+      "customerName": "Gao Xing Da Pte. Ltd.",
+      "totalAmt": 2480,
+      "balance": 2480,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "453",
+      "invoiceNo": "02610588",
+      "txnDate": "11/5/26",
+      "customerName": "Minyotech Pte. Ltd.",
+      "totalAmt": 311.5,
+      "balance": 311.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "454",
+      "invoiceNo": "02610590",
+      "txnDate": "12/5/26",
+      "customerName": "Modo Space Technology Pte. Ltd.",
+      "totalAmt": 1600,
+      "balance": 1600,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "455",
+      "invoiceNo": "02610591",
+      "txnDate": "12/5/26",
+      "customerName": "Beltroad International Investment Consulting Pte. Ltd.",
+      "totalAmt": 510,
+      "balance": 510,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "456",
+      "invoiceNo": "02610593",
+      "txnDate": "12/5/26",
+      "customerName": "Yuan En Yi Pte. Ltd.",
+      "totalAmt": 105.5,
+      "balance": 105.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "457",
+      "invoiceNo": "02610594",
+      "txnDate": "12/5/26",
+      "customerName": "Anvistec Pte. Ltd.",
+      "totalAmt": 860,
+      "balance": 860,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "458",
+      "invoiceNo": "02610595",
+      "txnDate": "12/5/26",
+      "customerName": "Asia Academy of Digital Economics Ltd.",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "459",
+      "invoiceNo": "02610596",
+      "txnDate": "12/5/26",
+      "customerName": "Erised Pte. Ltd.",
+      "totalAmt": 560,
+      "balance": 560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "460",
+      "invoiceNo": "02610597",
+      "txnDate": "12/5/26",
+      "customerName": "Higo Holdings Pte. Ltd.",
+      "totalAmt": 460,
+      "balance": 460,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "461",
+      "invoiceNo": "02610601",
+      "txnDate": "13/5/26",
+      "customerName": "Srid Trade Company Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "462",
+      "invoiceNo": "02610605",
+      "txnDate": "14/5/26",
+      "customerName": "AI Node Global Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "463",
+      "invoiceNo": "02610606",
+      "txnDate": "14/5/26",
+      "customerName": "King Vantage Resources Pte. Ltd.",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "464",
+      "invoiceNo": "DN26-082",
+      "txnDate": "14/5/26",
+      "customerName": "Easybook.Com Pte Ltd",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "465",
+      "invoiceNo": "DN26-083",
+      "txnDate": "15/5/26",
+      "customerName": "Huako Portrait Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "466",
+      "invoiceNo": "02610608",
+      "txnDate": "15/5/26",
+      "customerName": "Yeo Hiap Seng Limited",
+      "totalAmt": 1200,
+      "balance": 1200,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "467",
+      "invoiceNo": "02610609",
+      "txnDate": "15/5/26",
+      "customerName": "A.I.R Pte. Ltd.",
+      "totalAmt": 205.5,
+      "balance": 205.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "468",
+      "invoiceNo": "02610610",
+      "txnDate": "18/5/26",
+      "customerName": "Easyfly Travel Technology Pte. Ltd.",
+      "totalAmt": 1400,
+      "balance": 1400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "469",
+      "invoiceNo": "DN26-084",
+      "txnDate": "18/5/26",
+      "customerName": "Tonly Heavy Industries (Singapore) Pte. Ltd.",
+      "totalAmt": 304,
+      "balance": 304,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "470",
+      "invoiceNo": "02610612",
+      "txnDate": "20/5/26",
+      "customerName": "Baobabtree (S) Pte. Ltd.",
+      "totalAmt": 1125.5,
+      "balance": 1125.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "471",
+      "invoiceNo": "DN26-085",
+      "txnDate": "20/5/26",
+      "customerName": "Remobie Company Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "472",
+      "invoiceNo": "02610613",
+      "txnDate": "20/5/26",
+      "customerName": "Shadow Tech Pte. Ltd.",
+      "totalAmt": 3260,
+      "balance": 3260,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "473",
+      "invoiceNo": "02610616",
+      "txnDate": "21/5/26",
+      "customerName": "To-Asia Enterprise Development Pte. Ltd.",
+      "totalAmt": 60,
+      "balance": 60,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "474",
+      "invoiceNo": "02610617",
+      "txnDate": "20/5/26",
+      "customerName": "Xi'an Surgical Medical Technology Co., Ltd.",
+      "totalAmt": 1860,
+      "balance": 1860,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "475",
+      "invoiceNo": "02610618",
+      "txnDate": "20/5/26",
+      "customerName": "Silver River Technology Pte. Ltd.",
+      "totalAmt": 2260,
+      "balance": 2260,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "476",
+      "invoiceNo": "02610619",
+      "txnDate": "21/5/26",
+      "customerName": "A.I.R Investment Management Pte. Ltd.",
+      "totalAmt": 1260,
+      "balance": 1260,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "477",
+      "invoiceNo": "02610621",
+      "txnDate": "21/5/26",
+      "customerName": "Portout Singapore Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "478",
+      "invoiceNo": "02610622",
+      "txnDate": "22/5/26",
+      "customerName": "Oasis Tech Fz-Llc",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "479",
+      "invoiceNo": "DN26-086",
+      "txnDate": "22/5/26",
+      "customerName": "Sanli Group Pte Ltd",
+      "totalAmt": 200,
+      "balance": 200,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "480",
+      "invoiceNo": "02610625",
+      "txnDate": "25/5/26",
+      "customerName": "Chang Run Pte Ltd",
+      "totalAmt": 480,
+      "balance": 480,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "481",
+      "invoiceNo": "02610627",
+      "txnDate": "25/5/26",
+      "customerName": "Bytesforce Technologies Pte. Ltd.",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "482",
+      "invoiceNo": "02610632",
+      "txnDate": "26/5/26",
+      "customerName": "Jordans Elevator (S) Pte. Ltd.",
+      "totalAmt": 765.5,
+      "balance": 765.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "483",
+      "invoiceNo": "02610633",
+      "txnDate": "26/5/26",
+      "customerName": "Helder Trading Pte Ltd",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "484",
+      "invoiceNo": "02610634",
+      "txnDate": "28/5/26",
+      "customerName": "Sino Mining Heavy Industries Pte. Ltd.",
+      "totalAmt": 765.5,
+      "balance": 765.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "485",
+      "invoiceNo": "02610635",
+      "txnDate": "28/5/26",
+      "customerName": "Scentses AndCo Pte. Ltd.",
+      "totalAmt": 100,
+      "balance": 100,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "486",
+      "invoiceNo": "02610636",
+      "txnDate": "29/5/26",
+      "customerName": "Luckymarine Int. Pte. Ltd.",
+      "totalAmt": 50,
+      "balance": 50,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "487",
+      "invoiceNo": "02610637",
+      "txnDate": "2/6/26",
+      "customerName": "Monterosa Services (Singapore) Pte Ltd",
+      "totalAmt": 800,
+      "balance": 800,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "488",
+      "invoiceNo": "DN26-088",
+      "txnDate": "3/6/26",
+      "customerName": "Jordans Elevator (S) Pte. Ltd.",
+      "totalAmt": 15,
+      "balance": 15,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "489",
+      "invoiceNo": "02610638",
+      "txnDate": "3/6/26",
+      "customerName": "Edge Fitness Pte. Ltd.",
+      "totalAmt": 1400,
+      "balance": 1400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "490",
+      "invoiceNo": "02610639",
+      "txnDate": "3/6/26",
+      "customerName": "FOMO Solution Pte Ltd",
+      "totalAmt": 55.5,
+      "balance": 55.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "491",
+      "invoiceNo": "02610641",
+      "txnDate": "3/6/26",
+      "customerName": "Sino Mining Heavy Industries Pte. Ltd.",
+      "totalAmt": 105.5,
+      "balance": 105.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "492",
+      "invoiceNo": "02610647",
+      "txnDate": "3/6/26",
+      "customerName": "San Qing Pte. Ltd.",
+      "totalAmt": 530,
+      "balance": 530,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "493",
+      "invoiceNo": "02610648",
+      "txnDate": "3/6/26",
+      "customerName": "Kelun Health Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "494",
+      "invoiceNo": "02610649",
+      "txnDate": "3/6/26",
+      "customerName": "Oceanwide Shipping Pte. Ltd.",
+      "totalAmt": 1582.5,
+      "balance": 1582.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "495",
+      "invoiceNo": "02610651",
+      "txnDate": "4/6/26",
+      "customerName": "HRL Trade Pte. Ltd.",
+      "totalAmt": 1960,
+      "balance": 1960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "496",
+      "invoiceNo": "DN26-090",
+      "txnDate": "8/6/26",
+      "customerName": "Huako Photo Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "497",
+      "invoiceNo": "02610654",
+      "txnDate": "8/6/26",
+      "customerName": "Singapore Mingtong Resources Pte. Ltd.",
+      "totalAmt": 1940,
+      "balance": 1940,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "498",
+      "invoiceNo": "02610655",
+      "txnDate": "5/6/26",
+      "customerName": "Chloe",
+      "totalAmt": 11415,
+      "balance": 11415,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "499",
+      "invoiceNo": "02610656",
+      "txnDate": "8/6/26",
+      "customerName": "Bonvoy Bulk Lines Pte.Ltd.",
+      "totalAmt": 1225.5,
+      "balance": 1225.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "500",
+      "invoiceNo": "02610660",
+      "txnDate": "9/6/26",
+      "customerName": "ZTT Hongkong Limited",
+      "totalAmt": 8560,
+      "balance": 8560,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "501",
+      "invoiceNo": "02610663",
+      "txnDate": "9/6/26",
+      "customerName": "Relong Pte. Ltd.",
+      "totalAmt": 1060,
+      "balance": 1060,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "502",
+      "invoiceNo": "02610664",
+      "txnDate": "9/6/26",
+      "customerName": "Ark Partners VCC",
+      "totalAmt": 1400,
+      "balance": 1400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "503",
+      "invoiceNo": "02610666",
+      "txnDate": "10/6/26",
+      "customerName": "Infitainment Culture Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "504",
+      "invoiceNo": "02610667",
+      "txnDate": "10/6/26",
+      "customerName": "C2 INVESTMENTS (CHINA) PTE. LTD.",
+      "totalAmt": 660,
+      "balance": 660,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "505",
+      "invoiceNo": "DN26-093",
+      "txnDate": "11/6/26",
+      "customerName": "Webeye Pte. Ltd.",
+      "totalAmt": 400,
+      "balance": 400,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "506",
+      "invoiceNo": "02610676",
+      "txnDate": "11/6/26",
+      "customerName": "Cj Frozen Food Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "507",
+      "invoiceNo": "02610684",
+      "txnDate": "11/6/26",
+      "customerName": "Howorth Pte. Ltd.",
+      "totalAmt": 960,
+      "balance": 960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "508",
+      "invoiceNo": "02610685",
+      "txnDate": "11/6/26",
+      "customerName": "H-SIN Education Pte. Ltd.",
+      "totalAmt": 1120,
+      "balance": 1120,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "509",
+      "invoiceNo": "02610688",
+      "txnDate": "11/6/26",
+      "customerName": "宁波吉德电器有限公司",
+      "totalAmt": 8960,
+      "balance": 8960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "510",
+      "invoiceNo": "02610689",
+      "txnDate": "11/6/26",
+      "customerName": "宁波吉德电器有限公司",
+      "totalAmt": 8960,
+      "balance": 8960,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "511",
+      "invoiceNo": "02610695",
+      "txnDate": "11/6/26",
+      "customerName": "Huako Photo Beta Pte. Ltd.",
+      "totalAmt": 1900,
+      "balance": 1900,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "512",
+      "invoiceNo": "02610696",
+      "txnDate": "11/6/26",
+      "customerName": "Huako Photo Alpha Pte. Ltd.",
+      "totalAmt": 1900,
+      "balance": 1900,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "513",
+      "invoiceNo": "02610697",
+      "txnDate": "12/6/26",
+      "customerName": "Emotion Elements And Wellness Pte. Ltd.",
+      "totalAmt": 2280,
+      "balance": 2280,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "514",
+      "invoiceNo": "DN26-097",
+      "txnDate": "12/6/26",
+      "customerName": "TOUCHSTONE MEDTECH PTE. LTD.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "515",
+      "invoiceNo": "DN26-099",
+      "txnDate": "12/6/26",
+      "customerName": "Jordans Elevator (S) Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "516",
+      "invoiceNo": "DN26-101",
+      "txnDate": "15/6/26",
+      "customerName": "Jiuding Industrial Pte. Ltd.",
+      "totalAmt": 5.5,
+      "balance": 5.5,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "517",
+      "invoiceNo": "02610705",
+      "txnDate": "15/6/26",
+      "customerName": "Qing Wellness Centre Pte. Ltd.",
+      "totalAmt": 1800,
+      "balance": 1800,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    },
+    {
+      "id": "518",
+      "invoiceNo": "02610724",
+      "txnDate": "16/6/26",
+      "customerName": "Yugo Foodie Pte. Ltd.",
+      "totalAmt": 760,
+      "balance": 760,
+      "status": "Open",
+      "statusRaw": "Deposited"
+    }
+  ]
+}
