@@ -1,15 +1,29 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Lazy singleton — createClient is NOT called at module load time.
+// Vercel build phase has no env vars, calling createClient() top-level crashes the build.
+let _client: SupabaseClient | null = null;
 
-// Browser / Server Component client (anon key)
-export const supabase = createClient(supabaseUrl, supabaseAnon);
+function getClient(): SupabaseClient {
+  if (!_client) {
+    _client = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+  return _client;
+}
 
-// Server-only admin client (secret key) — only import in API routes / Server Actions
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(_target, prop: string | symbol) {
+    return getClient()[prop as keyof SupabaseClient];
+  },
+});
+
 export function createAdminClient() {
-  const secretKey = process.env.SUPABASE_SECRET_KEY!;
-  return createClient(supabaseUrl, secretKey, {
-    auth: { persistSession: false },
-  });
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SECRET_KEY!,
+    { auth: { persistSession: false } }
+  );
 }
