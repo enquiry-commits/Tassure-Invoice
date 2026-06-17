@@ -49,10 +49,10 @@ export default async function NomineDirectorsPage() {
         ))}
       </div>
 
-      {/* ND Cards — one per row, companies in 3-col grid when expanded */}
-      <div className="flex flex-col gap-4">
-        {persons.map(person => (
-          <NDPersonCard key={person.name} person={person} />
+      {/* ND Accordion */}
+      <div className="rounded-xl overflow-hidden shadow-sm">
+        {persons.map((person, i) => (
+          <NDPersonCard key={person.name} person={person} isLast={i === persons.length - 1} />
         ))}
       </div>
     </div>
