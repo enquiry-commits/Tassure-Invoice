@@ -1,6 +1,8 @@
 import StatCard from '@/components/StatCard';
 import SectionCard from '@/components/SectionCard';
+import QBConnectButton from '@/components/QBConnectButton';
 import { Building2, UserCheck, MapPin, AlertTriangle } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import path from 'path';
 import fs from 'fs';
 
@@ -33,8 +35,23 @@ async function getData() {
   return { clients, ndByCompany, ndPersons };
 }
 
+async function getQBStatus() {
+  const { data } = await supabase
+    .from('quickbooks_tokens')
+    .select('realm_id, updated_at, refresh_expires_at')
+    .limit(1)
+    .maybeSingle();
+  if (!data) return { connected: false };
+  const refreshExpired = data.refresh_expires_at
+    ? new Date(data.refresh_expires_at) < new Date() : false;
+  return { connected: !refreshExpired, lastConnected: data.updated_at };
+}
+
 export default async function DashboardPage() {
-  const { clients, ndByCompany, ndPersons } = await getData();
+  const [{ clients, ndByCompany, ndPersons }, qbStatus] = await Promise.all([
+    getData(),
+    getQBStatus(),
+  ]);
 
   const totalClients      = clients.length;
   const withAddress       = clients.filter(c => c.usesAddressService).length;
@@ -71,8 +88,11 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <div className="mb-4 text-sm text-slate-500">Dashboard</div>
+      {/* Breadcrumb + QB status */}
+      <div className="mb-4 flex items-center justify-between">
+        <div className="text-sm text-slate-500">Dashboard</div>
+        <QBConnectButton connected={qbStatus.connected} lastConnected={qbStatus.lastConnected} />
+      </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
