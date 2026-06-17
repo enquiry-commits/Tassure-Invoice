@@ -49,8 +49,8 @@ export default async function NomineDirectorsPage() {
         ))}
       </div>
 
-      {/* ND Cards — default collapsed, click to expand all companies */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* ND Cards — one per row, companies in 3-col grid when expanded */}
+      <div className="flex flex-col gap-4">
         {persons.map(person => (
           <NDPersonCard key={person.name} person={person} />
         ))}

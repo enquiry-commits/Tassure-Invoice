@@ -68,9 +68,9 @@ export default function NDPersonCard({ person }: { person: NDPerson }) {
       {open && (
         <div className="px-5 py-4">
           {active.length > 0 ? (
-            <div className="space-y-1">
+            <div className="grid grid-cols-3 gap-x-6 gap-y-1">
               {active.map((a, i) => (
-                <div key={i} className="flex items-start gap-2 py-1.5 border-b border-slate-50 last:border-0">
+                <div key={i} className="flex items-start gap-2 py-1.5 border-b border-slate-50">
                   <span className="text-green-500 text-xs mt-0.5 flex-shrink-0">●</span>
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-slate-700 leading-snug">{a.company_name}</div>
