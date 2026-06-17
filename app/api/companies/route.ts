@@ -27,9 +27,11 @@ export async function GET(req: NextRequest) {
   const page   = parseInt(searchParams.get('page') || '1', 10);
   const limit  = parseInt(searchParams.get('limit') || '50', 10);
 
-  let data = clients.map((c: Record<string, unknown>) => {
+  type Row = Record<string, unknown> & { hasActiveND: boolean; activeNDs: unknown[] };
+
+  let data: Row[] = clients.map((c: Record<string, unknown>) => {
     const nd = ndMap[c.companyName as string];
-    return { ...c, hasActiveND: nd?.hasActiveND ?? false, activeNDs: nd?.activeNDs ?? [] };
+    return { ...c, hasActiveND: nd?.hasActiveND ?? false, activeNDs: nd?.activeNDs ?? [] } as Row;
   });
 
   if (filter === 'nd')      data = data.filter(c => c.hasActiveND);
