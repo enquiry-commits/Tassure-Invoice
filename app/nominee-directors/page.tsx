@@ -1,34 +1,34 @@
-import SectionCard from '@/components/SectionCard';
-import path from 'path';
-import fs from 'fs';
+import NDPersonCard from '@/components/NDPersonCard';
+import { supabase } from '@/lib/supabase';
 
-interface Appointment {
-  companyName: string;
-  subRole: string;
-  appointmentDate: string;
-  cessationDate: string;
-  isActive: boolean;
-}
+const today = new Date().toISOString().split('T')[0];
 
-interface NDPerson {
-  ndName: string;
-  memberId: string | null;
-  activeCount: number;
-  inactiveCount: number;
-  appointments: Appointment[];
-}
+async function getData() {
+  const [{ data: nds }, { data: appts }] = await Promise.all([
+    supabase.from('nominee_directors').select('id, name, member_id').order('name'),
+    supabase.from('nd_appointments').select('nd_id, company_name, sub_role, appointment_date, cessation_date'),
+  ]);
 
-async function getData(): Promise<NDPerson[]> {
-  const dataDir = path.join(process.cwd(), 'data');
-  return JSON.parse(fs.readFileSync(path.join(dataDir, 'nd_from_individuals.json'), 'utf8'));
+  const apptsByND = new Map<number, typeof appts>();
+  for (const a of appts ?? []) {
+    const list = apptsByND.get(a.nd_id) ?? [];
+    list.push(a);
+    apptsByND.set(a.nd_id, list);
+  }
+
+  return (nds ?? []).map(nd => {
+    const appointments = apptsByND.get(nd.id) ?? [];
+    const activeCount = appointments.filter(a => !a.cessation_date || a.cessation_date > today).length;
+    return { ...nd, appointments, activeCount, totalCount: appointments.length };
+  }).sort((a, b) => b.activeCount - a.activeCount);
 }
 
 export default async function NomineDirectorsPage() {
-  const ndPersons = await getData();
-  const sorted = [...ndPersons].sort((a, b) => b.activeCount - a.activeCount);
+  const persons = await getData();
 
-  const totalActive = ndPersons.reduce((s, p) => s + p.activeCount, 0);
-  const totalCeased = ndPersons.reduce((s, p) => s + p.inactiveCount, 0);
+  const totalActive    = persons.reduce((s, p) => s + p.activeCount, 0);
+  const totalCeased    = persons.reduce((s, p) => s + (p.totalCount - p.activeCount), 0);
+  const activePersons  = persons.filter(p => p.activeCount > 0).length;
 
   return (
     <div>
@@ -37,70 +37,22 @@ export default async function NomineDirectorsPage() {
       {/* Summary bar */}
       <div className="grid grid-cols-4 gap-4 mb-6">
         {[
-          { label: 'Total NDs', value: ndPersons.length, color: '#1d4ed8' },
-          { label: 'Active NDs', value: ndPersons.filter(p => p.activeCount > 0).length, color: '#16a34a' },
-          { label: 'Total Active Appointments', value: totalActive, color: '#d97706' },
-          { label: 'Historical Ceased', value: totalCeased, color: '#6b7280' },
+          { label: 'Total NDs',                 value: persons.length, color: '#1d4ed8' },
+          { label: 'Active NDs',                value: activePersons,  color: '#16a34a' },
+          { label: 'Total Active Appointments', value: totalActive,    color: '#d97706' },
+          { label: 'Historical Ceased',         value: totalCeased,    color: '#6b7280' },
         ].map(({ label, value, color }) => (
-          <div key={label} className="bg-white rounded-xl p-4 shadow-sm flex items-center justify-between">
-            <div>
-              <div className="text-2xl font-bold" style={{ color }}>{value}</div>
-              <div className="text-xs text-slate-500 mt-0.5">{label}</div>
-            </div>
+          <div key={label} className="bg-white rounded-xl p-4 shadow-sm">
+            <div className="text-2xl font-bold" style={{ color }}>{value}</div>
+            <div className="text-xs text-slate-500 mt-0.5">{label}</div>
           </div>
         ))}
       </div>
 
-      {/* ND Grid */}
+      {/* ND Cards — default collapsed, click to expand all companies */}
       <div className="grid grid-cols-2 gap-4">
-        {sorted.map(person => (
-          <SectionCard
-            key={person.ndName}
-            title={person.ndName}
-          >
-            {/* Status badges */}
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-xs bg-green-100 text-green-700 px-2.5 py-1 rounded-full font-semibold">
-                {person.activeCount} Active
-              </span>
-              <span className="text-xs bg-slate-100 text-slate-500 px-2.5 py-1 rounded-full">
-                {person.inactiveCount} Ceased
-              </span>
-              {person.memberId && (
-                <span className="text-xs text-slate-400 ml-auto">ID: {person.memberId}</span>
-              )}
-            </div>
-
-            {/* Active appointments */}
-            {person.appointments.filter(a => a.isActive).length > 0 ? (
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {person.appointments
-                  .filter(a => a.isActive)
-                  .map((a, i) => (
-                    <div key={i} className="flex items-start gap-2 py-1 border-b border-slate-50 last:border-0">
-                      <span className="text-green-500 text-xs mt-0.5 flex-shrink-0">●</span>
-                      <div className="min-w-0">
-                        <div className="text-xs font-medium text-slate-700 leading-tight">{a.companyName}</div>
-                        <div className="text-xs text-slate-400">Since {a.appointmentDate}</div>
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 italic">
-                {person.appointments.length > 0
-                  ? 'No current active appointments'
-                  : 'No appointment records found'}
-              </p>
-            )}
-
-            {/* Ceased count hint */}
-            {person.inactiveCount > 0 && (
-              <p className="text-xs text-slate-400 mt-2 pt-2 border-t border-slate-100">
-                + {person.inactiveCount} historical ceased appointment{person.inactiveCount > 1 ? 's' : ''}
-              </p>
-            )}
-          </SectionCard>
+        {persons.map(person => (
+          <NDPersonCard key={person.name} person={person} />
         ))}
       </div>
     </div>
