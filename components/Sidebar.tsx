@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 const navItems = [
@@ -17,28 +16,9 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="fixed left-0 top-0 h-screen w-52 flex flex-col z-40"
-      style={{ backgroundColor: '#1d3a5c' }}
+      className="fixed left-0 w-52 flex flex-col z-40"
+      style={{ backgroundColor: '#1d3a5c', top: '70px', height: 'calc(100vh - 70px)' }}
     >
-      {/* Logo — 70px height matches navbar */}
-      <div
-        className="flex items-center gap-3 px-4 border-b border-white/10 shrink-0"
-        style={{ height: '70px' }}
-      >
-        <Image
-          src="/logo.png"
-          alt="Tassure Logo"
-          width={40}
-          height={40}
-          className="object-contain rounded"
-          priority
-        />
-        <span style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff', lineHeight: 1.2 }}>
-          TASSURE<br />
-          <span style={{ fontWeight: 400, color: '#93c5fd', fontSize: '11px' }}>Invoice</span>
-        </span>
-      </div>
-
       {/* Nav */}
       <nav className="flex-1 py-3 overflow-y-auto">
         {navItems.map(({ href, label, icon }) => {
