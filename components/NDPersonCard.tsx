@@ -41,38 +41,45 @@ export default function NDPersonCard({ person, isLast }: { person: NDPerson; isL
       {/* Row header */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-3 text-left transition-colors"
+        className="w-full flex items-center px-5 py-3 text-left transition-colors gap-4"
         style={{ backgroundColor: open ? '#1e3a8a' : '#1d3a5c' }}
         onMouseEnter={e => { if (!open) (e.currentTarget as HTMLElement).style.backgroundColor = '#1e3a8a'; }}
         onMouseLeave={e => { if (!open) (e.currentTarget as HTMLElement).style.backgroundColor = '#1d3a5c'; }}
       >
-        <span className="text-sm font-semibold text-white tracking-wide">{person.name}</span>
+        {/* Name — fixed width */}
+        <span className="text-sm font-semibold text-white tracking-wide" style={{ width: '220px', flexShrink: 0 }}>
+          {person.name}
+        </span>
 
-        <div className="flex items-center gap-2.5">
-          <span
-            className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
-            style={{ backgroundColor: 'rgba(34,197,94,0.2)', color: '#86efac' }}
-          >
-            {active.length} Active
-          </span>
-          {ceased.length > 0 && (
-            <span
-              className="text-xs px-2.5 py-0.5 rounded-full"
-              style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.45)' }}
-            >
-              {ceased.length} Ceased
-            </span>
-          )}
-          {person.member_id && (
-            <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
-              ID: {person.member_id}
-            </span>
-          )}
-          {open
-            ? <ChevronUp size={15} className="flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }} />
-            : <ChevronDown size={15} className="flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }} />
-          }
-        </div>
+        {/* Active badge */}
+        <span
+          className="text-xs font-semibold px-3 py-0.5 rounded-full"
+          style={{ backgroundColor: 'rgba(34,197,94,0.2)', color: '#86efac', width: '90px', textAlign: 'center', flexShrink: 0 }}
+        >
+          {active.length} Active
+        </span>
+
+        {/* Ceased badge */}
+        <span
+          className="text-xs px-3 py-0.5 rounded-full"
+          style={{ backgroundColor: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.4)', width: '90px', textAlign: 'center', flexShrink: 0 }}
+        >
+          {ceased.length > 0 ? `${ceased.length} Ceased` : '—'}
+        </span>
+
+        {/* ID */}
+        <span className="text-xs" style={{ color: 'rgba(255,255,255,0.3)', width: '70px', flexShrink: 0 }}>
+          {person.member_id ? `ID: ${person.member_id}` : ''}
+        </span>
+
+        {/* Spacer */}
+        <span className="flex-1" />
+
+        {/* Chevron */}
+        {open
+          ? <ChevronUp size={15} className="flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }} />
+          : <ChevronDown size={15} className="flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }} />
+        }
       </button>
 
       {/* Expanded body */}
