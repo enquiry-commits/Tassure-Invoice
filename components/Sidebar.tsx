@@ -23,8 +23,8 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="fixed left-0 w-52 flex flex-col z-40"
-      style={{ backgroundColor: '#1d3a5c', top: '70px', height: 'calc(100vh - 70px)' }}
+      className="flex flex-col flex-shrink-0"
+      style={{ backgroundColor: '#1d3a5c', width: '208px', overflowY: 'auto' }}
     >
       <nav className="flex-1 py-3 overflow-y-auto">
         {navItems.map(({ href, label, Icon }) => {
