@@ -53,6 +53,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <span style={{ fontWeight: 700, color: '#1e3a5f' }}>Vincent</span>
               </span>
               <button
+                className="hover:bg-[rgba(30,58,95,0.04)] transition-colors cursor-pointer"
                 style={{
                   fontSize: '14px',
                   fontWeight: 600,
@@ -61,13 +62,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   borderRadius: '8px',
                   border: 'none',
                   background: 'transparent',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={e => {
-                  (e.currentTarget as HTMLElement).style.background = 'rgba(30,58,95,0.04)';
-                }}
-                onMouseLeave={e => {
-                  (e.currentTarget as HTMLElement).style.background = 'transparent';
                 }}
               >
                 Logout
