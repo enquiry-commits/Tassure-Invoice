@@ -1,21 +1,23 @@
+import { LucideIcon } from 'lucide-react';
+
 interface StatCardProps {
   value: number | string;
   label: string;
   color: 'orange' | 'yellow' | 'gray' | 'red' | 'blue' | 'green';
-  icon?: string;
+  Icon: LucideIcon;
   sub?: string;
 }
 
 const colors = {
-  orange: { bg: '#f97316', text: '#ffffff', icon: '#ffedd5' },
-  yellow: { bg: '#d97706', text: '#ffffff', icon: '#fef3c7' },
-  gray:   { bg: '#475569', text: '#ffffff', icon: '#e2e8f0' },
-  red:    { bg: '#dc2626', text: '#ffffff', icon: '#fee2e2' },
-  blue:   { bg: '#1d4ed8', text: '#ffffff', icon: '#dbeafe' },
-  green:  { bg: '#16a34a', text: '#ffffff', icon: '#dcfce7' },
+  orange: { bg: '#f97316', text: '#ffffff' },
+  yellow: { bg: '#d97706', text: '#ffffff' },
+  gray:   { bg: '#475569', text: '#ffffff' },
+  red:    { bg: '#dc2626', text: '#ffffff' },
+  blue:   { bg: '#1d4ed8', text: '#ffffff' },
+  green:  { bg: '#16a34a', text: '#ffffff' },
 };
 
-export default function StatCard({ value, label, color, icon = '🏢', sub }: StatCardProps) {
+export default function StatCard({ value, label, color, Icon, sub }: StatCardProps) {
   const c = colors[color];
   return (
     <div
@@ -28,10 +30,10 @@ export default function StatCard({ value, label, color, icon = '🏢', sub }: St
         {sub && <div className="text-xs mt-0.5 opacity-70">{sub}</div>}
       </div>
       <div
-        className="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
-        style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+        className="w-11 h-11 rounded-full flex items-center justify-center"
+        style={{ backgroundColor: 'rgba(255,255,255,0.18)' }}
       >
-        {icon}
+        <Icon size={22} strokeWidth={1.75} color="rgba(255,255,255,0.85)" />
       </div>
     </div>
   );

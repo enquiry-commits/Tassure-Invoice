@@ -1,5 +1,6 @@
 import StatCard from '@/components/StatCard';
 import SectionCard from '@/components/SectionCard';
+import { Building2, UserCheck, MapPin, AlertTriangle } from 'lucide-react';
 import path from 'path';
 import fs from 'fs';
 
@@ -75,10 +76,10 @@ export default async function DashboardPage() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard value={totalClients}      label="Total Clients"        color="orange" icon="🏢" />
-        <StatCard value={activeNDCompanies} label="Active ND Companies"  color="yellow" icon="👤" />
-        <StatCard value={withAddress}       label="Address Service"      color="gray"   icon="📍" />
-        <StatCard value={ceasedOnly.length} label="ND Ceased (No Cover)" color="red"    icon="⚠️" />
+        <StatCard value={totalClients}      label="Total Clients"        color="orange" Icon={Building2}      />
+        <StatCard value={activeNDCompanies} label="Active ND Companies"  color="yellow" Icon={UserCheck}      />
+        <StatCard value={withAddress}       label="Address Service"      color="gray"   Icon={MapPin}         />
+        <StatCard value={ceasedOnly.length} label="ND Ceased (No Cover)" color="red"    Icon={AlertTriangle}  />
       </div>
 
       {/* Main content grid */}
