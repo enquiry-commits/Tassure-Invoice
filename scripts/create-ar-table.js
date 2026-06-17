@@ -27,14 +27,24 @@ async function main() {
     return raw;
   }
 
+  // Deduplicate by (entity_name, year, event_type) — keep last occurrence
+  const seen = new Map();
+  records.forEach(r => {
+    const key = `${r.entityName}|${r.year}|${r.event}`;
+    seen.set(key, r);
+  });
+  const unique = [...seen.values()];
+  console.log(`After dedup: ${unique.length} unique records (removed ${records.length - unique.length})`);
+
   // Upsert in batches of 100
-  const rows = records.map(r => ({
+  const rows = unique.map(r => ({
     entity_name: r.entityName,
     year: r.year,
     fye: cleanDate(r.fye),
     due_date: cleanDate(r.dueDate),
     pic: r.pic || '',
     status: r.status || 'Pending',
+    event_type: r.event || 'AR',
     scraped_at: raw.scraped_at,
   }));
 
@@ -44,7 +54,7 @@ async function main() {
     const batch = rows.slice(i, i + BATCH);
     const { error } = await sb
       .from('annual_returns')
-      .upsert(batch, { onConflict: 'entity_name,year', ignoreDuplicates: false });
+      .upsert(batch, { onConflict: 'entity_name,year,event_type', ignoreDuplicates: false });
 
     if (error) {
       console.error(`Batch ${i}-${i + BATCH} error:`, error.message);

@@ -27,7 +27,7 @@ function matchScore(a: string, b: string): number {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const year  = searchParams.get('year') ?? new Date().getFullYear().toString();
-  const type  = searchParams.get('type') ?? 'all'; // 'nd' | 'address' | 'ar' | 'all'
+  const type  = searchParams.get('type') ?? 'all'; // 'nd' | 'address' | 'ar' | 'agm' | 'all'
 
   const supabase = createAdminClient();
 
@@ -45,39 +45,44 @@ export async function GET(req: NextRequest) {
     .select('id, company_name, uses_address, internal_id');
   if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
 
-  // ── Fetch Annual Return records for the year (Teamwork source of truth)
-  const { data: arRecords } = await supabase
+  // ── Fetch AR + AGM records for the year (Teamwork source of truth)
+  const { data: dueDateRecords } = await supabase
     .from('annual_returns')
-    .select('entity_name, year, fye, due_date, status')
+    .select('entity_name, year, fye, due_date, status, event_type')
     .eq('year', parseInt(year));
+
+  const arRecords  = (dueDateRecords ?? []).filter(r => r.event_type === 'AR');
+  const agmRecords = (dueDateRecords ?? []).filter(r => r.event_type === 'AGM');
 
   // ── Fetch active ND appointments (no cessation date)
   const { data: ndAppointments } = await supabase
     .from('nd_appointments')
     .select('company_name, appointment_date, cessation_date');
 
-  const arSet   = new Set((arRecords ?? []).map(r => normalize(r.entity_name)));
-  const ndNames = (ndAppointments ?? [])
-    .filter(nd => !nd.cessation_date)
-    .map(nd => normalize(nd.company_name));
-  const ndSet = new Set(ndNames);
+  const arSet  = new Set((arRecords).map(r => normalize(r.entity_name)));
+  const agmSet = new Set((agmRecords).map(r => normalize(r.entity_name)));
+  const ndSet  = new Set(
+    (ndAppointments ?? []).filter(nd => !nd.cessation_date).map(nd => normalize(nd.company_name))
+  );
 
-  // ── Build company service map
+  // ── Build company result list
   const results = (allCompanies ?? []).map(company => {
     const normName = normalize(company.company_name);
 
-    // Which services apply to this company?
-    const hasAR      = arSet.has(normName) ||
-                       (arRecords ?? []).some(r => matchScore(company.company_name, r.entity_name) >= 70);
-    const hasND      = ndSet.has(normName) ||
-                       (ndAppointments ?? []).filter(nd => !nd.cessation_date)
-                         .some(nd => matchScore(company.company_name, nd.company_name) >= 70);
+    const hasAR  = arSet.has(normName)  || arRecords.some(r  => matchScore(company.company_name, r.entity_name)  >= 70);
+    const hasAGM = agmSet.has(normName) || agmRecords.some(r => matchScore(company.company_name, r.entity_name) >= 70);
+    const hasND  = ndSet.has(normName)  ||
+                   (ndAppointments ?? []).filter(nd => !nd.cessation_date)
+                     .some(nd => matchScore(company.company_name, nd.company_name) >= 70);
     const hasAddress = company.uses_address === true;
 
-    // Skip if none of the requested service types
+    // Filter by requested type
     if (type === 'ar'      && !hasAR)      return null;
+    if (type === 'agm'     && !hasAGM)     return null;
     if (type === 'nd'      && !hasND)      return null;
     if (type === 'address' && !hasAddress) return null;
+    // 'all' — only show companies that have at least one service
+    if (type === 'all' && !hasAR && !hasAGM && !hasND && !hasAddress) return null;
 
     // Match QB invoices to this company
     const matches = (invoices ?? [])
@@ -96,19 +101,23 @@ export async function GET(req: NextRequest) {
     else if (hasOpen)             billingStatus = 'INVOICED_UNPAID';
     else                          billingStatus = 'UNKNOWN';
 
-    // AR status from Teamwork
-    const arRecord = (arRecords ?? []).find(r => matchScore(company.company_name, r.entity_name) >= 70);
+    // Per-event status from Teamwork
+    const arRecord  = arRecords.find(r  => matchScore(company.company_name, r.entity_name)  >= 70);
+    const agmRecord = agmRecords.find(r => matchScore(company.company_name, r.entity_name) >= 70);
 
     return {
-      companyId:     company.id,
-      companyName:   company.company_name,
+      companyId:    company.id,
+      companyName:  company.company_name,
       services: {
         ar:      hasAR,
+        agm:     hasAGM,
         nd:      hasND,
         address: hasAddress,
       },
-      arStatus:      arRecord?.status ?? null,
-      arDueDate:     arRecord?.due_date ?? null,
+      arStatus:    arRecord?.status   ?? null,
+      arDueDate:   arRecord?.due_date ?? null,
+      agmStatus:   agmRecord?.status   ?? null,
+      agmDueDate:  agmRecord?.due_date ?? null,
       billingStatus,
       invoiceCount:  invoiceList.length,
       totalBilled,

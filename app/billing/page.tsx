@@ -16,11 +16,14 @@ interface CompanyResult {
   companyName:   string;
   services: {
     ar:      boolean;
+    agm:     boolean;
     nd:      boolean;
     address: boolean;
   };
   arStatus:      string | null;
   arDueDate:     string | null;
+  agmStatus:     string | null;
+  agmDueDate:    string | null;
   billingStatus: 'NOT_BILLED' | 'PAID' | 'INVOICED_UNPAID' | 'UNKNOWN';
   invoiceCount:  number;
   totalBilled:   number;
@@ -81,7 +84,7 @@ export default function BillingPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Billing Comparison</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Annual Return · Nominee Director · Address Service vs QB Invoices</p>
+          <p className="text-sm text-slate-500 mt-0.5">Annual Return · AGM · Nominee Director · Address Service vs QB Invoices</p>
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -98,6 +101,7 @@ export default function BillingPage() {
           >
             <option value="all">All Services</option>
             <option value="ar">Annual Return</option>
+            <option value="agm">AGM</option>
             <option value="nd">Nominee Director</option>
             <option value="address">Address Service</option>
           </select>
@@ -185,6 +189,11 @@ export default function BillingPage() {
                       <Building2 size={10} />AR
                     </span>
                   )}
+                  {company.services.agm && (
+                    <span className="flex items-center gap-0.5 text-xs bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded-full">
+                      <Building2 size={10} />AGM
+                    </span>
+                  )}
                   {company.services.nd && (
                     <span className="flex items-center gap-0.5 text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">
                       <Users size={10} />ND
@@ -197,13 +206,21 @@ export default function BillingPage() {
                   )}
                 </div>
 
-                {/* AR filing status from Teamwork */}
+                {/* AR / AGM status from Teamwork */}
                 {company.arStatus && (
                   <span
                     className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0"
                     style={AR_STATUS_COLOR[company.arStatus] ?? { bg: '#f8fafc', color: '#64748b' }}
                   >
                     AR: {company.arStatus}
+                  </span>
+                )}
+                {company.agmStatus && (
+                  <span
+                    className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0"
+                    style={AR_STATUS_COLOR[company.agmStatus] ?? { bg: '#f8fafc', color: '#64748b' }}
+                  >
+                    AGM: {company.agmStatus}
                   </span>
                 )}
 
@@ -223,11 +240,17 @@ export default function BillingPage() {
               {isOpen && (
                 <div className="px-10 pb-4 pt-1">
                   {/* Service detail row */}
-                  <div className="flex gap-4 mb-3 text-xs text-slate-500">
+                  <div className="flex gap-4 mb-3 text-xs text-slate-500 flex-wrap">
                     {company.services.ar && (
                       <span>
                         AR Due: <strong>{company.arDueDate ?? '—'}</strong>
                         {company.arStatus ? ` · ${company.arStatus}` : ''}
+                      </span>
+                    )}
+                    {company.services.agm && (
+                      <span>
+                        AGM Due: <strong>{company.agmDueDate ?? '—'}</strong>
+                        {company.agmStatus ? ` · ${company.agmStatus}` : ''}
                       </span>
                     )}
                   </div>
