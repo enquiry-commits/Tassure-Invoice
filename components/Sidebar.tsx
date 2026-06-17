@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 const navItems = [
@@ -21,16 +22,14 @@ export default function Sidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10">
-        <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
-          style={{ backgroundColor: '#7c3aed' }}
-        >
-          T
-        </div>
-        <div className="leading-tight">
-          <div className="text-white font-bold text-sm">T Assure</div>
-          <div className="text-blue-300 text-xs">Billing System</div>
-        </div>
+        <Image
+          src="/logo.png"
+          alt="Tassure Logo"
+          width={120}
+          height={40}
+          className="object-contain"
+          priority
+        />
       </div>
 
       {/* Nav */}
