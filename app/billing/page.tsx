@@ -254,12 +254,22 @@ export default function BillingPage() {
                         <ServiceDot active={company.services.address} label="Addr" color="#16a34a" />
                       </td>
 
-                      {/* Teamwork statuses */}
+                      {/* Teamwork statuses + due dates */}
                       <td className="px-3 py-3 text-center">
-                        <StatusPill status={company.arStatus} />
+                        <div className="flex flex-col items-center gap-0.5">
+                          <StatusPill status={company.arStatus} />
+                          {company.arDueDate && (
+                            <span className="text-xs text-slate-400">{company.arDueDate}</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-3 text-center">
-                        <StatusPill status={company.agmStatus} />
+                        <div className="flex flex-col items-center gap-0.5">
+                          <StatusPill status={company.agmStatus} />
+                          {company.agmDueDate && (
+                            <span className="text-xs text-slate-400">{company.agmDueDate}</span>
+                          )}
+                        </div>
                       </td>
 
                       {/* QB billing status */}
