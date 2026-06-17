@@ -20,16 +20,23 @@ export default function Sidebar() {
       className="fixed left-0 top-0 h-screen w-52 flex flex-col z-40"
       style={{ backgroundColor: '#1d3a5c' }}
     >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10">
+      {/* Logo — 70px height matches navbar */}
+      <div
+        className="flex items-center gap-3 px-4 border-b border-white/10 shrink-0"
+        style={{ height: '70px' }}
+      >
         <Image
           src="/logo.png"
           alt="Tassure Logo"
-          width={120}
+          width={40}
           height={40}
-          className="object-contain"
+          className="object-contain rounded"
           priority
         />
+        <span style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff', lineHeight: 1.2 }}>
+          TASSURE<br />
+          <span style={{ fontWeight: 400, color: '#93c5fd', fontSize: '11px' }}>Invoice</span>
+        </span>
       </div>
 
       {/* Nav */}

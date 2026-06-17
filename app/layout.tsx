@@ -30,9 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Image
                 src="/logo.png"
                 alt="Tassure"
-                height={45}
-                width={120}
-                className="object-contain object-left"
+                height={44}
+                width={44}
+                className="object-contain rounded"
                 priority
               />
               <span
@@ -40,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   fontSize: '18px',
                   fontWeight: 800,
                   color: '#1e3a5f',
+                  letterSpacing: '-0.3px',
                 }}
               >
                 Billing System
