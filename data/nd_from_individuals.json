@@ -1,0 +1,1854 @@
+[
+  {
+    "ndName": "CHEN DE",
+    "memberId": "1313",
+    "appointments": [
+      {
+        "companyName": "BELTROAD INTERNATIONAL INVESTMENT CONSULTING PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "28/04/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "RELONG PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/05/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "INFINITY LINKS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "24/05/2023",
+        "cessationDate": "02/10/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "TIDEUNIT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/08/2023",
+        "cessationDate": "11/09/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "AVANTAI PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "17/08/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "PHOEBUS LIGHT INDUSTRIAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "24/10/2023",
+        "cessationDate": "02/09/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "AUTHENTIC ENTERPRISE MANAGEMENT CONSULTING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "21/11/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "FANCING PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "28/11/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ZHONG HEALTHCARE TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "17/11/2023",
+        "cessationDate": "29/08/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "HELDER TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "01/03/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "WEJOY PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "22/12/2023",
+        "cessationDate": "23/04/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "BAO FORTUNE SHIPPING (G) PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "05/01/2024",
+        "cessationDate": "(Proposed) 06/01/2025",
+        "isActive": true
+      },
+      {
+        "companyName": "MAN SANG RESOURCES PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "01/04/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BETTER CARE PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "01/03/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "TAIYAU TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "05/03/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "GAISHI (SINGAPORE) HOLDING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "21/03/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "R&RONG TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "25/03/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SHI E XIN RUN INTERNATIONAL TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "21/08/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "NAJIWAN PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "17/07/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SHADOW TECH PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "(Proposed) 26/09/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "GLORY INTERNATIONAL CULTURE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "17/10/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BILLIONGOLD MARINE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "18/10/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YU AN SHIPPING PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "(Proposed) 23/10/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "TIMES SHIPPING PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "(Proposed) 13/11/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "FARWILL (SINGAPORE) PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "22/01/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "DYNESS SINGAPORE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "(Proposed) 13/03/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "CORETECH SOLUTIONS CAPITAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/09/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SUMMITBRIDGE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "19/12/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ELEPHANT NEW ENERGY TECHNOLOGY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "13/04/2026",
+        "cessationDate": "",
+        "isActive": true
+      }
+    ],
+    "activeCount": 24,
+    "inactiveCount": 5
+  },
+  {
+    "ndName": "DAI LIQING",
+    "memberId": "1509",
+    "appointments": [],
+    "activeCount": 0,
+    "inactiveCount": 0
+  },
+  {
+    "ndName": "HAN SONGYANG",
+    "memberId": "1482",
+    "appointments": [
+      {
+        "companyName": "LONGMAN SHIPPING PTE. LIMITED",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/12/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "MASCOT CULTURAL & CREATIVE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "18/01/2024",
+        "cessationDate": "14/06/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "PACIFIC PRIMACOM PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "31/01/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "LEBESE INTERNATIONAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "30/01/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SILKWAY ENERGY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "07/03/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "NAJIWAN PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "02/05/2024",
+        "cessationDate": "17/07/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "GOLDEN LOTUS INFORMATION SERVICE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "10/05/2024",
+        "cessationDate": "29/08/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "HONG HE YI PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "22/08/2024",
+        "cessationDate": "21/03/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "XGRIT TECHNOLOGY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "04/09/2024",
+        "cessationDate": "07/03/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "GLOBAL DUTY FREE PTE. LIMITED",
+        "subRole": "",
+        "appointmentDate": "06/11/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "NEW TALI MARITIME PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "07/01/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "HAITENG HONGFAN PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "16/01/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ZE YUAN JI PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "15/01/2025",
+        "cessationDate": "27/05/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "BAOLAIPO ELECTRONICS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "21/01/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "FILMNOVA PTE. LIMITED",
+        "subRole": "Nominee Director",
+        "appointmentDate": "21/04/2025",
+        "cessationDate": "05/11/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "ELECTRAMIN INTERNATIONAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "07/05/2025",
+        "cessationDate": "13/08/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "CHINASIN MARINE ENGINEERING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/05/2025",
+        "cessationDate": "13/10/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "MEISHAN SILK ROAD TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "29/05/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ZESTORY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "18/07/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ZEROX GLOBAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/09/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "GRANDEX BUSINESS SOLUTION PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "13/10/2025",
+        "cessationDate": "23/01/2026",
+        "isActive": false
+      },
+      {
+        "companyName": "XING HAN CONSTRUCTION PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "22/12/2025",
+        "cessationDate": "30/03/2026",
+        "isActive": false
+      },
+      {
+        "companyName": "PEACEFUL GLOW PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "27/01/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "RIDGE RESOURCE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "30/01/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "KINPLUS TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "09/05/2025",
+        "cessationDate": "",
+        "isActive": true
+      }
+    ],
+    "activeCount": 14,
+    "inactiveCount": 11
+  },
+  {
+    "ndName": "LI JIANWEI",
+    "memberId": "20",
+    "appointments": [
+      {
+        "companyName": "RICHANCE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "22/07/2016",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SIEHI SHIPPING PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "12/04/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ZEROX GLOBAL PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "23/05/2023",
+        "cessationDate": "20/07/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "AUTHENTIC ENTERPRISE MANAGEMENT CONSULTING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "25/05/2023",
+        "cessationDate": "21/11/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "PORTOUT SINGAPORE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "24/07/2023",
+        "cessationDate": "01/08/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "DB AI HE JIU PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "03/01/2025",
+        "cessationDate": "",
+        "isActive": true
+      }
+    ],
+    "activeCount": 3,
+    "inactiveCount": 3
+  },
+  {
+    "ndName": "LIU XIAOMEI",
+    "memberId": "62",
+    "appointments": [
+      {
+        "companyName": "BELTROAD INTERNATIONAL INVESTMENT CONSULTING PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "01/07/2017",
+        "cessationDate": "28/04/2022",
+        "isActive": false
+      },
+      {
+        "companyName": "LOYANG BESTCONN TRADING & SERVICES PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "21/05/2019",
+        "cessationDate": "05/04/2020",
+        "isActive": false
+      },
+      {
+        "companyName": "LOYANG PRIME TRADING & SERVICES PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "22/11/2018",
+        "cessationDate": "05/04/2020",
+        "isActive": false
+      },
+      {
+        "companyName": "SHENG MING TECH PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "04/07/2023",
+        "cessationDate": "20/02/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "LOYANG GUOAN TRADING & SERVICES PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "03/11/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "COMTOM PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "27/12/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "HALO INNOVATIONS PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "12/01/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ORIENTAL PAL SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "02/02/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ARK PARTNERS MANAGEMENT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "19/04/2024",
+        "cessationDate": "12/07/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "CARE PROPERTY HOLDINGS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "(Proposed) 27/05/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YU AN (SGP) HOLDING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "28/10/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YU AN BULK HOLDING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "30/04/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "WAYPORT TECHNOLOGY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "22/05/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YIHONG INVESTMENTS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "07/07/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ZTT SINGAPORE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "24/07/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ADVANCE CF TECHNOLOGY PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "11/11/2025",
+        "cessationDate": "01/12/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "YUHE CONSULTING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "(Proposed) 17/04/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BAOBABTREE (S) PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "13/05/2026",
+        "cessationDate": "",
+        "isActive": true
+      }
+    ],
+    "activeCount": 12,
+    "inactiveCount": 6
+  },
+  {
+    "ndName": "NG KEONG HUAT",
+    "memberId": "1533",
+    "appointments": [
+      {
+        "companyName": "ORBITEZ PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "15/07/2021",
+        "cessationDate": "(Proposed) 27/05/2022",
+        "isActive": true
+      },
+      {
+        "companyName": "RICI INDUSTRY (SINGAPORE) PTE. LTD.",
+        "subRole": "Nominee DirectorController",
+        "appointmentDate": "21/07/2023",
+        "cessationDate": "02/04/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "ICOMINTAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/01/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "STOPIA TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "26/12/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YB BROTHERS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "23/12/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "KINGSEND PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "08/01/2026",
+        "cessationDate": "09/03/2026",
+        "isActive": false
+      },
+      {
+        "companyName": "CEDRUS GENERATIONS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "02/01/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "RICH HIGHTECH (SINGAPORE) PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "23/01/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BAO NING SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "18/03/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "AI NODE GLOBAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "12/03/2026",
+        "cessationDate": "22/04/2026",
+        "isActive": false
+      },
+      {
+        "companyName": "ANMED TECHNOLOGIES PTE.LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "10/04/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "KRAF PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "26/03/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SUNLIGHT INNOVATION PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "27/03/2026",
+        "cessationDate": "13/05/2026",
+        "isActive": false
+      },
+      {
+        "companyName": "LUMINAR GLOBAL HORIZON PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "20/04/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "AEVUM CAPITAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "07/04/2026",
+        "cessationDate": "",
+        "isActive": true
+      }
+    ],
+    "activeCount": 11,
+    "inactiveCount": 4
+  },
+  {
+    "ndName": "NG LAY KIAN",
+    "memberId": "685",
+    "appointments": [
+      {
+        "companyName": "YUANFENG SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "21/06/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "JZ.M SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "25/06/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "POWERGUARD SINGAPORE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "29/06/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "HONGDA OVERSEAS INVESTMENT PTE. LIMITED",
+        "subRole": "Nominee Director",
+        "appointmentDate": "18/06/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "LZS TRAVEL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "16/06/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BINQUANT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "22/10/2021",
+        "cessationDate": "28/12/2022",
+        "isActive": false
+      },
+      {
+        "companyName": "DIGITAL ASSET CUSTODIAN TECHNOLOGY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "10/11/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BAO FORTUNE SHIPPING (G) PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "16/06/2021",
+        "cessationDate": "(Proposed) 04/01/2024",
+        "isActive": true
+      },
+      {
+        "companyName": "ASIA CONNET PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "01/12/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YYDS TECHNOLOGY PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "28/12/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "HAITEK INDUSTRIES HOLDING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "24/02/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "VIGOROUS METALS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "28/06/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "RENREN HU YU PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "25/04/2022",
+        "cessationDate": "03/01/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "MERIT BULK PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "29/04/2022",
+        "cessationDate": "12/04/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "WARM SEA WIND PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "09/05/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "XGC SINGAPORE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "11/07/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "DB AI HE JIU PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "25/08/2022",
+        "cessationDate": "03/01/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "REMOBIE COMPANY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "19/08/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "PAYLABS OCEAN CAPITAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "01/09/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "VANDA LOVE HOLDING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "19/09/2022",
+        "cessationDate": "01/11/2022",
+        "isActive": false
+      },
+      {
+        "companyName": "VANDA LOVE FUND PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "19/09/2022",
+        "cessationDate": "01/11/2022",
+        "isActive": false
+      },
+      {
+        "companyName": "LA VANDA MANAGEMENT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "19/09/2022",
+        "cessationDate": "01/11/2022",
+        "isActive": false
+      },
+      {
+        "companyName": "PRIMATECH PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "04/10/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "RAYFINE INTERNATIONAL TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "27/10/2022",
+        "cessationDate": "07/08/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "META GAEA PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "02/12/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "HOWORTH PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "25/05/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "MINGXIN ENTERPRISE MANAGEMENT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "17/05/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SNAIL MOBILE SINGAPORE PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "14/03/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "LSR GLOBE PTE. LTD.",
+        "subRole": "Nominee DirectorController",
+        "appointmentDate": "16/03/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "LUCKYMARINE INT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "16/06/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "UNIONFUTURE MARINE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "24/04/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "THE HASHING COMPANY PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "08/04/2022",
+        "cessationDate": "26/06/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "XPEL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "10/05/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "FUYUAN TECHNOLOGY TRADE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "09/11/2023",
+        "cessationDate": "29/08/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "POSEIDON DIGITAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "09/05/2022",
+        "cessationDate": "25/03/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "BRIGHT VISION TRADING INVESTMENTS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "13/05/2022",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "JOYGLOBE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "27/01/2026",
+        "cessationDate": "11/06/2026",
+        "isActive": false
+      }
+    ],
+    "activeCount": 25,
+    "inactiveCount": 12
+  },
+  {
+    "ndName": "PUNNATARO WEE KAI XIN",
+    "memberId": "1662",
+    "appointments": [
+      {
+        "companyName": "BYF INTERIOR PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "19/09/2022",
+        "cessationDate": "08/09/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "ELITE GATHERING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "30/07/2024",
+        "cessationDate": "12/09/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "PORT AND BRIDGE CAPITAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "04/09/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "NEW PEAK DEVELOPMENT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/10/2024",
+        "cessationDate": "(Proposed) 10/12/2025",
+        "isActive": true
+      },
+      {
+        "companyName": "YUFENG MEDICAL TECHNOLOGY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/10/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "FUHAI INTERNATIONAL TRANSPORT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "18/10/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SILVER ZENITH MARITIME PTE.LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "18/10/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "CYBER SHARK GAMES PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "18/10/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BLUE EAGLE SUPPLY CHAIN PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "20/11/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "DAWNBYTE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "07/02/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "HYDE SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "(Proposed) 16/11/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BAO FORTUNE SHIPPING (G) PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "(Proposed) 06/01/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "GLOBAL HARMONY SHIPTECH PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "19/12/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "STO GLOBAL FAST PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "24/01/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SURGELIFT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "07/03/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "TURBOLENS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "10/02/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "TAURUSX GLOBAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "20/03/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SUN MOON LIGHTING PRIVATE LIMITED",
+        "subRole": "Nominee Director",
+        "appointmentDate": "21/04/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ARIES HONOR SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "30/04/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SAGITTARIUS HONOR SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "30/04/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SUNTERRA TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/05/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BESTAR INTERNATIONAL HOLDING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "30/06/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "KAMPOL GROUP PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "17/06/2025",
+        "cessationDate": "29/08/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "OCEANIC APEX SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "29/05/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SMARTTRADE CONNECTED BUSINESS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "30/06/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "HEISITEK TRADING PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "02/07/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SANEX EASTERN TRADE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/07/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YH OCEAN PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "08/07/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SMART INNOVA STARTECH PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "09/07/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "INNOSMART STARTECH PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "18/07/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "LLT CAPITAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/09/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "HUAKO PHOTO PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "16/10/2025",
+        "cessationDate": "11/11/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "ADVANCE CF TECHNOLOGY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "01/12/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "FALCON INSIGHT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "23/12/2025",
+        "cessationDate": "29/01/2026",
+        "isActive": false
+      }
+    ],
+    "activeCount": 29,
+    "inactiveCount": 5
+  },
+  {
+    "ndName": "TAY YONG CHIAT",
+    "memberId": "2527",
+    "appointments": [
+      {
+        "companyName": "CHAKA HOLDING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "18/09/2024",
+        "cessationDate": "28/05/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "CHAKA SG PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "23/10/2024",
+        "cessationDate": "28/05/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "T&Z INSURANCE CONSULTANTS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "28/10/2024",
+        "cessationDate": "15/10/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "CLAIRVOYANT MEDICAL TECHNOLOGY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "23/12/2024",
+        "cessationDate": "09/04/2026",
+        "isActive": false
+      },
+      {
+        "companyName": "SINGAPORE HUA JIN INVESTMENT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "27/03/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "OPTIXON TECHNOLOGY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "22/05/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "NOVOZEE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "31/07/2025",
+        "cessationDate": "06/02/2026",
+        "isActive": false
+      },
+      {
+        "companyName": "PORTOUT SINGAPORE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "01/08/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "NEW FUSION INTERNATIONAL TRADE (SINGAPORE) PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/12/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "HALOFUN PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "01/05/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "SATORISYS PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "01/05/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "WEBEYE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "01/05/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "DEMIRER KABEL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "17/04/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "TAURUSX INTERNATIONAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "01/04/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YUNMAN MEDIA PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "22/04/2026",
+        "cessationDate": "",
+        "isActive": true
+      }
+    ],
+    "activeCount": 10,
+    "inactiveCount": 5
+  },
+  {
+    "ndName": "WANG WEI",
+    "memberId": "82",
+    "appointments": [
+      {
+        "companyName": "HORIZON INSIGHTS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "03/05/2019",
+        "cessationDate": "28/03/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "ADVANCE CF TECHNOLOGY PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "14/08/2018",
+        "cessationDate": "21/01/2020",
+        "isActive": false
+      },
+      {
+        "companyName": "ETING TRADING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "11/04/2019",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "CANVAS LOGISTIC PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "03/12/2019",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BAO FORTUNE SHIPPING (G) PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "04/07/2019",
+        "cessationDate": "16/06/2021",
+        "isActive": false
+      },
+      {
+        "companyName": "ZIC INTERNATIONAL (SINGAPORE) PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "11/02/2019",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YU AN LOGISTICS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "01/02/2019",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "VIGOROUS METALS PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "17/10/2019",
+        "cessationDate": "28/06/2021",
+        "isActive": false
+      },
+      {
+        "companyName": "GLORY TRADE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "24/02/2020",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "LZS TRAVEL PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "06/03/2019",
+        "cessationDate": "16/06/2021",
+        "isActive": false
+      },
+      {
+        "companyName": "LUCKYMARINE INT PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "18/11/2019",
+        "cessationDate": "16/06/2021",
+        "isActive": false
+      },
+      {
+        "companyName": "SIEHI SHIPPING PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "24/08/2018",
+        "cessationDate": "12/04/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "TRACTION MARINE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "25/02/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ZTT ENGINEERING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "16/03/2021",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BROTH BEYOND SINGAPORE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "17/05/2021",
+        "cessationDate": "09/03/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "HONGDA OVERSEAS INVESTMENT PTE. LIMITED",
+        "subRole": "Nominee Director",
+        "appointmentDate": "09/06/2021",
+        "cessationDate": "18/06/2021",
+        "isActive": false
+      },
+      {
+        "companyName": "SUNLIT TRADE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "10/02/2023",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "BENFOLD SHIPPING AND INVESTMENT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "24/07/2024",
+        "cessationDate": "(Proposed) 10/04/2025",
+        "isActive": true
+      },
+      {
+        "companyName": "DIGITAL CIVILIZATION CONFERENCE FOUNDATION LTD.",
+        "subRole": "",
+        "appointmentDate": "31/05/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ECHOCEAN SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "31/01/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "PACIFIC RIM TRANSPORT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "31/01/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "ECAPTIAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "20/02/2024",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "XBORDER ECOMMERCE PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "28/07/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "INFINITY LINKS PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "02/10/2025",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YU LONG INVESTMENT HOLDING (S) PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "17/03/2026",
+        "cessationDate": "",
+        "isActive": true
+      }
+    ],
+    "activeCount": 16,
+    "inactiveCount": 9
+  },
+  {
+    "ndName": "WANG YIDONG",
+    "memberId": "3216",
+    "appointments": [
+      {
+        "companyName": "UNINOV TECHNOLOGY PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "22/04/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "WANZHI CREATIVE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "22/04/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "GAOTON MEDICAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "13/05/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "JIN MU TECHNOLOGY PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "05/05/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "YUAN EN YI PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "12/05/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "STARFLY CAPITAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "03/06/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "JIDE INDUSTRIAL PTE. LTD",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/06/2026",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "JOYGLOBE PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "11/06/2026",
+        "cessationDate": "",
+        "isActive": true
+      }
+    ],
+    "activeCount": 8,
+    "inactiveCount": 0
+  },
+  {
+    "ndName": "ZHANG DAN",
+    "memberId": "39",
+    "appointments": [
+      {
+        "companyName": "FOUR SEAS TRADE PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "26/10/2015",
+        "cessationDate": "16/06/2020",
+        "isActive": false
+      },
+      {
+        "companyName": "LEBESE INTERNATIONAL PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "06/07/2017",
+        "cessationDate": "30/01/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "MAN SANG RESOURCES PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "22/11/2017",
+        "cessationDate": "(Proposed) 06/02/2024",
+        "isActive": true
+      },
+      {
+        "companyName": "ORIENTAL PAL SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "22/01/2016",
+        "cessationDate": "01/02/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "SEVENUS PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "17/11/2017",
+        "cessationDate": "14/02/2020",
+        "isActive": false
+      },
+      {
+        "companyName": "TANGS SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "21/12/2015",
+        "cessationDate": "17/02/2022",
+        "isActive": false
+      },
+      {
+        "companyName": "YU LONG INVESTMENT HOLDING (S) PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/09/2015",
+        "cessationDate": "17/03/2026",
+        "isActive": false
+      },
+      {
+        "companyName": "BLUE EAGLE SUPPLY CHAIN PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "17/12/2018",
+        "cessationDate": "31/01/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "TASSURE PAC",
+        "subRole": "Managing Director",
+        "appointmentDate": "08/06/2018",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "CHINA SHIPBUILDING INDUSTRY EQUIPMENT & MATERIALS (SINGAPORE) PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "22/11/2017",
+        "cessationDate": "05/03/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "PACIFIC PRIMACOM PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "13/04/2018",
+        "cessationDate": "31/01/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "BENFOLD SHIPPING AND INVESTMENT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "26/08/2019",
+        "cessationDate": "25/01/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "CWIOS INTERNATIONAL ENTREPRENEUR INCUBATOR PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "24/07/2020",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "CWIOS INTERNATIONAL BLOCKCHAIN TECHNOLOGY PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "24/07/2020",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "DIGITAL CIVILIZATION CONFERENCE FOUNDATION LTD.",
+        "subRole": "",
+        "appointmentDate": "24/09/2019",
+        "cessationDate": "(Proposed) 25/01/2024",
+        "isActive": true
+      },
+      {
+        "companyName": "ECAPTIAL PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "20/12/2018",
+        "cessationDate": "01/02/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "ECHOCEAN SHIPPING PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "28/08/2019",
+        "cessationDate": "31/01/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "TAFOS CAPITAL PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "23/12/2019",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "FANCING PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "12/09/2019",
+        "cessationDate": "28/11/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "FUHAI INTERNATIONAL TRANSPORT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "29/11/2019",
+        "cessationDate": "31/01/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "GRAND CHEN RESOURCES PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "27/04/2016",
+        "cessationDate": "18/05/2017",
+        "isActive": false
+      },
+      {
+        "companyName": "HONG XIN DA PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "24/07/2020",
+        "cessationDate": "14/08/2020",
+        "isActive": false
+      },
+      {
+        "companyName": "HAPPY BUY TRADING PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "04/12/2019",
+        "cessationDate": "14/05/2020",
+        "isActive": false
+      },
+      {
+        "companyName": "ICOMINTAL PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "01/11/2017",
+        "cessationDate": "22/03/2019",
+        "isActive": false
+      },
+      {
+        "companyName": "JORYA INTERNATIONAL (SINGAPORE) PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "23/05/2018",
+        "cessationDate": "25/01/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "LIONWIT ADVISORY PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "07/07/2020",
+        "cessationDate": "",
+        "isActive": true
+      },
+      {
+        "companyName": "LONGMAN SHIPPING PTE. LIMITED",
+        "subRole": "Nominee Director",
+        "appointmentDate": "15/01/2019",
+        "cessationDate": "15/12/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "SUNLIT TRADE PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "01/08/2020",
+        "cessationDate": "10/02/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "KE RUN SG PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "13/01/2020",
+        "cessationDate": "06/02/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "NEW FUSION INTERNATIONAL TRADE (SINGAPORE) PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "14/09/2018",
+        "cessationDate": "(Proposed) 26/01/2024",
+        "isActive": true
+      },
+      {
+        "companyName": "PACIFIC RIM TRANSPORT PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "23/12/2019",
+        "cessationDate": "31/01/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "ECOAI INFRA PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "(Proposed) 22/06/2022",
+        "cessationDate": "07/08/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "YUGO FOODIE PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "19/04/2023",
+        "cessationDate": "11/09/2023",
+        "isActive": false
+      },
+      {
+        "companyName": "BYF INTERIOR PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "08/09/2023",
+        "cessationDate": "18/06/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "ADVANCE CF TECHNOLOGY PTE. LTD.",
+        "subRole": "",
+        "appointmentDate": "21/01/2020",
+        "cessationDate": "11/11/2025",
+        "isActive": false
+      },
+      {
+        "companyName": "ZIC INTERNATIONAL (SINGAPORE) PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "09/04/2018",
+        "cessationDate": "11/02/2019",
+        "isActive": false
+      },
+      {
+        "companyName": "HUASHENG TECH PTE. LTD.",
+        "subRole": "Nominee Director",
+        "appointmentDate": "04/10/2024",
+        "cessationDate": "25/10/2024",
+        "isActive": false
+      },
+      {
+        "companyName": "TA ASIA MANAGEMENT PTE. LTD.",
+        "subRole": "Controller",
+        "appointmentDate": "25/11/2025",
+        "cessationDate": "",
+        "isActive": true
+      }
+    ],
+    "activeCount": 9,
+    "inactiveCount": 29
+  },
+  {
+    "ndName": "ZHANG YAN",
+    "memberId": null,
+    "appointments": [],
+    "activeCount": 0,
+    "inactiveCount": 0
+  }
+]
