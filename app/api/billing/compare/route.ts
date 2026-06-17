@@ -54,16 +54,29 @@ export async function GET(req: NextRequest) {
   const arRecords  = (dueDateRecords ?? []).filter(r => r.event_type === 'AR');
   const agmRecords = (dueDateRecords ?? []).filter(r => r.event_type === 'AGM');
 
-  // ── Fetch active ND appointments (no cessation date)
+  // ── Fetch ND appointments active in the selected year
   const { data: ndAppointments } = await supabase
     .from('nd_appointments')
-    .select('company_name, appointment_date, cessation_date');
+    .select('company_name, appointment_date, cessation_date')
+    .lte('appointment_date', `${year}-12-31`);
+
+  // Only ND still active during the selected year
+  const activeNd = (ndAppointments ?? []).filter(nd => {
+    if (!nd.appointment_date) return false;
+    if (nd.cessation_date && nd.cessation_date < `${year}-01-01`) return false;
+    return true;
+  });
+
+  // Calculate the renewal date for each ND in the selected year
+  // e.g. appointed 2022-04-28 → year 2025 renewal = 2025-04-28
+  function ndRenewalDate(appointmentDate: string, yr: string): string {
+    const [, mm, dd] = appointmentDate.split('-');
+    return `${yr}-${mm}-${dd}`;
+  }
 
   const arSet  = new Set((arRecords).map(r => normalize(r.entity_name)));
   const agmSet = new Set((agmRecords).map(r => normalize(r.entity_name)));
-  const ndSet  = new Set(
-    (ndAppointments ?? []).filter(nd => !nd.cessation_date).map(nd => normalize(nd.company_name))
-  );
+  const ndSet  = new Set(activeNd.map(nd => normalize(nd.company_name)));
 
   // ── Build company result list
   const results = (allCompanies ?? []).map(company => {
@@ -71,9 +84,10 @@ export async function GET(req: NextRequest) {
 
     const hasAR  = arSet.has(normName)  || arRecords.some(r  => matchScore(company.company_name, r.entity_name)  >= 70);
     const hasAGM = agmSet.has(normName) || agmRecords.some(r => matchScore(company.company_name, r.entity_name) >= 70);
-    const hasND  = ndSet.has(normName)  ||
-                   (ndAppointments ?? []).filter(nd => !nd.cessation_date)
-                     .some(nd => matchScore(company.company_name, nd.company_name) >= 70);
+    const ndMatch = ndSet.has(normName)
+      ? activeNd.find(nd => normalize(nd.company_name) === normName)
+      : activeNd.find(nd => matchScore(company.company_name, nd.company_name) >= 70);
+    const hasND      = !!ndMatch;
     const hasAddress = company.uses_address === true;
 
     // Filter by requested type
@@ -105,6 +119,11 @@ export async function GET(req: NextRequest) {
     const arRecord  = arRecords.find(r  => matchScore(company.company_name, r.entity_name)  >= 70);
     const agmRecord = agmRecords.find(r => matchScore(company.company_name, r.entity_name) >= 70);
 
+    // ND renewal date for the selected year
+    const ndRenewal = ndMatch ? ndRenewalDate(ndMatch.appointment_date, year) : null;
+    const today = new Date().toISOString().slice(0, 10);
+    const ndRenewalPast = ndRenewal ? ndRenewal <= today : false;
+
     return {
       companyId:    company.id,
       companyName:  company.company_name,
@@ -114,10 +133,13 @@ export async function GET(req: NextRequest) {
         nd:      hasND,
         address: hasAddress,
       },
-      arStatus:    arRecord?.status   ?? null,
-      arDueDate:   arRecord?.due_date ?? null,
-      agmStatus:   agmRecord?.status   ?? null,
-      agmDueDate:  agmRecord?.due_date ?? null,
+      arStatus:         arRecord?.status   ?? null,
+      arDueDate:        arRecord?.due_date ?? null,
+      agmStatus:        agmRecord?.status   ?? null,
+      agmDueDate:       agmRecord?.due_date ?? null,
+      ndAppointedDate:  ndMatch?.appointment_date ?? null,
+      ndRenewalDate:    ndRenewal,
+      ndRenewalPast,
       billingStatus,
       invoiceCount:  invoiceList.length,
       totalBilled,

@@ -12,22 +12,25 @@ interface Invoice {
 }
 
 interface CompanyResult {
-  companyId:    number;
-  companyName:  string;
+  companyId:       number;
+  companyName:     string;
   services: {
     ar:      boolean;
     agm:     boolean;
     nd:      boolean;
     address: boolean;
   };
-  arStatus:    string | null;
-  arDueDate:   string | null;
-  agmStatus:   string | null;
-  agmDueDate:  string | null;
-  billingStatus: 'NOT_BILLED' | 'PAID' | 'INVOICED_UNPAID' | 'UNKNOWN';
-  invoiceCount:  number;
-  totalBilled:   number;
-  invoices:      Invoice[];
+  arStatus:        string | null;
+  arDueDate:       string | null;
+  agmStatus:       string | null;
+  agmDueDate:      string | null;
+  ndAppointedDate: string | null;
+  ndRenewalDate:   string | null;
+  ndRenewalPast:   boolean;
+  billingStatus:   'NOT_BILLED' | 'PAID' | 'INVOICED_UNPAID' | 'UNKNOWN';
+  invoiceCount:    number;
+  totalBilled:     number;
+  invoices:        Invoice[];
 }
 
 interface Summary {
@@ -194,7 +197,7 @@ export default function BillingPage() {
                 {/* Service columns */}
                 <th className="text-center px-3 py-3 font-semibold text-purple-600 whitespace-nowrap">AR</th>
                 <th className="text-center px-3 py-3 font-semibold text-orange-500 whitespace-nowrap">AGM</th>
-                <th className="text-center px-3 py-3 font-semibold text-blue-600 whitespace-nowrap">ND</th>
+                <th className="text-center px-3 py-3 font-semibold text-blue-600 whitespace-nowrap">ND Renewal</th>
                 <th className="text-center px-3 py-3 font-semibold text-green-600 whitespace-nowrap">Address</th>
                 {/* Teamwork status */}
                 <th className="text-center px-3 py-3 font-semibold text-slate-500 whitespace-nowrap">AR Status</th>
@@ -248,7 +251,19 @@ export default function BillingPage() {
                         <ServiceDot active={company.services.agm}     label="AGM"  color="#f97316" />
                       </td>
                       <td className="px-3 py-3 text-center">
-                        <ServiceDot active={company.services.nd}      label="ND"   color="#2563eb" />
+                        {company.services.nd ? (
+                          <div className="flex flex-col items-center gap-0.5">
+                            <span className="text-xs font-semibold px-1.5 py-0.5 rounded"
+                              style={{ backgroundColor: '#2563eb18', color: '#2563eb' }}>ND</span>
+                            {company.ndRenewalDate && (
+                              <span className={`text-xs ${company.ndRenewalPast ? 'text-orange-500 font-medium' : 'text-slate-400'}`}>
+                                {company.ndRenewalDate}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-200 text-xs font-medium">—</span>
+                        )}
                       </td>
                       <td className="px-3 py-3 text-center">
                         <ServiceDot active={company.services.address} label="Addr" color="#16a34a" />
