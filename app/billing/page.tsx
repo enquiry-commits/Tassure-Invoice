@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle, CheckCircle, Clock, RefreshCw, FileText } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, RefreshCw, FileText, Building2, Users, MapPin } from 'lucide-react';
 
 interface Invoice {
   invoice_no: string;
@@ -14,7 +14,13 @@ interface Invoice {
 interface CompanyResult {
   companyId:     number;
   companyName:   string;
-  usesAddress:   boolean;
+  services: {
+    ar:      boolean;
+    nd:      boolean;
+    address: boolean;
+  };
+  arStatus:      string | null;
+  arDueDate:     string | null;
   billingStatus: 'NOT_BILLED' | 'PAID' | 'INVOICED_UNPAID' | 'UNKNOWN';
   invoiceCount:  number;
   totalBilled:   number;
@@ -35,6 +41,13 @@ const STATUS_CONFIG = {
   PAID:            { label: 'Paid',        color: '#16a34a', bg: '#f0fdf4', Icon: CheckCircle  },
   INVOICED_UNPAID: { label: 'Invoice Sent',color: '#d97706', bg: '#fffbeb', Icon: Clock        },
   UNKNOWN:         { label: 'Unknown',     color: '#64748b', bg: '#f8fafc', Icon: FileText     },
+};
+
+const AR_STATUS_COLOR: Record<string, { bg: string; color: string }> = {
+  Completed: { bg: '#f0fdf4', color: '#16a34a' },
+  Pending:   { bg: '#fffbeb', color: '#d97706' },
+  Dispense:  { bg: '#f0f9ff', color: '#0284c7' },
+  Dissolved: { bg: '#f8fafc', color: '#64748b' },
 };
 
 export default function BillingPage() {
@@ -68,7 +81,7 @@ export default function BillingPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Billing Comparison</h1>
-          <p className="text-sm text-slate-500 mt-0.5">QB invoices vs companies that should be billed</p>
+          <p className="text-sm text-slate-500 mt-0.5">Annual Return · Nominee Director · Address Service vs QB Invoices</p>
         </div>
         <div className="flex items-center gap-2">
           <select
@@ -84,6 +97,7 @@ export default function BillingPage() {
             className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white"
           >
             <option value="all">All Services</option>
+            <option value="ar">Annual Return</option>
             <option value="nd">Nominee Director</option>
             <option value="address">Address Service</option>
           </select>
@@ -163,9 +177,36 @@ export default function BillingPage() {
               >
                 <cfg.Icon size={15} style={{ color: cfg.color, flexShrink: 0 }} />
                 <span className="flex-1 text-sm font-medium text-slate-700 truncate">{company.companyName}</span>
-                {company.usesAddress && (
-                  <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full flex-shrink-0">Address</span>
+
+                {/* Service badges */}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {company.services.ar && (
+                    <span className="flex items-center gap-0.5 text-xs bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded-full">
+                      <Building2 size={10} />AR
+                    </span>
+                  )}
+                  {company.services.nd && (
+                    <span className="flex items-center gap-0.5 text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">
+                      <Users size={10} />ND
+                    </span>
+                  )}
+                  {company.services.address && (
+                    <span className="flex items-center gap-0.5 text-xs bg-green-50 text-green-600 px-1.5 py-0.5 rounded-full">
+                      <MapPin size={10} />Addr
+                    </span>
+                  )}
+                </div>
+
+                {/* AR filing status from Teamwork */}
+                {company.arStatus && (
+                  <span
+                    className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0"
+                    style={AR_STATUS_COLOR[company.arStatus] ?? { bg: '#f8fafc', color: '#64748b' }}
+                  >
+                    AR: {company.arStatus}
+                  </span>
                 )}
+
                 <span
                   className="text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: cfg.bg, color: cfg.color }}
@@ -179,40 +220,55 @@ export default function BillingPage() {
                 )}
               </div>
 
-              {isOpen && company.invoices.length > 0 && (
-                <div className="px-10 pb-3">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-slate-400">
-                        <th className="text-left py-1 pr-4 font-medium">Invoice No.</th>
-                        <th className="text-left py-1 pr-4 font-medium">Date</th>
-                        <th className="text-right py-1 pr-4 font-medium">Amount</th>
-                        <th className="text-left py-1 font-medium">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {company.invoices.map(inv => (
-                        <tr key={inv.invoice_no} className="border-t border-slate-50">
-                          <td className="py-1.5 pr-4 font-mono text-slate-600">{inv.invoice_no}</td>
-                          <td className="py-1.5 pr-4 text-slate-500">{inv.txn_date}</td>
-                          <td className="py-1.5 pr-4 text-right font-medium text-slate-700">
-                            ${(inv.total_amt ?? 0).toLocaleString()}
-                          </td>
-                          <td className="py-1.5">
-                            <span
-                              className="px-1.5 py-0.5 rounded text-xs font-medium"
-                              style={{
-                                backgroundColor: inv.status === 'Paid' ? '#f0fdf4' : inv.status === 'Overdue' ? '#fef2f2' : '#fffbeb',
-                                color: inv.status === 'Paid' ? '#16a34a' : inv.status === 'Overdue' ? '#dc2626' : '#d97706',
-                              }}
-                            >
-                              {inv.status}
-                            </span>
-                          </td>
+              {isOpen && (
+                <div className="px-10 pb-4 pt-1">
+                  {/* Service detail row */}
+                  <div className="flex gap-4 mb-3 text-xs text-slate-500">
+                    {company.services.ar && (
+                      <span>
+                        AR Due: <strong>{company.arDueDate ?? '—'}</strong>
+                        {company.arStatus ? ` · ${company.arStatus}` : ''}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Invoice table */}
+                  {company.invoices.length > 0 ? (
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-slate-400">
+                          <th className="text-left py-1 pr-4 font-medium">Invoice No.</th>
+                          <th className="text-left py-1 pr-4 font-medium">Date</th>
+                          <th className="text-right py-1 pr-4 font-medium">Amount</th>
+                          <th className="text-left py-1 font-medium">Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {company.invoices.map(inv => (
+                          <tr key={inv.invoice_no} className="border-t border-slate-50">
+                            <td className="py-1.5 pr-4 font-mono text-slate-600">{inv.invoice_no}</td>
+                            <td className="py-1.5 pr-4 text-slate-500">{inv.txn_date}</td>
+                            <td className="py-1.5 pr-4 text-right font-medium text-slate-700">
+                              ${(inv.total_amt ?? 0).toLocaleString()}
+                            </td>
+                            <td className="py-1.5">
+                              <span
+                                className="px-1.5 py-0.5 rounded text-xs font-medium"
+                                style={{
+                                  backgroundColor: inv.status === 'Paid' ? '#f0fdf4' : inv.status === 'Overdue' ? '#fef2f2' : '#fffbeb',
+                                  color: inv.status === 'Paid' ? '#16a34a' : inv.status === 'Overdue' ? '#dc2626' : '#d97706',
+                                }}
+                              >
+                                {inv.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p className="text-xs text-slate-400">No QB invoices found for {year}.</p>
+                  )}
                 </div>
               )}
             </div>

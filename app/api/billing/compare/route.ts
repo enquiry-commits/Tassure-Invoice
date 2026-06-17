@@ -17,7 +17,6 @@ function matchScore(a: string, b: string): number {
   const nb = normalize(b);
   if (na === nb) return 100;
   if (na.includes(nb) || nb.includes(na)) return 80;
-  // Word overlap score
   const wa = new Set(na.split(' ').filter(Boolean));
   const wb = new Set(nb.split(' ').filter(Boolean));
   const common = [...wa].filter(w => wb.has(w)).length;
@@ -28,28 +27,11 @@ function matchScore(a: string, b: string): number {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const year  = searchParams.get('year') ?? new Date().getFullYear().toString();
-  const type  = searchParams.get('type') ?? 'all'; // 'nd' | 'address' | 'all'
+  const type  = searchParams.get('type') ?? 'all'; // 'nd' | 'address' | 'ar' | 'all'
 
   const supabase = createAdminClient();
 
-  // Fetch companies that should be billed
-  let query = supabase.from('companies').select('id, company_name, uses_address, internal_id');
-  if (type === 'nd') {
-    // Companies with active ND appointments
-    const { data: ndIds } = await supabase
-      .from('nd_appointments')
-      .select('company_id')
-      .is('cessation_date', null);
-    const ids = [...new Set((ndIds ?? []).map((r: { company_id: number }) => r.company_id))];
-    query = query.in('id', ids);
-  } else if (type === 'address') {
-    query = query.eq('uses_address', true);
-  }
-
-  const { data: companies, error: compErr } = await query;
-  if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
-
-  // Fetch QB invoices for the year
+  // ── Fetch QB invoices for the year
   const { data: invoices, error: invErr } = await supabase
     .from('quickbooks_invoices')
     .select('invoice_no, txn_date, customer_name, total_amt, balance, status')
@@ -57,8 +39,47 @@ export async function GET(req: NextRequest) {
     .lte('txn_date', `${year}-12-31`);
   if (invErr) return NextResponse.json({ error: invErr.message }, { status: 500 });
 
-  // Match companies to invoices
-  const results = (companies ?? []).map(company => {
+  // ── Fetch companies
+  const { data: allCompanies, error: compErr } = await supabase
+    .from('companies')
+    .select('id, company_name, uses_address, internal_id');
+  if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
+
+  // ── Fetch Annual Return records for the year (Teamwork source of truth)
+  const { data: arRecords } = await supabase
+    .from('annual_returns')
+    .select('entity_name, year, fye, due_date, status')
+    .eq('year', parseInt(year));
+
+  // ── Fetch active ND appointments (no cessation date)
+  const { data: ndAppointments } = await supabase
+    .from('nd_appointments')
+    .select('company_name, appointment_date, cessation_date');
+
+  const arSet   = new Set((arRecords ?? []).map(r => normalize(r.entity_name)));
+  const ndNames = (ndAppointments ?? [])
+    .filter(nd => !nd.cessation_date)
+    .map(nd => normalize(nd.company_name));
+  const ndSet = new Set(ndNames);
+
+  // ── Build company service map
+  const results = (allCompanies ?? []).map(company => {
+    const normName = normalize(company.company_name);
+
+    // Which services apply to this company?
+    const hasAR      = arSet.has(normName) ||
+                       (arRecords ?? []).some(r => matchScore(company.company_name, r.entity_name) >= 70);
+    const hasND      = ndSet.has(normName) ||
+                       (ndAppointments ?? []).filter(nd => !nd.cessation_date)
+                         .some(nd => matchScore(company.company_name, nd.company_name) >= 70);
+    const hasAddress = company.uses_address === true;
+
+    // Skip if none of the requested service types
+    if (type === 'ar'      && !hasAR)      return null;
+    if (type === 'nd'      && !hasND)      return null;
+    if (type === 'address' && !hasAddress) return null;
+
+    // Match QB invoices to this company
     const matches = (invoices ?? [])
       .map(inv => ({ inv, score: matchScore(company.company_name, inv.customer_name) }))
       .filter(m => m.score >= 70)
@@ -75,24 +96,33 @@ export async function GET(req: NextRequest) {
     else if (hasOpen)             billingStatus = 'INVOICED_UNPAID';
     else                          billingStatus = 'UNKNOWN';
 
+    // AR status from Teamwork
+    const arRecord = (arRecords ?? []).find(r => matchScore(company.company_name, r.entity_name) >= 70);
+
     return {
       companyId:     company.id,
       companyName:   company.company_name,
-      usesAddress:   company.uses_address,
+      services: {
+        ar:      hasAR,
+        nd:      hasND,
+        address: hasAddress,
+      },
+      arStatus:      arRecord?.status ?? null,
+      arDueDate:     arRecord?.due_date ?? null,
       billingStatus,
       invoiceCount:  invoiceList.length,
       totalBilled,
       invoices:      invoiceList,
     };
-  });
+  }).filter(Boolean);
 
   const summary = {
     year,
     type,
-    total:         results.length,
-    notBilled:     results.filter(r => r.billingStatus === 'NOT_BILLED').length,
-    paid:          results.filter(r => r.billingStatus === 'PAID').length,
-    invoicedUnpaid:results.filter(r => r.billingStatus === 'INVOICED_UNPAID').length,
+    total:          results.length,
+    notBilled:      results.filter(r => r!.billingStatus === 'NOT_BILLED').length,
+    paid:           results.filter(r => r!.billingStatus === 'PAID').length,
+    invoicedUnpaid: results.filter(r => r!.billingStatus === 'INVOICED_UNPAID').length,
   };
 
   return NextResponse.json({ summary, companies: results });
