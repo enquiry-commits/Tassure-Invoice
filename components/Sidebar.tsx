@@ -4,11 +4,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const navItems = [
-  { href: '/',                   label: 'Dashboard',          icon: '⊞' },
+  { href: '/',                   label: 'Dashboard',          icon: '▦' },
   { href: '/companies',          label: 'Companies',          icon: '🏢' },
   { href: '/nominee-directors',  label: 'Nominee Directors',  icon: '👤' },
   { href: '/address-service',    label: 'Address Service',    icon: '📍' },
-  { href: '/billing',            label: 'Billing Drafts',     icon: '📄' },
+  { href: '/billing',            label: 'Billing Drafts',     icon: '📋' },
 ];
 
 export default function Sidebar() {
@@ -29,7 +29,7 @@ export default function Sidebar() {
               href={href}
               className="flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg mb-0.5 text-sm transition-colors"
               style={{
-                color: active ? '#ffffff' : '#93c5fd',
+                color: '#ffffff',
                 backgroundColor: active ? '#2563eb' : 'transparent',
               }}
               onMouseEnter={e => {
