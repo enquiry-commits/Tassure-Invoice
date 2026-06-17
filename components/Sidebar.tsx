@@ -2,13 +2,20 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import {
+  LayoutDashboard,
+  Building2,
+  UserCheck,
+  MapPin,
+  FileText,
+} from 'lucide-react';
 
 const navItems = [
-  { href: '/',                   label: 'Dashboard',          icon: '▦' },
-  { href: '/companies',          label: 'Companies',          icon: '🏢' },
-  { href: '/nominee-directors',  label: 'Nominee Directors',  icon: '👤' },
-  { href: '/address-service',    label: 'Address Service',    icon: '📍' },
-  { href: '/billing',            label: 'Billing Drafts',     icon: '📋' },
+  { href: '/',                  label: 'Dashboard',         Icon: LayoutDashboard },
+  { href: '/companies',         label: 'Companies',         Icon: Building2       },
+  { href: '/nominee-directors', label: 'Nominee Directors', Icon: UserCheck       },
+  { href: '/address-service',   label: 'Address Service',   Icon: MapPin          },
+  { href: '/billing',           label: 'Billing Drafts',    Icon: FileText        },
 ];
 
 export default function Sidebar() {
@@ -19,9 +26,8 @@ export default function Sidebar() {
       className="fixed left-0 w-52 flex flex-col z-40"
       style={{ backgroundColor: '#1d3a5c', top: '70px', height: 'calc(100vh - 70px)' }}
     >
-      {/* Nav */}
       <nav className="flex-1 py-3 overflow-y-auto">
-        {navItems.map(({ href, label, icon }) => {
+        {navItems.map(({ href, label, Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
           return (
             <Link
@@ -39,14 +45,13 @@ export default function Sidebar() {
                 if (!active) (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
               }}
             >
-              <span className="text-base w-5 text-center">{icon}</span>
+              <Icon size={16} strokeWidth={1.75} />
               <span className="font-medium">{label}</span>
             </Link>
           );
         })}
       </nav>
 
-      {/* Footer */}
       <div className="px-4 py-3 border-t border-white/10 text-xs text-blue-300">
         <div className="font-medium text-white">VS Vincent</div>
         <div>Tassure Asia</div>
