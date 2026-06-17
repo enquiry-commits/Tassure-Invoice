@@ -26,7 +26,7 @@ function formatDate(iso: string | null): string {
 
 const today = new Date().toISOString().split('T')[0];
 
-export default function NDPersonCard({ person, isLast }: { person: NDPerson; isLast?: boolean }) {
+export default function NDPersonCard({ person, index = 0, isLast }: { person: NDPerson; index?: number; isLast?: boolean }) {
   const [open, setOpen] = useState(false);
 
   const active = person.appointments.filter(
@@ -42,12 +42,12 @@ export default function NDPersonCard({ person, isLast }: { person: NDPerson; isL
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center px-5 py-3 text-left gap-4 transition-colors"
-        style={{ backgroundColor: open ? '#1e3a8a' : '#ffffff' }}
+        style={{ backgroundColor: open ? '#1e3a8a' : index % 2 === 0 ? '#ffffff' : '#f8fafc' }}
         onMouseEnter={e => {
-          if (!open) (e.currentTarget as HTMLElement).style.backgroundColor = '#f8fafc';
+          if (!open) (e.currentTarget as HTMLElement).style.backgroundColor = '#eef2f7';
         }}
         onMouseLeave={e => {
-          if (!open) (e.currentTarget as HTMLElement).style.backgroundColor = '#ffffff';
+          if (!open) (e.currentTarget as HTMLElement).style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
         }}
       >
         {/* Name */}

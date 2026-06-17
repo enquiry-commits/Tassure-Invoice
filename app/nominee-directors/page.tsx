@@ -52,7 +52,7 @@ export default async function NomineDirectorsPage() {
       {/* ND Accordion */}
       <div className="rounded-xl overflow-hidden shadow-sm">
         {persons.map((person, i) => (
-          <NDPersonCard key={person.name} person={person} isLast={i === persons.length - 1} />
+          <NDPersonCard key={person.name} person={person} index={i} isLast={i === persons.length - 1} />
         ))}
       </div>
     </div>
