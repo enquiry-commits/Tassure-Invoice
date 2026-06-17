@@ -36,7 +36,6 @@ create table if not exists nd_appointments (
   sub_role         text,
   appointment_date date,
   cessation_date   date,
-  is_active        boolean generated always as (cessation_date is null or cessation_date > current_date) stored,
   created_at       timestamptz default now()
 );
 

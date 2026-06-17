@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "import-data": "node scripts/import-to-supabase.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
@@ -15,6 +16,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "dotenv": "^16.5.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

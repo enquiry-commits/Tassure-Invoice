@@ -1,38 +1,44 @@
 import { NextResponse } from 'next/server';
-import path from 'path';
-import fs from 'fs';
+import { supabase } from '@/lib/supabase';
+
+const today = () => new Date().toISOString().split('T')[0];
 
 export async function GET() {
-  const dataDir = path.join(process.cwd(), 'data');
+  const [
+    { count: totalClients },
+    { count: withAddress },
+    { count: totalNDPersons },
+    { data: allAppts },
+    { data: syncRows },
+  ] = await Promise.all([
+    supabase.from('companies').select('*', { count: 'exact', head: true }),
+    supabase.from('companies').select('*', { count: 'exact', head: true }).eq('uses_address', true),
+    supabase.from('nominee_directors').select('*', { count: 'exact', head: true }),
+    supabase.from('nd_appointments').select('nd_id, company_name, cessation_date'),
+    supabase.from('sync_log').select('synced_at').order('synced_at', { ascending: false }).limit(1),
+  ]);
 
-  const clients: Record<string, unknown>[] = JSON.parse(
-    fs.readFileSync(path.join(dataDir, 'clients_merged.json'), 'utf8')
-  );
-  const ndByCompany: Record<string, unknown>[] = JSON.parse(
-    fs.readFileSync(path.join(dataDir, 'nd_by_company.json'), 'utf8')
-  );
-  const ndPersons: Record<string, unknown>[] = JSON.parse(
-    fs.readFileSync(path.join(dataDir, 'nd_from_individuals.json'), 'utf8')
-  );
+  const t = today();
+  const activeNDCompanySet = new Set<string>();
+  const allNDCompanySet    = new Set<string>();
+  const activeNDPersonSet  = new Set<number>();
 
-  const totalClients = clients.length;
-  const withAddress  = clients.filter((c: Record<string, unknown>) => c.usesAddressService).length;
-
-  const activeNDCompanies = ndByCompany.filter((c: Record<string, unknown>) => c.hasActiveND).length;
-  const ceasedOnlyCompanies = ndByCompany.filter(
-    (c: Record<string, unknown>) => !c.hasActiveND && Array.isArray(c.ndPersons) && (c.ndPersons as unknown[]).length > 0
-  ).length;
-
-  const activeNDPersons = ndPersons.filter(
-    (p: Record<string, unknown>) => (p.activeCount as number) > 0
-  ).length;
+  for (const row of allAppts ?? []) {
+    allNDCompanySet.add(row.company_name);
+    const isActive = !row.cessation_date || row.cessation_date > t;
+    if (isActive) {
+      activeNDCompanySet.add(row.company_name);
+      activeNDPersonSet.add(row.nd_id);
+    }
+  }
 
   return NextResponse.json({
-    totalClients,
-    withAddress,
-    activeNDCompanies,
-    ceasedOnlyCompanies,
-    activeNDPersons,
-    totalNDPersons: ndPersons.length,
+    totalClients:      totalClients ?? 0,
+    withAddress:       withAddress  ?? 0,
+    activeNDCompanies: activeNDCompanySet.size,
+    ceasedOnlyCompanies: [...allNDCompanySet].filter(c => !activeNDCompanySet.has(c)).length,
+    activeNDPersons:   activeNDPersonSet.size,
+    totalNDPersons:    totalNDPersons ?? 0,
+    lastSynced:        syncRows?.[0]?.synced_at ?? null,
   });
 }
