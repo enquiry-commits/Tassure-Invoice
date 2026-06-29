@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createAdminClient } from '@/lib/supabase';
 
 export async function GET() {
+  const supabase = createAdminClient();
   const { data } = await supabase
     .from('quickbooks_tokens')
     .select('realm_id, expires_at, refresh_expires_at, updated_at')
