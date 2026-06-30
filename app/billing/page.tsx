@@ -752,6 +752,114 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BILLING TAB
+// ── Expanded billing row: email + draft creation ──────────────────────────────
+function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
+  const [drafting, setDrafting] = useState(false);
+  const [draftResult, setDraftResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const billableRenewals = c.renewals.filter(r =>
+    r.applicable && (r.status === 'expired' || r.status === 'expiring_soon') && r.lastRate
+  );
+
+  const createDraft = async () => {
+    setDrafting(true); setDraftResult(null);
+    const lines = billableRenewals.map(r => {
+      const start = r.suggestedPeriodStart ? new Date(r.suggestedPeriodStart).toLocaleDateString('en-SG', { month: 'short', year: 'numeric' }) : '';
+      const end   = r.suggestedPeriodEnd   ? new Date(r.suggestedPeriodEnd).toLocaleDateString('en-SG', { month: 'short', year: 'numeric' }) : '';
+      const periodStr = start && end ? ` [${start} - ${end}]` : '';
+      return {
+        service:     r.service,
+        description: `${r.service === 'Secretary' ? 'Corporate Secretarial Services' : r.service === 'Address' ? 'Registered Address Service' : 'Nominee Director Service'}${periodStr}`,
+        rate:        r.lastRate!,
+        qty:         1,
+      };
+    });
+    try {
+      const res  = await fetch('/api/quickbooks/create-invoice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyName: c.companyName, email: c.email ?? undefined, lines }),
+      });
+      const json = await res.json();
+      if (json.error) setDraftResult({ ok: false, msg: json.error + (json.detail ? ` — ${json.detail.slice(0,120)}` : '') });
+      else setDraftResult({ ok: true, msg: `✓ Draft #${json.invoiceNo} created in QB` });
+    } catch (e: unknown) {
+      setDraftResult({ ok: false, msg: e instanceof Error ? e.message : 'Failed' });
+    } finally { setDrafting(false); }
+  };
+
+  return (
+    <div style={{ padding: '16px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
+
+      {/* Client email + contact */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '8px 12px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+        {c.email
+          ? <a href={`mailto:${c.email}`} style={{ fontSize: 12, color: '#1d4ed8', fontWeight: 600, textDecoration: 'none' }}>{c.email}</a>
+          : <span style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No email on file</span>
+        }
+        {c.contactName && <span style={{ fontSize: 11, color: '#64748b' }}>· {c.contactName}</span>}
+        {c.pic && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>PIC: <strong>{c.pic}</strong></span>}
+      </div>
+
+      {/* Renewal services */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>🔄 Renewal Services</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{c.renewals.map(r => <RenewalCard key={r.service} r={r} />)}</div>
+      </div>
+
+      {/* Annual obligations */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>📋 Annual Obligations</div>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{c.annuals.map(a => <AnnualCard key={a.service} a={a} />)}</div>
+      </div>
+
+      {/* Invoice draft creator */}
+      {billableRenewals.length > 0 && (
+        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginBottom: 4 }}>DRAFT PREVIEW</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {billableRenewals.map(r => (
+                <span key={r.service} style={{ fontSize: 11, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', color: '#374151' }}>
+                  <strong>{r.service}</strong> S${r.lastRate?.toLocaleString()}
+                  {r.suggestedPeriodStart && r.suggestedPeriodEnd && (
+                    <span style={{ color: '#64748b' }}> · {new Date(r.suggestedPeriodStart).toLocaleDateString('en-SG', { month: 'short', year: 'numeric' })} – {new Date(r.suggestedPeriodEnd).toLocaleDateString('en-SG', { month: 'short', year: 'numeric' })}</span>
+                  )}
+                </span>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={createDraft}
+            disabled={drafting}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 7, border: 'none', cursor: drafting ? 'wait' : 'pointer',
+              background: drafting ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            {drafting ? 'Creating…' : 'Create QB Draft'}
+          </button>
+        </div>
+      )}
+
+      {draftResult && (
+        <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+          background: draftResult.ok ? '#f0fdf4' : '#fef2f2',
+          color:      draftResult.ok ? '#15803d'  : '#dc2626',
+          border:     `1px solid ${draftResult.ok ? '#bbf7d0' : '#fecaca'}`,
+        }}>
+          {draftResult.msg}
+        </div>
+      )}
+
+      <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 12, fontSize: 10, color: '#94a3b8' }}>
+        ⚠ 草稿发票须在 QuickBooks 人工审核后才可发送给客户
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 function BillingTab() {
   const [data,       setData]       = useState<{ summary: BillingSummary; companies: CompanyBilling[] } | null>(null);
@@ -880,19 +988,7 @@ function BillingTab() {
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ?? '—'}</div>
                 </div>
                 {isOpen && (
-                  <div style={{ padding: '16px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
-                    <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>🔄 Renewal Services (annual subscription)</div>
-                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{c.renewals.map(r => <RenewalCard key={r.service} r={r} />)}</div>
-                    </div>
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>📋 Annual Obligations (per FYE cycle)</div>
-                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{c.annuals.map(a => <AnnualCard key={a.service} a={a} />)}</div>
-                    </div>
-                    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, fontSize: 11, color: '#94a3b8' }}>
-                      ⚠ 续期发票须人工审核后才可发送 · 数据来源：QuickBooks 历史发票 + TeamWork Active 状态 + ND Appointments
-                    </div>
-                  </div>
+                  <ExpandedBillingRow c={c} />
                 )}
               </div>
             );

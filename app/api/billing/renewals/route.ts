@@ -78,6 +78,8 @@ export interface CompanyBilling {
   urgency: 'expired' | 'expiring_soon' | 'active' | 'not_found';
   renewals: RenewalStatus[];
   annuals: AnnualStatus[];
+  email: string | null;
+  contactName: string | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -94,7 +96,7 @@ export async function GET(req: NextRequest) {
   // ── 1. Active CSS clients (TeamWork gate) ────────────────────────────────
   const { data: companies, error: compErr } = await supabase
     .from('companies')
-    .select('id, company_name, registration_no, fye_month, pic, sec_pic, has_nd, uses_address, has_xbrl, tw_status, client_type, is_active')
+    .select('id, company_name, registration_no, fye_month, pic, sec_pic, has_nd, uses_address, has_xbrl, tw_status, client_type, is_active, best_email, primary_contact')
     .eq('client_type', 'CSS Client')
     .eq('tw_status', 'Active');
   if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
@@ -245,16 +247,19 @@ export async function GET(req: NextRequest) {
       renewals.some(r => r.applicable && r.status === 'expiring_soon')     ? 'expiring_soon' :
       renewals.some(r => r.applicable && r.status === 'active')            ? 'active' : 'not_found';
 
+    const primary = company.primary_contact as { email?: string; contactName?: string } | null;
     return {
       companyId: company.id,
       companyName: company.company_name,
       uen: company.registration_no ?? null,
       fyeMonth: company.fye_month ?? null,
       pic: company.sec_pic ?? company.pic ?? null,
-      twActive: true, // already filtered to Active
+      twActive: true,
       urgency,
       renewals,
       annuals,
+      email: company.best_email ?? primary?.email ?? null,
+      contactName: primary?.contactName ?? null,
     };
   });
 
