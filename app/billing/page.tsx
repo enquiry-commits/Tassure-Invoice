@@ -684,9 +684,9 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
             servicePeriods={r.servicePeriods}
             ndStrikeOff={r.dormant === 'STRIKE_OFF'}
             ndPending={r.agm_documents === 'ND_PENDING'}
-            onNdFlag={async (field, value) => {
-              await fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, field, value: value || null }) });
-              onSave(r.id, field, value);
+            onNdFlag={(field, value) => {
+              onSave(r.id, field, value); // optimistic update — UI responds immediately
+              fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, field, value: value || null }) });
             }}
           />
 

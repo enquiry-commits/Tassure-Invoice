@@ -88,10 +88,11 @@ export async function GET(req: NextRequest) {
     .gte('txn_date', `${year}-01-01`)
     .lte('txn_date', `${year}-12-31`);
 
-  // ── QB invoice items (service history + periods) ─────────────────────────
+  // ── QB invoice items (service history + periods) — last 4 years only ───────
   const { data: qbItems } = await supabase
     .from('quickbooks_invoice_items')
-    .select('customer_name, service_type, product_service, period_start, period_end, rate, invoice_no, txn_date');
+    .select('customer_name, service_type, product_service, period_start, period_end, rate, invoice_no, txn_date')
+    .gte('txn_date', `${year - 3}-01-01`);
 
   // Build service lookup: normalizedName → Set<service_type>
   const qbServiceMap = new Map<string, Set<string>>();
