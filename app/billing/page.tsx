@@ -541,19 +541,25 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                 {/* Strike Off toggle */}
                 <button
                   onClick={() => onNdFlag('dormant', ndStrikeOff ? '' : 'STRIKE_OFF')}
-                  title="Mark client as pending strike-off — Finance will be notified to review ND billing"
+                  title={ndStrikeOff
+                    ? 'Strike-off in progress — company has initiated but NOT yet confirmed by ACRA. All services (Secretary, Address, ND, etc.) remain active and billable. May be cancelled at any time.'
+                    : 'Mark as pending strike-off — all services continue until ACRA formally confirms'}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
                     fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px', border: 'none',
-                    background: ndStrikeOff ? '#fee2e2' : '#f1f5f9',
-                    color:      ndStrikeOff ? '#b91c1c' : '#94a3b8',
+                    background: ndStrikeOff ? '#fff7ed' : '#f1f5f9',
+                    color:      ndStrikeOff ? '#c2410c' : '#94a3b8',
+                    outline:    ndStrikeOff ? '1.5px solid #fdba74' : 'none',
                   }}
                   onMouseEnter={e => { if (!ndStrikeOff) (e.currentTarget as HTMLElement).style.background = '#ffe4e6'; }}
                   onMouseLeave={e => { if (!ndStrikeOff) (e.currentTarget as HTMLElement).style.background = '#f1f5f9'; }}
                 >
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  Strike Off
-                  {ndStrikeOff && <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 2 }}>● Active</span>}
+                  {ndStrikeOff
+                    ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  }
+                  {ndStrikeOff ? 'Pending Strike-Off' : 'Strike Off'}
+                  {ndStrikeOff && <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 2, color: '#ea580c' }}>· All svcs. active</span>}
                 </button>
 
                 {/* ND Pending toggle */}
