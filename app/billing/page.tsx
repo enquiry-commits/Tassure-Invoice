@@ -542,24 +542,30 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                 <button
                   onClick={() => onNdFlag('dormant', ndStrikeOff ? '' : 'STRIKE_OFF')}
                   title={ndStrikeOff
-                    ? 'Strike-off in progress — company has initiated but NOT yet confirmed by ACRA. All services (Secretary, Address, ND, etc.) remain active and billable. May be cancelled at any time.'
+                    ? 'Strike-off in progress — initiated but NOT yet confirmed by ACRA. All services (Secretary, Address, ND, etc.) remain active and billable. May be cancelled at any time.'
                     : 'Mark as pending strike-off — all services continue until ACRA formally confirms'}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
                     fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px', border: 'none',
-                    background: ndStrikeOff ? '#fff7ed' : '#f1f5f9',
-                    color:      ndStrikeOff ? '#c2410c' : '#94a3b8',
-                    outline:    ndStrikeOff ? '1.5px solid #fdba74' : 'none',
+                    background: 'transparent', color: ndStrikeOff ? '#c2410c' : '#94a3b8',
                   }}
-                  onMouseEnter={e => { if (!ndStrikeOff) (e.currentTarget as HTMLElement).style.background = '#ffe4e6'; }}
-                  onMouseLeave={e => { if (!ndStrikeOff) (e.currentTarget as HTMLElement).style.background = '#f1f5f9'; }}
                 >
-                  {ndStrikeOff
-                    ? <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  }
+                  {/* Checkbox square */}
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 13, height: 13, flexShrink: 0,
+                    border: `1.5px solid ${ndStrikeOff ? '#c2410c' : '#cbd5e1'}`,
+                    borderRadius: 2,
+                    background: ndStrikeOff ? '#fff7ed' : '#fff',
+                  }}>
+                    {ndStrikeOff && (
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#c2410c" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </span>
                   {ndStrikeOff ? 'Pending Strike-Off' : 'Strike Off'}
-                  {ndStrikeOff && <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 2, color: '#ea580c' }}>· All svcs. active</span>}
+                  {ndStrikeOff && <span style={{ fontSize: 9, fontWeight: 400, color: '#ea580c' }}>· All svcs. active</span>}
                 </button>
 
                 {/* ND Pending toggle */}
@@ -567,17 +573,26 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                   onClick={() => onNdFlag('agm_documents', ndPending ? '' : 'ND_PENDING')}
                   title="ND service requested but director not yet assigned"
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
                     fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px', border: 'none',
-                    background: ndPending ? '#fef3c7' : '#f1f5f9',
-                    color:      ndPending ? '#b45309' : '#94a3b8',
+                    background: 'transparent', color: ndPending ? '#b45309' : '#94a3b8',
                   }}
-                  onMouseEnter={e => { if (!ndPending) (e.currentTarget as HTMLElement).style.background = '#fef9c3'; }}
-                  onMouseLeave={e => { if (!ndPending) (e.currentTarget as HTMLElement).style.background = '#f1f5f9'; }}
                 >
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  {/* Checkbox square */}
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 13, height: 13, flexShrink: 0,
+                    border: `1.5px solid ${ndPending ? '#b45309' : '#cbd5e1'}`,
+                    borderRadius: 2,
+                    background: ndPending ? '#fef3c7' : '#fff',
+                  }}>
+                    {ndPending && (
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </span>
                   ND Pending
-                  {ndPending && <span style={{ fontSize: 9, fontWeight: 400, marginLeft: 2 }}>● Active</span>}
                 </button>
               </div>
             )}
