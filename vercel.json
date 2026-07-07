@@ -7,10 +7,6 @@
     {
       "path": "/api/ar-reminder/generate",
       "schedule": "0 1 * * *"
-    },
-    {
-      "path": "/api/nd-appointments/sync",
-      "schedule": "0 2 * * 1"
     }
   ]
 }
