@@ -4,35 +4,61 @@ import type { Browser } from 'playwright-core';
 import https from 'https';
 
 /**
- * Auto-detects late filers directly from TeamWork's own "Due Date Tracker",
- * which reflects TeamWork staff's real AGM/AR Held/Filed status — far more
- * reliable than our own ar_reminder.filling_date shadow tracking.
+ * Auto-detects late filers directly from TeamWork's own per-company event
+ * history (company_agm/agm_list_ajax), which is the authoritative source —
+ * it reflects TeamWork staff's real AGM/AR Held/Filed dates, unlike our own
+ * ar_reminder.filling_date (a separate shadow-copy staff have to remember
+ * to update).
  *
- * TeamWork's login page has Google reCAPTCHA v3, so a pure-HTTP login isn't
- * viable — a real browser logs in once (fast, single navigation), then the
- * extracted PHPSESSID cookie is reused for plain HTTP calls to the
- * DataTables endpoint (/mainadmin/duedate_listing). No further browser use
- * needed, unlike the ND appointment sync which required many page visits —
- * this stays well within Vercel's function time limit.
+ * Validated against 16 originally hand-curated late filers: neither "any
+ * overdue cycle" nor "count of pending cycles" nor "current overdue days
+ * alone" correctly reproduces that list. The real rule (confirmed by
+ * inspecting each company's full Due-Date-to-Completion-Date history):
  *
- * Only INSERTS newly-detected late companies (matched by UEN/name) — never
- * overwrites existing manual entries (which may carry hand-written remarks
- * like "ACRA STRIKE OFF").
+ *   flag as late if EITHER
+ *     (a) the current outstanding cycle is overdue by > OVERDUE_THRESHOLD_DAYS, OR
+ *     (b) the historical average (Completion Date - Due Date) across past
+ *         completed cycles exceeds HISTORICAL_AVG_THRESHOLD_DAYS
+ *
+ * (a) alone misses companies with a consistently bad track record whose
+ * current cycle just happens to have recently become due (e.g. MEGASTAR
+ * SHIPPING: every past cycle 6-12 months late, but current cycle only 7
+ * days overdue right now). (b) alone misses companies with a fine history
+ * whose current cycle has been sitting unprocessed for a long time (e.g.
+ * JETONE GLOBAL FREIGHT: history is fine, current cycle 11 months overdue).
+ * Companies with neither signal (e.g. 1V CAPITAL: ~7 day gaps throughout)
+ * are correctly excluded — a cycle a few days past due is normal
+ * processing lag, not a late-filing risk.
+ *
+ * Companies with ZERO event history (already fully Struck
+ * Off/de-registered) can't be detected this way — they remain manual-only.
+ *
+ * Approach: log in once via a real browser (TeamWork's login page has
+ * Google reCAPTCHA v3, so a pure-HTTP login isn't viable), extract the
+ * PHPSESSID cookie, then close the browser and fetch every active
+ * company's event history via plain HTTP POST to /company_agm/agm_list_ajax
+ * (one lightweight call per company — no further browser use).
+ *
+ * Only INSERTS newly-detected late companies into late_filing_companies
+ * (matched by UEN/name) — never overwrites existing manual entries.
  */
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
 const USERNAME = 'Vincent';
 const PASSWORD = 'Pass@123';
+const OVERDUE_THRESHOLD_DAYS = 90;
+const HISTORICAL_AVG_THRESHOLD_DAYS = 90;
 const MONTH_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
-function parseDmy(s: string): { iso: string; month: number } | null {
-  const m = (s || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
+function parseDmy(s: string): Date | null {
+  const clean = (s || '').replace(/<[^>]+>/g, '').trim();
+  const m = clean.match(/(\d{2})\/(\d{2})\/(\d{4})/);
   if (!m) return null;
-  return { iso: `${m[3]}-${m[2]}-${m[1]}`, month: parseInt(m[2], 10) };
+  return new Date(`${m[3]}-${m[2]}-${m[1]}`);
 }
 
 async function getBrowser(): Promise<Browser> {
@@ -66,13 +92,13 @@ async function getSessionCookie(): Promise<string> {
   }
 }
 
-function fetchDueDateTracker(cookie: string): Promise<{ recordsTotal: number; data: (string | number)[][] }> {
+function fetchAgmList(cookie: string, companyId: string): Promise<{ data: string[][] }> {
   return new Promise((resolve, reject) => {
     const params: Record<string, string> = {
-      draw: '1', start: '0', length: '3000',
+      draw: '1', start: '0', length: '50',
       'search[value]': '', 'search[regex]': 'false',
-      'order[0][column]': '0', 'order[0][dir]': 'asc',
-      ci_csrf_token: '', comid: '', statu: 'Pending', month: '', eventval: '', year: '', cli: 'all',
+      'order[0][column]': '1', 'order[0][dir]': 'desc',
+      ci_csrf_token: '', company_id: companyId,
     };
     for (let i = 0; i < 9; i++) {
       params[`columns[${i}][data]`] = String(i);
@@ -83,9 +109,7 @@ function fetchDueDateTracker(cookie: string): Promise<{ recordsTotal: number; da
     }
     const body = new URLSearchParams(params).toString();
     const req = https.request({
-      hostname: 'apps.teamworkcss.com',
-      path: '/tassure_asia/mainadmin/duedate_listing',
-      method: 'POST',
+      hostname: 'apps.teamworkcss.com', path: '/tassure_asia/company_agm/agm_list_ajax', method: 'POST',
       headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
     }, (res) => {
       let data = '';
@@ -102,60 +126,78 @@ export async function GET() {
   const supabase = createAdminClient();
 
   const cookie = await getSessionCookie();
-  const result = await fetchDueDateTracker(cookie);
 
-  const today = new Date().toISOString().slice(0, 10);
-  type Overdue = { entityName: string; companyId: string | null; event: string; dueDateIso: string; fyeMonth: string | null };
-  const overdue: Overdue[] = [];
+  const { data: companies } = await supabase
+    .from('companies')
+    .select('company_name, internal_id, registration_no')
+    .eq('is_active', true)
+    .not('tw_status', 'in', '("Striking Off","Terminated")')
+    .not('internal_id', 'is', null);
 
-  for (const row of result.data) {
-    const [, entityName, , fyeDateRaw, event, dueDateRaw, , status, actionsHtml] = row as [number, string, string, string, string, string, string, string, string];
-    if (status !== 'Pending') continue;
-    if (!['AGM', 'AR'].includes(event)) continue;
-    const dueDate = parseDmy(dueDateRaw);
-    if (!dueDate || dueDate.iso >= today) continue;
-
-    const companyIdMatch = actionsHtml.match(/company_id="(\d+)"/);
-    const fyeDate = parseDmy(fyeDateRaw);
-    overdue.push({
-      entityName,
-      companyId: companyIdMatch ? companyIdMatch[1] : null,
-      event,
-      dueDateIso: dueDate.iso,
-      fyeMonth: fyeDate ? MONTH_ABBR[fyeDate.month - 1] : null,
-    });
-  }
-
-  const byCompany = new Map<string, Overdue>();
-  for (const o of overdue) {
-    const existing = byCompany.get(o.entityName);
-    if (!existing || o.dueDateIso < existing.dueDateIso) byCompany.set(o.entityName, o);
-  }
-
-  const { data: companies } = await supabase.from('companies').select('internal_id, registration_no');
-  const uenByInternalId = new Map((companies ?? []).map(c => [c.internal_id, c.registration_no]));
+  const targets = companies ?? [];
 
   const { data: existingManual } = await supabase.from('late_filing_companies').select('uen, company_name');
   const existingUens = new Set((existingManual ?? []).map(r => r.uen).filter(Boolean));
   const existingNames = new Set((existingManual ?? []).map(r => r.company_name.toLowerCase()));
 
-  let inserted = 0;
+  const today = new Date();
+  let flagged = 0, inserted = 0, errors = 0;
   const insertedNames: string[] = [];
 
-  for (const [entityName, o] of byCompany) {
-    const uen = o.companyId ? uenByInternalId.get(o.companyId) : null;
-    const alreadyExists = (uen && existingUens.has(uen)) || existingNames.has(entityName.toLowerCase());
+  for (const c of targets) {
+    let result;
+    try {
+      result = await fetchAgmList(cookie, c.internal_id as string);
+    } catch {
+      errors++;
+      continue;
+    }
+    const rows = result.data ?? [];
+
+    const gaps: number[] = [];
+    let currentOverdueDays = 0;
+    let currentDueDateIso: string | null = null;
+    let currentFyeMonth: string | null = null;
+
+    for (const row of rows) {
+      const [event, , fyeDateRaw, , dueDateRaw, heldDateRaw, filingDateRaw] = row;
+      if (!['AGM', 'AR'].includes(event)) continue;
+      const dueDate = parseDmy(dueDateRaw);
+      if (!dueDate) continue;
+      const heldDate = parseDmy(heldDateRaw);
+      const filingDate = parseDmy(filingDateRaw);
+      const completionDate = filingDate || heldDate;
+
+      if (completionDate) {
+        gaps.push(Math.round((completionDate.getTime() - dueDate.getTime()) / 86400000));
+      } else if (dueDate < today) {
+        const overdueDays = Math.round((today.getTime() - dueDate.getTime()) / 86400000);
+        if (overdueDays > currentOverdueDays) {
+          currentOverdueDays = overdueDays;
+          currentDueDateIso = dueDate.toISOString().slice(0, 10);
+          const fyeDate = parseDmy(fyeDateRaw);
+          currentFyeMonth = fyeDate ? MONTH_ABBR[fyeDate.getMonth()] : null;
+        }
+      }
+    }
+
+    const avgGap = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
+    const isLate = currentOverdueDays > OVERDUE_THRESHOLD_DAYS || avgGap > HISTORICAL_AVG_THRESHOLD_DAYS;
+    if (!isLate) continue;
+    flagged++;
+
+    const alreadyExists = (c.registration_no && existingUens.has(c.registration_no)) || existingNames.has(c.company_name.toLowerCase());
     if (alreadyExists) continue;
 
     const { error } = await supabase.from('late_filing_companies').insert({
-      company_name: entityName,
-      uen: uen || null,
-      financial_year_end: o.fyeMonth,
-      next_agm_due_date: o.dueDateIso,
+      company_name: c.company_name,
+      uen: c.registration_no || null,
+      financial_year_end: currentFyeMonth,
+      next_agm_due_date: currentDueDateIso,
       remarks: null,
     });
-    if (!error) { inserted++; insertedNames.push(entityName); }
+    if (!error) { inserted++; insertedNames.push(c.company_name); }
   }
 
-  return NextResponse.json({ ok: true, totalPendingEvents: result.recordsTotal, overdueCompanies: byCompany.size, inserted, insertedNames });
+  return NextResponse.json({ ok: true, checked: targets.length, flagged, inserted, insertedNames, errors });
 }

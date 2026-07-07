@@ -7,6 +7,10 @@
     {
       "path": "/api/ar-reminder/generate",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/late-filing/sync",
+      "schedule": "0 3 * * *"
     }
   ]
 }
