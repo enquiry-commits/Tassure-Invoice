@@ -9,13 +9,21 @@
     "lint": "eslint",
     "import-data": "node scripts/import-to-supabase.js",
     "scrape-qb": "node scripts/scrape-qb-invoices.js",
+    "scrape-qb-items": "node scripts/scrape-qb-line-items.js",
+    "scrape-qb-items-resume": "node scripts/scrape-qb-line-items.js --resume",
+    "scrape-qb-items-debug": "node scripts/scrape-qb-line-items.js --limit=3 --debug",
     "import-qb": "node scripts/import-qb-invoices.js",
+    "import-qb-items": "node scripts/import-qb-invoice-items.js",
+    "init-companies": "node scripts/init-companies-from-qb.js",
+    "init-companies-dry": "node scripts/init-companies-from-qb.js --dry-run",
     "import-ar": "node scripts/create-ar-table.js"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^149.0.0",
     "@supabase/supabase-js": "^2.108.2",
     "lucide-react": "^1.20.0",
     "next": "16.2.9",
+    "playwright-core": "^1.61.1",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -29,6 +37,7 @@
     "eslint-config-next": "16.2.9",
     "playwright": "^1.61.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "xlsx": "^0.18.5"
   }
 }
