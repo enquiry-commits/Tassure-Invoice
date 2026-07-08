@@ -156,8 +156,11 @@ export async function GET() {
 
     const gaps: number[] = [];
     let currentOverdueDays = 0;
-    let currentDueDateIso: string | null = null;
-    let currentFyeMonth: string | null = null;
+    let latestFyeMonth: string | null = null;
+    let lastAgmHeld: Date | null = null;
+    let lastArFiled: Date | null = null;
+    let earliestOutstandingDue: Date | null = null;
+    let newestAgmDue: Date | null = null;
 
     for (const row of rows) {
       const [event, , fyeDateRaw, , dueDateRaw, heldDateRaw, filingDateRaw] = row;
@@ -167,21 +170,27 @@ export async function GET() {
       const heldDate = parseDmy(heldDateRaw);
       const filingDate = parseDmy(filingDateRaw);
       const completionDate = filingDate || heldDate;
+      const fyeDate = parseDmy(fyeDateRaw);
+      if (fyeDate && !latestFyeMonth) latestFyeMonth = MONTH_ABBR[fyeDate.getMonth()];
+
+      if (event === 'AGM') {
+        if (heldDate && (!lastAgmHeld || heldDate > lastAgmHeld)) lastAgmHeld = heldDate;
+        if (!newestAgmDue || dueDate > newestAgmDue) newestAgmDue = dueDate;
+      }
+      if (event === 'AR' && filingDate && (!lastArFiled || filingDate > lastArFiled)) lastArFiled = filingDate;
 
       if (completionDate) {
         gaps.push(Math.round((completionDate.getTime() - dueDate.getTime()) / 86400000));
-      } else if (dueDate < today) {
-        const overdueDays = Math.round((today.getTime() - dueDate.getTime()) / 86400000);
-        if (overdueDays > currentOverdueDays) {
-          currentOverdueDays = overdueDays;
-          currentDueDateIso = dueDate.toISOString().slice(0, 10);
-          const fyeDate = parseDmy(fyeDateRaw);
-          currentFyeMonth = fyeDate ? MONTH_ABBR[fyeDate.getMonth()] : null;
+      } else {
+        if (!earliestOutstandingDue || dueDate < earliestOutstandingDue) earliestOutstandingDue = dueDate;
+        if (dueDate < today) {
+          const overdueDays = Math.round((today.getTime() - dueDate.getTime()) / 86400000);
+          if (overdueDays > currentOverdueDays) currentOverdueDays = overdueDays;
         }
       }
     }
 
-    const avgGap = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : 0;
+    const avgGap = gaps.length ? Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length) : 0;
     const isLate = currentOverdueDays > OVERDUE_THRESHOLD_DAYS || avgGap > HISTORICAL_AVG_THRESHOLD_DAYS;
     if (!isLate) continue;
     flagged++;
@@ -189,12 +198,19 @@ export async function GET() {
     const alreadyExists = (c.registration_no && existingUens.has(c.registration_no)) || existingNames.has(c.company_name.toLowerCase());
     if (alreadyExists) continue;
 
+    const reasons: string[] = [];
+    if (currentOverdueDays > OVERDUE_THRESHOLD_DAYS) reasons.push(`当前逾期${currentOverdueDays}天`);
+    if (avgGap > HISTORICAL_AVG_THRESHOLD_DAYS) reasons.push(`历史平均延迟${avgGap}天(${gaps.length}期)`);
+
+    const toIso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
     const { error } = await supabase.from('late_filing_companies').insert({
       company_name: c.company_name,
       uen: c.registration_no || null,
-      financial_year_end: currentFyeMonth,
-      next_agm_due_date: currentDueDateIso,
-      remarks: null,
+      financial_year_end: latestFyeMonth,
+      last_agm_date: toIso(lastAgmHeld),
+      last_annual_return_date: toIso(lastArFiled),
+      next_agm_due_date: toIso(earliestOutstandingDue) || toIso(newestAgmDue),
+      remarks: `AUTO: ${reasons.join('；')}`,
     });
     if (!error) { inserted++; insertedNames.push(c.company_name); }
   }
