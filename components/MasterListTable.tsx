@@ -5,8 +5,6 @@ import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle }
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { toDisplayDate } from '@/lib/date';
 
-const DATE_FIELDS = new Set(['update_date','join_date','inc_date','last_ar_date','last_agm_date','last_accounts_date','next_agm_due_date']);
-
 export interface MasterListRow {
   id: number;
   update_date: string | null;
@@ -223,7 +221,10 @@ function EditCell({ id, field, value, onSave }: { id: number; field: string; val
     );
   }
 
-  const shown = DATE_FIELDS.has(field) && display ? (toDisplayDate(display) ?? display) : display;
+  // Normalize any cell whose value is a recognizable date to the unified
+  // "DD MMM YYYY" format; non-dates (YES/NO, codes, counts) parse to null and
+  // are shown as-is. Universal so no date column can be missed.
+  const shown = display ? (toDisplayDate(display) ?? display) : display;
   return (
     <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
