@@ -71,6 +71,7 @@ export async function GET(req: NextRequest) {
       pic:                c.pic,
       usesAddressService: c.uses_address,
       hasActiveND:        ndIds.length > 0,
+      hadND:              hasAnyNDSet.has(c.company_name),
       activeNDs:          ndIds.map(id => ({ name: ndNameById.get(id) ?? 'Unknown' })),
       bestEmail:          c.best_email,
       primaryContact:     c.primary_contact,

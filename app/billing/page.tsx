@@ -1338,6 +1338,7 @@ function ARTab() {
     if (filter === 'filed')       return r.stages.arFiled;
     if (filter === 'in_progress') return r.stagesDone > 0 && !r.stages.arFiled;
     if (filter === 'pending')     return r.stagesDone === 0;
+    if (filter === 'overdue')     return !r.stages.arFiled && r.daysUntilDue !== null && r.daysUntilDue < 0;
     return true;
   }), [records, search, filter]);
 
@@ -1418,35 +1419,35 @@ function ARTab() {
         </div>
       )}
 
-      {/* Stats */}
+      {/* Stats — click a card to filter */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
-        {[
-          { label: 'Total Companies', value: stats.total,      bg: '#f8fafc', color: '#1d3a5c', Icon: FileText      },
-          { label: 'AR Filed',        value: stats.filed,      bg: '#f0fdf4', color: '#16a34a', Icon: CheckCircle2  },
-          { label: 'In Progress',     value: stats.inProgress, bg: '#fffbeb', color: '#b45309', Icon: Clock         },
-          { label: 'Not Started',     value: stats.pending,    bg: '#f8fafc', color: '#64748b', Icon: Calendar      },
-          { label: 'Overdue',         value: stats.overdue,    bg: '#fef2f2', color: '#dc2626', Icon: AlertTriangle },
-        ].map(({ label, value, bg, color, Icon }) => (
-          <div key={label} style={{ background: bg, borderRadius: 10, border: '1px solid #e2e8f0', padding: '12px 14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}><Icon size={13} style={{ color }} /><span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{label}</span></div>
-            <div style={{ fontSize: 24, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
-          </div>
-        ))}
+        {([
+          { key: 'all',         label: 'Total Companies', sub: 'in this FYE cycle',       value: stats.total,      color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText      },
+          { key: 'filed',       label: 'AR Filed',        sub: 'annual return filed',     value: stats.filed,      color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2  },
+          { key: 'in_progress', label: 'In Progress',     sub: 'some steps done',         value: stats.inProgress, color: '#b45309', bg: '#fffbeb', bd: '#fde68a', Icon: Clock         },
+          { key: 'pending',     label: 'Not Started',     sub: 'no steps yet',            value: stats.pending,    color: '#64748b', bg: '#f8fafc', bd: '#e2e8f0', Icon: Calendar      },
+          { key: 'overdue',     label: 'Overdue',         sub: 'past due, not filed',     value: stats.overdue,    color: '#dc2626', bg: '#fef2f2', bd: '#fecaca', Icon: AlertTriangle },
+        ] as const).map(({ key, label, sub, value, color, bg, bd, Icon }) => {
+          const active = filter === key;
+          return (
+            <button key={key} onClick={() => setFilter(key)}
+              style={{ textAlign: 'left', cursor: 'pointer', background: bg, borderRadius: 10, border: `1.5px solid ${active ? color : bd}`, padding: '12px 14px', boxShadow: active ? `0 0 0 2px ${color}22` : 'none' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}><Icon size={13} style={{ color }} /><span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>{label}</span></div>
+              <div style={{ fontSize: 24, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{sub}</div>
+            </button>
+          );
+        })}
       </div>
 
       {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: '#dc2626', fontSize: 12, marginBottom: 12 }}>{error}</div>}
 
-      {/* Filter */}
+      {/* Search + view toggle */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
         <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
-        {([
-          { key: 'all',         label: `All (${stats.total})` },
-          { key: 'filed',       label: `Filed (${stats.filed})` },
-          { key: 'in_progress', label: `In Progress (${stats.inProgress})` },
-          { key: 'pending',     label: `Not Started (${stats.pending})` },
-        ] as const).map(({ key, label }) => (
-          <button key={key} onClick={() => setFilter(key)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 7, border: 'none', background: filter === key ? '#1d3a5c' : '#f1f5f9', color: filter === key ? '#fff' : '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}>{label}</button>
-        ))}
+        {filter !== 'all' && (
+          <button onClick={() => setFilter('all')} style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', cursor: 'pointer', whiteSpace: 'nowrap' }}>Clear filter ✕</button>
+        )}
         <span style={{ fontSize: 11, color: '#94a3b8' }}>{filtered.length} companies</span>
         {/* View toggle */}
         <div style={{ display: 'flex', gap: 3, marginLeft: 'auto', background: '#f1f5f9', borderRadius: 7, padding: 3 }}>

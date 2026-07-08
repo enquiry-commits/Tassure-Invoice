@@ -238,6 +238,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [rows, setRows]       = useState<MasterListRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch]   = useState('');
+  const [catFilter, setCatFilter] = useState<'all' | 'fye_mismatch' | 'has_nd' | 'mas'>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -365,9 +366,49 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     return undefined;
   };
 
+  // ── Category breakdown (click a card to filter) ──────────────────────────
+  const isSet = (v: string | null) => {
+    const t = (v ?? '').trim().toUpperCase();
+    return t !== '' && !['NO', 'NA', 'N.A.', 'NONE', '-', '—', '0'].includes(t);
+  };
+  const isFyeMismatch = (r: MasterListRow) =>
+    !!r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye);
+  const catMatch = (r: MasterListRow, cat: typeof catFilter) => {
+    switch (cat) {
+      case 'fye_mismatch': return isFyeMismatch(r);
+      case 'has_nd':       return isSet(r.nominee_director);
+      case 'mas':          return isSet(r.mas);
+      default:             return true;
+    }
+  };
+  const catCount = (cat: typeof catFilter) => rows.filter(r => catMatch(r, cat)).length;
+  const visibleRows = rows.filter(r => catMatch(r, catFilter));
+  const catCards: { key: typeof catFilter; label: string; sub: string; color: string; bg: string; bd: string }[] = [
+    { key: 'all',          label: 'Total Records',  sub: 'in this list',              color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0' },
+    { key: 'fye_mismatch', label: 'FYE Mismatch',   sub: 'differs from TeamWork',     color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
+    { key: 'has_nd',       label: 'Has Nominee Dir', sub: 'nominee director on file',  color: '#7c3aed', bg: '#f5f3ff', bd: '#ddd6fe' },
+    { key: 'mas',          label: 'MAS Regulated',  sub: 'MAS grade assigned',        color: '#0369a1', bg: '#f0f9ff', bd: '#bae6fd' },
+  ];
+
   return (
     <div>
       <div className="mb-4 text-sm text-slate-500">Dashboard › Master List › {title}</div>
+
+      {/* Category cards — click to filter */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        {catCards.map(c => {
+          const active = catFilter === c.key;
+          return (
+            <button key={c.key} onClick={() => setCatFilter(c.key)}
+              style={{ textAlign: 'left', cursor: 'pointer', background: c.bg, border: `1.5px solid ${active ? c.color : c.bd}`,
+                borderRadius: 10, padding: '10px 16px', minWidth: 150, boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: c.color }}>{catCount(c.key)}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{c.label}</div>
+              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{c.sub}</div>
+            </button>
+          );
+        })}
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm p-4 mb-4 flex flex-wrap items-center gap-3">
         <input
@@ -383,7 +424,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         >
           <Plus size={14} />Add Manual
         </button>
-        <span className="text-sm text-slate-400 ml-auto">{rows.length} records</span>
+        <span className="text-sm text-slate-400 ml-auto">{visibleRows.length} shown{catFilter !== 'all' ? ` of ${rows.length}` : ''}</span>
       </div>
 
       {showAddForm && (
@@ -454,9 +495,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             <tbody>
               {loading ? (
                 <tr><td colSpan={COLUMNS.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</td></tr>
-              ) : rows.length === 0 ? (
+              ) : visibleRows.length === 0 ? (
                 <tr><td colSpan={COLUMNS.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No data</td></tr>
-              ) : rows.map((r, i) => (
+              ) : visibleRows.map((r, i) => (
                 <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                   <td style={{ position: 'sticky', left: 0, zIndex: 1, background: i % 2 === 0 ? '#fff' : '#f8fafc', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, padding: '3px 6px', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>{i + 1}</td>
                   {COLUMNS.map(c => {

@@ -9,10 +9,28 @@ interface Company {
   pic: string;
   usesAddressService: boolean;
   hasActiveND: boolean;
+  hadND: boolean;
   activeNDs: { name: string }[];
   bestEmail: string | null;
   primaryContact: { contactName: string } | null;
   clientStatus: string | null;
+}
+
+type CompanyCat = 'all' | 'active' | 'strike_off' | 'terminated' | 'nd' | 'address' | 'nd_ceased';
+
+const isActiveStatus     = (s: string | null) => (s ?? '').toLowerCase() === 'active';
+const isStrikeOffStatus  = (s: string | null) => /strik/i.test(s ?? '');
+const isTerminatedStatus = (s: string | null) => /terminat/i.test(s ?? '');
+function matchesCat(c: Company, cat: CompanyCat): boolean {
+  switch (cat) {
+    case 'active':      return isActiveStatus(c.clientStatus);
+    case 'strike_off':  return isStrikeOffStatus(c.clientStatus);
+    case 'terminated':  return isTerminatedStatus(c.clientStatus);
+    case 'nd':          return c.hasActiveND;
+    case 'address':     return c.usesAddressService;
+    case 'nd_ceased':   return c.hadND && !c.hasActiveND;
+    default:            return true;
+  }
 }
 
 function StatusBadge({ status }: { status: string | null }) {
@@ -47,39 +65,55 @@ interface APIResponse {
 export default function CompaniesPage() {
   const [data, setData]       = useState<APIResponse | null>(null);
   const [search, setSearch]   = useState('');
-  const [filter, setFilter]   = useState('');
+  const [cat, setCat]         = useState<CompanyCat>('all');
   const [loading, setLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({
-      page:   '1',
-      limit:  '10000',
-      search: search,
-      filter: filter,
-    });
+    const params = new URLSearchParams({ page: '1', limit: '10000', search, filter: '' });
     const res = await fetch(`/api/companies?${params}`);
     const json: APIResponse = await res.json();
     setData(json);
     setLoading(false);
-  }, [search, filter]);
+  }, [search]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const filterButtons = [
-    { label: 'All',                  value: '' },
-    { label: 'Active ND',            value: 'nd' },
-    { label: 'Address Service',      value: 'address' },
-    { label: 'ND Ceased (No Cover)', value: 'nd-ceased' },
+  const rows = data?.data ?? [];
+  const count = (c: CompanyCat) => rows.filter(r => matchesCat(r, c)).length;
+  const filtered = rows.filter(r => matchesCat(r, cat));
+
+  const cards: { key: CompanyCat; label: string; sub: string; color: string; bg: string; bd: string }[] = [
+    { key: 'all',        label: 'All Companies',  sub: 'total on file',           color: '#1e3a8a', bg: '#f8fafc', bd: '#e2e8f0' },
+    { key: 'active',     label: 'Active',         sub: 'TeamWork status active',  color: '#15803d', bg: '#f0fdf4', bd: '#bbf7d0' },
+    { key: 'strike_off', label: 'Striking Off',   sub: 'in strike-off process',   color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
+    { key: 'terminated', label: 'Terminated',     sub: 'services terminated',     color: '#b45309', bg: '#fff7ed', bd: '#fed7aa' },
+    { key: 'nd',         label: 'Active ND',       sub: 'has a nominee director',  color: '#7c3aed', bg: '#f5f3ff', bd: '#ddd6fe' },
+    { key: 'address',    label: 'Address Service', sub: 'uses our address',        color: '#0369a1', bg: '#f0f9ff', bd: '#bae6fd' },
+    { key: 'nd_ceased',  label: 'ND Ceased',       sub: 'ND left, no cover now',   color: '#be123c', bg: '#fff1f2', bd: '#fecdd3' },
   ];
 
   return (
     <div>
       <div className="mb-4 text-sm text-slate-500">Dashboard › Companies</div>
 
-      {/* Controls */}
+      {/* Stat cards — click to filter */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        {cards.map(c => {
+          const active = cat === c.key;
+          return (
+            <button key={c.key} onClick={() => setCat(c.key)}
+              style={{ textAlign: 'left', cursor: 'pointer', background: c.bg, border: `1.5px solid ${active ? c.color : c.bd}`,
+                borderRadius: 10, padding: '10px 16px', minWidth: 140, boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: c.color }}>{count(c.key)}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{c.label}</div>
+              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{c.sub}</div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Search */}
       <div className="bg-white rounded-xl shadow-sm p-4 mb-4 flex flex-wrap items-center gap-3">
         <input
           type="text"
@@ -88,26 +122,7 @@ export default function CompaniesPage() {
           onChange={e => setSearch(e.target.value)}
           className="flex-1 min-w-48 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400"
         />
-        <div className="flex gap-2 flex-wrap">
-          {filterButtons.map(btn => (
-            <button
-              key={btn.value}
-              onClick={() => setFilter(btn.value)}
-              className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-              style={{
-                backgroundColor: filter === btn.value ? '#1e3a8a' : '#f1f5f9',
-                color: filter === btn.value ? '#ffffff' : '#475569',
-              }}
-            >
-              {btn.label}
-            </button>
-          ))}
-        </div>
-        {data && (
-          <span className="text-sm text-slate-400 ml-auto">
-            {data.total} companies
-          </span>
-        )}
+        <span className="text-sm text-slate-400 ml-auto">{filtered.length} shown</span>
       </div>
 
       {/* Table */}
@@ -131,9 +146,9 @@ export default function CompaniesPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={9} className="text-center py-12 text-slate-400">Loading...</td></tr>
-              ) : data?.data.length === 0 ? (
+              ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="text-center py-12 text-slate-400">No companies found</td></tr>
-              ) : data?.data.map((c, i) => (
+              ) : filtered.map((c, i) => (
                 <tr key={c.registrationNo || i} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-2.5 text-slate-400 text-xs">{i + 1}</td>
                   <td className="px-4 py-2.5">
