@@ -19,7 +19,7 @@ const MONTH_INDEX: Record<string, number> = {
 };
 
 function fmtParts(y: number, mIdx: number, d: number): string {
-  return `${d} ${MONTHS[mIdx]} ${y}`;
+  return `${String(d).padStart(2, '0')} ${MONTHS[mIdx]} ${y}`;
 }
 
 /**
