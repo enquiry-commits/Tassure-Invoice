@@ -19,7 +19,7 @@ function StatusBadge({ status }: { status: string | null }) {
   if (!status) {
     return (
       <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
-        待同步
+        Pending Sync
       </span>
     );
   }

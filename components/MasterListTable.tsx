@@ -199,7 +199,7 @@ function EditCell({ id, field, value, onSave }: { id: number; field: string; val
   if (field === 'status') {
     const colors = statusColor(value);
     return (
-      <div onClick={() => setEditing(true)} title="点击编辑" style={{ cursor: 'text', minHeight: 22 }}>
+      <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22 }}>
         {display
           ? <span style={{ background: colors?.bg, color: colors?.color, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{display}</span>
           : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
@@ -208,7 +208,7 @@ function EditCell({ id, field, value, onSave }: { id: number; field: string; val
   }
 
   return (
-    <div onClick={() => setEditing(true)} title="点击编辑" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', borderRadius: 3, padding: '1px 3px' }}
+    <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
       {display ? <span style={{ fontSize: 11, color: '#374151' }}>{display}</span> : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
@@ -435,9 +435,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={COLUMNS.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>加载中…</td></tr>
+                <tr><td colSpan={COLUMNS.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={COLUMNS.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>暂无数据</td></tr>
+                <tr><td colSpan={COLUMNS.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No data</td></tr>
               ) : rows.map((r, i) => (
                 <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                   <td style={{ position: 'sticky', left: 0, zIndex: 1, background: i % 2 === 0 ? '#fff' : '#f8fafc', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, padding: '3px 6px', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>{i + 1}</td>

@@ -152,9 +152,9 @@ async function main() {
     if (!a.cycles && !a.earliestOutstandingDue) { console.log(`  SKIP (no event history): ${row.company_name}`); skipped++; continue; }
 
     const reasons = [];
-    if (a.currentOverdueDays > 90) reasons.push(`当前逾期${a.currentOverdueDays}天`);
-    if (a.avgGap > 90) reasons.push(`历史平均延迟${a.avgGap}天(${a.cycles}期)`);
-    const autoRemark = reasons.length ? `AUTO: ${reasons.join('；')}` : null;
+    if (a.currentOverdueDays > 90) reasons.push(`Overdue ${a.currentOverdueDays} days`);
+    if (a.avgGap > 90) reasons.push(`Avg ${a.avgGap} days late over ${a.cycles} cycles`);
+    const autoRemark = reasons.length ? `AUTO: ${reasons.join('; ')}` : null;
 
     const updates = {
       financial_year_end: row.financial_year_end || a.latestFyeMonth,

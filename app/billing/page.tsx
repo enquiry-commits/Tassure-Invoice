@@ -1,13 +1,15 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useRef } from 'react';
+import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   RefreshCw, ChevronDown, ChevronRight,
   AlertTriangle, Clock, CheckCircle2, FileText, Calendar,
   ShieldCheck, MapPin, UserCheck, BarChart3, BookOpen, DollarSign,
+  Plus, Check, X, Trash2,
 } from 'lucide-react';
 import type { RenewalStatus, AnnualStatus, CompanyBilling } from '@/app/api/billing/renewals/route';
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
@@ -269,14 +271,16 @@ function EditField({ id, field, value, onSave, placeholder = '—', isDate = fal
 
   const display = (value ?? '').trim();
   return (
-    <div onClick={() => setEditing(true)} title="点击编辑" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', borderRadius: 3, padding: '1px 3px' }}
+    <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
       {display
         ? isDate
           ? <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>{formatDisplay(display)}</span>
           : <span style={{ fontSize: 12, color: '#374151' }}>{display}</span>
-        : <span style={{ color: '#d1d5db', fontSize: 11 }}>{placeholder}</span>}
+        : isDate
+          ? <span style={{ display:'flex', alignItems:'center', gap:3, color:'#c7d2fe', fontSize:11 }}><Calendar size={11} /><span style={{ color:'#d1d5db' }}>{placeholder}</span></span>
+          : <span style={{ color: '#d1d5db', fontSize: 11 }}>{placeholder}</span>}
     </div>
   );
 }
@@ -307,7 +311,7 @@ const DPO_OPTIONS: SelectOption[] = [
 ];
 
 const XBRL_OPTIONS: SelectOption[] = [
-  { label: '日期', ...C.green, type: 'date' },
+  { label: 'Date', ...C.green, type: 'date' },
   { label: 'NO',   ...C.red   },
   { label: 'FULL', ...C.green },
 ];
@@ -377,7 +381,7 @@ function SelectField({ id, field, value, onSave, options }: {
           </div>
         </div>
       ) : (
-        <div onClick={() => setOpen(v => !v)} title="点击选择" style={{ cursor: 'pointer', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
+        <div onClick={() => setOpen(v => !v)} title="Click to select" style={{ cursor: 'pointer', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
           onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
           {display
@@ -406,14 +410,14 @@ function SelectField({ id, field, value, onSave, options }: {
               style={{ padding: '7px 12px', cursor: 'pointer', borderTop: '1px solid #f1f5f9', fontSize: 11, color: '#ef4444' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#fef2f2'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fff'}>
-              清除
+              Clear
             </div>
           )}
           <div onClick={() => { setOpen(false); setVal(value ?? ''); setCustom(true); }}
             style={{ padding: '7px 12px', cursor: 'pointer', borderTop: '1px solid #f1f5f9', fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fff'}>
-            <Calendar size={11} style={{ color: '#4338ca' }} /> 日期 / 自行填写…
+            <Calendar size={11} style={{ color: '#4338ca' }} /> Date / custom…
           </div>
         </div>
       )}
@@ -614,7 +618,7 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
         <div>
           <h4 style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Progress</h4>
           {([
-            { label: 'Reminder',      field: 'reminder_note', isDate: false },
+            { label: 'Reminder',      field: 'reminder_note', isDate: true  },
             { label: 'Report Ready',  field: 'prepared_date', isDate: true  },
             { label: 'To Client',     field: 'sent_date',     isDate: true  },
             { label: 'Signed / Rcvd', field: 'received_date', isDate: true  },
@@ -741,7 +745,7 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
           </div>
           <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #e2e8f0', padding: '8px 12px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Email Sent</div>
-            <EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="e.g. 12/5 email" />
+            <EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate />
           </div>
         </div>
       </div>
@@ -854,7 +858,7 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
       )}
 
       <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 12, fontSize: 10, color: '#94a3b8' }}>
-        ⚠ 草稿发票须在 QuickBooks 人工审核后才可发送给客户
+        ⚠ Draft invoices must be reviewed in QuickBooks before sending to clients
       </div>
     </div>
   );
@@ -896,14 +900,14 @@ function BillingTab() {
       {/* Controls */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 14 }}>
         <select value={withinDays} onChange={e => setWithinDays(+e.target.value)} style={S}>
-          <option value={30}>到期预警 30d</option>
-          <option value={60}>到期预警 60d</option>
-          <option value={90}>到期预警 90d</option>
-          <option value={180}>到期预警 180d</option>
+          <option value={30}>Expiry alert 30d</option>
+          <option value={60}>Expiry alert 60d</option>
+          <option value={90}>Expiry alert 90d</option>
+          <option value={180}>Expiry alert 180d</option>
         </select>
         <button onClick={load} disabled={loading} style={{ ...S, background: '#1d3a5c', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
           <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-          {loading ? '加载中…' : '刷新'}
+          {loading ? 'Loading…' : 'Refresh'}
         </button>
       </div>
 
@@ -928,16 +932,16 @@ function BillingTab() {
 
       {/* Filter */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <input type="text" placeholder="搜索公司名…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
+        <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
         {([
-          { key: 'all',           label: `全部 (${data?.summary.total ?? 0})` },
-          { key: 'expired',       label: `已过期 (${data?.summary.expired ?? 0})` },
-          { key: 'expiring_soon', label: `即将到期 (${data?.summary.expiringSoon ?? 0})` },
-          { key: 'active',        label: `正常 (${data?.summary.active ?? 0})` },
+          { key: 'all',           label: `All (${data?.summary.total ?? 0})` },
+          { key: 'expired',       label: `Expired (${data?.summary.expired ?? 0})` },
+          { key: 'expiring_soon', label: `Expiring Soon (${data?.summary.expiringSoon ?? 0})` },
+          { key: 'active',        label: `Active (${data?.summary.active ?? 0})` },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setFilter(key)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === key ? '#1d3a5c' : '#f1f5f9', color: filter === key ? '#fff' : '#475569', whiteSpace: 'nowrap' }}>{label}</button>
         ))}
-        <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{filtered.length} 家</span>
+        <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{filtered.length} companies</span>
       </div>
 
       {/* Table */}
@@ -945,7 +949,7 @@ function BillingTab() {
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '8px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
           <DollarSign size={13} style={{ color: '#93c5fd' }} />
           <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>BILLING DRAFTS</span>
-          <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>TeamWork Active · QB 历史 · ND Appointments · 人工审核后才生成发票</span>
+          <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>TeamWork Active · QB history · ND Appointments · Invoices generated only after manual review</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '28px 2fr 70px 1fr 1fr 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
           {['', 'Company', 'FYE', 'Renewal Services', 'Annual Obligations', 'PIC'].map((h, i) => (
@@ -953,8 +957,8 @@ function BillingTab() {
           ))}
         </div>
         <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
-          {loading && !data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>加载中…</div>}
-          {!loading && filtered.length === 0 && data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>没有符合条件的记录</div>}
+          {loading && !data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>}
+          {!loading && filtered.length === 0 && data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No matching records</div>}
           {filtered.map((c, i) => {
             const isOpen = expanded === c.companyId;
             const rowBg  = i % 2 === 0 ? '#fff' : '#fafbfc';
@@ -1000,7 +1004,7 @@ function BillingTab() {
 }
 
 // ── AR Detail Modal ───────────────────────────────────────────────────────────
-function ARDetailModal({ r, onSave, onClose }: { r: ARRecord; onSave: (id: number, field: string, val: string) => void; onClose: () => void }) {
+function ARDetailModal({ r, onSave, onClose, onDelete }: { r: ARRecord; onSave: (id: number, field: string, val: string) => void; onClose: () => void; onDelete: (id: number) => void }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
@@ -1020,7 +1024,13 @@ function ARDetailModal({ r, onSave, onClose }: { r: ARRecord; onSave: (id: numbe
           {/* Row 1: company name + close */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{r.entity_name}</div>
-            <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}>✕</button>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
+              <button onClick={() => onDelete(r.id)} title="Remove this company"
+                style={{ background: 'rgba(220,38,38,0.18)', border: 'none', color: '#fecaca', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Trash2 size={15} />
+              </button>
+              <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+            </div>
           </div>
           {/* Row 2: UEN · FYE · due badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -1052,79 +1062,102 @@ function ARDetailModal({ r, onSave, onClose }: { r: ARRecord; onSave: (id: numbe
 // ─────────────────────────────────────────────────────────────────────────────
 // AR TABLE VIEW
 // ─────────────────────────────────────────────────────────────────────────────
-function ARTableView({ records, onSave }: { records: ARRecord[]; onSave: (id: number, field: string, val: string) => void }) {
+function ARTableView({ records, onSave, onDelete }: { records: ARRecord[]; onSave: (id: number, field: string, val: string) => void; onDelete: (id: number) => void }) {
   // Finance columns get a teal header + tinted cell bg
   const FIN_HDR = '#0f766e';
   const FIN_CELL = 'rgba(20,184,166,0.06)';
 
   const outerRef  = useRef<HTMLDivElement>(null);
-  const mirrorRef = useRef<HTMLDivElement>(null);
-  const innerRef  = useRef<HTMLDivElement>(null);
-  const [mirrorLeft,  setMirrorLeft]  = useState(0);
-  const [mirrorWidth, setMirrorWidth] = useState(0);
+  const thumbRef  = useRef<HTMLDivElement>(null);
+  const sbRef     = useRef<HTMLDivElement>(null);
+  const dragging  = useRef(false);
+  const dragRef   = useRef({ startX: 0, startScroll: 0 });
+  const metaRef   = useRef({ tw: 0, sbW: 0 });
+
+  // Direct DOM update — zero React re-renders per scroll tick
+  const updateSb = () => {
+    const el    = outerRef.current;
+    const thumb = thumbRef.current;
+    const sb    = sbRef.current;
+    if (!el || !thumb || !sb) return;
+    const rect = el.getBoundingClientRect();
+    sb.style.left  = `${rect.left}px`;
+    sb.style.width = `${rect.width}px`;
+    if (el.scrollWidth <= el.clientWidth) { sb.style.display = 'none'; return; }
+    sb.style.display = 'block';
+    const tw = Math.max(rect.width * (el.clientWidth / el.scrollWidth), 40);
+    metaRef.current = { tw, sbW: rect.width };
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    const tl = maxScroll > 0 ? (el.scrollLeft / maxScroll) * (rect.width - tw) : 0;
+    thumb.style.width = `${tw}px`;
+    thumb.style.left  = `${tl}px`;
+  };
 
   useEffect(() => {
-    const outer  = outerRef.current;
-    const mirror = mirrorRef.current;
-    const inner  = innerRef.current;
-    if (!outer || !mirror || !inner) return;
-
-    const updatePos = () => {
-      const rect = outer.getBoundingClientRect();
-      setMirrorLeft(rect.left);
-      setMirrorWidth(rect.width);
-      const tbl = outer.querySelector('table') as HTMLElement | null;
-      if (tbl) inner.style.width = tbl.offsetWidth + 'px';
+    const el = outerRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', updateSb, { passive: true });
+    window.addEventListener('resize', updateSb, { passive: true });
+    const ro = new ResizeObserver(updateSb);
+    ro.observe(el);
+    updateSb();
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current || !el) return;
+      const { tw, sbW } = metaRef.current;
+      const dx = e.clientX - dragRef.current.startX;
+      const scrollable = el.scrollWidth - el.clientWidth;
+      const thumbRange = sbW - tw;
+      if (thumbRange <= 0) return;
+      el.scrollLeft = Math.max(0, Math.min(dragRef.current.startScroll + dx * (scrollable / thumbRange), scrollable));
     };
-
-    const onOuterScroll  = () => { if (mirror.scrollLeft !== outer.scrollLeft)  mirror.scrollLeft = outer.scrollLeft;  };
-    const onMirrorScroll = () => { if (outer.scrollLeft  !== mirror.scrollLeft) outer.scrollLeft  = mirror.scrollLeft; };
-
-    outer.addEventListener('scroll',  onOuterScroll);
-    mirror.addEventListener('scroll', onMirrorScroll);
-    window.addEventListener('resize', updatePos);
-    const ro = new ResizeObserver(updatePos);
-    ro.observe(outer);
-    updatePos();
-
+    const onUp = () => { dragging.current = false; };
+    document.addEventListener('mousemove', onMove, { passive: true });
+    document.addEventListener('mouseup', onUp);
     return () => {
-      outer.removeEventListener('scroll',  onOuterScroll);
-      mirror.removeEventListener('scroll', onMirrorScroll);
-      window.removeEventListener('resize', updatePos);
+      el.removeEventListener('scroll', updateSb);
+      window.removeEventListener('resize', updateSb);
       ro.disconnect();
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
     };
   }, []);
 
-  const TH = ({ children, w, center, finance }: { children: React.ReactNode; w: number; center?: boolean; finance?: boolean }) => (
+  const TH = ({ children, w, center, finance, stickyLeft, lastSticky }: { children: React.ReactNode; w: number; center?: boolean; finance?: boolean; stickyLeft?: number; lastSticky?: boolean }) => (
     <th style={{
-      position: 'sticky', top: 0, zIndex: 2,
+      position: 'sticky', top: 0, zIndex: stickyLeft !== undefined ? 3 : 2,
+      left: stickyLeft !== undefined ? stickyLeft : undefined,
       background: finance ? FIN_HDR : '#1d3a5c', color: '#fff',
       fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px',
       padding: '7px 8px', whiteSpace: 'nowrap', minWidth: w, width: w,
       textAlign: center ? 'center' : 'left',
       borderRight: finance ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(255,255,255,0.12)',
+      boxShadow: lastSticky ? '3px 0 8px -2px rgba(0,0,0,0.18)' : undefined,
     }}>{children}</th>
   );
 
-  const TD = ({ children, style, finance }: { children: React.ReactNode; style?: React.CSSProperties; finance?: boolean }) => (
+  const TD = ({ children, style, finance, stickyLeft, lastSticky }: { children: React.ReactNode; style?: React.CSSProperties; finance?: boolean; stickyLeft?: number; lastSticky?: boolean }) => (
     <td style={{
       padding: '3px 6px', verticalAlign: 'top',
       borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9',
-      background: finance ? FIN_CELL : undefined,
+      background: finance ? FIN_CELL : stickyLeft !== undefined ? '#fff' : undefined,
       wordBreak: 'break-word', overflowWrap: 'break-word',
+      position: stickyLeft !== undefined ? 'sticky' : undefined,
+      left: stickyLeft !== undefined ? stickyLeft : undefined,
+      zIndex: stickyLeft !== undefined ? 1 : undefined,
+      boxShadow: lastSticky ? '3px 0 8px -2px rgba(0,0,0,0.12)' : undefined,
       ...style,
     }}>{children}</td>
   );
 
   return (
     <>
-    <div ref={outerRef} style={{ overflowX: 'auto', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none', paddingBottom: 2 }}>
+    <div ref={outerRef} style={{ overflowX: 'hidden', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
       <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
         <thead>
           <tr>
-            <TH w={36} center>#</TH>
-            <TH w={240}>Company Name</TH>
-            <TH w={110}>UEN</TH>
+            <TH w={36} center stickyLeft={0}>#</TH>
+            <TH w={240} stickyLeft={36}>Company Name</TH>
+            <TH w={110} stickyLeft={276} lastSticky>UEN</TH>
             <TH w={120}>Reminder</TH>
             <TH w={120}>Report Ready</TH>
             <TH w={120}>AGM</TH>
@@ -1141,11 +1174,12 @@ function ARTableView({ records, onSave }: { records: ARRecord[]; onSave: (id: nu
             <TH w={180}>Remarks</TH>
             <TH w={150} finance>Invoice</TH>
             <TH w={150} finance>Email Sent</TH>
+            <TH w={44} center>{''}</TH>
           </tr>
         </thead>
         <tbody>
           {records.length === 0 && (
-            <tr><td colSpan={19} style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>暂无记录</td></tr>
+            <tr><td colSpan={20} style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>No records</td></tr>
           )}
           {records.map((r, i) => {
             const filed   = r.stages.arFiled;
@@ -1155,13 +1189,13 @@ function ARTableView({ records, onSave }: { records: ARRecord[]; onSave: (id: nu
             const accent  = filed ? '#16a34a' : overdue ? '#dc2626' : inProg ? '#f59e0b' : '#e2e8f0';
             return (
               <tr key={r.id} style={{ background: rowBg }}>
-                <TD style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{i + 1}</TD>
-                <TD>
+                <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{i + 1}</TD>
+                <TD stickyLeft={36}>
                   <div style={{ fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{r.entity_name}</div>
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
                 </TD>
-                <TD><span style={{ fontFamily: 'monospace', fontSize: 10, color: '#64748b' }}>{r.uen || '—'}</span></TD>
-                <TD><EditField id={r.id} field="reminder_note"   value={r.reminder_note}   onSave={onSave} placeholder="—" /></TD>
+                <TD stickyLeft={276} lastSticky><span style={{ fontFamily: 'monospace', fontSize: 10, color: '#64748b' }}>{r.uen || '—'}</span></TD>
+                <TD><EditField id={r.id} field="reminder_note"   value={r.reminder_note}   onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="prepared_date"   value={r.prepared_date}   onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="date_of_agm"     value={r.date_of_agm}     onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="sent_date"       value={r.sent_date}       onSave={onSave} placeholder="—" isDate /></TD>
@@ -1176,24 +1210,42 @@ function ARTableView({ records, onSave }: { records: ARRecord[]; onSave: (id: nu
                 <TD><EditField id={r.id} field="tax_pic"         value={r.tax_pic}         onSave={onSave} placeholder="—" /></TD>
                 <TD><EditField id={r.id} field="remarks"         value={r.remarks}         onSave={onSave} placeholder="—" /></TD>
                 <TD finance><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
-                <TD finance><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="e.g. 12/5 email" /></TD>
+                <TD finance><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate /></TD>
+                <TD style={{ textAlign: 'center' }}>
+                  <button onClick={() => onDelete(r.id)} title="Remove"
+                    style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', cursor: 'pointer', display: 'inline-flex' }}>
+                    <Trash2 size={11} />
+                  </button>
+                </TD>
               </tr>
             );
           })}
         </tbody>
       </table>
     </div>
-    {/* Fixed mirror scrollbar — always visible at viewport bottom, synced with table scroll */}
+    {/* Custom scrollbar — DOM-only updates, zero React re-renders on scroll */}
     <div
-      ref={mirrorRef}
-      style={{
-        position: 'fixed', bottom: 0, left: mirrorLeft, width: mirrorWidth,
-        overflowX: 'auto', overflowY: 'hidden', height: 14,
-        background: '#f1f5f9', borderTop: '1px solid #cbd5e1',
-        zIndex: 50,
+      ref={sbRef}
+      style={{ position: 'fixed', bottom: 0, display: 'none', height: 23, zIndex: 50, cursor: 'pointer' }}
+      onClick={e => {
+        const el = outerRef.current;
+        if (!el) return;
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        el.scrollLeft = ((e.clientX - rect.left) / metaRef.current.sbW) * (el.scrollWidth - el.clientWidth);
       }}
     >
-      <div ref={innerRef} style={{ height: 1 }} />
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 8, background: '#e1e7ef' }} />
+      <div
+        ref={thumbRef}
+        style={{ position: 'absolute', top: 0, left: 0, width: 0, height: 15, background: '#94a3b8', borderRadius: 8, userSelect: 'none', cursor: 'grab' }}
+        onMouseDown={e => {
+          dragging.current = true;
+          dragRef.current = { startX: e.clientX, startScroll: outerRef.current?.scrollLeft ?? 0 };
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+        onClick={e => e.stopPropagation()}
+      />
     </div>
     </>
   );
@@ -1203,8 +1255,8 @@ function ARTableView({ records, onSave }: { records: ARRecord[]; onSave: (id: nu
 // AR TAB
 // ─────────────────────────────────────────────────────────────────────────────
 function ARTab() {
-  const [month,       setMonth]       = useState('April');
-  const [year,        setYear]        = useState('2026');
+  const [month,       setMonth]       = useState('');
+  const [year,        setYear]        = useState('');
   const [records,     setRecords]     = useState<ARRecord[]>([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState<string | null>(null);
@@ -1215,7 +1267,19 @@ function ARTab() {
   const [syncing,     setSyncing]     = useState(false);
   const [syncMsg,     setSyncMsg]     = useState<string | null>(null);
 
+  // On mount: auto-detect the latest fye_month+fye_year in the database
+  useEffect(() => {
+    fetch('/api/ar-reminder/latest')
+      .then(r => r.json())
+      .then(({ month: m, year: y }) => {
+        setMonth(String(m));
+        setYear(String(y));
+      })
+      .catch(() => { setMonth('January'); setYear(String(new Date().getFullYear())); });
+  }, []);
+
   const load = useCallback(async () => {
+    if (!month || !year) return;
     setLoading(true); setError(null);
     try {
       const res  = await fetch(`/api/ar-reminder?month=${month}&year=${year}`);
@@ -1246,21 +1310,57 @@ function ARTab() {
     setModalRecord(prev => prev && prev.id === id ? { ...prev, [field]: value || null } : prev);
   }, []);
 
-  const filtered = records.filter(r => {
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  const handleDelete = useCallback((id: number) => setPendingDeleteId(id), []);
+
+  const confirmDelete = useCallback(async () => {
+    const id = pendingDeleteId;
+    if (id == null) return;
+    setPendingDeleteId(null);
+    await fetch('/api/ar-reminder', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    setRecords(prev => prev.filter(r => r.id !== id));
+    setModalRecord(prev => prev && prev.id === id ? null : prev);
+  }, [pendingDeleteId]);
+
+  // ── Add Manual ──────────────────────────────────────────────────────────
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [adding,      setAdding]      = useState(false);
+  const [newEntity,   setNewEntity]   = useState('');
+  const [newUen,      setNewUen]      = useState('');
+  const [newPic,      setNewPic]      = useState('');
+  const [newDueDate,  setNewDueDate]  = useState('');
+
+  const saveNewEntity = async () => {
+    if (!newEntity.trim()) return;
+    setAdding(true);
+    try {
+      const res = await fetch('/api/ar-reminder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entity_name: newEntity.trim(), fye_month: month, fye_year: year, uen: newUen || null, pic: newPic || null, due_date: newDueDate || null }),
+      });
+      const json = await res.json();
+      if (json.error) { alert(json.error); return; }
+      setShowAddForm(false); setNewEntity(''); setNewUen(''); setNewPic(''); setNewDueDate('');
+      load();
+    } finally { setAdding(false); }
+  };
+
+  const filtered = useMemo(() => records.filter(r => {
     if (search && !r.entity_name.toLowerCase().includes(search.toLowerCase())) return false;
     if (filter === 'filed')       return r.stages.arFiled;
     if (filter === 'in_progress') return r.stagesDone > 0 && !r.stages.arFiled;
     if (filter === 'pending')     return r.stagesDone === 0;
     return true;
-  });
+  }), [records, search, filter]);
 
-  const stats = {
+  const stats = useMemo(() => ({
     total:      records.length,
     filed:      records.filter(r => r.stages.arFiled).length,
     inProgress: records.filter(r => r.stagesDone > 0 && !r.stages.arFiled).length,
     pending:    records.filter(r => r.stagesDone === 0).length,
     overdue:    records.filter(r => !r.stages.arFiled && r.daysUntilDue !== null && r.daysUntilDue < 0).length,
-  };
+  }), [records]);
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, color: '#1e3a5f', background: '#fff', cursor: 'pointer', outline: 'none' };
 
@@ -1276,16 +1376,58 @@ function ARTab() {
         </select>
         <button onClick={load} disabled={loading} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: '#1d3a5c', color: '#fff', border: 'none', fontWeight: 600 }}>
           <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-          {loading ? '加载中…' : '刷新'}
+          {loading ? 'Loading…' : 'Refresh'}
         </button>
         <button onClick={syncQB} disabled={syncing || loading} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: syncing ? '#0f766e' : '#0f766e', color: '#fff', border: 'none', fontWeight: 600, opacity: syncing ? 0.75 : 1 }}>
           <RefreshCw size={13} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
           {syncing ? 'Syncing QB…' : 'Sync QB'}
         </button>
+        <button onClick={() => setShowAddForm(v => !v)} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: '#7c3aed', color: '#fff', border: 'none', fontWeight: 600 }}>
+          <Plus size={13} />Add Manual
+        </button>
       </div>
       {syncMsg && (
         <div style={{ marginBottom: 10, padding: '6px 12px', borderRadius: 6, fontSize: 12, background: syncMsg.startsWith('✓') ? '#f0fdf4' : '#fef2f2', color: syncMsg.startsWith('✓') ? '#16a34a' : '#dc2626', border: `1px solid ${syncMsg.startsWith('✓') ? '#bbf7d0' : '#fecaca'}` }}>
           {syncMsg}
+        </div>
+      )}
+
+      {/* Add Manual form */}
+      {showAddForm && (
+        <div style={{ background: '#faf5ff', border: '1.5px solid #ddd6fe', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, color: '#6d28d9', marginBottom: 10 }}>Add Manual Entry — FYE {month} {year}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Company Name *</div>
+              <input value={newEntity} onChange={e => setNewEntity(e.target.value)}
+                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>UEN</div>
+              <input value={newUen} onChange={e => setNewUen(e.target.value)}
+                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>PIC</div>
+              <input value={newPic} onChange={e => setNewPic(e.target.value)}
+                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Due Date</div>
+              <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)}
+                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={saveNewEntity} disabled={adding || !newEntity.trim()}
+              style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Check size={14} />{adding ? 'Saving…' : 'Save'}
+            </button>
+            <button onClick={() => setShowAddForm(false)}
+              style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <X size={14} />Cancel
+            </button>
+          </div>
         </div>
       )}
 
@@ -1309,16 +1451,16 @@ function ARTab() {
 
       {/* Filter */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <input type="text" placeholder="搜索公司名…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
+        <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
         {([
-          { key: 'all',         label: `全部 (${stats.total})` },
-          { key: 'filed',       label: `已申报 (${stats.filed})` },
-          { key: 'in_progress', label: `进行中 (${stats.inProgress})` },
-          { key: 'pending',     label: `未开始 (${stats.pending})` },
+          { key: 'all',         label: `All (${stats.total})` },
+          { key: 'filed',       label: `Filed (${stats.filed})` },
+          { key: 'in_progress', label: `In Progress (${stats.inProgress})` },
+          { key: 'pending',     label: `Not Started (${stats.pending})` },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setFilter(key)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 7, border: 'none', background: filter === key ? '#1d3a5c' : '#f1f5f9', color: filter === key ? '#fff' : '#475569', cursor: 'pointer', whiteSpace: 'nowrap' }}>{label}</button>
         ))}
-        <span style={{ fontSize: 11, color: '#94a3b8' }}>{filtered.length} 家</span>
+        <span style={{ fontSize: 11, color: '#94a3b8' }}>{filtered.length} companies</span>
         {/* View toggle */}
         <div style={{ display: 'flex', gap: 3, marginLeft: 'auto', background: '#f1f5f9', borderRadius: 7, padding: 3 }}>
           {([{ k: 'list', icon: '☰', label: 'List' }, { k: 'table', icon: '⊞', label: 'Table' }] as const).map(({ k, icon, label }) => (
@@ -1343,8 +1485,8 @@ function ARTab() {
             ))}
           </div>
           <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
-            {loading && records.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>加载中…</div>}
-            {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>{records.length > 0 ? '没有符合条件的记录' : `FYE ${month} ${year} 暂无记录`}</div>}
+            {loading && records.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>}
+            {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>{records.length > 0 ? 'No matching records' : `No records for FYE ${month} ${year}`}</div>}
             {filtered.map((r, i) => {
               const filed     = r.stages.arFiled;
               const accent    = filed ? '#16a34a' : r.stagesDone > 0 ? '#f59e0b' : '#e2e8f0';
@@ -1384,11 +1526,11 @@ function ARTab() {
           <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderRadius: '10px 10px 0 0', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Calendar size={13} style={{ color: '#93c5fd' }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>FYE {month.toUpperCase()} {year}</span>
-            <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>点击单元格直接编辑 · 数据与 List 视图实时同步</span>
+            <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Click any cell to edit · Data syncs with List view in real time</span>
           </div>
           {loading && records.length === 0
-            ? <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>加载中…</div>
-            : <ARTableView records={filtered} onSave={handleSave} />
+            ? <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>
+            : <ARTableView records={filtered} onSave={handleSave} onDelete={handleDelete} />
           }
         </>
       )}
@@ -1399,6 +1541,15 @@ function ARTab() {
           r={modalRecord}
           onSave={handleSave}
           onClose={() => setModalRecord(null)}
+          onDelete={handleDelete}
+        />
+      )}
+
+      {pendingDeleteId != null && (
+        <ConfirmDeleteModal
+          label={records.find(r => r.id === pendingDeleteId)?.entity_name ?? 'this record'}
+          onCancel={() => setPendingDeleteId(null)}
+          onConfirm={confirmDelete}
         />
       )}
     </div>
@@ -1454,7 +1605,9 @@ function CombinedPage() {
       </div>
 
       {/* Tab content */}
-      {tab === 'billing' ? <BillingTab /> : <ARTab />}
+      <div style={{ paddingBottom: tab === 'ar' ? 44 : 0 }}>
+        {tab === 'billing' ? <BillingTab /> : <ARTab />}
+      </div>
     </div>
   );
 }

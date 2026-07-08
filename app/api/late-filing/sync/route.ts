@@ -199,8 +199,8 @@ export async function GET() {
     if (alreadyExists) continue;
 
     const reasons: string[] = [];
-    if (currentOverdueDays > OVERDUE_THRESHOLD_DAYS) reasons.push(`当前逾期${currentOverdueDays}天`);
-    if (avgGap > HISTORICAL_AVG_THRESHOLD_DAYS) reasons.push(`历史平均延迟${avgGap}天(${gaps.length}期)`);
+    if (currentOverdueDays > OVERDUE_THRESHOLD_DAYS) reasons.push(`Overdue ${currentOverdueDays} days`);
+    if (avgGap > HISTORICAL_AVG_THRESHOLD_DAYS) reasons.push(`Avg ${avgGap} days late over ${gaps.length} cycles`);
 
     const toIso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
     const { error } = await supabase.from('late_filing_companies').insert({
