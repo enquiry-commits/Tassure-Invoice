@@ -436,12 +436,12 @@ function WorkflowBar({ stages, compact = false }: { stages: Stages; compact?: bo
 }
 
 function DueBadge({ days, filed }: { days: number | null; filed: boolean }) {
-  if (filed) return <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>Filed ✓</span>;
+  if (filed) return <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '2px 7px', fontSize: 12, fontWeight: 700 }}>Filed ✓</span>;
   if (days === null) return <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>;
   const bg    = days < 0 ? '#fef2f2' : days < 30 ? '#fff7ed' : days < 90 ? '#fefce8' : '#f0fdf4';
   const color = days < 0 ? '#dc2626' : days < 30 ? '#ea580c' : days < 90 ? '#ca8a04' : '#16a34a';
   const label = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d left`;
-  return <span style={{ background: bg, color, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>{label}</span>;
+  return <span style={{ background: bg, color, borderRadius: 4, padding: '2px 7px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>{label}</span>;
 }
 
 // ── Service Periods list with ND name reveal ──────────────────────────────────
@@ -1468,7 +1468,7 @@ function ARTab() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '28px 2fr 100px 1fr 110px 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
             {['', 'Company Name', 'UEN', 'Services', 'Due Date', 'PIC'].map((h, i) => (
-              <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px' }}>{h}</div>
+              <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px' }}>{h}</div>
             ))}
           </div>
           <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
@@ -1488,15 +1488,15 @@ function ARTab() {
                 >
                   <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></div>
                   <div style={{ padding: '0 6px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 10 }}>{i+1}</span>{r.entity_name}</div>
-                    {r.fye_date && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{i+1}</span>{r.entity_name}</div>
+                    {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
                   </div>
-                  <div style={{ padding: '0 6px', fontSize: 11, fontFamily: 'monospace', color: '#64748b' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
+                  <div style={{ padding: '0 6px', fontSize: 13, fontFamily: 'monospace', color: '#64748b' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
                   <div style={{ padding: '0 6px', display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                    {activeSvc.map(k => { const c = SVC[k]; return <span key={k} style={{ background: c.bg, color: c.color, borderRadius: 3, padding: '1px 5px', fontSize: 9, fontWeight: 700 }}>{c.label}</span>; })}
+                    {activeSvc.map(k => { const c = SVC[k]; return <span key={k} style={{ background: c.bg, color: c.color, borderRadius: 3, padding: '2px 6px', fontSize: 11, fontWeight: 700 }}>{c.label}</span>; })}
                   </div>
                   <div style={{ padding: '0 6px' }}><DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} /></div>
-                  <div style={{ padding: '0 6px', fontSize: 11, color: '#374151', fontWeight: 500 }}>{r.pic || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
+                  <div style={{ padding: '0 6px', fontSize: 14, color: '#374151', fontWeight: 500 }}>{r.pic || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
                 </div>
               );
             })}
