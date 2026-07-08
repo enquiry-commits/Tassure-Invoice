@@ -40,8 +40,27 @@ export function toDisplayDate(input: string | null | undefined): string | null {
   m = s.match(/^(\d{1,2})\s+([A-Za-z]+)\.?,?\s+(\d{4})$/); // "3 Sep 2025" / "30 Sept 2025"
   if (m && MONTH_INDEX[m[2].toLowerCase()] !== undefined) return fmtParts(+m[3], MONTH_INDEX[m[2].toLowerCase()], +m[1]);
 
-  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);          // dd/mm/yyyy
-  if (m) return fmtParts(+m[3], +m[2] - 1, +m[1]);
+  // Numeric a/b/y with / . or - separators, 2- or 4-digit year.
+  // Disambiguation, calibrated to this dataset's mixed source conventions:
+  //   - a > 12  → a is the day (day-first, e.g. 25.08.2020, 26/12/2019)
+  //   - b > 12  → b is the day (month-first, e.g. 8/31/19, 4/10/19)
+  //   - both ≤ 12 (ambiguous) → 4-digit year = day-first (dd/mm/yyyy),
+  //     2-digit year = month-first (m/d/yy) — the two conventions actually
+  //     used, verified by the same date stored both ways (4/10/19 == 10/04/2019).
+  m = s.match(/^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    let y = +m[3];
+    if (m[3].length <= 2) y = y < 70 ? 2000 + y : 1900 + y;
+    let day: number, mon: number;
+    if (a > 12 && b <= 12) { day = a; mon = b; }
+    else if (b > 12 && a <= 12) { mon = a; day = b; }
+    else if (a > 12 && b > 12) return null;
+    else if (m[3].length === 4) { day = a; mon = b; }
+    else { mon = a; day = b; }
+    if (mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+    return fmtParts(y, mon - 1, day);
+  }
 
   return null;
 }
