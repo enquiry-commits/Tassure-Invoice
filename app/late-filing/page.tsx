@@ -259,8 +259,8 @@ export default function LateFilingPage() {
                 {['No.','Company Name','UEN','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map(h=>(
                   <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontWeight:700, fontSize:12, whiteSpace:'nowrap',
                     position:'sticky', top:0, zIndex:2, background:'#1e3a5f', color:'#fff',
-                    ...(h==='Late FY' ? { minWidth:75 } : {}),
-                    ...(h==='Last AR Date' || h==='Last AGM Date' ? { minWidth:165 } : {}),
+                    ...(h==='Late FY' ? { minWidth:110 } : {}),
+                    ...(h==='Last AR Date' || h==='Last AGM Date' || h==='Last Accounts Date' ? { minWidth:150 } : {}),
                     ...(h==='Next AGM Due' ? { minWidth:260 } : {}) }}>{h}</th>
                 ))}
               </tr>
