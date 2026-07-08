@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { AlertTriangle, Plus, Pencil, Trash2, Check, X, RefreshCw, Zap } from 'lucide-react';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
+import { fmtDate as fmtDateStr } from '@/lib/date';
 
 const FYE_MONTHS = ['ALL','JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
@@ -38,7 +39,7 @@ const REMARKS_OPTIONS = [
 
 function fmtDate(d: string | null) {
   if (!d) return <span style={{ color: '#94a3b8' }}>NA</span>;
-  return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return fmtDateStr(d);
 }
 
 function RemarksBadge({ remarks }: { remarks: string | null }) {

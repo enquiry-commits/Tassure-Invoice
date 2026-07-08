@@ -3,6 +3,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
+import { toDisplayDate } from '@/lib/date';
+
+const DATE_FIELDS = new Set(['update_date','join_date','inc_date','last_ar_date','last_agm_date','last_accounts_date','next_agm_due_date']);
 
 export interface MasterListRow {
   id: number;
@@ -207,11 +210,12 @@ function EditCell({ id, field, value, onSave }: { id: number; field: string; val
     );
   }
 
+  const shown = DATE_FIELDS.has(field) && display ? (toDisplayDate(display) ?? display) : display;
   return (
     <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-      {display ? <span style={{ fontSize: 11, color: '#374151' }}>{display}</span> : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+      {shown ? <span style={{ fontSize: 11, color: '#374151' }}>{shown}</span> : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
     </div>
   );
 }

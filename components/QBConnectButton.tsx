@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { CheckCircle, Link, Loader } from 'lucide-react';
+import { fmtDate } from '@/lib/date';
 
 interface QBStatus {
   connected: boolean;
@@ -32,11 +33,7 @@ export default function QBConnectButton() {
   }
 
   if (status.connected) {
-    const when = status.lastConnected
-      ? new Date(status.lastConnected).toLocaleDateString('en-GB', {
-          day: '2-digit', month: 'short', year: 'numeric',
-        })
-      : null;
+    const when = status.lastConnected ? fmtDate(status.lastConnected) : null;
     return (
       <div className="flex items-center gap-2">
         <CheckCircle size={14} className="text-green-500" />

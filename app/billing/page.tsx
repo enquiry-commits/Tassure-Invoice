@@ -10,18 +10,11 @@ import {
 } from 'lucide-react';
 import type { RenewalStatus, AnnualStatus, CompanyBilling } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
+import { fmtDate, fmtMonth, toDisplayDate } from '@/lib/date';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
 // ─────────────────────────────────────────────────────────────────────────────
-function fmtDate(iso: string | null) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-function fmtMonth(iso: string | null) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-}
 function fmtPeriod(start: string | null, end: string | null) {
   if (!start || !end) return '—';
   return `${fmtMonth(start)} – ${fmtMonth(end)}`;
@@ -233,18 +226,12 @@ function EditField({ id, field, value, onSave, placeholder = '—', isDate = fal
   const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) return;
     const d = new Date(e.target.value + 'T00:00:00');
-    setVal(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+    setVal(fmtDate(d));
     e.target.value = '';
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const formatDisplay = (v: string) => {
-    if (/^\d{4}-\d{2}-\d{2}/.test(v)) {
-      const d = new Date(v + 'T00:00:00');
-      if (!isNaN(d.getTime())) return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    }
-    return v;
-  };
+  const formatDisplay = (v: string) => toDisplayDate(v) ?? v;
 
   if (editing) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -350,7 +337,7 @@ function SelectField({ id, field, value, onSave, options }: {
   const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) return;
     const d = new Date(e.target.value + 'T00:00:00');
-    setVal(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }));
+    setVal(fmtDate(d));
     e.target.value = '';
     setTimeout(() => inputRef.current?.focus(), 0);
   };
@@ -386,7 +373,7 @@ function SelectField({ id, field, value, onSave, options }: {
           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
           {display
             ? isDateValue
-              ? <span style={{ background: C.green.bg, color: C.green.color, borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{new Date(display + 'T00:00:00').toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              ? <span style={{ background: C.green.bg, color: C.green.color, borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{fmtDate(display)}</span>
               : chip
                 ? <span style={{ background: chip.bg, color: chip.color, borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{display}</span>
                 : <span style={{ fontSize: 12, color: '#374151' }}>{display}</span>
@@ -508,9 +495,9 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                       : (() => { const d = new Date(end!); d.setFullYear(d.getFullYear() - 1); d.setDate(d.getDate() + 1); return d; })();
                     return (
                       <span style={{ fontSize: 11, fontWeight: 600, color: clr.text }}>
-                        {startDate.toLocaleDateString('en-SG', { month: 'short', year: 'numeric' })}
+                        {fmtMonth(startDate)}
                         {' – '}
-                        {end.toLocaleDateString('en-SG', { month: 'short', year: 'numeric' })}
+                        {fmtMonth(end)}
                       </span>
                     );
                   })()}
@@ -768,8 +755,8 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
   const createDraft = async () => {
     setDrafting(true); setDraftResult(null);
     const lines = billableRenewals.map(r => {
-      const start = r.suggestedPeriodStart ? new Date(r.suggestedPeriodStart).toLocaleDateString('en-SG', { month: 'short', year: 'numeric' }) : '';
-      const end   = r.suggestedPeriodEnd   ? new Date(r.suggestedPeriodEnd).toLocaleDateString('en-SG', { month: 'short', year: 'numeric' }) : '';
+      const start = r.suggestedPeriodStart ? fmtMonth(r.suggestedPeriodStart) : '';
+      const end   = r.suggestedPeriodEnd   ? fmtMonth(r.suggestedPeriodEnd) : '';
       const periodStr = start && end ? ` [${start} - ${end}]` : '';
       return {
         service:     r.service,
@@ -827,7 +814,7 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
                 <span key={r.service} style={{ fontSize: 11, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', color: '#374151' }}>
                   <strong>{r.service}</strong> S${r.lastRate?.toLocaleString()}
                   {r.suggestedPeriodStart && r.suggestedPeriodEnd && (
-                    <span style={{ color: '#64748b' }}> · {new Date(r.suggestedPeriodStart).toLocaleDateString('en-SG', { month: 'short', year: 'numeric' })} – {new Date(r.suggestedPeriodEnd).toLocaleDateString('en-SG', { month: 'short', year: 'numeric' })}</span>
+                    <span style={{ color: '#64748b' }}> · {fmtMonth(r.suggestedPeriodStart)} – {fmtMonth(r.suggestedPeriodEnd)}</span>
                   )}
                 </span>
               ))}
