@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import { Suspense, useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   RefreshCw, ChevronDown, ChevronRight,
@@ -204,24 +204,39 @@ const SVC: Record<string, { label: string; bg: string; color: string }> = {
 const FYE_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const STAGE_LABELS = ['Accounts\nReady','Sent to\nClient','Docs\nReceived','AGM\nHeld','AR\nFiled'];
 
-function EditField({ id, field, value, onSave, placeholder = '—', isDate = false }:
+const EditField = memo(function EditField({ id, field, value, onSave, placeholder = '—', isDate = false }:
   { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; placeholder?: string; isDate?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value ?? '');
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const pendingRef = useRef<{ next: string; prev: string }>({ next: '', prev: '' });
   const inputRef = useRef<HTMLInputElement>(null);
   const dateRef  = useRef<HTMLInputElement>(null);
   useEffect(() => { setVal(value ?? ''); }, [value]);
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
-  const save = useCallback(async () => {
+  const persist = useCallback(async (next: string, prev: string) => {
+    pendingRef.current = { next, prev };
+    setStatus('saving');
+    try {
+      const res = await fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null }) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setStatus('saved');
+      setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
+    } catch { setStatus('error'); }
+  }, [id, field]);
+
+  const save = useCallback(() => {
     setEditing(false);
     const next = val.trim();
-    if (next === (value ?? '').trim()) return;
-    try {
-      await fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null }) });
-      onSave(id, field, next);
-    } catch (_) {}
-  }, [id, field, val, value, onSave]);
+    const prev = (value ?? '').trim();
+    if (next === prev) return;
+    onSave(id, field, next);      // optimistic local update first
+    persist(next, prev);
+  }, [val, value, id, field, onSave, persist]);
+
+  const retry  = useCallback(() => persist(pendingRef.current.next, pendingRef.current.prev), [persist]);
+  const revert = useCallback(() => { const { prev } = pendingRef.current; onSave(id, field, prev); setVal(prev); setStatus('idle'); }, [id, field, onSave]);
 
   const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) return;
@@ -256,9 +271,20 @@ function EditField({ id, field, value, onSave, placeholder = '—', isDate = fal
     </div>
   );
 
+  if (status === 'error') return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, padding: '1px 4px', minHeight: 24 }}>
+      <span title="Save failed" style={{ fontSize: 12, color: '#b91c1c', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val || '—'}</span>
+      <button onClick={retry}  title="Retry save"   style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}><RefreshCw size={11} /></button>
+      <button onClick={revert} title="Revert change" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={11} /></button>
+    </div>
+  );
+
   const display = (value ?? '').trim();
+  const statusDot = status === 'saving'
+    ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
+    : status === 'saved' ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
   return (
-    <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', borderRadius: 3, padding: '1px 3px' }}
+    <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
       {display
@@ -268,9 +294,10 @@ function EditField({ id, field, value, onSave, placeholder = '—', isDate = fal
         : isDate
           ? <span style={{ display:'flex', alignItems:'center', gap:3, color:'#c7d2fe', fontSize:11 }}><Calendar size={11} /><span style={{ color:'#d1d5db' }}>{placeholder}</span></span>
           : <span style={{ color: '#d1d5db', fontSize: 11 }}>{placeholder}</span>}
+      {statusDot}
     </div>
   );
-}
+});
 
 type SelectOption = { label: string; bg: string; color: string; type?: 'date' };
 
@@ -303,7 +330,7 @@ const XBRL_OPTIONS: SelectOption[] = [
   { label: 'FULL', ...C.green },
 ];
 
-function SelectField({ id, field, value, onSave, options }: {
+const SelectField = memo(function SelectField({ id, field, value, onSave, options }: {
   id: number; field: string; value: string | null;
   onSave: (id: number, field: string, val: string) => void;
   options: SelectOption[];
@@ -311,6 +338,8 @@ function SelectField({ id, field, value, onSave, options }: {
   const [open,   setOpen]   = useState(false);
   const [custom, setCustom] = useState(false);
   const [val,    setVal]    = useState(value ?? '');
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const pendingRef = useRef<{ next: string; prev: string }>({ next: '', prev: '' });
   const inputRef = useRef<HTMLInputElement>(null);
   const dateRef  = useRef<HTMLInputElement>(null);
   const wrapRef  = useRef<HTMLDivElement>(null);
@@ -324,15 +353,27 @@ function SelectField({ id, field, value, onSave, options }: {
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
-  const commit = useCallback(async (next: string) => {
+  const persist = useCallback(async (next: string, prev: string) => {
+    pendingRef.current = { next, prev };
+    setStatus('saving');
+    try {
+      const res = await fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null }) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setStatus('saved');
+      setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
+    } catch { setStatus('error'); }
+  }, [id, field]);
+  const retry  = useCallback(() => persist(pendingRef.current.next, pendingRef.current.prev), [persist]);
+  const revert = useCallback(() => { const { prev } = pendingRef.current; onSave(id, field, prev); setVal(prev); setStatus('idle'); }, [id, field, onSave]);
+
+  const commit = useCallback((next: string) => {
     setCustom(false); setOpen(false);
     const trimmed = next.trim();
-    if (trimmed === (value ?? '').trim()) return;
-    try {
-      await fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: trimmed || null }) });
-      onSave(id, field, trimmed);
-    } catch (_) {}
-  }, [id, field, value, onSave]);
+    const prev = (value ?? '').trim();
+    if (trimmed === prev) return;
+    onSave(id, field, trimmed);   // optimistic
+    persist(trimmed, prev);
+  }, [id, field, value, onSave, persist]);
 
   const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) return;
@@ -345,6 +386,17 @@ function SelectField({ id, field, value, onSave, options }: {
   const display = (value ?? '').trim();
   const chip = display ? options.find(o => o.label === display && !o.type) : null;
   const isDateValue = /^\d{4}-\d{2}-\d{2}$/.test(display);
+  const statusDot = status === 'saving'
+    ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
+    : status === 'saved' ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
+
+  if (status === 'error') return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, padding: '1px 4px', minHeight: 24 }}>
+      <span title="Save failed" style={{ fontSize: 12, color: '#b91c1c', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val || '—'}</span>
+      <button onClick={retry}  title="Retry save"   style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}><RefreshCw size={11} /></button>
+      <button onClick={revert} title="Revert change" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={11} /></button>
+    </div>
+  );
 
   return (
     <div ref={wrapRef} style={{ position: 'relative' }}>
@@ -378,6 +430,7 @@ function SelectField({ id, field, value, onSave, options }: {
                 ? <span style={{ background: chip.bg, color: chip.color, borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{display}</span>
                 : <span style={{ fontSize: 12, color: '#374151' }}>{display}</span>
             : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+          {statusDot}
           <svg width="10" height="10" viewBox="0 0 10 10" style={{ color: '#9ca3af', flexShrink: 0 }}><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.4" fill="none" strokeLinecap="round"/></svg>
         </div>
       )}
@@ -410,7 +463,7 @@ function SelectField({ id, field, value, onSave, options }: {
       )}
     </div>
   );
-}
+});
 
 function WorkflowBar({ stages, compact = false }: { stages: Stages; compact?: boolean }) {
   const vals = [stages.accountsReady, stages.sentToClient, stages.docsReceived, stages.agmHeld, stages.arFiled];

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { toDisplayDate } from '@/lib/date';
 
@@ -182,41 +182,80 @@ function RowActionMenu({ row, moveTargets, onMove, onDelete }: {
   );
 }
 
-function EditCell({ id, field, value, onSave }: { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void }) {
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+const EditCell = memo(function EditCell({ id, field, value, onSave }: { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value ?? '');
+  const [status, setStatus] = useState<SaveStatus>('idle');
+  const pendingRef = useRef<{ next: string; prev: string }>({ next: '', prev: '' });
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { setVal(value ?? ''); }, [value]);
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
-  const save = useCallback(async () => {
+  // Persist just this field of this row. Optimistic: the local value is already
+  // updated by the caller before the request; on failure we surface an error
+  // and offer retry / revert instead of silently dropping the edit.
+  const persist = useCallback(async (next: string, prev: string) => {
+    pendingRef.current = { next, prev };
+    setStatus('saving');
+    try {
+      const res = await fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null }) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setStatus('saved');
+      setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
+    } catch {
+      setStatus('error');
+    }
+  }, [id, field]);
+
+  const commit = useCallback(() => {
     setEditing(false);
     const next = val.trim();
-    if (next === (value ?? '').trim()) return;
-    try {
-      await fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null }) });
-      onSave(id, field, next);
-    } catch (_) {}
-  }, [id, field, val, value, onSave]);
+    const prev = (value ?? '').trim();
+    if (next === prev) return;
+    onSave(id, field, next);      // optimistic local update first
+    persist(next, prev);
+  }, [val, value, id, field, onSave, persist]);
+
+  const retry  = useCallback(() => persist(pendingRef.current.next, pendingRef.current.prev), [persist]);
+  const revert = useCallback(() => { const { prev } = pendingRef.current; onSave(id, field, prev); setVal(prev); setStatus('idle'); }, [id, field, onSave]);
 
   if (editing) return (
     <input
       ref={inputRef} type="text" value={val}
       onChange={e => setVal(e.target.value)}
-      onBlur={save}
-      onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setVal(value ?? ''); setEditing(false); } }}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(value ?? ''); setEditing(false); } }}
       style={{ width: '100%', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 5px', fontSize: 11, outline: 'none', background: '#eff6ff' }}
     />
   );
 
+  // On save failure, show an inline error with retry/revert (non-destructive —
+  // the optimistic value stays visible until the user chooses).
+  if (status === 'error') return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, padding: '1px 4px' }}>
+      <span style={{ fontSize: 11, color: '#b91c1c', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title="Save failed">{val || '—'}</span>
+      <button onClick={retry}  title="Retry save"  style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}><RotateCcw size={11} /></button>
+      <button onClick={revert} title="Revert change" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={11} /></button>
+    </div>
+  );
+
   const display = (value ?? '').trim();
+  const statusDot = status === 'saving'
+    ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
+    : status === 'saved'
+      ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} />
+      : null;
+
   if (field === 'status') {
     const colors = statusColor(value);
     return (
-      <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22 }}>
+      <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', gap: 4 }}>
         {display
           ? <span style={{ background: colors?.bg, color: colors?.color, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{display}</span>
           : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+        {statusDot}
       </div>
     );
   }
@@ -226,13 +265,14 @@ function EditCell({ id, field, value, onSave }: { id: number; field: string; val
   // are shown as-is. Universal so no date column can be missed.
   const shown = display ? (toDisplayDate(display) ?? display) : display;
   return (
-    <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', borderRadius: 3, padding: '1px 3px' }}
+    <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
       {shown ? <span style={{ fontSize: 11, color: '#374151' }}>{shown}</span> : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+      {statusDot}
     </div>
   );
-}
+});
 
 export default function MasterListTable({ listType, title, accentColor = '#1d3a5c', moveTargets }: { listType: string; title: string; accentColor?: string; moveTargets?: MoveTarget[] }) {
   const [rows, setRows]       = useState<MasterListRow[]>([]);
