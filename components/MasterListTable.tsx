@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { toDisplayDate } from '@/lib/date';
 
@@ -51,9 +51,22 @@ export interface MasterListRow {
   acra_update: string | null;
   mas: string | null;
   grade: string | null;
+  tw_fye?: string | null; // authoritative FYE month from TeamWork (for cross-check)
 }
 
-const COLUMNS: { field: Exclude<keyof MasterListRow, 'id'>; label: string; w: number }[] = [
+// Normalize any FYE value (month name/abbr, or dd/mm/yyyy date) to a month
+// number 1-12 for comparison. Returns null when not recognizable.
+const MONTH3: Record<string, number> = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+function fyeMonthNum(s: string | null | undefined): number | null {
+  if (!s) return null;
+  const t = String(s).trim();
+  const dm = t.match(/^\d{1,2}\/(\d{1,2})\//);      // dd/mm/yyyy
+  if (dm) { const m = parseInt(dm[1], 10); return m >= 1 && m <= 12 ? m : null; }
+  const a = t.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
+  return MONTH3[a] ?? null;
+}
+
+const COLUMNS: { field: Exclude<keyof MasterListRow, 'id' | 'tw_fye'>; label: string; w: number }[] = [
   { field: 'company_name',               label: 'Company Name',    w: 240 },
   { field: 'roc_no',                     label: 'ROC No.',         w: 110 },
   { field: 'status',                     label: 'Active',          w: 220 },
@@ -458,7 +471,18 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         background: sl !== undefined ? (i % 2 === 0 ? '#fff' : '#f8fafc') : undefined,
                         boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.12)' : undefined,
                       }}>
-                        <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                        {c.field === 'fye' && r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye) ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                            <span
+                              title={`⚠ FYE mismatch — TeamWork says "${r.tw_fye}", manual entry is "${r.fye}". Please verify which is correct.`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
+                              <AlertTriangle size={10} />TW:{String(r.tw_fye).slice(0, 3).toUpperCase()}
+                            </span>
+                          </div>
+                        ) : (
+                          <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                        )}
                       </td>
                     );
                   })}
