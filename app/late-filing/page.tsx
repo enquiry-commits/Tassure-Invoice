@@ -251,12 +251,13 @@ export default function LateFilingPage() {
           No late filing companies found for this year
         </div>
       ) : (
-        <div style={{ background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', overflow:'hidden' }}>
+        <div style={{ background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', overflow:'auto', maxHeight:'calc(100vh - 260px)' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
             <thead>
-              <tr style={{ background:'#1e3a5f', color:'#fff' }}>
+              <tr>
                 {['No.','Company Name','UEN','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map(h=>(
                   <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontWeight:700, fontSize:12, whiteSpace:'nowrap',
+                    position:'sticky', top:0, zIndex:2, background:'#1e3a5f', color:'#fff',
                     ...(h==='Late FY' ? { minWidth:150 } : {}),
                     ...(h==='Next AGM Due' ? { minWidth:260 } : {}) }}>{h}</th>
                 ))}

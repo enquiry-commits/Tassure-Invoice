@@ -12,6 +12,29 @@ interface Company {
   activeNDs: { name: string }[];
   bestEmail: string | null;
   primaryContact: { contactName: string } | null;
+  clientStatus: string | null;
+}
+
+function StatusBadge({ status }: { status: string | null }) {
+  if (!status) {
+    return (
+      <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
+        待同步
+      </span>
+    );
+  }
+  const isActive = status.toLowerCase() === 'active';
+  return (
+    <span
+      className="text-xs px-2 py-0.5 rounded-full font-medium"
+      style={{
+        backgroundColor: isActive ? '#dcfce7' : '#fef3c7',
+        color:            isActive ? '#15803d' : '#92400e',
+      }}
+    >
+      {isActive ? '🟢 ' : '⚪ '}{status}
+    </span>
+  );
 }
 
 interface APIResponse {
@@ -25,14 +48,13 @@ export default function CompaniesPage() {
   const [data, setData]       = useState<APIResponse | null>(null);
   const [search, setSearch]   = useState('');
   const [filter, setFilter]   = useState('');
-  const [page, setPage]       = useState(1);
   const [loading, setLoading] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     const params = new URLSearchParams({
-      page:   String(page),
-      limit:  '50',
+      page:   '1',
+      limit:  '10000',
       search: search,
       filter: filter,
     });
@@ -40,18 +62,11 @@ export default function CompaniesPage() {
     const json: APIResponse = await res.json();
     setData(json);
     setLoading(false);
-  }, [page, search, filter]);
+  }, [search, filter]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  // Reset page when filters change
-  useEffect(() => {
-    setPage(1);
-  }, [search, filter]);
-
-  const totalPages = data ? Math.ceil(data.total / 50) : 1;
 
   const filterButtons = [
     { label: 'All',                  value: '' },
@@ -101,33 +116,32 @@ export default function CompaniesPage() {
           <h2 className="text-white font-semibold text-sm">Company List</h2>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 260px)' }}>
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600 w-8">#</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Company Name</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">UEN</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Type</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Nominee Director</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Address Svc</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Contact</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">PIC</th>
+              <tr>
+                {['#','Company Name','Status','UEN','Type','Nominee Director','Address Svc','Contact','PIC'].map(h => (
+                  <th key={h} className="text-left px-4 py-2.5 font-semibold text-slate-600"
+                    style={{ position: 'sticky', top: 0, zIndex: 2, background: '#f8fafc', boxShadow: 'inset 0 -1px 0 #f1f5f9' }}>
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-12 text-slate-400">Loading...</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-slate-400">Loading...</td></tr>
               ) : data?.data.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-slate-400">No companies found</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-slate-400">No companies found</td></tr>
               ) : data?.data.map((c, i) => (
                 <tr key={c.registrationNo || i} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-2.5 text-slate-400 text-xs">{(page - 1) * 50 + i + 1}</td>
+                  <td className="px-4 py-2.5 text-slate-400 text-xs">{i + 1}</td>
                   <td className="px-4 py-2.5">
                     <div className="font-medium text-slate-800 max-w-56 truncate" title={c.companyName}>
                       {c.companyName}
                     </div>
                   </td>
+                  <td className="px-4 py-2.5"><StatusBadge status={c.clientStatus} /></td>
                   <td className="px-4 py-2.5 text-slate-500 text-xs font-mono">{c.registrationNo}</td>
                   <td className="px-4 py-2.5 text-slate-500 text-xs">{c.companyType || '—'}</td>
                   <td className="px-4 py-2.5">
@@ -161,30 +175,6 @@ export default function CompaniesPage() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {data && totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between">
-            <span className="text-xs text-slate-400">
-              Page {page} of {totalPages} · {data.total} total
-            </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1 rounded text-sm border border-slate-200 disabled:opacity-40"
-              >
-                ← Prev
-              </button>
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1 rounded text-sm border border-slate-200 disabled:opacity-40"
-              >
-                Next →
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

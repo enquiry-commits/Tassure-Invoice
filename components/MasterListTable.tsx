@@ -411,7 +411,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           <h2 className="text-white font-semibold text-sm">{title}</h2>
         </div>
 
-        <div ref={outerRef} style={{ overflowX: 'hidden', maxHeight: 640, overflowY: 'auto' }}>
+        <div ref={outerRef} style={{ overflowX: 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
             <thead>
               <tr>

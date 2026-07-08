@@ -1,20 +1,24 @@
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { todaySGT } from '@/lib/date';
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = todaySGT;
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const filter = searchParams.get('filter') ?? '';
   const search = (searchParams.get('search') ?? '').toLowerCase();
   const page   = Math.max(1, parseInt(searchParams.get('page')  ?? '1',  10));
-  const limit  = Math.min(200, parseInt(searchParams.get('limit') ?? '50', 10));
+  const limit  = Math.min(10000, parseInt(searchParams.get('limit') ?? '50', 10));
 
-  // Fetch all appointments once (250 rows) to build ND status lookups
-  const { data: allAppts } = await supabase
-    .from('nd_appointments')
-    .select('company_name, nd_id, cessation_date');
+  // Fetch all appointments + ND names once to build ND status lookups
+  const [{ data: allAppts }, { data: allNDs }] = await Promise.all([
+    supabase.from('nd_appointments').select('company_name, nd_id, cessation_date'),
+    supabase.from('nominee_directors').select('id, name'),
+  ]);
+
+  const ndNameById = new Map((allNDs ?? []).map(n => [n.id, n.name]));
 
   const t = today();
   const activeNDMap  = new Map<string, number[]>();  // company → [nd_ids]
@@ -58,11 +62,21 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const enriched = (allRows ?? []).map(c => ({
-    ...c,
-    hasActiveND: activeNDMap.has(c.company_name),
-    activeNDCount: (activeNDMap.get(c.company_name) ?? []).length,
-  }));
+  const enriched = (allRows ?? []).map(c => {
+    const ndIds = activeNDMap.get(c.company_name) ?? [];
+    return {
+      companyName:        c.company_name,
+      registrationNo:     c.registration_no,
+      companyType:        c.company_type,
+      pic:                c.pic,
+      usesAddressService: c.uses_address,
+      hasActiveND:        ndIds.length > 0,
+      activeNDs:          ndIds.map(id => ({ name: ndNameById.get(id) ?? 'Unknown' })),
+      bestEmail:          c.best_email,
+      primaryContact:     c.primary_contact,
+      clientStatus:       c.tw_status ?? null,
+    };
+  });
 
   const total  = enriched.length;
   const sliced = enriched.slice((page - 1) * limit, page * limit);
