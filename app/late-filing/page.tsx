@@ -37,6 +37,36 @@ const REMARKS_OPTIONS = [
   'LATE FILING',
 ];
 
+// Classify a late-filing row into one of four buckets, so the count can be
+// broken down instead of a single "Total". Signal comes from the auto-detection
+// remark plus (for manual/strike-off rows) the outstanding due date:
+//   serious  — genuinely, badly overdue (> 1 year) or actively being struck off
+//   recent   — overdue, but only recently (<= 1 year past due)
+//   habitual — a chronic late-filer by history, but its current cycle is NOT
+//              overdue yet (flagged pre-emptively)
+//   review   — manually flagged as possibly-resolved, pending human check
+type LateCategory = 'serious' | 'recent' | 'habitual' | 'review';
+function categorize(row: LateRow): LateCategory {
+  const r = row.remarks ?? '';
+  if (/^Review:/i.test(r)) return 'review';
+
+  const overdueMatch = r.match(/Overdue (\d+) days/);
+  const hasAvg = /Avg \d+ days late/.test(r);
+  const isStrikeOff = /STRIKE OFF/i.test(r);
+
+  let overdueDays: number | null = overdueMatch ? parseInt(overdueMatch[1], 10) : null;
+  // Manual strike-off rows (no "Overdue N" remark): derive from the due date.
+  if (overdueDays === null && row.next_agm_due_date) {
+    overdueDays = Math.round((Date.now() - new Date(row.next_agm_due_date + 'T00:00:00').getTime()) / 86400000);
+  }
+
+  if (isStrikeOff) return 'serious';
+  if (overdueDays !== null && overdueDays > 365) return 'serious';
+  if (overdueDays !== null && overdueDays > 0) return 'recent';
+  if (hasAvg) return 'habitual';
+  return 'recent';
+}
+
 function fmtDate(d: string | null) {
   if (!d) return <span style={{ color: '#94a3b8' }}>NA</span>;
   return fmtDateStr(d);
@@ -73,6 +103,7 @@ export default function LateFilingPage() {
   const [loading, setLoading]   = useState(true);
   const [fye, setFye]           = useState('ALL');
   const [yearFilter, setYearFilter] = useState<string>('ALL');
+  const [catFilter, setCatFilter] = useState<LateCategory | 'ALL'>('ALL');
   const [editId, setEditId]     = useState<string | 'new' | null>(null);
   const [editForm, setEditForm] = useState<EditState & { financial_year_end?: string; }>({});
   const [saving, setSaving]     = useState(false);
@@ -142,11 +173,16 @@ export default function LateFilingPage() {
     );
   }
 
-  // Derive filtered rows by year
+  // Category counts for the breakdown cards
+  const cats = { serious: 0, recent: 0, habitual: 0, review: 0 } as Record<LateCategory, number>;
+  const catOf = new Map<string, LateCategory>();
+  for (const r of rows) { const c = categorize(r); cats[c]++; catOf.set(r.id, c); }
+
+  // Derive filtered rows by year + category
   const allYears = [...new Set(rows.map(r => lateYear(r)).filter(Boolean) as number[])].sort((a,b)=>a-b);
-  const displayRows = yearFilter === 'ALL'
-    ? rows
-    : rows.filter(r => String(lateYear(r)) === yearFilter);
+  const displayRows = rows
+    .filter(r => yearFilter === 'ALL' || String(lateYear(r)) === yearFilter)
+    .filter(r => catFilter === 'ALL' || catOf.get(r.id) === catFilter);
 
   return (
     <div>
@@ -171,12 +207,26 @@ export default function LateFilingPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div style={{ display:'flex', gap:12, marginBottom:16 }}>
-        <div style={{ background:'#fff5f5', border:'1px solid #fca5a522', borderRadius:10, padding:'10px 18px', minWidth:130 }}>
-          <div style={{ fontSize:22, fontWeight:800, color:'#dc2626' }}>{rows.length}</div>
-          <div style={{ fontSize:12, color:'#64748b' }}>Total Late Filers</div>
-        </div>
+      {/* Stats — total + risk breakdown (click a card to filter) */}
+      <div style={{ display:'flex', gap:12, marginBottom:16, flexWrap:'wrap' }}>
+        {([
+          { key: 'ALL',      label: 'Total Late Filers',            sub: 'all flagged companies',            count: rows.length,   color: '#1e3a5f', bg: '#f8fafc', bd: '#e2e8f0' },
+          { key: 'serious',  label: 'Seriously Overdue',            sub: 'over 1 year late / strike-off',     count: cats.serious,  color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
+          { key: 'recent',   label: 'Recently Overdue',             sub: 'past due within the last year',     count: cats.recent,   color: '#ea580c', bg: '#fff7ed', bd: '#fed7aa' },
+          { key: 'habitual', label: 'Habitual Risk',                sub: 'chronic late-filer, not yet due',   count: cats.habitual, color: '#ca8a04', bg: '#fefce8', bd: '#fde68a' },
+          { key: 'review',   label: 'Under Review',                 sub: 'possibly resolved — verify',        count: cats.review,   color: '#64748b', bg: '#f8fafc', bd: '#e2e8f0' },
+        ] as const).map(c => {
+          const active = catFilter === c.key || (c.key === 'ALL' && catFilter === 'ALL');
+          return (
+            <button key={c.key} onClick={() => setCatFilter(c.key as LateCategory | 'ALL')}
+              style={{ textAlign:'left', cursor:'pointer', background:c.bg, border:`1.5px solid ${active ? c.color : c.bd}`,
+                borderRadius:10, padding:'10px 16px', minWidth:150, boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
+              <div style={{ fontSize:22, fontWeight:800, color:c.color }}>{c.count}</div>
+              <div style={{ fontSize:12, fontWeight:700, color:'#334155' }}>{c.label}</div>
+              <div style={{ fontSize:10, color:'#94a3b8', marginTop:1 }}>{c.sub}</div>
+            </button>
+          );
+        })}
       </div>
 
       {/* Year Filter */}
