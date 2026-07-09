@@ -850,15 +850,21 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
       const templateDesc = r.service === 'Secretary' ? secretaryDescription(pLabel)
                          : r.service === 'Address'   ? addressDescription(pLabel)
                          : `Nominee Director Service${pLabel ? ` (${pLabel})` : ''}`;
+      // Validation (262 renewal pairs): Secretary is 85% identical YoY / ~99%
+      // within 5%, Address 95% — safe to pre-fill. ND is volatile: its prior
+      // amount is often a setup/deposit fee and it's dropped in 8 of 13 cases,
+      // so never auto-check ND — force a human decision.
+      const isND = r.service === 'ND';
       out.push({
         service: r.service,
         productService: last?.product_service ?? QB_ITEM[r.service] ?? '',
         description: templateDesc,
         qty: 1,
         rate: r.lastRate ?? MEDIAN_RATE[r.service] ?? 0,
-        include: due,
+        include: isND ? false : due,
         due,
-        reason: r.status === 'expired' ? `Expired ${Math.abs(r.daysUntilExpiry ?? 0)}d ago`
+        reason: isND ? '⚠ ND fee varies yearly — verify amount & whether still engaged'
+              : r.status === 'expired' ? `Expired ${Math.abs(r.daysUntilExpiry ?? 0)}d ago`
               : r.status === 'expiring_soon' ? `Expiring in ${r.daysUntilExpiry}d`
               : r.status === 'active' ? `Active until ${r.lastPeriodEnd ? fmtDate(r.lastPeriodEnd) : '—'}`
               : 'No prior invoice',
@@ -879,10 +885,14 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
           qty: 1, rate: last?.rate ?? MEDIAN_RATE.AR, include: due, due, reason,
         });
       } else { // XBRL
+        // Validation: XBRL amount is 100% stable when present, but presence is
+        // unpredictable YoY (added 18× / dropped 7× across 32 pairs) because it
+        // depends on the year's filing requirement — always confirm it's needed.
         out.push({
           service: 'XBRL', productService: last?.product_service ?? QB_ITEM.XBRL,
           description: xbrlDescription(fyeStr),
-          qty: 1, rate: a.lastAmount ?? MEDIAN_RATE.XBRL, include: due, due, reason,
+          qty: 1, rate: a.lastAmount ?? MEDIAN_RATE.XBRL, include: due, due,
+          reason: `⚠ Confirm XBRL required this FY · ${reason}`,
         });
       }
     }
