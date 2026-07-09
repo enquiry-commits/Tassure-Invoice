@@ -850,10 +850,13 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
       const templateDesc = r.service === 'Secretary' ? secretaryDescription(pLabel)
                          : r.service === 'Address'   ? addressDescription(pLabel)
                          : `Nominee Director Service${pLabel ? ` (${pLabel})` : ''}`;
-      // Validation (262 renewal pairs): Secretary is 85% identical YoY / ~99%
-      // within 5%, Address 95% — safe to pre-fill. ND is volatile: its prior
-      // amount is often a setup/deposit fee and it's dropped in 8 of 13 cases,
-      // so never auto-check ND — force a human decision.
+      // ND's source of truth is TeamWork's nominee-director records, not QB.
+      // A line only reaches here when r.applicable is true, i.e. TeamWork shows
+      // an ACTIVE nominee appointment (validated accurate) — so trust it and
+      // pre-check it. QB history is unreliable for ND only because deposits and
+      // annual fees are billed on separate invoices, so the *fee* is the only
+      // thing to eyeball, not whether we're still engaged. Secretary is 85%
+      // identical YoY / Address 95% — likewise safe to pre-fill.
       const isND = r.service === 'ND';
       out.push({
         service: r.service,
@@ -861,9 +864,9 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
         description: templateDesc,
         qty: 1,
         rate: r.lastRate ?? MEDIAN_RATE[r.service] ?? 0,
-        include: isND ? false : due,
+        include: isND ? true : due,
         due,
-        reason: isND ? '⚠ ND fee varies yearly — verify amount & whether still engaged'
+        reason: isND ? 'Active nominee per TeamWork · confirm annual fee (excl. deposit)'
               : r.status === 'expired' ? `Expired ${Math.abs(r.daysUntilExpiry ?? 0)}d ago`
               : r.status === 'expiring_soon' ? `Expiring in ${r.daysUntilExpiry}d`
               : r.status === 'active' ? `Active until ${r.lastPeriodEnd ? fmtDate(r.lastPeriodEnd) : '—'}`
