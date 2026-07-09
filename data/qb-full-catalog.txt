@@ -1,0 +1,129 @@
+TOTAL line items: 7920
+
+DISTINCT product/service items: 99
+
+
+═══ Secretary  (4957 lines, 44 items) ═══
+  1805x  Corporate Secretarial Services                        med 466.67  [-100..2800]  (svc:Secretary)
+  1221x  ACRA Fees                                             med 60  [5.5..1600]  (svc:Secretary)
+   644x  Registered Address Services                           med 250  [15..1800]  (svc:Address)
+   422x  Other Professional Services                           med 100  [11..2500]  (svc:Secretary)
+   406x  Company XBRL Services                                 med 800  [300..2000]  (svc:XBRL)
+   175x  Company Incorporate Services                          med 585  [66.7..12625]  (svc:Secretary)
+    31x  Bank Acc Opening Support                              med 1000  [1000..1000]  (svc:Secretary)
+    19x  Common Seal & Company Stamp                           med 40  [35..80]  (svc:Secretary)
+    15x  Nominee Director Fees - NLK                           med 3000  [1000..3333.3]  (svc:AR)
+    15x  Secretary Fees - Offshore Co.                         med 525.59  [200..3800]  (svc:Secretary)
+    14x  Shares Transfer                                       med 300  [300..1400]  (svc:Secretary)
+    14x  Nominee Director Deposit                              med 3000  [3000..5000]  (svc:ND)
+    13x  Strike Off Services                                   med 500  [500..500]  (svc:Secretary)
+    13x  Change of Director                                    med 100  [100..150]  (svc:Secretary)
+    11x  CTC                                                   med 50  [50..150]  (svc:Secretary)
+    11x  Shares Allotment                                      med 200  [200..300]  (svc:Secretary)
+    10x  Nominee Director Fees - WW                            med 2750  [1000..3750]  (svc:AR)
+    10x  RORC Services                                         med 50  [50..100]  (svc:Secretary)
+    10x  CPF Submission Services                               med 350  [50..1200]  (svc:Secretary)
+     9x  Nominee Director Fees - ZY                            med 2250  [1000..3000]  (svc:ND)
+     9x  Resignation of directors                              med 50  [50..100]  (svc:Secretary)
+     7x  Nominee Director Fees - LXM                           med 2666.7  [900..3750]  (svc:ND)
+     7x  Nominee Director Fees - CD                            med 2000  [1000..3333.33]  (svc:ND)
+     7x  Interim Dividend Services                             med 100  [100..100]  (svc:ND)
+     6x  Nominee Director Fees - ZD                            med 3000  [500..3000]  (svc:AR)
+     6x  Payroll Package Services                              med 300  [50..600]  (svc:Secretary)
+     6x  Pass Application Services                             med 200  [200..16000]  (svc:Secretary)
+     4x  LOC application                                       med 200  [200..200]  (svc:Secretary)
+     4x  Named Secretary/Agent Fees                            med 200  [200..200]  (svc:AGM)
+     3x  Appointment of directors                              med 50  [50..50]  (svc:Secretary)
+     3x  Nominee Director Fees - NKH                           med 2500  [667..2500]  (svc:ND)
+     3x  Nominee Director Fees - HSY                           med 3000  [2000..3000]  (svc:ND)
+     3x  Nominee Director Fees - WYD                           med 1500  [1500..1750]  (svc:ND)
+     3x  Change of Company Name                                med 200  [100..200]  (svc:Secretary)
+     3x  Admin Fee                                             med 200  [50..500]  (svc:Secretary)
+     3x  Corppass registration                                 med -  [-..-]  (svc:Secretary)
+     2x  Nominee Director Fees - WKX                           med 4666.67  [3000..4666.67]  (svc:ND)
+     2x  Nominee Director Fees - JT                            med 2250  [1250..2250]  (svc:ND)
+     2x  Nominee Shareholder Fees                              med 2500  [2500..2500]  (svc:Secretary)
+     2x  Legalisation Services                                 med 550  [550..550]  (svc:Secretary)
+     1x  Named Auditor                                         med 1000  [1000..1000]  (svc:Secretary)
+     1x  Nominee Director Fees - LJW                           med 1500  [1500..1500]  (svc:AR)
+     1x  Company XBRL Services - DO NOT USE                    med 800  [800..800]  (svc:XBRL)
+     1x  Documents translation                                 med 250  [250..250]  (svc:Secretary)
+
+═══ (no category)  (1437 lines, 26 items) ═══
+   823x  Deferred Revenue - Corp Sec                           med 233.3  [33.3..833.33]  (svc:Secretary)
+   394x  Deferred Revenue - Reg Addr                           med 100  [12.5..1200]  (svc:Deferred)
+    90x  Discount Given                                        med -200  [-1310..-100]  (svc:Other)
+    19x  Contra Account                                        med 154  [30..10438]  (svc:Other)
+    13x  Amt due from Tassure PAC                              med 333  [275.5..3008.83]  (svc:Other)
+    12x  Staff Refreshment                                     med 100  [100..100]  (svc:Other)
+    12x  Subscription & Licensing Fees                         med 107.82  [102.8..752.49]  (svc:Other)
+     7x  Deferred Revenue - ND - NLK                           med 1000  [750..1666.7]  (svc:AR)
+     7x  Amount due to TAC                                     med 1800  [175..9417]  (svc:Other)
+     6x  Entertainment & Gift - Staff                          med 141.73  [78.06..742.96]  (svc:Other)
+     6x  Amount due to TAO                                     med 300  [100..2000]  (svc:Other)
+     6x  Deferred Revenue - ND - WW                            med 500  [250..1250]  (svc:AR)
+     6x  Deferred Revenue - ND - CD                            med 666.67  [300..1000]  (svc:Address)
+     5x  Recreation Expenses                                   med 110.55  [10.7..1655.91]  (svc:Other)
+     5x  Deferred Revenue - ND - ZY                            med 750  [250..1250]  (svc:XBRL)
+     4x  Deferred Revenue - ND - LXM                           med 1250  [1250..1333.3]  (svc:AR)
+     3x  Deferred Revenue - ND - ZD                            med 1000  [500..3333.3]  (svc:AR)
+     3x  Trade Debtors (USD)                                   med -  [-..-]  (svc:Other)
+     3x  Trade Debtors (USD) Exchange                          med -  [-..-]  (svc:Other)
+     3x  Deferred Revenue - ND - WYD                           med 1500  [1250..1500]  (svc:Deferred)
+     2x  Deferred Revenue - Payroll                            med 1000  [1000..1000]  (svc:Deferred)
+     2x  Deferred Revenue - ND - JT                            med 1750  [750..1750]  (svc:Deferred)
+     2x  Deferred Revenue - CPF                                med 400  [50..400]  (svc:Deferred)
+     2x  Deferred Revenue - ND - NKH                           med 500  [500..500]  (svc:AR)
+     1x  Deferred Revenue - ND - WKX                           med 2333.33  [2333.33..2333.33]  (svc:Secretary)
+     1x  Deferred Revenue - ND - LJW                           med 1500  [1500..1500]  (svc:AR)
+
+═══ Disbursement  (1356 lines, 13 items) ═══
+   631x  Reimbursement Control Account                         med 60  [2.14..660]  (svc:Other)
+   296x  Government fee for filing Annual Return               med 60  [60..1600]  (svc:AR)
+   154x  Other Receivables - Stamp Duty                        med 142  [1..29001]  (svc:Other)
+   105x  Bizfile                                               med 5.5  [5.5..5.5]  (svc:Other)
+    98x  Reimbursement - OPE                                   med 50  [10..350]  (svc:Other)
+    20x  Couriers & Postage                                    med 12.5  [9..94.5]  (svc:Other)
+    20x  Government Fee (Other)                                med 400  [200..8815]  (svc:AGM)
+    15x  Purchase of Certificate of Incorporation              med 50  [50..100]  (svc:Other)
+     7x  Purchase of Certificate of Good Standing              med 11  [11..50]  (svc:Other)
+     4x  Government fee - Application fee                      med 400  [400..400]  (svc:Other)
+     4x  Late lodgement penalty                                med 1200  [600..1320]  (svc:Other)
+     1x  Extension of time for AGM & AR                        med 400  [400..400]  (svc:AGM)
+     1x  Composition amount                                    med 600  [600..600]  (svc:AR)
+
+═══ Accounts  (73 lines, 4 items) ═══
+    47x  Yearly Accounts Services                              med 600  [200..1400]  (svc:Other)
+    18x  Compilation Services - DO NOT USE                     med 600  [300..700]  (svc:Accounts)
+     5x  Compilation Services                                  med 550  [400..600]  (svc:Accounts)
+     3x  Monthly Accounts Services                             med 300  [225..1200]  (svc:Other)
+
+═══ Tax  (57 lines, 4 items) ═══
+    45x  Corporate Tax Services                                med 500  [200..900]  (svc:Tax)
+     7x  Other Tax Services                                    med 300  [100..16377.25]  (svc:Other)
+     4x  Application for waiver of income tax                  med 500  [300..700]  (svc:Tax)
+     1x  Personal Income Tax Services                          med 620  [620..620]  (svc:Accounts)
+
+═══ Other  (40 lines, 8 items) ═══
+    19x  Rental Income #16-05                                  med 3200  [3000..3200]  (svc:Other)
+    12x  Rental Income #12-08 - DO NOT USE                     med 2000  [2000..2000]  (svc:Other)
+     3x  Software Support & Training                           med 1340  [180..1340]  (svc:Other)
+     2x  Meeting Room Rental                                   med 420  [420..420]  (svc:Other)
+     1x  Training & Seminar - cost                             med 176.9  [176.9..176.9]  (svc:Other)
+     1x  Rental Deposit Collected                              med -  [-..-]  (svc:Other)
+     1x  Bank Charges                                          med -  [-..-]  (svc:Other)
+     1x  Clients' Software & Training - DO NOT USE             med -  [-..-]  (svc:Other)
+
+
+═══ service_type classification totals ═══
+  3542x  Secretary
+  1431x  AR
+   933x  Other
+   705x  Address
+   701x  XBRL
+   297x  Deferred
+   173x  AGM
+    75x  ND
+    38x  Tax
+    24x  Accounts
+     1x  Audit

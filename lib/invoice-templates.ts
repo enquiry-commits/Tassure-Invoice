@@ -69,6 +69,85 @@ export function periodLabel(startIso: string | null, endIso: string | null): str
   return a && b ? `${a} - ${b}` : '';
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Full billable catalog — every real client-facing QB Product/Service item seen
+// in history (99 distinct items curated down to the ~50 that are actual client
+// charges; excludes Deferred Revenue / Discount / Contra / inter-company /
+// staff-expense / rental / "DO NOT USE" accounting artifacts). Used to let staff
+// add any line to a draft, matching how real invoices vary. Rate = typical
+// (median) so it pre-fills sensibly; staff can always edit.
+// ─────────────────────────────────────────────────────────────────────────────
+export type CatalogItem = { item: string; label: string; category: string; rate: number; service: string };
+
+export const QB_CATALOG: CatalogItem[] = [
+  // ── Corporate secretarial (recurring + ad-hoc) ──
+  { item: 'Secretary:Corporate Secretarial Services', label: 'Corporate Secretarial Services (annual)', category: 'Secretarial', rate: 466.67, service: 'Secretary' },
+  { item: 'Secretary:Registered Address Services',     label: 'Registered Address Services (annual)',    category: 'Secretarial', rate: 250,    service: 'Address' },
+  { item: 'Secretary:Company XBRL Services',           label: 'Company XBRL Services',                   category: 'Secretarial', rate: 800,    service: 'XBRL' },
+  { item: 'Secretary:Other Professional Services',     label: 'Other Professional Services',             category: 'Secretarial', rate: 100,    service: 'Secretary' },
+  { item: 'Secretary:Company Incorporate Services',    label: 'Company Incorporation Services',          category: 'Secretarial', rate: 585,    service: 'Secretary' },
+  { item: 'Secretary:Secretary Fees - Offshore Co.',   label: 'Secretary Fees – Offshore Co.',           category: 'Secretarial', rate: 525,    service: 'Secretary' },
+  { item: 'Secretary:Strike Off Services',             label: 'Strike Off Services',                     category: 'Secretarial', rate: 500,    service: 'Secretary' },
+  { item: 'Secretary:Bank Acc Opening Support',        label: 'Bank Account Opening Support',            category: 'Secretarial', rate: 1000,   service: 'Secretary' },
+  { item: 'Secretary:CPF Submission Services',         label: 'CPF Submission Services',                 category: 'Secretarial', rate: 350,    service: 'Secretary' },
+  { item: 'Secretary:Payroll Package Services',        label: 'Payroll Package Services',                category: 'Secretarial', rate: 300,    service: 'Secretary' },
+  { item: 'Secretary:Pass Application Services',       label: 'Pass Application Services (EP/work pass)', category: 'Secretarial', rate: 200,    service: 'Secretary' },
+  // ── Share / director / company changes ──
+  { item: 'Secretary:Shares Transfer',                 label: 'Shares Transfer',                         category: 'Changes', rate: 300, service: 'Secretary' },
+  { item: 'Secretary:Shares Allotment',                label: 'Shares Allotment',                        category: 'Changes', rate: 200, service: 'Secretary' },
+  { item: 'Secretary:Change of Director',              label: 'Change of Director',                      category: 'Changes', rate: 100, service: 'Secretary' },
+  { item: 'Secretary:Appointment of directors',        label: 'Appointment of Directors',                category: 'Changes', rate: 50,  service: 'Secretary' },
+  { item: 'Secretary:Resignation of directors',        label: 'Resignation of Directors',                category: 'Changes', rate: 50,  service: 'Secretary' },
+  { item: 'Secretary:Change of Company Name',          label: 'Change of Company Name',                  category: 'Changes', rate: 200, service: 'Secretary' },
+  { item: 'Secretary:Interim Dividend Services',       label: 'Interim Dividend Services',               category: 'Changes', rate: 100, service: 'Secretary' },
+  // ── Nominee director (per nominee) + related ──
+  { item: 'Secretary:Nominee Director Fees - NLK', label: 'Nominee Director Fees – Ng Lay Kian',   category: 'Nominee', rate: 3000, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - WW',  label: 'Nominee Director Fees – Wang Wei',       category: 'Nominee', rate: 2750, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - ZY',  label: 'Nominee Director Fees – Zhang Yan',      category: 'Nominee', rate: 2250, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - ZD',  label: 'Nominee Director Fees – Zhang Dan',      category: 'Nominee', rate: 3000, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - CD',  label: 'Nominee Director Fees – Chen De',        category: 'Nominee', rate: 2000, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - LXM', label: 'Nominee Director Fees – Liu Xiaomei',    category: 'Nominee', rate: 2666.7, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - NKH', label: 'Nominee Director Fees – Ng Keong Huat',  category: 'Nominee', rate: 2500, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - HSY', label: 'Nominee Director Fees – Han Songyang',   category: 'Nominee', rate: 3000, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - WYD', label: 'Nominee Director Fees – Wang Yidong',    category: 'Nominee', rate: 1500, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - WKX', label: 'Nominee Director Fees – Wee Kai Xin',    category: 'Nominee', rate: 4666.67, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - JT',  label: 'Nominee Director Fees – Tay Yong Chiat', category: 'Nominee', rate: 2250, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - LJW', label: 'Nominee Director Fees – Li Jianwei',     category: 'Nominee', rate: 1500, service: 'ND' },
+  { item: 'Secretary:Nominee Director Deposit',    label: 'Nominee Director Deposit',                category: 'Nominee', rate: 3000, service: 'ND' },
+  { item: 'Secretary:Nominee Shareholder Fees',    label: 'Nominee Shareholder Fees',                category: 'Nominee', rate: 2500, service: 'Secretary' },
+  // ── Small statutory items ──
+  { item: 'Secretary:CTC',                        label: 'Certified True Copy (CTC)',                category: 'Statutory', rate: 50,  service: 'Secretary' },
+  { item: 'Secretary:RORC Services',              label: 'RORC Services (register of controllers)',  category: 'Statutory', rate: 50,  service: 'Secretary' },
+  { item: 'Secretary:Common Seal & Company Stamp', label: 'Common Seal & Company Stamp',             category: 'Statutory', rate: 40,  service: 'Secretary' },
+  { item: 'Secretary:Corppass registration',      label: 'Corppass Registration',                    category: 'Statutory', rate: 50,  service: 'Secretary' },
+  { item: 'Secretary:Admin Fee',                  label: 'Admin Fee',                                category: 'Statutory', rate: 200, service: 'Secretary' },
+  { item: 'Secretary:LOC application',            label: 'LOC Application',                          category: 'Statutory', rate: 200, service: 'Secretary' },
+  { item: 'Secretary:Legalisation Services',      label: 'Legalisation Services',                    category: 'Statutory', rate: 550, service: 'Secretary' },
+  { item: 'Secretary:Documents translation',      label: 'Documents Translation',                    category: 'Statutory', rate: 250, service: 'Secretary' },
+  { item: 'Secretary:Named Secretary/Agent Fees', label: 'Named Secretary / Agent Fees',             category: 'Statutory', rate: 200, service: 'Secretary' },
+  { item: 'Secretary:Named Auditor',              label: 'Named Auditor',                            category: 'Statutory', rate: 1000, service: 'Secretary' },
+  // ── Accounts & tax ──
+  { item: 'Accounts:Yearly Accounts Services',    label: 'Yearly Accounts Services',                 category: 'Accounts & Tax', rate: 600, service: 'Accounts' },
+  { item: 'Accounts:Compilation Services',        label: 'Compilation Services',                     category: 'Accounts & Tax', rate: 550, service: 'Accounts' },
+  { item: 'Accounts:Monthly Accounts Services',   label: 'Monthly Accounts Services',                category: 'Accounts & Tax', rate: 300, service: 'Accounts' },
+  { item: 'Tax:Corporate Tax Services',           label: 'Corporate Tax Services',                   category: 'Accounts & Tax', rate: 500, service: 'Tax' },
+  { item: 'Tax:Application for waiver of income tax', label: 'Application for Waiver of Income Tax',  category: 'Accounts & Tax', rate: 500, service: 'Tax' },
+  { item: 'Tax:Other Tax Services',               label: 'Other Tax Services',                       category: 'Accounts & Tax', rate: 300, service: 'Tax' },
+  { item: 'Tax:Personal Income Tax Services',     label: 'Personal Income Tax Services',             category: 'Accounts & Tax', rate: 620, service: 'Tax' },
+  // ── Disbursements (government fees & reimbursements) ──
+  { item: 'Disbursement:Government fee for filing Annual Return', label: 'ACRA Govt Fee – Annual Return', category: 'Disbursements', rate: 60,  service: 'AR' },
+  { item: 'Disbursement:Bizfile',                 label: 'Bizfile',                                  category: 'Disbursements', rate: 5.5, service: 'Other' },
+  { item: 'Disbursement:Government Fee (Other)',   label: 'Government Fee (Other)',                  category: 'Disbursements', rate: 400, service: 'Other' },
+  { item: 'Disbursement:Extension of time for AGM & AR', label: 'Extension of Time (AGM & AR)',       category: 'Disbursements', rate: 400, service: 'Other' },
+  { item: 'Disbursement:Late lodgement penalty',   label: 'Late Lodgement Penalty',                  category: 'Disbursements', rate: 1200, service: 'Other' },
+  { item: 'Disbursement:Composition amount',       label: 'Composition Amount',                      category: 'Disbursements', rate: 600, service: 'Other' },
+  { item: 'Disbursement:Purchase of Certificate of Incorporation', label: 'Certificate of Incorporation', category: 'Disbursements', rate: 50, service: 'Other' },
+  { item: 'Disbursement:Purchase of Certificate of Good Standing', label: 'Certificate of Good Standing', category: 'Disbursements', rate: 11, service: 'Other' },
+  { item: 'Disbursement:Other Receivables - Stamp Duty', label: 'Stamp Duty',                        category: 'Disbursements', rate: 0,   service: 'Other' },
+  { item: 'Disbursement:Reimbursement - OPE',     label: 'Reimbursement – OPE',                      category: 'Disbursements', rate: 50,  service: 'Other' },
+  { item: 'Disbursement:Couriers & Postage',      label: 'Couriers & Postage',                       category: 'Disbursements', rate: 12.5, service: 'Other' },
+];
+
 // FYE month name + a reference date → "31.12.2025" style used in AR/XBRL lines.
 const MONTH_NUM: Record<string, number> = { january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12,jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12 };
 export function fyeDateString(fyeMonth: string | null, year: number): string {

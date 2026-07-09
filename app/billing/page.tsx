@@ -11,7 +11,7 @@ import {
 import type { RenewalStatus, AnnualStatus, CompanyBilling } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { fmtDate, fmtMonth, toDisplayDate } from '@/lib/date';
-import { QB_ITEM, MEDIAN_RATE, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
+import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
@@ -923,17 +923,18 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
 
       {/* Editable draft line items */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px', gap: 0, background: '#f1f5f9', padding: '6px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-          <div></div><div>Service</div><div>Description</div><div>Status</div><div style={{ textAlign: 'center' }}>Qty</div><div style={{ textAlign: 'right' }}>Rate (S$)</div><div style={{ textAlign: 'right' }}>Amount</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, background: '#f1f5f9', padding: '6px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+          <div></div><div>Service</div><div>Description</div><div>Status</div><div style={{ textAlign: 'center' }}>Qty</div><div style={{ textAlign: 'right' }}>Rate (S$)</div><div style={{ textAlign: 'right' }}>Amount</div><div></div>
         </div>
         {lines.map((l, i) => {
           const cfg = SVC_CONFIG[l.service as keyof typeof SVC_CONFIG];
+          const svcLabel = cfg?.label ?? (l.productService.includes(':') ? l.productService.split(':').slice(1).join(':') : l.service);
           return (
-            <div key={l.service} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px', gap: 0, alignItems: 'center', padding: '6px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
+            <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, alignItems: 'center', padding: '6px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
               <input type="checkbox" checked={l.include} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }} title={l.productService}>
                 {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{cfg?.label ?? l.service}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svcLabel}</span>
               </div>
               <textarea value={l.description} onChange={e => setLine(i, { description: e.target.value })} rows={l.description.length > 80 ? 3 : 1} style={{ ...inputStyle, width: '95%', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.35 }} />
               <span style={{ fontSize: 10, fontWeight: 600, color: l.due ? '#c2410c' : '#94a3b8' }}>{l.reason}</span>
@@ -941,10 +942,32 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
               <input type="number" min={0} value={l.rate || ''} placeholder="0" onChange={e => setLine(i, { rate: +e.target.value || 0 })}
                 style={{ ...inputStyle, width: 90, textAlign: 'right', borderColor: l.include && !l.rate ? '#f87171' : '#cbd5e1', background: l.include && !l.rate ? '#fef2f2' : '#fff' }} />
               <span style={{ fontSize: 12, fontWeight: 700, color: l.include ? '#0f766e' : '#94a3b8', textAlign: 'right' }}>{l.include ? `S$${(l.qty * l.rate).toLocaleString()}` : '—'}</span>
+              <button onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))} title="Remove line" style={{ border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'center' }}><X size={13} /></button>
             </div>
           );
         })}
         {lines.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No applicable services for this company.</div>}
+
+        {/* Add any line from the full QB catalogue */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+          <Plus size={13} style={{ color: '#0f766e' }} />
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add line</span>
+          <select value="" onChange={e => {
+              const item = QB_CATALOG.find(x => x.item === e.target.value);
+              if (!item) return;
+              setLines(prev => [...prev, { service: item.service, productService: item.item, description: item.label, qty: 1, rate: item.rate, include: true, due: false, reason: 'Added manually' }]);
+            }}
+            style={{ ...inputStyle, minWidth: 260, cursor: 'pointer' }}>
+            <option value="">Choose a QuickBooks item…</option>
+            {[...new Set(QB_CATALOG.map(x => x.category))].map(cat => (
+              <optgroup key={cat} label={cat}>
+                {QB_CATALOG.filter(x => x.category === cat).map(x => (
+                  <option key={x.item} value={x.item}>{x.label}{x.rate ? `  ·  S$${x.rate.toLocaleString()}` : ''}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Total + generate */}
