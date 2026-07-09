@@ -809,6 +809,19 @@ type EditableLine = {
   reason: string;
 };
 
+// Textarea that grows to fit its content — the full line description is always
+// visible, no inner scrollbar.
+function AutoTextarea({ value, onChange, style }: { value: string; onChange: (v: string) => void; style?: React.CSSProperties }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const resize = () => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } };
+  useEffect(() => { resize(); }, [value]);
+  return (
+    <textarea ref={ref} value={value} rows={1}
+      onChange={e => { onChange(e.target.value); resize(); }}
+      style={{ ...style, overflow: 'hidden', resize: 'none' }} />
+  );
+}
+
 function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
   const [drafting, setDrafting] = useState(false);
   const [draftResult, setDraftResult] = useState<{ ok: boolean; msg: string } | null>(null);
@@ -930,13 +943,13 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
           const cfg = SVC_CONFIG[l.service as keyof typeof SVC_CONFIG];
           const svcLabel = cfg?.label ?? (l.productService.includes(':') ? l.productService.split(':').slice(1).join(':') : l.service);
           return (
-            <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, alignItems: 'center', padding: '6px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
+            <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, alignItems: 'start', padding: '8px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
               <input type="checkbox" checked={l.include} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e' }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }} title={l.productService}>
                 {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svcLabel}</span>
               </div>
-              <textarea value={l.description} onChange={e => setLine(i, { description: e.target.value })} rows={l.description.length > 80 ? 3 : 1} style={{ ...inputStyle, width: '95%', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.35 }} />
+              <AutoTextarea value={l.description} onChange={v => setLine(i, { description: v })} style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
               <span style={{ fontSize: 10, fontWeight: 600, color: l.due ? '#c2410c' : '#94a3b8' }}>{l.reason}</span>
               <input type="number" min={1} value={l.qty} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center' }} />
               <input type="number" min={0} value={l.rate || ''} placeholder="0" onChange={e => setLine(i, { rate: +e.target.value || 0 })}
