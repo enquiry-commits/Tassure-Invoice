@@ -1072,18 +1072,62 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// A company "needs billing" now if it has any renewal expired/expiring OR any
-// annual obligation (AR/XBRL) not yet billed this cycle. This is what links the
-// AR Reminder cycle into Billing — a pending AR surfaces here as billable.
-function billingDueLines(c: CompanyBilling) {
-  const renewals = c.renewals.filter(x => x.applicable && (x.status === 'expired' || x.status === 'expiring_soon'));
-  const annuals  = c.annuals.filter(x => x.applicable && x.status === 'pending');
-  return { renewals, annuals, count: renewals.length + annuals.length };
+// Billing is a downstream STEP of the AR Reminder: TeamWork determines the AR
+// cycle, staff review it, and only then does a company reach Billing. So the
+// Billing list for a cycle IS the AR Reminder list — not a QB-derived guess
+// (a companies-table filter silently drops the ~5 of 35 that have no companies
+// row or aren't yet CSS+Active). We take the AR Reminder rows as the master
+// list and join each to the renewals record (by name) purely for accurate fee
+// amounts / prior-invoice cloning.
+type ARServiceFlags = { ar: boolean; agm: boolean; xbrl: boolean; nd: boolean; address: boolean; accounts: boolean; tax: boolean; secretary: boolean };
+type ARCompany = {
+  id: number; entity_name: string; uen: string | null; fye_date: string | null;
+  due_date: string | null; pic: string | null; status: string | null;
+  acc_pic: string | null; tax_pic: string | null; dormant: string | null;
+  services: ARServiceFlags;
+};
+
+function normName(s: string) {
+  return (s ?? '').toLowerCase()
+    .replace(/\bpte\.?\s*ltd\.?\b/gi, '').replace(/\bprivate\s+limited\b/gi, '')
+    .replace(/\blimited\b/gi, '').replace(/\bllp\b/gi, '')
+    .replace(/[.\-,()&]/g, ' ').replace(/\s+/g, ' ').trim();
 }
-const needsBilling = (c: CompanyBilling) => billingDueLines(c).count > 0;
-function dueEstimate(c: CompanyBilling) {
-  const d = billingDueLines(c);
-  return d.renewals.reduce((s, x) => s + (x.lastRate ?? 0), 0) + d.annuals.reduce((s, x) => s + (x.lastAmount ?? 0), 0);
+
+// Merge an AR Reminder row with its matched renewals record into a CompanyBilling
+// that ExpandedBillingRow can render. The AR Reminder is authoritative for WHICH
+// services to bill; the renewals record supplies the validated amounts + history.
+function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, month: string): CompanyBilling {
+  const svc = ar.services;
+  const mkRenewal = (service: RenewalStatus['service'], applicable: boolean): RenewalStatus => {
+    const m = matched?.renewals.find(r => r.service === service);
+    return m ? { ...m, applicable }
+             : { service, applicable, lastPeriodEnd: null, lastRate: null, daysUntilExpiry: null, status: 'not_found', suggestedPeriodStart: null, suggestedPeriodEnd: null, history: [] };
+  };
+  const mkAnnual = (service: AnnualStatus['service'], applicable: boolean): AnnualStatus => {
+    const m = matched?.annuals.find(a => a.service === service);
+    return m ? { ...m, applicable }
+             : { service, applicable, status: 'pending', lastTxnDate: null, lastFyeDate: null, lastAmount: null, history: [] };
+  };
+  return {
+    // Use the AR Reminder row id as the row identity: it's unique within the
+    // batch, so rows never collide (a companies-table id could clash with an
+    // unmatched row's ar.id). QB lookups key off companyName, not this id.
+    companyId: ar.id,
+    companyName: ar.entity_name,
+    uen: ar.uen ?? matched?.uen ?? null,
+    fyeMonth: month,
+    pic: ar.pic ?? matched?.pic ?? null,
+    twActive: matched?.twActive ?? true,
+    urgency: matched?.urgency ?? 'not_found',
+    renewals: [mkRenewal('Secretary', true), mkRenewal('Address', !!svc.address), mkRenewal('ND', !!svc.nd)],
+    annuals: [mkAnnual('AR', true), mkAnnual('XBRL', !!svc.xbrl)],
+    email: matched?.email ?? null,
+    contactName: matched?.contactName ?? null,
+    billedCycles: matched?.billedCycles ?? [],
+    priorLines: matched?.priorLines ?? [],
+    priorInvoiceDate: matched?.priorInvoiceDate ?? null,
+  };
 }
 
 function BillingTab({ month, year, setMonth, setYear }: { month: string; year: string; setMonth: (v: string) => void; setYear: (v: string) => void }) {
@@ -1094,6 +1138,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   const [search,     setSearch]     = useState('');
   const [filter,     setFilter]     = useState<'all' | 'needs' | 'expired' | 'expiring_soon' | 'active'>('all');
   const [withinDays, setWithinDays] = useState(90);
+
+  const [arList, setArList] = useState<ARCompany[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -1108,6 +1154,18 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
 
   useEffect(() => { load(); }, [load]);
 
+  // The master list for a cycle is the AR Reminder (TeamWork-driven, staff-
+  // reviewed). Re-fetch it whenever the FYE month/year changes.
+  useEffect(() => {
+    if (!month || !year) { setArList([]); return; }
+    let cancelled = false;
+    fetch(`/api/ar-reminder?month=${encodeURIComponent(month)}&year=${year}`)
+      .then(r => r.json())
+      .then(j => { if (!cancelled) setArList(j.companies ?? []); })
+      .catch(() => { if (!cancelled) setArList([]); });
+    return () => { cancelled = true; };
+  }, [month, year]);
+
   useEffect(() => {
     if (expanded === null) return;
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(null); };
@@ -1115,9 +1173,24 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     return () => window.removeEventListener('keydown', h);
   }, [expanded]);
 
-  // Invoicing is organised by FYE month (shared with AR Reminder): only show
-  // the companies whose financial year ends in the selected month.
-  const monthCompanies = (data?.companies ?? []).filter(c => !month || (c.fyeMonth ?? '') === month);
+  // The billing list for a cycle = the AR Reminder rows for that FYE month/year
+  // (the definitive, staff-reviewed set), each joined to its renewals record for
+  // accurate fees. Match by normalised name; unmatched AR rows (new companies
+  // with no QB history yet) still appear, built from the standard template.
+  const renewalByName = useMemo(() => {
+    const m = new Map<string, CompanyBilling>();
+    for (const c of data?.companies ?? []) m.set(normName(c.companyName), c);
+    return m;
+  }, [data]);
+  const monthCompanies = useMemo(() => {
+    const findMatch = (name: string) => {
+      const key = normName(name);
+      if (renewalByName.has(key)) return renewalByName.get(key);
+      for (const [k, v] of renewalByName) if (k.includes(key) || key.includes(k)) return v;
+      return undefined;
+    };
+    return arList.map(ar => arToBillingRow(ar, findMatch(ar.entity_name), month));
+  }, [arList, renewalByName, month]);
   // "Needs billing" for month-driven invoicing = this FYE cycle hasn't been
   // invoiced yet (the QB invoice for a cycle carries its "dd.mm.yyyy" FYE).
   const currentFye = fyeDateString(month, parseInt(year || '0', 10));
@@ -1161,10 +1234,10 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       </div>
 
       {/* Stats — click to filter (scoped to the month) */}
-      {data && (
+      {arList.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
           {([
-            { key: 'all',    label: `FYE ${month || '—'} ${year}`, sub: 'whole batch this month',       value: mCount.total,    color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText     },
+            { key: 'all',    label: `AR Reminder · FYE ${month || '—'} ${year}`, sub: 'staff-reviewed batch this cycle', value: mCount.total,    color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText     },
             { key: 'needs',  label: 'Needs Billing',               sub: 'not yet invoiced this cycle',  value: mCount.needs,    color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4', Icon: DollarSign   },
             { key: 'active', label: 'Invoiced',                    sub: 'already invoiced this cycle',   value: mCount.invoiced, color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2 },
           ] as const).map(({ key, label, sub, value, color, bg, bd, Icon }) => {
@@ -1201,7 +1274,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '8px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
           <DollarSign size={13} style={{ color: '#93c5fd' }} />
           <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>BILLING DRAFTS</span>
-          <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>TeamWork Active · QB history · ND Appointments · Invoices generated only after manual review</span>
+          <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '28px 2fr 70px 1fr 1fr 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
           {['', 'Company', 'FYE', 'Renewal Services', 'Annual Obligations', 'PIC'].map((h, i) => (
@@ -1210,7 +1283,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         </div>
         <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
           {loading && !data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>}
-          {!loading && filtered.length === 0 && data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No matching records</div>}
+          {!loading && arList.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No AR Reminder batch for {month} {year}. Generate/review it on the AR Reminder tab first.</div>}
+          {!loading && arList.length > 0 && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No matching records</div>}
           {filtered.map((c, i) => {
             const isOpen = expanded === c.companyId;
             const rowBg  = i % 2 === 0 ? '#fff' : '#fafbfc';
