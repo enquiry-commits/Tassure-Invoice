@@ -79,28 +79,60 @@ async function main() {
   const withMemberId = nds.filter(n => n.member_id);
   console.log(`${DRY_RUN ? '[DRY RUN] ' : ''}Syncing ${withMemberId.length} NDs (skipping ${nds.length - withMemberId.length} without member_id)`);
 
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  await page.route('**/*', route => {
-    const type = route.request().resourceType();
-    if (['image', 'font', 'media'].includes(type)) return route.abort();
-    return route.continue();
-  });
+  // Some NDs have 50+ appointment rows; reusing a single page across all of
+  // them builds up renderer memory until the tab crashes ("Page crashed"),
+  // which is why this never completed a full run. Fixes: run each ND on its
+  // own short-lived page, launch with the flags that stop shared-memory
+  // starvation, and relaunch the whole browser if it dies mid-run.
+  const LAUNCH_ARGS = ['--disable-dev-shm-usage', '--no-sandbox', '--disable-setuid-sandbox', '--disable-gpu'];
+  let browser, context;
+  const ensureBrowser = async () => {
+    if (browser) { try { await browser.close(); } catch { /* ignore */ } }
+    browser = await chromium.launch({ headless: true, args: LAUNCH_ARGS });
+    context = await browser.newContext();
+    const loginPage = await context.newPage();
+    await login(loginPage);
+    await loginPage.close().catch(() => {});
+  };
+  const scrapeOnFreshPage = async (memberId) => {
+    const page = await context.newPage();
+    await page.route('**/*', route => {
+      const type = route.request().resourceType();
+      if (['image', 'font', 'media'].includes(type)) return route.abort();
+      return route.continue();
+    });
+    try { return await scrapeMemberAppointments(page, memberId); }
+    finally { await page.close().catch(() => {}); }
+  };
 
-  await login(page);
+  // Recycle the browser every few NDs: the chromium process leaks memory across
+  // pages, and some member pages (50+ rows) tip it over. Restarting proactively
+  // keeps it well under the crash threshold — cheaper than crashing + recovering.
+  const RECYCLE_EVERY = 3;
+  let sinceLaunch = 0;
+  await ensureBrowser();
 
   const results = {};
   const errors = {};
 
   for (const nd of withMemberId) {
-    try {
-      results[nd.id] = await scrapeMemberAppointments(page, nd.member_id);
-      console.log(`  scraped ${nd.name}: ${results[nd.id].length} director rows`);
-    } catch (e) {
-      errors[nd.id] = e.message;
-      console.log(`  FAILED ${nd.name}: ${e.message}`);
+    if (sinceLaunch >= RECYCLE_EVERY) { await ensureBrowser(); sinceLaunch = 0; }
+    let done = false;
+    for (let attempt = 1; attempt <= 3 && !done; attempt++) {
+      try {
+        results[nd.id] = await scrapeOnFreshPage(nd.member_id);
+        console.log(`  scraped ${nd.name}: ${results[nd.id].length} director rows`);
+        done = true;
+      } catch (e) {
+        const msg = String(e.message).split('\n')[0];
+        console.log(`  retry ${attempt}/3 ${nd.name}: ${msg}`);
+        // A crash can take the whole browser down — bring it back before retrying.
+        if (/crash|closed|Target|Session/i.test(msg)) { try { await ensureBrowser(); sinceLaunch = 0; } catch { /* ignore */ } }
+        await new Promise(r => setTimeout(r, 1500));
+        if (attempt === 3) errors[nd.id] = e.message;
+      }
     }
+    sinceLaunch++;
   }
 
   await browser.close();
