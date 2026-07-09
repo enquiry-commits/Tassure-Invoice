@@ -1064,22 +1064,22 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   // Invoicing is organised by FYE month (shared with AR Reminder): only show
   // the companies whose financial year ends in the selected month.
   const monthCompanies = (data?.companies ?? []).filter(c => !month || (c.fyeMonth ?? '') === month);
-  const needsCount = monthCompanies.filter(needsBilling).length;
+  // "Needs billing" for month-driven invoicing = this FYE cycle hasn't been
+  // invoiced yet (the QB invoice for a cycle carries its "dd.mm.yyyy" FYE).
+  const currentFye = fyeDateString(month, parseInt(year || '0', 10));
+  const notInvoicedYet = (c: CompanyBilling) => !currentFye || !(c.billedCycles ?? []).includes(currentFye);
+  const needsCount = monthCompanies.filter(notInvoicedYet).length;
   const filtered = monthCompanies.filter(c => {
     if (search && !c.companyName.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filter === 'needs') return needsBilling(c);
+    if (filter === 'needs') return notInvoicedYet(c);
+    if (filter === 'active') return !notInvoicedYet(c); // already invoiced this cycle
     if (filter !== 'all' && c.urgency !== filter) return false;
     return true;
   });
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, background: '#fff', outline: 'none', color: '#1e3a5f' };
   // Counts scoped to the selected FYE month.
-  const mCount = {
-    total:        monthCompanies.length,
-    active:       monthCompanies.filter(c => c.urgency === 'active').length,
-    expiringSoon: monthCompanies.filter(c => c.urgency === 'expiring_soon').length,
-    expired:      monthCompanies.filter(c => c.urgency === 'expired').length,
-  };
+  const mCount = { total: monthCompanies.length, needs: needsCount, invoiced: monthCompanies.length - needsCount };
 
   return (
     <div>
@@ -1108,13 +1108,11 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
 
       {/* Stats — click to filter (scoped to the month) */}
       {data && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
           {([
-            { key: 'needs',         label: 'Needs Billing',        sub: `${month || 'this month'} — to invoice`, value: needsCount,        color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4', Icon: DollarSign    },
-            { key: 'expired',       label: 'Already Expired',      sub: 'renewal lapsed',             value: mCount.expired,            color: '#dc2626', bg: '#fef2f2', bd: '#fecaca', Icon: AlertTriangle },
-            { key: 'expiring_soon', label: `Expiring ≤${withinDays}d`, sub: 'renewal due soon',       value: mCount.expiringSoon,       color: '#ea580c', bg: '#fff7ed', bd: '#fed7aa', Icon: Clock         },
-            { key: 'active',        label: 'Active',               sub: 'covered, nothing due',       value: mCount.active,             color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2  },
-            { key: 'all',           label: `FYE ${month || '—'}`,  sub: 'companies this month',       value: mCount.total,              color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText      },
+            { key: 'all',    label: `FYE ${month || '—'} ${year}`, sub: 'whole batch this month',       value: mCount.total,    color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText     },
+            { key: 'needs',  label: 'Needs Billing',               sub: 'not yet invoiced this cycle',  value: mCount.needs,    color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4', Icon: DollarSign   },
+            { key: 'active', label: 'Invoiced',                    sub: 'already invoiced this cycle',   value: mCount.invoiced, color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2 },
           ] as const).map(({ key, label, sub, value, color, bg, bd, Icon }) => {
             const active = filter === key;
             return (
@@ -1135,11 +1133,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
         <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
         {([
-          { key: 'needs',         label: `💰 Needs Billing (${needsCount})` },
-          { key: 'all',           label: `All (${mCount.total})` },
-          { key: 'expired',       label: `Expired (${mCount.expired})` },
-          { key: 'expiring_soon', label: `Expiring Soon (${mCount.expiringSoon})` },
-          { key: 'active',        label: `Active (${mCount.active})` },
+          { key: 'all',    label: `All (${mCount.total})` },
+          { key: 'needs',  label: `💰 To Invoice (${mCount.needs})` },
+          { key: 'active', label: `✓ Invoiced (${mCount.invoiced})` },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setFilter(key)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === key ? '#0f766e' : '#f1f5f9', color: filter === key ? '#fff' : '#475569', whiteSpace: 'nowrap' }}>{label}</button>
         ))}
@@ -1180,11 +1176,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   <div style={{ padding: '0 6px' }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a5f', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: '#cbd5e1', fontSize: 10 }}>{i+1}</span>{c.companyName}
-                      {(() => { const est = dueEstimate(c); const n = billingDueLines(c).count; return n > 0 ? (
-                        <span style={{ fontSize: 10, fontWeight: 700, background: '#ccfbf1', color: '#0f766e', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>
-                          {n} due{est ? ` · ~S$${est.toLocaleString()}` : ''}
-                        </span>
-                      ) : null; })()}
+                      {notInvoicedYet(c)
+                        ? <span style={{ fontSize: 10, fontWeight: 700, background: '#ccfbf1', color: '#0f766e', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>To invoice</span>
+                        : <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>✓ Invoiced</span>}
                     </div>
                     {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen}</div>}
                   </div>

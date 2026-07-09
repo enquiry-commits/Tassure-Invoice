@@ -82,6 +82,7 @@ export interface CompanyBilling {
   annuals: AnnualStatus[];
   email: string | null;
   contactName: string | null;
+  billedCycles: string[]; // FYE dates ("dd.mm.yyyy") this company has already been invoiced for
 }
 
 export async function GET(req: NextRequest) {
@@ -112,21 +113,37 @@ export async function GET(req: NextRequest) {
     .is('cessation_date', null);
   const ndActiveSet = new Set((activeNDs ?? []).map(a => normalize(a.company_name)));
 
+  // Supabase caps a single request at 1000 rows, and the invoice-item tables
+  // are much larger than that — page through so no invoice lines are dropped.
+  type Row = Record<string, unknown>;
+  async function pageAll(makeQuery: () => PromiseLike<{ data: Row[] | null }>): Promise<Row[]> {
+    const out: Row[] = [];
+    let fromIdx = 0;
+    for (;;) {
+      const { data } = await (makeQuery() as unknown as { range: (a: number, b: number) => PromiseLike<{ data: Row[] | null }> }).range(fromIdx, fromIdx + 999);
+      if (!data?.length) break;
+      out.push(...data);
+      if (data.length < 1000) break;
+      fromIdx += 1000;
+    }
+    return out;
+  }
+
   // ── 3. QB items — subscription services (period-based) ───────────────────
-  const { data: periodItems } = await supabase
+  const periodItems = await pageAll(() => supabase
     .from('quickbooks_invoice_items')
     .select('customer_name, invoice_no, txn_date, service_type, period_start, period_end, rate, amount, product_service, description')
     .in('service_type', ['Secretary', 'Address', 'ND'])
     .not('period_end', 'is', null)
-    .order('period_end', { ascending: false });
+    .order('period_end', { ascending: false })) as unknown as Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; period_start: string | null; period_end: string | null; rate: number | null; amount: number | null; product_service: string | null; description: string | null }>;
 
   // ── 4. QB items — annual obligations (AR, XBRL) ──────────────────────────
-  const { data: annualItems } = await supabase
+  const annualItems = await pageAll(() => supabase
     .from('quickbooks_invoice_items')
     .select('customer_name, invoice_no, txn_date, service_type, fye_date, period_start, period_end, amount, rate, product_service, description')
     .in('service_type', ['AR', 'XBRL'])
     .gte('txn_date', cutoff18mStr)
-    .order('txn_date', { ascending: false });
+    .order('txn_date', { ascending: false })) as unknown as Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; fye_date: string | null; period_start: string | null; period_end: string | null; amount: number | null; rate: number | null; product_service: string | null; description: string | null }>;
 
   // ── 4b. TRUE annual fee per service ──────────────────────────────────────
   // QB splits an annual fee across a recognised line ("Corporate Secretarial
@@ -134,12 +151,12 @@ export async function GET(req: NextRequest) {
   // The real fee the client is charged is the SUM of both. So compute it per
   // company from the most recent renewal invoice: group that invoice's lines
   // by service and add them up.
-  const { data: feeItems } = await supabase
+  const feeItems = await pageAll(() => supabase
     .from('quickbooks_invoice_items')
     .select('customer_name, invoice_no, txn_date, product_service, amount')
     .or('product_service.ilike.%Corporate Secretarial Services%,product_service.ilike.%Deferred Revenue - Corp Sec%,product_service.ilike.%Registered Address Services%,product_service.ilike.%Deferred Revenue - Reg Addr%')
     .gte('txn_date', cutoff18mStr)
-    .order('txn_date', { ascending: false });
+    .order('txn_date', { ascending: false })) as unknown as Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; amount: number | null }>;
 
   // key normName|invoice|service → { txn_date, sum }; then keep the latest
   // invoice per (company, service) as the current annual fee.
@@ -199,6 +216,28 @@ export async function GET(req: NextRequest) {
       fye_date: item.fye_date, rate: item.rate, amount: item.amount,
       product_service: item.product_service, description: item.description,
     });
+  }
+
+  // ── Which FYE cycles has each company already been invoiced for? ─────────
+  // Extract the "dd.mm.yyyy" FYE marker from AR/annual line descriptions and
+  // the fye_date column. Lets the month view tell "already invoiced this
+  // cycle" apart from "still to invoice" — reliable even when period_end is
+  // missing on the subscription lines.
+  const billedCyclesMap = new Map<string, Set<string>>();
+  const addCycle = (name: string, s: string | null) => {
+    if (!s) return;
+    const n = normalize(name);
+    if (!billedCyclesMap.has(n)) billedCyclesMap.set(n, new Set());
+    billedCyclesMap.get(n)!.add(s);
+  };
+  const fyeFromIso = (d: string | null): string | null => {
+    const m = d ? String(d).match(/^(\d{4})-(\d{2})-(\d{2})/) : null;
+    return m ? `${m[3]}.${m[2]}.${m[1]}` : null;
+  };
+  for (const it of annualItems ?? []) {
+    addCycle(it.customer_name, fyeFromIso(it.fye_date));
+    const dm = (it.description || '').match(/(\d{2})\.(\d{2})\.(\d{4})/);
+    if (dm) addCycle(it.customer_name, `${dm[1]}.${dm[2]}.${dm[3]}`);
   }
 
   const periodEntries = [...periodMap.entries()];
@@ -310,6 +349,7 @@ export async function GET(req: NextRequest) {
       annuals,
       email: company.best_email ?? primary?.email ?? null,
       contactName: primary?.contactName ?? null,
+      billedCycles: [...(billedCyclesMap.get(normName) ?? [])],
     };
   });
 
