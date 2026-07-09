@@ -94,7 +94,7 @@ const COLUMNS: { field: Exclude<keyof MasterListRow, 'id' | 'tw_fye'>; label: st
   { field: 'nominee_director',           label: 'Nominee Dir.',    w: 120 },
   { field: 'secretary',                  label: 'Secretary',       w: 130 },
   { field: 'annual_return',              label: 'Annual Return',   w: 110 },
-  { field: 'fye',                        label: 'FYE',             w: 90  },
+  { field: 'fye',                        label: 'FYE',             w: 180 },
   { field: 'last_ar_date',               label: 'Last AR Date',    w: 110 },
   { field: 'last_agm_date',              label: 'Last AGM Date',   w: 110 },
   { field: 'last_accounts_date',         label: 'Last Accts Date', w: 110 },
