@@ -918,7 +918,7 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
   const inputStyle: React.CSSProperties = { border: '1px solid #cbd5e1', borderRadius: 5, padding: '3px 6px', fontSize: 12, outline: 'none', background: '#fff' };
 
   return (
-    <div style={{ padding: '16px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
+    <div style={{ padding: '16px 20px', background: '#fff' }}>
       {/* Header: contact + PIC + invoice date */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1054,6 +1054,13 @@ function BillingTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    if (expanded === null) return;
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(null); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [expanded]);
+
   const needsCount = (data?.companies ?? []).filter(needsBilling).length;
   const filtered = (data?.companies ?? []).filter(c => {
     if (search && !c.companyName.toLowerCase().includes(search.toLowerCase())) return false;
@@ -1174,14 +1181,32 @@ function BillingTab() {
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ?? '—'}</div>
                 </div>
-                {isOpen && (
-                  <ExpandedBillingRow c={c} />
-                )}
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* Draft builder modal */}
+      {expanded !== null && (() => {
+        const c = (data?.companies ?? []).find(x => x.companyId === expanded);
+        if (!c) return null;
+        return (
+          <div onClick={() => setExpanded(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 1040, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
+              <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <DollarSign size={16} style={{ color: '#93c5fd' }} />
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{c.companyName}</div>
+                  <div style={{ fontSize: 11, color: '#93c5fd' }}>{c.uen ?? ''} · FYE {c.fyeMonth ?? '—'} · Build &amp; generate invoice</div>
+                </div>
+                <button onClick={() => setExpanded(null)} style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
+              </div>
+              <ExpandedBillingRow c={c} />
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
