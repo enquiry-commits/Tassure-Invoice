@@ -797,121 +797,200 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
 // ─────────────────────────────────────────────────────────────────────────────
 // BILLING TAB
 // ── Expanded billing row: email + draft creation ──────────────────────────────
+const SERVICE_DESC: Record<string, string> = {
+  Secretary: 'Corporate Secretarial Services',
+  Address:   'Registered Address Service',
+  ND:        'Nominee Director Service',
+  AR:        'Annual Return Filing (ACRA)',
+  XBRL:      'XBRL Financial Statements',
+};
+
+type EditableLine = {
+  service: string;
+  description: string;
+  qty: number;
+  rate: number;
+  include: boolean;
+  due: boolean;
+  reason: string;
+};
+
 function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
   const [drafting, setDrafting] = useState(false);
   const [draftResult, setDraftResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [email, setEmail] = useState(c.email ?? '');
+  const [txnDate, setTxnDate] = useState(new Date().toISOString().slice(0, 10));
 
-  const billableRenewals = c.renewals.filter(r =>
-    r.applicable && (r.status === 'expired' || r.status === 'expiring_soon') && r.lastRate
-  );
+  // Build the editable draft from renewal + annual data. Every applicable
+  // service is a line; lines that are actually due are pre-checked. Staff can
+  // toggle any line, edit its rate/qty/description, then generate.
+  const initialLines = useMemo<EditableLine[]>(() => {
+    const out: EditableLine[] = [];
+    for (const r of c.renewals) {
+      if (!r.applicable) continue;
+      const due = r.status === 'expired' || r.status === 'expiring_soon';
+      const period = r.suggestedPeriodStart && r.suggestedPeriodEnd ? ` [${fmtMonth(r.suggestedPeriodStart)} – ${fmtMonth(r.suggestedPeriodEnd)}]` : '';
+      out.push({
+        service: r.service,
+        description: `${SERVICE_DESC[r.service] ?? r.service}${period}`,
+        qty: 1,
+        rate: r.lastRate ?? 0,
+        include: due,
+        due,
+        reason: r.status === 'expired' ? `Expired ${Math.abs(r.daysUntilExpiry ?? 0)}d ago`
+              : r.status === 'expiring_soon' ? `Expiring in ${r.daysUntilExpiry}d`
+              : r.status === 'active' ? `Active until ${r.lastPeriodEnd ? fmtDate(r.lastPeriodEnd) : '—'}`
+              : 'No prior invoice',
+      });
+    }
+    for (const a of c.annuals) {
+      if (!a.applicable) continue;
+      const due = a.status === 'pending';
+      out.push({
+        service: a.service,
+        description: `${SERVICE_DESC[a.service] ?? a.service}${c.fyeMonth ? ` (FYE ${c.fyeMonth})` : ''}`,
+        qty: 1,
+        rate: a.lastAmount ?? 0,
+        include: due,
+        due,
+        reason: a.status === 'billed' ? `Already billed ${a.lastTxnDate ? fmtDate(a.lastTxnDate) : ''}`
+              : a.status === 'pending' ? 'Not yet billed this cycle'
+              : 'No prior invoice',
+      });
+    }
+    return out;
+  }, [c]);
 
-  const createDraft = async () => {
+  const [lines, setLines] = useState<EditableLine[]>(initialLines);
+  const setLine = (i: number, patch: Partial<EditableLine>) =>
+    setLines(prev => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
+
+  const included = lines.filter(l => l.include);
+  const total = included.reduce((s, l) => s + l.qty * l.rate, 0);
+  const missingRate = included.some(l => !l.rate);
+
+  const createInvoice = async () => {
     setDrafting(true); setDraftResult(null);
-    const lines = billableRenewals.map(r => {
-      const start = r.suggestedPeriodStart ? fmtMonth(r.suggestedPeriodStart) : '';
-      const end   = r.suggestedPeriodEnd   ? fmtMonth(r.suggestedPeriodEnd) : '';
-      const periodStr = start && end ? ` [${start} - ${end}]` : '';
-      return {
-        service:     r.service,
-        description: `${r.service === 'Secretary' ? 'Corporate Secretarial Services' : r.service === 'Address' ? 'Registered Address Service' : 'Nominee Director Service'}${periodStr}`,
-        rate:        r.lastRate!,
-        qty:         1,
-      };
-    });
     try {
-      const res  = await fetch('/api/quickbooks/create-invoice', {
+      const res = await fetch('/api/quickbooks/create-invoice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyName: c.companyName, email: c.email ?? undefined, lines }),
+        body: JSON.stringify({
+          companyName: c.companyName,
+          email: email || undefined,
+          txnDate,
+          sendEmail: false,
+          lines: included.map(l => ({ service: l.service, description: l.description, rate: l.rate, qty: l.qty })),
+        }),
       });
       const json = await res.json();
-      if (json.error) setDraftResult({ ok: false, msg: json.error + (json.detail ? ` — ${json.detail.slice(0,120)}` : '') });
-      else setDraftResult({ ok: true, msg: `✓ Draft #${json.invoiceNo} created in QB` });
+      if (json.error) setDraftResult({ ok: false, msg: json.error + (json.detail ? ` — ${json.detail.slice(0, 140)}` : '') });
+      else setDraftResult({ ok: true, msg: `Invoice ${json.invoiceNo ? `#${json.invoiceNo}` : ''} created in QuickBooks · S$${(json.total ?? total).toLocaleString()} · review & send from QB` });
     } catch (e: unknown) {
-      setDraftResult({ ok: false, msg: e instanceof Error ? e.message : 'Failed' });
+      setDraftResult({ ok: false, msg: e instanceof Error ? e.message : 'Request failed' });
     } finally { setDrafting(false); }
   };
 
+  const inputStyle: React.CSSProperties = { border: '1px solid #cbd5e1', borderRadius: 5, padding: '3px 6px', fontSize: 12, outline: 'none', background: '#fff' };
+
   return (
     <div style={{ padding: '16px 20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>
-
-      {/* Client email + contact */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '8px 12px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8 }}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
-        {c.email
-          ? <a href={`mailto:${c.email}`} style={{ fontSize: 12, color: '#1d4ed8', fontWeight: 600, textDecoration: 'none' }}>{c.email}</a>
-          : <span style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No email on file</span>
-        }
-        {c.contactName && <span style={{ fontSize: 11, color: '#64748b' }}>· {c.contactName}</span>}
-        {c.pic && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>PIC: <strong>{c.pic}</strong></span>}
-      </div>
-
-      {/* Renewal services */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>🔄 Renewal Services</div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{c.renewals.map(r => <RenewalCard key={r.service} r={r} />)}</div>
-      </div>
-
-      {/* Annual obligations */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>📋 Annual Obligations</div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>{c.annuals.map(a => <AnnualCard key={a.service} a={a} />)}</div>
-      </div>
-
-      {/* Invoice draft creator */}
-      {billableRenewals.length > 0 && (
-        <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginBottom: 4 }}>DRAFT PREVIEW</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {billableRenewals.map(r => (
-                <span key={r.service} style={{ fontSize: 11, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 5, padding: '3px 8px', color: '#374151' }}>
-                  <strong>{r.service}</strong> S${r.lastRate?.toLocaleString()}
-                  {r.suggestedPeriodStart && r.suggestedPeriodEnd && (
-                    <span style={{ color: '#64748b' }}> · {fmtMonth(r.suggestedPeriodStart)} – {fmtMonth(r.suggestedPeriodEnd)}</span>
-                  )}
-                </span>
-              ))}
-            </div>
-          </div>
-          <button
-            onClick={createDraft}
-            disabled={drafting}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 7, border: 'none', cursor: drafting ? 'wait' : 'pointer',
-              background: drafting ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-            {drafting ? 'Creating…' : 'Create QB Draft'}
-          </button>
+      {/* Header: contact + PIC + invoice date */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="client@email.com"
+            style={{ ...inputStyle, width: 240, color: '#1d4ed8', fontWeight: 600 }} />
         </div>
-      )}
+        {c.contactName && <span style={{ fontSize: 11, color: '#64748b' }}>· {c.contactName}</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: '#64748b' }}>Invoice date</span>
+          <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} style={inputStyle} />
+        </div>
+        {c.pic && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>PIC: <strong style={{ color: '#334155' }}>{c.pic}</strong></span>}
+      </div>
+
+      {/* Editable draft line items */}
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px', gap: 0, background: '#f1f5f9', padding: '6px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+          <div></div><div>Service</div><div>Description</div><div>Status</div><div style={{ textAlign: 'center' }}>Qty</div><div style={{ textAlign: 'right' }}>Rate (S$)</div><div style={{ textAlign: 'right' }}>Amount</div>
+        </div>
+        {lines.map((l, i) => {
+          const cfg = SVC_CONFIG[l.service as keyof typeof SVC_CONFIG];
+          return (
+            <div key={l.service} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px', gap: 0, alignItems: 'center', padding: '6px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
+              <input type="checkbox" checked={l.include} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{cfg?.label ?? l.service}</span>
+              </div>
+              <input value={l.description} onChange={e => setLine(i, { description: e.target.value })} style={{ ...inputStyle, width: '95%' }} />
+              <span style={{ fontSize: 10, fontWeight: 600, color: l.due ? '#c2410c' : '#94a3b8' }}>{l.reason}</span>
+              <input type="number" min={1} value={l.qty} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center' }} />
+              <input type="number" min={0} value={l.rate || ''} placeholder="0" onChange={e => setLine(i, { rate: +e.target.value || 0 })}
+                style={{ ...inputStyle, width: 90, textAlign: 'right', borderColor: l.include && !l.rate ? '#f87171' : '#cbd5e1', background: l.include && !l.rate ? '#fef2f2' : '#fff' }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: l.include ? '#0f766e' : '#94a3b8', textAlign: 'right' }}>{l.include ? `S$${(l.qty * l.rate).toLocaleString()}` : '—'}</span>
+            </div>
+          );
+        })}
+        {lines.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No applicable services for this company.</div>}
+      </div>
+
+      {/* Total + generate */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, color: '#334155' }}>
+          <span style={{ color: '#64748b' }}>{included.length} line{included.length !== 1 ? 's' : ''} · Total </span>
+          <strong style={{ fontSize: 17, color: '#0f766e' }}>S${total.toLocaleString()}</strong>
+        </div>
+        {missingRate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>⚠ Fill in the highlighted rate(s) before generating</span>}
+        <button
+          onClick={createInvoice}
+          disabled={drafting || included.length === 0 || missingRate}
+          style={{
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none',
+            cursor: (drafting || included.length === 0 || missingRate) ? 'not-allowed' : 'pointer',
+            background: (drafting || included.length === 0 || missingRate) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+          }}>
+          <DollarSign size={15} />{drafting ? 'Generating…' : 'Generate Invoice in QuickBooks'}
+        </button>
+      </div>
 
       {draftResult && (
-        <div style={{ marginTop: 8, padding: '6px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
-          background: draftResult.ok ? '#f0fdf4' : '#fef2f2',
-          color:      draftResult.ok ? '#15803d'  : '#dc2626',
-          border:     `1px solid ${draftResult.ok ? '#bbf7d0' : '#fecaca'}`,
-        }}>
-          {draftResult.msg}
+        <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+          background: draftResult.ok ? '#f0fdf4' : '#fef2f2', color: draftResult.ok ? '#15803d' : '#dc2626',
+          border: `1px solid ${draftResult.ok ? '#bbf7d0' : '#fecaca'}` }}>
+          {draftResult.ok ? '✓ ' : '✕ '}{draftResult.msg}
         </div>
       )}
 
       <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 12, fontSize: 10, color: '#94a3b8' }}>
-        ⚠ Draft invoices must be reviewed in QuickBooks before sending to clients
+        ⚠ The invoice is created as a draft in QuickBooks (not sent). Review it in QB, then send to the client from there.
       </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// A company "needs billing" now if it has any renewal expired/expiring OR any
+// annual obligation (AR/XBRL) not yet billed this cycle. This is what links the
+// AR Reminder cycle into Billing — a pending AR surfaces here as billable.
+function billingDueLines(c: CompanyBilling) {
+  const renewals = c.renewals.filter(x => x.applicable && (x.status === 'expired' || x.status === 'expiring_soon'));
+  const annuals  = c.annuals.filter(x => x.applicable && x.status === 'pending');
+  return { renewals, annuals, count: renewals.length + annuals.length };
+}
+const needsBilling = (c: CompanyBilling) => billingDueLines(c).count > 0;
+function dueEstimate(c: CompanyBilling) {
+  const d = billingDueLines(c);
+  return d.renewals.reduce((s, x) => s + (x.lastRate ?? 0), 0) + d.annuals.reduce((s, x) => s + (x.lastAmount ?? 0), 0);
+}
+
 function BillingTab() {
   const [data,       setData]       = useState<{ summary: BillingSummary; companies: CompanyBilling[] } | null>(null);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [expanded,   setExpanded]   = useState<number | null>(null);
   const [search,     setSearch]     = useState('');
-  const [filter,     setFilter]     = useState<'all' | 'expired' | 'expiring_soon' | 'active'>('all');
+  const [filter,     setFilter]     = useState<'all' | 'needs' | 'expired' | 'expiring_soon' | 'active'>('needs');
   const [withinDays, setWithinDays] = useState(90);
 
   const load = useCallback(async () => {
@@ -927,8 +1006,10 @@ function BillingTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  const needsCount = (data?.companies ?? []).filter(needsBilling).length;
   const filtered = (data?.companies ?? []).filter(c => {
     if (search && !c.companyName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filter === 'needs') return needsBilling(c);
     if (filter !== 'all' && c.urgency !== filter) return false;
     return true;
   });
@@ -951,20 +1032,26 @@ function BillingTab() {
         </button>
       </div>
 
-      {/* Stats */}
+      {/* Stats — click to filter */}
       {data && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
           {([
-            { label: 'Active',                    value: data.summary.active,       bg: '#f0fdf4', color: '#16a34a', Icon: CheckCircle2 },
-            { label: `Expiring ≤${withinDays}d`,  value: data.summary.expiringSoon, bg: '#fff7ed', color: '#ea580c', Icon: Clock        },
-            { label: 'Already Expired',           value: data.summary.expired,      bg: '#fef2f2', color: '#dc2626', Icon: AlertTriangle },
-            { label: 'Total CSS Clients',         value: data.summary.total,        bg: '#f8fafc', color: '#1d3a5c', Icon: FileText      },
-          ] as const).map(({ label, value, bg, color, Icon }) => (
-            <div key={label} style={{ background: bg, borderRadius: 10, border: '1px solid #e2e8f0', padding: '12px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}><Icon size={13} style={{ color }} /><span style={{ fontSize: 10, color: '#64748b', fontWeight: 600 }}>{label}</span></div>
-              <div style={{ fontSize: 26, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
-            </div>
-          ))}
+            { key: 'needs',         label: 'Needs Billing',        sub: 'due now — ready to invoice', value: needsCount,                color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4', Icon: DollarSign    },
+            { key: 'expired',       label: 'Already Expired',      sub: 'renewal lapsed',             value: data.summary.expired,      color: '#dc2626', bg: '#fef2f2', bd: '#fecaca', Icon: AlertTriangle },
+            { key: 'expiring_soon', label: `Expiring ≤${withinDays}d`, sub: 'renewal due soon',       value: data.summary.expiringSoon, color: '#ea580c', bg: '#fff7ed', bd: '#fed7aa', Icon: Clock         },
+            { key: 'active',        label: 'Active',               sub: 'covered, nothing due',       value: data.summary.active,       color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2  },
+            { key: 'all',           label: 'Total CSS Clients',    sub: 'all active clients',         value: data.summary.total,        color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText      },
+          ] as const).map(({ key, label, sub, value, color, bg, bd, Icon }) => {
+            const active = filter === key;
+            return (
+              <button key={key} onClick={() => setFilter(key)}
+                style={{ textAlign: 'left', cursor: 'pointer', background: bg, borderRadius: 10, border: `1.5px solid ${active ? color : bd}`, padding: '12px 16px', boxShadow: active ? `0 0 0 2px ${color}22` : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}><Icon size={13} style={{ color }} /><span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>{label}</span></div>
+                <div style={{ fontSize: 26, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
+                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{sub}</div>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -974,12 +1061,13 @@ function BillingTab() {
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
         <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
         {([
+          { key: 'needs',         label: `💰 Needs Billing (${needsCount})` },
           { key: 'all',           label: `All (${data?.summary.total ?? 0})` },
           { key: 'expired',       label: `Expired (${data?.summary.expired ?? 0})` },
           { key: 'expiring_soon', label: `Expiring Soon (${data?.summary.expiringSoon ?? 0})` },
           { key: 'active',        label: `Active (${data?.summary.active ?? 0})` },
         ] as const).map(({ key, label }) => (
-          <button key={key} onClick={() => setFilter(key)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === key ? '#1d3a5c' : '#f1f5f9', color: filter === key ? '#fff' : '#475569', whiteSpace: 'nowrap' }}>{label}</button>
+          <button key={key} onClick={() => setFilter(key)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === key ? '#0f766e' : '#f1f5f9', color: filter === key ? '#fff' : '#475569', whiteSpace: 'nowrap' }}>{label}</button>
         ))}
         <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{filtered.length} companies</span>
       </div>
@@ -1016,7 +1104,14 @@ function BillingTab() {
                   onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = rowBg; }}>
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a5f' }}><span style={{ color: '#cbd5e1', fontSize: 10, marginRight: 4 }}>{i+1}</span>{c.companyName}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a5f', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>{i+1}</span>{c.companyName}
+                      {(() => { const est = dueEstimate(c); const n = billingDueLines(c).count; return n > 0 ? (
+                        <span style={{ fontSize: 10, fontWeight: 700, background: '#ccfbf1', color: '#0f766e', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>
+                          {n} due{est ? ` · ~S$${est.toLocaleString()}` : ''}
+                        </span>
+                      ) : null; })()}
+                    </div>
                     {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen}</div>}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#64748b' }}>{c.fyeMonth ?? '—'}</div>

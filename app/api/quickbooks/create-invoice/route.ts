@@ -79,11 +79,12 @@ function pickItem(service: string, itemMap: Map<string, { id: string; name: stri
 // ── POST /api/quickbooks/create-invoice ───────────────────────────────────────
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { companyName, email, lines, txnDate } = body as {
+  const { companyName, email, lines, txnDate, sendEmail } = body as {
     companyName: string;
     email?: string;
     lines: DraftLineItem[];
     txnDate?: string;
+    sendEmail?: boolean;
   };
 
   if (!companyName || !lines?.length) {
@@ -126,7 +127,9 @@ export async function POST(req: NextRequest) {
     CustomerRef: { value: customer.id, name: customer.name },
     TxnDate:     txnDate ?? new Date().toISOString().slice(0, 10),
     PrintStatus: 'NeedToPrint',
-    EmailStatus: email ? 'NeedToSend' : 'NotSet',
+    // Default: create as a draft for review in QB — do NOT queue for sending.
+    // The email address is still stored so staff can send it manually later.
+    EmailStatus: sendEmail && email ? 'NeedToSend' : 'NotSet',
   };
   if (email) payload.BillEmail = { Address: email };
 
