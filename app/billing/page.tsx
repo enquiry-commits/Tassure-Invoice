@@ -1032,13 +1032,13 @@ function dueEstimate(c: CompanyBilling) {
   return d.renewals.reduce((s, x) => s + (x.lastRate ?? 0), 0) + d.annuals.reduce((s, x) => s + (x.lastAmount ?? 0), 0);
 }
 
-function BillingTab() {
+function BillingTab({ month, year, setMonth, setYear }: { month: string; year: string; setMonth: (v: string) => void; setYear: (v: string) => void }) {
   const [data,       setData]       = useState<{ summary: BillingSummary; companies: CompanyBilling[] } | null>(null);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState<string | null>(null);
   const [expanded,   setExpanded]   = useState<number | null>(null);
   const [search,     setSearch]     = useState('');
-  const [filter,     setFilter]     = useState<'all' | 'needs' | 'expired' | 'expiring_soon' | 'active'>('needs');
+  const [filter,     setFilter]     = useState<'all' | 'needs' | 'expired' | 'expiring_soon' | 'active'>('all');
   const [withinDays, setWithinDays] = useState(90);
 
   const load = useCallback(async () => {
@@ -1061,8 +1061,11 @@ function BillingTab() {
     return () => window.removeEventListener('keydown', h);
   }, [expanded]);
 
-  const needsCount = (data?.companies ?? []).filter(needsBilling).length;
-  const filtered = (data?.companies ?? []).filter(c => {
+  // Invoicing is organised by FYE month (shared with AR Reminder): only show
+  // the companies whose financial year ends in the selected month.
+  const monthCompanies = (data?.companies ?? []).filter(c => !month || (c.fyeMonth ?? '') === month);
+  const needsCount = monthCompanies.filter(needsBilling).length;
+  const filtered = monthCompanies.filter(c => {
     if (search && !c.companyName.toLowerCase().includes(search.toLowerCase())) return false;
     if (filter === 'needs') return needsBilling(c);
     if (filter !== 'all' && c.urgency !== filter) return false;
@@ -1070,32 +1073,48 @@ function BillingTab() {
   });
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, background: '#fff', outline: 'none', color: '#1e3a5f' };
+  // Counts scoped to the selected FYE month.
+  const mCount = {
+    total:        monthCompanies.length,
+    active:       monthCompanies.filter(c => c.urgency === 'active').length,
+    expiringSoon: monthCompanies.filter(c => c.urgency === 'expiring_soon').length,
+    expired:      monthCompanies.filter(c => c.urgency === 'expired').length,
+  };
 
   return (
     <div>
-      {/* Controls */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 14 }}>
-        <select value={withinDays} onChange={e => setWithinDays(+e.target.value)} style={S}>
-          <option value={30}>Expiry alert 30d</option>
-          <option value={60}>Expiry alert 60d</option>
-          <option value={90}>Expiry alert 90d</option>
-          <option value={180}>Expiry alert 180d</option>
+      {/* Controls — month/year shared with AR Reminder */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#0f766e', display: 'flex', alignItems: 'center', gap: 5 }}><Calendar size={14} />Invoicing FYE</span>
+        <select value={month} onChange={e => setMonth(e.target.value)} style={S}>
+          {FYE_MONTHS.map(m => <option key={m}>{m}</option>)}
         </select>
-        <button onClick={load} disabled={loading} style={{ ...S, background: '#1d3a5c', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
+        <select value={year} onChange={e => setYear(e.target.value)} style={S}>
+          {['2024','2025','2026','2027'].map(y => <option key={y}>{y}</option>)}
+        </select>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+          <select value={withinDays} onChange={e => setWithinDays(+e.target.value)} style={S}>
+            <option value={30}>Expiry alert 30d</option>
+            <option value={60}>Expiry alert 60d</option>
+            <option value={90}>Expiry alert 90d</option>
+            <option value={180}>Expiry alert 180d</option>
+          </select>
+          <button onClick={load} disabled={loading} style={{ ...S, background: '#1d3a5c', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Loading…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
-      {/* Stats — click to filter */}
+      {/* Stats — click to filter (scoped to the month) */}
       {data && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
           {([
-            { key: 'needs',         label: 'Needs Billing',        sub: 'due now — ready to invoice', value: needsCount,                color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4', Icon: DollarSign    },
-            { key: 'expired',       label: 'Already Expired',      sub: 'renewal lapsed',             value: data.summary.expired,      color: '#dc2626', bg: '#fef2f2', bd: '#fecaca', Icon: AlertTriangle },
-            { key: 'expiring_soon', label: `Expiring ≤${withinDays}d`, sub: 'renewal due soon',       value: data.summary.expiringSoon, color: '#ea580c', bg: '#fff7ed', bd: '#fed7aa', Icon: Clock         },
-            { key: 'active',        label: 'Active',               sub: 'covered, nothing due',       value: data.summary.active,       color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2  },
-            { key: 'all',           label: 'Total CSS Clients',    sub: 'all active clients',         value: data.summary.total,        color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText      },
+            { key: 'needs',         label: 'Needs Billing',        sub: `${month || 'this month'} — to invoice`, value: needsCount,        color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4', Icon: DollarSign    },
+            { key: 'expired',       label: 'Already Expired',      sub: 'renewal lapsed',             value: mCount.expired,            color: '#dc2626', bg: '#fef2f2', bd: '#fecaca', Icon: AlertTriangle },
+            { key: 'expiring_soon', label: `Expiring ≤${withinDays}d`, sub: 'renewal due soon',       value: mCount.expiringSoon,       color: '#ea580c', bg: '#fff7ed', bd: '#fed7aa', Icon: Clock         },
+            { key: 'active',        label: 'Active',               sub: 'covered, nothing due',       value: mCount.active,             color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2  },
+            { key: 'all',           label: `FYE ${month || '—'}`,  sub: 'companies this month',       value: mCount.total,              color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText      },
           ] as const).map(({ key, label, sub, value, color, bg, bd, Icon }) => {
             const active = filter === key;
             return (
@@ -1117,10 +1136,10 @@ function BillingTab() {
         <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
         {([
           { key: 'needs',         label: `💰 Needs Billing (${needsCount})` },
-          { key: 'all',           label: `All (${data?.summary.total ?? 0})` },
-          { key: 'expired',       label: `Expired (${data?.summary.expired ?? 0})` },
-          { key: 'expiring_soon', label: `Expiring Soon (${data?.summary.expiringSoon ?? 0})` },
-          { key: 'active',        label: `Active (${data?.summary.active ?? 0})` },
+          { key: 'all',           label: `All (${mCount.total})` },
+          { key: 'expired',       label: `Expired (${mCount.expired})` },
+          { key: 'expiring_soon', label: `Expiring Soon (${mCount.expiringSoon})` },
+          { key: 'active',        label: `Active (${mCount.active})` },
         ] as const).map(({ key, label }) => (
           <button key={key} onClick={() => setFilter(key)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === key ? '#0f766e' : '#f1f5f9', color: filter === key ? '#fff' : '#475569', whiteSpace: 'nowrap' }}>{label}</button>
         ))}
@@ -1462,9 +1481,7 @@ function ARTableView({ records, onSave, onDelete }: { records: ARRecord[]; onSav
 // ─────────────────────────────────────────────────────────────────────────────
 // AR TAB
 // ─────────────────────────────────────────────────────────────────────────────
-function ARTab() {
-  const [month,       setMonth]       = useState('');
-  const [year,        setYear]        = useState('');
+function ARTab({ month, year, setMonth, setYear }: { month: string; year: string; setMonth: (v: string) => void; setYear: (v: string) => void }) {
   const [records,     setRecords]     = useState<ARRecord[]>([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState<string | null>(null);
@@ -1474,17 +1491,6 @@ function ARTab() {
   const [view,        setView]        = useState<'list' | 'table'>('list');
   const [syncing,     setSyncing]     = useState(false);
   const [syncMsg,     setSyncMsg]     = useState<string | null>(null);
-
-  // On mount: auto-detect the latest fye_month+fye_year in the database
-  useEffect(() => {
-    fetch('/api/ar-reminder/latest')
-      .then(r => r.json())
-      .then(({ month: m, year: y }) => {
-        setMonth(String(m));
-        setYear(String(y));
-      })
-      .catch(() => { setMonth('January'); setYear(String(new Date().getFullYear())); });
-  }, []);
 
   const load = useCallback(async () => {
     if (!month || !year) return;
@@ -1773,6 +1779,17 @@ function CombinedPage() {
   const router       = useRouter();
   const tab          = (searchParams.get('tab') ?? 'billing') as 'billing' | 'ar';
 
+  // Month/year is shared across both tabs — invoicing is organised by FYE month,
+  // so Billing Drafts and AR Reminder always look at the same batch of companies.
+  const [month, setMonth] = useState('');
+  const [year,  setYear]  = useState('');
+  useEffect(() => {
+    fetch('/api/ar-reminder/latest')
+      .then(r => r.json())
+      .then(({ month: m, year: y }) => { setMonth(String(m)); setYear(String(y)); })
+      .catch(() => { setMonth('January'); setYear(String(new Date().getFullYear())); });
+  }, []);
+
   const switchTab = (t: 'billing' | 'ar') => {
     router.replace(`/billing${t === 'ar' ? '?tab=ar' : ''}`, { scroll: false });
   };
@@ -1815,7 +1832,9 @@ function CombinedPage() {
 
       {/* Tab content */}
       <div style={{ paddingBottom: tab === 'ar' ? 44 : 0 }}>
-        {tab === 'billing' ? <BillingTab /> : <ARTab />}
+        {tab === 'billing'
+          ? <BillingTab month={month} year={year} setMonth={setMonth} setYear={setYear} />
+          : <ARTab month={month} year={year} setMonth={setMonth} setYear={setYear} />}
       </div>
     </div>
   );
