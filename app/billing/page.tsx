@@ -11,6 +11,7 @@ import {
 import type { RenewalStatus, AnnualStatus, CompanyBilling } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { fmtDate, fmtMonth, toDisplayDate } from '@/lib/date';
+import { QB_ITEM, MEDIAN_RATE, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
@@ -797,16 +798,9 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
 // ─────────────────────────────────────────────────────────────────────────────
 // BILLING TAB
 // ── Expanded billing row: email + draft creation ──────────────────────────────
-const SERVICE_DESC: Record<string, string> = {
-  Secretary: 'Corporate Secretarial Services',
-  Address:   'Registered Address Service',
-  ND:        'Nominee Director Service',
-  AR:        'Annual Return Filing (ACRA)',
-  XBRL:      'XBRL Financial Statements',
-};
-
 type EditableLine = {
   service: string;
+  productService: string;   // exact QB Product/Service item
   description: string;
   qty: number;
   rate: number;
@@ -821,20 +815,31 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
   const [email, setEmail] = useState(c.email ?? '');
   const [txnDate, setTxnDate] = useState(new Date().toISOString().slice(0, 10));
 
-  // Build the editable draft from renewal + annual data. Every applicable
-  // service is a line; lines that are actually due are pre-checked. Staff can
-  // toggle any line, edit its rate/qty/description, then generate.
+  // Build the editable draft. Each line defaults to how THIS company was last
+  // invoiced for that service (same QB item + description wording + rate, from
+  // history), refreshing the period/FYE; when there's no history it falls back
+  // to Tassure's standard template + typical rate. AR adds the fixed S$60 ACRA
+  // government-fee line. Lines that are actually due are pre-checked.
+  const currentYear = new Date().getFullYear();
   const initialLines = useMemo<EditableLine[]>(() => {
     const out: EditableLine[] = [];
+    const period = periodLabel(c.renewals[0]?.suggestedPeriodStart ?? null, c.renewals[0]?.suggestedPeriodEnd ?? null);
+    const fyeStr = fyeDateString(c.fyeMonth, currentYear);
+
     for (const r of c.renewals) {
       if (!r.applicable) continue;
       const due = r.status === 'expired' || r.status === 'expiring_soon';
-      const period = r.suggestedPeriodStart && r.suggestedPeriodEnd ? ` [${fmtMonth(r.suggestedPeriodStart)} – ${fmtMonth(r.suggestedPeriodEnd)}]` : '';
+      const last = r.history?.[0];
+      const pLabel = periodLabel(r.suggestedPeriodStart, r.suggestedPeriodEnd);
+      const templateDesc = r.service === 'Secretary' ? secretaryDescription(pLabel)
+                         : r.service === 'Address'   ? addressDescription(pLabel)
+                         : `Nominee Director Service${pLabel ? ` (${pLabel})` : ''}`;
       out.push({
         service: r.service,
-        description: `${SERVICE_DESC[r.service] ?? r.service}${period}`,
+        productService: last?.product_service ?? QB_ITEM[r.service] ?? '',
+        description: templateDesc,
         qty: 1,
-        rate: r.lastRate ?? 0,
+        rate: r.lastRate ?? MEDIAN_RATE[r.service] ?? 0,
         include: due,
         due,
         reason: r.status === 'expired' ? `Expired ${Math.abs(r.daysUntilExpiry ?? 0)}d ago`
@@ -843,23 +848,30 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
               : 'No prior invoice',
       });
     }
+
     for (const a of c.annuals) {
       if (!a.applicable) continue;
       const due = a.status === 'pending';
-      out.push({
-        service: a.service,
-        description: `${SERVICE_DESC[a.service] ?? a.service}${c.fyeMonth ? ` (FYE ${c.fyeMonth})` : ''}`,
-        qty: 1,
-        rate: a.lastAmount ?? 0,
-        include: due,
-        due,
-        reason: a.status === 'billed' ? `Already billed ${a.lastTxnDate ? fmtDate(a.lastTxnDate) : ''}`
-              : a.status === 'pending' ? 'Not yet billed this cycle'
-              : 'No prior invoice',
-      });
+      const last = a.history?.[0];
+      const reason = a.status === 'billed' ? `Already billed ${a.lastTxnDate ? fmtDate(a.lastTxnDate) : ''}`
+                   : a.status === 'pending' ? 'Not yet billed this cycle' : 'No prior invoice';
+      if (a.service === 'AR') {
+        // AR = fixed S$60 ACRA government filing fee (a disbursement line).
+        out.push({
+          service: 'AR', productService: last?.product_service ?? QB_ITEM.AR,
+          description: arGovtFeeDescription(fyeStr),
+          qty: 1, rate: last?.rate ?? MEDIAN_RATE.AR, include: due, due, reason,
+        });
+      } else { // XBRL
+        out.push({
+          service: 'XBRL', productService: last?.product_service ?? QB_ITEM.XBRL,
+          description: xbrlDescription(fyeStr),
+          qty: 1, rate: a.lastAmount ?? MEDIAN_RATE.XBRL, include: due, due, reason,
+        });
+      }
     }
     return out;
-  }, [c]);
+  }, [c, currentYear]);
 
   const [lines, setLines] = useState<EditableLine[]>(initialLines);
   const setLine = (i: number, patch: Partial<EditableLine>) =>
@@ -879,7 +891,7 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
           email: email || undefined,
           txnDate,
           sendEmail: false,
-          lines: included.map(l => ({ service: l.service, description: l.description, rate: l.rate, qty: l.qty })),
+          lines: included.map(l => ({ service: l.service, productService: l.productService, description: l.description, rate: l.rate, qty: l.qty })),
         }),
       });
       const json = await res.json();
@@ -923,7 +935,7 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
                 {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{cfg?.label ?? l.service}</span>
               </div>
-              <input value={l.description} onChange={e => setLine(i, { description: e.target.value })} style={{ ...inputStyle, width: '95%' }} />
+              <textarea value={l.description} onChange={e => setLine(i, { description: e.target.value })} rows={l.description.length > 80 ? 3 : 1} style={{ ...inputStyle, width: '95%', resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.35 }} />
               <span style={{ fontSize: 10, fontWeight: 600, color: l.due ? '#c2410c' : '#94a3b8' }}>{l.reason}</span>
               <input type="number" min={1} value={l.qty} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center' }} />
               <input type="number" min={0} value={l.rate || ''} placeholder="0" onChange={e => setLine(i, { rate: +e.target.value || 0 })}

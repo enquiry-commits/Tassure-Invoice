@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { todaySGT } from '@/lib/date';
 
 function normalize(name: string) {
   return (name ?? '')
@@ -42,6 +43,7 @@ export interface ServicePeriod {
   period_start: string | null; period_end: string | null;
   fye_date: string | null;
   rate: number | null; amount: number | null;
+  product_service: string | null; description: string | null;
 }
 
 // Secretary / Address / ND — subscription services with explicit period
@@ -89,7 +91,7 @@ export async function GET(req: NextRequest) {
   const filterService = searchParams.get('service') ?? 'all';
 
   const supabase = createAdminClient();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todaySGT();
   const cutoff18m = new Date(); cutoff18m.setMonth(cutoff18m.getMonth() - 18);
   const cutoff18mStr = cutoff18m.toISOString().slice(0, 10);
 
@@ -113,7 +115,7 @@ export async function GET(req: NextRequest) {
   // ── 3. QB items — subscription services (period-based) ───────────────────
   const { data: periodItems } = await supabase
     .from('quickbooks_invoice_items')
-    .select('customer_name, invoice_no, txn_date, service_type, period_start, period_end, rate, amount')
+    .select('customer_name, invoice_no, txn_date, service_type, period_start, period_end, rate, amount, product_service, description')
     .in('service_type', ['Secretary', 'Address', 'ND'])
     .not('period_end', 'is', null)
     .order('period_end', { ascending: false });
@@ -121,7 +123,7 @@ export async function GET(req: NextRequest) {
   // ── 4. QB items — annual obligations (AR, XBRL) ──────────────────────────
   const { data: annualItems } = await supabase
     .from('quickbooks_invoice_items')
-    .select('customer_name, invoice_no, txn_date, service_type, fye_date, period_start, period_end, amount, rate')
+    .select('customer_name, invoice_no, txn_date, service_type, fye_date, period_start, period_end, amount, rate, product_service, description')
     .in('service_type', ['AR', 'XBRL'])
     .gte('txn_date', cutoff18mStr)
     .order('txn_date', { ascending: false });
@@ -137,6 +139,7 @@ export async function GET(req: NextRequest) {
       invoice_no: item.invoice_no, txn_date: item.txn_date,
       period_start: item.period_start, period_end: item.period_end,
       fye_date: null, rate: item.rate, amount: item.amount,
+      product_service: item.product_service, description: item.description,
     });
   }
 
@@ -151,6 +154,7 @@ export async function GET(req: NextRequest) {
       invoice_no: item.invoice_no, txn_date: item.txn_date,
       period_start: item.period_start, period_end: item.period_end,
       fye_date: item.fye_date, rate: item.rate, amount: item.amount,
+      product_service: item.product_service, description: item.description,
     });
   }
 

@@ -10,6 +10,7 @@ export interface DraftLineItem {
   description: string;      // full line description
   rate: number;
   qty?: number;
+  productService?: string;  // exact QB Product/Service name, e.g. "Secretary:Corporate Secretarial Services"
 }
 
 // ── Look up QB Customer by display name ───────────────────────────────────────
@@ -105,9 +106,11 @@ export async function POST(req: NextRequest) {
   // 2. Get item map
   const itemMap = await getItemMap(token, realmId);
 
-  // 3. Build invoice lines
+  // 3. Build invoice lines. Prefer the exact QB Product/Service name the client
+  //    resolved from invoice history/templates; fall back to keyword matching.
   const invoiceLines = lines.map((l, i) => {
-    const item = pickItem(l.service, itemMap);
+    const exact = l.productService ? itemMap.get(l.productService.toLowerCase()) : undefined;
+    const item = exact ?? pickItem(l.service, itemMap);
     return {
       LineNum: i + 1,
       DetailType: 'SalesItemLineDetail',
