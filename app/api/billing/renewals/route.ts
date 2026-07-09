@@ -83,6 +83,15 @@ export interface CompanyBilling {
   email: string | null;
   contactName: string | null;
   billedCycles: string[]; // FYE dates ("dd.mm.yyyy") this company has already been invoiced for
+  priorLines: PriorLine[]; // every line from the most recent renewal invoice (to clone)
+  priorInvoiceDate: string | null;
+}
+
+export interface PriorLine {
+  product_service: string | null;
+  description: string | null;
+  amount: number | null;
+  service_type: string | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -184,6 +193,53 @@ export async function GET(req: NextRequest) {
     if (direct?.fee) return direct.fee;
     for (const [k, m] of annualFeeEntries) {
       if (matchScore(companyName, k) >= 70) { const f = m.get(svc)?.fee; if (f) return f; }
+    }
+    return null;
+  }
+
+  // ── 4c. Prior renewal invoice (the template to clone) ────────────────────
+  // The billing SOP is: take last year's invoice, reuse its items + amounts,
+  // just roll the service period forward. So capture, per company, the FULL
+  // line set of its most recent *renewal* invoice — the invoice that carried
+  // the annual retainer (Corporate Secretarial Services) or the AR govt fee.
+  const cutoff24m = new Date();
+  cutoff24m.setMonth(cutoff24m.getMonth() - 24);
+  const allItems = await pageAll(() => supabase
+    .from('quickbooks_invoice_items')
+    .select('customer_name, invoice_no, txn_date, product_service, description, amount, service_type')
+    .gte('txn_date', cutoff24m.toISOString().slice(0, 10))
+    .order('txn_date', { ascending: false })) as unknown as Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; description: string | null; amount: number | null; service_type: string | null }>;
+
+  // Group every line under company → invoice.
+  const invByCompany = new Map<string, Map<string, { txn_date: string | null; lines: PriorLine[] }>>();
+  for (const it of allItems) {
+    const n = normalize(it.customer_name);
+    if (!invByCompany.has(n)) invByCompany.set(n, new Map());
+    const invs = invByCompany.get(n)!;
+    if (!invs.has(it.invoice_no)) invs.set(it.invoice_no, { txn_date: it.txn_date, lines: [] });
+    invs.get(it.invoice_no)!.lines.push({
+      product_service: it.product_service, description: it.description,
+      amount: it.amount, service_type: it.service_type,
+    });
+  }
+  const isRenewalLine = (ps: string | null) =>
+    /Corporate Secretarial Services|Government fee for filing Annual Return|Registered Address Services/i.test(ps ?? '');
+  // Per company keep the latest invoice that looks like an annual renewal.
+  const priorInvoiceMap = new Map<string, { txn_date: string | null; lines: PriorLine[] }>();
+  for (const [n, invs] of invByCompany) {
+    let best: { txn_date: string | null; lines: PriorLine[] } | null = null;
+    for (const inv of invs.values()) {
+      if (!inv.lines.some(l => isRenewalLine(l.product_service))) continue;
+      if (!best || (inv.txn_date ?? '') > (best.txn_date ?? '')) best = inv;
+    }
+    if (best) priorInvoiceMap.set(n, best);
+  }
+  const priorInvoiceEntries = [...priorInvoiceMap.entries()];
+  function getPriorInvoice(companyName: string): { txn_date: string | null; lines: PriorLine[] } | null {
+    const direct = priorInvoiceMap.get(normalize(companyName));
+    if (direct) return direct;
+    for (const [k, v] of priorInvoiceEntries) {
+      if (matchScore(companyName, k) >= 70) return v;
     }
     return null;
   }
@@ -350,6 +406,8 @@ export async function GET(req: NextRequest) {
       email: company.best_email ?? primary?.email ?? null,
       contactName: primary?.contactName ?? null,
       billedCycles: [...(billedCyclesMap.get(normName) ?? [])],
+      priorLines: getPriorInvoice(company.company_name)?.lines ?? [],
+      priorInvoiceDate: getPriorInvoice(company.company_name)?.txn_date ?? null,
     };
   });
 

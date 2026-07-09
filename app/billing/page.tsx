@@ -32,6 +32,9 @@ const SVC_CONFIG = {
   ND:        { label: 'Nominee Dir.', short: 'ND',   bg: '#dcfce7', color: '#166534', Icon: UserCheck  },
   AR:        { label: 'AR / AGM',     short: 'AR',   bg: '#fff7ed', color: '#c2410c', Icon: BarChart3  },
   XBRL:      { label: 'XBRL',         short: 'XBRL', bg: '#fdf4ff', color: '#7e22ce', Icon: ShieldCheck },
+  Discount:  { label: 'Discount',     short: 'DISC', bg: '#fef2f2', color: '#dc2626', Icon: DollarSign },
+  Accounts:  { label: 'Accounts',     short: 'ACCT', bg: '#eff6ff', color: '#1d4ed8', Icon: FileText   },
+  Tax:       { label: 'Tax',          short: 'TAX',  bg: '#f0fdfa', color: '#0f766e', Icon: FileText   },
 };
 
 function RenewalCard({ r }: { r: RenewalStatus }) {
@@ -883,6 +886,38 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
         });
       }
     }
+
+    // Carry forward the extras from last year's actual invoice that the core
+    // template doesn't cover — per the SOP "沿用上一年的收费项目/金额/折扣".
+    // Discount is pre-checked (part of the client's deal) but flagged to
+    // confirm it still applies; recurring Accounts/Tax lines are surfaced
+    // unchecked for staff to confirm they recur this year.
+    const priorDate = c.priorInvoiceDate ? fmtDate(c.priorInvoiceDate) : 'last year';
+    for (const p of c.priorLines ?? []) {
+      const ps = p.product_service ?? '';
+      if (/Discount Given/i.test(ps)) {
+        out.push({
+          service: 'Discount', productService: ps,
+          description: p.description || 'Discount Given',
+          qty: 1, rate: p.amount ?? 0, include: true, due: true,
+          reason: `Discount from ${priorDate} — confirm it still applies`,
+        });
+      } else if (/Yearly Accounts Services|Compilation Services|Monthly Accounts Services/i.test(ps) && !/DO NOT USE/i.test(ps)) {
+        out.push({
+          service: 'Accounts', productService: ps,
+          description: p.description || ps,
+          qty: 1, rate: p.amount ?? MEDIAN_RATE.Accounts ?? 0, include: false, due: false,
+          reason: `On ${priorDate} invoice — confirm if recurring`,
+        });
+      } else if (/Corporate Tax Services|Personal Income Tax Services|Other Tax Services/i.test(ps)) {
+        out.push({
+          service: 'Tax', productService: ps,
+          description: p.description || ps,
+          qty: 1, rate: p.amount ?? MEDIAN_RATE.Tax ?? 0, include: false, due: false,
+          reason: `On ${priorDate} invoice — confirm if recurring`,
+        });
+      }
+    }
     return out;
   }, [c, currentYear]);
 
@@ -932,6 +967,15 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
           <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} style={inputStyle} />
         </div>
         {c.pic && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>PIC: <strong style={{ color: '#334155' }}>{c.pic}</strong></span>}
+      </div>
+
+      {/* Provenance: this draft mirrors last year's invoice (items + amounts),
+          with the service period rolled forward. */}
+      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <FileText size={12} />
+        {c.priorInvoiceDate
+          ? <span>Based on last invoice dated <strong style={{ color: '#334155' }}>{fmtDate(c.priorInvoiceDate)}</strong> — items & amounts carried forward, period rolled to this cycle. Verify discount still applies.</span>
+          : <span style={{ color: '#b45309' }}>No prior renewal invoice found — draft built from standard template. Confirm each line.</span>}
       </div>
 
       {/* Editable draft line items */}
