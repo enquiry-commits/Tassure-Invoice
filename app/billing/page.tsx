@@ -1791,7 +1791,7 @@ function CombinedPage() {
   }, []);
 
   const switchTab = (t: 'billing' | 'ar') => {
-    router.replace(`/billing${t === 'ar' ? '?tab=ar' : ''}`, { scroll: false });
+    router.replace(`/billing?tab=${t}`, { scroll: false });
   };
 
   return (
