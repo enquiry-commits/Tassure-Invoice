@@ -139,26 +139,28 @@ function Branch({ nodes, depth, act, expanded, toggle }:
   { nodes: Node[]; depth: number; act: (h?: string) => boolean;
     expanded: Record<string, boolean>; toggle: (k: string) => void }) {
   const TICK = 15;
-  const CENTER = depth === 1 ? 13 : 12;   // vertical centre of a row, from its top
   return (
     <div style={{ marginLeft: depth === 1 ? 18 : 15, marginRight: depth === 1 ? 12 : 0, position: 'relative' }}>
       {nodes.map((n, i) => {
         const last = i === nodes.length - 1;
         const open = n.children ? expanded[n.id!] : false;
+        // Draw the vertical line down to the next sibling — but NOT when this
+        // row is an expanded group. Its children already separate it from the
+        // next sibling, and a long line bridging that gap looks wrong. The next
+        // sibling then starts with just its own curved elbow.
+        const connect = !last && !open;
         return (
-          <div key={n.id ?? n.href} style={{ position: 'relative', marginBottom: 2 }}>
-            {/* curved elbow from the rail into this row */}
-            <span aria-hidden style={{
-              position: 'absolute', left: 0, top: 0, width: TICK, height: CENTER,
-              borderLeft: `1.5px solid ${RAIL}`, borderBottom: `1.5px solid ${RAIL}`,
-              borderBottomLeftRadius: 11, pointerEvents: 'none',
-            }} />
-            {/* vertical rail down to the next sibling — spans this row AND any
-                expanded children, so the rail never breaks under an open group */}
-            {!last && <span aria-hidden style={{
-              position: 'absolute', left: 0, top: CENTER, bottom: -2, width: 1.5, background: RAIL, pointerEvents: 'none',
-            }} />}
-            <div style={{ paddingLeft: TICK + 9 }}>
+          <div key={n.id ?? n.href}>
+            <div style={{ position: 'relative', paddingLeft: TICK + 9, marginBottom: 2 }}>
+              {/* curved elbow from the rail into this row */}
+              <span aria-hidden style={{
+                position: 'absolute', left: 0, top: 0, width: TICK, height: '50%',
+                borderLeft: `1.5px solid ${RAIL}`, borderBottom: `1.5px solid ${RAIL}`,
+                borderBottomLeftRadius: 11, pointerEvents: 'none',
+              }} />
+              {connect && <span aria-hidden style={{
+                position: 'absolute', left: 0, top: '50%', bottom: -2, width: 1.5, background: RAIL, pointerEvents: 'none',
+              }} />}
               {n.children
                 ? <SubRow node={n} depth={depth + 1} active={false} expanded={open} onToggle={() => toggle(n.id!)} />
                 : <SubRow node={n} depth={depth + 1} active={act(n.href)} />}
