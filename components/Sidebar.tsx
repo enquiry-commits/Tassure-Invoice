@@ -139,9 +139,8 @@ function SubRow({ node, depth, last, active, expanded, onToggle }:
   const label = (
     <>
       <span style={{ flex: 1 }}>{node.label}</span>
-      {onToggle
-        ? (expanded ? <ChevronDown size={13} style={{ opacity: 0.6 }} /> : <ChevronRight size={13} style={{ opacity: 0.6 }} />)
-        : active && <ChevronRight size={14} style={{ opacity: 0.85 }} />}
+      {/* Only expandable rows get a chevron — leaf items show no right arrow. */}
+      {onToggle && (expanded ? <ChevronDown size={13} style={{ opacity: 0.6 }} /> : <ChevronRight size={13} style={{ opacity: 0.6 }} />)}
     </>
   );
   return (
