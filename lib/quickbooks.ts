@@ -62,7 +62,7 @@ export async function getValidToken(): Promise<TokenRow | null> {
 
   await supabase
     .from('quickbooks_tokens')
-    .update(updated)
+    .update({ ...updated })
     .eq('realm_id', data.realm_id);
 
   return { ...data, ...updated } as TokenRow;

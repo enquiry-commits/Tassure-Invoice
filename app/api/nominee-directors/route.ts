@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { todaySGT } from '@/lib/date';
 
-const today = () => new Date().toISOString().split('T')[0];
+const today = todaySGT;
 
 export async function GET() {
   const [{ data: nds }, { data: appts }] = await Promise.all([

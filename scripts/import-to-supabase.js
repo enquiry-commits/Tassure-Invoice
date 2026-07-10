@@ -36,6 +36,9 @@ async function importCompanies() {
     best_email:      c.bestEmail || null,
     primary_contact: c.primaryContact || null,
     contact_persons: c.contactPersons || [],
+    client_type:     'CSS Client',                  // all records in this JSON are CSS clients
+    tw_status:       c.status || null,              // 'Active' | 'Inactive' from TeamWork
+    is_active:       c.status === 'Active',
     synced_at:       new Date().toISOString(),
   }));
 

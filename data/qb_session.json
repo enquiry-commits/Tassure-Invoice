@@ -1,0 +1,622 @@
+{
+  "cookies": [
+    {
+      "name": "_GRECAPTCHA",
+      "value": "09AKhCRwgJrpHMa_8KRJgGnUR0Kq6M4YWcWOESpDRD6Gt7JJTL8IvHCtKfwce4SvIu-u3Z-nntxCpz_ZNJAqqNcbk",
+      "domain": "www.google.com",
+      "path": "/recaptcha",
+      "expires": 1797953206.191543,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "hosted-shell",
+      "value": "%7B%22clientId%22%3A%224af5959b-e061-4425-817d-e7550700225d%22%7D",
+      "domain": "qbo.intuit.com",
+      "path": "/",
+      "expires": 1816961145.04735,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "hosted-shell",
+      "value": "%7B%22clientId%22%3A%220d2c2d21-1371-46d1-bd75-77adf95593f2%22%7D",
+      "domain": "accounts.intuit.com",
+      "path": "/",
+      "expires": 1816961145.863557,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "ivid",
+      "value": "779ab0f4-b1b6-4628-9130-bd3b2a352c76",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1817014205.523677,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "AKES_GEO",
+      "value": "SG~",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "thx_guid",
+      "value": "d29b68c79d568bb070fe6abcf3e95ada",
+      "domain": "qfp.intuit.com",
+      "path": "/",
+      "expires": 1816961149.818096,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "__Secure-kdid",
+      "value": "a4d0bae3-7400-4a41-9fec-917d387e4919",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1786029949.945212,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ajs_anonymous_id",
+      "value": "779ab0f4-b1b6-4628-9130-bd3b2a352c76",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1813990211,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "hosted-shell",
+      "value": "%7B%22clientId%22%3A%224efadfe3-9898-4bfe-aa0b-e5db04fe102e%22%7D",
+      "domain": "qbo-preload.app.intuit.com",
+      "path": "/",
+      "expires": 1816961151.045287,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "did",
+      "value": "SHOPPER2_4a756e4084846e8c920148ff33e7c9291813d2efb10dc8a2f2c55cae96cd90a5f1ec28142c02dd6e009f003e8562df71",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1816961203.41018,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "qbn.uidp",
+      "value": "1332b9172d4e10e4b7bb0da38676a714e9f",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbn.gauthid",
+      "value": "9411836737981971",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "userIdentifier",
+      "value": "9411836737981971",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbn.glogin",
+      "value": "vincent%40tassure.com",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1817014205.523914,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "is_from_fms_mktg_pg",
+      "value": "Y",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.partnerInfo",
+      "value": "\"partner=NONE|redirectrequired=false\"",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.cluster",
+      "value": "7",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.qbo",
+      "value": "\"|locale=en_SG|sku=A|\"",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1813990212.902631,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.clientType",
+      "value": "web",
+      "domain": "qbo.intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.clientip",
+      "value": "203.118.22.195",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.company",
+      "value": "203.118.22.195",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.qbo_version",
+      "value": "2077.159",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bm_sz",
+      "value": "288094E6F78D57152FE7E9FE9286E993~YAAQz3U2F+8VUNKeAQAAWh6MAgDX+ycbrfHAYQs+fwxEvIkCGlQ3gh/rb4c0O8Qfi6zAGt1KBp4FHMJ6eCVABr/nJ82lXaAIxgPMQ4FL+i0gJrRQ5lz4BuYe8yfcoBPG9Z6qnmOhadjv8/RwUnIyMR/+oXKBCHXKM81Gil4F9UYpAY+tylt9vbg2gx+I2IvuBB24IzPYmWvZWVmF1jY39X/Z/OtlhjjrmYNVTpbSigkDMsOZILPLIs9gKL7axbTLqw9qP7yXbMNn5CNZq/eR3qBnzrjHDFkYwk4kCASQE7Y0K3whh0EvGS51RZBHPVsZ1i7RMu3wOnglvpJG8LR3hwm0suz/QPq2HBqxlLQ8YSNQWK5DGZUOieWBnFWCGsNnQe4u0EUttO3Bh447EP8O~4605490~4604467",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1782468564.042728,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "ius_session",
+      "value": "b11b3a46d3b24a86b00151183b3bf0de",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "di_session",
+      "value": "b3b3ae483f7f4b1b0136f3608d8bf099",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ak_bmsc",
+      "value": "3045B8B4DF272F96A1082F6F66BAA268~000000000000000000000000000000~YAAQz3U2F/YZUNKeAQAAzjqMAgDRYFJXib4hxt1nWgpErGMxWI8gDgshNNmcHnzB9C4N//NeBTVz8lZekibP7yDmmCrBctSzzjFX2WH19yAeD9pLoC4y/YmvjO0RdLBczKABdjssijAn0hwshFsSxAM4V730DZnzrwEM/Ka4uYadjryshX1rqEPB4fhSY20VyjCt3qE+j8YVsKRnTGgSyJeuRXIV6tsSeCKru+c+gyQQROBCDNAS78uHL3LTGzCUfZa8BUKj/PJgG+azaDWkr1veScvTpp/xBpFaa35oVHImlLSwiBYSCAY/zAoBGVBhggBRV+Iozbav7seOPxOEMTUkFZ8Iw0J7konoDKxd6iB6dgcjs20JSxv8MS0v6tsY6GmMgznlhF89Q+8uxTYDwNxq1qoIUe9P+j8hFC3Oy48h8u+gHtiCLBbphDD77eFYhLxivGVI4eXeN+K+vvugpJhWbOXhyzd1Fdl6pAA8BhhJsEwFX6HAS+dKwPxB6+Us4wk=",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1782461364.324981,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "tmx_guid",
+      "value": "AAya5Gl9l2iH_Xlmpaz_brLYPoPngafr99HwjXKdOUcpI64ve8ZrZCLBT3Wwb4CpuZEZdcxWy-eH3fIGTKwuouUEtt_9VQ",
+      "domain": "qfp.intuit.com",
+      "path": "/",
+      "expires": 1817014172.45952,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "ak_bmsc",
+      "value": "3045B8B4DF272F96A1082F6F66BAA268~000000000000000000000000000000~YAAQf96bfD6wC9meAQAADkCMAgB9adLjJ7JWyDlhkuIcxRht/AV3qUE6fwZa3mHy2j7u7PCLxfiyCM5fRiICeIMIj3lEXeZfdRT3xFF/3WQ5N3YmB5HygWQflBlLPFXQHwXNn9WBHlYHo75lMDdOls84HpHvW05nWkRfb3mAV8lHhU+OKmwOkeTNh0Wb4Pm/5Wk+ldGDDepAV0xeUHCb8fGydRi9J7x6Dcf8BC2sJIzpekbsWQujwktBO+Oe+h/FSJyouPykbqsMli8FeGH+XPxFpOTD1aX48SQ28EDAalibkI4lqQbp/HC3tkXvedMW7VRY7mpgegPFQMp/bBxmRpD7Zo+TskRdmNs0s2xBcO+FD7tOtTO/+AsYg6R4Ya3/9g4Rd6Hm70oJSg8UtuoKMg0MEt7ua828limNmTkd4+tBy2DuFaJjmYK8+wa8RLtUmkzAAyeTwq9/hPNx00mglZMAEIYmUQrvWQaCF2WeIlld3N/FTcD3JfGhR5l486+b4p1G/s0P",
+      "domain": ".api.intuit.com",
+      "path": "/",
+      "expires": 1782461364.669922,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "analytics_session_id",
+      "value": "1782454176276",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1813990211,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "bm_sv",
+      "value": "B767E6E154FFB68526D83E44D35214A6~YAAQf96bfHCwC9meAQAAc2WMAgAp00BvJM6d8YTGD507qcPjFXotr4m9i/jX0XQxVwFdLWOmkYCoFl6AEa8h4gWLPPIMBNOFmvLPOl6uH7rfsuMpDgHqW8KqRVhyOg6CEpmFKF76Xox/z7jfaDg755GmzmHdf+GFvVvcCMAoLqdS5h7J80FukOPws0F4ATf0H9K36D53pHnmfRqNac3Upo28AfcRBMw8DL/GxxmmhqpZwj1OBS4QMLL7RL4qD0ys8ZcFzw==~1",
+      "domain": ".api.intuit.com",
+      "path": "/",
+      "expires": 1782461373.245121,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "_abck",
+      "value": "89A337D2C4FB308E1A3CDC75028D1B37~-1~YAAQz3U2F4ExUNKeAQAAyrqMAhCJga4gerSyYyMgsmawvWjdxjaiGfOYgoWkvN4MBJxxGMOniCWLTBvXmWPOLv1cLBY3ntvZ1LKu6ZwCzrPR49PUyC7uaU+HRF5v/JSvII0Gli82a/DugjPl+eSw4uT64m3Ini0XnBQIhPonS0gi/oiZdtsRe85kqPNoyx1QrHJRjWmg0BItJs/6wsZWEta9hreomE0IpO6NRznHypVK2bQqro9Q9bucl3ClmsiOuUCWVR7MMoXhG4vacCc1QcJVj8fuvYrS4BIzoqPqQjE4PNmAjTL7e1GoWW3/QFshsdo0/QLBj3igMW0pk3oH0PxCEfMgj9EdnwTSm6ZEDJ+nLCXIhrJ6u2hwexxc8iS1R/idt9Rv2JtkhITVOdqTvBMqf2rYwlkIKMHHMPHtdwHmwXuOPGykld8E9CK9MsZjNPzY9qkDKUc+52N+u1H4Dku+7W1mRB6j0FZHB3Rc8dFbNzkTZ1fie5ZekxcF6AMey44SKzqwWYRxy15yzLrVp6Y82oqwenq0coZarOETOt00motqw64I70gH82tMDnD4Lt/ETRM2GFtNalBrWYBo/wtfoxDQ8bageyJtJJIOKQAYj3jp1jvbcEgZDRsMIaUQfCrdMXvvg7hD60+TktsWbmcWyci8csbQ6GM7bC2NS/AtUF8sZzeyug8AII5uNxEdDZUP~-1~-1~-1~AAQAAAAF%2f%2f%2f%2f%2f7k1V4wDfs3gSHlMJ3f28Mma%2fv6WtKQHW%2fGsSUsKtRzeJNwEqeLQAiGnEZFBO6DRs4e3eX5qNab4%2f9e3W7a9Nw2WB82DOgLAqc5DyGyRBZKxrRAKYYLTYlVdezvNKJFFGFSp49PoyybzD+AvEsMVvUt7nne%2ftUtXiywK9w0mjQ%3d%3d~-1",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1813990205.134436,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbn.authid",
+      "value": "9411836737981971",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "qbn.agentid",
+      "value": "9411836737981971",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "qbn.account_chooser",
+      "value": "zcmEiqfeVrlnoSNk7yLmD5bVANKmO3bolyqBIHCdJ3ffEFXjTG16U5HLjx7wwS44x-cd0LiE97f7JXCX0Y7_IkiSDdWoLoYluLqYzSF_63V02wAqK5MUBLyy4Czi23Qg3vlTbuM4pRa8nQuzlduiWnnRYv07Yg8Kmk9u7BJreSrSIPQwDMHLJSUU1cBLjBfJQXIrgoQOZ0Vi6FCW9QSquC7OlZFuDD2_X7TOjqYRznw-FeghvBAMTldxehDtckJNpqHPSwnd9mnp7puzEX5sWA",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1817014205.523777,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "pageProperties",
+      "value": "$accounts.intuit.com/app/sign-in$/app/sign-in$accounts.intuit.com$iip|identity|identity||/app/sign-in$",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "analytics_session_id.last_access",
+      "value": "1782454211361",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": 1813990211,
+      "httpOnly": false,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbn.ticket",
+      "value": "V1-122-B0b7s1zhmgbimvc61dfe6u",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "qbn.tkt",
+      "value": "V1-122-B0b7s1zhmgbimvc61dfe6u",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "qbn.parentid",
+      "value": "9341453164046000",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "qbn.ract",
+      "value": "9341453164046000",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "qbo.parentid",
+      "value": "9341453164046000",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.gauthid",
+      "value": "9411836737981971",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.agentid",
+      "value": "9411836737981971",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.authid",
+      "value": "9341457264416948",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.ticket",
+      "value": "V1-122-B0b7s1zhmgbimvc61dfe6u",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.tkt",
+      "value": "V1-122-B0b7s1zhmgbimvc61dfe6u",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.csrftoken",
+      "value": "1ccf3c3f177129d14d1e6607b70ef1230a2927372febb679b1a28fee40187226",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "shell.ctx.id",
+      "value": "\"authId=9341457264416948&companyId=9341453164046000\"",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "qbo.currentcompanyid",
+      "value": "9341453164046000",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": false,
+      "secure": true,
+      "sameSite": "None"
+    },
+    {
+      "name": "qbo.xcsrfderivationkey",
+      "value": "2gIAAAAbAQAEAAAAFgUACGZHY2krV3ZUBgAG6Ou_nQ7XX9vxp5LaBBE3YYZfXaV0o9BQ-7_eJ2NKFgtkkvK0pxtiDDEltlCXXAl2g6Tbl0Tzfne8-ywRK3edTa0JxnYsME9yKKkCO-MvvMrPOVyFXxQZ",
+      "domain": ".intuit.com",
+      "path": "/",
+      "expires": -1,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://qbo.intuit.com",
+      "localStorage": [
+        {
+          "name": "9341453164046000_4579119244463486_navigation_info",
+          "value": "{\"landingPage\":\"homepage?locale=zh&iux_intuit_tid=1-6a3e1794-718e192b13c64f9d4389c2a1\"}"
+        }
+      ]
+    },
+    {
+      "origin": "https://accounts.intuit.com",
+      "localStorage": [
+        {
+          "name": "RUM_default_c0613eca-8024-45d4-b5c0-40f9f6d70346",
+          "value": "{\"item\":{\"id\":\"08a3f037-0348-42ee-8d4d-a3d25180585a\",\"name\":\"widget-render::account-selector/accountselector\",\"totalTime\":5258,\"measures\":{\"request-start-to-widget-mount\":11,\"request-start-to-widget-first-display\":5258,\"request-start-to-widget-ready\":5258,\"end\":5258},\"details\":[],\"measureStartTimes\":{\"request-start-to-widget-mount\":\"2026-06-26T06:10:06.011Z\",\"request-start-to-widget-first-display\":\"2026-06-26T06:10:06.011Z\",\"request-start-to-widget-ready\":\"2026-06-26T06:10:06.011Z\",\"end\":\"2026-06-26T06:10:06.011Z\"},\"appProps\":{},\"context\":{\"pluginId\":\"account-selector\",\"widgetId\":\"account-selector/accountselector\",\"widgetInstanceId\":\"account-selector:account-selector/accountselector@1.0.0:98\",\"consumingWidgetInstanceId\":\"identity-authn-core-ui:identity-authn-core-ui/sign-in-sign-up-hosted@1.0.0:96\",\"sandboxType\":\"\",\"widgetVersion\":\"1.0.0\",\"consumingPluginId\":\"identity-authn-core-ui\",\"consumingWidgetId\":\"identity-authn-core-ui/sign-in-sign-up-hosted\",\"namespace\":\"\",\"appExpId\":\"sign-in-webapp\",\"route\":\"/app/sign-in\",\"url\":\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\",\"hasFocus\":true,\"visibilityState\":\"visible\",\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\",\"upstreamTid\":\"1-6a3e1794-718e192b13c64f9d4389c2a1\",\"o11yRumWebSessionId\":\"02e52920-edd0-4665-b509-e7bde1d16e7e\",\"browserInfo\":{\"currentBrowser\":{\"name\":\"Chrome\",\"version\":124,\"device\":{\"type\":\"desktop\"}},\"isYellowBrowser\":false,\"isRedBrowser\":false,\"browserType\":\"green\",\"isScraperBot\":false},\"ecmaScript\":2022,\"shellVersion\":\"5.290.2\",\"deviceMemory\":16,\"cores\":14,\"clientMode\":\"WEB\",\"runtime\":\"CSR\",\"connectionType\":\"4g\",\"navigationType\":\"navigate\",\"downlink\":10,\"isOffline\":false,\"assetId\":\"75452886709396085\",\"intuitRumEnabled\":\"true\",\"serverContext\":{\"experimentalTemplateName\":\"index-v4.html\",\"routeEnabledForPreload\":false},\"browserLocale\":\"zh-CN\",\"browserRegion\":\"CN\",\"browserTimezone\":\"Asia/Singapore\",\"experiments\":{\"externalPreloadingEnabled\":true,\"webWorkerPreloadingEnabled\":false},\"pluginVersion\":\"1.142.2\",\"pluginLabel\":\"account-selector\",\"isFirstLoad\":false,\"traceId\":\"4323fa8f56b556e5121452fa8f59bb06\",\"spanId\":\"f0142ebfbe85e5d2\",\"isSampled\":false},\"metadata\":{\"startTime\":\"2026-06-26T06:10:06.010Z\",\"widgetVersion\":\"1.0.0\",\"isPreloadWidget\":false,\"consumingWidgetId\":\"identity-authn-core-ui/sign-in-sign-up-hosted\",\"consumingPluginId\":\"identity-authn-core-ui\",\"consumingWidgetInstanceId\":\"identity-authn-core-ui:identity-authn-core-ui/sign-in-sign-up-hosted@1.0.0:96\",\"consumingWidgetVersion\":\"1.0.0\",\"widgetId\":\"account-selector/accountselector\",\"widgetInstanceId\":\"account-selector:account-selector/accountselector@1.0.0:98\",\"pluginId\":\"account-selector\",\"pluginVersion\":\"1.142.2\",\"isFirstLoad\":false,\"isFirstPageLoad\":false},\"component\":\"IntuitPerformanceSDK\",\"env\":\"prod\",\"timestamp\":1782454211328,\"eventType\":\"PERFORMANCE\",\"oilProps\":{\"timestamp\":1782454211328,\"destination\":[\"Intuit.identity.authn.signin\"]}},\"timestamp\":1782454211328}"
+        },
+        {
+          "name": "RUM_default_5691bde5-37ce-421f-a084-5c3fd298b202",
+          "value": "{\"item\":{\"_errors\":[{\"stack\":\"Error: accountSelectorLoaded [MEASURE] cannot capture mark 'accountSelectorLoaded' does not exist.\\n    at i.measure (https://uxfabric.intuitcdn.net/@appfabric/ui-profiler/3.4.2/ui-profiler.min.js:1:2759)\\n    at i.measure (https://uxfabric.intuitcdn.net/@appfabric/ui-profiler/3.4.2/ui-profiler.min.js:1:8640)\\n    at u (https://uxfabric.intuitcdn.net/account-selector/account-selector-accountselector-1_0_0-7f044e6d.ee58b958dccf58e3.js:2:22598)\\n    at et.componentDidMount (https://uxfabric.intuitcdn.net/account-selector/account-selector-accountselector-1_0_0-584c7b1d.ace849f2057857df.js:2:75223)\",\"message\":\"accountSelectorLoaded [MEASURE] cannot capture mark 'accountSelectorLoaded' does not exist.\"}],\"id\":\"14e44e58-cce0-4ab7-a7df-a12679500d07\",\"name\":\"accountSelectorLoaded\",\"totalTime\":5210,\"measures\":{\"Account selector rendering completed\":null,\"success\":5210},\"details\":[],\"measureStartTimes\":{\"success\":\"2026-06-26T06:10:06.058Z\"},\"degraded\":false,\"outcome\":\"success\",\"appProps\":{},\"context\":{\"pluginId\":\"account-selector\",\"widgetId\":\"account-selector/accountselector\",\"widgetInstanceId\":\"account-selector:account-selector/accountselector@1.0.0:98\",\"consumingWidgetInstanceId\":\"\",\"sandboxType\":\"widget\",\"widgetVersion\":\"1.0.0\",\"consumingPluginId\":\"identity-authn-core-ui\",\"consumingWidgetId\":\"identity-authn-core-ui/sign-in-sign-up-hosted\",\"namespace\":\"\",\"appExpId\":\"sign-in-webapp\",\"route\":\"/app/sign-in\",\"url\":\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\",\"hasFocus\":true,\"visibilityState\":\"visible\",\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\",\"upstreamTid\":\"1-6a3e1794-718e192b13c64f9d4389c2a1\",\"o11yRumWebSessionId\":\"02e52920-edd0-4665-b509-e7bde1d16e7e\",\"browserInfo\":{\"currentBrowser\":{\"name\":\"Chrome\",\"version\":124,\"device\":{\"type\":\"desktop\"}},\"isYellowBrowser\":false,\"isRedBrowser\":false,\"browserType\":\"green\",\"isScraperBot\":false},\"ecmaScript\":2022,\"shellVersion\":\"5.290.2\",\"deviceMemory\":16,\"cores\":14,\"clientMode\":\"WEB\",\"runtime\":\"CSR\",\"connectionType\":\"4g\",\"navigationType\":\"navigate\",\"downlink\":10,\"isOffline\":false,\"assetId\":\"75452886709396085\",\"intuitRumEnabled\":\"true\",\"serverContext\":{\"experimentalTemplateName\":\"index-v4.html\",\"routeEnabledForPreload\":false},\"browserLocale\":\"zh-CN\",\"browserRegion\":\"CN\",\"browserTimezone\":\"Asia/Singapore\",\"experiments\":{\"externalPreloadingEnabled\":true,\"webWorkerPreloadingEnabled\":false},\"pluginVersion\":\"1.142.2\",\"pluginLabel\":\"account-selector\",\"traceId\":\"5dd960ce9d3f1d5a219c48729cee4dbb\",\"spanId\":\"96f1e7f460d753f3\",\"isSampled\":false},\"metadata\":{\"intuitInteractionNoBackendCalls\":\"true\",\"operation\":\"accountSelectorLoaded\"},\"component\":\"IntuitPerformanceSDK\",\"env\":\"prod\",\"timestamp\":1782454211283,\"eventType\":\"PERFORMANCE\",\"oilProps\":{\"timestamp\":1782454211283,\"destination\":[\"Intuit.identity.authn.signin\"]}},\"timestamp\":1782454211283}"
+        },
+        {
+          "name": "5718FABB002E",
+          "value": "AAw4t-8F36A8SFgO-rQZ16cTHJKbLuPkCTDvEFXchQ8usVr5Yg8peyhpml1oWOzsg7Nq6xWE-_jdqtpFe1t_FYv48MVq5w"
+        },
+        {
+          "name": "RUM_default_9a720a90-15da-4309-a045-bf3390ae12e6",
+          "value": "{\"item\":{\"id\":\"a9c4eabd-5c83-4c31-b1c8-de8928146e14\",\"name\":\"widget-load::account-selector/accountselector\",\"totalTime\":2,\"measures\":{\"request-start-to-widget-load-start\":0,\"request-start-to-widget-load-end\":2,\"widget-load-time\":2,\"end\":2},\"details\":[],\"measureStartTimes\":{\"request-start-to-widget-load-start\":\"2026-06-26T06:10:06.011Z\",\"request-start-to-widget-load-end\":\"2026-06-26T06:10:06.011Z\",\"widget-load-time\":\"2026-06-26T06:10:06.011Z\",\"end\":\"2026-06-26T06:10:06.011Z\"},\"appProps\":{},\"context\":{\"pluginId\":\"account-selector\",\"widgetId\":\"account-selector/accountselector\",\"widgetInstanceId\":\"account-selector:account-selector/accountselector@1.0.0:98\",\"consumingWidgetInstanceId\":\"identity-authn-core-ui:identity-authn-core-ui/sign-in-sign-up-hosted@1.0.0:96\",\"sandboxType\":\"\",\"widgetVersion\":\"1.0.0\",\"consumingPluginId\":\"identity-authn-core-ui\",\"consumingWidgetId\":\"identity-authn-core-ui/sign-in-sign-up-hosted\",\"namespace\":\"\",\"appExpId\":\"sign-in-webapp\",\"route\":\"/app/sign-in\",\"url\":\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\",\"hasFocus\":true,\"visibilityState\":\"visible\",\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\",\"upstreamTid\":\"1-6a3e1794-718e192b13c64f9d4389c2a1\",\"o11yRumWebSessionId\":\"02e52920-edd0-4665-b509-e7bde1d16e7e\",\"browserInfo\":{\"currentBrowser\":{\"name\":\"Chrome\",\"version\":124,\"device\":{\"type\":\"desktop\"}},\"isYellowBrowser\":false,\"isRedBrowser\":false,\"browserType\":\"green\",\"isScraperBot\":false},\"ecmaScript\":2022,\"shellVersion\":\"5.290.2\",\"deviceMemory\":16,\"cores\":14,\"clientMode\":\"WEB\",\"runtime\":\"CSR\",\"connectionType\":\"4g\",\"navigationType\":\"navigate\",\"downlink\":10,\"isOffline\":false,\"assetId\":\"75452886709396085\",\"intuitRumEnabled\":\"true\",\"serverContext\":{\"experimentalTemplateName\":\"index-v4.html\",\"routeEnabledForPreload\":false},\"browserLocale\":\"zh-CN\",\"browserRegion\":\"CN\",\"browserTimezone\":\"Asia/Singapore\",\"experiments\":{\"externalPreloadingEnabled\":true,\"webWorkerPreloadingEnabled\":false},\"pluginVersion\":\"1.142.2\",\"pluginLabel\":\"account-selector\",\"isFirstLoad\":false,\"traceId\":\"bf3f01fa926f81dd78366fb847097e61\",\"spanId\":\"6a2a8433e26c8738\",\"isSampled\":false},\"metadata\":{\"startTime\":\"2026-06-26T06:10:06.010Z\",\"widgetVersion\":\"1.0.0\",\"isPreloadWidget\":false,\"consumingWidgetId\":\"identity-authn-core-ui/sign-in-sign-up-hosted\",\"consumingPluginId\":\"identity-authn-core-ui\",\"consumingWidgetInstanceId\":\"identity-authn-core-ui:identity-authn-core-ui/sign-in-sign-up-hosted@1.0.0:96\",\"consumingWidgetVersion\":\"1.0.0\",\"widgetId\":\"account-selector/accountselector\",\"widgetInstanceId\":\"account-selector:account-selector/accountselector@1.0.0:98\",\"pluginId\":\"account-selector\",\"pluginVersion\":\"1.142.2\",\"isFirstLoad\":false,\"isFirstPageLoad\":false},\"component\":\"IntuitPerformanceSDK\",\"env\":\"prod\",\"timestamp\":1782454206026,\"eventType\":\"PERFORMANCE\",\"oilProps\":{\"timestamp\":1782454206026,\"destination\":[\"Intuit.identity.authn.signin\"]}},\"timestamp\":1782454206026}"
+        },
+        {
+          "name": "RUM_default_806b415a-e43d-4191-9212-4f5ed41c4862",
+          "value": "{\"item\":{\"id\":\"b33d5582-046c-40c9-8213-c7d9c05fceb3\",\"name\":\"fetchUserAccounts\",\"totalTime\":5195,\"measures\":{\"Fetch User Accounts successful\":5194,\"User accounts service fetched successfully\":5194,\"Accounts fetched\":5194,\"success\":5195},\"details\":[],\"measureStartTimes\":{\"Fetch User Accounts successful\":\"2026-06-26T06:10:06.063Z\",\"User accounts service fetched successfully\":\"2026-06-26T06:10:06.063Z\",\"Accounts fetched\":\"2026-06-26T06:10:06.063Z\",\"success\":\"2026-06-26T06:10:06.062Z\"},\"degraded\":false,\"outcome\":\"success\",\"appProps\":{},\"context\":{\"pluginId\":\"account-selector\",\"widgetId\":\"account-selector/accountselector\",\"widgetInstanceId\":\"account-selector:account-selector/accountselector@1.0.0:98\",\"consumingWidgetInstanceId\":\"\",\"sandboxType\":\"widget\",\"widgetVersion\":\"1.0.0\",\"consumingPluginId\":\"identity-authn-core-ui\",\"consumingWidgetId\":\"identity-authn-core-ui/sign-in-sign-up-hosted\",\"namespace\":\"\",\"appExpId\":\"sign-in-webapp\",\"route\":\"/app/sign-in\",\"url\":\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\",\"hasFocus\":true,\"visibilityState\":\"visible\",\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\",\"upstreamTid\":\"1-6a3e1794-718e192b13c64f9d4389c2a1\",\"o11yRumWebSessionId\":\"02e52920-edd0-4665-b509-e7bde1d16e7e\",\"browserInfo\":{\"currentBrowser\":{\"name\":\"Chrome\",\"version\":124,\"device\":{\"type\":\"desktop\"}},\"isYellowBrowser\":false,\"isRedBrowser\":false,\"browserType\":\"green\",\"isScraperBot\":false},\"ecmaScript\":2022,\"shellVersion\":\"5.290.2\",\"deviceMemory\":16,\"cores\":14,\"clientMode\":\"WEB\",\"runtime\":\"CSR\",\"connectionType\":\"4g\",\"navigationType\":\"navigate\",\"downlink\":10,\"isOffline\":false,\"assetId\":\"75452886709396085\",\"intuitRumEnabled\":\"true\",\"serverContext\":{\"experimentalTemplateName\":\"index-v4.html\",\"routeEnabledForPreload\":false},\"browserLocale\":\"zh-CN\",\"browserRegion\":\"CN\",\"browserTimezone\":\"Asia/Singapore\",\"experiments\":{\"externalPreloadingEnabled\":true,\"webWorkerPreloadingEnabled\":false},\"pluginVersion\":\"1.142.2\",\"pluginLabel\":\"account-selector\",\"traceId\":\"9e0f8cb441ca6c11cbf09633035c0cb3\",\"spanId\":\"6e49b1e680ba6aac\",\"isSampled\":false},\"metadata\":{\"intuitInteractionNoBackendCalls\":\"false\",\"operation\":\"fetchUserAccounts\"},\"component\":\"IntuitPerformanceSDK\",\"env\":\"prod\",\"timestamp\":1782454211271,\"eventType\":\"PERFORMANCE\",\"oilProps\":{\"timestamp\":1782454211272,\"destination\":[\"Intuit.identity.authn.signin\"]}},\"timestamp\":1782454211272}"
+        },
+        {
+          "name": "RUM_default_9742d74c-ab28-48db-a50f-f7a9432b7561",
+          "value": "{\"item\":{\"id\":\"1fddb569-d5a2-420e-bda6-a956ffe91461\",\"name\":\"ACCOUNT_SELECTOR_SELECT_EXISTING_COMPANY_SUCCESS\",\"totalTime\":0,\"measures\":{\"success\":0},\"details\":[],\"measureStartTimes\":{\"success\":\"2026-06-26T06:10:11.322Z\"},\"degraded\":false,\"outcome\":\"success\",\"appProps\":{},\"context\":{\"pluginId\":\"identity-authn-core-ui\",\"widgetId\":\"identity-authn-core-ui/sign-in-sign-up-hosted\",\"widgetInstanceId\":\"identity-authn-core-ui:identity-authn-core-ui/sign-in-sign-up-hosted@1.0.0:96\",\"consumingWidgetInstanceId\":\"\",\"sandboxType\":\"widget\",\"widgetVersion\":\"1.0.0\",\"consumingPluginId\":\"identity-authn-core-ui\",\"consumingWidgetId\":\"\",\"namespace\":\"\",\"appExpId\":\"sign-in-webapp\",\"route\":\"/app/sign-in\",\"url\":\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\",\"hasFocus\":true,\"visibilityState\":\"visible\",\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\",\"upstreamTid\":\"1-6a3e1794-718e192b13c64f9d4389c2a1\",\"o11yRumWebSessionId\":\"02e52920-edd0-4665-b509-e7bde1d16e7e\",\"browserInfo\":{\"currentBrowser\":{\"name\":\"Chrome\",\"version\":124,\"device\":{\"type\":\"desktop\"}},\"isYellowBrowser\":false,\"isRedBrowser\":false,\"browserType\":\"green\",\"isScraperBot\":false},\"ecmaScript\":2022,\"shellVersion\":\"5.290.2\",\"deviceMemory\":16,\"cores\":14,\"clientMode\":\"WEB\",\"runtime\":\"CSR\",\"connectionType\":\"4g\",\"navigationType\":\"navigate\",\"downlink\":10,\"isOffline\":false,\"assetId\":\"75452886709396085\",\"intuitRumEnabled\":\"true\",\"serverContext\":{\"experimentalTemplateName\":\"index-v4.html\",\"routeEnabledForPreload\":false},\"browserLocale\":\"zh-CN\",\"browserRegion\":\"CN\",\"browserTimezone\":\"Asia/Singapore\",\"experiments\":{\"externalPreloadingEnabled\":true,\"webWorkerPreloadingEnabled\":false},\"pluginVersion\":\"1.1409.2\",\"pluginLabel\":\"identity-authn-core-ui\",\"traceId\":\"bc97f3d595d79df64c4c246c00be1f3d\",\"spanId\":\"67ff2bd952f946d0\",\"isSampled\":false},\"metadata\":{\"intuitInteractionNoBackendCalls\":\"true\"},\"component\":\"IntuitPerformanceSDK\",\"env\":\"prod\",\"timestamp\":1782454211323,\"eventType\":\"PERFORMANCE\",\"oilProps\":{\"timestamp\":1782454211323,\"destination\":[\"Intuit.identity.authn.signin\"]}},\"timestamp\":1782454211323}"
+        },
+        {
+          "name": "ed73f20edbf2b73",
+          "value": "15b973c06c5d44c09545757ed0eb2b6e_1937921150371"
+        },
+        {
+          "name": "RUM_otelNetworkRequestStorage_53c564ac-b83f-4ff1-bf9a-b4a6851db9a6",
+          "value": "{\"url\":\"https://rum.api.intuit.com/v1/trace\",\"method\":\"post\",\"keepalive\":false,\"data\":\"{\\\"resourceSpans\\\":[{\\\"resource\\\":{\\\"attributes\\\":[{\\\"key\\\":\\\"service.name\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"intuit.identity.authn.signin\\\"}}],\\\"droppedAttributesCount\\\":0},\\\"instrumentationLibrarySpans\\\":[{\\\"spans\\\":[{\\\"traceId\\\":\\\"DkFSFrXgxtuBhwnWE3jbRA==\\\",\\\"spanId\\\":\\\"BKntIOQIdtw=\\\",\\\"name\\\":\\\"sign_in_with_password\\\",\\\"kind\\\":3,\\\"startTimeUnixNano\\\":1782454204789999900,\\\"endTimeUnixNano\\\":1782454205566999800,\\\"attributes\\\":[{\\\"key\\\":\\\"intuitTracePropagation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"outcome\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"success\\\"}},{\\\"key\\\":\\\"intuitInteractionNoBackendCalls\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"offeringId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Intuit.sbe.salsa.default\\\"}},{\\\"key\\\":\\\"api\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"identityV2\\\"}},{\\\"key\\\":\\\"operation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"v2-sign-in-with-password\\\"}},{\\\"key\\\":\\\"details\\\",\\\"value\\\":{\\\"arrayValue\\\":{\\\"values\\\":[]}}},{\\\"key\\\":\\\"intuit-sessionid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"02e52920-edd0-4665-b509-e7bde1d16e7e\\\"}},{\\\"key\\\":\\\"upstreamTid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1-6a3e1794-718e192b13c64f9d4389c2a1\\\"}},{\\\"key\\\":\\\"appExpId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"sign-in-webapp\\\"}},{\\\"key\\\":\\\"assetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"75452886709396085\\\"}},{\\\"key\\\":\\\"shellVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"5.290.2\\\"}},{\\\"key\\\":\\\"appPluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"deviceMemory\\\",\\\"value\\\":{\\\"doubleValue\\\":16}},{\\\"key\\\":\\\"cores\\\",\\\"value\\\":{\\\"doubleValue\\\":14}},{\\\"key\\\":\\\"clientMode\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"WEB\\\"}},{\\\"key\\\":\\\"env\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"prod\\\"}},{\\\"key\\\":\\\"pluginId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"identity-authn-core-ui\\\"}},{\\\"key\\\":\\\"pluginAssetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"506672550384311598\\\"}},{\\\"key\\\":\\\"pluginAssetAlias\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Intuit.identity.authn.core\\\"}},{\\\"key\\\":\\\"pluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.1409.2\\\"}},{\\\"key\\\":\\\"widgetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"identity-authn-core-ui/sign-in-sign-up-hosted\\\"}},{\\\"key\\\":\\\"widgetVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.0.0\\\"}},{\\\"key\\\":\\\"widgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"identity-authn-core-ui:identity-authn-core-ui/sign-in-sign-up-hosted@1.0.0:96\\\"}},{\\\"key\\\":\\\"consumingWidgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"referrer\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"route\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"/app/sign-in\\\"}},{\\\"key\\\":\\\"runtime\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"CSR\\\"}},{\\\"key\\\":\\\"hasFocus\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"intuitRumEnabled\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"visibilityState\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"visible\\\"}},{\\\"key\\\":\\\"http.url\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\\\"}},{\\\"key\\\":\\\"http.host\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"accounts.intuit.com\\\"}},{\\\"key\\\":\\\"userAgent\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\\\"}},{\\\"key\\\":\\\"networkEffectiveType\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"4g\\\"}},{\\\"key\\\":\\\"intuit.tracesampler\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"intuit.identity.authn.signin=TraceIdRatioBased{1}\\\"}},{\\\"key\\\":\\\"type\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"interaction\\\"}},{\\\"key\\\":\\\"priority\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"medium\\\"}},{\\\"key\\\":\\\"isSampled\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"mainSpan\\\",\\\"value\\\":{\\\"boolValue\\\":true}}],\\\"droppedAttributesCount\\\":0,\\\"events\\\":[],\\\"droppedEventsCount\\\":0,\\\"status\\\":{\\\"code\\\":0},\\\"links\\\":[],\\\"droppedLinksCount\\\":0}],\\\"instrumentationLibrary\\\":{\\\"name\\\":\\\"sign_in_with_password\\\",\\\"version\\\":\\\"*\\\"}},{\\\"spans\\\":[{\\\"traceId\\\":\\\"lsgLSCK7iANeXxDrOemUkQ==\\\",\\\"spanId\\\":\\\"vWG3IcSc2tw=\\\",\\\"name\\\":\\\"LOAD_ACCOUNT_SELECTOR\\\",\\\"kind\\\":3,\\\"startTimeUnixNano\\\":1782454206009000000,\\\"endTimeUnixNano\\\":1782454206023000000,\\\"attributes\\\":[{\\\"key\\\":\\\"intuitTracePropagation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"outcome\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"success\\\"}},{\\\"key\\\":\\\"intuitInteractionNoBackendCalls\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"retryCount\\\",\\\"value\\\":{\\\"doubleValue\\\":0}},{\\\"key\\\":\\\"details\\\",\\\"value\\\":{\\\"arrayValue\\\":{\\\"values\\\":[]}}},{\\\"key\\\":\\\"intuit-sessionid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"02e52920-edd0-4665-b509-e7bde1d16e7e\\\"}},{\\\"key\\\":\\\"upstreamTid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1-6a3e1794-718e192b13c64f9d4389c2a1\\\"}},{\\\"key\\\":\\\"appExpId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"sign-in-webapp\\\"}},{\\\"key\\\":\\\"assetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"75452886709396085\\\"}},{\\\"key\\\":\\\"shellVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"5.290.2\\\"}},{\\\"key\\\":\\\"appPluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"deviceMemory\\\",\\\"value\\\":{\\\"doubleValue\\\":16}},{\\\"key\\\":\\\"cores\\\",\\\"value\\\":{\\\"doubleValue\\\":14}},{\\\"key\\\":\\\"clientMode\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"WEB\\\"}},{\\\"key\\\":\\\"env\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"prod\\\"}},{\\\"key\\\":\\\"pluginId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"identity-authn-core-ui\\\"}},{\\\"key\\\":\\\"pluginAssetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"506672550384311598\\\"}},{\\\"key\\\":\\\"pluginAssetAlias\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Intuit.identity.authn.core\\\"}},{\\\"key\\\":\\\"pluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.1409.2\\\"}},{\\\"key\\\":\\\"widgetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"identity-authn-core-ui/sign-in-sign-up-hosted\\\"}},{\\\"key\\\":\\\"widgetVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.0.0\\\"}},{\\\"key\\\":\\\"widgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"identity-authn-core-ui:identity-authn-core-ui/sign-in-sign-up-hosted@1.0.0:96\\\"}},{\\\"key\\\":\\\"consumingWidgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"referrer\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"route\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"/app/sign-in\\\"}},{\\\"key\\\":\\\"runtime\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"CSR\\\"}},{\\\"key\\\":\\\"hasFocus\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"intuitRumEnabled\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"visibilityState\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"visible\\\"}},{\\\"key\\\":\\\"http.url\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\\\"}},{\\\"key\\\":\\\"http.host\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"accounts.intuit.com\\\"}},{\\\"key\\\":\\\"userAgent\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\\\"}},{\\\"key\\\":\\\"networkEffectiveType\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"4g\\\"}},{\\\"key\\\":\\\"intuit.tracesampler\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"intuit.identity.authn.signin=TraceIdRatioBased{1}\\\"}},{\\\"key\\\":\\\"type\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"interaction\\\"}},{\\\"key\\\":\\\"priority\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"medium\\\"}},{\\\"key\\\":\\\"isSampled\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"mainSpan\\\",\\\"value\\\":{\\\"boolValue\\\":true}}],\\\"droppedAttributesCount\\\":0,\\\"events\\\":[],\\\"droppedEventsCount\\\":0,\\\"status\\\":{\\\"code\\\":0},\\\"links\\\":[],\\\"droppedLinksCount\\\":0}],\\\"instrumentationLibrary\\\":{\\\"name\\\":\\\"LOAD_ACCOUNT_SELECTOR\\\",\\\"version\\\":\\\"*\\\"}},{\\\"spans\\\":[{\\\"traceId\\\":\\\"ng+MtEHKbBHL8JYzA1wMsw==\\\",\\\"spanId\\\":\\\"wlV2MwL0gFs=\\\",\\\"parentSpanId\\\":\\\"bkmx5oC6aqw=\\\",\\\"name\\\":\\\"fetchUserAccounts to Fetch User Accounts successful\\\",\\\"kind\\\":3,\\\"startTimeUnixNano\\\":1782454206063000000,\\\"endTimeUnixNano\\\":1782454211257000000,\\\"attributes\\\":[{\\\"key\\\":\\\"intuitTracePropagation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"intuitInteractionNoBackendCalls\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"operation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"fetchUserAccounts\\\"}},{\\\"key\\\":\\\"details\\\",\\\"value\\\":{\\\"arrayValue\\\":{\\\"values\\\":[]}}},{\\\"key\\\":\\\"intuit-sessionid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"02e52920-edd0-4665-b509-e7bde1d16e7e\\\"}},{\\\"key\\\":\\\"upstreamTid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1-6a3e1794-718e192b13c64f9d4389c2a1\\\"}},{\\\"key\\\":\\\"appExpId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"sign-in-webapp\\\"}},{\\\"key\\\":\\\"assetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"75452886709396085\\\"}},{\\\"key\\\":\\\"shellVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"5.290.2\\\"}},{\\\"key\\\":\\\"appPluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"deviceMemory\\\",\\\"value\\\":{\\\"doubleValue\\\":16}},{\\\"key\\\":\\\"cores\\\",\\\"value\\\":{\\\"doubleValue\\\":14}},{\\\"key\\\":\\\"clientMode\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"WEB\\\"}},{\\\"key\\\":\\\"env\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"prod\\\"}},{\\\"key\\\":\\\"pluginId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector\\\"}},{\\\"key\\\":\\\"pluginAssetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1444547173301316459\\\"}},{\\\"key\\\":\\\"pluginAssetAlias\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Intuit.identity.manage.accountselector\\\"}},{\\\"key\\\":\\\"pluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.142.2\\\"}},{\\\"key\\\":\\\"widgetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector/accountselector\\\"}},{\\\"key\\\":\\\"widgetVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.0.0\\\"}},{\\\"key\\\":\\\"widgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector:account-selector/accountselector@1.0.0:98\\\"}},{\\\"key\\\":\\\"consumingWidgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"referrer\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"route\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"/app/sign-in\\\"}},{\\\"key\\\":\\\"runtime\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"CSR\\\"}},{\\\"key\\\":\\\"hasFocus\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"intuitRumEnabled\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"visibilityState\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"visible\\\"}},{\\\"key\\\":\\\"http.url\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\\\"}},{\\\"key\\\":\\\"http.host\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"accounts.intuit.com\\\"}},{\\\"key\\\":\\\"userAgent\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\\\"}},{\\\"key\\\":\\\"networkEffectiveType\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"4g\\\"}},{\\\"key\\\":\\\"intuit.tracesampler\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"intuit.identity.authn.signin=TraceIdRatioBased{1}\\\"}},{\\\"key\\\":\\\"type\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"markmeasure\\\"}},{\\\"key\\\":\\\"priority\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"medium\\\"}},{\\\"key\\\":\\\"isSampled\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"mainSpan\\\",\\\"value\\\":{\\\"boolValue\\\":false}},{\\\"key\\\":\\\"interactionName\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"fetchUserAccounts\\\"}},{\\\"key\\\":\\\"outcome\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"incomplete\\\"}}],\\\"droppedAttributesCount\\\":0,\\\"events\\\":[],\\\"droppedEventsCount\\\":0,\\\"status\\\":{\\\"code\\\":0},\\\"links\\\":[],\\\"droppedLinksCount\\\":0},{\\\"traceId\\\":\\\"ng+MtEHKbBHL8JYzA1wMsw==\\\",\\\"spanId\\\":\\\"7DAIeWASwmw=\\\",\\\"parentSpanId\\\":\\\"bkmx5oC6aqw=\\\",\\\"name\\\":\\\"fetchUserAccounts to User accounts service fetched successfully\\\",\\\"kind\\\":3,\\\"startTimeUnixNano\\\":1782454206063000000,\\\"endTimeUnixNano\\\":1782454211257000000,\\\"attributes\\\":[{\\\"key\\\":\\\"intuitTracePropagation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"intuitInteractionNoBackendCalls\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"operation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"fetchUserAccounts\\\"}},{\\\"key\\\":\\\"details\\\",\\\"value\\\":{\\\"arrayValue\\\":{\\\"values\\\":[]}}},{\\\"key\\\":\\\"intuit-sessionid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"02e52920-edd0-4665-b509-e7bde1d16e7e\\\"}},{\\\"key\\\":\\\"upstreamTid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1-6a3e1794-718e192b13c64f9d4389c2a1\\\"}},{\\\"key\\\":\\\"appExpId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"sign-in-webapp\\\"}},{\\\"key\\\":\\\"assetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"75452886709396085\\\"}},{\\\"key\\\":\\\"shellVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"5.290.2\\\"}},{\\\"key\\\":\\\"appPluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"deviceMemory\\\",\\\"value\\\":{\\\"doubleValue\\\":16}},{\\\"key\\\":\\\"cores\\\",\\\"value\\\":{\\\"doubleValue\\\":14}},{\\\"key\\\":\\\"clientMode\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"WEB\\\"}},{\\\"key\\\":\\\"env\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"prod\\\"}},{\\\"key\\\":\\\"pluginId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector\\\"}},{\\\"key\\\":\\\"pluginAssetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1444547173301316459\\\"}},{\\\"key\\\":\\\"pluginAssetAlias\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Intuit.identity.manage.accountselector\\\"}},{\\\"key\\\":\\\"pluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.142.2\\\"}},{\\\"key\\\":\\\"widgetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector/accountselector\\\"}},{\\\"key\\\":\\\"widgetVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.0.0\\\"}},{\\\"key\\\":\\\"widgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector:account-selector/accountselector@1.0.0:98\\\"}},{\\\"key\\\":\\\"consumingWidgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"referrer\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"route\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"/app/sign-in\\\"}},{\\\"key\\\":\\\"runtime\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"CSR\\\"}},{\\\"key\\\":\\\"hasFocus\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"intuitRumEnabled\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"visibilityState\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"visible\\\"}},{\\\"key\\\":\\\"http.url\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\\\"}},{\\\"key\\\":\\\"http.host\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"accounts.intuit.com\\\"}},{\\\"key\\\":\\\"userAgent\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\\\"}},{\\\"key\\\":\\\"networkEffectiveType\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"4g\\\"}},{\\\"key\\\":\\\"intuit.tracesampler\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"intuit.identity.authn.signin=TraceIdRatioBased{1}\\\"}},{\\\"key\\\":\\\"type\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"markmeasure\\\"}},{\\\"key\\\":\\\"priority\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"medium\\\"}},{\\\"key\\\":\\\"isSampled\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"mainSpan\\\",\\\"value\\\":{\\\"boolValue\\\":false}},{\\\"key\\\":\\\"interactionName\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"fetchUserAccounts\\\"}},{\\\"key\\\":\\\"outcome\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"incomplete\\\"}}],\\\"droppedAttributesCount\\\":0,\\\"events\\\":[],\\\"droppedEventsCount\\\":0,\\\"status\\\":{\\\"code\\\":0},\\\"links\\\":[],\\\"droppedLinksCount\\\":0},{\\\"traceId\\\":\\\"ng+MtEHKbBHL8JYzA1wMsw==\\\",\\\"spanId\\\":\\\"JJ9PYWu2HYQ=\\\",\\\"parentSpanId\\\":\\\"bkmx5oC6aqw=\\\",\\\"name\\\":\\\"fetchUserAccounts to Accounts fetched\\\",\\\"kind\\\":3,\\\"startTimeUnixNano\\\":1782454206063000000,\\\"endTimeUnixNano\\\":1782454211257000000,\\\"attributes\\\":[{\\\"key\\\":\\\"intuitTracePropagation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"intuitInteractionNoBackendCalls\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"operation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"fetchUserAccounts\\\"}},{\\\"key\\\":\\\"details\\\",\\\"value\\\":{\\\"arrayValue\\\":{\\\"values\\\":[]}}},{\\\"key\\\":\\\"intuit-sessionid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"02e52920-edd0-4665-b509-e7bde1d16e7e\\\"}},{\\\"key\\\":\\\"upstreamTid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1-6a3e1794-718e192b13c64f9d4389c2a1\\\"}},{\\\"key\\\":\\\"appExpId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"sign-in-webapp\\\"}},{\\\"key\\\":\\\"assetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"75452886709396085\\\"}},{\\\"key\\\":\\\"shellVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"5.290.2\\\"}},{\\\"key\\\":\\\"appPluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"deviceMemory\\\",\\\"value\\\":{\\\"doubleValue\\\":16}},{\\\"key\\\":\\\"cores\\\",\\\"value\\\":{\\\"doubleValue\\\":14}},{\\\"key\\\":\\\"clientMode\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"WEB\\\"}},{\\\"key\\\":\\\"env\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"prod\\\"}},{\\\"key\\\":\\\"pluginId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector\\\"}},{\\\"key\\\":\\\"pluginAssetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1444547173301316459\\\"}},{\\\"key\\\":\\\"pluginAssetAlias\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Intuit.identity.manage.accountselector\\\"}},{\\\"key\\\":\\\"pluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.142.2\\\"}},{\\\"key\\\":\\\"widgetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector/accountselector\\\"}},{\\\"key\\\":\\\"widgetVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.0.0\\\"}},{\\\"key\\\":\\\"widgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector:account-selector/accountselector@1.0.0:98\\\"}},{\\\"key\\\":\\\"consumingWidgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"referrer\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"route\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"/app/sign-in\\\"}},{\\\"key\\\":\\\"runtime\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"CSR\\\"}},{\\\"key\\\":\\\"hasFocus\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"intuitRumEnabled\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"visibilityState\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"visible\\\"}},{\\\"key\\\":\\\"http.url\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\\\"}},{\\\"key\\\":\\\"http.host\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"accounts.intuit.com\\\"}},{\\\"key\\\":\\\"userAgent\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\\\"}},{\\\"key\\\":\\\"networkEffectiveType\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"4g\\\"}},{\\\"key\\\":\\\"intuit.tracesampler\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"intuit.identity.authn.signin=TraceIdRatioBased{1}\\\"}},{\\\"key\\\":\\\"type\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"markmeasure\\\"}},{\\\"key\\\":\\\"priority\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"medium\\\"}},{\\\"key\\\":\\\"isSampled\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"mainSpan\\\",\\\"value\\\":{\\\"boolValue\\\":false}},{\\\"key\\\":\\\"interactionName\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"fetchUserAccounts\\\"}},{\\\"key\\\":\\\"outcome\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"incomplete\\\"}}],\\\"droppedAttributesCount\\\":0,\\\"events\\\":[],\\\"droppedEventsCount\\\":0,\\\"status\\\":{\\\"code\\\":0},\\\"links\\\":[],\\\"droppedLinksCount\\\":0},{\\\"traceId\\\":\\\"ng+MtEHKbBHL8JYzA1wMsw==\\\",\\\"spanId\\\":\\\"bkmx5oC6aqw=\\\",\\\"name\\\":\\\"fetchUserAccounts\\\",\\\"kind\\\":3,\\\"startTimeUnixNano\\\":1782454206062000000,\\\"endTimeUnixNano\\\":1782454211257000000,\\\"attributes\\\":[{\\\"key\\\":\\\"intuitTracePropagation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"outcome\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"success\\\"}},{\\\"key\\\":\\\"intuitInteractionNoBackendCalls\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"operation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"fetchUserAccounts\\\"}},{\\\"key\\\":\\\"details\\\",\\\"value\\\":{\\\"arrayValue\\\":{\\\"values\\\":[]}}},{\\\"key\\\":\\\"intuit-sessionid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"02e52920-edd0-4665-b509-e7bde1d16e7e\\\"}},{\\\"key\\\":\\\"upstreamTid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1-6a3e1794-718e192b13c64f9d4389c2a1\\\"}},{\\\"key\\\":\\\"appExpId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"sign-in-webapp\\\"}},{\\\"key\\\":\\\"assetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"75452886709396085\\\"}},{\\\"key\\\":\\\"shellVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"5.290.2\\\"}},{\\\"key\\\":\\\"appPluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"deviceMemory\\\",\\\"value\\\":{\\\"doubleValue\\\":16}},{\\\"key\\\":\\\"cores\\\",\\\"value\\\":{\\\"doubleValue\\\":14}},{\\\"key\\\":\\\"clientMode\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"WEB\\\"}},{\\\"key\\\":\\\"env\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"prod\\\"}},{\\\"key\\\":\\\"pluginId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector\\\"}},{\\\"key\\\":\\\"pluginAssetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1444547173301316459\\\"}},{\\\"key\\\":\\\"pluginAssetAlias\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Intuit.identity.manage.accountselector\\\"}},{\\\"key\\\":\\\"pluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.142.2\\\"}},{\\\"key\\\":\\\"widgetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector/accountselector\\\"}},{\\\"key\\\":\\\"widgetVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.0.0\\\"}},{\\\"key\\\":\\\"widgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector:account-selector/accountselector@1.0.0:98\\\"}},{\\\"key\\\":\\\"consumingWidgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"referrer\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"route\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"/app/sign-in\\\"}},{\\\"key\\\":\\\"runtime\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"CSR\\\"}},{\\\"key\\\":\\\"hasFocus\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"intuitRumEnabled\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"visibilityState\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"visible\\\"}},{\\\"key\\\":\\\"http.url\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\\\"}},{\\\"key\\\":\\\"http.host\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"accounts.intuit.com\\\"}},{\\\"key\\\":\\\"userAgent\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\\\"}},{\\\"key\\\":\\\"networkEffectiveType\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"4g\\\"}},{\\\"key\\\":\\\"intuit.tracesampler\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"intuit.identity.authn.signin=TraceIdRatioBased{1}\\\"}},{\\\"key\\\":\\\"type\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"interaction\\\"}},{\\\"key\\\":\\\"priority\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"medium\\\"}},{\\\"key\\\":\\\"isSampled\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"mainSpan\\\",\\\"value\\\":{\\\"boolValue\\\":true}}],\\\"droppedAttributesCount\\\":0,\\\"events\\\":[],\\\"droppedEventsCount\\\":0,\\\"status\\\":{\\\"code\\\":0},\\\"links\\\":[],\\\"droppedLinksCount\\\":0}],\\\"instrumentationLibrary\\\":{\\\"name\\\":\\\"fetchUserAccounts\\\",\\\"version\\\":\\\"*\\\"}},{\\\"spans\\\":[{\\\"traceId\\\":\\\"Xdlgzp0/HVohnEhynO5Nuw==\\\",\\\"spanId\\\":\\\"lvHn9GDXU/M=\\\",\\\"name\\\":\\\"accountSelectorLoaded\\\",\\\"kind\\\":3,\\\"startTimeUnixNano\\\":1782454206058000100,\\\"endTimeUnixNano\\\":1782454211268000000,\\\"attributes\\\":[{\\\"key\\\":\\\"intuitTracePropagation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"outcome\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"success\\\"}},{\\\"key\\\":\\\"intuitInteractionNoBackendCalls\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"operation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"accountSelectorLoaded\\\"}},{\\\"key\\\":\\\"details\\\",\\\"value\\\":{\\\"arrayValue\\\":{\\\"values\\\":[]}}},{\\\"key\\\":\\\"intuit-sessionid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"02e52920-edd0-4665-b509-e7bde1d16e7e\\\"}},{\\\"key\\\":\\\"upstreamTid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1-6a3e1794-718e192b13c64f9d4389c2a1\\\"}},{\\\"key\\\":\\\"appExpId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"sign-in-webapp\\\"}},{\\\"key\\\":\\\"assetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"75452886709396085\\\"}},{\\\"key\\\":\\\"shellVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"5.290.2\\\"}},{\\\"key\\\":\\\"appPluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"deviceMemory\\\",\\\"value\\\":{\\\"doubleValue\\\":16}},{\\\"key\\\":\\\"cores\\\",\\\"value\\\":{\\\"doubleValue\\\":14}},{\\\"key\\\":\\\"clientMode\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"WEB\\\"}},{\\\"key\\\":\\\"env\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"prod\\\"}},{\\\"key\\\":\\\"pluginId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector\\\"}},{\\\"key\\\":\\\"pluginAssetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1444547173301316459\\\"}},{\\\"key\\\":\\\"pluginAssetAlias\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Intuit.identity.manage.accountselector\\\"}},{\\\"key\\\":\\\"pluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.142.2\\\"}},{\\\"key\\\":\\\"widgetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector/accountselector\\\"}},{\\\"key\\\":\\\"widgetVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.0.0\\\"}},{\\\"key\\\":\\\"widgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"account-selector:account-selector/accountselector@1.0.0:98\\\"}},{\\\"key\\\":\\\"consumingWidgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"referrer\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"route\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"/app/sign-in\\\"}},{\\\"key\\\":\\\"runtime\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"CSR\\\"}},{\\\"key\\\":\\\"hasFocus\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"intuitRumEnabled\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"visibilityState\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"visible\\\"}},{\\\"key\\\":\\\"http.url\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\\\"}},{\\\"key\\\":\\\"http.host\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"accounts.intuit.com\\\"}},{\\\"key\\\":\\\"userAgent\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\\\"}},{\\\"key\\\":\\\"networkEffectiveType\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"4g\\\"}},{\\\"key\\\":\\\"intuit.tracesampler\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"intuit.identity.authn.signin=TraceIdRatioBased{1}\\\"}},{\\\"key\\\":\\\"type\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"interaction\\\"}},{\\\"key\\\":\\\"priority\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"medium\\\"}},{\\\"key\\\":\\\"isSampled\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"mainSpan\\\",\\\"value\\\":{\\\"boolValue\\\":true}}],\\\"droppedAttributesCount\\\":0,\\\"events\\\":[],\\\"droppedEventsCount\\\":0,\\\"status\\\":{\\\"code\\\":0},\\\"links\\\":[],\\\"droppedLinksCount\\\":0}],\\\"instrumentationLibrary\\\":{\\\"name\\\":\\\"accountSelectorLoaded\\\",\\\"version\\\":\\\"*\\\"}},{\\\"spans\\\":[{\\\"traceId\\\":\\\"vJfz1ZXXnfZMTCRsAL4fPQ==\\\",\\\"spanId\\\":\\\"Z/8r2VL5RtA=\\\",\\\"name\\\":\\\"ACCOUNT_SELECTOR_SELECT_EXISTING_COMPANY_SUCCESS\\\",\\\"kind\\\":3,\\\"startTimeUnixNano\\\":1782454211322000100,\\\"endTimeUnixNano\\\":1782454211322000100,\\\"attributes\\\":[{\\\"key\\\":\\\"intuitTracePropagation\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"false\\\"}},{\\\"key\\\":\\\"outcome\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"success\\\"}},{\\\"key\\\":\\\"intuitInteractionNoBackendCalls\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"details\\\",\\\"value\\\":{\\\"arrayValue\\\":{\\\"values\\\":[]}}},{\\\"key\\\":\\\"intuit-sessionid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"02e52920-edd0-4665-b509-e7bde1d16e7e\\\"}},{\\\"key\\\":\\\"upstreamTid\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1-6a3e1794-718e192b13c64f9d4389c2a1\\\"}},{\\\"key\\\":\\\"appExpId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"sign-in-webapp\\\"}},{\\\"key\\\":\\\"assetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"75452886709396085\\\"}},{\\\"key\\\":\\\"shellVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"5.290.2\\\"}},{\\\"key\\\":\\\"appPluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"deviceMemory\\\",\\\"value\\\":{\\\"doubleValue\\\":16}},{\\\"key\\\":\\\"cores\\\",\\\"value\\\":{\\\"doubleValue\\\":14}},{\\\"key\\\":\\\"clientMode\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"WEB\\\"}},{\\\"key\\\":\\\"env\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"prod\\\"}},{\\\"key\\\":\\\"pluginId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"identity-authn-core-ui\\\"}},{\\\"key\\\":\\\"pluginAssetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"506672550384311598\\\"}},{\\\"key\\\":\\\"pluginAssetAlias\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Intuit.identity.authn.core\\\"}},{\\\"key\\\":\\\"pluginVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.1409.2\\\"}},{\\\"key\\\":\\\"widgetId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"identity-authn-core-ui/sign-in-sign-up-hosted\\\"}},{\\\"key\\\":\\\"widgetVersion\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"1.0.0\\\"}},{\\\"key\\\":\\\"widgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"identity-authn-core-ui:identity-authn-core-ui/sign-in-sign-up-hosted@1.0.0:96\\\"}},{\\\"key\\\":\\\"consumingWidgetInstanceId\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"referrer\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"\\\"}},{\\\"key\\\":\\\"route\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"/app/sign-in\\\"}},{\\\"key\\\":\\\"runtime\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"CSR\\\"}},{\\\"key\\\":\\\"hasFocus\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"intuitRumEnabled\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"true\\\"}},{\\\"key\\\":\\\"visibilityState\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"visible\\\"}},{\\\"key\\\":\\\"http.url\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\\\"}},{\\\"key\\\":\\\"http.host\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"accounts.intuit.com\\\"}},{\\\"key\\\":\\\"userAgent\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\\\"}},{\\\"key\\\":\\\"networkEffectiveType\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"4g\\\"}},{\\\"key\\\":\\\"intuit.tracesampler\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"intuit.identity.authn.signin=TraceIdRatioBased{1}\\\"}},{\\\"key\\\":\\\"type\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"interaction\\\"}},{\\\"key\\\":\\\"priority\\\",\\\"value\\\":{\\\"stringValue\\\":\\\"medium\\\"}},{\\\"key\\\":\\\"isSampled\\\",\\\"value\\\":{\\\"boolValue\\\":true}},{\\\"key\\\":\\\"mainSpan\\\",\\\"value\\\":{\\\"boolValue\\\":true}}],\\\"droppedAttributesCount\\\":0,\\\"events\\\":[],\\\"droppedEventsCount\\\":0,\\\"status\\\":{\\\"code\\\":0},\\\"links\\\":[],\\\"droppedLinksCount\\\":0}],\\\"instrumentationLibrary\\\":{\\\"name\\\":\\\"ACCOUNT_SELECTOR_SELECT_EXISTING_COMPANY_SUCCESS\\\",\\\"version\\\":\\\"*\\\"}}]}]}\",\"headers\":{\"Content-Type\":\"application/json\",\"intuit_tid\":\"68838802-92d5-425a-bab8-c1c150da1945\",\"Accept\":\"application/json\",\"x-opentelemetry-outgoing-request\":\"1\",\"Authorization\":\"Intuit_APIKey intuit_apikey=prdakyresdqEXlPtPHBH9bBofxqx1e7Z8T2iJJmZ, intuit_apkey_version=1.0\",\"intuit-sessionid\":\"02e52920-edd0-4665-b509-e7bde1d16e7e\"},\"params\":{},\"lastError\":{},\"_retryCount\":0,\"_retryAfterMs\":0,\"_dispatchInProgress\":false,\"_id\":\"RUM_otelNetworkRequestStorage_53c564ac-b83f-4ff1-bf9a-b4a6851db9a6\",\"_createdAt\":1782454212918,\"_updatedAt\":1782454212918,\"_persisted\":true}"
+        },
+        {
+          "name": "_grecaptcha",
+          "value": "09AKhCRwiNgDv1FssHtStrg8rhrE8_zFyO94ncgMe0MJc6AkOCRjsuG_A5C86DYQuyQrHG5eVzOue7kyBr3XSZqdPFUXMJyH8eXrCxjapOyw63U2vVqMgk2LMT9UCBnq3F"
+        },
+        {
+          "name": "recentsList_9411836737981971",
+          "value": "{\"recentSelections\":[\"9341453164046000\"],\"productInfo\":{}}"
+        },
+        {
+          "name": "ividEchoed",
+          "value": "779ab0f4-b1b6-4628-9130-bd3b2a352c76"
+        },
+        {
+          "name": "RUM_default_c379e75d-0fcb-4430-a206-8ee37a2d19b9",
+          "value": "{\"item\":{\"id\":\"f964d77d-6947-44a2-961e-22ca1efad666\",\"name\":\"LOAD_ACCOUNT_SELECTOR\",\"totalTime\":14,\"measures\":{\"success\":14},\"details\":[],\"measureStartTimes\":{\"success\":\"2026-06-26T06:10:06.009Z\"},\"degraded\":false,\"outcome\":\"success\",\"appProps\":{},\"context\":{\"pluginId\":\"identity-authn-core-ui\",\"widgetId\":\"identity-authn-core-ui/sign-in-sign-up-hosted\",\"widgetInstanceId\":\"identity-authn-core-ui:identity-authn-core-ui/sign-in-sign-up-hosted@1.0.0:96\",\"consumingWidgetInstanceId\":\"\",\"sandboxType\":\"widget\",\"widgetVersion\":\"1.0.0\",\"consumingPluginId\":\"identity-authn-core-ui\",\"consumingWidgetId\":\"\",\"namespace\":\"\",\"appExpId\":\"sign-in-webapp\",\"route\":\"/app/sign-in\",\"url\":\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\",\"hasFocus\":true,\"visibilityState\":\"visible\",\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\",\"upstreamTid\":\"1-6a3e1794-718e192b13c64f9d4389c2a1\",\"o11yRumWebSessionId\":\"02e52920-edd0-4665-b509-e7bde1d16e7e\",\"browserInfo\":{\"currentBrowser\":{\"name\":\"Chrome\",\"version\":124,\"device\":{\"type\":\"desktop\"}},\"isYellowBrowser\":false,\"isRedBrowser\":false,\"browserType\":\"green\",\"isScraperBot\":false},\"ecmaScript\":2022,\"shellVersion\":\"5.290.2\",\"deviceMemory\":16,\"cores\":14,\"clientMode\":\"WEB\",\"runtime\":\"CSR\",\"connectionType\":\"4g\",\"navigationType\":\"navigate\",\"downlink\":10,\"isOffline\":false,\"assetId\":\"75452886709396085\",\"intuitRumEnabled\":\"true\",\"serverContext\":{\"experimentalTemplateName\":\"index-v4.html\",\"routeEnabledForPreload\":false},\"browserLocale\":\"zh-CN\",\"browserRegion\":\"CN\",\"browserTimezone\":\"Asia/Singapore\",\"experiments\":{\"externalPreloadingEnabled\":true,\"webWorkerPreloadingEnabled\":false},\"pluginVersion\":\"1.1409.2\",\"pluginLabel\":\"identity-authn-core-ui\",\"traceId\":\"96c80b4822bb88035e5f10eb39e99491\",\"spanId\":\"bd61b721c49cdadc\",\"isSampled\":false},\"metadata\":{\"intuitInteractionNoBackendCalls\":\"true\",\"retryCount\":0},\"component\":\"IntuitPerformanceSDK\",\"env\":\"prod\",\"timestamp\":1782454206023,\"eventType\":\"PERFORMANCE\",\"oilProps\":{\"timestamp\":1782454206023,\"destination\":[\"Intuit.identity.authn.signin\"]}},\"timestamp\":1782454206023}"
+        },
+        {
+          "name": "analytics_session_id.last_access",
+          "value": "1782454211361"
+        },
+        {
+          "name": "intuit_dtc_last_accessed",
+          "value": "1782454211345"
+        },
+        {
+          "name": "RUM_default_c07bb90f-51d4-4f3c-9aa1-a1913e31fcc1",
+          "value": "{\"item\":{\"id\":\"2781407f-a832-4e70-9b39-6b79a5502bd8\",\"name\":\"sign_in_with_password\",\"totalTime\":777,\"measures\":{\"success\":777},\"details\":[],\"measureStartTimes\":{\"success\":\"2026-06-26T06:10:04.790Z\"},\"degraded\":false,\"outcome\":\"success\",\"appProps\":{},\"context\":{\"pluginId\":\"identity-authn-core-ui\",\"widgetId\":\"identity-authn-core-ui/sign-in-sign-up-hosted\",\"widgetInstanceId\":\"identity-authn-core-ui:identity-authn-core-ui/sign-in-sign-up-hosted@1.0.0:96\",\"consumingWidgetInstanceId\":\"\",\"sandboxType\":\"widget\",\"widgetVersion\":\"1.0.0\",\"consumingPluginId\":\"identity-authn-core-ui\",\"consumingWidgetId\":\"\",\"namespace\":\"\",\"appExpId\":\"sign-in-webapp\",\"route\":\"/app/sign-in\",\"url\":\"https://accounts.intuit.com/app/sign-in?app_group=QBO&asset_alias=Intuit.accounting.core.qbowebapp&app_environment=prod&iux_redirect_reason=UNAUTHENTICATED\",\"hasFocus\":true,\"visibilityState\":\"visible\",\"userAgent\":\"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36\",\"upstreamTid\":\"1-6a3e1794-718e192b13c64f9d4389c2a1\",\"o11yRumWebSessionId\":\"02e52920-edd0-4665-b509-e7bde1d16e7e\",\"browserInfo\":{\"currentBrowser\":{\"name\":\"Chrome\",\"version\":124,\"device\":{\"type\":\"desktop\"}},\"isYellowBrowser\":false,\"isRedBrowser\":false,\"browserType\":\"green\",\"isScraperBot\":false},\"ecmaScript\":2022,\"shellVersion\":\"5.290.2\",\"deviceMemory\":16,\"cores\":14,\"clientMode\":\"WEB\",\"runtime\":\"CSR\",\"connectionType\":\"4g\",\"navigationType\":\"navigate\",\"downlink\":10,\"isOffline\":false,\"assetId\":\"75452886709396085\",\"intuitRumEnabled\":\"true\",\"serverContext\":{\"experimentalTemplateName\":\"index-v4.html\",\"routeEnabledForPreload\":false},\"browserLocale\":\"zh-CN\",\"browserRegion\":\"CN\",\"browserTimezone\":\"Asia/Singapore\",\"experiments\":{\"externalPreloadingEnabled\":true,\"webWorkerPreloadingEnabled\":false},\"pluginVersion\":\"1.1409.2\",\"pluginLabel\":\"identity-authn-core-ui\",\"traceId\":\"0e415216b5e0c6db818709d61378db44\",\"spanId\":\"04a9ed20e40876dc\",\"isSampled\":false},\"metadata\":{\"intuitInteractionNoBackendCalls\":\"false\",\"offeringId\":\"Intuit.sbe.salsa.default\",\"api\":\"identityV2\",\"operation\":\"v2-sign-in-with-password\"},\"component\":\"IntuitPerformanceSDK\",\"env\":\"prod\",\"timestamp\":1782454205584,\"eventType\":\"PERFORMANCE\",\"oilProps\":{\"timestamp\":1782454205584,\"destination\":[\"Intuit.identity.authn.signin\"]}},\"timestamp\":1782454205585}"
+        },
+        {
+          "name": "ed73f20edbf2b74",
+          "value": "0:1:1782401146862:1782401146862:2d3894d0669bbd38c89b19288ddc42c0"
+        },
+        {
+          "name": "analytics_session_id",
+          "value": "1782454176276"
+        },
+        {
+          "name": "ajs_anonymous_id",
+          "value": "\"779ab0f4-b1b6-4628-9130-bd3b2a352c76\""
+        },
+        {
+          "name": "ajs_user_id",
+          "value": "null"
+        }
+      ]
+    },
+    {
+      "origin": "https://qfp.intuit.com",
+      "localStorage": [
+        {
+          "name": "ed73f20edbf2b73",
+          "value": "8589e0463db74d15811c8cd84bd40191_1937921151046"
+        },
+        {
+          "name": "5718FABB002E",
+          "value": "AAxJjrMHCKZM6Vhb9CTR1HGECMSfs9x7OcVlQcgF60oe54knCmZNT9xJ1mQUA6tjJByPwYtuMAIgdESveLlH_MkIMC3acg"
+        }
+      ]
+    },
+    {
+      "origin": "https://www.google.com",
+      "localStorage": [
+        {
+          "name": "rc::a",
+          "value": "MWF5bWw0Njc0OHh3bg=="
+        },
+        {
+          "name": "rc::f",
+          "value": "0aAL5LEXvNjKjPUpUQPZMiPl5r1DWyvXtvA4YgDF7w5cAqq456w5YcglACFlnyfkBPoqK_OvuhuwLeO4TzD3wbW43DbO1t"
+        }
+      ]
+    }
+  ]
+}

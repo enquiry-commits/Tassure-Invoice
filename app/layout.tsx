@@ -4,7 +4,7 @@ import './globals.css';
 import Sidebar from '@/components/Sidebar';
 
 export const metadata: Metadata = {
-  title: 'Tassure Billing System',
+  title: 'Tassure Corporate Services System',
   description: 'Tassure Asia billing automation dashboard',
 };
 
@@ -33,7 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               priority
             />
             <span style={{ fontSize: '18px', fontWeight: 800, color: '#1e3a5f', letterSpacing: '-0.3px' }}>
-              Billing System
+              Tassure Corporate Services System
             </span>
           </div>
 

@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { thisYearSGT } from '@/lib/date';
 
 function normalize(name: string) {
   return name
     .toLowerCase()
-    .replace(/\bpte\.?\s*ltd\.?\b/g, '')
-    .replace(/\bsdn\.?\s*bhd\.?\b/g, '')
-    .replace(/\bllp\b/g, '')
-    .replace(/[.\-,()]/g, ' ')
+    .replace(/\bpte\.?\s*ltd\.?\b/gi, '')
+    .replace(/\bsdn\.?\s*bhd\.?\b/gi, '')
+    .replace(/\bllp\b/gi, '')
+    .replace(/\bprivate\s+limited\b/gi, '')
+    .replace(/\blimited\b/gi, '')
+    .replace(/[.\-,()&@]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -16,22 +19,24 @@ function matchScore(a: string, b: string): number {
   const na = normalize(a);
   const nb = normalize(b);
   if (na === nb) return 100;
-  if (na.includes(nb) || nb.includes(na)) return 80;
-  const wa = new Set(na.split(' ').filter(Boolean));
-  const wb = new Set(nb.split(' ').filter(Boolean));
+  if (na.includes(nb) || nb.includes(na)) return 85;
+  const wa = new Set(na.split(' ').filter(w => w.length > 1));
+  const wb = new Set(nb.split(' ').filter(w => w.length > 1));
+  if (wa.size === 0 || wb.size === 0) return 0;
   const common = [...wa].filter(w => wb.has(w)).length;
   const total  = Math.max(wa.size, wb.size);
-  return total > 0 ? Math.round((common / total) * 70) : 0;
+  return Math.round((common / total) * 70);
 }
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const year  = searchParams.get('year') ?? new Date().getFullYear().toString();
-  const type  = searchParams.get('type') ?? 'all'; // 'nd' | 'address' | 'ar' | 'agm' | 'all'
+  const year   = searchParams.get('year') ?? thisYearSGT().toString();
+  const type   = searchParams.get('type') ?? 'all';
+  const status = searchParams.get('status') ?? 'all'; // NOT_BILLED | PAID | INVOICED_UNPAID | all
 
   const supabase = createAdminClient();
 
-  // ── Fetch QB invoices for the year
+  // ── QB invoices for the year ──────────────────────────────────────────────
   const { data: invoices, error: invErr } = await supabase
     .from('quickbooks_invoices')
     .select('invoice_no, txn_date, customer_name, total_amt, balance, status')
@@ -39,122 +44,108 @@ export async function GET(req: NextRequest) {
     .lte('txn_date', `${year}-12-31`);
   if (invErr) return NextResponse.json({ error: invErr.message }, { status: 500 });
 
-  // ── Fetch companies
-  const { data: allCompanies, error: compErr } = await supabase
+  // ── Companies with service flags ──────────────────────────────────────────
+  const { data: companies, error: compErr } = await supabase
     .from('companies')
-    .select('id, company_name, uses_address, internal_id');
+    .select('id, company_name, has_annual_return, has_agm, has_xbrl, has_nd, has_accounts, has_tax, uses_address, is_active, fye_month, pic')
+    .eq('is_active', true);
   if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
 
-  // ── Fetch AR + AGM records for the year (Teamwork source of truth)
-  const { data: dueDateRecords } = await supabase
-    .from('annual_returns')
-    .select('entity_name, year, fye, due_date, status, event_type')
-    .eq('year', parseInt(year));
+  // ── AR reminder workflow data (for filing status) ─────────────────────────
+  const { data: arRows } = await supabase
+    .from('ar_reminder')
+    .select('entity_name, fye_month, fye_year, ar_status, filling_date, due_date');
 
-  const arRecords  = (dueDateRecords ?? []).filter(r => r.event_type === 'AR');
-  const agmRecords = (dueDateRecords ?? []).filter(r => r.event_type === 'AGM');
-
-  // ── Fetch ND appointments active in the selected year
-  const { data: ndAppointments } = await supabase
-    .from('nd_appointments')
-    .select('company_name, appointment_date, cessation_date')
-    .lte('appointment_date', `${year}-12-31`);
-
-  // Only ND still active during the selected year
-  const activeNd = (ndAppointments ?? []).filter(nd => {
-    if (!nd.appointment_date) return false;
-    if (nd.cessation_date && nd.cessation_date < `${year}-01-01`) return false;
-    return true;
-  });
-
-  // Calculate the renewal date for each ND in the selected year
-  // e.g. appointed 2022-04-28 → year 2025 renewal = 2025-04-28
-  function ndRenewalDate(appointmentDate: string, yr: string): string {
-    const [, mm, dd] = appointmentDate.split('-');
-    return `${yr}-${mm}-${dd}`;
+  // Build lookup: normalized company name → AR record
+  const arLookup = new Map<string, typeof arRows extends (infer T)[] | null ? T : never>();
+  for (const row of arRows ?? []) {
+    if (row.entity_name) arLookup.set(normalize(row.entity_name), row);
   }
 
-  const arSet  = new Set((arRecords).map(r => normalize(r.entity_name)));
-  const agmSet = new Set((agmRecords).map(r => normalize(r.entity_name)));
-  const ndSet  = new Set(activeNd.map(nd => normalize(nd.company_name)));
+  // Pre-index QB invoices by normalized customer name for fast lookup
+  const invoicesByNorm = new Map<string, typeof invoices extends (infer T)[] | null ? T[] : never[]>();
+  for (const inv of invoices ?? []) {
+    const n = normalize(inv.customer_name);
+    if (!invoicesByNorm.has(n)) invoicesByNorm.set(n, []);
+    invoicesByNorm.get(n)!.push(inv);
+  }
 
-  // ── Build company result list
-  const results = (allCompanies ?? []).map(company => {
+  // ── Build results ─────────────────────────────────────────────────────────
+  const results = (companies ?? []).map(company => {
     const normName = normalize(company.company_name);
 
-    const hasAR  = arSet.has(normName)  || arRecords.some(r  => matchScore(company.company_name, r.entity_name)  >= 70);
-    const hasAGM = agmSet.has(normName) || agmRecords.some(r => matchScore(company.company_name, r.entity_name) >= 70);
-    const ndMatch = ndSet.has(normName)
-      ? activeNd.find(nd => normalize(nd.company_name) === normName)
-      : activeNd.find(nd => matchScore(company.company_name, nd.company_name) >= 70);
-    const hasND      = !!ndMatch;
-    const hasAddress = company.uses_address === true;
+    // Service flags (from companies master — initialized by QB history)
+    const hasAR      = company.has_annual_return === true;
+    const hasAGM     = company.has_agm           === true;
+    const hasXBRL    = company.has_xbrl          === true;
+    const hasND      = company.has_nd            === true;
+    const hasAcct    = company.has_accounts      === true;
+    const hasTax     = company.has_tax           === true;
+    const hasAddress = company.uses_address      === true;
 
-    // Filter by requested type
+    // Filter by service type
     if (type === 'ar'      && !hasAR)      return null;
     if (type === 'agm'     && !hasAGM)     return null;
     if (type === 'nd'      && !hasND)      return null;
     if (type === 'address' && !hasAddress) return null;
-    // 'all' — only show companies that have at least one service
-    if (type === 'all' && !hasAR && !hasAGM && !hasND && !hasAddress) return null;
+    if (type === 'accounts'&& !hasAcct)    return null;
+    if (type === 'tax'     && !hasTax)     return null;
 
-    // Match QB invoices to this company
-    const matches = (invoices ?? [])
-      .map(inv => ({ inv, score: matchScore(company.company_name, inv.customer_name) }))
-      .filter(m => m.score >= 70)
-      .sort((a, b) => b.score - a.score);
+    // Match QB invoices by name (exact first, then fuzzy)
+    let invoiceList = invoicesByNorm.get(normName) ?? [];
+    if (invoiceList.length === 0) {
+      // Fuzzy fallback — scan all invoices
+      invoiceList = (invoices ?? [])
+        .map(inv => ({ inv, score: matchScore(company.company_name, inv.customer_name) }))
+        .filter(m => m.score >= 70)
+        .sort((a, b) => b.score - a.score)
+        .map(m => m.inv);
+    }
 
-    const invoiceList = matches.map(m => m.inv);
-    const hasPaid     = invoiceList.some(i => i.status === 'Paid');
-    const hasOpen     = invoiceList.some(i => i.status === 'Open' || i.status === 'Overdue');
+    const hasPaid = invoiceList.some(i => i.status === 'Paid');
+    const hasOpen = invoiceList.some(i => i.status === 'Open' || i.status === 'Overdue');
     const totalBilled = invoiceList.reduce((s, i) => s + (i.total_amt ?? 0), 0);
 
-    let billingStatus: string;
-    if (invoiceList.length === 0) billingStatus = 'NOT_BILLED';
-    else if (hasPaid)             billingStatus = 'PAID';
-    else if (hasOpen)             billingStatus = 'INVOICED_UNPAID';
-    else                          billingStatus = 'UNKNOWN';
+    let billingStatus: 'NOT_BILLED' | 'PAID' | 'INVOICED_UNPAID' | 'UNKNOWN';
+    if      (invoiceList.length === 0) billingStatus = 'NOT_BILLED';
+    else if (hasPaid)                  billingStatus = 'PAID';
+    else if (hasOpen)                  billingStatus = 'INVOICED_UNPAID';
+    else                               billingStatus = 'UNKNOWN';
 
-    // Per-event status from Teamwork
-    const arRecord  = arRecords.find(r  => matchScore(company.company_name, r.entity_name)  >= 70);
-    const agmRecord = agmRecords.find(r => matchScore(company.company_name, r.entity_name) >= 70);
+    // Filter by billing status
+    if (status !== 'all' && billingStatus !== status) return null;
 
-    // ND renewal date for the selected year
-    const ndRenewal = ndMatch ? ndRenewalDate(ndMatch.appointment_date, year) : null;
-    const today = new Date().toISOString().slice(0, 10);
-    const ndRenewalPast = ndRenewal ? ndRenewal <= today : false;
+    // AR workflow status from ar_reminder
+    const arRecord = arLookup.get(normName)
+      ?? arRows?.find(r => r.entity_name && matchScore(company.company_name, r.entity_name) >= 70);
+
+    const arFiled  = !!(arRecord?.filling_date || arRecord?.ar_status === 'Yes');
 
     return {
       companyId:    company.id,
       companyName:  company.company_name,
-      services: {
-        ar:      hasAR,
-        agm:     hasAGM,
-        nd:      hasND,
-        address: hasAddress,
-      },
-      arStatus:         arRecord?.status   ?? null,
-      arDueDate:        arRecord?.due_date ?? null,
-      agmStatus:        agmRecord?.status   ?? null,
-      agmDueDate:       agmRecord?.due_date ?? null,
-      ndAppointedDate:  ndMatch?.appointment_date ?? null,
-      ndRenewalDate:    ndRenewal,
-      ndRenewalPast,
+      fye:          company.fye_month ?? '—',
+      pic:          company.pic ?? null,
+      services: { ar: hasAR, agm: hasAGM, xbrl: hasXBRL, nd: hasND, accounts: hasAcct, tax: hasTax, address: hasAddress },
+      arFiled,
+      arDueDate:   arRecord?.due_date ?? null,
       billingStatus,
-      invoiceCount:  invoiceList.length,
+      invoiceCount: invoiceList.length,
       totalBilled,
-      invoices:      invoiceList,
+      invoices:     invoiceList.slice(0, 10),
     };
   }).filter(Boolean);
 
+  const all = results as NonNullable<typeof results[0]>[];
+
   const summary = {
-    year,
-    type,
-    total:          results.length,
-    notBilled:      results.filter(r => r!.billingStatus === 'NOT_BILLED').length,
-    paid:           results.filter(r => r!.billingStatus === 'PAID').length,
-    invoicedUnpaid: results.filter(r => r!.billingStatus === 'INVOICED_UNPAID').length,
+    year, type,
+    total:          all.length,
+    notBilled:      all.filter(r => r.billingStatus === 'NOT_BILLED').length,
+    paid:           all.filter(r => r.billingStatus === 'PAID').length,
+    invoicedUnpaid: all.filter(r => r.billingStatus === 'INVOICED_UNPAID').length,
+    totalRevenue:   all.reduce((s, r) => s + r.totalBilled, 0),
   };
 
-  return NextResponse.json({ summary, companies: results });
+  return NextResponse.json({ summary, companies: all });
 }

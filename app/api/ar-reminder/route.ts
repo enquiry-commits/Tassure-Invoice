@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { todaySGT } from '@/lib/date';
 
 const EDITABLE_FIELDS = new Set([
   'reminder_note', 'prepared_date', 'date_of_agm', 'agm_held_date',
@@ -38,39 +39,48 @@ export async function GET(req: NextRequest) {
 
   const supabase = createAdminClient();
 
-  // ── Core AR reminder records ──────────────────────────────────────────────
-  const { data: arRows, error } = await supabase
-    .from('ar_reminder')
-    .select('*')
-    .eq('fye_month', month)
-    .eq('fye_year', year)
-    .order('entity_name');
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Supabase caps a single request at 1000 rows; the invoice-item table is far
+  // larger (7900+ rows), so the 3-year QB items query MUST page or service
+  // detection silently sees only an arbitrary 1000-row slice.
+  async function pageAll<T>(makeQuery: () => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
+    const out: T[] = [];
+    let fromIdx = 0;
+    for (;;) {
+      const { data } = await (makeQuery() as unknown as { range: (a: number, b: number) => PromiseLike<{ data: T[] | null }> }).range(fromIdx, fromIdx + 999);
+      if (!data?.length) break;
+      out.push(...data);
+      if (data.length < 1000) break;
+      fromIdx += 1000;
+    }
+    return out;
+  }
 
+  // ── Parallel fetch: all queries at once ──────────────────────────────────
+  const [
+    { data: arRows, error },
+    { data: companies },
+    { data: activeNDs },
+    { data: qbInvoices },
+    qbItems,
+  ] = await Promise.all([
+    supabase.from('ar_reminder').select('*').eq('fye_month', month).eq('fye_year', year).order('entity_name'),
+    supabase.from('companies').select('id, company_name, has_xbrl, has_nd, has_accounts, has_tax, uses_address, has_annual_return, has_agm'),
+    supabase.from('nd_appointments').select('company_name, appointment_date, nd_id').eq('sub_role', 'Nominee Director').not('appointment_date', 'is', null).is('cessation_date', null),
+    supabase.from('quickbooks_invoices').select('invoice_no, txn_date, customer_name, total_amt, balance, status').gte('txn_date', `${year}-01-01`).lte('txn_date', `${year}-12-31`),
+    pageAll<{ customer_name: string; service_type: string; product_service: string | null; period_start: string | null; period_end: string | null; rate: number | null; invoice_no: string; txn_date: string | null }>(() => supabase.from('quickbooks_invoice_items').select('customer_name, service_type, product_service, period_start, period_end, rate, invoice_no, txn_date').gte('txn_date', `${year - 3}-01-01`)),
+  ]);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!arRows?.length) return NextResponse.json({ month, year, total: 0, companies: [] });
 
-  // ── Companies master (service flags + address) ────────────────────────────
-  const { data: companies } = await supabase
-    .from('companies')
-    .select('id, company_name, has_xbrl, has_nd, has_accounts, has_tax, uses_address, has_annual_return, has_agm');
-
-  // ── Active ND appointments ────────────────────────────────────────────────
-  const { data: activeNDs } = await supabase
-    .from('nd_appointments')
-    .select('company_name, appointment_date, nd_id')
-    .eq('sub_role', 'Nominee Director')
-    .not('appointment_date', 'is', null)
-    .is('cessation_date', null);
+  // ── ND name lookup (depends on activeNDs result) ──────────────────────────
   const ndActiveSet = new Set((activeNDs ?? []).map(a => normalize(a.company_name)));
-
-  // Fetch ND names from nominee_directors
   const ndIds = [...new Set((activeNDs ?? []).map(a => a.nd_id).filter(Boolean))];
   const { data: ndPeople } = ndIds.length
     ? await supabase.from('nominee_directors').select('id, name').in('id', ndIds)
     : { data: [] as { id: number; name: string }[] };
   const ndNameById = new Map((ndPeople ?? []).map(n => [n.id, n.name]));
 
-  // normName → { date, name }
   const ndAppointmentMap = new Map<string, { date: string; name: string | null }>();
   for (const a of activeNDs ?? []) {
     if (a.appointment_date) {
@@ -80,19 +90,6 @@ export async function GET(req: NextRequest) {
       });
     }
   }
-
-  // ── QB invoices for the year (for billing reference) ─────────────────────
-  const { data: qbInvoices } = await supabase
-    .from('quickbooks_invoices')
-    .select('invoice_no, txn_date, customer_name, total_amt, balance, status')
-    .gte('txn_date', `${year}-01-01`)
-    .lte('txn_date', `${year}-12-31`);
-
-  // ── QB invoice items (service history + periods) — last 4 years only ───────
-  const { data: qbItems } = await supabase
-    .from('quickbooks_invoice_items')
-    .select('customer_name, service_type, product_service, period_start, period_end, rate, invoice_no, txn_date')
-    .gte('txn_date', `${year - 3}-01-01`);
 
   // Build service lookup: normalizedName → Set<service_type>
   const qbServiceMap = new Map<string, Set<string>>();
@@ -205,7 +202,7 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.txn_date.localeCompare(a.txn_date));
 
     // Due date urgency
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todaySGT();
     const daysUntilDue = row.due_date
       ? Math.ceil((new Date(row.due_date).getTime() - new Date(today).getTime()) / 86400000)
       : null;
@@ -232,6 +229,33 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json({ month, year, total: enriched.length, companies: enriched });
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const { entity_name, fye_month, fye_year } = body;
+  if (!entity_name)         return NextResponse.json({ error: 'entity_name required' }, { status: 400 });
+  if (!fye_month || !fye_year) return NextResponse.json({ error: 'fye_month and fye_year required' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  const record: Record<string, unknown> = { entity_name, fye_month, fye_year: Number(fye_year) };
+  for (const field of ['uen', 'due_date', 'pic', 'acc_pic', 'tax_pic', ...EDITABLE_FIELDS]) {
+    if (body[field] !== undefined) record[field] = body[field] || null;
+  }
+
+  const { data, error } = await supabase.from('ar_reminder').insert(record).select().single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, data });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { id } = await req.json();
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from('ar_reminder').delete().eq('id', id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }
 
 export async function PATCH(req: NextRequest) {

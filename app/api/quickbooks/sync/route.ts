@@ -103,7 +103,6 @@ export async function POST(req: NextRequest) {
 
     invoiceRows.push({
       invoice_no:    docNo,
-      qb_invoice_id: String(inv.Id),
       customer_name: (customer.name as string) ?? '',
       txn_date:      txnDate,
       total_amt:     inv.TotalAmt ?? 0,

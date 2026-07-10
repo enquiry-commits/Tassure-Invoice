@@ -24,16 +24,14 @@ function formatDate(iso: string | null): string {
   return `${d}/${m}/${y}`;
 }
 
-const today = new Date().toISOString().split('T')[0];
-
 export default function NDPersonCard({ person, index = 0, isLast }: { person: NDPerson; index?: number; isLast?: boolean }) {
   const [open, setOpen] = useState(false);
 
   const active = person.appointments.filter(
-    a => !a.cessation_date || a.cessation_date > today
+    a => a.sub_role === 'Nominee Director' && !!a.appointment_date && !a.cessation_date
   );
   const ceased = person.appointments.filter(
-    a => a.cessation_date && a.cessation_date <= today
+    a => a.sub_role === 'Nominee Director' && !!a.cessation_date
   );
 
   return (

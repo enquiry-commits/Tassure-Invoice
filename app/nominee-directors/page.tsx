@@ -1,8 +1,6 @@
 import NDPersonCard from '@/components/NDPersonCard';
 import { supabase } from '@/lib/supabase';
 
-const today = new Date().toISOString().split('T')[0];
-
 async function getData() {
   const [{ data: nds }, { data: appts }] = await Promise.all([
     supabase.from('nominee_directors').select('id, name, member_id').order('name'),
@@ -18,7 +16,11 @@ async function getData() {
 
   return (nds ?? []).map(nd => {
     const appointments = apptsByND.get(nd.id) ?? [];
-    const activeCount = appointments.filter(a => !a.cessation_date || a.cessation_date > today).length;
+    const activeCount = appointments.filter(a =>
+      a.sub_role === 'Nominee Director' &&
+      !!a.appointment_date &&
+      !a.cessation_date
+    ).length;
     return { ...nd, appointments, activeCount, totalCount: appointments.length };
   }).sort((a, b) => b.activeCount - a.activeCount);
 }
