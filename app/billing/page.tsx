@@ -963,12 +963,12 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
     } finally { setDrafting(false); }
   };
 
-  const inputStyle: React.CSSProperties = { border: '1px solid #cbd5e1', borderRadius: 5, padding: '3px 6px', fontSize: 12, outline: 'none', background: '#fff' };
+  const inputStyle: React.CSSProperties = { border: '1px solid #cbd5e1', borderRadius: 5, padding: '6px 6px', fontSize: 12, outline: 'none', background: '#fff' };
 
   return (
-    <div style={{ padding: '16px 20px', background: '#fff' }}>
+    <div style={{ padding: '28px 20px', background: '#fff' }}>
       {/* Header: contact + PIC + invoice date */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="client@email.com"
@@ -984,7 +984,7 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
 
       {/* Provenance: this draft mirrors last year's invoice (items + amounts),
           with the service period rolled forward. */}
-      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
         <FileText size={12} />
         {c.priorInvoiceDate
           ? <span>Based on last invoice dated <strong style={{ color: '#334155' }}>{fmtDate(c.priorInvoiceDate)}</strong> — items & amounts carried forward, period rolled to this cycle. Verify discount still applies.</span>
@@ -993,14 +993,14 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
 
       {/* Editable draft line items */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, background: '#f1f5f9', padding: '6px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, background: '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
           <div></div><div>Service</div><div>Description</div><div>Status</div><div style={{ textAlign: 'center' }}>Qty</div><div style={{ textAlign: 'right' }}>Rate (S$)</div><div style={{ textAlign: 'right' }}>Amount</div><div></div>
         </div>
         {lines.map((l, i) => {
           const cfg = SVC_CONFIG[l.service as keyof typeof SVC_CONFIG];
           const svcLabel = cfg?.label ?? (l.productService.includes(':') ? l.productService.split(':').slice(1).join(':') : l.service);
           return (
-            <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, alignItems: 'start', padding: '8px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
+            <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, alignItems: 'start', padding: '16px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
               <input type="checkbox" checked={l.include} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e' }} />
               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }} title={l.productService}>
                 {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
@@ -1019,7 +1019,7 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
         {lines.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No applicable services for this company.</div>}
 
         {/* Add any line from the full QB catalogue */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 10px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
           <Plus size={13} style={{ color: '#0f766e' }} />
           <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add line</span>
           <select value="" onChange={e => {
@@ -1041,7 +1041,7 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
       </div>
 
       {/* Total + generate */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 24, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 13, color: '#334155' }}>
           <span style={{ color: '#64748b' }}>{included.length} line{included.length !== 1 ? 's' : ''} · Total </span>
           <strong style={{ fontSize: 17, color: '#0f766e' }}>S${total.toLocaleString()}</strong>
@@ -1060,14 +1060,14 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
       </div>
 
       {draftResult && (
-        <div style={{ marginTop: 10, padding: '8px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+        <div style={{ marginTop: 20, padding: '12px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
           background: draftResult.ok ? '#f0fdf4' : '#fef2f2', color: draftResult.ok ? '#15803d' : '#dc2626',
           border: `1px solid ${draftResult.ok ? '#bbf7d0' : '#fecaca'}` }}>
           {draftResult.ok ? '✓ ' : '✕ '}{draftResult.msg}
         </div>
       )}
 
-      <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 8, marginTop: 12, fontSize: 10, color: '#94a3b8' }}>
+      <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, marginTop: 24, fontSize: 10, color: '#94a3b8' }}>
         ⚠ The invoice is created as a draft in QuickBooks (not sent). Review it in QB, then send to the client from there.
       </div>
     </div>
