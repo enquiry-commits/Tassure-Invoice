@@ -33,15 +33,15 @@ const tree: Node[] = [
           { label: 'MAS',           href: '/master-list/mas' },
         ],
       },
-    ],
-  },
-  {
-    id: 'strike-off', label: 'Strike Off / Terminated', img: '/nav/strike-off.png',
-    children: [
-      { label: 'Strike Off',          href: '/master-list/strike-off' },
-      { label: 'Terminated Services', href: '/master-list/terminated' },
-      { label: 'Change Co Name',      href: '/master-list/name-change' },
-      { label: 'Inactive Old Record', href: '/master-list/inactive-old' },
+      {
+        id: 'strike-off', label: 'Strike Off / Terminated',
+        children: [
+          { label: 'Strike Off',          href: '/master-list/strike-off' },
+          { label: 'Terminated Services', href: '/master-list/terminated' },
+          { label: 'Change Co Name',      href: '/master-list/name-change' },
+          { label: 'Inactive Old Record', href: '/master-list/inactive-old' },
+        ],
+      },
     ],
   },
 ];
@@ -114,16 +114,16 @@ function Level1({ node, active, expanded, onToggle }:
   );
 }
 
-// ── Nested rows (level ≥ 2): no icon, indented, curved connector rails ──────
-function SubRow({ node, depth, last, active, expanded, onToggle }:
-  { node: Node; depth: number; last: boolean; active: boolean; expanded?: boolean; onToggle?: () => void }) {
-  const TICK = 15;
+// ── Nested rows (level ≥ 2): no icon, just the pill. Connector rails are
+//    drawn by the parent Branch so they stay continuous across open groups. ──
+function SubRow({ node, depth, active, expanded, onToggle }:
+  { node: Node; depth: number; active: boolean; expanded?: boolean; onToggle?: () => void }) {
   const isHeader = !!onToggle;
   const idle = isHeader ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.62)';
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 6, width: '100%',
     padding: depth >= 3 ? '5px 9px' : '6px 9px',
-    marginBottom: 2, borderRadius: 9, textAlign: 'left', cursor: 'pointer',
+    borderRadius: 9, textAlign: 'left', cursor: 'pointer',
     border: `1px solid ${active ? ACTIVE_BORDER : 'transparent'}`,
     color: active ? '#fff' : idle,
     background: active ? ACTIVE_BG : 'transparent',
@@ -144,41 +144,42 @@ function SubRow({ node, depth, last, active, expanded, onToggle }:
       {onToggle && (expanded ? <ChevronDown size={13} style={{ opacity: 0.6 }} /> : <ChevronRight size={13} style={{ opacity: 0.6 }} />)}
     </>
   );
-  return (
-    <div style={{ position: 'relative', paddingLeft: TICK + 9 }}>
-      {/* Curved branch: down the rail, then a smooth bend into the row. */}
-      <span aria-hidden style={{
-        position: 'absolute', left: 0, top: 0, width: TICK, height: '50%',
-        borderLeft: `1.5px solid ${RAIL}`, borderBottom: `1.5px solid ${RAIL}`,
-        borderBottomLeftRadius: 12, pointerEvents: 'none',
-      }} />
-      {!last && <span aria-hidden style={{
-        position: 'absolute', left: 0, top: '50%', bottom: -2, width: 1.5, background: RAIL, pointerEvents: 'none',
-      }} />}
-      {onToggle
-        ? <button style={rowStyle} onClick={onToggle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{label}</button>
-        : <Link href={node.href!} style={rowStyle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{label}</Link>}
-    </div>
-  );
+  return onToggle
+    ? <button style={rowStyle} onClick={onToggle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{label}</button>
+    : <Link href={node.href!} style={rowStyle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{label}</Link>;
 }
 
 function Branch({ nodes, depth, act, expanded, toggle }:
   { nodes: Node[]; depth: number; act: (h?: string) => boolean;
     expanded: Record<string, boolean>; toggle: (k: string) => void }) {
+  const TICK = 15;
+  const CENTER = depth === 1 ? 13 : 12;   // vertical centre of a row, from its top
   return (
     <div style={{ marginLeft: depth === 1 ? 18 : 15, marginRight: depth === 1 ? 12 : 0, position: 'relative' }}>
       {nodes.map((n, i) => {
         const last = i === nodes.length - 1;
-        if (n.children) {
-          const open = expanded[n.id!];
-          return (
-            <div key={n.id}>
-              <SubRow node={n} depth={depth + 1} last={last} active={false} expanded={open} onToggle={() => toggle(n.id!)} />
-              {open && <Branch nodes={n.children} depth={depth + 1} act={act} expanded={expanded} toggle={toggle} />}
+        const open = n.children ? expanded[n.id!] : false;
+        return (
+          <div key={n.id ?? n.href} style={{ position: 'relative', marginBottom: 2 }}>
+            {/* curved elbow from the rail into this row */}
+            <span aria-hidden style={{
+              position: 'absolute', left: 0, top: 0, width: TICK, height: CENTER,
+              borderLeft: `1.5px solid ${RAIL}`, borderBottom: `1.5px solid ${RAIL}`,
+              borderBottomLeftRadius: 11, pointerEvents: 'none',
+            }} />
+            {/* vertical rail down to the next sibling — spans this row AND any
+                expanded children, so the rail never breaks under an open group */}
+            {!last && <span aria-hidden style={{
+              position: 'absolute', left: 0, top: CENTER, bottom: -2, width: 1.5, background: RAIL, pointerEvents: 'none',
+            }} />}
+            <div style={{ paddingLeft: TICK + 9 }}>
+              {n.children
+                ? <SubRow node={n} depth={depth + 1} active={false} expanded={open} onToggle={() => toggle(n.id!)} />
+                : <SubRow node={n} depth={depth + 1} active={act(n.href)} />}
             </div>
-          );
-        }
-        return <SubRow key={n.href} node={n} depth={depth + 1} last={last} active={act(n.href)} />;
+            {n.children && open && <Branch nodes={n.children} depth={depth + 1} act={act} expanded={expanded} toggle={toggle} />}
+          </div>
+        );
       })}
     </div>
   );
