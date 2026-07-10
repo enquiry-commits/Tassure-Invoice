@@ -30,9 +30,6 @@ export default function NDPersonCard({ person, index = 0, isLast }: { person: ND
   const active = person.appointments.filter(
     a => a.sub_role === 'Nominee Director' && !!a.appointment_date && !a.cessation_date
   );
-  const ceased = person.appointments.filter(
-    a => a.sub_role === 'Nominee Director' && !!a.cessation_date
-  );
 
   return (
     <div className={!isLast ? 'border-b border-slate-100' : ''}>
@@ -68,18 +65,6 @@ export default function NDPersonCard({ person, index = 0, isLast }: { person: ND
           {active.length} Active
         </span>
 
-        {/* Ceased badge */}
-        <span
-          className="text-xs px-3 py-0.5 rounded-full"
-          style={{
-            width: '90px', textAlign: 'center', flexShrink: 0,
-            backgroundColor: open ? 'rgba(255,255,255,0.08)' : '#f1f5f9',
-            color: open ? 'rgba(255,255,255,0.5)' : '#94a3b8',
-          }}
-        >
-          {ceased.length > 0 ? `${ceased.length} Ceased` : '—'}
-        </span>
-
         {/* ID */}
         <span
           className="text-xs"
@@ -113,12 +98,6 @@ export default function NDPersonCard({ person, index = 0, isLast }: { person: ND
             </div>
           ) : (
             <p className="text-xs text-slate-400 italic">No active appointments</p>
-          )}
-
-          {ceased.length > 0 && (
-            <p className="text-xs text-slate-400 mt-3 pt-2 border-t border-slate-100">
-              + {ceased.length} historical ceased appointment{ceased.length > 1 ? 's' : ''}
-            </p>
           )}
         </div>
       )}

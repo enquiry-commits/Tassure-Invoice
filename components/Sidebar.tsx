@@ -13,16 +13,6 @@ const tree: Node[] = [
   { label: 'Dashboard', href: '/',          img: '/nav/dashboard.png' },
   { label: 'Companies', href: '/companies', img: '/nav/companies.png' },
   {
-    id: 'billing', label: 'Billing System', img: '/nav/billing.png',
-    children: [
-      { label: 'Nominee Directors', href: '/nominee-directors' },
-      { label: 'Address Service',   href: '/address-service' },
-      { label: 'AR Reminder',       href: '/billing?tab=ar' },
-      { label: 'Late Filing',       href: '/late-filing' },
-      { label: 'Billing Drafts',    href: '/billing?tab=billing' },
-    ],
-  },
-  {
     id: 'master-list', label: 'Master List', img: '/nav/master-list.png',
     children: [
       {
@@ -42,6 +32,16 @@ const tree: Node[] = [
           { label: 'Inactive Old Record', href: '/master-list/inactive-old' },
         ],
       },
+    ],
+  },
+  {
+    id: 'billing', label: 'Billing System', img: '/nav/billing.png',
+    children: [
+      { label: 'Nominee Directors', href: '/nominee-directors' },
+      { label: 'Address Service',   href: '/address-service' },
+      { label: 'AR Reminder',       href: '/billing?tab=ar' },
+      { label: 'Late Filing',       href: '/late-filing' },
+      { label: 'Billing Drafts',    href: '/billing?tab=billing' },
     ],
   },
 ];
@@ -69,49 +69,34 @@ function isActive(href: string, pathname: string, tab: string) {
   return pathname.startsWith(href);
 }
 
-// ── Level-1: leaves are big title-case rows; groups keep the uppercase
-//    section-header type. Both now use the 3D image icons. ────────────────
+// ── Level-1: every top item (leaves AND collapsible groups) shares the same
+//    type — 14px title-case, white, 23px icon. Groups just add a chevron. ──
 function Level1({ node, active, expanded, onToggle }:
   { node: Node; active: boolean; expanded?: boolean; onToggle?: () => void }) {
-  if (onToggle) {
-    // Collapsible section header (Billing System, Master List, …)
-    return (
-      <button onClick={onToggle}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          width: 'calc(100% - 16px)', padding: '8px 10px', margin: '0 8px 2px',
-          borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer',
-          color: 'rgba(255,255,255,0.78)',
-        }}
-        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#fff'}
-        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.78)'}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.7px' }}>
-          <NavImg src={node.img!} size={20} />
-          {node.label}
-        </span>
-        {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-      </button>
-    );
-  }
-
-  // Primary leaf (Dashboard, Companies)
-  return (
-    <Link href={node.href!}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 11, width: 'calc(100% - 16px)',
-        padding: '8px 12px', margin: '0 8px 2px', borderRadius: 10,
-        border: `1px solid ${active ? ACTIVE_BORDER : 'transparent'}`,
-        color: active ? '#fff' : 'rgba(255,255,255,0.92)',
-        background: active ? ACTIVE_BG : 'transparent',
-        boxShadow: active ? ACTIVE_SHADOW : 'none',
-        fontSize: 14, fontWeight: 600, lineHeight: 1.25,
-      }}
-      onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)'; (e.currentTarget as HTMLElement).style.color = '#fff'; } }}
-      onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.92)'; } }}>
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 11, width: 'calc(100% - 20px)',
+    padding: '8px 12px', margin: '0 10px 2px', borderRadius: 10,
+    border: `1px solid ${active ? ACTIVE_BORDER : 'transparent'}`,
+    color: active ? '#fff' : 'rgba(255,255,255,0.92)',
+    background: active ? ACTIVE_BG : 'transparent',
+    boxShadow: active ? ACTIVE_SHADOW : 'none',
+    fontSize: 14, fontWeight: 600, lineHeight: 1.25, textAlign: 'left', cursor: 'pointer',
+  };
+  const hover = (on: boolean) => (e: React.MouseEvent) => {
+    if (active) return;
+    (e.currentTarget as HTMLElement).style.background = on ? 'rgba(255,255,255,0.07)' : 'transparent';
+    (e.currentTarget as HTMLElement).style.color = on ? '#fff' : 'rgba(255,255,255,0.92)';
+  };
+  const inner = (
+    <>
       <NavImg src={node.img!} size={23} />
-      <span>{node.label}</span>
-    </Link>
+      <span style={{ flex: 1 }}>{node.label}</span>
+      {onToggle && (expanded ? <ChevronDown size={15} style={{ opacity: 0.7 }} /> : <ChevronRight size={15} style={{ opacity: 0.7 }} />)}
+    </>
   );
+  return onToggle
+    ? <button style={rowStyle} onClick={onToggle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{inner}</button>
+    : <Link href={node.href!} style={rowStyle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{inner}</Link>;
 }
 
 // ── Nested rows (level ≥ 2): no icon, just the pill. Connector rails are
@@ -128,7 +113,8 @@ function SubRow({ node, depth, active, expanded, onToggle }:
     color: active ? '#fff' : idle,
     background: active ? ACTIVE_BG : 'transparent',
     boxShadow: active ? ACTIVE_SHADOW : 'none',
-    fontSize: isHeader ? 11.5 : depth >= 3 ? 11.5 : 12.5,
+    // Level 2 (depth 2) sits a step larger than level 3 (depth 3).
+    fontSize: depth >= 3 ? 11.5 : 12.5,
     fontWeight: isHeader ? 700 : active ? 600 : 500,
     letterSpacing: isHeader ? '0.15px' : 'normal',
     lineHeight: 1.2,
@@ -238,10 +224,10 @@ function NavTree({ collapsed }: { collapsed: boolean }) {
     <>
       {level1.map(n =>
         n.children ? (
-          <div key={n.id} style={{ marginTop: n.id === 'billing' ? 8 : 4 }}>
+          <div key={n.id}>
             <Level1 node={n} active={false} expanded={expanded[n.id!]} onToggle={() => toggle(n.id!)} />
             {expanded[n.id!] && (
-              <div style={{ marginBottom: 4 }}>
+              <div style={{ marginBottom: 6 }}>
                 <Branch nodes={n.children} depth={1} act={act} expanded={expanded} toggle={toggle} />
               </div>
             )}
