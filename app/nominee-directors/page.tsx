@@ -1,4 +1,4 @@
-import NDPersonCard from '@/components/NDPersonCard';
+import NDDirectory from '@/components/NDDirectory';
 import { supabase } from '@/lib/supabase';
 
 async function getData() {
@@ -49,12 +49,8 @@ export default async function NomineDirectorsPage() {
         ))}
       </div>
 
-      {/* ND Accordion */}
-      <div className="rounded-xl overflow-hidden shadow-sm">
-        {persons.map((person, i) => (
-          <NDPersonCard key={person.name} person={person} index={i} isLast={i === persons.length - 1} />
-        ))}
-      </div>
+      {/* ND directory with company-name search */}
+      <NDDirectory persons={persons} />
     </div>
   );
 }
