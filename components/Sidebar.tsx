@@ -166,7 +166,7 @@ function Branch({ nodes, depth, act, expanded, toggle }:
   { nodes: Node[]; depth: number; act: (h?: string) => boolean;
     expanded: Record<string, boolean>; toggle: (k: string) => void }) {
   return (
-    <div style={{ marginLeft: depth === 1 ? 18 : 15, position: 'relative' }}>
+    <div style={{ marginLeft: depth === 1 ? 18 : 15, marginRight: depth === 1 ? 12 : 0, position: 'relative' }}>
       {nodes.map((n, i) => {
         const last = i === nodes.length - 1;
         if (n.children) {
@@ -262,7 +262,7 @@ export default function Sidebar() {
   const toggle = () =>
     setCollapsed(v => { localStorage.setItem('sidebar-collapsed', String(!v)); return !v; });
 
-  const width = collapsed ? 56 : 216;
+  const width = collapsed ? 56 : 232;
 
   return (
     <aside
