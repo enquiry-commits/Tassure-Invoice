@@ -6,239 +6,246 @@ import { Suspense, useState, useEffect } from 'react';
 import {
   LayoutDashboard, Building2, UserCheck, MapPin, FileText, CalendarClock,
   AlertTriangle, PanelLeftClose, PanelLeftOpen, Wallet, ChevronDown, ChevronRight,
-  Archive, XCircle, UserX, Repeat2, ArchiveX, Users, Shuffle, Landmark,
+  Archive, XCircle, Users,
 } from 'lucide-react';
 
-type LeafItem = { href: string; label: string; Icon: typeof LayoutDashboard };
-type SubGroup = { id: string; label: string; Icon: typeof LayoutDashboard; items: LeafItem[] };
-type Group = { id: string; label: string; Icon: typeof LayoutDashboard; items?: LeafItem[]; subGroups?: SubGroup[] };
+type Icon = typeof LayoutDashboard;
+type Node = { label: string; href?: string; Icon?: Icon; id?: string; children?: Node[] };
 
-// Foundation of the future company-wide system — kept flat, top-level
-const topItems: LeafItem[] = [
-  { href: '/',          label: 'Dashboard', Icon: LayoutDashboard },
-  { href: '/companies', label: 'Companies', Icon: Building2       },
-];
-
-// Collapsible groups, in display order
-const groups: Group[] = [
+// One tree. Level 1 nodes carry an icon; everything nested is icon-free and
+// indented with connector rails (see reference design).
+const tree: Node[] = [
+  { label: 'Dashboard', href: '/',          Icon: LayoutDashboard },
+  { label: 'Companies', href: '/companies', Icon: Building2 },
   {
-    id: 'billing',
-    label: 'Billing System',
-    Icon: Wallet,
-    items: [
-      { href: '/nominee-directors', label: 'Nominee Directors', Icon: UserCheck     },
-      { href: '/address-service',   label: 'Address Service',   Icon: MapPin        },
-      { href: '/billing?tab=ar',      label: 'AR Reminder',    Icon: CalendarClock },
-      { href: '/late-filing',         label: 'Late Filing',    Icon: AlertTriangle },
-      { href: '/billing?tab=billing', label: 'Billing Drafts', Icon: FileText      },
+    id: 'billing', label: 'Billing System', Icon: Wallet,
+    children: [
+      { label: 'Nominee Directors', href: '/nominee-directors' },
+      { label: 'Address Service',   href: '/address-service' },
+      { label: 'AR Reminder',       href: '/billing?tab=ar' },
+      { label: 'Late Filing',       href: '/late-filing' },
+      { label: 'Billing Drafts',    href: '/billing?tab=billing' },
     ],
   },
   {
-    id: 'master-list',
-    label: 'Master List',
-    Icon: Archive,
-    subGroups: [
+    id: 'master-list', label: 'Master List', Icon: Archive,
+    children: [
       {
-        id: 'active-clients',
-        label: 'Active Clients',
-        Icon: Users,
-        items: [
-          { href: '/master-list/active-clients', label: 'Active Client', Icon: Users    },
-          { href: '/master-list/ad-hoc',         label: 'Ad-Hoc',        Icon: Shuffle  },
-          { href: '/master-list/mas',            label: 'MAS',           Icon: Landmark },
-        ],
-      },
-      {
-        id: 'strike-off-terminated',
-        label: 'Strike Off/Terminated',
-        Icon: XCircle,
-        items: [
-          { href: '/master-list/strike-off',     label: 'Strike Off',           Icon: XCircle  },
-          { href: '/master-list/terminated',     label: 'Terminated Services',  Icon: UserX    },
-          { href: '/master-list/name-change',    label: 'Change Co Name',       Icon: Repeat2  },
-          { href: '/master-list/inactive-old',   label: 'Inactive Old Record',  Icon: ArchiveX },
+        id: 'active-clients', label: 'Active Clients',
+        children: [
+          { label: 'Active Client', href: '/master-list/active-clients' },
+          { label: 'Ad-Hoc',        href: '/master-list/ad-hoc' },
+          { label: 'MAS',           href: '/master-list/mas' },
         ],
       },
     ],
   },
+  {
+    id: 'strike-off', label: 'Strike Off / Terminated', Icon: XCircle,
+    children: [
+      { label: 'Strike Off',          href: '/master-list/strike-off' },
+      { label: 'Terminated Services', href: '/master-list/terminated' },
+      { label: 'Change Co Name',      href: '/master-list/name-change' },
+      { label: 'Inactive Old Record', href: '/master-list/inactive-old' },
+    ],
+  },
 ];
 
-const allItems = [
-  ...topItems,
-  ...groups.flatMap(g => g.items ?? g.subGroups?.flatMap(sg => sg.items) ?? []),
-];
+const groupIds = (nodes: Node[]): string[] =>
+  nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
+const firstLeaf = (n: Node): string => n.href ?? (n.children ? firstLeaf(n.children[0]) : '#');
+const level1 = tree;
 
-function isActive(href: string, pathname: string, currentTab: string) {
+const RAIL = 'rgba(255,255,255,0.16)';
+const PURPLE = 'linear-gradient(135deg, #7c3aed, #6d28d9)';
+const PURPLE_SHADOW = '0 2px 6px rgba(109,40,217,0.35), inset 0 1px 0 rgba(255,255,255,0.12)';
+
+function isActive(href: string, pathname: string, tab: string) {
   if (href === '/')                    return pathname === '/';
-  if (href === '/billing?tab=ar')      return pathname === '/billing' && currentTab === 'ar';
-  if (href === '/billing?tab=billing') return pathname === '/billing' && currentTab !== 'ar';
+  if (href === '/billing?tab=ar')      return pathname === '/billing' && tab === 'ar';
+  if (href === '/billing?tab=billing') return pathname === '/billing' && tab !== 'ar';
   return pathname.startsWith(href);
 }
 
-function NavLink({ href, label, Icon, collapsed, depth = 1 }: LeafItem & { collapsed: boolean; depth?: 1 | 2 | 3 }) {
-  const pathname     = usePathname();
-  const searchParams = useSearchParams();
-  const currentTab   = searchParams.get('tab') ?? '';
-  const active       = isActive(href, pathname, currentTab);
-  const sub          = depth > 1;
-  const fontSize     = depth === 1 ? 14 : depth === 2 ? 12.5 : 11.5;
-  const iconSize     = depth === 1 ? 18 : depth === 2 ? 15 : 13;
+// ── Level-1: leaves are big title-case rows; groups keep the uppercase
+//    purple-icon section-header type from the original design. ─────────────
+function Level1({ node, active, expanded, onToggle }:
+  { node: Node; active: boolean; expanded?: boolean; onToggle?: () => void }) {
+  const Ico = node.Icon!;
 
+  if (onToggle) {
+    // Collapsible section header (Billing System, Master List, …)
+    return (
+      <button onClick={onToggle}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          width: 'calc(100% - 16px)', padding: '9px 10px', margin: '0 8px 2px',
+          borderRadius: 8, border: 'none', background: 'transparent', cursor: 'pointer',
+          color: 'rgba(255,255,255,0.78)',
+        }}
+        onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#fff'}
+        onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.78)'}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.7px' }}>
+          <Ico size={14} strokeWidth={2.25} style={{ color: '#a78bfa', flexShrink: 0 }} />
+          {node.label}
+        </span>
+        {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+      </button>
+    );
+  }
+
+  // Primary leaf (Dashboard, Companies)
   return (
-    <Link
-      href={href}
-      title={collapsed ? label : undefined}
-      className="flex items-center transition-all"
+    <Link href={node.href!}
       style={{
-        gap: collapsed ? 0 : sub ? 9 : 12,
-        padding: collapsed ? '10px 0' : depth === 3 ? '5px 9px' : sub ? '6px 9px' : '9px 12px',
-        margin: collapsed ? '0 6px 2px' : depth === 3 ? '0 0 1px' : sub ? '0 0 2px' : '0 8px 2px',
-        borderRadius: depth === 3 ? 7 : 9,
-        justifyContent: collapsed ? 'center' : 'flex-start',
-        color: active ? '#ffffff' : sub ? 'rgba(255,255,255,0.62)' : 'rgba(255,255,255,0.92)',
-        background: active
-          ? 'linear-gradient(135deg, #7c3aed, #6d28d9)'
-          : 'transparent',
-        boxShadow: active ? '0 2px 6px rgba(109,40,217,0.35), inset 0 1px 0 rgba(255,255,255,0.12)' : 'none',
+        display: 'flex', alignItems: 'center', gap: 12, width: 'calc(100% - 16px)',
+        padding: '9px 12px', margin: '0 8px 2px', borderRadius: 9,
+        color: active ? '#fff' : 'rgba(255,255,255,0.92)',
+        background: active ? PURPLE : 'transparent',
+        boxShadow: active ? PURPLE_SHADOW : 'none',
+        fontSize: 14, fontWeight: 600, lineHeight: 1.25,
       }}
       onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)'; (e.currentTarget as HTMLElement).style.color = '#fff'; } }}
-      onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = sub ? 'rgba(255,255,255,0.62)' : 'rgba(255,255,255,0.92)'; } }}
-    >
-      <Icon size={iconSize} strokeWidth={1.75} style={{ flexShrink: 0 }} />
-      {!collapsed && <span style={{ fontSize, fontWeight: sub ? 500 : 600, lineHeight: 1.25 }}>{label}</span>}
+      onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'transparent'; (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.92)'; } }}>
+      <Ico size={18} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+      <span>{node.label}</span>
     </Link>
   );
 }
 
-// Top-level collapsible group — rendered as an elevated card
-function GroupHeader({ label, Icon, expanded, onToggle }: { label: string; Icon: typeof LayoutDashboard; expanded: boolean; onToggle: () => void }) {
+// ── Nested rows (level ≥ 2): no icon, indented, with ├ / └ connector rails ──
+function SubRow({ node, depth, last, active, expanded, onToggle }:
+  { node: Node; depth: number; last: boolean; active: boolean; expanded?: boolean; onToggle?: () => void }) {
+  const TICK = 12;
+  const isHeader = !!onToggle;            // an expandable sub-group (e.g. Active Clients)
+  const idle = isHeader ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.62)';
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+    padding: depth >= 3 ? '5px 9px' : '6px 9px',
+    marginBottom: 2, borderRadius: 8, border: 'none', textAlign: 'left', cursor: 'pointer',
+    color: active ? '#fff' : idle,
+    background: active ? PURPLE : 'transparent',
+    boxShadow: active ? PURPLE_SHADOW : 'none',
+    fontSize: isHeader ? 11.5 : depth >= 3 ? 11.5 : 12.5,
+    fontWeight: isHeader ? 700 : active ? 600 : 500,
+    letterSpacing: isHeader ? '0.15px' : 'normal',
+    lineHeight: 1.2,
+  };
+  const hover = (on: boolean) => (e: React.MouseEvent) => {
+    if (active) return;
+    (e.currentTarget as HTMLElement).style.background = on ? 'rgba(255,255,255,0.07)' : 'transparent';
+    (e.currentTarget as HTMLElement).style.color = on ? '#fff' : idle;
+  };
+  const label = (
+    <>
+      <span style={{ flex: 1 }}>{node.label}</span>
+      {onToggle
+        ? (expanded ? <ChevronDown size={13} style={{ opacity: 0.6 }} /> : <ChevronRight size={13} style={{ opacity: 0.6 }} />)
+        : active && <ChevronRight size={14} style={{ opacity: 0.85 }} />}
+    </>
+  );
   return (
-    <button
-      onClick={onToggle}
-      className="w-full flex items-center justify-between transition-colors"
-      style={{
-        padding: '9px 10px',
-        borderRadius: 8,
-        color: 'rgba(255,255,255,0.78)',
-        background: 'transparent',
-        border: 'none',
-        cursor: 'pointer',
-      }}
-      onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#fff'}
-      onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.78)'}
-    >
-      <span className="flex items-center" style={{ gap: 8, fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.7px' }}>
-        <Icon size={14} strokeWidth={2.25} style={{ color: '#a78bfa' }} />
-        {label}
-      </span>
-      {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-    </button>
+    <div style={{ position: 'relative', paddingLeft: TICK + 8 }}>
+      {/* vertical rail: full height for middle rows, half (└) for the last */}
+      <span style={{ position: 'absolute', left: 0, top: 0, bottom: last ? 'calc(50% - 0px)' : 0, width: 1.5, background: RAIL }} />
+      {/* horizontal tick into the row */}
+      <span style={{ position: 'absolute', left: 0, top: 'calc(50% - 1px)', width: TICK, height: 1.5, background: RAIL }} />
+      {onToggle
+        ? <button style={rowStyle} onClick={onToggle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{label}</button>
+        : <Link href={node.href!} style={rowStyle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{label}</Link>}
+    </div>
   );
 }
 
-// Level-2 header nested inside a top-level group card (e.g. "Active Clients" under "Master List") — its own nested card
-function SubGroupHeader({ label, Icon, expanded, onToggle }: { label: string; Icon: typeof LayoutDashboard; expanded: boolean; onToggle: () => void }) {
+// Recursive branch for everything below level 1.
+function Branch({ nodes, depth, act, expanded, toggle }:
+  { nodes: Node[]; depth: number; act: (h?: string) => boolean;
+    expanded: Record<string, boolean>; toggle: (k: string) => void }) {
   return (
-    <button
-      onClick={onToggle}
-      className="w-full flex items-center justify-between transition-colors"
-      style={{
-        padding: '6px 8px',
-        borderRadius: 6,
-        color: 'rgba(255,255,255,0.68)',
-        background: 'transparent',
-        border: 'none',
-        cursor: 'pointer',
-      }}
-      onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#fff'}
-      onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.68)'}
-    >
-      <span className="flex items-center" style={{ gap: 6, fontSize: 11, fontWeight: 700, letterSpacing: '0.15px' }}>
-        <Icon size={12.5} strokeWidth={2} style={{ color: '#c4b5fd' }} />
-        {label}
-      </span>
-      {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-    </button>
+    <div style={{ marginLeft: depth === 1 ? 18 : 15, position: 'relative' }}>
+      {nodes.map((n, i) => {
+        const last = i === nodes.length - 1;
+        if (n.children) {
+          const open = expanded[n.id!];
+          return (
+            <div key={n.id}>
+              <SubRow node={n} depth={depth + 1} last={last} active={false} expanded={open} onToggle={() => toggle(n.id!)} />
+              {open && <Branch nodes={n.children} depth={depth + 1} act={act} expanded={expanded} toggle={toggle} />}
+            </div>
+          );
+        }
+        return <SubRow key={n.href} node={n} depth={depth + 1} last={last} active={act(n.href)} />;
+      })}
+    </div>
   );
 }
 
-function NavLinks({ collapsed }: { collapsed: boolean }) {
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
-    const init: Record<string, boolean> = {};
-    for (const g of groups) {
-      init[g.id] = true;
-      for (const sg of g.subGroups ?? []) init[`${g.id}.${sg.id}`] = true;
-    }
-    return init;
-  });
+function NavTree({ collapsed }: { collapsed: boolean }) {
+  const pathname = usePathname();
+  const tab = useSearchParams().get('tab') ?? '';
+  const act = (href?: string) => (href ? isActive(href, pathname, tab) : false);
+
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(groupIds(tree).map(id => [id, true])));
 
   useEffect(() => {
     setExpanded(prev => {
       const next = { ...prev };
       for (const key of Object.keys(next)) {
-        const saved = localStorage.getItem(`sidebar-group-${key}-expanded`);
-        if (saved === 'false') next[key] = false;
+        if (localStorage.getItem(`sidebar-group-${key}-expanded`) === 'false') next[key] = false;
       }
       return next;
     });
   }, []);
 
-  const toggle = (key: string) => {
+  const toggle = (key: string) =>
     setExpanded(prev => {
       const next = !prev[key];
       localStorage.setItem(`sidebar-group-${key}-expanded`, String(next));
       return { ...prev, [key]: next };
     });
-  };
 
   if (collapsed) {
-    return <>{allItems.map(item => <NavLink key={item.href} {...item} collapsed />)}</>;
+    return (
+      <>
+        {level1.map(n => {
+          const Ico = n.Icon!;
+          const active = n.href ? act(n.href) : false;
+          return (
+            <Link key={n.id ?? n.href} href={firstLeaf(n)} title={n.label}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '10px 0', margin: '0 6px 2px', borderRadius: 9,
+                color: active ? '#fff' : 'rgba(255,255,255,0.9)',
+                background: active ? PURPLE : 'transparent', boxShadow: active ? PURPLE_SHADOW : 'none',
+              }}
+              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)'; }}
+              onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
+            >
+              <Ico size={18} strokeWidth={1.75} />
+            </Link>
+          );
+        })}
+      </>
+    );
   }
 
   return (
     <>
-      {topItems.map(item => <NavLink key={item.href} {...item} collapsed={false} />)}
-      {groups.map(g => (
-        <div
-          key={g.id}
-          style={{
-            margin: '10px 8px 0',
-            padding: 6,
-            borderRadius: 12,
-            background: 'rgba(255,255,255,0.035)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            boxShadow: '0 2px 10px rgba(0,0,0,0.14)',
-          }}
-        >
-          <GroupHeader label={g.label} Icon={g.Icon} expanded={expanded[g.id]} onToggle={() => toggle(g.id)} />
-          {expanded[g.id] && (
-            <div style={{ marginTop: 3 }}>
-              {g.items?.map(item => <NavLink key={item.href} {...item} collapsed={false} depth={2} />)}
-              {g.subGroups?.map(sg => {
-                const key = `${g.id}.${sg.id}`;
-                return (
-                  <div
-                    key={sg.id}
-                    style={{
-                      marginTop: 4,
-                      padding: 5,
-                      borderRadius: 9,
-                      background: 'rgba(255,255,255,0.04)',
-                    }}
-                  >
-                    <SubGroupHeader label={sg.label} Icon={sg.Icon} expanded={expanded[key]} onToggle={() => toggle(key)} />
-                    {expanded[key] && (
-                      <div style={{ marginTop: 2 }}>
-                        {sg.items.map(item => <NavLink key={item.href} {...item} collapsed={false} depth={3} />)}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      ))}
+      {level1.map(n =>
+        n.children ? (
+          <div key={n.id} style={{ marginTop: n.id === 'billing' ? 8 : 4 }}>
+            <Level1 node={n} active={false} expanded={expanded[n.id!]} onToggle={() => toggle(n.id!)} />
+            {expanded[n.id!] && (
+              <div style={{ marginBottom: 4 }}>
+                <Branch nodes={n.children} depth={1} act={act} expanded={expanded} toggle={toggle} />
+              </div>
+            )}
+          </div>
+        ) : (
+          <Level1 key={n.href} node={n} active={act(n.href)} />
+        )
+      )}
     </>
   );
 }
@@ -246,55 +253,36 @@ function NavLinks({ collapsed }: { collapsed: boolean }) {
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
 
-  // Persist across page navigations
   useEffect(() => {
-    const saved = localStorage.getItem('sidebar-collapsed');
-    if (saved === 'true') setCollapsed(true);
+    if (localStorage.getItem('sidebar-collapsed') === 'true') setCollapsed(true);
   }, []);
-  const toggle = () => {
-    setCollapsed(v => {
-      localStorage.setItem('sidebar-collapsed', String(!v));
-      return !v;
-    });
-  };
+  const toggle = () =>
+    setCollapsed(v => { localStorage.setItem('sidebar-collapsed', String(!v)); return !v; });
 
   const width = collapsed ? 56 : 216;
 
   return (
     <aside
       className="flex flex-col flex-shrink-0"
-      style={{
-        background: 'linear-gradient(180deg, #1e3a5f 0%, #17293f 100%)',
-        width,
-        overflow: 'hidden',
-        transition: 'width 0.22s ease',
-      }}
+      style={{ background: 'linear-gradient(180deg, #1e3a5f 0%, #17293f 100%)', width, overflow: 'hidden', transition: 'width 0.22s ease' }}
     >
       {/* Header */}
       <div style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
         {collapsed ? (
-          /* Collapsed: logo + visible expand button */
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 0 8px' }}>
-            <button
-              onClick={toggle}
-              title="Expand sidebar"
+            <button onClick={toggle} title="Expand sidebar"
               style={{ marginTop: 8, background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: 6, width: 32, height: 26, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.22)'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'}
-            >
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.1)'}>
               <PanelLeftOpen size={15} />
             </button>
           </div>
         ) : (
-          /* Expanded: logo left, collapse button right */
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '12px 10px 12px 14px' }}>
-            <button
-              onClick={toggle}
-              title="Collapse sidebar"
+            <button onClick={toggle} title="Collapse sidebar"
               style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' }}
               onMouseEnter={e => (e.currentTarget as HTMLElement).style.color = '#fff'}
-              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'}
-            >
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.5)'}>
               <PanelLeftClose size={16} />
             </button>
           </div>
@@ -304,14 +292,17 @@ export default function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden">
         <Suspense fallback={
-          allItems.map(({ href, label, Icon }) => (
-            <div key={href} style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: 12, padding: collapsed ? '10px 0' : '9px 12px', margin: collapsed ? '0 6px' : '0 8px', color: '#ffffff' }}>
-              <Icon size={18} strokeWidth={1.75} />
-              {!collapsed && <span className="font-medium text-sm">{label}</span>}
-            </div>
-          ))
+          level1.map(n => {
+            const Ico = n.Icon!;
+            return (
+              <div key={n.id ?? n.href} style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: 12, padding: collapsed ? '10px 0' : '9px 12px', margin: collapsed ? '0 6px' : '0 8px', color: '#fff' }}>
+                <Ico size={18} strokeWidth={1.75} />
+                {!collapsed && <span className="font-semibold text-sm">{n.label}</span>}
+              </div>
+            );
+          })
         }>
-          <NavLinks collapsed={collapsed} />
+          <NavTree collapsed={collapsed} />
         </Suspense>
       </nav>
 
