@@ -56,9 +56,12 @@ const groupIds = (nodes: Node[]): string[] =>
 const firstLeaf = (n: Node): string => n.href ?? (n.children ? firstLeaf(n.children[0]) : '#');
 const level1 = tree;
 
-const RAIL = 'rgba(255,255,255,0.16)';
-const PURPLE = 'linear-gradient(135deg, #7c3aed, #6d28d9)';
-const PURPLE_SHADOW = '0 2px 6px rgba(109,40,217,0.35), inset 0 1px 0 rgba(255,255,255,0.12)';
+const RAIL = 'rgba(255,255,255,0.18)';
+// Selected row: a soft frosted-grey pill (not the old purple), matching the
+// reference — subtle top highlight + faint outline.
+const ACTIVE_BG = 'linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.05))';
+const ACTIVE_BORDER = 'rgba(255,255,255,0.15)';
+const ACTIVE_SHADOW = 'inset 0 1px 0 rgba(255,255,255,0.10), 0 3px 10px rgba(0,0,0,0.22)';
 
 function isActive(href: string, pathname: string, tab: string) {
   if (href === '/')                    return pathname === '/';
@@ -99,10 +102,11 @@ function Level1({ node, active, expanded, onToggle }:
     <Link href={node.href!}
       style={{
         display: 'flex', alignItems: 'center', gap: 12, width: 'calc(100% - 16px)',
-        padding: '9px 12px', margin: '0 8px 2px', borderRadius: 9,
+        padding: '9px 12px', margin: '0 8px 2px', borderRadius: 10,
+        border: `1px solid ${active ? ACTIVE_BORDER : 'transparent'}`,
         color: active ? '#fff' : 'rgba(255,255,255,0.92)',
-        background: active ? PURPLE : 'transparent',
-        boxShadow: active ? PURPLE_SHADOW : 'none',
+        background: active ? ACTIVE_BG : 'transparent',
+        boxShadow: active ? ACTIVE_SHADOW : 'none',
         fontSize: 14, fontWeight: 600, lineHeight: 1.25,
       }}
       onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)'; (e.currentTarget as HTMLElement).style.color = '#fff'; } }}
@@ -116,16 +120,17 @@ function Level1({ node, active, expanded, onToggle }:
 // ── Nested rows (level ≥ 2): no icon, indented, with ├ / └ connector rails ──
 function SubRow({ node, depth, last, active, expanded, onToggle }:
   { node: Node; depth: number; last: boolean; active: boolean; expanded?: boolean; onToggle?: () => void }) {
-  const TICK = 12;
+  const TICK = 15;
   const isHeader = !!onToggle;            // an expandable sub-group (e.g. Active Clients)
   const idle = isHeader ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.62)';
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 6, width: '100%',
     padding: depth >= 3 ? '5px 9px' : '6px 9px',
-    marginBottom: 2, borderRadius: 8, border: 'none', textAlign: 'left', cursor: 'pointer',
+    marginBottom: 2, borderRadius: 9, textAlign: 'left', cursor: 'pointer',
+    border: `1px solid ${active ? ACTIVE_BORDER : 'transparent'}`,
     color: active ? '#fff' : idle,
-    background: active ? PURPLE : 'transparent',
-    boxShadow: active ? PURPLE_SHADOW : 'none',
+    background: active ? ACTIVE_BG : 'transparent',
+    boxShadow: active ? ACTIVE_SHADOW : 'none',
     fontSize: isHeader ? 11.5 : depth >= 3 ? 11.5 : 12.5,
     fontWeight: isHeader ? 700 : active ? 600 : 500,
     letterSpacing: isHeader ? '0.15px' : 'normal',
@@ -144,11 +149,18 @@ function SubRow({ node, depth, last, active, expanded, onToggle }:
     </>
   );
   return (
-    <div style={{ position: 'relative', paddingLeft: TICK + 8 }}>
-      {/* vertical rail: full height for middle rows, half (└) for the last */}
-      <span style={{ position: 'absolute', left: 0, top: 0, bottom: last ? 'calc(50% - 0px)' : 0, width: 1.5, background: RAIL }} />
-      {/* horizontal tick into the row */}
-      <span style={{ position: 'absolute', left: 0, top: 'calc(50% - 1px)', width: TICK, height: 1.5, background: RAIL }} />
+    <div style={{ position: 'relative', paddingLeft: TICK + 9 }}>
+      {/* Curved branch: comes down the rail then sweeps smoothly into the row
+          (rounded elbow instead of a hard right angle). */}
+      <span aria-hidden style={{
+        position: 'absolute', left: 0, top: 0, width: TICK, height: '50%',
+        borderLeft: `1.5px solid ${RAIL}`, borderBottom: `1.5px solid ${RAIL}`,
+        borderBottomLeftRadius: 12, pointerEvents: 'none',
+      }} />
+      {/* Continue the vertical rail to the next sibling (not on the last row). */}
+      {!last && <span aria-hidden style={{
+        position: 'absolute', left: 0, top: '50%', bottom: -2, width: 1.5, background: RAIL, pointerEvents: 'none',
+      }} />}
       {onToggle
         ? <button style={rowStyle} onClick={onToggle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{label}</button>
         : <Link href={node.href!} style={rowStyle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{label}</Link>}
@@ -215,8 +227,9 @@ function NavTree({ collapsed }: { collapsed: boolean }) {
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 padding: '10px 0', margin: '0 6px 2px', borderRadius: 9,
+                border: `1px solid ${active ? ACTIVE_BORDER : 'transparent'}`,
                 color: active ? '#fff' : 'rgba(255,255,255,0.9)',
-                background: active ? PURPLE : 'transparent', boxShadow: active ? PURPLE_SHADOW : 'none',
+                background: active ? ACTIVE_BG : 'transparent', boxShadow: active ? ACTIVE_SHADOW : 'none',
               }}
               onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)'; }}
               onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
