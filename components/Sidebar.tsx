@@ -103,8 +103,10 @@ function Level1({ node, active, expanded, onToggle }:
 //    drawn by the parent Branch so they stay continuous across open groups. ──
 function SubRow({ node, depth, active, expanded, onToggle }:
   { node: Node; depth: number; active: boolean; expanded?: boolean; onToggle?: () => void }) {
-  const isHeader = !!onToggle;
-  const idle = isHeader ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.62)';
+  // Expandable sub-group headers (Active Clients, Strike Off/Terminated) use
+  // the exact same type as the leaf rows at their level — only the chevron
+  // marks them as expandable.
+  const idle = 'rgba(255,255,255,0.62)';
   const rowStyle: React.CSSProperties = {
     display: 'flex', alignItems: 'center', gap: 6, width: '100%',
     padding: depth >= 3 ? '5px 9px' : '6px 9px',
@@ -115,8 +117,8 @@ function SubRow({ node, depth, active, expanded, onToggle }:
     boxShadow: active ? ACTIVE_SHADOW : 'none',
     // Level 2 (depth 2) sits a step larger than level 3 (depth 3).
     fontSize: depth >= 3 ? 11.5 : 12.5,
-    fontWeight: isHeader ? 700 : active ? 600 : 500,
-    letterSpacing: isHeader ? '0.15px' : 'normal',
+    fontWeight: active ? 600 : 500,
+    letterSpacing: 'normal',
     lineHeight: 1.2,
   };
   const hover = (on: boolean) => (e: React.MouseEvent) => {
