@@ -1333,7 +1333,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
 
       {/* Draft builder modal */}
       {expanded !== null && (() => {
-        const c = (data?.companies ?? []).find(x => x.companyId === expanded);
+        // Rows come from the AR-Reminder-driven list (companyId = ar.id), so the
+        // modal must resolve against that same list — not the raw renewals data.
+        const c = monthCompanies.find(x => x.companyId === expanded);
         if (!c) return null;
         return (
           <div onClick={() => setExpanded(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
