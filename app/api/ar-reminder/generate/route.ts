@@ -63,6 +63,9 @@ export async function GET() {
   for (const target of targets) {
     const matching = (companies ?? []).filter(c => c.fye_month === target.monthName);
 
+    // Intentionally counts ALL rows for the cycle, including soft-deleted
+    // ('Excluded') ones — that's how a user-removed company stays removed and
+    // isn't auto-recreated. Do NOT filter out status='Excluded' here.
     const { data: existing } = await supabase
       .from('ar_reminder')
       .select('entity_name')

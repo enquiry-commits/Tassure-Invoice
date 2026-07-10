@@ -63,7 +63,8 @@ export async function GET(req: NextRequest) {
     { data: qbInvoices },
     qbItems,
   ] = await Promise.all([
-    supabase.from('ar_reminder').select('*').eq('fye_month', month).eq('fye_year', year).order('entity_name'),
+    // Hide soft-deleted rows (status 'Excluded') from every list/consumer.
+    supabase.from('ar_reminder').select('*').eq('fye_month', month).eq('fye_year', year).or('status.is.null,status.neq.Excluded').order('entity_name'),
     supabase.from('companies').select('id, company_name, has_xbrl, has_nd, has_accounts, has_tax, uses_address, has_annual_return, has_agm'),
     supabase.from('nd_appointments').select('company_name, appointment_date, nd_id').eq('sub_role', 'Nominee Director').not('appointment_date', 'is', null).is('cessation_date', null),
     supabase.from('quickbooks_invoices').select('invoice_no, txn_date, customer_name, total_amt, balance, status').gte('txn_date', `${year}-01-01`).lte('txn_date', `${year}-12-31`),
@@ -238,6 +239,24 @@ export async function POST(req: NextRequest) {
   if (!fye_month || !fye_year) return NextResponse.json({ error: 'fye_month and fye_year required' }, { status: 400 });
 
   const supabase = createAdminClient();
+
+  // If this company was previously soft-deleted for the same cycle, restore it
+  // (un-exclude) rather than inserting a duplicate.
+  const { data: prior } = await supabase
+    .from('ar_reminder')
+    .select('id')
+    .ilike('entity_name', entity_name)
+    .eq('fye_month', fye_month)
+    .eq('fye_year', Number(fye_year))
+    .eq('status', 'Excluded')
+    .limit(1)
+    .maybeSingle();
+  if (prior) {
+    const { data, error } = await supabase.from('ar_reminder').update({ status: 'Pending' }).eq('id', prior.id).select().single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, restored: true, data });
+  }
+
   const record: Record<string, unknown> = { entity_name, fye_month, fye_year: Number(fye_year) };
   for (const field of ['uen', 'due_date', 'pic', 'acc_pic', 'tax_pic', ...EDITABLE_FIELDS]) {
     if (body[field] !== undefined) record[field] = body[field] || null;
@@ -253,9 +272,13 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from('ar_reminder').delete().eq('id', id);
+  // Soft delete: mark the row 'Excluded' instead of removing it. The row stays
+  // in the table, so the daily auto-generator (which only inserts entity names
+  // not already present for that cycle) will NOT re-create a company the user
+  // intentionally removed. Excluded rows are filtered out of every list.
+  const { error } = await supabase.from('ar_reminder').update({ status: 'Excluded' }).eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, excluded: true });
 }
 
 export async function PATCH(req: NextRequest) {
