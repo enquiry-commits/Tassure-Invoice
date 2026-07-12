@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
   Building2, UserCheck, MapPin, CalendarClock, AlertTriangle, RefreshCw,
-  BarChart3, PieChart, TrendingUp, Users, ArrowRight,
+  BarChart3, Users, ArrowRight,
 } from 'lucide-react';
 import QBConnectButton from '@/components/QBConnectButton';
-import { VBars, Donut, HBars } from '@/components/dashboard/Charts';
+import { VBars, HBars } from '@/components/dashboard/Charts';
 
 type Pt = { label: string; value: number; color?: string };
 interface Data {
@@ -98,27 +98,11 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          {/* Two-column rows */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
-            <Card title="Upcoming AR Filings" icon={<CalendarClock size={16} />}
-              action={<Link href="/billing?tab=ar" style={{ fontSize: 11.5, color: '#0f766e', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}>Open AR Reminder <ArrowRight size={12} /></Link>}>
-              <VBars data={data.upcomingAR} color="#d97706" height={170} />
-            </Card>
-
-            <Card title="Client Status" icon={<PieChart size={16} />}>
-              <Donut segments={data.statusDonut} />
-            </Card>
-
-            <Card title="Service Mix" icon={<TrendingUp size={16} />}
-              action={<span style={{ fontSize: 11, color: '#94a3b8' }}>active clients</span>}>
-              <HBars data={data.serviceMix} labelWidth={110} />
-            </Card>
-
-            <Card title="Top Nominee Directors" icon={<Users size={16} />}
-              action={<Link href="/nominee-directors" style={{ fontSize: 11.5, color: '#0f766e', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}>Directory <ArrowRight size={12} /></Link>}>
-              <HBars data={data.topNDs} accent="#7c3aed" labelWidth={150} />
-            </Card>
-          </div>
+          {/* Top nominee directors */}
+          <Card title="Top Nominee Directors" icon={<Users size={16} />}
+            action={<Link href="/nominee-directors" style={{ fontSize: 11.5, color: '#0f766e', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}>Directory <ArrowRight size={12} /></Link>}>
+            <HBars data={data.topNDs} accent="#7c3aed" labelWidth={150} />
+          </Card>
         </>
       )}
 
