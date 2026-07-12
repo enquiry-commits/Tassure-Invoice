@@ -1,184 +1,128 @@
-import StatCard from '@/components/StatCard';
-import SectionCard from '@/components/SectionCard';
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import {
+  Building2, UserCheck, MapPin, CalendarClock, AlertTriangle, RefreshCw,
+  BarChart3, PieChart, TrendingUp, Users, ArrowRight,
+} from 'lucide-react';
 import QBConnectButton from '@/components/QBConnectButton';
-import { Building2, UserCheck, MapPin, AlertTriangle } from 'lucide-react';
-import path from 'path';
-import fs from 'fs';
+import { VBars, Donut, HBars } from '@/components/dashboard/Charts';
 
-interface NDPerson {
-  ndName: string;
-  memberId: string | null;
-  activeCount: number;
-  inactiveCount: number;
-  appointments: {
-    companyName: string;
-    appointmentDate: string;
-    cessationDate: string;
-    isActive: boolean;
-  }[];
+type Pt = { label: string; value: number; color?: string };
+interface Data {
+  kpis: { activeClients: number; cssClients: number; activeNDAppts: number; addressClients: number; upcomingAR: number; lateFiling: number };
+  statusDonut: Pt[];
+  fyeMonths: Pt[];
+  serviceMix: Pt[];
+  upcomingAR: Pt[];
+  topNDs: Pt[];
 }
 
-interface NDCompany {
-  companyName: string;
-  hasActiveND: boolean;
-  ndPersons: { name: string; appointmentDate: string; cessationDate: string; isActive: boolean }[];
-  activeNDs: unknown[];
-  inactiveNDs: { name: string; cessationDate: string }[];
+function Card({ title, icon, children, action }: { title: string; icon: React.ReactNode; children: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <div style={{ background: '#fff', borderRadius: 14, border: '1px solid #e8ecf1', boxShadow: '0 1px 3px rgba(16,37,66,.04), 0 8px 24px rgba(16,37,66,.04)', padding: '18px 20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        <span style={{ color: '#0f766e', display: 'flex' }}>{icon}</span>
+        <h3 style={{ fontSize: 13.5, fontWeight: 700, color: '#1e3a5f', margin: 0, letterSpacing: '-.01em' }}>{title}</h3>
+        <span style={{ marginLeft: 'auto' }}>{action}</span>
+      </div>
+      {children}
+    </div>
+  );
 }
 
-async function getData() {
-  const dataDir = path.join(process.cwd(), 'data');
-  const clients: Record<string, unknown>[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'clients_merged.json'), 'utf8'));
-  const ndByCompany: NDCompany[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'nd_by_company.json'), 'utf8'));
-  const ndPersons: NDPerson[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'nd_from_individuals.json'), 'utf8'));
-  return { clients, ndByCompany, ndPersons };
+function Kpi({ label, value, sub, Icon, tint, href }: { label: string; value: number | string; sub?: string; Icon: typeof Building2; tint: string; href: string }) {
+  return (
+    <Link href={href} style={{
+      display: 'block', background: '#fff', borderRadius: 14, border: '1px solid #e8ecf1',
+      boxShadow: '0 1px 3px rgba(16,37,66,.04)', padding: '16px 18px', textDecoration: 'none', transition: 'box-shadow .15s, transform .15s',
+    }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 6px 20px rgba(16,37,66,.10)'; (e.currentTarget as HTMLElement).style.transform = 'translateY(-1px)'; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 1px 3px rgba(16,37,66,.04)'; (e.currentTarget as HTMLElement).style.transform = 'none'; }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <span style={{ width: 34, height: 34, borderRadius: 9, background: `${tint}15`, color: tint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={18} /></span>
+        <span style={{ fontSize: 11.5, color: '#64748b', fontWeight: 600 }}>{label}</span>
+      </div>
+      <div style={{ fontSize: 30, fontWeight: 800, color: '#12233b', lineHeight: 1, letterSpacing: '-.02em' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>{sub}</div>}
+    </Link>
+  );
 }
 
-export default async function DashboardPage() {
-  const { clients, ndByCompany, ndPersons } = await getData();
+export default function DashboardPage() {
+  const [data, setData] = useState<Data | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const totalClients      = clients.length;
-  const withAddress       = clients.filter(c => c.usesAddressService).length;
-  const activeNDCompanies = ndByCompany.filter(c => c.hasActiveND).length;
-  const ceasedOnly        = ndByCompany.filter(c => !c.hasActiveND && c.ndPersons.length > 0);
-
-  // Top NDs by active count
-  const topNDs = [...ndPersons]
-    .filter(p => p.activeCount > 0)
-    .sort((a, b) => b.activeCount - a.activeCount)
-    .slice(0, 8);
-
-  // Recently ceased (within 6 months from today)
-  const today = new Date();
-  const sixMonthsAgo = new Date(today);
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-
-  function parseDate(s: string) {
-    if (!s) return null;
-    const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-    return m ? new Date(`${m[3]}-${m[2]}-${m[1]}`) : null;
-  }
-
-  const recentCeased: { company: string; nd: string; date: string }[] = [];
-  ceasedOnly.forEach(c => {
-    c.inactiveNDs.forEach(nd => {
-      const d = parseDate(nd.cessationDate);
-      if (d && d >= sixMonthsAgo) {
-        recentCeased.push({ company: c.companyName, nd: nd.name, date: nd.cessationDate });
-      }
-    });
-  });
-  recentCeased.sort((a, b) => (parseDate(b.date)?.getTime() ?? 0) - (parseDate(a.date)?.getTime() ?? 0));
+  const load = () => {
+    setLoading(true);
+    fetch('/api/dashboard').then(r => r.json()).then(d => setData(d)).finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
 
   return (
     <div>
-      {/* Breadcrumb + QB status */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="text-sm text-slate-500">Dashboard</div>
-        <QBConnectButton />
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#12233b', margin: 0, letterSpacing: '-.02em' }}>Overview</h1>
+          <p style={{ fontSize: 13, color: '#64748b', margin: '4px 0 0' }}>Live snapshot of your corporate-services portfolio</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={load} disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 600, color: '#475569', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 12px', cursor: 'pointer' }}>
+            <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> Refresh
+          </button>
+          <QBConnectButton />
+        </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard value={totalClients}      label="Total Clients"        color="orange" Icon={Building2}      />
-        <StatCard value={activeNDCompanies} label="Active ND Companies"  color="yellow" Icon={UserCheck}      />
-        <StatCard value={withAddress}       label="Address Service"      color="gray"   Icon={MapPin}         />
-        <StatCard value={ceasedOnly.length} label="ND Ceased (No Cover)" color="red"    Icon={AlertTriangle}  />
-      </div>
-
-      {/* Main content grid */}
-      <div className="grid grid-cols-2 gap-4">
-
-        {/* ND Person Summary */}
-        <SectionCard title="Nominee Director Summary" count={ndPersons.filter(p => p.activeCount > 0).length}>
-          <div className="space-y-2">
-            {topNDs.map(p => (
-              <div key={p.ndName} className="flex items-center justify-between py-1.5 border-b border-slate-100 last:border-0">
-                <span className="text-sm font-medium text-slate-700">{p.ndName}</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                    {p.activeCount} active
-                  </span>
-                  {p.inactiveCount > 0 && (
-                    <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">
-                      {p.inactiveCount} ceased
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+      {!data ? (
+        <div style={{ textAlign: 'center', padding: 80, color: '#94a3b8', fontSize: 14 }}>Loading analytics…</div>
+      ) : (
+        <>
+          {/* KPI row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 18 }}>
+            <Kpi label="Active Clients"       value={data.kpis.activeClients} sub={`${data.kpis.cssClients} CSS clients`} Icon={Building2}    tint="#0f766e" href="/companies" />
+            <Kpi label="Nominee Appointments" value={data.kpis.activeNDAppts} sub="active mandates"                    Icon={UserCheck}    tint="#7c3aed" href="/nominee-directors" />
+            <Kpi label="Address Service"      value={data.kpis.addressClients} sub="clients on our address"           Icon={MapPin}       tint="#2563eb" href="/address-service" />
+            <Kpi label="Upcoming AR (6 mo)"   value={data.kpis.upcomingAR}   sub="filings due this window"           Icon={CalendarClock} tint="#d97706" href="/billing?tab=ar" />
+            <Kpi label="Late-Filing Watch"    value={data.kpis.lateFiling}   sub="companies flagged"                 Icon={AlertTriangle} tint="#e11d48" href="/late-filing" />
           </div>
-        </SectionCard>
 
-        {/* Recently Ceased ND Alert */}
-        <SectionCard title="ND Ceased — No Replacement" count={ceasedOnly.length}>
-          {recentCeased.length === 0 ? (
-            <p className="text-sm text-slate-400">No recent cessations in last 6 months.</p>
-          ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {recentCeased.slice(0, 20).map((item, i) => (
-                <div key={i} className="flex items-start gap-2 py-1.5 border-b border-slate-100 last:border-0">
-                  <span className="text-red-500 mt-0.5 flex-shrink-0">⚠</span>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-slate-700 truncate">{item.company}</div>
-                    <div className="text-xs text-slate-400">{item.nd} · Ceased {item.date}</div>
-                  </div>
-                </div>
-              ))}
-              {recentCeased.length > 20 && (
-                <p className="text-xs text-slate-400 text-center pt-1">
-                  +{recentCeased.length - 20} more companies
-                </p>
-              )}
-            </div>
-          )}
-        </SectionCard>
-
-        {/* Address Service breakdown */}
-        <SectionCard title="Address Service" count={withAddress}>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">Using 10 Anson Road #12-08</span>
-              <span className="font-bold text-slate-800">{withAddress}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-600">Not using address service</span>
-              <span className="font-bold text-slate-800">{totalClients - withAddress}</span>
-            </div>
-            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${Math.round(withAddress / totalClients * 100)}%`, backgroundColor: '#1d4ed8' }}
-              />
-            </div>
-            <p className="text-xs text-slate-400 text-right">
-              {Math.round(withAddress / totalClients * 100)}% of clients
-            </p>
+          {/* FYE calendar — full width */}
+          <div style={{ marginBottom: 16 }}>
+            <Card title="Financial Year-End Calendar" icon={<BarChart3 size={16} />}
+              action={<span style={{ fontSize: 11, color: '#94a3b8' }}>active clients by FYE month</span>}>
+              <VBars data={data.fyeMonths} color="#0f766e" height={180} />
+            </Card>
           </div>
-        </SectionCard>
 
-        {/* Quick links */}
-        <SectionCard title="Quick Actions">
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { label: 'View All Companies',       href: '/companies',         color: '#1d4ed8' },
-              { label: 'Nominee Directors Report', href: '/nominee-directors', color: '#16a34a' },
-              { label: 'Address Service List',     href: '/address-service',   color: '#d97706' },
-              { label: 'Generate Billing Draft',   href: '/billing',           color: '#dc2626' },
-            ].map(({ label, href, color }) => (
-              <a
-                key={href}
-                href={href}
-                className="block text-center text-sm text-white font-medium py-2.5 px-3 rounded-lg transition-opacity hover:opacity-90"
-                style={{ backgroundColor: color }}
-              >
-                {label}
-              </a>
-            ))}
+          {/* Two-column rows */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
+            <Card title="Upcoming AR Filings" icon={<CalendarClock size={16} />}
+              action={<Link href="/billing?tab=ar" style={{ fontSize: 11.5, color: '#0f766e', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}>Open AR Reminder <ArrowRight size={12} /></Link>}>
+              <VBars data={data.upcomingAR} color="#d97706" height={170} />
+            </Card>
+
+            <Card title="Client Status" icon={<PieChart size={16} />}>
+              <Donut segments={data.statusDonut} />
+            </Card>
+
+            <Card title="Service Mix" icon={<TrendingUp size={16} />}
+              action={<span style={{ fontSize: 11, color: '#94a3b8' }}>active clients</span>}>
+              <HBars data={data.serviceMix} labelWidth={110} />
+            </Card>
+
+            <Card title="Top Nominee Directors" icon={<Users size={16} />}
+              action={<Link href="/nominee-directors" style={{ fontSize: 11.5, color: '#0f766e', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, textDecoration: 'none' }}>Directory <ArrowRight size={12} /></Link>}>
+              <HBars data={data.topNDs} accent="#7c3aed" labelWidth={150} />
+            </Card>
           </div>
-        </SectionCard>
+        </>
+      )}
 
-      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
