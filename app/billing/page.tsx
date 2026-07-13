@@ -1318,6 +1318,14 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   // created manually in QB outside this system).
   const currentFye = fyeDateString(month, parseInt(year || '0', 10));
   const generatedThisCycle = (c: CompanyBilling) => (c.generatedInvoices ?? []).filter(g => g.fyeCycle === currentFye);
+  // Latest invoice number for this cycle, per QB company — for the dedicated
+  // TAB Invoice / TAC Invoice columns. Most recent by createdAt if more than
+  // one somehow exists for the same cycle.
+  const latestInvoiceNo = (c: CompanyBilling, company: 'TAB' | 'TAC') => {
+    const matches = generatedThisCycle(c).filter(g => g.qbCompany === company);
+    if (!matches.length) return null;
+    return matches.reduce((a, b) => (a.createdAt > b.createdAt ? a : b)).invoiceNo;
+  };
   const notInvoicedYet = (c: CompanyBilling) =>
     !currentFye ? true
     : generatedThisCycle(c).length > 0 ? false
@@ -1395,12 +1403,14 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>BILLING DRAFTS</span>
           <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '28px 1.6fr 70px 120px 120px 140px 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-          {['', 'Company', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'PIC'].map((h, i) => (
+        <div style={{ display: 'grid', gridTemplateColumns: '28px 1.6fr 70px 120px 120px 140px 110px 110px 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+          {['', 'Company', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC'].map((h, i) => (
             i === 4
               ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                   ND <span style={{ fontSize: 8, fontWeight: 800, background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 3, padding: '0 3px' }}>TAC</span>
                 </div>
+              : (i === 6 || i === 7)
+              ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', textAlign: 'center' }}>{h}</div>
               : <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px' }}>{h}</div>
           ))}
         </div>
@@ -1420,7 +1430,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             return (
               <div key={c.companyId}>
                 <div onClick={() => setExpanded(isOpen ? null : c.companyId)}
-                  style={{ display: 'grid', gridTemplateColumns: '28px 1.6fr 70px 120px 120px 140px 80px', alignItems: 'center', padding: '9px 12px', background: isOpen ? '#f0f6ff' : rowBg, borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                  style={{ display: 'grid', gridTemplateColumns: '28px 1.6fr 70px 120px 120px 140px 110px 110px 80px', alignItems: 'center', padding: '9px 12px', background: isOpen ? '#f0f6ff' : rowBg, borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
                   onMouseEnter={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#f0f6ff'; }}
                   onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = rowBg; }}>
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
@@ -1432,21 +1442,6 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                         : <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>✓ Invoiced</span>}
                     </div>
                     {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen}</div>}
-                    {generatedThisCycle(c).length > 0 && (
-                      <div style={{ display: 'flex', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
-                        {generatedThisCycle(c).map((g, gi) => (
-                          <span key={gi} style={{
-                            fontSize: 9, fontFamily: 'monospace', fontWeight: 700,
-                            color: g.qbCompany === 'TAC' ? '#7c2d12' : '#1d4ed8',
-                            background: g.qbCompany === 'TAC' ? '#ffedd5' : '#eff6ff',
-                            border: `1px solid ${g.qbCompany === 'TAC' ? '#fed7aa' : '#dbeafe'}`,
-                            borderRadius: 4, padding: '1px 5px',
-                          }}>
-                            {g.qbCompany} #{g.invoiceNo ?? '?'}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#64748b' }}>{c.fyeMonth ?? '—'}</div>
                   <div style={{ padding: '0 6px', display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -1460,6 +1455,18 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   <div style={{ padding: '0 6px', display: 'flex', flexDirection: 'column', gap: 3 }}>
                     {arA   && <ServiceMini label="AR"   status={arA.status}   applicable={arA.applicable}   />}
                     {xbrlA && <ServiceMini label="XBRL" status={xbrlA.status} applicable={xbrlA.applicable} />}
+                  </div>
+                  {/* Latest invoice number for this cycle, per QB company — the
+                      authoritative generated_invoices record, not a QB-parsed guess. */}
+                  <div style={{ padding: '0 6px', textAlign: 'center' }}>
+                    {latestInvoiceNo(c, 'TAB')
+                      ? <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>#{latestInvoiceNo(c, 'TAB')}</span>
+                      : <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>}
+                  </div>
+                  <div style={{ padding: '0 6px', textAlign: 'center' }}>
+                    {latestInvoiceNo(c, 'TAC')
+                      ? <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>#{latestInvoiceNo(c, 'TAC')}</span>
+                      : <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ?? '—'}</div>
                 </div>
