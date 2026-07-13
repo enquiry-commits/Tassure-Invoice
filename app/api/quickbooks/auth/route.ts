@@ -1,10 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 
-export async function GET() {
+// Kicks off OAuth for a specific QB company — TAB (default, basic services) or
+// TAC (Nominee Director only). The target company rides in `state`, which
+// Intuit echoes back unchanged to the callback.
+export async function GET(req: NextRequest) {
+  const company = req.nextUrl.searchParams.get('company') === 'TAC' ? 'TAC' : 'TAB';
   const clientId    = process.env.QB_CLIENT_ID!;
   const redirectUri = process.env.QB_REDIRECT_URI!;
-  const state       = crypto.randomBytes(16).toString('hex');
+  const state = `${company}:${crypto.randomBytes(16).toString('hex')}`;
 
   const params = new URLSearchParams({
     client_id:     clientId,

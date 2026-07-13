@@ -63,6 +63,18 @@ export interface CompanyBilling {
   priorLines: PriorLine[]; // every line from the most recent renewal invoice (to clone)
   priorInvoiceDate: string | null;
   priorInvoiceNo: string | null; // QB DocNumber of that prior renewal invoice
+  generatedInvoices: GeneratedInvoice[]; // invoices OUR system has created (authoritative)
+}
+
+export interface GeneratedInvoice {
+  qbCompany: 'TAB' | 'TAC';
+  invoiceNo: string | null;
+  fyeCycle: string | null;
+  fyeMonth: string | null;
+  fyeYear: number | null;
+  totalAmt: number | null;
+  services: string[];
+  createdAt: string;
 }
 
 export interface PriorLine {
@@ -105,6 +117,7 @@ export async function GET(req: NextRequest) {
     annualItems,
     feeItems,
     carriedItems,
+    { data: generatedRows },
   ] = await Promise.all([
     supabase
       .from('companies')
@@ -151,10 +164,32 @@ export async function GET(req: NextRequest) {
       .gte('txn_date', cutoff24mStr)
       .order('txn_date', { ascending: false })
       .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; description: string | null; amount: number | null; service_type: string | null }>>,
+    supabase
+      .from('generated_invoices')
+      .select('company_name, qb_company, invoice_no, fye_cycle, fye_month, fye_year, total_amt, services, created_at')
+      .order('created_at', { ascending: false }),
   ]);
   if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
 
   const ndActiveSet = new Set((activeNDs ?? []).map(a => normalize(a.company_name)));
+
+  // Index our own generated-invoice records per company (authoritative record
+  // of what THIS system has already invoiced, per QB company).
+  const generatedMap = new Map<string, GeneratedInvoice[]>();
+  for (const g of generatedRows ?? []) {
+    const n = normalize(g.company_name);
+    if (!generatedMap.has(n)) generatedMap.set(n, []);
+    generatedMap.get(n)!.push({
+      qbCompany: g.qb_company as 'TAB' | 'TAC',
+      invoiceNo: g.invoice_no,
+      fyeCycle: g.fye_cycle,
+      fyeMonth: g.fye_month,
+      fyeYear: g.fye_year,
+      totalAmt: g.total_amt,
+      services: g.services ?? [],
+      createdAt: g.created_at,
+    });
+  }
 
   // ── 4b. TRUE annual fee per service ──────────────────────────────────────
   // QB splits an annual fee across a recognised line ("Corporate Secretarial
@@ -410,6 +445,7 @@ export async function GET(req: NextRequest) {
       priorLines: carriedLines,
       priorInvoiceDate: prior?.txn_date ?? null,
       priorInvoiceNo: prior?.invoice_no ?? null,
+      generatedInvoices: generatedMap.get(normName) ?? [],
     };
   });
 

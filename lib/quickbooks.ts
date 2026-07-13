@@ -4,22 +4,38 @@ const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
   : 'https://quickbooks.api.intuit.com';
 
+export type QbCompany = 'TAB' | 'TAC';
+
 interface TokenRow {
   realm_id: string;
   access_token: string;
   refresh_token: string;
   expires_at: string;
   refresh_expires_at: string;
+  company_label: QbCompany;
 }
 
-// Get stored tokens, auto-refresh if expired
-export async function getValidToken(): Promise<TokenRow | null> {
+// Get stored tokens for a specific QB company, auto-refresh if expired.
+// 'TAB' is the default company (all basic services); 'TAC' is the second
+// company used only for Nominee Director invoicing.
+export async function getValidToken(company: QbCompany = 'TAB'): Promise<TokenRow | null> {
   const supabase = createAdminClient();
-  const { data } = await supabase
+  let { data } = await supabase
     .from('quickbooks_tokens')
     .select('*')
+    .eq('company_label', company)
     .limit(1)
     .maybeSingle();
+
+  // Backward-compat fallback for the window before the multi-company
+  // migration (scripts/add-multi-company-qb-support.sql) has been run: the
+  // company_label column may not exist yet, or the one legacy token row may
+  // not be labelled yet. Only ever fall back for TAB — never hand TAB's
+  // token to a TAC caller just because nothing is labelled.
+  if (!data && company === 'TAB') {
+    const legacy = await supabase.from('quickbooks_tokens').select('*').limit(1).maybeSingle();
+    if (legacy.data && !(legacy.data as { company_label?: string }).company_label) data = legacy.data;
+  }
 
   if (!data) return null;
 
@@ -68,9 +84,9 @@ export async function getValidToken(): Promise<TokenRow | null> {
   return { ...data, ...updated } as TokenRow;
 }
 
-// Run a QB query and return rows
-export async function qbQuery(query: string): Promise<{ rows: Record<string, unknown>[]; realmId: string } | null> {
-  const token = await getValidToken();
+// Run a QB query against a specific company and return rows.
+export async function qbQuery(query: string, company: QbCompany = 'TAB'): Promise<{ rows: Record<string, unknown>[]; realmId: string } | null> {
+  const token = await getValidToken(company);
   if (!token) return null;
 
   const url = `${QB_BASE}/v3/company/${token.realm_id}/query?query=${encodeURIComponent(query)}&minorversion=65`;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getValidToken } from '@/lib/quickbooks';
+import { getValidToken, type QbCompany } from '@/lib/quickbooks';
+import { createAdminClient } from '@/lib/supabase';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -11,6 +12,13 @@ export interface DraftLineItem {
   rate: number;
   qty?: number;
   productService?: string;  // exact QB Product/Service name, e.g. "Secretary:Corporate Secretarial Services"
+}
+
+interface CompanyResult {
+  invoiceNo?: string;
+  qbId?: string;
+  total?: number;
+  error?: string;
 }
 
 // ── Look up QB Customer by display name ───────────────────────────────────────
@@ -77,37 +85,21 @@ function pickItem(service: string, itemMap: Map<string, { id: string; name: stri
   return itemMap.size ? [...itemMap.values()][0] : { id: '1', name: 'Services' };
 }
 
-// ── POST /api/quickbooks/create-invoice ───────────────────────────────────────
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { companyName, email, lines, txnDate, sendEmail } = body as {
-    companyName: string;
-    email?: string;
-    lines: DraftLineItem[];
-    txnDate?: string;
-    sendEmail?: boolean;
-  };
-
-  if (!companyName || !lines?.length) {
-    return NextResponse.json({ error: 'companyName and lines are required' }, { status: 400 });
-  }
-
-  const tokenRow = await getValidToken();
-  if (!tokenRow) return NextResponse.json({ error: 'QuickBooks not connected' }, { status: 401 });
-
+// Create one invoice in ONE QB company for the given lines. Used twice per
+// request when a draft has both TAB lines (basic services) and TAC lines
+// (Nominee Director) — each is its own invoice in its own QB company.
+async function createInvoiceInCompany(
+  company: QbCompany, companyName: string, lines: DraftLineItem[],
+  email: string | undefined, txnDate: string, sendEmail: boolean | undefined,
+): Promise<CompanyResult> {
+  const tokenRow = await getValidToken(company);
+  if (!tokenRow) return { error: `QuickBooks ${company} not connected` };
   const { access_token: token, realm_id: realmId } = tokenRow;
 
-  // 1. Find customer
   const customer = await findCustomer(token, realmId, companyName);
-  if (!customer) {
-    return NextResponse.json({ error: `Customer not found in QB: "${companyName}"` }, { status: 404 });
-  }
+  if (!customer) return { error: `Customer not found in QB ${company}: "${companyName}"` };
 
-  // 2. Get item map
   const itemMap = await getItemMap(token, realmId);
-
-  // 3. Build invoice lines. Prefer the exact QB Product/Service name the client
-  //    resolved from invoice history/templates; fall back to keyword matching.
   const invoiceLines = lines.map((l, i) => {
     const exact = l.productService ? itemMap.get(l.productService.toLowerCase()) : undefined;
     const item = exact ?? pickItem(l.service, itemMap);
@@ -124,45 +116,95 @@ export async function POST(req: NextRequest) {
     };
   });
 
-  // 4. Build invoice payload
   const payload: Record<string, unknown> = {
     Line:        invoiceLines,
     CustomerRef: { value: customer.id, name: customer.name },
-    TxnDate:     txnDate ?? new Date().toISOString().slice(0, 10),
+    TxnDate:     txnDate,
     PrintStatus: 'NeedToPrint',
     // Default: create as a draft for review in QB — do NOT queue for sending.
-    // The email address is still stored so staff can send it manually later.
     EmailStatus: sendEmail && email ? 'NeedToSend' : 'NotSet',
   };
   if (email) payload.BillEmail = { Address: email };
 
-  // 5. Create draft invoice in QB
-  const createRes = await fetch(
-    `${QB_BASE}/v3/company/${realmId}/invoice?minorversion=65`,
-    {
-      method:  'POST',
-      headers: {
-        Authorization:  `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        Accept:         'application/json',
-      },
-      body: JSON.stringify(payload),
-    }
-  );
+  const createRes = await fetch(`${QB_BASE}/v3/company/${realmId}/invoice?minorversion=65`, {
+    method:  'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(payload),
+  });
 
   if (!createRes.ok) {
     const errText = await createRes.text();
-    return NextResponse.json({ error: 'QB create failed', detail: errText }, { status: 500 });
+    return { error: `QB ${company} create failed: ${errText.slice(0, 300)}` };
   }
 
   const created = await createRes.json();
   const inv = created.Invoice ?? {};
+  return { invoiceNo: inv.DocNumber, qbId: inv.Id, total: inv.TotalAmt };
+}
 
+// ── POST /api/quickbooks/create-invoice ───────────────────────────────────────
+// Basic services (Secretary/Address/AR/XBRL/Accounts/Tax/Discount) invoice
+// under TAB (the default company); Nominee Director always invoices
+// separately under TAC. A single request can produce up to two invoices.
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const {
+    companyName, email, txnDate, sendEmail,
+    tabLines, tacLines,
+    fyeMonth, fyeYear, fyeCycle,
+  } = body as {
+    companyName: string;
+    email?: string;
+    txnDate?: string;
+    sendEmail?: boolean;
+    tabLines: DraftLineItem[];
+    tacLines: DraftLineItem[];
+    fyeMonth?: string;
+    fyeYear?: number;
+    fyeCycle?: string; // "dd.mm.yyyy"
+  };
+
+  if (!companyName || (!tabLines?.length && !tacLines?.length)) {
+    return NextResponse.json({ error: 'companyName and at least one line (tabLines or tacLines) are required' }, { status: 400 });
+  }
+
+  const date = txnDate ?? new Date().toISOString().slice(0, 10);
+  const supabase = createAdminClient();
+
+  const [tab, tac] = await Promise.all([
+    tabLines?.length ? createInvoiceInCompany('TAB', companyName, tabLines, email, date, sendEmail) : Promise.resolve(null),
+    tacLines?.length ? createInvoiceInCompany('TAC', companyName, tacLines, email, date, sendEmail) : Promise.resolve(null),
+  ]);
+
+  // Persist every successful creation — the authoritative "already invoiced
+  // this cycle" record going forward, and what lets the Billing list show the
+  // real invoice number per company instead of a generic "Invoiced" chip.
+  const toRecord: { qb_company: QbCompany; result: CompanyResult; lines: DraftLineItem[] }[] = [];
+  if (tab && !tab.error) toRecord.push({ qb_company: 'TAB', result: tab, lines: tabLines ?? [] });
+  if (tac && !tac.error) toRecord.push({ qb_company: 'TAC', result: tac, lines: tacLines ?? [] });
+
+  if (toRecord.length) {
+    await supabase.from('generated_invoices').insert(toRecord.map(({ qb_company, result, lines }) => ({
+      company_name: companyName,
+      fye_month: fyeMonth ?? null,
+      fye_year: fyeYear ?? null,
+      fye_cycle: fyeCycle ?? null,
+      qb_company,
+      invoice_no: result.invoiceNo ?? null,
+      qb_invoice_id: result.qbId ?? null,
+      total_amt: result.total ?? null,
+      services: [...new Set(lines.map(l => l.service))],
+    })));
+  }
+
+  const anySuccess = !!(tab && !tab.error) || !!(tac && !tac.error);
   return NextResponse.json({
-    success:   true,
-    invoiceNo: inv.DocNumber,
-    qbId:      inv.Id,
-    customer:  customer.name,
-    total:     inv.TotalAmt,
-  });
+    success: anySuccess,
+    tab: tab && !tab.error ? { invoiceNo: tab.invoiceNo, qbId: tab.qbId, total: tab.total } : null,
+    tac: tac && !tac.error ? { invoiceNo: tac.invoiceNo, qbId: tac.qbId, total: tac.total } : null,
+    errors: {
+      ...(tab?.error ? { tab: tab.error } : {}),
+      ...(tac?.error ? { tac: tac.error } : {}),
+    },
+  }, { status: anySuccess ? 200 : 500 });
 }

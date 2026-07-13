@@ -8,7 +8,7 @@ import {
   ShieldCheck, MapPin, UserCheck, BarChart3, BookOpen, DollarSign,
   Plus, Check, X, Trash2,
 } from 'lucide-react';
-import type { RenewalStatus, AnnualStatus, CompanyBilling } from '@/app/api/billing/renewals/route';
+import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { fmtDate, fmtMonth, toDisplayDate } from '@/lib/date';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
@@ -948,13 +948,37 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const setLine = (i: number, patch: Partial<EditableLine>) =>
     setLines(prev => prev.map((l, idx) => (idx === i ? { ...l, ...patch } : l)));
 
+  // All Nominee Director lines invoice separately under TAC; everything else
+  // (Secretary/Address/AR/XBRL/Accounts/Tax/Discount) stays under TAB, the
+  // default company. Keep original array indices so setLine/remove still
+  // target the right row after splitting into two rendered tables.
+  const withIndex = lines.map((l, i) => ({ l, i }));
+  const tabRows = withIndex.filter(x => x.l.service !== 'ND');
+  const tacRows = withIndex.filter(x => x.l.service === 'ND');
+
+  // Only offer the TAC section at all when this company actually has an ND
+  // line — most companies never will.
+  const hasTac = tacRows.length > 0;
+
+  const [tacStatus, setTacStatus] = useState<{ connected: boolean } | null>(null);
+  useEffect(() => {
+    if (!hasTac) return;
+    fetch('/api/quickbooks/status?company=TAC').then(r => r.json()).then(setTacStatus).catch(() => setTacStatus({ connected: false }));
+  }, [hasTac]);
+
   const included = lines.filter(l => l.include);
+  const includedTab = included.filter(l => l.service !== 'ND');
+  const includedTac = included.filter(l => l.service === 'ND');
   const total = included.reduce((s, l) => s + l.qty * l.rate, 0);
+  const totalTab = includedTab.reduce((s, l) => s + l.qty * l.rate, 0);
+  const totalTac = includedTac.reduce((s, l) => s + l.qty * l.rate, 0);
   const missingRate = included.some(l => !l.rate);
 
   const createInvoice = async () => {
     setDrafting(true); setDraftResult(null);
     try {
+      const fyeYear = cycleFye ? +cycleFye.slice(-4) : currentYear;
+      const toApiLine = (l: EditableLine) => ({ service: l.service, productService: l.productService, description: l.description, rate: l.rate, qty: l.qty });
       const res = await fetch('/api/quickbooks/create-invoice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -962,18 +986,59 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           email: email || undefined,
           txnDate,
           sendEmail: false,
-          lines: included.map(l => ({ service: l.service, productService: l.productService, description: l.description, rate: l.rate, qty: l.qty })),
+          tabLines: includedTab.map(toApiLine),
+          tacLines: includedTac.map(toApiLine),
+          fyeMonth: c.fyeMonth, fyeYear, fyeCycle: cycleFye ?? null,
         }),
       });
       const json = await res.json();
-      if (json.error) setDraftResult({ ok: false, msg: json.error + (json.detail ? ` — ${json.detail.slice(0, 140)}` : '') });
-      else setDraftResult({ ok: true, msg: `Invoice ${json.invoiceNo ? `#${json.invoiceNo}` : ''} created in QuickBooks · S$${(json.total ?? total).toLocaleString()} · review & send from QB` });
+      const parts: string[] = [];
+      if (json.tab) parts.push(`TAB #${json.tab.invoiceNo ?? '?'} · S$${(json.tab.total ?? 0).toLocaleString()}`);
+      if (json.tac) parts.push(`TAC #${json.tac.invoiceNo ?? '?'} · S$${(json.tac.total ?? 0).toLocaleString()}`);
+      const errs: string[] = [];
+      if (json.errors?.tab) errs.push(`TAB: ${json.errors.tab}`);
+      if (json.errors?.tac) errs.push(`TAC: ${json.errors.tac}`);
+      if (json.success) {
+        setDraftResult({ ok: true, msg: `Created in QuickBooks — ${parts.join(' · ')}${errs.length ? `  ⚠ ${errs.join('; ')}` : ''} · review & send from QB` });
+      } else {
+        setDraftResult({ ok: false, msg: errs.join('; ') || json.error || 'QB create failed' });
+      }
     } catch (e: unknown) {
       setDraftResult({ ok: false, msg: e instanceof Error ? e.message : 'Request failed' });
     } finally { setDrafting(false); }
   };
 
   const inputStyle: React.CSSProperties = { border: '1px solid #cbd5e1', borderRadius: 5, padding: '6px 6px', fontSize: 12, outline: 'none', background: '#fff' };
+
+  // Shared table renderer for both the TAB and TAC sections.
+  const renderTable = (rows: { l: EditableLine; i: number }[], emptyMsg: string) => (
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, background: '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+        <div></div><div>Service</div><div>Description</div><div>Status</div><div style={{ textAlign: 'center' }}>Qty</div><div style={{ textAlign: 'right' }}>Rate (S$)</div><div style={{ textAlign: 'right' }}>Amount</div><div></div>
+      </div>
+      {rows.map(({ l, i }) => {
+        const cfg = SVC_CONFIG[l.service as keyof typeof SVC_CONFIG];
+        const svcLabel = cfg?.label ?? (l.productService.includes(':') ? l.productService.split(':').slice(1).join(':') : l.service);
+        return (
+          <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, alignItems: 'start', padding: '16px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
+            <input type="checkbox" checked={l.include} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }} title={l.productService}>
+              {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svcLabel}</span>
+            </div>
+            <AutoTextarea value={l.description} onChange={v => setLine(i, { description: v })} style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
+            <span style={{ fontSize: 10, fontWeight: 600, color: l.due ? '#c2410c' : '#94a3b8' }}>{l.reason}</span>
+            <input type="number" min={1} value={l.qty} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center' }} />
+            <input type="number" min={0} value={l.rate || ''} placeholder="0" onChange={e => setLine(i, { rate: +e.target.value || 0 })}
+              style={{ ...inputStyle, width: 90, textAlign: 'right', borderColor: l.include && !l.rate ? '#f87171' : '#cbd5e1', background: l.include && !l.rate ? '#fef2f2' : '#fff' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: l.include ? '#0f766e' : '#94a3b8', textAlign: 'right' }}>{l.include ? `S$${(l.qty * l.rate).toLocaleString()}` : '—'}</span>
+            <button onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))} title="Remove line" style={{ border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'center' }}><X size={13} /></button>
+          </div>
+        );
+      })}
+      {rows.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>{emptyMsg}</div>}
+    </div>
+  );
 
   return (
     <div style={{ padding: '28px 20px', background: '#fff' }}>
@@ -1005,35 +1070,15 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           : <span style={{ color: '#b45309' }}>No prior renewal invoice found — draft built from standard template. Confirm each line.</span>}
       </div>
 
-      {/* Editable draft line items */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, background: '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-          <div></div><div>Service</div><div>Description</div><div>Status</div><div style={{ textAlign: 'center' }}>Qty</div><div style={{ textAlign: 'right' }}>Rate (S$)</div><div style={{ textAlign: 'right' }}>Amount</div><div></div>
-        </div>
-        {lines.map((l, i) => {
-          const cfg = SVC_CONFIG[l.service as keyof typeof SVC_CONFIG];
-          const svcLabel = cfg?.label ?? (l.productService.includes(':') ? l.productService.split(':').slice(1).join(':') : l.service);
-          return (
-            <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, alignItems: 'start', padding: '16px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
-              <input type="checkbox" checked={l.include} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e' }} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }} title={l.productService}>
-                {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svcLabel}</span>
-              </div>
-              <AutoTextarea value={l.description} onChange={v => setLine(i, { description: v })} style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
-              <span style={{ fontSize: 10, fontWeight: 600, color: l.due ? '#c2410c' : '#94a3b8' }}>{l.reason}</span>
-              <input type="number" min={1} value={l.qty} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center' }} />
-              <input type="number" min={0} value={l.rate || ''} placeholder="0" onChange={e => setLine(i, { rate: +e.target.value || 0 })}
-                style={{ ...inputStyle, width: 90, textAlign: 'right', borderColor: l.include && !l.rate ? '#f87171' : '#cbd5e1', background: l.include && !l.rate ? '#fef2f2' : '#fff' }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: l.include ? '#0f766e' : '#94a3b8', textAlign: 'right' }}>{l.include ? `S$${(l.qty * l.rate).toLocaleString()}` : '—'}</span>
-              <button onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))} title="Remove line" style={{ border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'center' }}><X size={13} /></button>
-            </div>
-          );
-        })}
-        {lines.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No applicable services for this company.</div>}
-
-        {/* Add any line from the full QB catalogue */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 10px', borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
+      {/* TAB — basic services (Secretary/Address/AR/XBRL/Accounts/Tax/Discount) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 5, padding: '2px 8px' }}>TAB</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Basic Services</span>
+        <span style={{ fontSize: 10, color: '#94a3b8' }}>· default QuickBooks company</span>
+      </div>
+      <div style={{ marginBottom: hasTac ? 22 : 0 }}>
+        {renderTable(tabRows, 'No applicable services for this company.')}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#f8fafc' }}>
           <Plus size={13} style={{ color: '#0f766e' }} />
           <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add line</span>
           <select value="" onChange={e => {
@@ -1043,7 +1088,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             }}
             style={{ ...inputStyle, minWidth: 260, cursor: 'pointer' }}>
             <option value="">Choose a QuickBooks item…</option>
-            {[...new Set(QB_CATALOG.map(x => x.category))].map(cat => (
+            {[...new Set(QB_CATALOG.filter(x => x.category !== 'Nominee').map(x => x.category))].map(cat => (
               <optgroup key={cat} label={cat}>
                 {QB_CATALOG.filter(x => x.category === cat).map(x => (
                   <option key={x.item} value={x.item}>{x.label}{x.rate ? `  ·  S$${x.rate.toLocaleString()}` : ''}</option>
@@ -1054,11 +1099,51 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         </div>
       </div>
 
+      {/* TAC — Nominee Director only, and only shown when this company has an
+          ND line at all (most companies never will). */}
+      {hasTac && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 5, padding: '2px 8px' }}>TAC</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Nominee Director</span>
+            <span style={{ fontSize: 10, color: '#94a3b8' }}>· invoiced separately under the TAC company</span>
+            {tacStatus && !tacStatus.connected && (
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 5, padding: '2px 8px', marginLeft: 4 }}>
+                <AlertTriangle size={11} />
+                QuickBooks TAC not connected
+                <a href="/api/quickbooks/auth?company=TAC" style={{ color: '#1d4ed8', textDecoration: 'underline', fontWeight: 700 }}>Connect TAC</a>
+              </span>
+            )}
+          </div>
+          <div style={{ marginBottom: 0 }}>
+            {renderTable(tacRows, 'No Nominee Director line.')}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#fff7ed' }}>
+              <Plus size={13} style={{ color: '#9a3412' }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add ND line</span>
+              <select value="" onChange={e => {
+                  const item = QB_CATALOG.find(x => x.item === e.target.value);
+                  if (!item) return;
+                  setLines(prev => [...prev, { service: item.service, productService: item.item, description: item.label, qty: 1, rate: item.rate, include: true, due: false, reason: 'Added manually' }]);
+                }}
+                style={{ ...inputStyle, minWidth: 260, cursor: 'pointer' }}>
+                <option value="">Choose a Nominee item…</option>
+                {QB_CATALOG.filter(x => x.category === 'Nominee').map(x => (
+                  <option key={x.item} value={x.item}>{x.label}{x.rate ? `  ·  S$${x.rate.toLocaleString()}` : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Total + generate */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 24, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 13, color: '#334155' }}>
           <span style={{ color: '#64748b' }}>{included.length} line{included.length !== 1 ? 's' : ''} · Total </span>
           <strong style={{ fontSize: 17, color: '#0f766e' }}>S${total.toLocaleString()}</strong>
+          {hasTac && includedTac.length > 0 && (
+            <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 8 }}>(TAB S${totalTab.toLocaleString()} · TAC S${totalTac.toLocaleString()})</span>
+          )}
         </div>
         {missingRate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>⚠ Fill in the highlighted rate(s) before generating</span>}
         <button
@@ -1069,7 +1154,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             cursor: (drafting || included.length === 0 || missingRate) ? 'not-allowed' : 'pointer',
             background: (drafting || included.length === 0 || missingRate) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
           }}>
-          <DollarSign size={15} />{drafting ? 'Generating…' : 'Generate Invoice in QuickBooks'}
+          <DollarSign size={15} />{drafting ? 'Generating…' : includedTab.length && includedTac.length ? 'Generate 2 Invoices (TAB + TAC)' : 'Generate Invoice in QuickBooks'}
         </button>
       </div>
 
@@ -1145,6 +1230,7 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
     priorLines: matched?.priorLines ?? [],
     priorInvoiceDate: matched?.priorInvoiceDate ?? null,
     priorInvoiceNo: matched?.priorInvoiceNo ?? null,
+    generatedInvoices: matched?.generatedInvoices ?? [],
   };
 }
 
@@ -1210,9 +1296,16 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     return arList.map(ar => arToBillingRow(ar, findMatch(ar.entity_name), month));
   }, [arList, renewalByName, month]);
   // "Needs billing" for month-driven invoicing = this FYE cycle hasn't been
-  // invoiced yet (the QB invoice for a cycle carries its "dd.mm.yyyy" FYE).
+  // invoiced yet. Prefer our own generated_invoices record (exact — we made
+  // it) over the billedCycles heuristic (fuzzy-parsed from QB descriptions;
+  // still useful as a fallback for invoices created before this feature, or
+  // created manually in QB outside this system).
   const currentFye = fyeDateString(month, parseInt(year || '0', 10));
-  const notInvoicedYet = (c: CompanyBilling) => !currentFye || !(c.billedCycles ?? []).includes(currentFye);
+  const generatedThisCycle = (c: CompanyBilling) => (c.generatedInvoices ?? []).filter(g => g.fyeCycle === currentFye);
+  const notInvoicedYet = (c: CompanyBilling) =>
+    !currentFye ? true
+    : generatedThisCycle(c).length > 0 ? false
+    : !(c.billedCycles ?? []).includes(currentFye);
   const needsCount = monthCompanies.filter(notInvoicedYet).length;
   const filtered = monthCompanies.filter(c => {
     if (search && !c.companyName.toLowerCase().includes(search.toLowerCase())) return false;
@@ -1327,6 +1420,21 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                         : <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>✓ Invoiced</span>}
                     </div>
                     {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen}</div>}
+                    {generatedThisCycle(c).length > 0 && (
+                      <div style={{ display: 'flex', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
+                        {generatedThisCycle(c).map((g, gi) => (
+                          <span key={gi} style={{
+                            fontSize: 9, fontFamily: 'monospace', fontWeight: 700,
+                            color: g.qbCompany === 'TAC' ? '#7c2d12' : '#1d4ed8',
+                            background: g.qbCompany === 'TAC' ? '#ffedd5' : '#eff6ff',
+                            border: `1px solid ${g.qbCompany === 'TAC' ? '#fed7aa' : '#dbeafe'}`,
+                            borderRadius: 4, padding: '1px 5px',
+                          }}>
+                            {g.qbCompany} #{g.invoiceNo ?? '?'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#64748b' }}>{c.fyeMonth ?? '—'}</div>
                   <div style={{ padding: '0 6px', display: 'flex', flexDirection: 'column', gap: 3 }}>

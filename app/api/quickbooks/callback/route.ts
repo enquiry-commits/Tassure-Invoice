@@ -5,7 +5,12 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code    = searchParams.get('code');
   const realmId = searchParams.get('realmId');
+  const state   = searchParams.get('state') ?? '';
   const error   = searchParams.get('error');
+
+  // Which company this connection is for — encoded as "TAB:<random>" /
+  // "TAC:<random>" when the auth flow was started (see auth/route.ts).
+  const company = state.startsWith('TAC:') ? 'TAC' : 'TAB';
 
   if (error || !code || !realmId) {
     return NextResponse.redirect(
@@ -34,7 +39,6 @@ export async function GET(req: NextRequest) {
   });
 
   if (!tokenRes.ok) {
-    const msg = await tokenRes.text();
     return NextResponse.redirect(new URL(`/?qb_error=token_exchange_failed`, req.url));
   }
 
@@ -43,11 +47,14 @@ export async function GET(req: NextRequest) {
 
   const supabase = createAdminClient();
 
-  // Delete any existing token for this realm, then insert fresh
-  await supabase.from('quickbooks_tokens').delete().eq('realm_id', realmId);
+  // One row per company_label — replace whatever was previously connected as
+  // this company (by label, not by realm, so re-authorising the same company
+  // under a different realm still replaces the old row cleanly).
+  await supabase.from('quickbooks_tokens').delete().eq('company_label', company);
 
   const { error: saveErr } = await supabase.from('quickbooks_tokens').insert({
     realm_id:           realmId,
+    company_label:      company,
     access_token:       tokens.access_token,
     refresh_token:      tokens.refresh_token,
     expires_at:         new Date(now.getTime() + tokens.expires_in * 1000).toISOString(),
@@ -60,5 +67,5 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL(`/?qb_error=token_save_failed`, req.url));
   }
 
-  return NextResponse.redirect(new URL('/?qb_connected=1', req.url));
+  return NextResponse.redirect(new URL(`/?qb_connected=${company}`, req.url));
 }

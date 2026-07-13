@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { qbQuery } from '@/lib/quickbooks';
+import { qbQuery, type QbCompany } from '@/lib/quickbooks';
 import { createAdminClient } from '@/lib/supabase';
 
 // ── Service classification ───────────────────────────────────────────────────
@@ -106,25 +106,30 @@ export const maxDuration = 300; // full-year sync pages through 1500+ invoices (
 // Keeps invoice history fresh so billing drafts always see the latest "prior
 // invoice" and billed-cycle markers. Syncs the current AND previous year (the
 // prior year still matters to the 18–24-month lookback windows, and December
-// invoices keep being edited into January).
+// invoices keep being edited into January) for BOTH QB companies — TAB
+// (basic services) and TAC (Nominee Director only). TAC is skipped silently
+// (reported, not fatal) until it's connected.
 export async function GET() {
   const thisYear = new Date().getFullYear();
   const results: Record<string, unknown>[] = [];
-  for (const year of [String(thisYear - 1), String(thisYear)]) {
-    const res = await syncYear(year);
-    results.push({ year, ...res });
+  for (const company of ['TAB', 'TAC'] as QbCompany[]) {
+    for (const year of [String(thisYear - 1), String(thisYear)]) {
+      const res = await syncYear(year, company);
+      results.push({ company, year, ...res });
+    }
   }
   return NextResponse.json({ ok: true, results });
 }
 
 // ── POST /api/quickbooks/sync ─────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  const { year = new Date().getFullYear().toString() } = await req.json().catch(() => ({}));
-  const result = await syncYear(String(year));
-  return NextResponse.json({ year, ...result });
+  const { year = new Date().getFullYear().toString(), company = 'TAB' } = await req.json().catch(() => ({}));
+  const qbCompany: QbCompany = company === 'TAC' ? 'TAC' : 'TAB';
+  const result = await syncYear(String(year), qbCompany);
+  return NextResponse.json({ year, company: qbCompany, ...result });
 }
 
-async function syncYear(year: string) {
+async function syncYear(year: string, company: QbCompany) {
 
   // QB caps a query at 1000 results; page with STARTPOSITION so a year with
   // more than 1000 invoices doesn't silently lose the overflow.
@@ -133,10 +138,11 @@ async function syncYear(year: string) {
   let realmSeen = false;
   for (let start = 1; ; start += PAGE) {
     const page = await qbQuery(
-      `SELECT * FROM Invoice WHERE TxnDate >= '${year}-01-01' AND TxnDate <= '${year}-12-31' STARTPOSITION ${start} MAXRESULTS ${PAGE}`
+      `SELECT * FROM Invoice WHERE TxnDate >= '${year}-01-01' AND TxnDate <= '${year}-12-31' STARTPOSITION ${start} MAXRESULTS ${PAGE}`,
+      company
     );
     if (!page) {
-      if (!realmSeen) return { error: 'QuickBooks not connected or token expired' };
+      if (!realmSeen) return { error: `QuickBooks ${company} not connected or token expired` };
       break;
     }
     realmSeen = true;
@@ -159,6 +165,7 @@ async function syncYear(year: string) {
 
     invoiceRows.push({
       invoice_no:    docNo,
+      qb_company:    company,
       customer_name: (customer.name as string) ?? '',
       txn_date:      txnDate,
       total_amt:     inv.TotalAmt ?? 0,
@@ -180,6 +187,7 @@ async function syncYear(year: string) {
 
       itemRows.push({
         invoice_no:      docNo,
+        qb_company:      company,
         qb_invoice_id:   String(inv.Id),
         customer_name:   (customer.name as string) ?? '',
         txn_date:        txnDate,
@@ -198,20 +206,24 @@ async function syncYear(year: string) {
     }
   }
 
-  // QB allows duplicate DocNumbers; a batch containing the same invoice_no
-  // twice makes Postgres reject the whole upsert ("cannot affect row a second
-  // time"). Dedupe within the batch — keep the newest TxnDate per number.
+  // QB allows duplicate DocNumbers WITHIN a company; a batch containing the
+  // same invoice_no twice makes Postgres reject the whole upsert ("cannot
+  // affect row a second time"). Dedupe within the batch — keep the newest
+  // TxnDate per (company, number). (Uniqueness is scoped per qb_company —
+  // TAB and TAC each have their own independent DocNumber sequence.)
+  const invKey = (r: Record<string, unknown>) => `${r.qb_company}|${r.invoice_no}`;
   const invByNo = new Map<string, Record<string, unknown>>();
   for (const r of invoiceRows) {
-    const prev = invByNo.get(r.invoice_no as string);
-    if (!prev || String(r.txn_date) > String(prev.txn_date)) invByNo.set(r.invoice_no as string, r);
+    const k = invKey(r);
+    const prev = invByNo.get(k);
+    if (!prev || String(r.txn_date) > String(prev.txn_date)) invByNo.set(k, r);
   }
   const dedupedInvoices = [...invByNo.values()];
   const itemByKey = new Map<string, Record<string, unknown>>();
   for (const r of itemRows) {
     // Only keep line items belonging to the invoice occurrence we kept.
-    if (invByNo.get(r.invoice_no as string)?.txn_date !== r.txn_date) continue;
-    itemByKey.set(`${r.invoice_no}|${r.line_num}`, r);
+    if (invByNo.get(invKey(r))?.txn_date !== r.txn_date) continue;
+    itemByKey.set(`${r.qb_company}|${r.invoice_no}|${r.line_num}`, r);
   }
   const dedupedItems = [...itemByKey.values()];
   itemRows.length = 0; itemRows.push(...dedupedItems);
@@ -219,14 +231,14 @@ async function syncYear(year: string) {
   // Upsert invoices
   const { error: invErr } = await supabase
     .from('quickbooks_invoices')
-    .upsert(dedupedInvoices as Parameters<typeof supabase.from>[0] extends never ? never : never[], { onConflict: 'invoice_no' });
+    .upsert(dedupedInvoices as Parameters<typeof supabase.from>[0] extends never ? never : never[], { onConflict: 'qb_company,invoice_no' });
 
   // Upsert line items in batches of 200
   let itemsDone = 0, itemsErr = 0;
   for (let i = 0; i < itemRows.length; i += 200) {
     const { error } = await supabase
       .from('quickbooks_invoice_items')
-      .upsert(itemRows.slice(i, i + 200) as Parameters<typeof supabase.from>[0] extends never ? never : never[], { onConflict: 'invoice_no,line_num' });
+      .upsert(itemRows.slice(i, i + 200) as Parameters<typeof supabase.from>[0] extends never ? never : never[], { onConflict: 'qb_company,invoice_no,line_num' });
     if (error) itemsErr += Math.min(200, itemRows.length - i);
     else       itemsDone += Math.min(200, itemRows.length - i);
   }
