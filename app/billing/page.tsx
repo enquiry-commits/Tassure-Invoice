@@ -997,7 +997,11 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       <div style={{ fontSize: 11, color: '#64748b', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
         <FileText size={12} />
         {c.priorInvoiceDate
-          ? <span>Based on last invoice dated <strong style={{ color: '#334155' }}>{fmtDate(c.priorInvoiceDate)}</strong> — items & amounts carried forward, period rolled to this cycle. Verify discount still applies.</span>
+          ? <span>
+              Based on last invoice
+              {c.priorInvoiceNo && <strong style={{ color: '#1d4ed8', fontFamily: 'monospace', margin: '0 5px', background: '#eff6ff', border: '1px solid #dbeafe', padding: '1px 7px', borderRadius: 4 }}>#{c.priorInvoiceNo}</strong>}
+              {' '}dated <strong style={{ color: '#334155' }}>{fmtDate(c.priorInvoiceDate)}</strong> — items & amounts carried forward, period rolled to this cycle. Verify discount still applies.
+            </span>
           : <span style={{ color: '#b45309' }}>No prior renewal invoice found — draft built from standard template. Confirm each line.</span>}
       </div>
 
@@ -1140,6 +1144,7 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
     billedCycles: matched?.billedCycles ?? [],
     priorLines: matched?.priorLines ?? [],
     priorInvoiceDate: matched?.priorInvoiceDate ?? null,
+    priorInvoiceNo: matched?.priorInvoiceNo ?? null,
   };
 }
 

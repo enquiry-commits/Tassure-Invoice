@@ -62,6 +62,7 @@ export interface CompanyBilling {
   billedCycles: string[]; // FYE dates ("dd.mm.yyyy") this company has already been invoiced for
   priorLines: PriorLine[]; // every line from the most recent renewal invoice (to clone)
   priorInvoiceDate: string | null;
+  priorInvoiceNo: string | null; // QB DocNumber of that prior renewal invoice
 }
 
 export interface PriorLine {
@@ -219,7 +220,7 @@ export async function GET(req: NextRequest) {
     });
   }
   const priorInvoiceEntries = [...priorInvoiceMap.entries()];
-  function getPriorInvoice(companyName: string): { txn_date: string | null; lines: PriorLine[] } | null {
+  function getPriorInvoice(companyName: string): { invoice_no: string; txn_date: string | null; lines: PriorLine[] } | null {
     const n = normalize(companyName);
     let key = n;
     let hit = priorInvoiceMap.get(n);
@@ -229,7 +230,7 @@ export async function GET(req: NextRequest) {
       }
     }
     if (!hit) return null;
-    return { txn_date: hit.txn_date, lines: carriedByInv.get(`${key}|${hit.invoice_no}`) ?? [] };
+    return { invoice_no: hit.invoice_no, txn_date: hit.txn_date, lines: carriedByInv.get(`${key}|${hit.invoice_no}`) ?? [] };
   }
 
   // Index period items: normName → service_type → deduplicated ServicePeriod[]
@@ -408,6 +409,7 @@ export async function GET(req: NextRequest) {
       billedCycles: [...(billedCyclesMap.get(normName) ?? [])],
       priorLines: carriedLines,
       priorInvoiceDate: prior?.txn_date ?? null,
+      priorInvoiceNo: prior?.invoice_no ?? null,
     };
   });
 
