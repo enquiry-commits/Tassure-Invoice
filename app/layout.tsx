@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import './globals.css';
 import Sidebar from '@/components/Sidebar';
+import AssistantWidget from '@/components/AssistantWidget';
 
 export const metadata: Metadata = {
   title: 'Tassure Corporate Services System',
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </main>
         </div>
 
+        <AssistantWidget />
       </body>
     </html>
   );
