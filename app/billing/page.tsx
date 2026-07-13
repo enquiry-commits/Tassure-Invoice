@@ -2074,8 +2074,8 @@ function CombinedPage() {
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, marginTop: 16, borderBottom: '2px solid #e2e8f0' }}>
           {([
-            { key: 'billing', label: '💰 Billing Drafts',  desc: 'Renewals & annual obligations' },
-            { key: 'ar',      label: '📋 AR Reminder',      desc: 'Annual Return filing tracker'  },
+            { key: 'billing', label: 'Billing Drafts',  desc: 'Renewals & annual obligations' },
+            { key: 'ar',      label: 'AR Reminder',      desc: 'Annual Return filing tracker'  },
           ] as const).map(({ key, label, desc }) => {
             const active = tab === key;
             return (
