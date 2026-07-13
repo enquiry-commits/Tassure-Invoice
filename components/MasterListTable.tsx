@@ -64,7 +64,12 @@ function fyeMonthNum(s: string | null | undefined): number | null {
   return MONTH3[a] ?? null;
 }
 
-const COLUMNS: { field: Exclude<keyof MasterListRow, 'id' | 'tw_fye'>; label: string; w: number }[] = [
+type ColumnField = Exclude<keyof MasterListRow, 'id' | 'tw_fye'>;
+
+// Full column set — the default for every Master List page. A page can pass
+// `fields` to MasterListTable to show only a subset, in a given order
+// (e.g. Active Client's reduced view), without affecting any other page.
+const COLUMNS: { field: ColumnField; label: string; w: number }[] = [
   { field: 'company_name',               label: 'Company Name',    w: 240 },
   { field: 'roc_no',                     label: 'ROC No.',         w: 110 },
   { field: 'status',                     label: 'Active',          w: 220 },
@@ -274,7 +279,13 @@ const EditCell = memo(function EditCell({ id, field, value, onSave }: { id: numb
   );
 });
 
-export default function MasterListTable({ listType, title, accentColor = '#1d3a5c', moveTargets }: { listType: string; title: string; accentColor?: string; moveTargets?: MoveTarget[] }) {
+export default function MasterListTable({ listType, title, accentColor = '#1d3a5c', moveTargets, fields }: { listType: string; title: string; accentColor?: string; moveTargets?: MoveTarget[]; fields?: ColumnField[] }) {
+  const columns = useMemo(() => {
+    if (!fields) return COLUMNS;
+    const byField = new Map(COLUMNS.map(c => [c.field, c]));
+    return fields.map(f => byField.get(f)).filter((c): c is typeof COLUMNS[number] => !!c);
+  }, [fields]);
+
   const [rows, setRows]       = useState<MasterListRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch]   = useState('');
@@ -515,7 +526,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             <thead>
               <tr>
                 <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, background: accentColor, color: '#fff', fontSize: 9, fontWeight: 700, padding: '7px 8px', minWidth: 36, width: 36, textAlign: 'center' }}>#</th>
-                {COLUMNS.map(c => {
+                {columns.map(c => {
                   const sl = stickyLeftOf(c.field);
                   return (
                     <th key={c.field} style={{
@@ -534,13 +545,13 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={COLUMNS.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</td></tr>
+                <tr><td colSpan={columns.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</td></tr>
               ) : visibleRows.length === 0 ? (
-                <tr><td colSpan={COLUMNS.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No data</td></tr>
+                <tr><td colSpan={columns.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No data</td></tr>
               ) : visibleRows.map((r, i) => (
                 <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                   <td style={{ position: 'sticky', left: 0, zIndex: 1, background: i % 2 === 0 ? '#fff' : '#f8fafc', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, padding: '3px 6px', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>{i + 1}</td>
-                  {COLUMNS.map(c => {
+                  {columns.map(c => {
                     const sl = stickyLeftOf(c.field);
                     return (
                       <td key={c.field} style={{
