@@ -1370,13 +1370,6 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       {/* Filter */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
         <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
-        {([
-          { key: 'all',    label: `All (${mCount.total})` },
-          { key: 'needs',  label: `💰 To Invoice (${mCount.needs})` },
-          { key: 'active', label: `✓ Invoiced (${mCount.invoiced})` },
-        ] as const).map(({ key, label }) => (
-          <button key={key} onClick={() => setFilter(key)} style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: filter === key ? '#0f766e' : '#f1f5f9', color: filter === key ? '#fff' : '#475569', whiteSpace: 'nowrap' }}>{label}</button>
-        ))}
         <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{filtered.length} companies</span>
       </div>
 
