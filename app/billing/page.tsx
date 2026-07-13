@@ -2063,13 +2063,6 @@ function CombinedPage() {
     <div>
       {/* Page header with tab switcher */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: '#1e3a5f', margin: 0, lineHeight: 1 }}>Client Services</h1>
-            <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, marginBottom: 0 }}>Billing Drafts · AR Reminder · Secretary · ND · Address · XBRL</p>
-          </div>
-        </div>
-
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 0, marginTop: 16, borderBottom: '2px solid #e2e8f0' }}>
           {([
