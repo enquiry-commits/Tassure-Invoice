@@ -5,6 +5,10 @@
   "installCommand": "npm install",
   "crons": [
     {
+      "path": "/api/teamwork/sync",
+      "schedule": "30 0 * * *"
+    },
+    {
       "path": "/api/ar-reminder/generate",
       "schedule": "0 1 * * *"
     },

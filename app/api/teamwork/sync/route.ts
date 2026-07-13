@@ -1,0 +1,198 @@
+import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase';
+import { normalize } from '@/lib/company-name';
+
+// Daily TeamWork -> companies sync (see vercel.json cron, 00:30 UTC — before
+// the 01:00 ar-reminder generator so new clients enter that day's AR window).
+//
+// TeamWork is the source of truth for the company roster. Before this route
+// existed the table was only refreshed by hand-run scripts (last: 2026-06-26),
+// so clients created in TeamWork after that never entered Billing/AR at all.
+//
+// Write rules:
+//  - Match by companies.internal_id === TeamWork company_id (authoritative).
+//  - Rows without internal_id are matched by normalized name once, which
+//    backfills internal_id so the next run matches directly.
+//  - Only overwrite a field with a NON-EMPTY TeamWork value; never blank out
+//    registration_no / fye_month / best_email because TeamWork has a gap.
+//  - Never touch company_name on existing rows (manual typo fixes live here)
+//    and never touch QB-derived fields (has_*, *_pic, client_type, …).
+//  - Unmatched TeamWork records are INSERTED only if client=1 AND
+//    status=Active — shareholder entities, prospects etc. stay out.
+//  - Nothing is ever deleted; rows whose internal_id vanished from TeamWork
+//    are only counted in the summary.
+export const maxDuration = 300;
+
+const TW_URL = 'https://apps.teamworkcss.com/dev/apiservice';
+const ENV_KEYS = ['TEAMWORK_BASIC_USER', 'TEAMWORK_BASIC_PASS', 'TEAMWORK_API_KEY', 'TEAMWORK_LOGIN_EMAIL', 'TEAMWORK_LOGIN_PASSWORD'] as const;
+
+interface TwCompany {
+  company_id: string;
+  company_name: string | null;
+  company_registration_Num: string | null;
+  type: string | null;
+  status: string | null;
+  fye_date: string | null;            // "DD/MM"
+  company_email_address: string | null;
+  person_in_charge: string | null;
+  client: string;                     // "1" | "0"
+}
+
+function twHeaders(token = '') {
+  const basic = Buffer.from(`${process.env.TEAMWORK_BASIC_USER}:${process.env.TEAMWORK_BASIC_PASS}`).toString('base64');
+  return { Authorization: `Basic ${basic}`, 'x-api-key': process.env.TEAMWORK_API_KEY!, authtoken: token };
+}
+
+async function twLogin(): Promise<string> {
+  const form = new FormData();
+  form.set('memail', process.env.TEAMWORK_LOGIN_EMAIL!);
+  form.set('mpassword', process.env.TEAMWORK_LOGIN_PASSWORD!);
+  const res = await fetch(`${TW_URL}/api/user_auth/login`, { method: 'POST', headers: twHeaders(), body: form });
+  const json = await res.json();
+  if (!json.token) throw new Error(`TeamWork login failed: ${JSON.stringify(json).slice(0, 200)}`);
+  return json.token;
+}
+
+async function fetchAllCompanies(token: string): Promise<TwCompany[]> {
+  const PAGE = 100;
+  const all: TwCompany[] = [];
+  for (let start = 0; ; start += PAGE) {
+    const form = new FormData();
+    form.set('start', String(start));
+    form.set('length', String(PAGE));
+    const res = await fetch(`${TW_URL}/api/corpsec/companies/getCompanies`, { method: 'POST', headers: twHeaders(token), body: form });
+    if (!res.ok) throw new Error(`getCompanies HTTP ${res.status} at start=${start}`);
+    const json = await res.json();
+    const batch: TwCompany[] = json.data?.data?.companyinfo ?? [];
+    all.push(...batch);
+    const total: number = json.data?.recordsTotal ?? 0;
+    if (!batch.length || all.length >= total) break;
+  }
+  return all;
+}
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+function fyeMonthOf(fyeDate: string | null): string | null {
+  const m = (fyeDate ?? '').match(/^\d{1,2}\/(\d{1,2})$/);   // "31/12" = DD/MM
+  return m ? MONTH_NAMES[parseInt(m[1], 10) - 1] ?? null : null;
+}
+
+export async function GET() {
+  const missing = ENV_KEYS.filter(k => !process.env[k]);
+  if (missing.length) return NextResponse.json({ error: `Missing env vars: ${missing.join(', ')}` }, { status: 500 });
+
+  let twList: TwCompany[];
+  try {
+    twList = await fetchAllCompanies(await twLogin());
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 });
+  }
+  // A truncated/broken TeamWork response must not drive DB writes.
+  if (twList.length < 500) {
+    return NextResponse.json({ error: `TeamWork returned only ${twList.length} companies — aborting as suspicious` }, { status: 502 });
+  }
+
+  const supabase = createAdminClient();
+  const { data: rows, error } = await supabase
+    .from('companies')
+    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, best_email');
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const byInternal = new Map((rows ?? []).filter(r => r.internal_id).map(r => [r.internal_id as string, r]));
+  // Name lookup ONLY for rows that still lack an internal_id (one-time healing).
+  const AMBIG = Symbol('ambiguous');
+  const byName = new Map<string, typeof rows extends (infer R)[] | null ? R : never | typeof AMBIG>();
+  for (const r of rows ?? []) {
+    if (r.internal_id) continue;
+    const n = normalize(r.company_name);
+    byName.set(n, byName.has(n) ? (AMBIG as never) : (r as never));
+  }
+
+  const now = new Date().toISOString();
+  const updates: { id: number; patch: Record<string, unknown> }[] = [];
+  const inserts: Record<string, unknown>[] = [];
+  let matched = 0, backfilled = 0, skippedAmbiguous = 0;
+
+  for (const tw of twList) {
+    const twName = (tw.company_name ?? '').trim();
+    let row = byInternal.get(tw.company_id) ?? null;
+
+    if (!row && twName) {
+      const cand = byName.get(normalize(twName));
+      if (cand === (AMBIG as never)) { skippedAmbiguous++; continue; }
+      if (cand) { row = cand; backfilled++; }
+    }
+
+    const regNo   = (tw.company_registration_Num ?? '').trim() || null;
+    const type    = (tw.type ?? '').trim() || null;
+    const status  = (tw.status ?? '').trim() || null;
+    const fyeMon  = fyeMonthOf(tw.fye_date);
+    const email   = (tw.company_email_address ?? '').trim() || null;
+
+    if (row) {
+      matched++;
+      const patch: Record<string, unknown> = {};
+      if (!row.internal_id)                                          patch.internal_id = tw.company_id;
+      if (regNo  && regNo  !== (row.registration_no ?? '').trim())   patch.registration_no = regNo;
+      if (type   && type   !== row.company_type)                     patch.company_type = type;
+      if (status && status !== row.tw_status) { patch.tw_status = status; patch.is_active = status === 'Active'; }
+      if (fyeMon && fyeMon !== row.fye_month)                        patch.fye_month = fyeMon;
+      if (email  && email.toLowerCase() !== (row.best_email ?? '').toLowerCase()) patch.best_email = email;
+      if (Object.keys(patch).length) { patch.synced_at = now; updates.push({ id: row.id, patch }); }
+    } else if (tw.client === '1' && status === 'Active' && twName) {
+      inserts.push({
+        company_name: twName,
+        internal_id: tw.company_id,
+        registration_no: regNo,
+        company_type: type,
+        fye_month: fyeMon,
+        best_email: email,
+        pic: (tw.person_in_charge ?? '').trim() || null,
+        client_type: 'CSS Client',
+        tw_status: 'Active',
+        is_active: true,
+        synced_at: now,
+      });
+    }
+  }
+
+  // Guard against TeamWork-side duplicate names creating duplicate rows.
+  const seen = new Set<string>();
+  const dedupedInserts = inserts.filter(r => {
+    const n = normalize(r.company_name as string);
+    if (seen.has(n)) return false;
+    seen.add(n);
+    return true;
+  });
+
+  let updatedCount = 0, updateErrors: string[] = [];
+  for (let i = 0; i < updates.length; i += 10) {
+    const results = await Promise.all(updates.slice(i, i + 10).map(u =>
+      supabase.from('companies').update(u.patch).eq('id', u.id).then(r => r.error?.message ?? null)
+    ));
+    for (const err of results) err ? updateErrors.push(err) : updatedCount++;
+  }
+
+  let insertedCount = 0, insertError: string | null = null;
+  if (dedupedInserts.length) {
+    const { error: insErr } = await supabase.from('companies').insert(dedupedInserts);
+    if (insErr) insertError = insErr.message;
+    else insertedCount = dedupedInserts.length;
+  }
+
+  const missingFromTw = (rows ?? []).filter(r => r.internal_id && !twList.some(t => t.company_id === r.internal_id)).length;
+
+  return NextResponse.json({
+    ok: !insertError && !updateErrors.length,
+    tw_total: twList.length,
+    matched,
+    internal_id_backfilled: backfilled,
+    updated: updatedCount,
+    inserted: insertedCount,
+    inserted_names: dedupedInserts.map(r => r.company_name),
+    skipped_ambiguous_names: skippedAmbiguous,
+    rows_missing_from_teamwork: missingFromTw,
+    ...(insertError ? { insert_error: insertError } : {}),
+    ...(updateErrors.length ? { update_errors: updateErrors.slice(0, 5) } : {}),
+  });
+}

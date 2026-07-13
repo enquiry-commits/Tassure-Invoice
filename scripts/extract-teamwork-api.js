@@ -1,14 +1,19 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
 
 const BASE_HOST = 'apps.teamworkcss.com';
 const BASE_PATH = '/dev/apiservice';
-const BASIC_USER = 'admin';
-const BASIC_PASS = 'Admin@123';
-const API_KEY = 'f3a8d1c42b7e9e6d18ac0f45e21bd6a2';
-const LOGIN_EMAIL = 'tassurecorpsec@yopmail.com';
-const LOGIN_PASSWORD = 'Tassure@123_n';
+const BASIC_USER = process.env.TEAMWORK_BASIC_USER;
+const BASIC_PASS = process.env.TEAMWORK_BASIC_PASS;
+const API_KEY = process.env.TEAMWORK_API_KEY;
+const LOGIN_EMAIL = process.env.TEAMWORK_LOGIN_EMAIL;
+const LOGIN_PASSWORD = process.env.TEAMWORK_LOGIN_PASSWORD;
+if (!BASIC_USER || !BASIC_PASS || !API_KEY || !LOGIN_EMAIL || !LOGIN_PASSWORD) {
+  console.error('Missing TEAMWORK_* env vars in .env.local');
+  process.exit(1);
+}
 
 const DATA_DIR = path.join(__dirname, '..', 'data', 'teamwork-api');
 const COMPANIES_DIR = path.join(DATA_DIR, 'companies');
