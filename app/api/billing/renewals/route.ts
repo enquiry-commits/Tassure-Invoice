@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
+import { pageAll } from '@/lib/page-all';
 
+// normalize/matchScore run millions of times per request (830 companies × 5
+// services fuzzy-scanning hundreds of QB name entries). Memoise the regex
+// pipeline and the word sets — this was the actual bottleneck (~15s of CPU),
+// not the database queries.
+const normCache = new Map<string, string>();
 function normalize(name: string) {
-  return (name ?? '')
+  const hit = normCache.get(name);
+  if (hit !== undefined) return hit;
+  const v = (name ?? '')
     .toLowerCase()
     .replace(/\(fka\b[^)]*\)/gi, '')
     .replace(/\(f\.k\.a\.[^)]*\)/gi, '')
@@ -14,16 +22,28 @@ function normalize(name: string) {
     .replace(/[.\-,()&@]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+  normCache.set(name, v);
+  return v;
+}
+
+const wordsCache = new Map<string, Set<string>>();
+function wordsOf(normalized: string): Set<string> {
+  let s = wordsCache.get(normalized);
+  if (!s) {
+    s = new Set(normalized.split(' ').filter(w => w.length > 1));
+    wordsCache.set(normalized, s);
+  }
+  return s;
 }
 
 function matchScore(a: string, b: string): number {
   const na = normalize(a), nb = normalize(b);
   if (na === nb) return 100;
   if (na.includes(nb) || nb.includes(na)) return 85;
-  const wa = new Set(na.split(' ').filter(w => w.length > 1));
-  const wb = new Set(nb.split(' ').filter(w => w.length > 1));
+  const wa = wordsOf(na), wb = wordsOf(nb);
   if (!wa.size || !wb.size) return 0;
-  const common = [...wa].filter(w => wb.has(w)).length;
+  let common = 0;
+  for (const w of wa) if (wb.has(w)) common++;
   return Math.round((common / Math.max(wa.size, wb.size)) * 100);
 }
 
@@ -94,65 +114,84 @@ export interface PriorLine {
   service_type: string | null;
 }
 
+// The aggregation is expensive (6 queries, ~10k invoice rows from Tokyo), but
+// its inputs only change when QB syncs — cache the computed results for 60s
+// per `within` value; the cheap status/service filters run per request.
+let renewalsCache: { key: string; ts: number; today: string; results: CompanyBilling[] } | null = null;
+const RENEWALS_TTL = 60_000;
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const withinDays = parseInt(searchParams.get('within') ?? '90');
   const filterStatus  = searchParams.get('status')  ?? 'all';
   const filterService = searchParams.get('service') ?? 'all';
 
+  if (renewalsCache && renewalsCache.key === String(withinDays) && Date.now() - renewalsCache.ts < RENEWALS_TTL) {
+    return respond(renewalsCache.today, renewalsCache.results, filterStatus, filterService, withinDays);
+  }
+
   const supabase = createAdminClient();
   const today = todaySGT();
   const cutoff18m = new Date(); cutoff18m.setMonth(cutoff18m.getMonth() - 18);
   const cutoff18mStr = cutoff18m.toISOString().slice(0, 10);
+  const cutoff24m = new Date(); cutoff24m.setMonth(cutoff24m.getMonth() - 24);
+  const cutoff24mStr = cutoff24m.toISOString().slice(0, 10);
 
-  // ── 1. Active CSS clients (TeamWork gate) ────────────────────────────────
-  const { data: companies, error: compErr } = await supabase
-    .from('companies')
-    .select('id, company_name, registration_no, fye_month, pic, sec_pic, has_nd, uses_address, has_xbrl, tw_status, client_type, is_active, best_email, primary_contact')
-    .eq('client_type', 'CSS Client')
-    .eq('tw_status', 'Active');
+  // ── Fetch everything in parallel (pageAll itself fetches pages in parallel
+  //    waves) — this was 6 serial round-trip chains before and dominated the
+  //    13-16s response time.
+  const [
+    { data: companies, error: compErr },
+    { data: activeNDs },
+    periodItems,
+    annualItems,
+    feeItems,
+    carriedItems,
+  ] = await Promise.all([
+    supabase
+      .from('companies')
+      .select('id, company_name, registration_no, fye_month, pic, sec_pic, has_nd, uses_address, has_xbrl, tw_status, client_type, is_active, best_email, primary_contact')
+      .eq('client_type', 'CSS Client')
+      .eq('tw_status', 'Active'),
+    supabase
+      .from('nd_appointments')
+      .select('company_name')
+      .eq('sub_role', 'Nominee Director')
+      .not('appointment_date', 'is', null)
+      .is('cessation_date', null),
+    pageAll(() => supabase
+      .from('quickbooks_invoice_items')
+      .select('customer_name, invoice_no, txn_date, service_type, period_start, period_end, rate, amount, product_service, description')
+      .in('service_type', ['Secretary', 'Address', 'ND'])
+      .not('period_end', 'is', null)
+      .order('period_end', { ascending: false })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; period_start: string | null; period_end: string | null; rate: number | null; amount: number | null; product_service: string | null; description: string | null }>>,
+    pageAll(() => supabase
+      .from('quickbooks_invoice_items')
+      .select('customer_name, invoice_no, txn_date, service_type, fye_date, period_start, period_end, amount, rate, product_service, description')
+      .in('service_type', ['AR', 'XBRL'])
+      .gte('txn_date', cutoff18mStr)
+      .order('txn_date', { ascending: false })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; fye_date: string | null; period_start: string | null; period_end: string | null; amount: number | null; rate: number | null; product_service: string | null; description: string | null }>>,
+    pageAll(() => supabase
+      .from('quickbooks_invoice_items')
+      .select('customer_name, invoice_no, txn_date, product_service, amount')
+      .or('product_service.ilike.%Corporate Secretarial Services%,product_service.ilike.%Deferred Revenue - Corp Sec%,product_service.ilike.%Registered Address Services%,product_service.ilike.%Deferred Revenue - Reg Addr%')
+      .gte('txn_date', cutoff18mStr)
+      .order('txn_date', { ascending: false })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; amount: number | null }>>,
+    // Carry-forward candidates only (Discount / Accounts / Tax lines). This
+    // used to be a full 24-month scan of ALL invoice items (~9k rows) just to
+    // find each company's prior renewal invoice — but that invoice is already
+    // derivable from the fee + annual queries above, so fetch only the few
+    // hundred lines the draft modal actually carries forward.
+    pageAll(() => supabase
+      .from('quickbooks_invoice_items')
+      .select('customer_name, invoice_no, txn_date, product_service, description, amount, service_type')
+      .or('product_service.ilike.%Discount Given%,product_service.ilike.%Yearly Accounts Services%,product_service.ilike.%Compilation Services%,product_service.ilike.%Monthly Accounts Services%,product_service.ilike.%Corporate Tax Services%,product_service.ilike.%Personal Income Tax Services%,product_service.ilike.%Other Tax Services%')
+      .gte('txn_date', cutoff24mStr)
+      .order('txn_date', { ascending: false })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; description: string | null; amount: number | null; service_type: string | null }>>,
+  ]);
   if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
 
-  // ── 2. Active ND appointments ────────────────────────────────────────────
-  const { data: activeNDs } = await supabase
-    .from('nd_appointments')
-    .select('company_name')
-    .eq('sub_role', 'Nominee Director')
-    .not('appointment_date', 'is', null)
-    .is('cessation_date', null);
   const ndActiveSet = new Set((activeNDs ?? []).map(a => normalize(a.company_name)));
-
-  // Supabase caps a single request at 1000 rows, and the invoice-item tables
-  // are much larger than that — page through so no invoice lines are dropped.
-  type Row = Record<string, unknown>;
-  async function pageAll(makeQuery: () => PromiseLike<{ data: Row[] | null }>): Promise<Row[]> {
-    const out: Row[] = [];
-    let fromIdx = 0;
-    for (;;) {
-      const { data } = await (makeQuery() as unknown as { range: (a: number, b: number) => PromiseLike<{ data: Row[] | null }> }).range(fromIdx, fromIdx + 999);
-      if (!data?.length) break;
-      out.push(...data);
-      if (data.length < 1000) break;
-      fromIdx += 1000;
-    }
-    return out;
-  }
-
-  // ── 3. QB items — subscription services (period-based) ───────────────────
-  const periodItems = await pageAll(() => supabase
-    .from('quickbooks_invoice_items')
-    .select('customer_name, invoice_no, txn_date, service_type, period_start, period_end, rate, amount, product_service, description')
-    .in('service_type', ['Secretary', 'Address', 'ND'])
-    .not('period_end', 'is', null)
-    .order('period_end', { ascending: false })) as unknown as Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; period_start: string | null; period_end: string | null; rate: number | null; amount: number | null; product_service: string | null; description: string | null }>;
-
-  // ── 4. QB items — annual obligations (AR, XBRL) ──────────────────────────
-  const annualItems = await pageAll(() => supabase
-    .from('quickbooks_invoice_items')
-    .select('customer_name, invoice_no, txn_date, service_type, fye_date, period_start, period_end, amount, rate, product_service, description')
-    .in('service_type', ['AR', 'XBRL'])
-    .gte('txn_date', cutoff18mStr)
-    .order('txn_date', { ascending: false })) as unknown as Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; fye_date: string | null; period_start: string | null; period_end: string | null; amount: number | null; rate: number | null; product_service: string | null; description: string | null }>;
 
   // ── 4b. TRUE annual fee per service ──────────────────────────────────────
   // QB splits an annual fee across a recognised line ("Corporate Secretarial
@@ -160,13 +199,6 @@ export async function GET(req: NextRequest) {
   // The real fee the client is charged is the SUM of both. So compute it per
   // company from the most recent renewal invoice: group that invoice's lines
   // by service and add them up.
-  const feeItems = await pageAll(() => supabase
-    .from('quickbooks_invoice_items')
-    .select('customer_name, invoice_no, txn_date, product_service, amount')
-    .or('product_service.ilike.%Corporate Secretarial Services%,product_service.ilike.%Deferred Revenue - Corp Sec%,product_service.ilike.%Registered Address Services%,product_service.ilike.%Deferred Revenue - Reg Addr%')
-    .gte('txn_date', cutoff18mStr)
-    .order('txn_date', { ascending: false })) as unknown as Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; amount: number | null }>;
-
   // key normName|invoice|service → { txn_date, sum }; then keep the latest
   // invoice per (company, service) as the current annual fee.
   const feeTmp = new Map<string, { n: string; svc: string; txn_date: string | null; sum: number }>();
@@ -199,49 +231,43 @@ export async function GET(req: NextRequest) {
 
   // ── 4c. Prior renewal invoice (the template to clone) ────────────────────
   // The billing SOP is: take last year's invoice, reuse its items + amounts,
-  // just roll the service period forward. So capture, per company, the FULL
-  // line set of its most recent *renewal* invoice — the invoice that carried
-  // the annual retainer (Corporate Secretarial Services) or the AR govt fee.
-  const cutoff24m = new Date();
-  cutoff24m.setMonth(cutoff24m.getMonth() - 24);
-  const allItems = await pageAll(() => supabase
-    .from('quickbooks_invoice_items')
-    .select('customer_name, invoice_no, txn_date, product_service, description, amount, service_type')
-    .gte('txn_date', cutoff24m.toISOString().slice(0, 10))
-    .order('txn_date', { ascending: false })) as unknown as Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; description: string | null; amount: number | null; service_type: string | null }>;
+  // just roll the service period forward. The prior renewal invoice — the one
+  // carrying the annual retainer / AR govt fee / address line — is already
+  // present in the fee + annual queries above, so derive it from those instead
+  // of scanning every invoice line (that scan dominated response time).
+  const RENEWAL_LINE = /Corporate Secretarial Services|Government fee for filing Annual Return|Registered Address Services/i;
+  const priorInvoiceMap = new Map<string, { invoice_no: string; txn_date: string | null }>();
+  const noteRenewal = (name: string, invoice_no: string, txn_date: string | null, ps: string | null) => {
+    if (!RENEWAL_LINE.test(ps ?? '')) return;
+    const n = normalize(name);
+    const cur = priorInvoiceMap.get(n);
+    if (!cur || (txn_date ?? '') > (cur.txn_date ?? '')) priorInvoiceMap.set(n, { invoice_no, txn_date });
+  };
+  for (const it of feeItems ?? [])    noteRenewal(it.customer_name, it.invoice_no, it.txn_date, it.product_service);
+  for (const it of annualItems ?? []) noteRenewal(it.customer_name, it.invoice_no, it.txn_date, it.product_service);
 
-  // Group every line under company → invoice.
-  const invByCompany = new Map<string, Map<string, { txn_date: string | null; lines: PriorLine[] }>>();
-  for (const it of allItems) {
-    const n = normalize(it.customer_name);
-    if (!invByCompany.has(n)) invByCompany.set(n, new Map());
-    const invs = invByCompany.get(n)!;
-    if (!invs.has(it.invoice_no)) invs.set(it.invoice_no, { txn_date: it.txn_date, lines: [] });
-    invs.get(it.invoice_no)!.lines.push({
+  // Carry-forward lines (Discount/Accounts/Tax) grouped by (company, invoice).
+  const carriedByInv = new Map<string, PriorLine[]>();
+  for (const it of carriedItems ?? []) {
+    const key = `${normalize(it.customer_name)}|${it.invoice_no}`;
+    if (!carriedByInv.has(key)) carriedByInv.set(key, []);
+    carriedByInv.get(key)!.push({
       product_service: it.product_service, description: it.description,
       amount: it.amount, service_type: it.service_type,
     });
   }
-  const isRenewalLine = (ps: string | null) =>
-    /Corporate Secretarial Services|Government fee for filing Annual Return|Registered Address Services/i.test(ps ?? '');
-  // Per company keep the latest invoice that looks like an annual renewal.
-  const priorInvoiceMap = new Map<string, { txn_date: string | null; lines: PriorLine[] }>();
-  for (const [n, invs] of invByCompany) {
-    let best: { txn_date: string | null; lines: PriorLine[] } | null = null;
-    for (const inv of invs.values()) {
-      if (!inv.lines.some(l => isRenewalLine(l.product_service))) continue;
-      if (!best || (inv.txn_date ?? '') > (best.txn_date ?? '')) best = inv;
-    }
-    if (best) priorInvoiceMap.set(n, best);
-  }
   const priorInvoiceEntries = [...priorInvoiceMap.entries()];
   function getPriorInvoice(companyName: string): { txn_date: string | null; lines: PriorLine[] } | null {
-    const direct = priorInvoiceMap.get(normalize(companyName));
-    if (direct) return direct;
-    for (const [k, v] of priorInvoiceEntries) {
-      if (matchScore(companyName, k) >= 70) return v;
+    const n = normalize(companyName);
+    let key = n;
+    let hit = priorInvoiceMap.get(n);
+    if (!hit) {
+      for (const [k, v] of priorInvoiceEntries) {
+        if (matchScore(companyName, k) >= 70) { hit = v; key = k; break; }
+      }
     }
-    return null;
+    if (!hit) return null;
+    return { txn_date: hit.txn_date, lines: carriedByInv.get(`${key}|${hit.invoice_no}`) ?? [] };
   }
 
   // Index period items: normName → service_type → deduplicated ServicePeriod[]
@@ -356,7 +382,9 @@ export async function GET(req: NextRequest) {
         lastRate: annualFee ?? history.find(h => h.rate)?.rate ?? null,
         suggestedPeriodStart: firstOfNextMonth(lastPeriodEnd),
         suggestedPeriodEnd:   addOneYear(lastPeriodEnd),
-        history: history.slice(0, 5),
+        // The UI shows period + invoice_no and reads [0].product_service/rate;
+        // the long line descriptions were dead weight in a 2.3MB payload.
+        history: history.slice(0, 3).map(h => ({ ...h, description: null })),
       };
     });
 
@@ -382,7 +410,7 @@ export async function GET(req: NextRequest) {
         lastTxnDate: latest.txn_date,
         lastFyeDate: latest.fye_date,
         lastAmount: latest.amount,
-        history: history.slice(0, 5),
+        history: history.slice(0, 3).map(h => ({ ...h, description: null })),
       };
     });
 
@@ -393,6 +421,11 @@ export async function GET(req: NextRequest) {
       renewals.some(r => r.applicable && r.status === 'active')            ? 'active' : 'not_found';
 
     const primary = company.primary_contact as { email?: string; contactName?: string } | null;
+    // The draft modal only carries forward Discount / Accounts / Tax lines
+    // from the prior invoice — the carried-items query already fetches only
+    // those, so the prior invoice's line list is exactly what ships.
+    const prior = getPriorInvoice(company.company_name);
+    const carriedLines = prior?.lines ?? [];
     return {
       companyId: company.id,
       companyName: company.company_name,
@@ -406,12 +439,17 @@ export async function GET(req: NextRequest) {
       email: company.best_email ?? primary?.email ?? null,
       contactName: primary?.contactName ?? null,
       billedCycles: [...(billedCyclesMap.get(normName) ?? [])],
-      priorLines: getPriorInvoice(company.company_name)?.lines ?? [],
-      priorInvoiceDate: getPriorInvoice(company.company_name)?.txn_date ?? null,
+      priorLines: carriedLines,
+      priorInvoiceDate: prior?.txn_date ?? null,
     };
   });
 
-  // ── Filters ───────────────────────────────────────────────────────────────
+  renewalsCache = { key: String(withinDays), ts: Date.now(), today, results };
+  return respond(today, results, filterStatus, filterService, withinDays);
+}
+
+// Cheap per-request filtering over the (possibly cached) computed results.
+function respond(today: string, results: CompanyBilling[], filterStatus: string, filterService: string, withinDays: number) {
   const filtered = results.filter(c => {
     if (filterStatus !== 'all' && c.urgency !== filterStatus) return false;
     if (filterService !== 'all') {

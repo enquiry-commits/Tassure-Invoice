@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
+import { pageAll } from '@/lib/page-all';
 
 const EDITABLE_FIELDS = new Set([
   'reminder_note', 'prepared_date', 'date_of_agm', 'agm_held_date',
@@ -38,22 +39,6 @@ export async function GET(req: NextRequest) {
   const year  = parseInt(searchParams.get('year') ?? '2026');
 
   const supabase = createAdminClient();
-
-  // Supabase caps a single request at 1000 rows; the invoice-item table is far
-  // larger (7900+ rows), so the 3-year QB items query MUST page or service
-  // detection silently sees only an arbitrary 1000-row slice.
-  async function pageAll<T>(makeQuery: () => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
-    const out: T[] = [];
-    let fromIdx = 0;
-    for (;;) {
-      const { data } = await (makeQuery() as unknown as { range: (a: number, b: number) => PromiseLike<{ data: T[] | null }> }).range(fromIdx, fromIdx + 999);
-      if (!data?.length) break;
-      out.push(...data);
-      if (data.length < 1000) break;
-      fromIdx += 1000;
-    }
-    return out;
-  }
 
   // ── Parallel fetch: all queries at once ──────────────────────────────────
   const [
