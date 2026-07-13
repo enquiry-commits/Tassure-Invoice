@@ -1110,7 +1110,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       {hasTac && (
         <>
           <div style={{ height: 66, display: 'flex', alignItems: 'center' }}>
-            <div style={{ flex: 1, borderTop: '2px dashed #cbd5e1' }} />
+            <div style={{ flex: 1, borderTop: '1px dashed #e2e8f0' }} />
           </div>
           <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, flexWrap: 'wrap' }}>
