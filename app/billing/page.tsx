@@ -1076,7 +1076,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Basic Services</span>
         <span style={{ fontSize: 10, color: '#94a3b8' }}>· default QuickBooks company</span>
       </div>
-      <div style={{ marginBottom: hasTac ? 22 : 0 }}>
+      <div style={{ marginBottom: 0 }}>
         {renderTable(tabRows, 'No applicable services for this company.')}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#f8fafc' }}>
           <Plus size={13} style={{ color: '#0f766e' }} />
@@ -1100,9 +1100,15 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       </div>
 
       {/* TAC — Nominee Director only, and only shown when this company has an
-          ND line at all (most companies never will). */}
+          ND line at all (most companies never will). Gap between the TAB and
+          TAC sections is 3x the normal section spacing (22 -> 66), with a
+          dashed divider centred in it — visually separates the two invoices. */}
       {hasTac && (
-        <div>
+        <>
+          <div style={{ height: 66, display: 'flex', alignItems: 'center' }}>
+            <div style={{ flex: 1, borderTop: '2px dashed #cbd5e1' }} />
+          </div>
+          <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 5, padding: '2px 8px' }}>TAC</span>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Nominee Director</span>
@@ -1133,7 +1139,8 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
               </select>
             </div>
           </div>
-        </div>
+          </div>
+        </>
       )}
 
       {/* Total + generate */}
