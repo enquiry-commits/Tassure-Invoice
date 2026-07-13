@@ -53,7 +53,9 @@ export async function GET(req: NextRequest) {
     supabase.from('companies').select('id, company_name, has_xbrl, has_nd, has_accounts, has_tax, uses_address, has_annual_return, has_agm'),
     supabase.from('nd_appointments').select('company_name, appointment_date, nd_id').eq('sub_role', 'Nominee Director').not('appointment_date', 'is', null).is('cessation_date', null),
     supabase.from('quickbooks_invoices').select('invoice_no, txn_date, customer_name, total_amt, balance, status').gte('txn_date', `${year}-01-01`).lte('txn_date', `${year}-12-31`),
-    pageAll<{ customer_name: string; service_type: string; product_service: string | null; period_start: string | null; period_end: string | null; rate: number | null; invoice_no: string; txn_date: string | null }>(() => supabase.from('quickbooks_invoice_items').select('customer_name, service_type, product_service, period_start, period_end, rate, invoice_no, txn_date').gte('txn_date', `${year - 3}-01-01`)),
+    // invoice_no+line_num ordering = deterministic page boundaries (without it,
+    // rows can be duplicated/skipped between parallel page requests).
+    pageAll<{ customer_name: string; service_type: string; product_service: string | null; period_start: string | null; period_end: string | null; rate: number | null; invoice_no: string; txn_date: string | null }>(() => supabase.from('quickbooks_invoice_items').select('customer_name, service_type, product_service, period_start, period_end, rate, invoice_no, txn_date').gte('txn_date', `${year - 3}-01-01`).order('invoice_no', { ascending: true }).order('line_num', { ascending: true })),
   ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

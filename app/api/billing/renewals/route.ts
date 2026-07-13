@@ -164,19 +164,23 @@ export async function GET(req: NextRequest) {
       .select('customer_name, invoice_no, txn_date, service_type, period_start, period_end, rate, amount, product_service, description')
       .in('service_type', ['Secretary', 'Address', 'ND'])
       .not('period_end', 'is', null)
-      .order('period_end', { ascending: false })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; period_start: string | null; period_end: string | null; rate: number | null; amount: number | null; product_service: string | null; description: string | null }>>,
+      .order('period_end', { ascending: false })
+      // invoice_no+line_num = unique tiebreaker so parallel page boundaries are stable
+      .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; period_start: string | null; period_end: string | null; rate: number | null; amount: number | null; product_service: string | null; description: string | null }>>,
     pageAll(() => supabase
       .from('quickbooks_invoice_items')
       .select('customer_name, invoice_no, txn_date, service_type, fye_date, period_start, period_end, amount, rate, product_service, description')
       .in('service_type', ['AR', 'XBRL'])
       .gte('txn_date', cutoff18mStr)
-      .order('txn_date', { ascending: false })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; fye_date: string | null; period_start: string | null; period_end: string | null; amount: number | null; rate: number | null; product_service: string | null; description: string | null }>>,
+      .order('txn_date', { ascending: false })
+      .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; fye_date: string | null; period_start: string | null; period_end: string | null; amount: number | null; rate: number | null; product_service: string | null; description: string | null }>>,
     pageAll(() => supabase
       .from('quickbooks_invoice_items')
       .select('customer_name, invoice_no, txn_date, product_service, amount')
       .or('product_service.ilike.%Corporate Secretarial Services%,product_service.ilike.%Deferred Revenue - Corp Sec%,product_service.ilike.%Registered Address Services%,product_service.ilike.%Deferred Revenue - Reg Addr%')
       .gte('txn_date', cutoff18mStr)
-      .order('txn_date', { ascending: false })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; amount: number | null }>>,
+      .order('txn_date', { ascending: false })
+      .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; amount: number | null }>>,
     // Carry-forward candidates only (Discount / Accounts / Tax lines). This
     // used to be a full 24-month scan of ALL invoice items (~9k rows) just to
     // find each company's prior renewal invoice — but that invoice is already
@@ -187,7 +191,8 @@ export async function GET(req: NextRequest) {
       .select('customer_name, invoice_no, txn_date, product_service, description, amount, service_type')
       .or('product_service.ilike.%Discount Given%,product_service.ilike.%Yearly Accounts Services%,product_service.ilike.%Compilation Services%,product_service.ilike.%Monthly Accounts Services%,product_service.ilike.%Corporate Tax Services%,product_service.ilike.%Personal Income Tax Services%,product_service.ilike.%Other Tax Services%')
       .gte('txn_date', cutoff24mStr)
-      .order('txn_date', { ascending: false })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; description: string | null; amount: number | null; service_type: string | null }>>,
+      .order('txn_date', { ascending: false })
+      .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; description: string | null; amount: number | null; service_type: string | null }>>,
   ]);
   if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
 
@@ -362,7 +367,12 @@ export async function GET(req: NextRequest) {
         .sort((a, b) => (b.period_end ?? '').localeCompare(a.period_end ?? ''));
 
       if (!history.length) {
-        return { service: svc, applicable, lastPeriodEnd: null, lastRate: null,
+        // No parsed service period — but the TRUE annual fee may still be known
+        // from the fee lines (368 active clients have a real Secretary fee yet
+        // no parseable period). Surface it so drafts pre-fill the real rate
+        // instead of falling back to the catalogue median.
+        return { service: svc, applicable, lastPeriodEnd: null,
+          lastRate: getAnnualFee(company.company_name, svc),
           daysUntilExpiry: null, status: 'not_found', suggestedPeriodStart: null,
           suggestedPeriodEnd: null, history: [] };
       }
