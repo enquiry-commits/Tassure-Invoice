@@ -208,7 +208,7 @@ export default function LateFilingPage() {
       </div>
 
       {/* Stats — total + risk breakdown (click a card to filter) */}
-      <div style={{ display:'flex', gap:12, marginBottom:16, flexWrap:'wrap' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:16 }}>
         {([
           { key: 'ALL',      label: 'Total Late Filers',            sub: 'all flagged companies',            count: rows.length,   color: '#1e3a5f', bg: '#f8fafc', bd: '#e2e8f0' },
           { key: 'serious',  label: 'Seriously Overdue',            sub: 'over 1 year late / strike-off',     count: cats.serious,  color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
@@ -220,7 +220,7 @@ export default function LateFilingPage() {
           return (
             <button key={c.key} onClick={() => setCatFilter(c.key as LateCategory | 'ALL')}
               style={{ textAlign:'left', cursor:'pointer', background:c.bg, border:`1.5px solid ${active ? c.color : c.bd}`,
-                borderRadius:10, padding:'10px 16px', minWidth:150, boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
+                borderRadius:10, padding:'10px 16px', boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
               <div style={{ fontSize:22, fontWeight:800, color:c.color }}>{c.count}</div>
               <div style={{ fontSize:12, fontWeight:700, color:'#334155' }}>{c.label}</div>
               <div style={{ fontSize:10, color:'#94a3b8', marginTop:1 }}>{c.sub}</div>
