@@ -1387,7 +1387,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>BILLING DRAFTS</span>
           <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '28px 2fr 70px 90px 70px 1fr 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '28px 1.6fr 70px 100px 100px 100px 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
           {['', 'Company', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'PIC'].map((h, i) => (
             i === 4
               ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -1412,7 +1412,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             return (
               <div key={c.companyId}>
                 <div onClick={() => setExpanded(isOpen ? null : c.companyId)}
-                  style={{ display: 'grid', gridTemplateColumns: '28px 2fr 70px 90px 70px 1fr 80px', alignItems: 'center', padding: '9px 12px', background: isOpen ? '#f0f6ff' : rowBg, borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
+                  style={{ display: 'grid', gridTemplateColumns: '28px 1.6fr 70px 100px 100px 100px 80px', alignItems: 'center', padding: '9px 12px', background: isOpen ? '#f0f6ff' : rowBg, borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
                   onMouseEnter={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#f0f6ff'; }}
                   onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = rowBg; }}>
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
