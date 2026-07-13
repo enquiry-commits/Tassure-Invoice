@@ -1014,7 +1014,11 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const renderTable = (rows: { l: EditableLine; i: number }[], emptyMsg: string) => (
     <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, background: '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-        <div></div><div>Service</div><div>Description</div><div>Status</div><div style={{ textAlign: 'center' }}>Qty</div><div style={{ textAlign: 'right' }}>Rate (S$)</div><div style={{ textAlign: 'right' }}>Amount</div><div></div>
+        <div></div><div>Service</div><div>Description</div>
+        <div style={{ textAlign: 'center', padding: '0 8px' }}>Status</div>
+        <div style={{ textAlign: 'center', padding: '0 8px' }}>Qty</div>
+        <div style={{ textAlign: 'center', padding: '0 8px' }}>Rate (S$)</div>
+        <div style={{ textAlign: 'right' }}>Amount</div><div></div>
       </div>
       {rows.map(({ l, i }) => {
         const cfg = SVC_CONFIG[l.service as keyof typeof SVC_CONFIG];
@@ -1027,10 +1031,10 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
               <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svcLabel}</span>
             </div>
             <AutoTextarea value={l.description} onChange={v => setLine(i, { description: v })} style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: l.due ? '#c2410c' : '#94a3b8' }}>{l.reason}</span>
-            <input type="number" min={1} value={l.qty} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center' }} />
+            <span style={{ fontSize: 10, fontWeight: 600, color: l.due ? '#c2410c' : '#94a3b8', textAlign: 'center', padding: '0 8px' }}>{l.reason}</span>
+            <input type="number" min={1} value={l.qty} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center', justifySelf: 'center' }} />
             <input type="number" min={0} value={l.rate || ''} placeholder="0" onChange={e => setLine(i, { rate: +e.target.value || 0 })}
-              style={{ ...inputStyle, width: 90, textAlign: 'right', borderColor: l.include && !l.rate ? '#f87171' : '#cbd5e1', background: l.include && !l.rate ? '#fef2f2' : '#fff' }} />
+              style={{ ...inputStyle, width: 90, textAlign: 'center', justifySelf: 'center', borderColor: l.include && !l.rate ? '#f87171' : '#cbd5e1', background: l.include && !l.rate ? '#fef2f2' : '#fff' }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: l.include ? '#0f766e' : '#94a3b8', textAlign: 'right' }}>{l.include ? `S$${(l.qty * l.rate).toLocaleString()}` : '—'}</span>
             <button onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))} title="Remove line" style={{ border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'center' }}><X size={13} /></button>
           </div>
