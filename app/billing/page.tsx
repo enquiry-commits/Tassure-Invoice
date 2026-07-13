@@ -1165,7 +1165,12 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             cursor: (drafting || included.length === 0 || missingRate) ? 'not-allowed' : 'pointer',
             background: (drafting || included.length === 0 || missingRate) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
           }}>
-          <DollarSign size={15} />{drafting ? 'Generating…' : includedTab.length && includedTac.length ? 'Generate 2 Invoices (TAB + TAC)' : 'Generate Invoice in QuickBooks'}
+          <DollarSign size={15} />{
+            drafting ? 'Generating…'
+            : includedTab.length && includedTac.length ? 'Generate 2 Invoices (TAB + TAC)'
+            : includedTac.length ? 'Generate Invoice in QB (TAC)'
+            : 'Generate Invoice in QB (TAB)'
+          }
         </button>
       </div>
 
