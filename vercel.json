@@ -11,6 +11,10 @@
     {
       "path": "/api/late-filing/sync",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/quickbooks/sync",
+      "schedule": "30 1 * * *"
     }
   ]
 }

@@ -80,9 +80,31 @@ function parsePeriod(raw: string | null): { period_start?: string; period_end?: 
   return null;
 }
 
+export const maxDuration = 300; // full-year sync pages through 1500+ invoices (~40s)
+
+// ── GET /api/quickbooks/sync — daily Vercel cron ─────────────────────────────
+// Keeps invoice history fresh so billing drafts always see the latest "prior
+// invoice" and billed-cycle markers. Syncs the current AND previous year (the
+// prior year still matters to the 18–24-month lookback windows, and December
+// invoices keep being edited into January).
+export async function GET() {
+  const thisYear = new Date().getFullYear();
+  const results: Record<string, unknown>[] = [];
+  for (const year of [String(thisYear - 1), String(thisYear)]) {
+    const res = await syncYear(year);
+    results.push({ year, ...res });
+  }
+  return NextResponse.json({ ok: true, results });
+}
+
 // ── POST /api/quickbooks/sync ─────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   const { year = new Date().getFullYear().toString() } = await req.json().catch(() => ({}));
+  const result = await syncYear(String(year));
+  return NextResponse.json({ year, ...result });
+}
+
+async function syncYear(year: string) {
 
   // QB caps a query at 1000 results; page with STARTPOSITION so a year with
   // more than 1000 invoices doesn't silently lose the overflow.
@@ -94,7 +116,7 @@ export async function POST(req: NextRequest) {
       `SELECT * FROM Invoice WHERE TxnDate >= '${year}-01-01' AND TxnDate <= '${year}-12-31' STARTPOSITION ${start} MAXRESULTS ${PAGE}`
     );
     if (!page) {
-      if (!realmSeen) return NextResponse.json({ error: 'QuickBooks not connected or token expired' }, { status: 401 });
+      if (!realmSeen) return { error: 'QuickBooks not connected or token expired' };
       break;
     }
     realmSeen = true;
@@ -156,10 +178,28 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // QB allows duplicate DocNumbers; a batch containing the same invoice_no
+  // twice makes Postgres reject the whole upsert ("cannot affect row a second
+  // time"). Dedupe within the batch — keep the newest TxnDate per number.
+  const invByNo = new Map<string, Record<string, unknown>>();
+  for (const r of invoiceRows) {
+    const prev = invByNo.get(r.invoice_no as string);
+    if (!prev || String(r.txn_date) > String(prev.txn_date)) invByNo.set(r.invoice_no as string, r);
+  }
+  const dedupedInvoices = [...invByNo.values()];
+  const itemByKey = new Map<string, Record<string, unknown>>();
+  for (const r of itemRows) {
+    // Only keep line items belonging to the invoice occurrence we kept.
+    if (invByNo.get(r.invoice_no as string)?.txn_date !== r.txn_date) continue;
+    itemByKey.set(`${r.invoice_no}|${r.line_num}`, r);
+  }
+  const dedupedItems = [...itemByKey.values()];
+  itemRows.length = 0; itemRows.push(...dedupedItems);
+
   // Upsert invoices
   const { error: invErr } = await supabase
     .from('quickbooks_invoices')
-    .upsert(invoiceRows as Parameters<typeof supabase.from>[0] extends never ? never : never[], { onConflict: 'invoice_no' });
+    .upsert(dedupedInvoices as Parameters<typeof supabase.from>[0] extends never ? never : never[], { onConflict: 'invoice_no' });
 
   // Upsert line items in batches of 200
   let itemsDone = 0, itemsErr = 0;
@@ -171,11 +211,10 @@ export async function POST(req: NextRequest) {
     else       itemsDone += Math.min(200, itemRows.length - i);
   }
 
-  return NextResponse.json({
-    year,
-    invoices_synced: invoiceRows.length,
+  return {
+    invoices_synced: dedupedInvoices.length,
     items_synced:    itemsDone,
     items_error:     itemsErr,
     invoice_error:   invErr?.message ?? null,
-  });
+  };
 }
