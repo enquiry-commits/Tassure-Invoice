@@ -27,7 +27,6 @@ const PAGES = [
   { label: 'Strike Off',            href: '/master-list/strike-off',    kw: ['strike off', 'strike-off', '除名'] },
   { label: 'Terminated Services',   href: '/master-list/terminated',    kw: ['terminated', '终止'] },
   { label: 'Change Co Name',        href: '/master-list/name-change',   kw: ['name change', '改名', 'change co name'] },
-  { label: 'Inactive Old Record',   href: '/master-list/inactive-old',  kw: ['inactive', '旧记录'] },
   { label: 'Nominee Directors 提名董事', href: '/nominee-directors',    kw: ['nominee', 'nd', '提名董事', '挂名董事'] },
   { label: 'Address Service 地址服务', href: '/address-service',        kw: ['address', '地址'] },
   { label: 'AR Reminder 年报提醒',  href: '/billing?tab=ar',            kw: ['ar reminder', 'ar', '年报', 'annual return', '提醒'] },

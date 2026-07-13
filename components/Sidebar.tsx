@@ -29,7 +29,6 @@ const tree: Node[] = [
           { label: 'Strike Off',          href: '/master-list/strike-off' },
           { label: 'Terminated Services', href: '/master-list/terminated' },
           { label: 'Change Co Name',      href: '/master-list/name-change' },
-          { label: 'Inactive Old Record', href: '/master-list/inactive-old' },
         ],
       },
     ],
