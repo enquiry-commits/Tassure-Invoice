@@ -825,7 +825,7 @@ function AutoTextarea({ value, onChange, style }: { value: string; onChange: (v:
   );
 }
 
-function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
+function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: string }) {
   const [drafting, setDrafting] = useState(false);
   const [draftResult, setDraftResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [email, setEmail] = useState(c.email ?? '');
@@ -840,7 +840,14 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
   const initialLines = useMemo<EditableLine[]>(() => {
     const out: EditableLine[] = [];
     const period = periodLabel(c.renewals[0]?.suggestedPeriodStart ?? null, c.renewals[0]?.suggestedPeriodEnd ?? null);
-    const fyeStr = fyeDateString(c.fyeMonth, currentYear);
+    // Prefer the FYE of the cycle actually being invoiced (from the selected
+    // month/year) over a current-year guess — a January-selected cycle drafted
+    // in December would otherwise stamp the wrong year on AR/XBRL lines.
+    const fyeStr = cycleFye ?? fyeDateString(c.fyeMonth, currentYear);
+    // "Invoiced this cycle" from the FYE markers on QB lines — validated
+    // reliable, unlike the 13-month recency heuristic which misreads
+    // last year's invoice as covering this cycle at boundary months.
+    const billedThisCycle = cycleFye ? (c.billedCycles ?? []).includes(cycleFye) : null;
 
     for (const r of c.renewals) {
       if (!r.applicable) continue;
@@ -876,9 +883,12 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
 
     for (const a of c.annuals) {
       if (!a.applicable) continue;
-      const due = a.status === 'pending';
+      // Cycle marker beats the recency heuristic whenever we know the cycle.
+      const due = billedThisCycle !== null ? !billedThisCycle : a.status === 'pending';
       const last = a.history?.[0];
-      const reason = a.status === 'billed' ? `Already billed ${a.lastTxnDate ? fmtDate(a.lastTxnDate) : ''}`
+      const reason = billedThisCycle === true ? `Already invoiced this cycle [FYE ${cycleFye}]`
+                   : billedThisCycle === false ? 'Not yet invoiced this cycle'
+                   : a.status === 'billed' ? `Already billed ${a.lastTxnDate ? fmtDate(a.lastTxnDate) : ''}`
                    : a.status === 'pending' ? 'Not yet billed this cycle' : 'No prior invoice';
       if (a.service === 'AR') {
         // AR = fixed S$60 ACRA government filing fee (a disbursement line).
@@ -932,7 +942,7 @@ function ExpandedBillingRow({ c }: { c: CompanyBilling }) {
       }
     }
     return out;
-  }, [c, currentYear]);
+  }, [c, currentYear, cycleFye]);
 
   const [lines, setLines] = useState<EditableLine[]>(initialLines);
   const setLine = (i: number, patch: Partial<EditableLine>) =>
@@ -1348,7 +1358,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                 </div>
                 <button onClick={() => setExpanded(null)} style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
               </div>
-              <ExpandedBillingRow c={c} />
+              <ExpandedBillingRow c={c} cycleFye={currentFye || undefined} />
             </div>
           </div>
         );

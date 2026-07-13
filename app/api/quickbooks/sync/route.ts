@@ -84,10 +84,24 @@ function parsePeriod(raw: string | null): { period_start?: string; period_end?: 
 export async function POST(req: NextRequest) {
   const { year = new Date().getFullYear().toString() } = await req.json().catch(() => ({}));
 
-  const result = await qbQuery(
-    `SELECT * FROM Invoice WHERE TxnDate >= '${year}-01-01' AND TxnDate <= '${year}-12-31' MAXRESULTS 1000`
-  );
-  if (!result) return NextResponse.json({ error: 'QuickBooks not connected or token expired' }, { status: 401 });
+  // QB caps a query at 1000 results; page with STARTPOSITION so a year with
+  // more than 1000 invoices doesn't silently lose the overflow.
+  const PAGE = 1000;
+  let allRows: Record<string, unknown>[] = [];
+  let realmSeen = false;
+  for (let start = 1; ; start += PAGE) {
+    const page = await qbQuery(
+      `SELECT * FROM Invoice WHERE TxnDate >= '${year}-01-01' AND TxnDate <= '${year}-12-31' STARTPOSITION ${start} MAXRESULTS ${PAGE}`
+    );
+    if (!page) {
+      if (!realmSeen) return NextResponse.json({ error: 'QuickBooks not connected or token expired' }, { status: 401 });
+      break;
+    }
+    realmSeen = true;
+    allRows = allRows.concat(page.rows);
+    if (page.rows.length < PAGE) break;
+  }
+  const result = { rows: allRows };
 
   const supabase = createAdminClient();
   const now = new Date().toISOString();

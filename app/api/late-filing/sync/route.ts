@@ -48,8 +48,8 @@ export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
-const USERNAME = 'Vincent';
-const PASSWORD = 'Pass@123';
+const USERNAME = process.env.TEAMWORK_USERNAME || 'Vincent'; // TODO remove fallback once TEAMWORK_USERNAME is set in Vercel env
+const PASSWORD = process.env.TEAMWORK_PASSWORD || 'Pass@123'; // TODO remove fallback once TEAMWORK_PASSWORD is set in Vercel env
 const OVERDUE_THRESHOLD_DAYS = 90;
 const HISTORICAL_AVG_THRESHOLD_DAYS = 90;
 const MONTH_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
 import { pageAll } from '@/lib/page-all';
+import { normalize, matchScore } from '@/lib/company-name';
 
 const EDITABLE_FIELDS = new Set([
   'reminder_note', 'prepared_date', 'date_of_agm', 'agm_held_date',
@@ -11,27 +12,6 @@ const EDITABLE_FIELDS = new Set([
   // table columns from create-ar-reminder-table.sql
   'accounts_status', 'fin_stmt_status', 'audited_fs', 'agm_documents', 'dormant',
 ]);
-
-function normalize(name: string) {
-  return name.toLowerCase()
-    .replace(/\bpte\.?\s*ltd\.?\b/gi, '')
-    .replace(/\bprivate\s+limited\b/gi, '')
-    .replace(/\blimited\b/gi, '')
-    .replace(/\bllp\b/gi, '')
-    .replace(/[.\-,()&]/g, ' ')
-    .replace(/\s+/g, ' ').trim();
-}
-
-function matchScore(a: string, b: string): number {
-  const na = normalize(a), nb = normalize(b);
-  if (na === nb) return 100;
-  if (na.includes(nb) || nb.includes(na)) return 85;
-  const wa = new Set(na.split(' ').filter(w => w.length > 1));
-  const wb = new Set(nb.split(' ').filter(w => w.length > 1));
-  if (!wa.size || !wb.size) return 0;
-  const common = [...wa].filter(w => wb.has(w)).length;
-  return Math.round((common / Math.max(wa.size, wb.size)) * 70);
-}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

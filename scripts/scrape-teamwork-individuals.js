@@ -10,8 +10,8 @@ const fs = require('fs');
 const path = require('path');
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
-const USERNAME = 'Vincent';
-const PASSWORD = 'Pass@123';
+const USERNAME = process.env.TEAMWORK_USERNAME || 'Vincent'; // TODO remove fallback once TEAMWORK_USERNAME is set in Vercel env
+const PASSWORD = process.env.TEAMWORK_PASSWORD || 'Pass@123'; // TODO remove fallback once TEAMWORK_PASSWORD is set in Vercel env
 
 const DATA_DIR = path.join(__dirname, '..', 'data', 'teamwork-scrape');
 const INDIVIDUALS_DIR = path.join(DATA_DIR, 'individuals');

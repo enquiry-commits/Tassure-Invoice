@@ -1,32 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { thisYearSGT } from '@/lib/date';
+import { normalize, matchScore } from '@/lib/company-name';
 
-function normalize(name: string) {
-  return name
-    .toLowerCase()
-    .replace(/\bpte\.?\s*ltd\.?\b/gi, '')
-    .replace(/\bsdn\.?\s*bhd\.?\b/gi, '')
-    .replace(/\bllp\b/gi, '')
-    .replace(/\bprivate\s+limited\b/gi, '')
-    .replace(/\blimited\b/gi, '')
-    .replace(/[.\-,()&@]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function matchScore(a: string, b: string): number {
-  const na = normalize(a);
-  const nb = normalize(b);
-  if (na === nb) return 100;
-  if (na.includes(nb) || nb.includes(na)) return 85;
-  const wa = new Set(na.split(' ').filter(w => w.length > 1));
-  const wb = new Set(nb.split(' ').filter(w => w.length > 1));
-  if (wa.size === 0 || wb.size === 0) return 0;
-  const common = [...wa].filter(w => wb.has(w)).length;
-  const total  = Math.max(wa.size, wb.size);
-  return Math.round((common / total) * 70);
-}
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

@@ -2,50 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
 import { pageAll } from '@/lib/page-all';
-
-// normalize/matchScore run millions of times per request (830 companies × 5
-// services fuzzy-scanning hundreds of QB name entries). Memoise the regex
-// pipeline and the word sets — this was the actual bottleneck (~15s of CPU),
-// not the database queries.
-const normCache = new Map<string, string>();
-function normalize(name: string) {
-  const hit = normCache.get(name);
-  if (hit !== undefined) return hit;
-  const v = (name ?? '')
-    .toLowerCase()
-    .replace(/\(fka\b[^)]*\)/gi, '')
-    .replace(/\(f\.k\.a\.[^)]*\)/gi, '')
-    .replace(/\bpte\.?\s*ltd\.?\b/gi, '')
-    .replace(/\bprivate\s+limited\b/gi, '')
-    .replace(/\blimited\b/gi, '')
-    .replace(/\bllp\b/gi, '')
-    .replace(/[.\-,()&@]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  normCache.set(name, v);
-  return v;
-}
-
-const wordsCache = new Map<string, Set<string>>();
-function wordsOf(normalized: string): Set<string> {
-  let s = wordsCache.get(normalized);
-  if (!s) {
-    s = new Set(normalized.split(' ').filter(w => w.length > 1));
-    wordsCache.set(normalized, s);
-  }
-  return s;
-}
-
-function matchScore(a: string, b: string): number {
-  const na = normalize(a), nb = normalize(b);
-  if (na === nb) return 100;
-  if (na.includes(nb) || nb.includes(na)) return 85;
-  const wa = wordsOf(na), wb = wordsOf(nb);
-  if (!wa.size || !wb.size) return 0;
-  let common = 0;
-  for (const w of wa) if (wb.has(w)) common++;
-  return Math.round((common / Math.max(wa.size, wb.size)) * 100);
-}
+import { normalize, matchScore } from '@/lib/company-name';
 
 function daysBetween(from: string, to: string): number {
   return Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86400000);
