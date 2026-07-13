@@ -1365,7 +1365,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
           {([
             { key: 'all',    label: `AR Reminder · FYE ${month || '—'} ${year}`, sub: 'staff-reviewed batch this cycle', value: mCount.total,    color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText     },
-            { key: 'needs',  label: 'Needs Billing',               sub: 'not yet invoiced this cycle',  value: mCount.needs,    color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4', Icon: null         },
+            { key: 'needs',  label: 'Needs Billing',               sub: 'not yet invoiced this cycle',  value: mCount.needs,    color: '#c2410c', bg: '#fff7ed', bd: '#fed7aa', Icon: null         },
             { key: 'active', label: 'Invoiced',                    sub: 'already invoiced this cycle',   value: mCount.invoiced, color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2 },
           ] as const).map(({ key, label, sub, value, color, bg, bd, Icon }) => {
             const active = filter === key;
@@ -1428,7 +1428,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a5f', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: '#cbd5e1', fontSize: 10 }}>{i+1}</span>{c.companyName}
                       {notInvoicedYet(c)
-                        ? <span style={{ fontSize: 10, fontWeight: 700, background: '#ccfbf1', color: '#0f766e', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>To invoice</span>
+                        ? <span style={{ fontSize: 10, fontWeight: 700, background: '#fff7ed', color: '#c2410c', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>To invoice</span>
                         : <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>✓ Invoiced</span>}
                     </div>
                     {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen}</div>}
