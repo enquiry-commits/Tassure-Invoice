@@ -36,27 +36,43 @@ const PAGES = [
 ];
 
 const FAQ: { kw: string[]; a: string }[] = [
-  { kw: ['怎么开单', '如何开单', '生成发票', 'how to invoice', '怎么生成', '开发票'],
-    a: '开单流程:进入 [Billing Drafts 开单草稿](/billing?tab=billing) → 选 FYE 月份/年份 → 点开公司行,系统已按上一年发票预填服务项和真实费用(折扣会自动带入并提醒确认)→ 核对后点 "Generate Invoice in QuickBooks"。发票只会创建为 QB 草稿,不会自动发给客户。' },
-  { kw: ['ar 流程', 'ar是什么', 'ar reminder是什么', '年报流程', '年报是什么'],
-    a: 'AR Reminder 是年报申报追踪:TeamWork 判定每家公司的 FYE 周期 → 系统每天自动生成未来 6 个月的提醒批次 → 人工审核 → 到期进入 Billing 开单。删除某家公司后它不会被自动加回(软删除),用 Add Manual 可恢复。' },
-  { kw: ['删除', '移除公司', '不要这家', 'exclude', '排除'],
-    a: '在 [AR Reminder](/billing?tab=ar) 删除公司是"软删除":列表里消失,且每日自动生成不会把它加回来。以后想恢复,用 Add Manual 重新添加同一家即可自动还原。' },
-  { kw: ['late filing是什么', '迟报是什么', '怎么算迟报'],
-    a: 'Late Filing 每天自动检测:当前周期逾期超过 90 天,或历史平均(完成日−到期日)超过 90 天的公司会被标记,进入 [Late Filing 迟报监控](/late-filing)。' },
-  { kw: ['nd同步', 'nd更新', '提名董事同步', 'nd多久'],
-    a: 'ND 提名董事数据每天早上 8 点从 TeamWork 自动同步(电脑当时没开会在开机后补跑)。当前在任任命以 TeamWork「Company Appointments」为准。查询请到 [Nominee Directors](/nominee-directors),支持按公司名搜索。' },
-  { kw: ['qb同步', 'quickbooks同步', '发票数据多久', '数据多久更新'],
-    a: 'QuickBooks 发票数据每天凌晨 1:30 自动同步(今年+去年全量)。AR 批次每天凌晨 1 点滚动生成,Late Filing 每天凌晨 3 点检测。' },
+  { kw: ['怎么开单', '如何开单', '生成发票', 'how to invoice', '怎么生成', '开发票', '怎么开票', '如何开票', '怎么出单', '开单流程', '开票流程'],
+    a: '**开单流程**\n· 进入 [Billing Drafts 开单草稿](/billing?tab=billing)\n· 选 FYE 月份 / 年份\n· 点开公司行——系统已按上一年发票预填服务项和真实费用(折扣自动带入并提醒确认)\n· 核对后点 "Generate Invoice in QuickBooks"\n\n发票只会创建为 QB 草稿,**不会自动发给客户**。' },
+  { kw: ['ar 流程', 'ar是什么', 'ar reminder是什么', '年报流程', '年报是什么', '什么是ar', '什么是年报', 'ar怎么运作'],
+    a: '**AR Reminder 年报追踪流程**\n· TeamWork 判定每家公司的 FYE 周期\n· 系统每天自动生成未来 6 个月的提醒批次\n· 人工审核批次\n· 到期进入 [Billing Drafts](/billing?tab=billing) 开单\n\n删除的公司不会被自动加回(软删除),用 Add Manual 可恢复。' },
+  { kw: ['删除', '移除公司', '不要这家', 'exclude', '排除', '删掉', '去掉这家', '隐藏公司'],
+    a: '**删除公司(软删除)**\n· 在 [AR Reminder](/billing?tab=ar) 删除后,列表里消失\n· 每日自动生成**不会**把它加回来\n· 想恢复:用 Add Manual 重新添加同一家,自动还原原记录' },
+  { kw: ['恢复', '加回', 'add manual', '添加公司', '新增公司', '手动添加'],
+    a: '**添加 / 恢复公司**\n· 在 [AR Reminder](/billing?tab=ar) 点 "Add Manual"\n· 如果这家公司之前被删除过(同月份+年份),会自动**恢复原记录**而不是新建重复' },
+  { kw: ['late filing是什么', '迟报是什么', '怎么算迟报', '什么是迟报', '迟报标准', '迟报规则'],
+    a: '**Late Filing 判定规则**(每天凌晨 3 点自动检测)\n· 当前周期逾期超过 **90 天**,或\n· 历史平均(完成日 − 到期日)超过 **90 天**\n\n命中的公司进入 [Late Filing 迟报监控](/late-filing)。' },
+  { kw: ['nd同步', 'nd更新', '提名董事同步', 'nd多久', 'nd数据'],
+    a: '**ND 提名董事数据**\n· 每天早上 8 点从 TeamWork 自动同步(电脑没开会在开机后补跑)\n· 在任任命以 TeamWork「Company Appointments」为准\n\n查询:[Nominee Directors](/nominee-directors),支持按公司名搜索。' },
+  { kw: ['qb同步', 'quickbooks同步', '发票数据多久', '数据多久更新', '同步时间', '数据更新时间', '多久同步'],
+    a: '**自动同步时间表**(每天)\n· 01:00 — AR 批次滚动生成(未来 6 个月)\n· 01:30 — QuickBooks 发票全量同步(今年 + 去年)\n· 03:00 — Late Filing 迟报检测\n· 08:00 — ND 提名董事同步(TeamWork)' },
+  { kw: ['xbrl是什么', '什么是xbrl', 'xbrl要不要', '要不要xbrl', 'xbrl需要吗', 'xbrl规则'],
+    a: '**XBRL 处理规则**\n· 金额历史上 100% 稳定(有就是同一个价)\n· 但**是否需要**每年会变(取决于当年申报要求)\n· 所以草稿里 XBRL 行会标 "⚠ Confirm XBRL required this FY",需人工确认' },
+  { kw: ['折扣', 'discount', '优惠'],
+    a: '**折扣处理**\n· 上一年发票里的 Discount Given 会**自动带入**新草稿\n· 默认勾选,并标注 "confirm it still applies"\n· 不再适用就取消勾选即可' },
+  { kw: ['fye是什么', '什么是fye', 'financial year', '财年'],
+    a: '**FYE = Financial Year End(财年结束月份)**\n· 决定每家公司的 AR 年报周期\n· 也决定它出现在哪个月的开单批次\n· 开单一般在 FYE 月份后约 6 周进行' },
+  { kw: ['已开单', '未开单', '没开单怎么看', 'to invoice', '哪些开过', '怎么看开单状态'],
+    a: '**查看开单状态**\n· [Billing Drafts](/billing?tab=billing) 顶部有三张卡:全部 / To Invoice(待开)/ Invoiced(已开)\n· 判定依据是发票上的 FYE 周期标记,可点击卡片筛选\n· 每行公司名旁也有 "To invoice" / "✓ Invoiced" 徽章' },
+  { kw: ['token', '授权过期', 'reconnect', 'qb授权', 'quickbooks连不上', 'qb报错'],
+    a: '**QuickBooks 授权**\n· 顶栏右上有 QuickBooks 状态;授权临期会变黄色警告、过期变红色\n· 点它重新授权即可\n· 正常情况下每日自动同步会让授权持续续期,不会过期' },
+  { kw: ['nd费用', 'nd收费', 'nd deposit', 'nd押金', '提名董事费'],
+    a: '**ND 收费说明**\n· ND 是否要开单:以 TeamWork 在任记录为准(草稿自动勾选)\n· 金额要人工核对——因为**押金(deposit)和年费是分开开票的**,历史金额可能是押金\n· 草稿里 ND 行标注 "confirm annual fee (excl. deposit)"' },
 ];
 
 // ── Data tools (shared by both engines) ─────────────────────────────────────
 async function searchCompany(q: string) {
   const sb = createAdminClient();
   const like = `%${q.trim()}%`;
+  // A UEN-looking query searches registration_no instead of the name.
+  const isUen = /^(19|20)\d{7,8}[A-Z]$/i.test(q.trim());
   const { data: comps } = await sb.from('companies')
     .select('company_name, registration_no, fye_month, tw_status, client_type, is_active, uses_address, has_nd, has_xbrl, pic, sec_pic, internal_id')
-    .ilike('company_name', like).limit(5);
+    .ilike(isUen ? 'registration_no' : 'company_name', isUen ? q.trim() : like).limit(5);
   if (!comps?.length) return { found: false as const };
   const results = [];
   for (const c of comps) {
@@ -181,52 +197,142 @@ const MONTH_MAP: Record<string, string> = {
   '12月': 'December', '十二月': 'December', dec: 'December', december: 'December',
 };
 
+type CompanyCardData = {
+  name: string; uen: string | null; fye_month: string | null; status: string | null;
+  client_type: string | null; active: boolean | null; pic: string | null;
+  services: { address: boolean; nd: boolean; xbrl: boolean };
+  nominee_directors: string[]; ar_reminders: string[];
+};
+function companyCard(c: CompanyCardData): string {
+  const svcs = [c.services.address && '地址服务', c.services.nd && 'ND', c.services.xbrl && 'XBRL'].filter(Boolean).join(' + ') || '仅秘书';
+  const lines = [
+    `**${c.name}**`,
+    `· UEN:${c.uen ?? '—'}`,
+    `· 状态:${c.status ?? '—'}(${c.client_type ?? '—'})`,
+    `· FYE 月份:${c.fye_month ?? '未记录'} · PIC:${c.pic ?? '—'}`,
+    `· 服务:${svcs}`,
+  ];
+  if (c.nominee_directors.length) lines.push(`· 在任 ND:${c.nominee_directors.join('、')}`);
+  for (const r of c.ar_reminders) lines.push(`· AR:${r}`);
+  return lines.join('\n');
+}
+
 async function intentAnswer(text: string): Promise<string> {
   const t = text.toLowerCase().trim();
 
-  // 1. FAQ
-  for (const f of FAQ) if (f.kw.some(k => t.includes(k))) return f.a;
-
-  // 2. AR batch question: month (+year) + ar/开单 keywords
+  // 1. AR batch by month — checked BEFORE FAQ so "4月有几家没开单" isn't
+  //    hijacked by the 已开单/没开单 FAQ entry.
   const monthKey = Object.keys(MONTH_MAP).sort((a, b) => b.length - a.length).find(k => t.includes(k));
-  if (monthKey && /(ar|年报|开单|reminder|billing|batch|批次|几家|多少)/.test(t)) {
+  if (monthKey && /(ar|年报|开单|开票|reminder|billing|batch|批次|几家|多少|名单|清单)/.test(t)) {
     const yearMatch = t.match(/20\d{2}/);
     const year = yearMatch ? +yearMatch[0] : new Date().getFullYear();
     const b = await arBatch(MONTH_MAP[monthKey], year);
-    if (!b.total) return `${MONTH_MAP[monthKey]} ${year} 还没有 AR Reminder 批次。到 [AR Reminder](/billing?tab=ar) 可切换月份查看或生成。`;
-    return `**${MONTH_MAP[monthKey]} ${year} AR 批次:共 ${b.total} 家**(已申报 ${b.filed},待处理 ${b.pending})。\n前几家:${b.companies.slice(0, 8).join('、')}${b.total > 8 ? ' …' : ''}\n\n查看完整批次:[AR Reminder](/billing?tab=ar) · 去开单:[Billing Drafts](/billing?tab=billing)`;
+    if (!b.total) return `${MONTH_MAP[monthKey]} ${year} 还没有 AR Reminder 批次。\n\n[AR Reminder](/billing?tab=ar) 可切换月份查看或生成。`;
+    return [
+      `**${MONTH_MAP[monthKey]} ${year} AR 批次**`,
+      `· 共 **${b.total}** 家`,
+      `· 待处理 ${b.pending} · 已申报 ${b.filed}`,
+      '',
+      '部分名单:',
+      ...b.companies.slice(0, 8).map(n => `· ${n}`),
+      b.total > 8 ? `…共 ${b.total} 家,完整名单见页面` : '',
+      '',
+      `[AR Reminder 查看批次](/billing?tab=ar) [Billing Drafts 去开单](/billing?tab=billing)`,
+    ].filter(l => l !== '').join('\n').replace('部分名单:\n', '部分名单:\n');
   }
 
-  // 3. Navigation: 去/打开/带我/open/go
-  if (/(去|打开|带我|跳转|open |go to |进入)/.test(t)) {
-    for (const p of PAGES) if (p.kw.some(k => t.includes(k))) return `好的,带你去 **${p.label}**:[点击打开](${p.href})`;
+  // 2. FAQ (longest-phrase keyword sets)
+  for (const f of FAQ) if (f.kw.some(k => t.includes(k))) return f.a;
+
+  // 3. Due-soon: "最近有什么到期 / 30天内到期"
+  if (/(到期|due|快到了|截止)/.test(t)) {
+    const days = +(t.match(/(\d+)\s*天/)?.[1] ?? 45);
+    const sb = createAdminClient();
+    const today = new Date().toISOString().slice(0, 10);
+    const until = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    const { data } = await sb.from('ar_reminder')
+      .select('entity_name, due_date, fye_month, fye_year')
+      .gte('due_date', today).lte('due_date', until)
+      .or('status.is.null,status.neq.Excluded')
+      .order('due_date', { ascending: true }).limit(200);
+    const rows = data ?? [];
+    if (!rows.length) return `未来 ${days} 天内没有到期的 AR。\n\n[AR Reminder](/billing?tab=ar)`;
+    return [
+      `**未来 ${days} 天内到期的 AR:共 ${rows.length} 家**`,
+      '',
+      ...rows.slice(0, 10).map(r => `· ${r.due_date} — ${r.entity_name}(FYE ${r.fye_month} ${r.fye_year})`),
+      rows.length > 10 ? `…共 ${rows.length} 家` : '',
+      '',
+      `[AR Reminder 查看全部](/billing?tab=ar)`,
+    ].filter(Boolean).join('\n');
   }
 
-  // 4. ND person lookup: "XX 有哪些公司 / 挂了几家"
-  if (/(哪些公司|几家公司|挂名|任职|appointments)/.test(t)) {
-    const nameGuess = text.replace(/有哪些公司|挂名|挂了几家公司?|任职|的|哪些|几家|公司|appointments|\?|？/g, '').trim();
+  // 4. Late-filing count: "有几家迟报"
+  if (/(迟报|late filing|逾期)/.test(t) && /(几家|多少|count|名单|哪些)/.test(t)) {
+    const sb = createAdminClient();
+    const { data } = await sb.from('late_filing_companies').select('company_name').limit(200);
+    const rows = data ?? [];
+    return [
+      `**迟报监控名单:共 ${rows.length} 家**`,
+      '',
+      ...rows.slice(0, 10).map(r => `· ${r.company_name}`),
+      rows.length > 10 ? `…共 ${rows.length} 家` : '',
+      '',
+      `[Late Filing 查看全部](/late-filing)`,
+    ].filter(Boolean).join('\n');
+  }
+
+  // 5. Navigation with a verb: 去/打开/带我/open/go
+  if (/(去|打开|带我|跳转|open |go to |进入|看看)/.test(t)) {
+    for (const p of PAGES) if (p.kw.some(k => t.includes(k))) return `好的,带你去 **${p.label}**\n\n[点击打开](${p.href})`;
+  }
+
+  // 6. ND person lookup: "XX 有哪些公司 / 挂了几家"
+  if (/(哪些公司|几家公司|挂名|任职|appointments|在任)/.test(t)) {
+    const nameGuess = text.replace(/有哪些公司|挂名|挂了几家公司?|任职|在任|的|哪些|几家|公司|appointments|\?|？/g, '').trim();
     if (nameGuess.length >= 2) {
       const r = await ndLookup(nameGuess);
       if (r.found) {
-        return r.directors.map(d => `**${d.name}** 当前在任 ${d.active_count} 家:\n${d.companies.slice(0, 12).map(c => '· ' + c).join('\n')}${d.active_count > 12 ? '\n…' : ''}`).join('\n\n') + `\n\n详情:[Nominee Directors](/nominee-directors)`;
+        return r.directors.map(d => [
+          `**${d.name}** 当前在任 **${d.active_count}** 家`,
+          '',
+          ...d.companies.slice(0, 12).map(c => `· ${c}`),
+          d.active_count > 12 ? `…共 ${d.active_count} 家` : '',
+        ].filter(Boolean).join('\n')).join('\n\n')
+          + `\n\n[Nominee Directors 详情](/nominee-directors)`;
       }
     }
   }
 
-  // 5. Company lookup: try the raw text as a company name (≥3 chars)
-  const cleaned = text.replace(/查|一下|公司|的资料|的信息|情况|status|是什么|谁|\?|？/g, ' ').trim();
+  // 7. Company lookup — accepts company names or a UEN (e.g. 202320434R)
+  const uen = text.match(/(19|20)\d{7,8}[A-Z]/i)?.[0];
+  const cleaned = uen ?? text.replace(/查|一下|帮我|公司|的资料|的信息|的情况|情况|status|是什么|的?nd是谁|的?pic是?谁?|谁是|开过什么单|\?|？/g, ' ').trim();
   if (cleaned.length >= 3) {
     const r = await searchCompany(cleaned);
     if (r.found) {
-      return r.companies.map(c => {
-        const svcs = [c.services.address && '地址服务', c.services.nd && 'ND', c.services.xbrl && 'XBRL'].filter(Boolean).join(' + ') || '仅秘书';
-        return `**${c.name}**\n· UEN:${c.uen ?? '—'} · 状态:${c.status ?? '—'}(${c.client_type ?? '—'})\n· FYE 月份:${c.fye_month ?? '未记录'} · PIC:${c.pic ?? '—'}\n· 服务:${svcs}${c.nominee_directors.length ? `\n· 在任 ND:${c.nominee_directors.join('、')}` : ''}${c.ar_reminders.length ? `\n· AR:${c.ar_reminders.join(';')}` : ''}`;
-      }).join('\n\n') + `\n\n[Companies 公司库](/companies) · [Billing Drafts 开单](/billing?tab=billing)`;
+      return r.companies.map(companyCard).join('\n\n')
+        + `\n\n[Companies 公司库](/companies) [Billing Drafts 开单](/billing?tab=billing)`;
     }
   }
 
-  // 6. Fallback: capabilities
-  return `我可以帮你:\n· **查公司**——直接输入公司名(如"INFINITY LINKS"),给你状态/FYE/服务/ND/年报进度\n· **查 ND**——如"CHEN DE 有哪些公司"\n· **查 AR 批次**——如"4月2026有几家AR"\n· **带你去页面**——如"打开开单草稿"\n· **流程问题**——如"怎么开单"、"删除的公司会回来吗"\n\n试着换个说法,或点这里浏览:${PAGES.slice(0, 5).map(p => `[${p.label}](${p.href})`).join(' · ')}`;
+  // 8. Bare page name without a verb ("late filing", "开单草稿")
+  for (const p of PAGES) if (p.kw.some(k => k.length >= 2 && t.includes(k))) {
+    return `你要找的应该是 **${p.label}**\n\n[点击打开](${p.href})`;
+  }
+
+  // 9. Fallback: capabilities
+  return [
+    '我可以帮你:',
+    '· **查公司** — 输入公司名或 UEN,如 "INFINITY LINKS"',
+    '· **查 ND** — 如 "CHEN DE 有哪些公司"',
+    '· **查 AR 批次** — 如 "4月2026有几家AR"',
+    '· **查到期** — 如 "30天内有什么到期"',
+    '· **查迟报** — 如 "有几家迟报"',
+    '· **页面导航** — 如 "打开开单草稿"',
+    '· **流程问题** — 如 "怎么开单"、"折扣怎么处理"、"XBRL要不要"',
+    '',
+    `快捷入口:${PAGES.slice(0, 5).map(p => `[${p.label}](${p.href})`).join(' ')}`,
+  ].join('\n');
 }
 
 // ── Route ────────────────────────────────────────────────────────────────────

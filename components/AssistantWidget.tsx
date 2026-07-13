@@ -6,16 +6,18 @@ import { MessageCircle, X, Send, Sparkles } from 'lucide-react';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 
-const WELCOME = `你好,我是 Tassure 系统助手 👋
+const WELCOME = `**你好,我是 Tassure 系统助手** 👋
 可以直接问我:
-· "INFINITY LINKS 的资料" —— 查公司
-· "CHEN DE 有哪些公司" —— 查提名董事
-· "4月2026有几家AR" —— 查年报批次
-· "打开开单草稿" —— 带你去页面
-· "怎么开单" —— 流程问题`;
+· 查公司 — "INFINITY LINKS" 或输入 UEN
+· 查提名董事 — "CHEN DE 有哪些公司"
+· 查 AR 批次 — "4月2026有几家AR"
+· 查到期 — "30天内有什么到期"
+· 查迟报 — "有几家迟报"
+· 页面导航 — "打开开单草稿"
+· 流程答疑 — "怎么开单"、"折扣怎么处理"`;
 
-// Render **bold**, newlines, and [label](href) links (internal links navigate in-app).
-function RichText({ text, onNav }: { text: string; onNav: (href: string) => void }) {
+// Inline pieces: **bold** and [label](href) buttons.
+function Inline({ text, onNav }: { text: string; onNav: (href: string) => void }) {
   const parts = text.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*)/g);
   return (
     <>
@@ -25,16 +27,69 @@ function RichText({ text, onNav }: { text: string; onNav: (href: string) => void
           const [, label, href] = link;
           return (
             <button key={i} onClick={() => onNav(href)}
-              style={{ display: 'inline-block', margin: '2px 2px', padding: '3px 10px', borderRadius: 999, border: '1px solid #99f6e4', background: '#f0fdfa', color: '#0f766e', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ display: 'inline-block', margin: 2, padding: '4px 11px', borderRadius: 999, border: '1px solid #99f6e4', background: '#f0fdfa', color: '#0f766e', fontSize: 12, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
               {label} →
             </button>
           );
         }
         const bold = p.match(/^\*\*([^*]+)\*\*$/);
-        if (bold) return <strong key={i} style={{ color: '#12233b' }}>{bold[1]}</strong>;
+        if (bold) return <strong key={i} style={{ color: '#12233b', fontWeight: 750 }}>{bold[1]}</strong>;
         return <span key={i}>{p}</span>;
       })}
     </>
+  );
+}
+
+// Block renderer: each line becomes a styled block — headings (a line that is
+// entirely bold), bullet rows (· / - prefixed), link-only rows (rendered as a
+// button row), and paragraphs — with proper spacing between them.
+function RichText({ text, onNav }: { text: string; onNav: (href: string) => void }) {
+  const lines = text.split('\n');
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {lines.map((raw, i) => {
+        const line = raw.trimEnd();
+        if (!line.trim()) return <div key={i} style={{ height: 8 }} />;
+
+        // Row consisting only of links → button row with wrapping.
+        const noLinks = line.replace(/\[[^\]]+\]\([^)]+\)/g, '').replace(/[·・\s]/g, '');
+        const hasLink = /\[[^\]]+\]\([^)]+\)/.test(line);
+        if (hasLink && (noLinks === '' || /^快捷入口[::]?$/.test(noLinks))) {
+          return (
+            <div key={i} style={{ display: 'flex', flexWrap: 'wrap', gap: 4, margin: '4px 0 2px' }}>
+              <Inline text={line} onNav={onNav} />
+            </div>
+          );
+        }
+
+        // Bullet row.
+        const bullet = line.match(/^[·\-•]\s*(.*)$/);
+        if (bullet) {
+          return (
+            <div key={i} style={{ display: 'flex', gap: 7, margin: '2.5px 0', paddingLeft: 2 }}>
+              <span style={{ color: '#0f766e', flexShrink: 0, lineHeight: 1.55 }}>•</span>
+              <span style={{ flex: 1 }}><Inline text={bullet[1]} onNav={onNav} /></span>
+            </div>
+          );
+        }
+
+        // Heading: the whole line is a single bold token.
+        if (/^\*\*[^*]+\*\*$/.test(line.trim())) {
+          return (
+            <div key={i} style={{ fontSize: 13, fontWeight: 750, color: '#12233b', margin: i === 0 ? '0 0 4px' : '6px 0 4px', paddingBottom: 4, borderBottom: '1px solid #eef2f6' }}>
+              {line.trim().slice(2, -2)}
+            </div>
+          );
+        }
+
+        // Plain paragraph.
+        return (
+          <div key={i} style={{ margin: '2px 0' }}>
+            <Inline text={line} onNav={onNav} />
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -111,7 +166,8 @@ export default function AssistantWidget() {
             {msgs.map((m, i) => (
               <div key={i} style={{
                 alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
-                maxWidth: '88%', padding: '9px 12px', borderRadius: 12, fontSize: 12.5, lineHeight: 1.55, whiteSpace: 'pre-wrap',
+                maxWidth: '90%', padding: '10px 13px', borderRadius: 12, fontSize: 12.5, lineHeight: 1.55,
+                whiteSpace: m.role === 'user' ? 'pre-wrap' : 'normal',
                 background: m.role === 'user' ? '#1d3a5c' : '#fff',
                 color: m.role === 'user' ? '#fff' : '#334155',
                 border: m.role === 'user' ? 'none' : '1px solid #e8ecf1',
