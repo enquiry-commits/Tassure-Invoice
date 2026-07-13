@@ -2,7 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { qbQuery } from '@/lib/quickbooks';
 import { createAdminClient } from '@/lib/supabase';
 
-// ── Service classification (mirrors scrape-qb-line-items.js) ─────────────────
+// ── Service classification ───────────────────────────────────────────────────
+// The QB Product/Service item name is authoritative — classify by it FIRST.
+// Description keywords are only a fallback for lines without a mapped item.
+// (The old description-first classifier mislabelled 30% of Secretary retainer
+// lines as AR, because the standard retainer wording contains "…submitting the
+// prescribed Annual Return as required by the Act…".)
+const PRODUCT_MAP: { type: string; match: string[] }[] = [
+  { type: 'Deferred',  match: ['deferred revenue'] },           // check first: "Deferred Revenue - Corp Sec" etc.
+  { type: 'Secretary', match: ['corporate secretarial services', 'secretary fees - offshore'] },
+  { type: 'Address',   match: ['registered address services'] },
+  { type: 'ND',        match: ['nominee director fees', 'nominee director deposit', 'nominee shareholder fees'] },
+  { type: 'AR',        match: ['government fee for filing annual return'] },
+  { type: 'XBRL',      match: ['company xbrl services'] },
+  { type: 'Accounts',  match: ['yearly accounts services', 'monthly accounts services', 'compilation services'] },
+  { type: 'Tax',       match: ['corporate tax services', 'personal income tax services', 'other tax services', 'application for waiver of income tax'] },
+];
+
 const SERVICE_PATTERNS = [
   { type: 'AR',        kw: ['annual return', 'ar filing', 'ar fee', 'a/r filing', 'acra annual', 'government fee for acra', 'government fee of'] },
   { type: 'AGM',       kw: ['agm', 'annual general meeting'] },
@@ -17,6 +33,10 @@ const SERVICE_PATTERNS = [
 ];
 
 function classify(desc: string, product: string): string {
+  const p = (product || '').toLowerCase();
+  for (const { type, match } of PRODUCT_MAP) {
+    if (match.some(m => p.includes(m))) return type;
+  }
   const t = `${desc || ''} ${product || ''}`.toLowerCase();
   for (const { type, kw } of SERVICE_PATTERNS) {
     if (kw.some(k => t.includes(k))) return type;
