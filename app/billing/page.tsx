@@ -1165,7 +1165,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             cursor: (drafting || included.length === 0 || missingRate) ? 'not-allowed' : 'pointer',
             background: (drafting || included.length === 0 || missingRate) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
           }}>
-          <DollarSign size={15} />{
+          {
             drafting ? 'Generating…'
             : includedTab.length && includedTac.length ? 'Generate 2 Invoices (TAB + TAC)'
             : includedTac.length ? 'Generate Invoice in QB (TAC)'
@@ -1365,14 +1365,14 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
           {([
             { key: 'all',    label: `AR Reminder · FYE ${month || '—'} ${year}`, sub: 'staff-reviewed batch this cycle', value: mCount.total,    color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText     },
-            { key: 'needs',  label: 'Needs Billing',               sub: 'not yet invoiced this cycle',  value: mCount.needs,    color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4', Icon: DollarSign   },
+            { key: 'needs',  label: 'Needs Billing',               sub: 'not yet invoiced this cycle',  value: mCount.needs,    color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4', Icon: null         },
             { key: 'active', label: 'Invoiced',                    sub: 'already invoiced this cycle',   value: mCount.invoiced, color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2 },
           ] as const).map(({ key, label, sub, value, color, bg, bd, Icon }) => {
             const active = filter === key;
             return (
               <button key={key} onClick={() => setFilter(key)}
                 style={{ textAlign: 'left', cursor: 'pointer', background: bg, borderRadius: 10, border: `1.5px solid ${active ? color : bd}`, padding: '12px 16px', boxShadow: active ? `0 0 0 2px ${color}22` : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}><Icon size={13} style={{ color }} /><span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>{label}</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>{Icon && <Icon size={13} style={{ color }} />}<span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>{label}</span></div>
                 <div style={{ fontSize: 26, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
                 <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{sub}</div>
               </button>
@@ -1392,7 +1392,6 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       {/* Table */}
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '8px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <DollarSign size={13} style={{ color: '#93c5fd' }} />
           <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>BILLING DRAFTS</span>
           <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
