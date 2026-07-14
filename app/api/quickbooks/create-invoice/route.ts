@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
+import { nextDocNumber, getNet7TermId, findPicClass, isGovFeeLine } from '@/lib/qb-invoice-conventions';
 import { createAdminClient } from '@/lib/supabase';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
@@ -91,6 +92,7 @@ function pickItem(service: string, itemMap: Map<string, { id: string; name: stri
 async function createInvoiceInCompany(
   company: QbCompany, companyName: string, lines: DraftLineItem[],
   email: string | undefined, txnDate: string, sendEmail: boolean | undefined,
+  pic: string | undefined,
 ): Promise<CompanyResult> {
   const tokenRow = await getValidToken(company);
   if (!tokenRow) return { error: `QuickBooks ${company} not connected` };
@@ -99,7 +101,17 @@ async function createInvoiceInCompany(
   const customer = await findCustomer(token, realmId, companyName);
   if (!customer) return { error: `Customer not found in QB ${company}: "${companyName}"` };
 
-  const itemMap = await getItemMap(token, realmId);
+  // House conventions (see lib/qb-invoice-conventions.ts): sequential
+  // DocNumber per company/year series (custom transaction numbers are ON, so
+  // an unnumbered create stays blank), Net 7 terms, and — TAB only — the
+  // PIC's person class on every service line (not on government-fee lines).
+  const [itemMap, docNumber, termId, picClass] = await Promise.all([
+    getItemMap(token, realmId),
+    nextDocNumber(token, realmId, company, txnDate),
+    getNet7TermId(token, realmId),
+    company === 'TAB' && pic ? findPicClass(token, realmId, pic) : Promise.resolve(null),
+  ]);
+
   const invoiceLines = lines.map((l, i) => {
     const exact = l.productService ? itemMap.get(l.productService.toLowerCase()) : undefined;
     const item = exact ?? pickItem(l.service, itemMap);
@@ -112,6 +124,7 @@ async function createInvoiceInCompany(
         ItemRef: { value: item.id, name: item.name },
         Qty:       l.qty ?? 1,
         UnitPrice: l.rate,
+        ...(picClass && !isGovFeeLine(l) ? { ClassRef: picClass } : {}),
       },
     };
   });
@@ -124,6 +137,8 @@ async function createInvoiceInCompany(
     // Default: create as a draft for review in QB — do NOT queue for sending.
     EmailStatus: sendEmail && email ? 'NeedToSend' : 'NotSet',
   };
+  if (docNumber) payload.DocNumber = docNumber;
+  if (termId)    payload.SalesTermRef = { value: termId };
   if (email) payload.BillEmail = { Address: email };
 
   const createRes = await fetch(`${QB_BASE}/v3/company/${realmId}/invoice?minorversion=65`, {
@@ -149,7 +164,7 @@ async function createInvoiceInCompany(
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
-    companyName, email, txnDate, sendEmail,
+    companyName, email, txnDate, sendEmail, pic,
     tabLines, tacLines,
     fyeMonth, fyeYear, fyeCycle,
   } = body as {
@@ -157,6 +172,7 @@ export async function POST(req: NextRequest) {
     email?: string;
     txnDate?: string;
     sendEmail?: boolean;
+    pic?: string;          // person-in-charge — becomes the line Class in TAB
     tabLines: DraftLineItem[];
     tacLines: DraftLineItem[];
     fyeMonth?: string;
@@ -172,8 +188,8 @@ export async function POST(req: NextRequest) {
   const supabase = createAdminClient();
 
   const [tab, tac] = await Promise.all([
-    tabLines?.length ? createInvoiceInCompany('TAB', companyName, tabLines, email, date, sendEmail) : Promise.resolve(null),
-    tacLines?.length ? createInvoiceInCompany('TAC', companyName, tacLines, email, date, sendEmail) : Promise.resolve(null),
+    tabLines?.length ? createInvoiceInCompany('TAB', companyName, tabLines, email, date, sendEmail, pic) : Promise.resolve(null),
+    tacLines?.length ? createInvoiceInCompany('TAC', companyName, tacLines, email, date, sendEmail, pic) : Promise.resolve(null),
   ]);
 
   // Persist every successful creation — the authoritative "already invoiced

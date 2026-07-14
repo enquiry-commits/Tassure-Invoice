@@ -1018,6 +1018,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           email: email || undefined,
           txnDate,
           sendEmail: false,
+          pic: c.pic ?? undefined,
           tabLines: includedTab.map(toApiLine),
           tacLines: includedTac.map(toApiLine),
           fyeMonth: c.fyeMonth, fyeYear, fyeCycle: cycleFye ?? null,

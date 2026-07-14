@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getValidToken } from '@/lib/quickbooks';
+import { nextDocNumber, getNet7TermId, findPicClass } from '@/lib/qb-invoice-conventions';
 
 // TEMPORARY — inspect invoice conventions (DocNumber/Class/Terms) so the
 // create-invoice route can replicate them. Delete after use.
@@ -30,6 +31,18 @@ export async function GET(req: NextRequest) {
   const B = `${QB_BASE}/v3/company/${tok.realm_id}`;
 
   const out: Record<string, unknown> = {};
+
+  // Preview mode: dry-run the invoice-convention helpers (nothing created).
+  if (req.nextUrl.searchParams.get('preview')) {
+    const pic = req.nextUrl.searchParams.get('pic') ?? '';
+    const today = new Date().toISOString().slice(0, 10);
+    const [doc, term, cls] = await Promise.all([
+      nextDocNumber(tok.access_token, tok.realm_id, company, today),
+      getNet7TermId(tok.access_token, tok.realm_id),
+      pic ? findPicClass(tok.access_token, tok.realm_id, pic) : Promise.resolve(null),
+    ]);
+    return NextResponse.json({ company, nextDocNumber: doc, net7TermId: term, pic, matchedClass: cls });
+  }
 
   if (docNo) {
     const q = encodeURIComponent(`SELECT * FROM Invoice WHERE DocNumber = '${docNo}'`);
