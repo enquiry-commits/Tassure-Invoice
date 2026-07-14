@@ -1157,6 +1157,24 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
               </span>
             )}
           </div>
+          {/* Provenance for the TAC invoice — mirrors the TAB note above. The
+              ND draft line's item & fee come from this exact invoice. */}
+          {(() => {
+            const ndPrior = c.renewals.find(r => r.service === 'ND')?.history?.[0] ?? null;
+            return (
+              <div style={{ fontSize: 11, color: '#64748b', margin: '2px 0 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <FileText size={12} />
+                {ndPrior?.invoice_no
+                  ? <span>
+                      Based on last invoice
+                      <strong style={{ color: '#9a3412', fontFamily: 'monospace', margin: '0 5px', background: '#ffedd5', border: '1px solid #fed7aa', padding: '1px 7px', borderRadius: 4 }}>#{ndPrior.invoice_no}</strong>
+                      {ndPrior.txn_date && <> dated <strong style={{ color: '#334155' }}>{fmtDate(ndPrior.txn_date)}</strong></>}
+                      {' '}— ND fee &amp; director item carried forward, period rolled to this cycle.
+                    </span>
+                  : <span style={{ color: '#b45309' }}>No prior ND invoice found — confirm the director&apos;s item &amp; fee before generating.</span>}
+              </div>
+            );
+          })()}
           <div style={{ marginBottom: 0 }}>
             {renderTable(tacRows, 'No Nominee Director line.')}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#fff7ed' }}>
