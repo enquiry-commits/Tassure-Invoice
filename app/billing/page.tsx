@@ -209,6 +209,28 @@ const SVC: Record<string, { label: string; bg: string; color: string }> = {
   secretary: { label: 'Secretary',     bg: '#f5f3ff', color: '#6d28d9' },
 };
 
+// Services rendered as FIXED slots in a FIXED order so each service always
+// sits in the same position row-to-row — much easier to scan than a
+// variable-length list. Color encodes PROVENANCE, not service type:
+//   blue = automatically detected · green = manually switched on ·
+//   grey = not provided / switched off.
+const SVC_ORDER = ['ar', 'agm', 'secretary', 'nd', 'address', 'xbrl', 'accounts', 'tax'] as const;
+const SVC_SHORT: Record<string, string> = {
+  ar: 'AR', agm: 'AGM', secretary: 'SEC', nd: 'ND',
+  address: 'ADDR', xbrl: 'XBRL', accounts: 'ACC', tax: 'TAX',
+};
+type SvcState = 'auto-on' | 'manual-on' | 'off';
+const SVC_STATE_STYLE: Record<SvcState, { bg: string; color: string; bd: string }> = {
+  'auto-on':   { bg: '#dbeafe', color: '#1d4ed8', bd: '#93c5fd' },
+  'manual-on': { bg: '#dcfce7', color: '#15803d', bd: '#86efac' },
+  'off':       { bg: '#f1f5f9', color: '#94a3b8', bd: '#e2e8f0' },
+};
+function svcStateOf(services: Services, manual: Partial<Record<string, boolean>> | undefined, key: string): SvcState {
+  if (manual?.[key] === true) return 'manual-on';
+  if ((services as unknown as Record<string, boolean>)[key]) return 'auto-on';
+  return 'off';
+}
+
 const FYE_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const STAGE_LABELS = ['Accounts\nReady','Sent to\nClient','Docs\nReceived','AGM\nHeld','AR\nFiled'];
 
@@ -218,24 +240,25 @@ const OVERRIDABLE_SVC = ['secretary', 'accounts', 'tax', 'xbrl'] as const;
 
 // Clickable service chip: AUTO by default; one click flips the effective
 // state (manual, ✎ marker), clicking again restores AUTO. Automation never
-// touches manual values.
+// touches manual values. Colors encode provenance: blue = auto-detected,
+// green = manually on, grey = off / not provided.
 function OverrideChip({ svc, effective, manual, disabled, onCycle }:
   { svc: string; effective: boolean; manual: boolean | undefined; disabled: boolean; onCycle: () => void }) {
   const c = SVC[svc];
   const isManual = manual !== undefined;
+  const st = SVC_STATE_STYLE[isManual && manual ? 'manual-on' : effective ? 'auto-on' : 'off'];
   return (
     <button onClick={onCycle} disabled={disabled}
       title={disabled ? 'No company-master match — cannot override' : isManual ? `${c.label}: manual ${manual ? 'ON' : 'OFF'} · click to restore auto` : `${c.label}: auto (${effective ? 'on' : 'off'}) · click to force ${effective ? 'OFF' : 'ON'}`}
       style={{
-        background: effective ? c.bg : '#f1f5f9',
-        color: effective ? c.color : '#94a3b8',
-        border: `1.5px ${isManual ? 'solid' : 'dashed'} ${effective ? c.color : '#cbd5e1'}`,
-        borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 700,
+        background: st.bg, color: st.color,
+        border: `1.5px ${isManual ? 'solid' : 'dashed'} ${st.bd}`,
+        borderRadius: 5, padding: '3px 9px', fontSize: 11, fontWeight: 700,
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
         textDecoration: isManual && !effective ? 'line-through' : 'none',
         display: 'inline-flex', alignItems: 'center', gap: 4,
       }}>
-      {c.label}{isManual && <span style={{ fontSize: 9 }}>✎</span>}
+      {c.label}{isManual && <span style={{ fontSize: 10 }}>✎</span>}
     </button>
   );
 }
@@ -1653,9 +1676,13 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
             <DueBadge days={r.daysUntilDue} filed={filed} />
           </div>
           {/* Row 3: service chips — Secretary/Accounts/Tax/XBRL are clickable
-              (auto → manual on → manual off); ND/Address follow TeamWork. */}
+              (auto → manual on → manual off); ND/Address follow TeamWork.
+              Blue = auto-detected · green = manually on · grey = off. */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {activeSvc.filter(k => !(OVERRIDABLE_SVC as readonly string[]).includes(k)).map(k => { const c = SVC[k]; return <span key={k} style={{ background: c.bg, color: c.color, borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>{c.label}</span>; })}
+            {activeSvc.filter(k => !(OVERRIDABLE_SVC as readonly string[]).includes(k)).map(k => {
+              const st = SVC_STATE_STYLE['auto-on'];
+              return <span key={k} title={`${SVC[k].label}: auto${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`} style={{ background: st.bg, color: st.color, border: `1.5px dashed ${st.bd}`, borderRadius: 5, padding: '3px 9px', fontSize: 11, fontWeight: 700 }}>{SVC[k].label}</span>;
+            })}
             {OVERRIDABLE_SVC.map(k => (
               <OverrideChip key={k} svc={k}
                 effective={r.services[k as keyof Services]}
@@ -2096,7 +2123,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     <DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} />
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 7, alignItems: 'center' }}>
-                    {activeSvc.map(k => { const c = SVC[k]; return <span key={k} style={{ background: c.bg, color: c.color, borderRadius: 3, padding: '1px 5px', fontSize: 10, fontWeight: 700 }}>{c.label}</span>; })}
+                    {activeSvc.map(k => {
+                      const st = SVC_STATE_STYLE[svcStateOf(r.services, r.servicesManual, k)];
+                      return <span key={k} style={{ background: st.bg, color: st.color, border: `1px solid ${st.bd}`, borderRadius: 3, padding: '1px 5px', fontSize: 10, fontWeight: 700 }}>{SVC[k].label}</span>;
+                    })}
                   </div>
                   <div style={{ display: 'flex', gap: 10, marginTop: 7, fontSize: 10.5, color: '#64748b' }}>
                     <span>Progress: <span style={{ fontWeight: 700, color: filed ? '#16a34a' : r.stagesDone > 0 ? '#b45309' : '#94a3b8' }}>{r.stagesDone}/5{filed ? ' · Filed' : ''}</span></span>
@@ -2117,8 +2147,20 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 13, fontFamily: 'monospace', color: '#64748b' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
-                  <div style={{ padding: '0 6px', display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-                    {activeSvc.map(k => { const c = SVC[k]; return <span key={k} style={{ background: c.bg, color: c.color, borderRadius: 3, padding: '2px 6px', fontSize: 11, fontWeight: 700 }}>{c.label}</span>; })}
+                  {/* Fixed slots in fixed order — every service always in the
+                      same position, so rows align and differences pop out.
+                      Blue = auto · green = manual on · grey = off. */}
+                  <div style={{ padding: '0 6px', display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {SVC_ORDER.map(k => {
+                      const state = svcStateOf(r.services, r.servicesManual, k);
+                      const st = SVC_STATE_STYLE[state];
+                      return (
+                        <span key={k} title={`${SVC[k].label} — ${state === 'auto-on' ? 'auto' : state === 'manual-on' ? 'manually on' : 'not provided / off'}`}
+                          style={{ background: st.bg, color: st.color, border: `1px solid ${st.bd}`, borderRadius: 5, padding: '3px 7px', fontSize: 11.5, fontWeight: 800, letterSpacing: '0.2px' }}>
+                          {SVC_SHORT[k]}
+                        </span>
+                      );
+                    })}
                   </div>
                   <div style={{ padding: '0 6px' }}><DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} /></div>
                   <div style={{ padding: '0 6px', fontSize: 14, color: '#374151', fontWeight: 500 }}>{r.pic || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
