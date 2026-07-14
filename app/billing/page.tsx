@@ -192,7 +192,9 @@ interface ARRecord {
   accounts_status: string | null; fin_stmt_status: string | null;
   audited_fs: string | null; agm_documents: string | null;
   remarks: string | null; reminder_note: string | null;
+  company_id: number | null;
   services: Services; stages: Stages; stagesDone: number; invoices: Invoice[];
+  servicesAuto?: Services; servicesManual?: Partial<Record<string, boolean>>;
   servicePeriods: ServicePeriods | null;
 }
 
@@ -209,6 +211,33 @@ const SVC: Record<string, { label: string; bg: string; color: string }> = {
 
 const FYE_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const STAGE_LABELS = ['Accounts\nReady','Sent to\nClient','Docs\nReceived','AGM\nHeld','AR\nFiled'];
+
+// Services a human may override from the AR detail modal. ND/Address are
+// deliberately excluded — they follow TeamWork (appointments / reg. address).
+const OVERRIDABLE_SVC = ['secretary', 'accounts', 'tax', 'xbrl'] as const;
+
+// Clickable service chip cycling Auto → forced ON → forced OFF → Auto.
+// A manual state shows a ✎ marker; automation never touches manual values.
+function OverrideChip({ svc, effective, manual, disabled, onCycle }:
+  { svc: string; effective: boolean; manual: boolean | undefined; disabled: boolean; onCycle: () => void }) {
+  const c = SVC[svc];
+  const isManual = manual !== undefined;
+  return (
+    <button onClick={onCycle} disabled={disabled}
+      title={disabled ? 'No company-master match — cannot override' : `${c.label}: ${isManual ? (manual ? 'manual ON' : 'manual OFF') : 'auto'} · click to cycle auto → on → off`}
+      style={{
+        background: effective ? c.bg : '#f1f5f9',
+        color: effective ? c.color : '#94a3b8',
+        border: `1.5px ${isManual ? 'solid' : 'dashed'} ${effective ? c.color : '#cbd5e1'}`,
+        borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 700,
+        cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
+        textDecoration: isManual && !effective ? 'line-through' : 'none',
+        display: 'inline-flex', alignItems: 'center', gap: 4,
+      }}>
+      {c.label}{isManual && <span style={{ fontSize: 9 }}>✎</span>}
+    </button>
+  );
+}
 
 const EditField = memo(function EditField({ id, field, value, onSave, placeholder = '—', isDate = false }:
   { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; placeholder?: string; isDate?: boolean }) {
@@ -1541,7 +1570,28 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
 }
 
 // ── AR Detail Modal ───────────────────────────────────────────────────────────
-function ARDetailModal({ r, onSave, onClose, onDelete }: { r: ARRecord; onSave: (id: number, field: string, val: string) => void; onClose: () => void; onDelete: (id: number) => void }) {
+function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARRecord; onSave: (id: number, field: string, val: string) => void; onClose: () => void; onDelete: (id: number) => void; onServices?: (id: number, services: Services, manual: Partial<Record<string, boolean>>) => void }) {
+  // Cycle a service override: auto → manual ON → manual OFF → auto.
+  // Optimistic local update; the PATCH persists it on companies.services_manual
+  // where no automation ever writes.
+  const cycleService = async (svc: string) => {
+    if (!r.company_id) return;
+    const cur = r.servicesManual?.[svc];
+    const next = cur === undefined ? true : cur === true ? false : null;
+    const auto = (r.servicesAuto as Record<string, boolean> | undefined)?.[svc] ?? false;
+    const newManual = { ...(r.servicesManual ?? {}) };
+    if (next === null) delete newManual[svc]; else newManual[svc] = next;
+    const newServices = { ...r.services, [svc]: next === null ? auto : next } as Services;
+    onServices?.(r.id, newServices, newManual);
+    const res = await fetch('/api/companies/service-override', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId: r.company_id, service: svc, value: next }),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(`Save failed: ${j.error ?? res.status}`);
+    }
+  };
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', handler);
@@ -1581,9 +1631,17 @@ function ARDetailModal({ r, onSave, onClose, onDelete }: { r: ARRecord; onSave: 
             <span style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
             <DueBadge days={r.daysUntilDue} filed={filed} />
           </div>
-          {/* Row 3: service chips */}
+          {/* Row 3: service chips — Secretary/Accounts/Tax/XBRL are clickable
+              (auto → manual on → manual off); ND/Address follow TeamWork. */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {activeSvc.map(k => { const c = SVC[k]; return <span key={k} style={{ background: c.bg, color: c.color, borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>{c.label}</span>; })}
+            {activeSvc.filter(k => !(OVERRIDABLE_SVC as readonly string[]).includes(k)).map(k => { const c = SVC[k]; return <span key={k} style={{ background: c.bg, color: c.color, borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>{c.label}</span>; })}
+            {OVERRIDABLE_SVC.map(k => (
+              <OverrideChip key={k} svc={k}
+                effective={r.services[k as keyof Services]}
+                manual={r.servicesManual?.[k]}
+                disabled={!r.company_id}
+                onCycle={() => cycleService(k)} />
+            ))}
           </div>
         </div>
 
@@ -1832,6 +1890,12 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     const updated = (r: ARRecord) => r.id === id ? { ...r, [field]: value || null } : r;
     setRecords(prev => prev.map(updated));
     setModalRecord(prev => prev && prev.id === id ? { ...prev, [field]: value || null } : prev);
+  }, []);
+
+  // Optimistic local sync after a service-override cycle in the modal.
+  const handleServices = useCallback((id: number, services: Services, manual: Partial<Record<string, boolean>>) => {
+    setRecords(prev => prev.map(r => r.id === id ? { ...r, services, servicesManual: manual } : r));
+    setModalRecord(prev => prev && prev.id === id ? { ...prev, services, servicesManual: manual } : prev);
   }, []);
 
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
@@ -2094,6 +2158,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           onSave={handleSave}
           onClose={() => setModalRecord(null)}
           onDelete={handleDelete}
+          onServices={handleServices}
         />
       )}
 

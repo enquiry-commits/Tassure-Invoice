@@ -30,7 +30,10 @@ export async function GET(req: NextRequest) {
   ] = await Promise.all([
     // Hide soft-deleted rows (status 'Excluded') from every list/consumer.
     supabase.from('ar_reminder').select('*').eq('fye_month', month).eq('fye_year', year).or('status.is.null,status.neq.Excluded').order('entity_name'),
-    supabase.from('companies').select('id, company_name, has_xbrl, has_nd, has_accounts, has_tax, uses_address, has_annual_return, has_agm'),
+    // select('*') so the optional services_manual column (added by
+    // add-services-manual-override.sql) is picked up when present without
+    // erroring before the migration has been run.
+    supabase.from('companies').select('*'),
     supabase.from('nd_appointments').select('company_name, appointment_date, nd_id').eq('sub_role', 'Nominee Director').not('appointment_date', 'is', null).is('cessation_date', null),
     supabase.from('quickbooks_invoices').select('invoice_no, txn_date, customer_name, total_amt, balance, status').gte('txn_date', `${year}-01-01`).lte('txn_date', `${year}-12-31`),
     // invoice_no+line_num ordering = deterministic page boundaries (without it,
@@ -153,7 +156,7 @@ export async function GET(req: NextRequest) {
     const hasTax     = qbSvcs.has('Tax')        || compMatch?.has_tax      === true;
     const hasSec     = qbSvcs.has('Secretary');
 
-    const services = {
+    const servicesAuto = {
       ar:       true, // always true — this IS the AR reminder
       agm:      true, // AGM is always part of AR cycle in Singapore
       xbrl:     hasXBRL,
@@ -162,6 +165,17 @@ export async function GET(req: NextRequest) {
       accounts: hasAccts,
       tax:      hasTax,
       secretary:hasSec,
+    };
+    // Manual overrides (secretary/accounts/tax/xbrl) ALWAYS win over the
+    // automatic judgement; a key absent from services_manual means automatic.
+    // ND/Address deliberately not overridable — they follow TeamWork.
+    const servicesManual = (compMatch as { services_manual?: Record<string, boolean> } | undefined)?.services_manual ?? {};
+    const services = {
+      ...servicesAuto,
+      ...(servicesManual.secretary !== undefined ? { secretary: servicesManual.secretary } : {}),
+      ...(servicesManual.accounts  !== undefined ? { accounts:  servicesManual.accounts  } : {}),
+      ...(servicesManual.tax       !== undefined ? { tax:       servicesManual.tax       } : {}),
+      ...(servicesManual.xbrl      !== undefined ? { xbrl:      servicesManual.xbrl      } : {}),
     };
 
     // QB invoices for this company this year
@@ -187,7 +201,10 @@ export async function GET(req: NextRequest) {
 
     return {
       ...row,
+      company_id: compMatch?.id ?? null,
       services,
+      servicesAuto,
+      servicesManual,
       servicePeriods: qbPeriods,
       invoices,
       stages,
