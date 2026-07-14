@@ -36,7 +36,15 @@ interface TwCompany {
   company_email_address: string | null;
   person_in_charge: string | null;
   client: string;                     // "1" | "0"
+  company_reg_Office_address: string | null;
 }
+
+// A client "uses our address service" iff its registered office in TeamWork
+// is Tassure's own office (10 Anson Road #12-08 International Plaza).
+// Validated against all 319 flagged clients: 317 match this rule, and the 2
+// that don't turned out to be genuine cancellations (address moved away).
+// TeamWork is the source of truth here — QB history only proves a PAST bill.
+const usesOurAddress = (regAddr: string) => /10\s+ANSON/i.test(regAddr) && /12-08/.test(regAddr);
 
 function twHeaders(token = '') {
   const basic = Buffer.from(`${process.env.TEAMWORK_BASIC_USER}:${process.env.TEAMWORK_BASIC_PASS}`).toString('base64');
@@ -95,7 +103,7 @@ export async function GET() {
   const supabase = createAdminClient();
   const { data: rows, error } = await supabase
     .from('companies')
-    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, best_email');
+    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, best_email, uses_address, has_nd');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const byInternal = new Map((rows ?? []).filter(r => r.internal_id).map(r => [r.internal_id as string, r]));
@@ -128,6 +136,7 @@ export async function GET() {
     const status  = (tw.status ?? '').trim() || null;
     const fyeMon  = fyeMonthOf(tw.fye_date);
     const email   = (tw.company_email_address ?? '').trim() || null;
+    const regAddr = (tw.company_reg_Office_address ?? '').trim();
 
     if (row) {
       matched++;
@@ -138,6 +147,10 @@ export async function GET() {
       if (status && status !== row.tw_status) { patch.tw_status = status; patch.is_active = status === 'Active'; }
       if (fyeMon && fyeMon !== row.fye_month)                        patch.fye_month = fyeMon;
       if (email  && email.toLowerCase() !== (row.best_email ?? '').toLowerCase()) patch.best_email = email;
+      // Address service follows the CURRENT TeamWork registered address (both
+      // directions — cancelled service flips off, new service flips on). Only
+      // when TeamWork actually has an address on file.
+      if (regAddr && usesOurAddress(regAddr) !== (row.uses_address === true)) patch.uses_address = usesOurAddress(regAddr);
       if (Object.keys(patch).length) { patch.synced_at = now; updates.push({ id: row.id, patch }); }
     } else if (tw.client === '1' && status === 'Active' && twName) {
       inserts.push({
@@ -151,6 +164,7 @@ export async function GET() {
         client_type: 'CSS Client',
         tw_status: 'Active',
         is_active: true,
+        uses_address: regAddr ? usesOurAddress(regAddr) : false,
         synced_at: now,
       });
     }
@@ -164,6 +178,31 @@ export async function GET() {
     seen.add(n);
     return true;
   });
+
+  // ── has_nd follows the ND appointments register (TeamWork officials) ──────
+  // Same principle as uses_address: QB history only proves a PAST bill; the
+  // Nominee Directors page's own data (active appointment = has appointment
+  // date, no cessation date) is the truth. Keeps the companies flag mirroring
+  // exactly what the ND page shows.
+  let ndFlagUpdates = 0;
+  {
+    const { data: activeNDs } = await supabase
+      .from('nd_appointments')
+      .select('company_name')
+      .eq('sub_role', 'Nominee Director')
+      .not('appointment_date', 'is', null)
+      .is('cessation_date', null);
+    const ndSet = new Set((activeNDs ?? []).map(a => normalize(a.company_name)));
+    const ndPatches = (rows ?? [])
+      .filter(r => ndSet.has(normalize(r.company_name)) !== (r.has_nd === true))
+      .map(r => ({ id: r.id, has_nd: ndSet.has(normalize(r.company_name)) }));
+    for (let i = 0; i < ndPatches.length; i += 10) {
+      const results = await Promise.all(ndPatches.slice(i, i + 10).map(p =>
+        supabase.from('companies').update({ has_nd: p.has_nd, synced_at: now }).eq('id', p.id).then(r => r.error?.message ?? null)
+      ));
+      ndFlagUpdates += results.filter(e => !e).length;
+    }
+  }
 
   let updatedCount = 0, updateErrors: string[] = [];
   for (let i = 0; i < updates.length; i += 10) {
@@ -188,6 +227,7 @@ export async function GET() {
     matched,
     internal_id_backfilled: backfilled,
     updated: updatedCount,
+    nd_flag_updates: ndFlagUpdates,
     inserted: insertedCount,
     inserted_names: dedupedInserts.map(r => r.company_name),
     skipped_ambiguous_names: skippedAmbiguous,

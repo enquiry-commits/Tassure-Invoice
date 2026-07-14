@@ -1,22 +1,27 @@
 import SectionCard from '@/components/SectionCard';
 import AddressServiceTable from '@/components/AddressServiceTable';
-import path from 'path';
-import fs from 'fs';
+import { supabase } from '@/lib/supabase';
 
-interface Client {
-  companyName: string;
-  registrationNo: string;
-  companyType: string;
-  pic: string;
-  usesAddressService: boolean;
-  bestEmail: string | null;
-  primaryContact: { contactName: string; phone: string } | null;
-}
+// Live view of companies.uses_address (kept current by the daily TeamWork
+// sync from each company's registered office address) — this page previously
+// read a static build-time JSON snapshot and could never reflect changes.
+export const dynamic = 'force-dynamic';
 
 async function getData() {
-  const dataDir = path.join(process.cwd(), 'data');
-  const clients: Client[] = JSON.parse(fs.readFileSync(path.join(dataDir, 'clients_merged.json'), 'utf8'));
-  return clients.filter(c => c.usesAddressService);
+  const { data } = await supabase
+    .from('companies')
+    .select('company_name, registration_no, company_type, pic, best_email, primary_contact')
+    .eq('uses_address', true)
+    .eq('is_active', true)
+    .order('company_name');
+  return (data ?? []).map(c => ({
+    companyName: c.company_name,
+    registrationNo: c.registration_no ?? '',
+    companyType: c.company_type ?? '',
+    pic: c.pic ?? '',
+    bestEmail: c.best_email,
+    primaryContact: c.primary_contact as { contactName: string; phone: string } | null,
+  }));
 }
 
 export default async function AddressServicePage() {
