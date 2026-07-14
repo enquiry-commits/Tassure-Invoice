@@ -1,4 +1,5 @@
 import SectionCard from '@/components/SectionCard';
+import AddressServiceTable from '@/components/AddressServiceTable';
 import path from 'path';
 import fs from 'fs';
 
@@ -56,38 +57,9 @@ export default async function AddressServicePage() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table — client component so it can paginate (100 rows/page) */}
       <SectionCard title="Companies Using Address Service" count={companies.length}>
-        <div className="overflow-x-auto -mx-4 -mb-4">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50">
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600 w-8">#</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Company Name</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">UEN</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Type</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Contact</th>
-                <th className="text-left px-4 py-2.5 font-semibold text-slate-600">PIC</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map((c, i) => (
-                <tr key={c.registrationNo || i} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-2.5 text-slate-400 text-xs">{i + 1}</td>
-                  <td className="px-4 py-2.5 font-medium text-slate-800 max-w-64">
-                    <span className="truncate block" title={c.companyName}>{c.companyName}</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-slate-500 text-xs font-mono">{c.registrationNo}</td>
-                  <td className="px-4 py-2.5 text-slate-500 text-xs">{c.companyType || '—'}</td>
-                  <td className="px-4 py-2.5 text-xs text-slate-500">
-                    {c.primaryContact?.contactName || c.bestEmail || '—'}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs text-slate-500">{c.pic || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <AddressServiceTable companies={companies} />
       </SectionCard>
     </div>
   );

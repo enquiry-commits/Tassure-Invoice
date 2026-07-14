@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { usePagination, PaginationBar } from '@/components/Pagination';
 
 interface Company {
   companyName: string;
@@ -82,6 +83,9 @@ export default function CompaniesPage() {
   const rows = data?.data ?? [];
   const count = (c: CompanyCat) => rows.filter(r => matchesCat(r, c)).length;
   const filtered = rows.filter(r => matchesCat(r, cat));
+  // Search is server-side (full dataset); pagination only caps rendering.
+  const { page, setPage, totalPages, pageItems, startIndex, total } =
+    usePagination(filtered, `${search}|${cat}`);
 
   const cards: { key: CompanyCat; label: string; sub: string; color: string; bg: string; bd: string }[] = [
     { key: 'all',        label: 'All Companies',  sub: 'total on file',           color: '#1e3a8a', bg: '#f8fafc', bd: '#e2e8f0' },
@@ -148,9 +152,9 @@ export default function CompaniesPage() {
                 <tr><td colSpan={9} className="text-center py-12 text-slate-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="text-center py-12 text-slate-400">No companies found</td></tr>
-              ) : filtered.map((c, i) => (
+              ) : pageItems.map((c, i) => (
                 <tr key={c.registrationNo || i} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-2.5 text-slate-400 text-xs">{i + 1}</td>
+                  <td className="px-4 py-2.5 text-slate-400 text-xs">{startIndex + i + 1}</td>
                   <td className="px-4 py-2.5">
                     <div className="font-medium text-slate-800 max-w-56 truncate" title={c.companyName}>
                       {c.companyName}
@@ -191,6 +195,8 @@ export default function CompaniesPage() {
         </div>
 
       </div>
+
+      <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
     </div>
   );
 }

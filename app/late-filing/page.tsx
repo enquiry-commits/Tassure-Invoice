@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { AlertTriangle, Plus, Pencil, Trash2, Check, X, RefreshCw, Zap } from 'lucide-react';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
+import { usePagination, PaginationBar } from '@/components/Pagination';
 import { fmtDate as fmtDateStr } from '@/lib/date';
 
 const FYE_MONTHS = ['ALL','JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
@@ -183,6 +184,9 @@ export default function LateFilingPage() {
   const displayRows = rows
     .filter(r => yearFilter === 'ALL' || String(lateYear(r)) === yearFilter)
     .filter(r => catFilter === 'ALL' || catOf.get(r.id) === catFilter);
+  // Paginate AFTER the year/category filters — only rendering is capped.
+  const { page, setPage, totalPages, pageItems, startIndex, total } =
+    usePagination(displayRows, `${yearFilter}|${catFilter}`);
 
   return (
     <div>
@@ -316,11 +320,11 @@ export default function LateFilingPage() {
               </tr>
             </thead>
             <tbody>
-              {displayRows.map((row, idx) =>
+              {pageItems.map((row, idx) =>
                 editId === row.id ? (
                   /* Edit row */
                   <tr key={row.id} style={{ background:'#eff6ff' }}>
-                    <td style={{ padding:'6px 12px', color:'#64748b' }}>{idx+1}</td>
+                    <td style={{ padding:'6px 12px', color:'#64748b' }}>{startIndex + idx + 1}</td>
                     <td style={{ padding:'4px 8px' }}>
                       <input value={editForm.company_name??''} onChange={e=>setEditForm(f=>({...f,company_name:e.target.value}))}
                         style={{ width:'100%', padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:12 }} />
@@ -370,7 +374,7 @@ export default function LateFilingPage() {
                     style={{ background:rowBg(row.remarks), borderBottom:'1px solid #f1f5f9' }}
                     onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f8fafc'}
                     onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=rowBg(row.remarks)}>
-                    <td style={{ padding:'10px 12px', color:'#94a3b8', fontWeight:600 }}>{idx+1}</td>
+                    <td style={{ padding:'10px 12px', color:'#94a3b8', fontWeight:600 }}>{startIndex + idx + 1}</td>
                     <td style={{ padding:'10px 12px', fontWeight:600, color:'#1e3a5f', maxWidth:260 }}>
                       {row.company_name}
                     </td>
@@ -423,6 +427,8 @@ export default function LateFilingPage() {
           </table>
         </div>
       )}
+
+      <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
 
       {/* Legend */}
       <div style={{ marginTop:16, display:'flex', gap:20, fontSize:12, color:'#64748b', flexWrap:'wrap' }}>

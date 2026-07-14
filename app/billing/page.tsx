@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
+import { usePagination, PaginationBar } from '@/components/Pagination';
 import { fmtDate, fmtMonth, toDisplayDate } from '@/lib/date';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 
@@ -1338,6 +1339,10 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     if (filter !== 'all' && c.urgency !== filter) return false;
     return true;
   });
+  // Paginate AFTER search/filter — search always covers the full cycle list;
+  // only rendering is capped at 100 rows per page.
+  const { page, setPage, totalPages, pageItems, startIndex, total } =
+    usePagination(filtered, `${search}|${filter}|${month}|${year}`);
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, background: '#fff', outline: 'none', color: '#1e3a5f' };
   // Counts scoped to the selected FYE month.
@@ -1418,7 +1423,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           {loading && !data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>}
           {!loading && arList.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No AR Reminder batch for {month} {year}. Generate/review it on the AR Reminder tab first.</div>}
           {!loading && arList.length > 0 && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No matching records</div>}
-          {filtered.map((c, i) => {
+          {pageItems.map((c, i) => {
             const isOpen = expanded === c.companyId;
             const rowBg  = i % 2 === 0 ? '#fff' : '#fafbfc';
             const accent = c.urgency === 'expired' ? '#dc2626' : c.urgency === 'expiring_soon' ? '#f59e0b' : '#16a34a';
@@ -1436,7 +1441,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a5f', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>{i+1}</span>{c.companyName}
+                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName}
                       {notInvoicedYet(c)
                         ? <span style={{ fontSize: 10, fontWeight: 700, background: '#fff7ed', color: '#c2410c', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>To invoice</span>
                         : <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>✓ Invoiced</span>}
@@ -1475,6 +1480,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           })}
         </div>
       </div>
+
+      <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
 
       {/* Draft builder modal */}
       {expanded !== null && (() => {
@@ -1561,7 +1568,7 @@ function ARDetailModal({ r, onSave, onClose, onDelete }: { r: ARRecord; onSave: 
 // ─────────────────────────────────────────────────────────────────────────────
 // AR TABLE VIEW
 // ─────────────────────────────────────────────────────────────────────────────
-function ARTableView({ records, onSave, onDelete }: { records: ARRecord[]; onSave: (id: number, field: string, val: string) => void; onDelete: (id: number) => void }) {
+function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: ARRecord[]; onSave: (id: number, field: string, val: string) => void; onDelete: (id: number) => void; startIndex?: number }) {
   // Finance columns get a teal header + tinted cell bg
   const FIN_HDR = '#0f766e';
   const FIN_CELL = 'rgba(20,184,166,0.06)';
@@ -1688,7 +1695,7 @@ function ARTableView({ records, onSave, onDelete }: { records: ARRecord[]; onSav
             const accent  = filed ? '#16a34a' : overdue ? '#dc2626' : inProg ? '#f59e0b' : '#e2e8f0';
             return (
               <tr key={r.id} style={{ background: rowBg }}>
-                <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{i + 1}</TD>
+                <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
                 <TD stickyLeft={36}>
                   <div style={{ fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{r.entity_name}</div>
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
@@ -1849,6 +1856,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     overdue:    records.filter(r => !r.stages.arFiled && r.daysUntilDue !== null && r.daysUntilDue < 0).length,
   }), [records]);
 
+  // Paginate AFTER search/filter — shared by both List and Table views.
+  const { page, setPage, totalPages, pageItems, startIndex, total: pagedTotal } =
+    usePagination(filtered, `${search}|${filter}|${month}|${year}`);
+
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, color: '#1e3a5f', background: '#fff', cursor: 'pointer', outline: 'none' };
 
   return (
@@ -1974,7 +1985,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
             {loading && records.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>}
             {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>{records.length > 0 ? 'No matching records' : `No records for FYE ${month} ${year}`}</div>}
-            {filtered.map((r, i) => {
+            {pageItems.map((r, i) => {
               const filed     = r.stages.arFiled;
               const accent    = filed ? '#16a34a' : r.stagesDone > 0 ? '#f59e0b' : '#e2e8f0';
               const rowBg     = i % 2 === 0 ? '#ffffff' : '#fafbfc';
@@ -1988,7 +1999,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                 >
                   <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></div>
                   <div style={{ padding: '0 6px' }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{i+1}</span>{r.entity_name}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
                     {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 13, fontFamily: 'monospace', color: '#64748b' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
@@ -2017,10 +2028,12 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           </div>
           {loading && records.length === 0
             ? <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>
-            : <ARTableView records={filtered} onSave={handleSave} onDelete={handleDelete} />
+            : <ARTableView records={pageItems} onSave={handleSave} onDelete={handleDelete} startIndex={startIndex} />
           }
         </>
       )}
+
+      <PaginationBar page={page} totalPages={totalPages} total={pagedTotal} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
 
       {/* Modal */}
       {modalRecord && (

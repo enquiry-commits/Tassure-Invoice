@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
+import { usePagination, PaginationBar } from './Pagination';
 import { toDisplayDate } from '@/lib/date';
 
 export interface MasterListRow {
@@ -408,8 +409,6 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     };
   }, [updateSb]);
 
-  useEffect(() => { updateSb(); }, [rows, updateSb]);
-
   const stickyLeftOf = (field: string) => {
     if (field === 'company_name') return 0;
     if (field === 'roc_no')       return STICKY_WIDTHS[0];
@@ -434,6 +433,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   };
   const catCount = (cat: typeof catFilter) => rows.filter(r => catMatch(r, cat)).length;
   const visibleRows = rows.filter(r => catMatch(r, catFilter));
+  // Paginate AFTER search (server-side) + category filter — search always
+  // covers the full list; only rendering is capped at 100 rows per page.
+  const { page, setPage, totalPages, pageItems, startIndex, total } =
+    usePagination(visibleRows, `${listType}|${search}|${catFilter}`);
+
+  useEffect(() => { updateSb(); }, [rows, page, updateSb]);
   const catCards: { key: typeof catFilter; label: string; sub: string; color: string; bg: string; bd: string }[] = [
     { key: 'all',          label: 'Total Records',  sub: 'in this list',              color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0' },
     { key: 'fye_mismatch', label: 'FYE Mismatch',   sub: 'differs from TeamWork',     color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
@@ -548,9 +553,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                 <tr><td colSpan={columns.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</td></tr>
               ) : visibleRows.length === 0 ? (
                 <tr><td colSpan={columns.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No data</td></tr>
-              ) : visibleRows.map((r, i) => (
+              ) : pageItems.map((r, i) => (
                 <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                  <td style={{ position: 'sticky', left: 0, zIndex: 1, background: i % 2 === 0 ? '#fff' : '#f8fafc', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, padding: '3px 6px', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>{i + 1}</td>
+                  <td style={{ position: 'sticky', left: 0, zIndex: 1, background: i % 2 === 0 ? '#fff' : '#f8fafc', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, padding: '3px 6px', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>{startIndex + i + 1}</td>
                   {columns.map(c => {
                     const sl = stickyLeftOf(c.field);
                     return (
@@ -588,6 +593,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           </table>
         </div>
       </div>
+
+      <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
 
       {/* Mirrored scrollbar */}
       <div
