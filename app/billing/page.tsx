@@ -1093,9 +1093,15 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         {c.pic && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>PIC: <strong style={{ color: '#334155' }}>{c.pic}</strong></span>}
       </div>
 
-      {/* Provenance: this draft mirrors last year's invoice (items + amounts),
-          with the service period rolled forward. */}
-      <div style={{ fontSize: 11, color: '#64748b', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* TAB — basic services (Secretary/Address/AR/XBRL/Accounts/Tax/Discount).
+          Layout mirrors the TAC section: badge header first, then the
+          "based on last invoice" provenance note. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 5, padding: '2px 8px' }}>TAB</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Basic Services</span>
+        <span style={{ fontSize: 10, color: '#94a3b8' }}>· default QuickBooks company</span>
+      </div>
+      <div style={{ fontSize: 11, color: '#64748b', margin: '2px 0 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
         <FileText size={12} />
         {c.priorInvoiceDate
           ? <span>
@@ -1104,13 +1110,6 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
               {' '}dated <strong style={{ color: '#334155' }}>{fmtDate(c.priorInvoiceDate)}</strong> — items & amounts carried forward, period rolled to this cycle. Verify discount still applies.
             </span>
           : <span style={{ color: '#b45309' }}>No prior renewal invoice found — draft built from standard template. Confirm each line.</span>}
-      </div>
-
-      {/* TAB — basic services (Secretary/Address/AR/XBRL/Accounts/Tax/Discount) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
-        <span style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 5, padding: '2px 8px' }}>TAB</span>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Basic Services</span>
-        <span style={{ fontSize: 10, color: '#94a3b8' }}>· default QuickBooks company</span>
       </div>
       <div style={{ marginBottom: 0 }}>
         {renderTable(tabRows, 'No applicable services for this company.')}
