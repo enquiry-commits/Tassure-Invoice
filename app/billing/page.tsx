@@ -1571,9 +1571,21 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                       : <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>}
                   </div>
                   <div style={{ padding: '0 6px', textAlign: 'center' }}>
-                    {latestInvoiceNo(c, 'TAC')
-                      ? <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>#{latestInvoiceNo(c, 'TAC')}</span>
-                      : <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>}
+                    {(() => {
+                      // This cycle's system-generated TAC invoice takes priority;
+                      // otherwise fall back to the company's most recent ND
+                      // invoice from synced history (ND invoices carry a service
+                      // period, not an FYE-cycle marker, so they can't be keyed
+                      // to cycles the way the TAB backfill was) — shown muted.
+                      const gen = latestInvoiceNo(c, 'TAC');
+                      if (gen) return <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>#{gen}</span>;
+                      const ndHist = c.renewals.find(r => r.service === 'ND' && r.applicable)?.history?.[0];
+                      if (ndHist?.invoice_no) return (
+                        <span title={`Last ND invoice${ndHist.txn_date ? ` · ${fmtDate(ndHist.txn_date)}` : ''} — historical, not this cycle`}
+                          style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color: '#c2712e', background: '#fffbf5', border: '1px dashed #fed7aa', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap', opacity: 0.85 }}>#{ndHist.invoice_no}</span>
+                      );
+                      return <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>;
+                    })()}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ?? '—'}</div>
                 </div>
