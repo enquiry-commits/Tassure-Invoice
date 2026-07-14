@@ -1878,8 +1878,6 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   const [search,      setSearch]      = useState('');
   const [filter,      setFilter]      = useState('all');
   const [view,        setView]        = useState<'list' | 'table'>('list');
-  const [syncing,     setSyncing]     = useState(false);
-  const [syncMsg,     setSyncMsg]     = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!month || !year) return;
@@ -1894,18 +1892,6 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   }, [month, year]);
 
   useEffect(() => { load(); }, [load]);
-
-  const syncQB = useCallback(async () => {
-    setSyncing(true); setSyncMsg(null);
-    try {
-      const res  = await fetch('/api/quickbooks/sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ year }) });
-      const json = await res.json();
-      if (json.error) { setSyncMsg(`QB error: ${json.error}`); return; }
-      setSyncMsg(`✓ ${json.invoices_synced} invoices · ${json.items_synced} line items synced`);
-      load();
-    } catch (e: unknown) { setSyncMsg(e instanceof Error ? e.message : 'Sync failed'); }
-    finally { setSyncing(false); }
-  }, [year, load]);
 
   const handleSave = useCallback((id: number, field: string, value: string) => {
     const updated = (r: ARRecord) => r.id === id ? { ...r, [field]: value || null } : r;
@@ -1993,19 +1979,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           {loading ? 'Loading…' : 'Refresh'}
         </button>
-        <button onClick={syncQB} disabled={syncing || loading} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: syncing ? '#0f766e' : '#0f766e', color: '#fff', border: 'none', fontWeight: 600, opacity: syncing ? 0.75 : 1 }}>
-          <RefreshCw size={13} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
-          {syncing ? 'Syncing QB…' : 'Sync QB'}
-        </button>
-        <button onClick={() => setShowAddForm(v => !v)} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: '#7c3aed', color: '#fff', border: 'none', fontWeight: 600 }}>
+        <button onClick={() => setShowAddForm(v => !v)} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: '#1d3a5c', color: '#fff', border: 'none', fontWeight: 600 }}>
           <Plus size={13} />Add Manual
         </button>
       </div>
-      {syncMsg && (
-        <div style={{ marginBottom: 10, padding: '6px 12px', borderRadius: 6, fontSize: 12, background: syncMsg.startsWith('✓') ? '#f0fdf4' : '#fef2f2', color: syncMsg.startsWith('✓') ? '#16a34a' : '#dc2626', border: `1px solid ${syncMsg.startsWith('✓') ? '#bbf7d0' : '#fecaca'}` }}>
-          {syncMsg}
-        </div>
-      )}
 
       {/* Add Manual form */}
       {showAddForm && (
