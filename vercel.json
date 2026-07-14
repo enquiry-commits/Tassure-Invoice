@@ -13,6 +13,10 @@
       "schedule": "0 1 * * *"
     },
     {
+      "path": "/api/ar-reminder/sync-workflow",
+      "schedule": "0 2 * * *"
+    },
+    {
       "path": "/api/late-filing/sync",
       "schedule": "0 3 * * *"
     },
