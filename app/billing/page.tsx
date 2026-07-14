@@ -216,15 +216,16 @@ const STAGE_LABELS = ['Accounts\nReady','Sent to\nClient','Docs\nReceived','AGM\
 // deliberately excluded — they follow TeamWork (appointments / reg. address).
 const OVERRIDABLE_SVC = ['secretary', 'accounts', 'tax', 'xbrl'] as const;
 
-// Clickable service chip cycling Auto → forced ON → forced OFF → Auto.
-// A manual state shows a ✎ marker; automation never touches manual values.
+// Clickable service chip: AUTO by default; one click flips the effective
+// state (manual, ✎ marker), clicking again restores AUTO. Automation never
+// touches manual values.
 function OverrideChip({ svc, effective, manual, disabled, onCycle }:
   { svc: string; effective: boolean; manual: boolean | undefined; disabled: boolean; onCycle: () => void }) {
   const c = SVC[svc];
   const isManual = manual !== undefined;
   return (
     <button onClick={onCycle} disabled={disabled}
-      title={disabled ? 'No company-master match — cannot override' : `${c.label}: ${isManual ? (manual ? 'manual ON' : 'manual OFF') : 'auto'} · click to cycle auto → on → off`}
+      title={disabled ? 'No company-master match — cannot override' : isManual ? `${c.label}: manual ${manual ? 'ON' : 'OFF'} · click to restore auto` : `${c.label}: auto (${effective ? 'on' : 'off'}) · click to force ${effective ? 'OFF' : 'ON'}`}
       style={{
         background: effective ? c.bg : '#f1f5f9',
         color: effective ? c.color : '#94a3b8',
@@ -1571,14 +1572,16 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
 
 // ── AR Detail Modal ───────────────────────────────────────────────────────────
 function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARRecord; onSave: (id: number, field: string, val: string) => void; onClose: () => void; onDelete: (id: number) => void; onServices?: (id: number, services: Services, manual: Partial<Record<string, boolean>>) => void }) {
-  // Cycle a service override: auto → manual ON → manual OFF → auto.
-  // Optimistic local update; the PATCH persists it on companies.services_manual
-  // where no automation ever writes.
+  // Toggle a service override: default is AUTO; one click flips the current
+  // effective state (a lit badge becomes manual-OFF, an unlit one manual-ON —
+  // always a visible change); clicking again restores AUTO. Optimistic local
+  // update; the PATCH persists it on companies.services_manual where no
+  // automation ever writes.
   const cycleService = async (svc: string) => {
     if (!r.company_id) return;
     const cur = r.servicesManual?.[svc];
-    const next = cur === undefined ? true : cur === true ? false : null;
     const auto = (r.servicesAuto as Record<string, boolean> | undefined)?.[svc] ?? false;
+    const next = cur === undefined ? !auto : null;
     const newManual = { ...(r.servicesManual ?? {}) };
     if (next === null) delete newManual[svc]; else newManual[svc] = next;
     const newServices = { ...r.services, [svc]: next === null ? auto : next } as Services;
