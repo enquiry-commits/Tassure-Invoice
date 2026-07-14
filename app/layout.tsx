@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import './globals.css';
 import Sidebar from '@/components/Sidebar';
+import MobileNav from '@/components/MobileNav';
 import AssistantWidget from '@/components/AssistantWidget';
 
 export const metadata: Metadata = {
@@ -14,9 +15,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body style={{ margin: 0, overflow: 'hidden', height: '100vh', display: 'flex', flexDirection: 'column' }}>
 
+        {/* Phone-only top bar + drawer (hidden ≥769px; desktop untouched) */}
+        <MobileNav />
+
         {/* Navbar — fixed height at top */}
         <header
-          className="flex items-center justify-between px-8 flex-shrink-0 z-50"
+          className="desktop-only flex items-center justify-between px-8 flex-shrink-0 z-50"
           style={{
             height: '70px',
             background: 'linear-gradient(135deg, #ffffff, #f8fafc)',

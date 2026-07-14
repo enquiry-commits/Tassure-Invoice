@@ -5,6 +5,7 @@ import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, 
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { usePagination, PaginationBar } from './Pagination';
 import { toDisplayDate } from '@/lib/date';
+import { useIsMobile } from '@/lib/use-is-mobile';
 
 export interface MasterListRow {
   id: number;
@@ -291,6 +292,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [loading, setLoading] = useState(false);
   const [search, setSearch]   = useState('');
   const [catFilter, setCatFilter] = useState<'all' | 'fye_mismatch' | 'has_nd' | 'mas'>('all');
+  const isMobile = useIsMobile();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -526,7 +528,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           <h2 className="text-white font-semibold text-sm">{title}</h2>
         </div>
 
-        <div ref={outerRef} style={{ overflowX: 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
+        {/* Phone: native swipe-scroll (the mirrored scrollbar is desktop-only) */}
+        <div ref={outerRef} style={{ overflowX: isMobile ? 'auto' : 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
             <thead>
               <tr>
@@ -597,7 +600,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
 
       {/* Mirrored scrollbar */}
-      <div
+      {!isMobile && <div
         ref={sbRef}
         style={{ position: 'fixed', bottom: 0, display: 'none', height: 23, zIndex: 50, cursor: 'pointer' }}
         onClick={e => {
@@ -619,7 +622,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           }}
           onClick={e => e.stopPropagation()}
         />
-      </div>
+      </div>}
 
       {pendingDelete && (
         <ConfirmDeleteModal

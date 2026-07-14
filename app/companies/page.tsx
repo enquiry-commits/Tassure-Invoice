@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { usePagination, PaginationBar } from '@/components/Pagination';
+import { useIsMobile } from '@/lib/use-is-mobile';
 
 interface Company {
   companyName: string;
@@ -68,6 +69,7 @@ export default function CompaniesPage() {
   const [search, setSearch]   = useState('');
   const [cat, setCat]         = useState<CompanyCat>('all');
   const [loading, setLoading] = useState(false);
+  const isMobile = useIsMobile();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -129,7 +131,35 @@ export default function CompaniesPage() {
         <span className="text-sm text-slate-400 ml-auto">{filtered.length} shown</span>
       </div>
 
-      {/* Table */}
+      {/* Phone: view-only card list (desktop table untouched below) */}
+      {isMobile ? (
+        <div>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>
+          ) : pageItems.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No companies found</div>
+          ) : pageItems.map((c, i) => (
+            <div key={c.registrationNo || i} style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '12px 14px', marginBottom: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{c.companyName}</div>
+                  <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#94a3b8', marginTop: 2 }}>{c.registrationNo}</div>
+                </div>
+                <StatusBadge status={c.clientStatus} />
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 8, fontSize: 11.5, color: '#64748b' }}>
+                {c.hasActiveND && c.activeNDs?.length > 0 && (
+                  <span>ND: <span style={{ color: '#15803d', fontWeight: 600 }}>{c.activeNDs.map(n => n.name).join(', ')}</span></span>
+                )}
+                {c.usesAddressService && <span style={{ color: '#1d4ed8', fontWeight: 600 }}>Address Svc</span>}
+                {(c.primaryContact?.contactName || c.bestEmail) && <span>{c.primaryContact?.contactName || c.bestEmail}</span>}
+                {c.pic && <span>PIC: {c.pic}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="px-4 py-3" style={{ backgroundColor: '#1e3a8a' }}>
           <h2 className="text-white font-semibold text-sm">Company List</h2>
@@ -195,6 +225,7 @@ export default function CompaniesPage() {
         </div>
 
       </div>
+      )}
 
       <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
     </div>

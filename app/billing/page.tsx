@@ -11,6 +11,7 @@ import {
 import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
+import { useIsMobile } from '@/lib/use-is-mobile';
 import { fmtDate, fmtMonth, toDisplayDate } from '@/lib/date';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 
@@ -1343,6 +1344,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   // only rendering is capped at 100 rows per page.
   const { page, setPage, totalPages, pageItems, startIndex, total } =
     usePagination(filtered, `${search}|${filter}|${month}|${year}`);
+  const isMobile = useIsMobile();
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, background: '#fff', outline: 'none', color: '#1e3a5f' };
   // Counts scoped to the selected FYE month.
@@ -1351,7 +1353,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   return (
     <div>
       {/* Controls — month/year shared with AR Reminder */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: isMobile ? 'wrap' : undefined }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: '#0f766e', display: 'flex', alignItems: 'center', gap: 5 }}><Calendar size={14} />Invoicing FYE</span>
         <select value={month} onChange={e => setMonth(e.target.value)} style={S}>
           {FYE_MONTHS.map(m => <option key={m}>{m}</option>)}
@@ -1375,7 +1377,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
 
       {/* Stats — click to filter (scoped to the month) */}
       {arList.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
           {([
             { key: 'all',    label: `AR Reminder · FYE ${month || '—'} ${year}`, sub: 'staff-reviewed batch this cycle', value: mCount.total,    color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText     },
             { key: 'needs',  label: 'Needs Billing',               sub: 'not yet invoiced this cycle',  value: mCount.needs,    color: '#c2410c', bg: '#fff7ed', bd: '#fed7aa', Icon: null         },
@@ -1408,7 +1410,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>BILLING DRAFTS</span>
           <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '28px 1.6fr 70px 120px 120px 140px 110px 110px 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+        {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '28px 1.6fr 70px 120px 120px 140px 110px 110px 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
           {['', 'Company', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC'].map((h, i) => (
             i === 4
               ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
@@ -1418,7 +1420,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
               ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', textAlign: 'center' }}>{h}</div>
               : <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px' }}>{h}</div>
           ))}
-        </div>
+        </div>}
         <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
           {loading && !data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>}
           {!loading && arList.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No AR Reminder batch for {month} {year}. Generate/review it on the AR Reminder tab first.</div>}
@@ -1432,6 +1434,35 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             const ndR    = c.renewals.find(r => r.service === 'ND');
             const arA    = c.annuals.find(a => a.service === 'AR');
             const xbrlA  = c.annuals.find(a => a.service === 'XBRL');
+            // Phone: view-only card (no draft modal — that's a desktop task)
+            if (isMobile) return (
+              <div key={c.companyId} style={{ padding: '10px 12px', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9', background: rowBg }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                  <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{c.companyName}</div>
+                    {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen} · FYE {c.fyeMonth ?? '—'}</div>}
+                  </div>
+                  {notInvoicedYet(c)
+                    ? <span style={{ fontSize: 10, fontWeight: 700, background: '#fff7ed', color: '#c2410c', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>To invoice</span>
+                    : <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>✓ Invoiced</span>}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 7 }}>
+                  {secR  && <ServiceMini label="SEC"  status={secR.status}  applicable={secR.applicable}  />}
+                  {addrR && <ServiceMini label="ADDR" status={addrR.status} applicable={addrR.applicable} />}
+                  {ndR   && <ServiceMini label="ND"   status={ndR.status}   applicable={ndR.applicable}   />}
+                  {arA   && <ServiceMini label="AR"   status={arA.status}   applicable={arA.applicable}   />}
+                  {xbrlA && <ServiceMini label="XBRL" status={xbrlA.status} applicable={xbrlA.applicable} />}
+                </div>
+                {(latestInvoiceNo(c, 'TAB') || latestInvoiceNo(c, 'TAC') || c.pic) && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', marginTop: 7, alignItems: 'center' }}>
+                    {latestInvoiceNo(c, 'TAB') && <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 4, padding: '1px 6px' }}>TAB #{latestInvoiceNo(c, 'TAB')}</span>}
+                    {latestInvoiceNo(c, 'TAC') && <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 4, padding: '1px 6px' }}>TAC #{latestInvoiceNo(c, 'TAC')}</span>}
+                    {c.pic && <span style={{ fontSize: 10.5, color: '#64748b' }}>PIC: {c.pic}</span>}
+                  </div>
+                )}
+              </div>
+            );
             return (
               <div key={c.companyId}>
                 <div onClick={() => setExpanded(isOpen ? null : c.companyId)}
@@ -1859,13 +1890,14 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   // Paginate AFTER search/filter — shared by both List and Table views.
   const { page, setPage, totalPages, pageItems, startIndex, total: pagedTotal } =
     usePagination(filtered, `${search}|${filter}|${month}|${year}`);
+  const isMobile = useIsMobile();
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, color: '#1e3a5f', background: '#fff', cursor: 'pointer', outline: 'none' };
 
   return (
     <div>
       {/* Controls */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 14, flexWrap: isMobile ? 'wrap' : undefined }}>
         <select value={month} onChange={e => setMonth(e.target.value)} style={S}>
           {FYE_MONTHS.map(m => <option key={m}>{m}</option>)}
         </select>
@@ -1930,7 +1962,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       )}
 
       {/* Stats — click a card to filter */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
         {([
           { key: 'all',         label: 'Total Companies', sub: 'in this FYE cycle',       value: stats.total,      color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText      },
           { key: 'filed',       label: 'AR Filed',        sub: 'annual return filed',     value: stats.filed,      color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2  },
@@ -1959,29 +1991,29 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           <button onClick={() => setFilter('all')} style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', cursor: 'pointer', whiteSpace: 'nowrap' }}>Clear filter ✕</button>
         )}
         <span style={{ fontSize: 11, color: '#94a3b8' }}>{filtered.length} companies</span>
-        {/* View toggle */}
-        <div style={{ display: 'flex', gap: 3, marginLeft: 'auto', background: '#f1f5f9', borderRadius: 7, padding: 3 }}>
+        {/* View toggle — desktop only; phones always get the card list */}
+        {!isMobile && <div style={{ display: 'flex', gap: 3, marginLeft: 'auto', background: '#f1f5f9', borderRadius: 7, padding: 3 }}>
           {([{ k: 'list', icon: '☰', label: 'List' }, { k: 'table', icon: '⊞', label: 'Table' }] as const).map(({ k, icon, label }) => (
             <button key={k} onClick={() => setView(k)} style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 5, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, background: view === k ? '#1d3a5c' : 'transparent', color: view === k ? '#fff' : '#64748b', transition: 'all 0.15s' }}>
               <span>{icon}</span>{label}
             </button>
           ))}
-        </div>
+        </div>}
       </div>
 
       {/* List view */}
-      {view === 'list' && (
+      {(view === 'list' || isMobile) && (
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
           <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Calendar size={13} style={{ color: '#93c5fd' }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>FYE {month.toUpperCase()} {year}</span>
             <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Click row to open full details & edit</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '28px 2fr 100px 1fr 110px 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+          {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '28px 2fr 100px 1fr 110px 80px', padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
             {['', 'Company Name', 'UEN', 'Services', 'Due Date', 'PIC'].map((h, i) => (
               <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px' }}>{h}</div>
             ))}
-          </div>
+          </div>}
           <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
             {loading && records.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>}
             {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>{records.length > 0 ? 'No matching records' : `No records for FYE ${month} ${year}`}</div>}
@@ -1990,6 +2022,26 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
               const accent    = filed ? '#16a34a' : r.stagesDone > 0 ? '#f59e0b' : '#e2e8f0';
               const rowBg     = i % 2 === 0 ? '#ffffff' : '#fafbfc';
               const activeSvc = Object.entries(r.services).filter(([, v]) => v).map(([k]) => k);
+              // Phone: view-only card (workflow editing is a desktop task)
+              if (isMobile) return (
+                <div key={r.id} style={{ padding: '10px 12px', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9', background: rowBg }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                    <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{r.entity_name}</div>
+                      <div style={{ fontSize: 10.5, color: '#94a3b8', fontFamily: 'monospace', marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${r.fye_date}` : ''}</div>
+                    </div>
+                    <DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} />
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 7, alignItems: 'center' }}>
+                    {activeSvc.map(k => { const c = SVC[k]; return <span key={k} style={{ background: c.bg, color: c.color, borderRadius: 3, padding: '1px 5px', fontSize: 10, fontWeight: 700 }}>{c.label}</span>; })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 7, fontSize: 10.5, color: '#64748b' }}>
+                    <span>Progress: <span style={{ fontWeight: 700, color: filed ? '#16a34a' : r.stagesDone > 0 ? '#b45309' : '#94a3b8' }}>{r.stagesDone}/5{filed ? ' · Filed' : ''}</span></span>
+                    {r.pic && <span>PIC: {r.pic}</span>}
+                  </div>
+                </div>
+              );
               return (
                 <div key={r.id}
                   onClick={() => setModalRecord(r)}
@@ -2018,8 +2070,8 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
         </div>
       )}
 
-      {/* Table view */}
-      {view === 'table' && (
+      {/* Table view — desktop only */}
+      {view === 'table' && !isMobile && (
         <>
           <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderRadius: '10px 10px 0 0', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <Calendar size={13} style={{ color: '#93c5fd' }} />

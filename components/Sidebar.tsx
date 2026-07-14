@@ -256,7 +256,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className="flex flex-col flex-shrink-0"
+      className="desktop-only flex flex-col flex-shrink-0"
       style={{ background: 'linear-gradient(180deg, #1e3a5f 0%, #17293f 100%)', width, overflow: 'hidden', transition: 'width 0.22s ease' }}
     >
       {/* Header */}
