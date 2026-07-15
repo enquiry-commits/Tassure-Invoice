@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Matched the Billing Draft header's four-pixel column gap to the body grid,
+  eliminating the cumulative horizontal offset after the Company column.
 - Moved the Billing Draft header into the same scroll container as its rows so
   scrollbar width can no longer shift header and body grid tracks apart.
 - Restored Billing Draft group dividers as non-layout background lines so the
@@ -99,6 +101,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Corrected the final Billing Draft grid mismatch: body rows had a four-pixel
+  column gap while the header did not; both grids now use identical parameters.
 - Fixed the remaining Billing Draft header/body mismatch by making the header a
   sticky row inside the body scroller with the same three-pixel left geometry.
 - Restored visual separators before Renewal and TAB using background gradients;
