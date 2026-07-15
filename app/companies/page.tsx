@@ -54,6 +54,22 @@ function StatusBadge({ status }: { status: string | null }) {
   );
 }
 
+function CompanyServicePill({ label, tone = 'off' }: { label: string; tone?: 'nd' | 'address' | 'off' }) {
+  const palette = tone === 'nd'
+    ? { color: '#6d4aa5', background: '#f7f3ff', border: '#ddd0f5' }
+    : tone === 'address'
+      ? { color: '#25678f', background: '#f0f7fb', border: '#cce3ef' }
+      : { color: '#94a3b8', background: '#f8fafc', border: '#e2e8f0' };
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', padding: '4px 9px', borderRadius: 999,
+      background: palette.background, color: palette.color, border: `1px solid ${palette.border}`, fontSize: 10.5, fontWeight: 700,
+      lineHeight: 1, whiteSpace: 'nowrap' }} title={label}>
+      <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: palette.color, flexShrink: 0 }} />
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+    </span>
+  );
+}
+
 interface APIResponse {
   total: number;
   page: number;
@@ -146,10 +162,10 @@ export default function CompaniesPage() {
                 <StatusBadge status={c.clientStatus} />
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 8, fontSize: 11.5, color: '#64748b' }}>
-                {c.hasActiveND && c.activeNDs?.length > 0 && (
-                  <span>ND: <span style={{ color: '#15803d', fontWeight: 600 }}>{c.activeNDs.map(n => n.name).join(', ')}</span></span>
-                )}
-                {c.usesAddressService && <span style={{ color: '#1d4ed8', fontWeight: 600 }}>Address Svc</span>}
+                {c.hasActiveND && c.activeNDs?.length > 0
+                  ? <CompanyServicePill label={`ND · ${c.activeNDs.map(n => n.name).join(', ')}`} tone="nd" />
+                  : <CompanyServicePill label="No active ND" />}
+                <CompanyServicePill label={c.usesAddressService ? 'Address service' : 'No address service'} tone={c.usesAddressService ? 'address' : 'off'} />
                 {(c.primaryContact?.contactName || c.bestEmail) && <span>{c.primaryContact?.contactName || c.bestEmail}</span>}
                 {c.pic && <span>PIC: {c.pic}</span>}
               </div>
@@ -191,25 +207,21 @@ export default function CompaniesPage() {
                   <td className="px-4 py-2.5 text-slate-500 text-xs font-mono">{c.registrationNo}</td>
                   <td className="px-4 py-2.5 text-slate-500 text-xs">{c.companyType || '—'}</td>
                   <td className="px-4 py-2.5">
-                    {c.hasActiveND ? (
-                      <div>
+                    {c.hasActiveND && c.activeNDs?.length > 0 ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                         {c.activeNDs?.slice(0, 2).map((nd, j) => (
-                          <span key={j} className="block text-xs text-green-700 font-medium">{nd.name}</span>
+                          <CompanyServicePill key={j} label={nd.name} tone="nd" />
                         ))}
                         {(c.activeNDs?.length ?? 0) > 2 && (
-                          <span className="text-xs text-slate-400">+{(c.activeNDs?.length ?? 0) - 2} more</span>
+                          <CompanyServicePill label={`+${(c.activeNDs?.length ?? 0) - 2} more`} tone="nd" />
                         )}
                       </div>
                     ) : (
-                      <span className="text-xs text-slate-400">—</span>
+                      <CompanyServicePill label="No active ND" />
                     )}
                   </td>
                   <td className="px-4 py-2.5">
-                    {c.usesAddressService ? (
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Yes</span>
-                    ) : (
-                      <span className="text-xs text-slate-300">—</span>
-                    )}
+                    <CompanyServicePill label={c.usesAddressService ? 'Active' : 'Not used'} tone={c.usesAddressService ? 'address' : 'off'} />
                   </td>
                   <td className="px-4 py-2.5 text-xs text-slate-500">
                     {c.primaryContact?.contactName || c.bestEmail || '—'}

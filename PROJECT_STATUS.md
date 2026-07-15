@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Converted Companies Nominee Director and Address Service cells into semantic
+  service pills for both active and inactive states on desktop and mobile.
 - Replaced Companies status badges with consistent semantic status pills using
   solid dots, soft fills, thin borders, and lifecycle-specific colors.
 - Converted the standalone Companies summary cards to the same auto-fitting
@@ -117,6 +119,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Added reusable Companies service pills: ND names use muted plum, active
+  address service uses slate blue, and unavailable services use quiet grey.
+  Desktop and mobile now share the same visual language.
 - Standardized Companies Active, Striking Off, Terminated, and Pending Sync
   states as semantic pills; removed emoji/gradient-style status indicators.
 - Updated Companies separately from the shared Master List component: all seven
