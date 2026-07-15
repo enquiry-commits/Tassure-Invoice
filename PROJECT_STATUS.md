@@ -24,8 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
-- Added spatial grouping to the Billing Draft status columns with five subtle,
-  tone-specific panels, wider service columns, and calmer row spacing.
+- Simplified Billing Draft status spacing to match the AR Reminder list: clean
+  white rows, borderless pill groups, subtle dividers, and generous whitespace.
 - Restyled the five Billing Draft status columns as semantic pills for renewal
   services, ND, annual obligations, TAB invoices, and TAC invoices.
 - Standardized Late Filing FYE, Late FY, and Next AGM Due values as semantic
@@ -89,8 +89,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
-- Refined Billing Draft desktop rows with softly bordered status-group panels
-  for Renewal, ND, Annual, TAB, and TAC, plus wider columns and more whitespace.
+- Refined Billing Draft desktop rows to mirror the AR Reminder list language:
+  removed nested status cards, kept semantic pills, and used subtle dividers,
+  white rows, wider columns, and calmer spacing.
 - Unified Billing Draft service and invoice states with rounded semantic pills,
   including explicit grey `Not issued` states for empty invoice columns.
 - Added a reusable Late Filing `SemanticStatusPill` and applied it to FYE, Late

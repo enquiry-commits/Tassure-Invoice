@@ -1,7 +1,6 @@
 'use client';
 
 import { Suspense, useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
-import type { ReactNode } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
@@ -183,23 +182,6 @@ function BillingStatusPill({ label, color, background, border, title, muted = fa
       <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0 }} />
       {label}
     </span>
-  );
-}
-
-function BillingStatusGroup({ children, tone = 'blue', centered = false }: {
-  children: ReactNode; tone?: 'blue' | 'amber' | 'green'; centered?: boolean;
-}) {
-  const palette = tone === 'amber'
-    ? { background: '#fffbf5', border: '#ffedd5' }
-    : tone === 'green'
-      ? { background: '#f8fdf9', border: '#e2f7e8' }
-      : { background: '#f8fbff', border: '#e6eef8' };
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: centered ? 'center' : 'flex-start',
-      justifyContent: 'center', gap: 5, minHeight: 48, padding: '7px 8px', borderRadius: 10,
-      background: palette.background, border: `1px solid ${palette.border}` }}>
-      {children}
-    </div>
   );
 }
 
@@ -1581,9 +1563,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             return (
               <div key={c.companyId}>
                 <div onClick={() => setExpanded(isOpen ? null : c.companyId)}
-                  style={{ display: 'grid', gridTemplateColumns: '28px minmax(260px,1.6fr) 70px 140px 100px 160px 110px 110px 80px', alignItems: 'center', columnGap: 4, padding: '8px 12px', background: isOpen ? '#f0f6ff' : rowBg, borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf2f7', cursor: 'pointer' }}
+                  style={{ display: 'grid', gridTemplateColumns: '28px minmax(260px,1.6fr) 70px 140px 100px 160px 110px 110px 80px', alignItems: 'center', minHeight: 68, columnGap: 4, padding: '9px 12px', background: isOpen ? '#f0f6ff' : '#fff', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf1f5', cursor: 'pointer', transition: 'background 0.15s' }}
                   onMouseEnter={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#f0f6ff'; }}
-                  onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = rowBg; }}>
+                  onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#fff'; }}>
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a5f', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1595,35 +1577,26 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                     {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen}</div>}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#64748b' }}>{c.fyeMonth ?? '—'}</div>
-                  <div style={{ padding: '0 4px' }}>
-                    <BillingStatusGroup tone="blue">
+                  <div style={{ margin: '0 4px', padding: '2px 0 2px 12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, borderLeft: '1px solid #dbe3ee' }}>
                     {secR  && <ServiceMini label="SEC"  status={secR.status}  applicable={secR.applicable}  />}
                     {addrR && <ServiceMini label="ADDR" status={addrR.status} applicable={addrR.applicable} />}
-                    </BillingStatusGroup>
                   </div>
                   {/* ND is its own column — invoiced separately under TAC, not bundled with the TAB renewal services. */}
-                  <div style={{ padding: '0 4px' }}>
-                    <BillingStatusGroup tone="amber" centered>
-                      {ndR && <ServiceMini label="ND" status={ndR.status} applicable={ndR.applicable} />}
-                    </BillingStatusGroup>
+                  <div style={{ padding: '0 6px', display: 'flex', justifyContent: 'center' }}>
+                    {ndR && <ServiceMini label="ND" status={ndR.status} applicable={ndR.applicable} />}
                   </div>
-                  <div style={{ padding: '0 4px' }}>
-                    <BillingStatusGroup tone="green">
+                  <div style={{ padding: '2px 6px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
                     {arA   && <ServiceMini label="AR"   status={arA.status}   applicable={arA.applicable}   />}
                     {xbrlA && <ServiceMini label="XBRL" status={xbrlA.status} applicable={xbrlA.applicable} />}
-                    </BillingStatusGroup>
                   </div>
                   {/* Latest invoice number for this cycle, per QB company — the
                       authoritative generated_invoices record, not a QB-parsed guess. */}
-                  <div style={{ padding: '0 4px' }}>
-                    <BillingStatusGroup tone="blue" centered>
+                  <div style={{ margin: '0 4px', padding: '2px 0 2px 12px', display: 'flex', justifyContent: 'center', borderLeft: '1px solid #dbe3ee' }}>
                     {latestInvoiceNo(c, 'TAB')
                       ? <BillingStatusPill label={`#${latestInvoiceNo(c, 'TAB')}`} color="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
                       : <BillingStatusPill label="Not issued" color="#94a3b8" background="#f8fafc" border="#e2e8f0" />}
-                    </BillingStatusGroup>
                   </div>
-                  <div style={{ padding: '0 4px' }}>
-                    <BillingStatusGroup tone="amber" centered>
+                  <div style={{ padding: '0 6px', display: 'flex', justifyContent: 'center' }}>
                     {(() => {
                       // This cycle's system-generated TAC invoice takes priority;
                       // otherwise fall back to the company's most recent ND
@@ -1639,7 +1612,6 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                       );
                       return <BillingStatusPill label="Not issued" color="#94a3b8" background="#f8fafc" border="#e2e8f0" />;
                     })()}
-                    </BillingStatusGroup>
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ?? '—'}</div>
                 </div>
