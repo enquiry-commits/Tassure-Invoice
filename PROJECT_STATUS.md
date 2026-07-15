@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Refined the Dashboard with a restrained premium palette of deep navy, muted
+  teal, bronze, slate blue, soft plum, and brick rose across cards and charts.
 - Rebuilt the Dashboard into a portfolio command centre with an executive
   summary, KPI navigation, action queue, and complete use of dashboard data.
 - Added a dedicated centered Billing Status column to Billing Draft, moving To
@@ -105,6 +107,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Replaced the Dashboard's saturated SaaS palette with a centralized muted
+  professional-services palette and applied it consistently to the hero, KPIs,
+  action queue, donut, service mix, FYE, and nominee charts.
 - Redesigned the Dashboard with a responsive executive summary, five linked KPI
   cards, six-month AR workload, action centre, client-status donut, service mix,
   FYE calendar, and nominee-director workload. Existing API data remains the
