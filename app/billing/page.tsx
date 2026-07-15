@@ -1705,7 +1705,7 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
           </div>
           {/* Row 2: UEN · FYE · due badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            {r.uen && <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#fff', background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4 }}>{r.uen}</span>}
+            {r.uen && <span style={{ fontSize: 11, color: '#fff', background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4 }}>{r.uen}</span>}
             {r.fye_date && (
               <>
                 <span style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
@@ -1928,7 +1928,7 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
                   <div style={{ fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{r.entity_name}</div>
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
                 </TD>
-                <TD stickyLeft={276} lastSticky><span style={{ fontFamily: 'monospace', fontSize: 10, color: '#64748b' }}>{r.uen || '—'}</span></TD>
+                <TD stickyLeft={276} lastSticky><span style={{ fontSize: 10, color: '#64748b' }}>{r.uen || '—'}</span></TD>
                 <TD><EditField id={r.id} field="reminder_note"   value={r.reminder_note}   onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="prepared_date"   value={r.prepared_date}   onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="date_of_agm"     value={r.date_of_agm}     onSave={onSave} placeholder="—" isDate /></TD>
@@ -2209,7 +2209,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{r.entity_name}</div>
-                      <div style={{ fontSize: 10.5, color: '#94a3b8', fontFamily: 'monospace', marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${r.fye_date}` : ''}</div>
+                      <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${r.fye_date}` : ''}</div>
                     </div>
                     <DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} />
                   </div>
@@ -2237,7 +2237,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
                     {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
                   </div>
-                  <div style={{ padding: '0 6px', fontSize: 13, fontFamily: 'monospace', color: '#64748b' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
+                  <div style={{ padding: '0 6px', fontSize: 13, color: '#64748b' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
                   {/* Fixed slots in fixed order — every service always in the
                       same position, so rows align and differences pop out.
                       Blue = auto · green = manual on · grey = off. */}

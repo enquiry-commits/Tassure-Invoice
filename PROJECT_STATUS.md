@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Unified AR Reminder and Late Filing UEN typography with the system UI font
+  used by other pages instead of monospace.
 - Restored Late Filing FYE values to plain text while keeping Late FY and AGM
   due-date semantic pills.
 - Increased Late Filing page top padding and vertical spacing between its
@@ -125,6 +127,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Removed monospace styling from UEN values in AR Reminder list/table/mobile/
+  modal views and the Late Filing UEN column; sizes and colors are unchanged.
 - Removed the status-pill treatment from Late Filing's FYE column only; Late FY
   and New AGM Due/Overdue remain semantic pills.
 - Opened up Late Filing's vertical rhythm with 12px page-top padding, taller

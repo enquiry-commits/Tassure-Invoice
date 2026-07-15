@@ -410,7 +410,7 @@ export default function LateFilingPage() {
                     <td style={{ padding:'10px 12px', fontWeight:600, color:'#1e3a5f', maxWidth:260 }}>
                       {row.company_name}
                     </td>
-                    <td style={{ padding:'10px 12px', color:'#475569', fontFamily:'monospace', fontSize:12 }}>{row.uen||'—'}</td>
+                    <td style={{ padding:'10px 12px', color:'#475569', fontSize:12 }}>{row.uen||'—'}</td>
                     <td style={{ padding:'10px 12px' }}>
                       {row.financial_year_end
                         ? <span style={{ color:'#475569', fontSize:12, fontWeight:600 }}>{row.financial_year_end}</span>
