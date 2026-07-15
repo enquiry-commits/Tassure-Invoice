@@ -893,6 +893,8 @@ type EditableLine = {
   reason: string;
 };
 
+type InvoiceNumberState = { TAB: string; TAC: string };
+
 // Textarea that grows to fit its content — the full line description is always
 // visible, no inner scrollbar.
 function AutoTextarea({ value, onChange, style }: { value: string; onChange: (v: string) => void; style?: React.CSSProperties }) {
@@ -911,6 +913,11 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const [draftResult, setDraftResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [email, setEmail] = useState(c.email ?? '');
   const [txnDate, setTxnDate] = useState(new Date().toISOString().slice(0, 10));
+  const [invoiceNumbers, setInvoiceNumbers] = useState<InvoiceNumberState>({ TAB: '', TAC: '' });
+  const [suggestedNumbers, setSuggestedNumbers] = useState<InvoiceNumberState>({ TAB: '', TAC: '' });
+  const [numberLoading, setNumberLoading] = useState(true);
+  const [numberWarning, setNumberWarning] = useState('');
+  const [numberRefreshKey, setNumberRefreshKey] = useState(0);
 
   // Build the editable draft. Each line defaults to how THIS company was last
   // invoiced for that service (same QB item + description wording + rate, from
@@ -1049,6 +1056,33 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     fetch('/api/quickbooks/status?company=TAC').then(r => r.json()).then(setTacStatus).catch(() => setTacStatus({ connected: false }));
   }, [hasTac]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    setNumberLoading(true);
+    setNumberWarning('');
+    fetch(`/api/quickbooks/next-invoice-numbers?txnDate=${encodeURIComponent(txnDate)}`, { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) throw new Error('Unable to read QuickBooks invoice numbers');
+        return response.json();
+      })
+      .then(json => {
+        const next = {
+          TAB: typeof json.TAB?.number === 'string' ? json.TAB.number : '',
+          TAC: typeof json.TAC?.number === 'string' ? json.TAC.number : '',
+        };
+        setSuggestedNumbers(next);
+        setInvoiceNumbers(next);
+        if (!json.TAB?.connected || (hasTac && !json.TAC?.connected)) {
+          setNumberWarning('QuickBooks connection unavailable for one or more invoice numbers.');
+        }
+      })
+      .catch(error => {
+        if (error instanceof Error && error.name !== 'AbortError') setNumberWarning(error.message);
+      })
+      .finally(() => { if (!controller.signal.aborted) setNumberLoading(false); });
+    return () => controller.abort();
+  }, [txnDate, hasTac, numberRefreshKey]);
+
   const included = lines.filter(l => l.include);
   const includedTab = included.filter(l => l.service !== 'ND');
   const includedTac = included.filter(l => l.service === 'ND');
@@ -1056,6 +1090,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const totalTab = includedTab.reduce((s, l) => s + l.qty * l.rate, 0);
   const totalTac = includedTac.reduce((s, l) => s + l.qty * l.rate, 0);
   const missingRate = included.some(l => !l.rate);
+  const missingInvoiceNumber = (includedTab.length > 0 && !invoiceNumbers.TAB) || (includedTac.length > 0 && !invoiceNumbers.TAC);
 
   const createInvoice = async () => {
     setDrafting(true); setDraftResult(null);
@@ -1073,9 +1108,23 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           tabLines: includedTab.map(toApiLine),
           tacLines: includedTac.map(toApiLine),
           fyeMonth: c.fyeMonth, fyeYear, fyeCycle: cycleFye ?? null,
+          docNumbers: invoiceNumbers,
+          expectedNextNumbers: suggestedNumbers,
         }),
       });
       const json = await res.json();
+      if (res.status === 409 && json.numberConflict) {
+        const refreshed = {
+          TAB: typeof json.nextNumbers?.TAB === 'string' ? json.nextNumbers.TAB : invoiceNumbers.TAB,
+          TAC: typeof json.nextNumbers?.TAC === 'string' ? json.nextNumbers.TAC : invoiceNumbers.TAC,
+        };
+        setSuggestedNumbers(refreshed);
+        setInvoiceNumbers(refreshed);
+        const details = Object.entries(json.conflicts ?? {}).map(([company, message]) => `${company}: ${message}`).join(' · ');
+        setNumberWarning(`Invoice number changed in QuickBooks. ${details}`);
+        setDraftResult({ ok: false, msg: 'No invoice was created. Review the refreshed TAB / TAC number, then generate again.' });
+        return;
+      }
       const parts: string[] = [];
       if (json.tab) parts.push(`TAB #${json.tab.invoiceNo ?? '?'} · S$${(json.tab.total ?? 0).toLocaleString()}`);
       if (json.tac) parts.push(`TAC #${json.tac.invoiceNo ?? '?'} · S$${(json.tac.total ?? 0).toLocaleString()}`);
@@ -1093,6 +1142,30 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   };
 
   const inputStyle: React.CSSProperties = { border: '1px solid #cbd5e1', borderRadius: 5, padding: '6px 6px', fontSize: 12, outline: 'none', background: '#fff' };
+
+  const renderInvoiceNumber = (company: keyof InvoiceNumberState) => {
+    const value = invoiceNumbers[company];
+    const suggested = suggestedNumbers[company];
+    const manuallyChanged = !!value && !!suggested && value !== suggested;
+    return (
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 9px', borderRadius: 8, background: manuallyChanged ? '#fffbeb' : '#f8fafc', border: `1px solid ${manuallyChanged ? '#fcd34d' : '#dbe5ee'}` }}>
+        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+          <span style={{ fontSize: 8, fontWeight: 800, color: manuallyChanged ? '#b45309' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Next QB number'}</span>
+          <span style={{ fontSize: 8.5, color: '#94a3b8' }}>{numberLoading ? 'Checking live…' : 'rechecked before create'}</span>
+        </div>
+        <input
+          value={value}
+          onChange={event => { setInvoiceNumbers(current => ({ ...current, [company]: event.target.value.trim() })); setNumberWarning(''); }}
+          placeholder={numberLoading ? 'Loading…' : 'Unavailable'}
+          aria-label={`${company} invoice number`}
+          style={{ width: 92, border: 0, borderBottom: `1px solid ${manuallyChanged ? '#f59e0b' : '#94a3b8'}`, outline: 'none', background: 'transparent', color: manuallyChanged ? '#92400e' : '#1e3a5f', fontFamily: 'monospace', fontSize: 11.5, fontWeight: 800, padding: '2px 1px', textAlign: 'center' }}
+        />
+        <button type="button" onClick={() => setNumberRefreshKey(key => key + 1)} title="Refresh from QuickBooks" style={{ border: 0, background: 'transparent', color: '#64748b', padding: 2, cursor: 'pointer', display: 'flex' }}>
+          <RefreshCw size={12} style={{ animation: numberLoading ? 'spin 1s linear infinite' : 'none' }} />
+        </button>
+      </div>
+    );
+  };
 
   // Shared table renderer for both the TAB and TAC sections.
   const renderTable = (rows: { l: EditableLine; i: number }[], emptyMsg: string) => (
@@ -1149,10 +1222,11 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       {/* TAB — basic services (Secretary/Address/AR/XBRL/Accounts/Tax/Discount).
           Layout mirrors the TAC section: badge header first, then the
           "based on last invoice" provenance note. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 5, padding: '2px 8px' }}>TAB</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Basic Services</span>
         <span style={{ fontSize: 10, color: '#94a3b8' }}>· default QuickBooks company</span>
+        {renderInvoiceNumber('TAB')}
       </div>
       <div style={{ fontSize: 11, color: '#64748b', margin: '2px 0 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
         <FileText size={12} />
@@ -1213,6 +1287,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
                 <a href="/api/quickbooks/auth?company=TAC" style={{ color: '#1d4ed8', textDecoration: 'underline', fontWeight: 700 }}>Connect TAC</a>
               </span>
             )}
+            {renderInvoiceNumber('TAC')}
           </div>
           {/* Provenance for the TAC invoice — mirrors the TAB note above. The
               ND draft line's item & fee come from this exact invoice. */}
@@ -1264,13 +1339,14 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           )}
         </div>
         {missingRate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>⚠ Fill in the highlighted rate(s) before generating</span>}
+        {missingInvoiceNumber && !numberLoading && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>Confirm the required QB invoice number</span>}
         <button
           onClick={createInvoice}
-          disabled={drafting || included.length === 0 || missingRate}
+          disabled={drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber}
           style={{
             marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none',
-            cursor: (drafting || included.length === 0 || missingRate) ? 'not-allowed' : 'pointer',
-            background: (drafting || included.length === 0 || missingRate) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+            cursor: (drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber) ? 'not-allowed' : 'pointer',
+            background: (drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
           }}>
           {
             drafting ? 'Generating…'
@@ -1280,6 +1356,13 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           }
         </button>
       </div>
+
+      {numberWarning && (
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 7, padding: '9px 11px', borderRadius: 8, background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 11, fontWeight: 650 }}>
+          <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
+          <span>{numberWarning}</span>
+        </div>
+      )}
 
       {draftResult && (
         <div style={{ marginTop: 20, padding: '12px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,

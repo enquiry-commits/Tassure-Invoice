@@ -36,6 +36,15 @@ export async function nextDocNumber(token: string, realmId: string, company: QbC
   return `${prefix}${String(seq + 1).padStart(latest.length - prefix.length, '0')}`;
 }
 
+// Exact duplicate check used when staff manually override the suggested
+// number. QuickBooks custom transaction numbers are company-specific, so this
+// must run against the matching TAB/TAC realm immediately before creation.
+export async function invoiceDocNumberExists(token: string, realmId: string, docNumber: string): Promise<boolean> {
+  const escaped = docNumber.replace(/'/g, "\\'");
+  const qr = await qbGet(token, realmId, `SELECT * FROM Invoice WHERE DocNumber = '${escaped}' MAXRESULTS 1`);
+  return (qr?.Invoice?.length ?? 0) > 0;
+}
+
 // Net 7 term id (id 7 in both companies today; resolved defensively).
 export async function getNet7TermId(token: string, realmId: string): Promise<string | null> {
   const qr = await qbGet(token, realmId, 'SELECT * FROM Term MAXRESULTS 100');

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
-import { nextDocNumber, getNet7TermId, findPicClass, isGovFeeLine } from '@/lib/qb-invoice-conventions';
+import { nextDocNumber, invoiceDocNumberExists, getNet7TermId, findPicClass, isGovFeeLine } from '@/lib/qb-invoice-conventions';
 import { createAdminClient } from '@/lib/supabase';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
@@ -100,7 +100,7 @@ function pickItem(service: string, itemMap: Map<string, { id: string; name: stri
 async function createInvoiceInCompany(
   company: QbCompany, companyName: string, lines: DraftLineItem[],
   email: string | undefined, txnDate: string, sendEmail: boolean | undefined,
-  pic: string | undefined,
+  pic: string | undefined, docNumber: string | undefined,
 ): Promise<CompanyResult> {
   const tokenRow = await getValidToken(company);
   if (!tokenRow) return { error: `QuickBooks ${company} not connected` };
@@ -114,9 +114,8 @@ async function createInvoiceInCompany(
   // an unnumbered create stays blank), Net 7 terms, and — TAB only — the
   // PIC's person class on Secretary and XBRL lines only. Other services do not
   // carry a PIC in QuickBooks, even when they share the same TAB invoice.
-  const [itemMap, docNumber, termId, picClass] = await Promise.all([
+  const [itemMap, termId, picClass] = await Promise.all([
     getItemMap(token, realmId),
-    nextDocNumber(token, realmId, company, txnDate),
     getNet7TermId(token, realmId),
     company === 'TAB' && pic ? findPicClass(token, realmId, pic) : Promise.resolve(null),
   ]);
@@ -175,7 +174,7 @@ export async function POST(req: NextRequest) {
   const {
     companyName, email, txnDate, sendEmail, pic,
     tabLines, tacLines,
-    fyeMonth, fyeYear, fyeCycle,
+    fyeMonth, fyeYear, fyeCycle, docNumbers, expectedNextNumbers,
   } = body as {
     companyName: string;
     email?: string;
@@ -187,6 +186,8 @@ export async function POST(req: NextRequest) {
     fyeMonth?: string;
     fyeYear?: number;
     fyeCycle?: string; // "dd.mm.yyyy"
+    docNumbers?: Partial<Record<QbCompany, string>>;
+    expectedNextNumbers?: Partial<Record<QbCompany, string>>;
   };
 
   if (!companyName || (!tabLines?.length && !tacLines?.length)) {
@@ -196,9 +197,55 @@ export async function POST(req: NextRequest) {
   const date = txnDate ?? new Date().toISOString().slice(0, 10);
   const supabase = createAdminClient();
 
+  // Preflight every invoice before creating either one. The modal sends the
+  // next number it originally saw; if QB has advanced since then, abort the
+  // whole request so a TAB invoice cannot be created before a TAC conflict is
+  // discovered (or vice versa). Manual overrides are allowed only when unused.
+  const activeCompanies: QbCompany[] = [
+    ...(tabLines?.length ? ['TAB' as const] : []),
+    ...(tacLines?.length ? ['TAC' as const] : []),
+  ];
+  const resolvedNumbers: Partial<Record<QbCompany, string>> = {};
+  const liveNumbers: Partial<Record<QbCompany, string | null>> = {};
+  const numberConflicts: Partial<Record<QbCompany, string>> = {};
+
+  await Promise.all(activeCompanies.map(async company => {
+    const token = await getValidToken(company);
+    if (!token) return;
+    const live = await nextDocNumber(token.access_token, token.realm_id, company, date);
+    liveNumbers[company] = live;
+    const expected = expectedNextNumbers?.[company]?.trim();
+    const requested = docNumbers?.[company]?.trim();
+
+    if (expected && live && expected !== live) {
+      numberConflicts[company] = `QuickBooks advanced from ${expected} to ${live}`;
+      return;
+    }
+    if (requested && !/^[A-Za-z0-9-]{1,21}$/.test(requested)) {
+      numberConflicts[company] = 'Invoice number must use 1-21 letters, numbers or hyphens';
+      return;
+    }
+    if (requested && await invoiceDocNumberExists(token.access_token, token.realm_id, requested)) {
+      numberConflicts[company] = `${requested} already exists in QuickBooks ${company}`;
+      return;
+    }
+    const selected = requested || live;
+    if (selected) resolvedNumbers[company] = selected;
+  }));
+
+  if (Object.keys(numberConflicts).length) {
+    return NextResponse.json({
+      success: false,
+      numberConflict: true,
+      error: 'Invoice numbers changed or are already in use. Review the refreshed numbers before generating.',
+      conflicts: numberConflicts,
+      nextNumbers: liveNumbers,
+    }, { status: 409 });
+  }
+
   const [tab, tac] = await Promise.all([
-    tabLines?.length ? createInvoiceInCompany('TAB', companyName, tabLines, email, date, sendEmail, pic) : Promise.resolve(null),
-    tacLines?.length ? createInvoiceInCompany('TAC', companyName, tacLines, email, date, sendEmail, pic) : Promise.resolve(null),
+    tabLines?.length ? createInvoiceInCompany('TAB', companyName, tabLines, email, date, sendEmail, pic, resolvedNumbers.TAB) : Promise.resolve(null),
+    tacLines?.length ? createInvoiceInCompany('TAC', companyName, tacLines, email, date, sendEmail, pic, resolvedNumbers.TAC) : Promise.resolve(null),
   ]);
 
   // Persist every successful creation — the authoritative "already invoiced

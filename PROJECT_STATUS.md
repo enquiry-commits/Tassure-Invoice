@@ -243,6 +243,10 @@ one focused Git commit.
 - Made the latest active TeamWork nominee appointment authoritative for TAC PIC
   and service shorthand. QuickBooks history is used for fee totals and periods,
   but never overrides the current TeamWork-appointed director.
+- Added editable live QuickBooks invoice-number fields beside the TAB and TAC
+  draft headers. Both numbers are fetched from their QB realms, revalidated
+  together before creation, checked for manual-override duplicates, and safely
+  refreshed with a conflict warning if another QB invoice advances a sequence.
 - Verification: `npm run build`.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.
