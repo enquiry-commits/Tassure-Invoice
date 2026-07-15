@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Restored Billing Draft group dividers as non-layout background lines so the
+  centered headers and contents remain on the exact same vertical axes.
 - Corrected Billing Draft optical alignment by removing offsetting cell
   dividers and standardizing all centered status cells to the same full width.
 - Centered all Billing Draft columns except Company and PIC, including matching
@@ -95,6 +97,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Restored visual separators before Renewal and TAB using background gradients;
+  unlike borders, these consume no width and do not offset centered content.
 - Fixed apparent Billing Draft misalignment caused by Renewal and TAB left
   dividers/padding; all centered cells now share identical full-width geometry.
 - Center-aligned FYE, Renewal, ND, Annual, TAB, and TAC in Billing Draft while
