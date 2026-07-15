@@ -242,7 +242,7 @@ export async function POST(req: NextRequest) {
   }
 
   const record: Record<string, unknown> = { entity_name, fye_month, fye_year: Number(fye_year) };
-  for (const field of ['uen', 'due_date', 'pic', 'acc_pic', 'tax_pic', ...EDITABLE_FIELDS]) {
+  for (const field of ['uen', 'fye_date', 'due_date', 'pic', 'acc_pic', 'tax_pic', ...EDITABLE_FIELDS]) {
     if (body[field] !== undefined) record[field] = body[field] || null;
   }
 

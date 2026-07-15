@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Imported the Google Drive workbook's January, February, and March 2026 AR
+  Reminder batches into Supabase: 15, 17, and 62 rows respectively.
 - Unified AR Reminder and Late Filing UEN typography with the system UI font
   used by other pages instead of monospace.
 - Restored Late Filing FYE values to plain text while keeping Late FY and AGM
@@ -127,6 +129,14 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Imported 94 AR Reminder records from `AR FYE 2026 - 18.06.2026.xlsx` for
+  January (15), February (17), and March (62). Verified every target month has
+  unique, nonblank UENs and spot-checked workflow dates, PICs, remarks, invoice,
+  and email-sent values. Non-date labels found in date columns are preserved in
+  Remarks as `Source status` notes.
+- Added `scripts/import-ar-reminder-workbook.py`, which is dry-run by default,
+  validates the expected source counts, resumes by UEN/name after interruption,
+  and imports through the local AR API. AR POST now accepts `fye_date`.
 - Removed monospace styling from UEN values in AR Reminder list/table/mobile/
   modal views and the Late Filing UEN column; sizes and colors are unchanged.
 - Removed the status-pill treatment from Late Filing's FYE column only; Late FY
