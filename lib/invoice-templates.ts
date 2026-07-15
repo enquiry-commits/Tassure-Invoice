@@ -24,7 +24,7 @@ export const MEDIAN_RATE: Record<string, number> = {
 
 // Nominee-director initials → full name (QB items are "Nominee Director Fees - XX").
 export const ND_INITIALS: Record<string, string> = {
-  CD: 'Chen De', HSY: 'Han Songyang', LJW: 'Li Jianwei', LXM: 'Liu Xiaomei',
+  CD: 'Chen De', DLQ: 'Dai Liqing', HSY: 'Han Songyang', LJW: 'Li Jianwei', LXM: 'Liu Xiaomei',
   NLK: 'Ng Lay Kian', NKH: 'Ng Keong Huat', WKX: 'Punnataro Wee Kai Xin',
   WW: 'Wang Wei', WYD: 'Wang Yidong', ZD: 'Zhang Dan', ZY: 'Zhang Yan', JT: 'Tay Yong Chiat',
 };
@@ -106,6 +106,7 @@ export const QB_CATALOG: CatalogItem[] = [
   { item: 'Secretary:Nominee Director Fees - ZY',  label: 'Nominee Director Fees – Zhang Yan',      category: 'Nominee', rate: 2250, service: 'ND' },
   { item: 'Secretary:Nominee Director Fees - ZD',  label: 'Nominee Director Fees – Zhang Dan',      category: 'Nominee', rate: 3000, service: 'ND' },
   { item: 'Secretary:Nominee Director Fees - CD',  label: 'Nominee Director Fees – Chen De',        category: 'Nominee', rate: 2000, service: 'ND' },
+  { item: 'Secretary:Nominee Director Fees - DLQ', label: 'Nominee Director Fees – Dai Liqing',     category: 'Nominee', rate: 1333.33, service: 'ND' },
   { item: 'Secretary:Nominee Director Fees - LXM', label: 'Nominee Director Fees – Liu Xiaomei',    category: 'Nominee', rate: 2666.7, service: 'ND' },
   { item: 'Secretary:Nominee Director Fees - NKH', label: 'Nominee Director Fees – Ng Keong Huat',  category: 'Nominee', rate: 2500, service: 'ND' },
   { item: 'Secretary:Nominee Director Fees - HSY', label: 'Nominee Director Fees – Han Songyang',   category: 'Nominee', rate: 3000, service: 'ND' },

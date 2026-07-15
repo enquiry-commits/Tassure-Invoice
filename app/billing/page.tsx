@@ -13,7 +13,7 @@ import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { fmtDate, fmtMonth, toDisplayDate } from '@/lib/date';
-import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
+import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
@@ -918,6 +918,8 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   // to Tassure's standard template + typical rate. AR adds the fixed S$60 ACRA
   // government-fee line. Lines that are actually due are pre-checked.
   const currentYear = new Date().getFullYear();
+  const ndInitials = c.ndPic ? NAME_TO_INITIALS[c.ndPic.trim().toUpperCase()] : undefined;
+  const ndProductService = ndInitials ? `${QB_ITEM.ND} - ${ndInitials}` : QB_ITEM.ND;
   const initialLines = useMemo<EditableLine[]>(() => {
     const out: EditableLine[] = [];
     const period = periodLabel(c.renewals[0]?.suggestedPeriodStart ?? null, c.renewals[0]?.suggestedPeriodEnd ?? null);
@@ -948,7 +950,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       const isND = r.service === 'ND';
       out.push({
         service: r.service,
-        productService: last?.product_service ?? QB_ITEM[r.service] ?? '',
+        productService: isND ? (ndInitials ? ndProductService : last?.product_service ?? ndProductService) : last?.product_service ?? QB_ITEM[r.service] ?? '',
         description: templateDesc,
         qty: 1,
         rate: r.lastRate ?? MEDIAN_RATE[r.service] ?? 0,
@@ -1023,7 +1025,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       }
     }
     return out;
-  }, [c, currentYear, cycleFye]);
+  }, [c, currentYear, cycleFye, ndInitials, ndProductService]);
 
   const [lines, setLines] = useState<EditableLine[]>(initialLines);
   const setLine = (i: number, patch: Partial<EditableLine>) =>
@@ -1104,7 +1106,8 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       </div>
       {rows.map(({ l, i }) => {
         const cfg = SVC_CONFIG[l.service as keyof typeof SVC_CONFIG];
-        const svcLabel = cfg?.label ?? (l.productService.includes(':') ? l.productService.split(':').slice(1).join(':') : l.service);
+        const ndCode = l.service === 'ND' ? l.productService.match(/Nominee Director Fees\s*-\s*([A-Z]+)/i)?.[1]?.toUpperCase() : null;
+        const svcLabel = ndCode ? `ND · ${ndCode}` : cfg?.label ?? (l.productService.includes(':') ? l.productService.split(':').slice(1).join(':') : l.service);
         return (
           <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, alignItems: 'start', padding: '16px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
             <input type="checkbox" checked={l.include} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e' }} />
@@ -1198,6 +1201,11 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             <span style={{ fontSize: 10, fontWeight: 800, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 5, padding: '2px 8px' }}>TAC</span>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Nominee Director</span>
             <span style={{ fontSize: 10, color: '#94a3b8' }}>· invoiced separately under the TAC company</span>
+            {c.ndPic && (
+              <span style={{ fontSize: 10.5, color: '#9a3412', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 999, padding: '2px 8px', marginLeft: 3 }}>
+                TAC PIC: <strong>{c.ndPic}</strong>{ndInitials ? ` · ${ndInitials} in service` : ' · confirm service shorthand'}
+              </span>
+            )}
             {tacStatus && !tacStatus.connected && (
               <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 5, padding: '2px 8px', marginLeft: 4 }}>
                 <AlertTriangle size={11} />
@@ -1335,6 +1343,7 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
     uen: ar.uen ?? matched?.uen ?? null,
     fyeMonth: month,
     pic: ar.pic ?? matched?.pic ?? null,
+    ndPic: matched?.ndPic ?? null,
     twActive: matched?.twActive ?? true,
     urgency: matched?.urgency ?? 'not_found',
     renewals: [mkRenewal('Secretary', true), mkRenewal('Address', !!svc.address), mkRenewal('ND', !!svc.nd)],

@@ -66,7 +66,11 @@ async function getItemMap(token: string, realmId: string): Promise<Map<string, {
   if (!res.ok) return map;
   const json = await res.json();
   for (const item of json.QueryResponse?.Item ?? []) {
-    map.set((item.Name as string).toLowerCase(), { id: item.Id as string, name: item.Name as string });
+    const name = item.Name as string;
+    const fullyQualifiedName = (item.FullyQualifiedName as string | undefined) ?? name;
+    const ref = { id: item.Id as string, name: fullyQualifiedName };
+    map.set(name.toLowerCase(), ref);
+    map.set(fullyQualifiedName.toLowerCase(), ref);
   }
   return map;
 }

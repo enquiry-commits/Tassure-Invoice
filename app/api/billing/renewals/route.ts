@@ -53,6 +53,7 @@ export interface CompanyBilling {
   uen: string | null;
   fyeMonth: string | null;
   pic: string | null;
+  ndPic: string | null;
   twActive: boolean;
   urgency: 'expired' | 'expiring_soon' | 'active' | 'not_found';
   renewals: RenewalStatus[];
@@ -113,6 +114,7 @@ export async function GET(req: NextRequest) {
   const [
     { data: companies, error: compErr },
     { data: activeNDs },
+    { data: nomineeDirectors },
     periodItems,
     annualItems,
     feeItems,
@@ -126,10 +128,13 @@ export async function GET(req: NextRequest) {
       .eq('tw_status', 'Active'),
     supabase
       .from('nd_appointments')
-      .select('company_name')
+      .select('company_name, nd_id')
       .eq('sub_role', 'Nominee Director')
       .not('appointment_date', 'is', null)
       .is('cessation_date', null),
+    supabase
+      .from('nominee_directors')
+      .select('id, name'),
     pageAll(() => supabase
       .from('quickbooks_invoice_items')
       .select('customer_name, invoice_no, txn_date, service_type, period_start, period_end, rate, amount, product_service, description')
@@ -172,6 +177,12 @@ export async function GET(req: NextRequest) {
   if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
 
   const ndActiveSet = new Set((activeNDs ?? []).map(a => normalize(a.company_name)));
+  const ndNameById = new Map((nomineeDirectors ?? []).map(person => [person.id, person.name as string]));
+  const activeNdNameByCompany = new Map<string, string>();
+  for (const appointment of activeNDs ?? []) {
+    const name = ndNameById.get(appointment.nd_id);
+    if (name) activeNdNameByCompany.set(normalize(appointment.company_name), name);
+  }
 
   // Index our own generated-invoice records per company (authoritative record
   // of what THIS system has already invoiced, per QB company).
@@ -435,6 +446,7 @@ export async function GET(req: NextRequest) {
       uen: company.registration_no ?? null,
       fyeMonth: company.fye_month ?? null,
       pic: company.sec_pic ?? company.pic ?? null,
+      ndPic: activeNdNameByCompany.get(normName) ?? null,
       twActive: true,
       urgency,
       renewals,

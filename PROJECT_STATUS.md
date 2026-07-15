@@ -234,6 +234,9 @@ one focused Git commit.
 - Restricted QuickBooks PIC Class assignment to Secretary and XBRL invoice
   lines only. Address, AR, ND, Accounts, Tax, discounts, and other services no
   longer inherit the company PIC when sharing an invoice.
+- Added TAC PIC handling through the Nominee Director service item rather than
+  a QuickBooks Class. Active ND names now resolve to their service shorthand
+  (for example `Nominee Director Fees - WKX`) and are shown in the TAC draft.
 - Verification: `npm run build`.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.
