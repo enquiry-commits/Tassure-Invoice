@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Combined narrow Active Client FYE mismatches into one editable two-source
+  pill showing manual FYE and TeamWork month without vertical text wrapping.
 - Reorganized the Dashboard as a spacious bento layout with distinct Command,
   Portfolio Pulse, Planning, Annual Rhythm, and Coverage zones.
 - Refined the Dashboard with a restrained premium palette of deep navy, muted
@@ -109,6 +111,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Added a compact integrated FYE mismatch component for columns at or below
+  80px: manual `FYE MMM` and warning `TW MMM` now share one clickable pill;
+  wider Master List pages retain their existing comparison layout.
 - Rebuilt Dashboard information architecture to eliminate card stacking: paired
   Command and Action centres, added section-level visual pauses, enlarged chart
   canvases, increased gaps, and separated Planning, FYE, and Coverage zones.

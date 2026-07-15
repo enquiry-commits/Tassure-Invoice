@@ -192,7 +192,7 @@ function RowActionMenu({ row, moveTargets, onMove, onDelete }: {
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-const EditCell = memo(function EditCell({ id, field, value, onSave }: { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void }) {
+const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMismatch }: { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compactFyeMismatch?: string | null }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value ?? '');
   const [status, setStatus] = useState<SaveStatus>('idle');
@@ -263,6 +263,24 @@ const EditCell = memo(function EditCell({ id, field, value, onSave }: { id: numb
         {display
           ? <span style={{ background: colors?.bg, color: colors?.color, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{display}</span>
           : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+        {statusDot}
+      </div>
+    );
+  }
+
+  if (field === 'fye' && compactFyeMismatch) {
+    const manualMonth = fyeMonthNum(value);
+    const teamworkMonth = fyeMonthNum(compactFyeMismatch);
+    const monthNames = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    return (
+      <div onClick={() => setEditing(true)}
+        title={`FYE mismatch — manual: ${value || '—'} · TeamWork: ${compactFyeMismatch}. Click to edit manual FYE.`}
+        style={{ width: '100%', minHeight: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
+          padding: '4px 2px', borderRadius: 7, background: '#fff7f7', border: '1px solid #fecaca', cursor: 'text', boxShadow: '0 1px 2px rgba(220,38,38,.04)' }}>
+        <span style={{ fontSize: 9, lineHeight: 1, fontWeight: 800, color: '#7f1d1d', whiteSpace: 'nowrap' }}>FYE {manualMonth ? monthNames[manualMonth - 1] : '—'}</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 8, lineHeight: 1, fontWeight: 750, color: '#dc2626', whiteSpace: 'nowrap' }}>
+          <AlertTriangle size={8} />TW {teamworkMonth ? monthNames[teamworkMonth - 1] : String(compactFyeMismatch).slice(0, 3).toUpperCase()}
+        </span>
         {statusDot}
       </div>
     );
@@ -579,14 +597,16 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.12)' : undefined,
                       }}>
                         {c.field === 'fye' && r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye) ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
-                            <span
-                              title={`⚠ FYE mismatch — TeamWork says "${r.tw_fye}", manual entry is "${r.fye}". Please verify which is correct.`}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
-                              <AlertTriangle size={10} />TW:{String(r.tw_fye).slice(0, 3).toUpperCase()}
-                            </span>
-                          </div>
+                          (c.w ?? 180) <= 80
+                            ? <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} compactFyeMismatch={r.tw_fye} />
+                            : <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                                <span
+                                  title={`⚠ FYE mismatch — TeamWork says "${r.tw_fye}", manual entry is "${r.fye}". Please verify which is correct.`}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
+                                  <AlertTriangle size={10} />TW:{String(r.tw_fye).slice(0, 3).toUpperCase()}
+                                </span>
+                              </div>
                         ) : (
                           <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
                         )}
