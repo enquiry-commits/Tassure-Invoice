@@ -237,6 +237,9 @@ one focused Git commit.
 - Added TAC PIC handling through the Nominee Director service item rather than
   a QuickBooks Class. Active ND names now resolve to their service shorthand
   (for example `Nominee Director Fees - WKX`) and are shown in the TAC draft.
+- Consolidated TAC ND billing into one draft line. The named Nominee Director
+  fee and its matching deferred ND fee are summed from the same prior invoice,
+  while the generated line keeps the named ND item and one-year period text.
 - Verification: `npm run build`.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.

@@ -939,7 +939,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       const pLabel = periodLabel(r.suggestedPeriodStart, r.suggestedPeriodEnd);
       const templateDesc = r.service === 'Secretary' ? secretaryDescription(pLabel)
                          : r.service === 'Address'   ? addressDescription(pLabel)
-                         : `Nominee Director Service${pLabel ? ` (${pLabel})` : ''}`;
+                         : `Nominee Director for one year${pLabel ? ` (${pLabel})` : ''}`;
       // ND's source of truth is TeamWork's nominee-director records, not QB.
       // A line only reaches here when r.applicable is true, i.e. TeamWork shows
       // an ACTIVE nominee appointment (validated accurate) — so trust it and

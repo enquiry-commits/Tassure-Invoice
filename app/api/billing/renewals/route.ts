@@ -153,7 +153,7 @@ export async function GET(req: NextRequest) {
     pageAll(() => supabase
       .from('quickbooks_invoice_items')
       .select('customer_name, invoice_no, txn_date, product_service, amount')
-      .or('product_service.ilike.%Corporate Secretarial Services%,product_service.ilike.%Deferred Revenue - Corp Sec%,product_service.ilike.%Registered Address Services%,product_service.ilike.%Deferred Revenue - Reg Addr%')
+      .or('product_service.ilike.%Corporate Secretarial Services%,product_service.ilike.%Deferred Revenue - Corp Sec%,product_service.ilike.%Registered Address Services%,product_service.ilike.%Deferred Revenue - Reg Addr%,product_service.ilike.%Nominee Director Fees%,product_service.ilike.%Deferred%ND%')
       .gte('txn_date', cutoff18mStr)
       .order('txn_date', { ascending: false })
       .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; amount: number | null }>>,
@@ -205,24 +205,30 @@ export async function GET(req: NextRequest) {
   // ── 4b. TRUE annual fee per service ──────────────────────────────────────
   // QB splits an annual fee across a recognised line ("Corporate Secretarial
   // Services") and a deferred-revenue line ("Deferred Revenue - Corp Sec").
+  // TAC uses the same pattern for ND: the named Nominee Director item plus a
+  // "Deferred - ND Fees" / "Deferred Revenue - ND" line in the same invoice.
   // The real fee the client is charged is the SUM of both. So compute it per
   // company from the most recent renewal invoice: group that invoice's lines
   // by service and add them up.
   // key normName|invoice|service → { txn_date, sum }; then keep the latest
   // invoice per (company, service) as the current annual fee.
-  const feeTmp = new Map<string, { n: string; svc: string; txn_date: string | null; sum: number }>();
+  const feeTmp = new Map<string, { n: string; svc: string; txn_date: string | null; sum: number; hasPrimary: boolean }>();
   for (const it of feeItems ?? []) {
     const ps = it.product_service ?? '';
-    const svc = /Corporate Secretarial|Corp Sec/i.test(ps) ? 'Secretary'
+    const svc = /Nominee Director Fees|Deferred.*ND/i.test(ps) ? 'ND'
+              : /Corporate Secretarial|Corp Sec/i.test(ps) ? 'Secretary'
               : /Registered Address|Reg Addr/i.test(ps) ? 'Address' : null;
     if (!svc) continue;
     const n = normalize(it.customer_name);
     const key = `${n}|${it.invoice_no}|${svc}`;
-    if (!feeTmp.has(key)) feeTmp.set(key, { n, svc, txn_date: it.txn_date, sum: 0 });
-    feeTmp.get(key)!.sum += +(it.amount ?? 0) || 0;
+    if (!feeTmp.has(key)) feeTmp.set(key, { n, svc, txn_date: it.txn_date, sum: 0, hasPrimary: false });
+    const group = feeTmp.get(key)!;
+    group.sum += +(it.amount ?? 0) || 0;
+    if (svc !== 'ND' || /Nominee Director Fees/i.test(ps)) group.hasPrimary = true;
   }
   const annualFeeMap = new Map<string, Map<string, { txn_date: string | null; fee: number }>>();
-  for (const { n, svc, txn_date, sum } of feeTmp.values()) {
+  for (const { n, svc, txn_date, sum, hasPrimary } of feeTmp.values()) {
+    if (!hasPrimary) continue;
     if (!annualFeeMap.has(n)) annualFeeMap.set(n, new Map());
     const m = annualFeeMap.get(n)!;
     const cur = m.get(svc);
@@ -388,8 +394,8 @@ export async function GET(req: NextRequest) {
         daysUntilExpiry < 0          ? 'expired' :
         daysUntilExpiry <= withinDays ? 'expiring_soon' : 'active';
 
-      // Prefer the true annual fee (service + deferred summed) for Secretary /
-      // Address; fall back to the single line's rate (e.g. ND).
+      // Prefer the true annual fee (service + deferred lines summed) for
+      // Secretary, Address and ND; fall back to the single parsed line rate.
       const annualFee = getAnnualFee(company.company_name, svc);
       return {
         service: svc, applicable, lastPeriodEnd, daysUntilExpiry, status,
