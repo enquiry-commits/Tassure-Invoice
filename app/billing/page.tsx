@@ -900,6 +900,18 @@ type WritableFileHandle = { createWritable: () => Promise<{ write: (data: Blob) 
 type WritableDirectoryHandle = { getFileHandle: (name: string, options: { create: boolean }) => Promise<WritableFileHandle> };
 type FolderPickerWindow = Window & { showDirectoryPicker?: () => Promise<WritableDirectoryHandle> };
 
+function existingGeneratedPdfs(company: CompanyBilling, cycleFye?: string): GeneratedPdf[] {
+  const seen = new Set<'TAB' | 'TAC'>();
+  const pdfs: GeneratedPdf[] = [];
+  for (const invoice of company.generatedInvoices ?? []) {
+    if (cycleFye && invoice.fyeCycle !== cycleFye) continue;
+    if (!invoice.invoiceNo || !invoice.qbId || seen.has(invoice.qbCompany)) continue;
+    seen.add(invoice.qbCompany);
+    pdfs.push({ company: invoice.qbCompany, invoiceNo: invoice.invoiceNo, qbId: invoice.qbId });
+  }
+  return pdfs;
+}
+
 // Textarea that grows to fit its content — the full line description is always
 // visible, no inner scrollbar.
 function AutoTextarea({ value, onChange, style }: { value: string; onChange: (v: string) => void; style?: React.CSSProperties }) {
@@ -923,7 +935,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const [numberLoading, setNumberLoading] = useState(true);
   const [numberWarning, setNumberWarning] = useState('');
   const [numberRefreshKey, setNumberRefreshKey] = useState(0);
-  const [generatedPdfs, setGeneratedPdfs] = useState<GeneratedPdf[]>([]);
+  const [generatedPdfs, setGeneratedPdfs] = useState<GeneratedPdf[]>(() => existingGeneratedPdfs(c, cycleFye));
   const [savingPdfs, setSavingPdfs] = useState(false);
   const [pdfResult, setPdfResult] = useState<{ ok: boolean; msg: string } | null>(null);
 

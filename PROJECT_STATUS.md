@@ -250,6 +250,9 @@ one focused Git commit.
 - Added post-creation QuickBooks invoice PDF saving. Successful TAB/TAC results
   can fetch their official QB PDFs and save one or both directly into a folder
   selected by the user, with a normal browser-download fallback.
+- Restored PDF actions when reopening an already-invoiced Billing Draft by
+  returning the persisted QB invoice id for current-cycle TAB/TAC invoices,
+  rather than relying only on temporary state from the creation response.
 - Verification: `npm run build`.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.

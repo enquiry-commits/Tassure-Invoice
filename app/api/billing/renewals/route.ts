@@ -70,6 +70,7 @@ export interface CompanyBilling {
 export interface GeneratedInvoice {
   qbCompany: 'TAB' | 'TAC';
   invoiceNo: string | null;
+  qbId: string | null;
   fyeCycle: string | null;
   fyeMonth: string | null;
   fyeYear: number | null;
@@ -172,7 +173,7 @@ export async function GET(req: NextRequest) {
       .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; description: string | null; amount: number | null; service_type: string | null }>>,
     supabase
       .from('generated_invoices')
-      .select('company_name, qb_company, invoice_no, fye_cycle, fye_month, fye_year, total_amt, services, created_at')
+      .select('company_name, qb_company, invoice_no, qb_invoice_id, fye_cycle, fye_month, fye_year, total_amt, services, created_at')
       .order('created_at', { ascending: false }),
   ]);
   if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
@@ -198,6 +199,7 @@ export async function GET(req: NextRequest) {
     generatedMap.get(n)!.push({
       qbCompany: g.qb_company as 'TAB' | 'TAC',
       invoiceNo: g.invoice_no,
+      qbId: g.qb_invoice_id,
       fyeCycle: g.fye_cycle,
       fyeMonth: g.fye_month,
       fyeYear: g.fye_year,
