@@ -1576,27 +1576,27 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                     </div>
                     {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen}</div>}
                   </div>
-                  <div style={{ padding: '0 6px', fontSize: 11, color: '#64748b', textAlign: 'center' }}>{c.fyeMonth ?? '—'}</div>
-                  <div style={{ margin: '0 4px', padding: '2px 0 2px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, borderLeft: '1px solid #dbe3ee', whiteSpace: 'nowrap' }}>
+                  <div style={{ width: '100%', padding: '0 6px', fontSize: 11, color: '#64748b', textAlign: 'center', boxSizing: 'border-box' }}>{c.fyeMonth ?? '—'}</div>
+                  <div style={{ width: '100%', padding: '2px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
                     {secR  && <ServiceMini label="SEC"  status={secR.status}  applicable={secR.applicable}  />}
                     {addrR && <ServiceMini label="ADDR" status={addrR.status} applicable={addrR.applicable} />}
                   </div>
                   {/* ND is its own column — invoiced separately under TAC, not bundled with the TAB renewal services. */}
-                  <div style={{ padding: '0 6px', display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ width: '100%', padding: '0 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
                     {ndR && <ServiceMini label="ND" status={ndR.status} applicable={ndR.applicable} />}
                   </div>
-                  <div style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+                  <div style={{ width: '100%', padding: '2px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
                     {arA   && <ServiceMini label="AR"   status={arA.status}   applicable={arA.applicable}   />}
                     {xbrlA && <ServiceMini label="XBRL" status={xbrlA.status} applicable={xbrlA.applicable} />}
                   </div>
                   {/* Latest invoice number for this cycle, per QB company — the
                       authoritative generated_invoices record, not a QB-parsed guess. */}
-                  <div style={{ margin: '0 4px', padding: '2px 0 2px 12px', display: 'flex', justifyContent: 'center', borderLeft: '1px solid #dbe3ee' }}>
+                  <div style={{ width: '100%', padding: '2px 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
                     {latestInvoiceNo(c, 'TAB')
                       ? <BillingStatusPill label={`#${latestInvoiceNo(c, 'TAB')}`} color="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
                       : <BillingStatusPill label="Not issued" color="#94a3b8" background="#f8fafc" border="#e2e8f0" />}
                   </div>
-                  <div style={{ padding: '0 6px', display: 'flex', justifyContent: 'center' }}>
+                  <div style={{ width: '100%', padding: '0 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
                     {(() => {
                       // This cycle's system-generated TAC invoice takes priority;
                       // otherwise fall back to the company's most recent ND

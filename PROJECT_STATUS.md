@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Corrected Billing Draft optical alignment by removing offsetting cell
+  dividers and standardizing all centered status cells to the same full width.
 - Centered all Billing Draft columns except Company and PIC, including matching
   header and row-content alignment.
 - Reduced the Billing Draft company column and arranged Renewal and Annual
@@ -93,6 +95,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Fixed apparent Billing Draft misalignment caused by Renewal and TAB left
+  dividers/padding; all centered cells now share identical full-width geometry.
 - Center-aligned FYE, Renewal, ND, Annual, TAB, and TAC in Billing Draft while
   retaining left alignment for Company and PIC.
 - Rebalanced Billing Draft desktop widths: the Company column now uses less
