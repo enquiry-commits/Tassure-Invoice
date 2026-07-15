@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Rebuilt the Dashboard into a portfolio command centre with an executive
+  summary, KPI navigation, action queue, and complete use of dashboard data.
 - Added a dedicated centered Billing Status column to Billing Draft, moving To
   invoice/Invoiced out of Company and using the released company-column space.
 - Matched the Billing Draft header's four-pixel column gap to the body grid,
@@ -103,6 +105,10 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Redesigned the Dashboard with a responsive executive summary, five linked KPI
+  cards, six-month AR workload, action centre, client-status donut, service mix,
+  FYE calendar, and nominee-director workload. Existing API data remains the
+  source of truth; no synthetic metrics were added.
 - Split Billing Draft invoice state into a new 110px Billing Status column with
   semantic pills and reduced the Company column's minimum width to 180px.
 - Corrected the final Billing Draft grid mismatch: body rows had a four-pixel
