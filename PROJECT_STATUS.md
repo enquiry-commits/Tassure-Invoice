@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Added a dedicated centered Billing Status column to Billing Draft, moving To
+  invoice/Invoiced out of Company and using the released company-column space.
 - Matched the Billing Draft header's four-pixel column gap to the body grid,
   eliminating the cumulative horizontal offset after the Company column.
 - Moved the Billing Draft header into the same scroll container as its rows so
@@ -101,6 +103,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Split Billing Draft invoice state into a new 110px Billing Status column with
+  semantic pills and reduced the Company column's minimum width to 180px.
 - Corrected the final Billing Draft grid mismatch: body rows had a four-pixel
   column gap while the header did not; both grids now use identical parameters.
 - Fixed the remaining Billing Draft header/body mismatch by making the header a
