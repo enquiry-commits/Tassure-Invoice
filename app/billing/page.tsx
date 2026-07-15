@@ -554,12 +554,13 @@ function WorkflowBar({ stages, compact = false }: { stages: Stages; compact?: bo
 }
 
 function DueBadge({ days, filed }: { days: number | null; filed: boolean }) {
-  if (filed) return <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '2px 7px', fontSize: 12, fontWeight: 700 }}>Filed ✓</span>;
+  if (filed) return <span style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 999, padding: '5px 10px', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16a34a' }} />Filed</span>;
   if (days === null) return <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>;
   const bg    = days < 0 ? '#fef2f2' : days < 30 ? '#fff7ed' : days < 90 ? '#fefce8' : '#f0fdf4';
   const color = days < 0 ? '#dc2626' : days < 30 ? '#ea580c' : days < 90 ? '#ca8a04' : '#16a34a';
+  const border = days < 0 ? '#fecaca' : days < 30 ? '#fed7aa' : days < 90 ? '#fde68a' : '#bbf7d0';
   const label = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d left`;
-  return <span style={{ background: bg, color, borderRadius: 4, padding: '2px 7px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>{label}</span>;
+  return <span style={{ background: bg, color, border: `1px solid ${border}`, borderRadius: 999, padding: '5px 10px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0 }} />{label}</span>;
 }
 
 // ── Service Periods list with ND name reveal ──────────────────────────────────

@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Restyled AR due dates as semantic status pills matching the Services visual
+  language, with soft colors, thin borders, rounded shape, and status dots.
 - Removed dashed auto-state borders from the AR modal service panel and expanded
   spacing throughout for a calmer, less crowded layout.
 - Refined the AR modal service configuration into a lighter pill-based layout
@@ -79,6 +81,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Converted AR due-date badges (including Filed) into reusable-style semantic
+  status pills. Urgency colors and day calculations are unchanged.
 - Simplified the service-state visual language by replacing dashed borders with
   solid borders; AUTO/MANUAL/OFF labels now carry the meaning. Increased panel,
   section, label, and chip spacing for improved readability.
