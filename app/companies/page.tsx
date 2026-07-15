@@ -36,23 +36,20 @@ function matchesCat(c: Company, cat: CompanyCat): boolean {
 }
 
 function StatusBadge({ status }: { status: string | null }) {
-  if (!status) {
-    return (
-      <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-medium">
-        Pending Sync
-      </span>
-    );
-  }
-  const isActive = status.toLowerCase() === 'active';
+  const normalized = (status ?? '').toLowerCase();
+  const palette = normalized === 'active'
+    ? { color: '#15803d', background: '#f0fdf4', border: '#bbf7d0' }
+    : /strik/.test(normalized)
+      ? { color: '#dc2626', background: '#fef2f2', border: '#fecaca' }
+      : /terminat/.test(normalized)
+        ? { color: '#b45309', background: '#fff7ed', border: '#fed7aa' }
+        : { color: '#64748b', background: '#f8fafc', border: '#e2e8f0' };
   return (
-    <span
-      className="text-xs px-2 py-0.5 rounded-full font-medium"
-      style={{
-        backgroundColor: isActive ? '#dcfce7' : '#fef3c7',
-        color:            isActive ? '#15803d' : '#92400e',
-      }}
-    >
-      {isActive ? '🟢 ' : '⚪ '}{status}
+    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '4px 9px',
+      borderRadius: 999, background: palette.background, color: palette.color, border: `1px solid ${palette.border}`,
+      fontSize: 10.5, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>
+      <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: palette.color, flexShrink: 0 }} />
+      {status || 'Pending Sync'}
     </span>
   );
 }
