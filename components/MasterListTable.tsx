@@ -282,12 +282,15 @@ const EditCell = memo(function EditCell({ id, field, value, onSave }: { id: numb
   );
 });
 
-export default function MasterListTable({ listType, title, accentColor = '#1d3a5c', moveTargets, fields }: { listType: string; title: string; accentColor?: string; moveTargets?: MoveTarget[]; fields?: ColumnField[] }) {
+export default function MasterListTable({ listType, title, accentColor = '#1d3a5c', moveTargets, fields, columnWidths }: { listType: string; title: string; accentColor?: string; moveTargets?: MoveTarget[]; fields?: ColumnField[]; columnWidths?: Partial<Record<ColumnField, number>> }) {
   const columns = useMemo(() => {
-    if (!fields) return COLUMNS;
     const byField = new Map(COLUMNS.map(c => [c.field, c]));
-    return fields.map(f => byField.get(f)).filter((c): c is typeof COLUMNS[number] => !!c);
-  }, [fields]);
+    const selected = fields
+      ? fields.map(f => byField.get(f)).filter((c): c is typeof COLUMNS[number] => !!c)
+      : COLUMNS;
+    if (!columnWidths) return selected;
+    return selected.map(c => columnWidths[c.field] === undefined ? c : { ...c, w: columnWidths[c.field] });
+  }, [fields, columnWidths]);
 
   const [rows, setRows]       = useState<MasterListRow[]>([]);
   const [loading, setLoading] = useState(false);
