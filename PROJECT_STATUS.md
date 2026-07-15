@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Redesigned AR Reminder list services into a bordered 4x2 service panel inside
+  a separately spaced company card, improving company-to-service grouping.
 - Added a Resolved archive to Late Filing. Under Review rows now use a teal
   check action that retains the record instead of deleting it.
 - Added independently collapsible SEC/ACC/TAX PIC columns to AR Reminder; SEC
@@ -69,6 +71,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Restyled the desktop AR Reminder list: each company is now a distinct card,
+  and its fixed service slots sit in a dedicated 4x2 panel with clearer active
+  and inactive states. Service logic and ordering are unchanged.
 - Added the Late Filing Resolved category. Resolving an Under Review row changes
   its persisted remark from `Review:` to `Resolved:` and retains it for history;
   other manual rows keep their existing delete action.
