@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
-  RefreshCw, ChevronDown, ChevronRight,
+  RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
   AlertTriangle, Clock, CheckCircle2, FileText, Calendar,
   ShieldCheck, MapPin, UserCheck, BarChart3, BookOpen, DollarSign,
   Plus, Check, X, Trash2,
@@ -1728,6 +1728,28 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
   const dragging  = useRef(false);
   const dragRef   = useRef({ startX: 0, startScroll: 0 });
   const metaRef   = useRef({ tw: 0, sbW: 0 });
+  const [picOpen, setPicOpen] = useState({ sec: true, acc: false, tax: false });
+
+  const picHeader = (key: keyof typeof picOpen, label: string) => {
+    const open = picOpen[key];
+    return (
+      <TH w={open ? 100 : 34} center>
+        <button
+          type="button"
+          onClick={() => setPicOpen(current => ({ ...current, [key]: !current[key] }))}
+          title={open ? `Collapse ${label} to the left` : `Expand ${label}`}
+          style={{
+            width: '100%', padding: 0, border: 0, background: 'transparent', color: '#fff',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: open ? 4 : 1, fontSize: open ? 9 : 8, fontWeight: 700,
+          }}
+        >
+          {open ? <ChevronLeft size={11} /> : <ChevronRight size={10} />}
+          <span>{open ? label : label.replace(' PIC', '')}</span>
+        </button>
+      </TH>
+    );
+  };
 
   // Direct DOM update — zero React re-renders per scroll tick
   const updateSb = () => {
@@ -1823,9 +1845,9 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
             <TH w={90}>TW Update</TH>
             <TH w={90}>DPO</TH>
             <TH w={90}>ROND RONS</TH>
-            <TH w={100}>SEC PIC</TH>
-            <TH w={100}>ACC PIC</TH>
-            <TH w={100}>TAX PIC</TH>
+            {picHeader('sec', 'SEC PIC')}
+            {picHeader('acc', 'ACC PIC')}
+            {picHeader('tax', 'TAX PIC')}
             <TH w={180}>Remarks</TH>
             <TH w={150} finance>Invoice</TH>
             <TH w={150} finance>Email Sent</TH>
@@ -1860,9 +1882,9 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
                 <TD><EditField id={r.id} field="software_update" value={r.software_update} onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><SelectField id={r.id} field="dpo"           value={r.dpo}             onSave={onSave} options={DPO_OPTIONS} /></TD>
                 <TD><SelectField id={r.id} field="ond_ron"       value={r.ond_ron}         onSave={onSave} options={ROND_OPTIONS} /></TD>
-                <TD><EditField id={r.id} field="pic"             value={r.pic}             onSave={onSave} placeholder="—" /></TD>
-                <TD><EditField id={r.id} field="acc_pic"         value={r.acc_pic}         onSave={onSave} placeholder="—" /></TD>
-                <TD><EditField id={r.id} field="tax_pic"         value={r.tax_pic}         onSave={onSave} placeholder="—" /></TD>
+                <TD style={!picOpen.sec ? { padding: 0 } : undefined}>{picOpen.sec && <EditField id={r.id} field="pic"     value={r.pic}     onSave={onSave} placeholder="—" />}</TD>
+                <TD style={!picOpen.acc ? { padding: 0 } : undefined}>{picOpen.acc && <EditField id={r.id} field="acc_pic" value={r.acc_pic} onSave={onSave} placeholder="—" />}</TD>
+                <TD style={!picOpen.tax ? { padding: 0 } : undefined}>{picOpen.tax && <EditField id={r.id} field="tax_pic" value={r.tax_pic} onSave={onSave} placeholder="—" />}</TD>
                 <TD><EditField id={r.id} field="remarks"         value={r.remarks}         onSave={onSave} placeholder="—" /></TD>
                 <TD finance><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
                 <TD finance><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate /></TD>

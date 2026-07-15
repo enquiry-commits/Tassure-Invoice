@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Added independently collapsible SEC/ACC/TAX PIC columns to AR Reminder; SEC
+  defaults open while ACC and TAX default collapsed.
 - Tightened AR Reminder workflow columns: UEN is 70px; Reminder through ROND
   RONS are 90px; renamed SW Update to TW Update.
 - Reduced the Active and FYE columns to 60px on Active Client only; shared
@@ -65,6 +67,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Added PIC column collapse controls to AR Reminder. Expanded columns are 100px;
+  collapsed columns remain as identifiable 34px tabs. SEC defaults expanded,
+  ACC and TAX default collapsed.
 - Updated AR Reminder table column widths and renamed the SW Update header to
   TW Update; underlying `software_update` data behavior is unchanged.
 - Added per-page Master List column-width overrides and set Active Client's
