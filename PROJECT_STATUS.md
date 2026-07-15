@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Restyled the five Billing Draft status columns as semantic pills for renewal
+  services, ND, annual obligations, TAB invoices, and TAC invoices.
 - Standardized Late Filing FYE, Late FY, and Next AGM Due values as semantic
   status pills, including an integrated overdue state.
 - Redesigned the AR modal Nominee Director area as an explicit interactive card
@@ -85,6 +87,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Unified Billing Draft service and invoice states with rounded semantic pills,
+  including explicit grey `Not issued` states for empty invoice columns.
 - Added a reusable Late Filing `SemanticStatusPill` and applied it to FYE, Late
   FY, and Next AGM Due. Overdue text is now integrated into the red due-date
   pill; future due dates use green.

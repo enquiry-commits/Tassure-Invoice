@@ -164,13 +164,25 @@ function AnnualCard({ a }: { a: AnnualStatus }) {
 }
 
 function ServiceMini({ label, status, applicable }: { label: string; status: string; applicable: boolean }) {
-  if (!applicable) return (
-    <span style={{ fontSize: 9, fontWeight: 700, color: '#cbd5e1', background: '#f1f5f9', borderRadius: 3, padding: '1px 4px' }}>{label}</span>
-  );
+  if (!applicable) return <BillingStatusPill label={label} color="#94a3b8" background="#f8fafc" border="#e2e8f0" />;
   const color = status === 'expired' || status === 'pending' ? '#dc2626' : status === 'expiring_soon' ? '#ea580c' : status === 'active' || status === 'billed' ? '#16a34a' : '#94a3b8';
   const bg    = status === 'expired' || status === 'pending' ? '#fef2f2' : status === 'expiring_soon' ? '#fff7ed' : status === 'active' || status === 'billed' ? '#f0fdf4' : '#f8fafc';
-  const dot   = status === 'expired' || status === 'pending' ? '✕' : status === 'expiring_soon' ? '!' : status === 'active' || status === 'billed' ? '✓' : '—';
-  return <span style={{ fontSize: 9, fontWeight: 700, color, background: bg, borderRadius: 3, padding: '1px 4px' }}>{label} {dot}</span>;
+  const border = status === 'expired' || status === 'pending' ? '#fecaca' : status === 'expiring_soon' ? '#fed7aa' : status === 'active' || status === 'billed' ? '#bbf7d0' : '#e2e8f0';
+  return <BillingStatusPill label={label} color={color} background={bg} border={border} />;
+}
+
+function BillingStatusPill({ label, color, background, border, title, muted = false }: {
+  label: string; color: string; background: string; border: string; title?: string; muted?: boolean;
+}) {
+  return (
+    <span title={title} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+      width: 'fit-content', maxWidth: '100%', padding: '4px 8px', borderRadius: 999, background, color,
+      border: `1px solid ${border}`, fontSize: 9.5, fontWeight: 750, lineHeight: 1, whiteSpace: 'nowrap',
+      opacity: muted ? 0.78 : 1 }}>
+      <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0 }} />
+      {label}
+    </span>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1541,8 +1553,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                 </div>
                 {(latestInvoiceNo(c, 'TAB') || latestInvoiceNo(c, 'TAC') || c.pic) && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', marginTop: 7, alignItems: 'center' }}>
-                    {latestInvoiceNo(c, 'TAB') && <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 4, padding: '1px 6px' }}>TAB #{latestInvoiceNo(c, 'TAB')}</span>}
-                    {latestInvoiceNo(c, 'TAC') && <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 4, padding: '1px 6px' }}>TAC #{latestInvoiceNo(c, 'TAC')}</span>}
+                    {latestInvoiceNo(c, 'TAB') && <BillingStatusPill label={`TAB #${latestInvoiceNo(c, 'TAB')}`} color="#1d4ed8" background="#eff6ff" border="#bfdbfe" />}
+                    {latestInvoiceNo(c, 'TAC') && <BillingStatusPill label={`TAC #${latestInvoiceNo(c, 'TAC')}`} color="#9a3412" background="#fff7ed" border="#fed7aa" />}
                     {c.pic && <span style={{ fontSize: 10.5, color: '#64748b' }}>PIC: {c.pic}</span>}
                   </div>
                 )}
@@ -1581,8 +1593,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                       authoritative generated_invoices record, not a QB-parsed guess. */}
                   <div style={{ padding: '0 6px', textAlign: 'center' }}>
                     {latestInvoiceNo(c, 'TAB')
-                      ? <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>#{latestInvoiceNo(c, 'TAB')}</span>
-                      : <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>}
+                      ? <BillingStatusPill label={`#${latestInvoiceNo(c, 'TAB')}`} color="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
+                      : <BillingStatusPill label="Not issued" color="#94a3b8" background="#f8fafc" border="#e2e8f0" />}
                   </div>
                   <div style={{ padding: '0 6px', textAlign: 'center' }}>
                     {(() => {
@@ -1592,13 +1604,13 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                       // period, not an FYE-cycle marker, so they can't be keyed
                       // to cycles the way the TAB backfill was) — shown muted.
                       const gen = latestInvoiceNo(c, 'TAC');
-                      if (gen) return <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>#{gen}</span>;
+                      if (gen) return <BillingStatusPill label={`#${gen}`} color="#9a3412" background="#fff7ed" border="#fed7aa" />;
                       const ndHist = c.renewals.find(r => r.service === 'ND' && r.applicable)?.history?.[0];
                       if (ndHist?.invoice_no) return (
-                        <span title={`Last ND invoice${ndHist.txn_date ? ` · ${fmtDate(ndHist.txn_date)}` : ''} — historical, not this cycle`}
-                          style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600, color: '#c2712e', background: '#fffbf5', border: '1px dashed #fed7aa', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap', opacity: 0.85 }}>#{ndHist.invoice_no}</span>
+                        <BillingStatusPill label={`#${ndHist.invoice_no}`} color="#c2712e" background="#fffbf5" border="#fed7aa"
+                          title={`Last ND invoice${ndHist.txn_date ? ` · ${fmtDate(ndHist.txn_date)}` : ''} — historical, not this cycle`} muted />
                       );
-                      return <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>;
+                      return <BillingStatusPill label="Not issued" color="#94a3b8" background="#f8fafc" border="#e2e8f0" />;
                     })()}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ?? '—'}</div>
