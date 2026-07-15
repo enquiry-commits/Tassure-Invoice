@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   Building2, UserCheck, MapPin, CalendarClock, AlertTriangle, RefreshCw,
   BarChart3, Users, ArrowRight, ShieldCheck, Layers3, Activity, Clock3,
-  BriefcaseBusiness, Sparkles,
+  BriefcaseBusiness, Sparkles, FileSpreadsheet, Download,
 } from 'lucide-react';
 import QBConnectButton from '@/components/QBConnectButton';
 import { Donut, VBars, HBars } from '@/components/dashboard/Charts';
@@ -102,12 +102,40 @@ function SectionLabel({ eyebrow, title, description }: { eyebrow: string; title:
 export default function DashboardPage() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
   const load = () => {
     setLoading(true);
     fetch('/api/dashboard').then(r => r.json()).then(setData).finally(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    fetch('/api/dashboard').then(r => r.json()).then(setData).finally(() => setLoading(false));
+  }, []);
+
+  const exportCompanyData = async () => {
+    setExporting(true);
+    setExportError('');
+    try {
+      const response = await fetch('/api/export/company-data');
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const disposition = response.headers.get('content-disposition') ?? '';
+      const fileName = disposition.match(/filename="([^"]+)"/)?.[1] ?? 'Tassure-Company-Data.xlsx';
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div style={{ maxWidth: 1760, margin: '0 auto' }}>
@@ -121,6 +149,19 @@ export default function DashboardPage() {
           <p style={{ fontSize: 12.5, color: '#64748b', margin: '4px 0 0' }}>Corporate-services performance, obligations and operational priorities.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+            <button
+              onClick={exportCompanyData}
+              disabled={exporting}
+              title="Download the latest Active Clients and AR Reminder data in one Excel workbook"
+              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 750, color: '#fff', background: exporting ? '#769a95' : DASHBOARD_COLORS.teal, border: '1px solid rgba(21,94,89,.2)', borderRadius: 9, padding: '8px 12px', cursor: exporting ? 'wait' : 'pointer', boxShadow: '0 5px 14px rgba(57,127,120,.14)' }}
+            >
+              <FileSpreadsheet size={15} />
+              {exporting ? 'Preparing Excel…' : 'Export Company Data'}
+              <Download size={13} />
+            </button>
+            {exportError && <span style={{ fontSize: 9.5, color: '#b91c1c' }}>{exportError}</span>}
+          </div>
           <button onClick={load} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 650, color: '#475569', background: '#fff', border: '1px solid #dfe6ee', borderRadius: 9, padding: '7px 11px', cursor: 'pointer' }}>
             <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> Refresh
           </button>

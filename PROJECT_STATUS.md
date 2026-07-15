@@ -228,6 +228,9 @@ one focused Git commit.
 - Refined AR Reminder desktop column sizing: row number is 30px, company is
   200px, UEN is 80px, and the ten workflow columns are 100px each. Updated the
   sticky identity-column offsets to match.
+- Added a live Dashboard Excel export. The generated dated workbook contains
+  two filterable sheets: all current Active Client master-list records and all
+  non-excluded AR Reminder records, with readable column sizing.
 - Verification: `npm run build`.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.
