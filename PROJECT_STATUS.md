@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Converted the standalone Companies summary cards to the same auto-fitting
+  full-width grid used by Master List and AR Reminder.
 - Changed shared Master List category cards from fixed-width flex items to an
   auto-fitting full-width grid across all Master List pages.
 - Combined narrow Active Client FYE mismatches into one editable two-source
@@ -113,6 +115,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Updated Companies separately from the shared Master List component: all seven
+  category cards now distribute across the full page width and wrap responsively.
 - Made all five shared Master List category cards divide the full available
   page width like AR Reminder, while retaining responsive wrapping on narrow
   screens. This applies to every page using `MasterListTable`.

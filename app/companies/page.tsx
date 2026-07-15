@@ -104,13 +104,13 @@ export default function CompaniesPage() {
       <div className="mb-4 text-sm text-slate-500">Dashboard › Companies</div>
 
       {/* Stat cards — click to filter */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12, marginBottom: 16, width: '100%' }}>
         {cards.map(c => {
           const active = cat === c.key;
           return (
             <button key={c.key} onClick={() => setCat(c.key)}
               style={{ textAlign: 'left', cursor: 'pointer', background: c.bg, border: `1.5px solid ${active ? c.color : c.bd}`,
-                borderRadius: 10, padding: '10px 16px', minWidth: 140, boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
+                borderRadius: 10, padding: '12px 16px', width: '100%', minWidth: 0, boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
               <div style={{ fontSize: 22, fontWeight: 800, color: c.color }}>{count(c.key)}</div>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{c.label}</div>
               <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{c.sub}</div>
