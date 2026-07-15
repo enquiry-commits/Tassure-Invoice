@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Redesigned the AR modal Nominee Director area as an explicit interactive card
+  with director-detail disclosure and clearly explained workflow flag controls.
 - Restyled AR due dates as semantic status pills matching the Services visual
   language, with soft colors, thin borders, rounded shape, and status dots.
 - Removed dashed auto-state borders from the AR modal service panel and expanded
@@ -81,6 +83,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Made the Nominee Director service card visibly interactive even without a
+  service period. Added a View/Hide director affordance, TeamWork source label,
+  and descriptive Strike-Off Pending / ND Assignment Pending state cards.
 - Converted AR due-date badges (including Filed) into reusable-style semantic
   status pills. Urgency colors and day calculations are unchanged.
 - Simplified the service-state visual language by replacing dashed borders with

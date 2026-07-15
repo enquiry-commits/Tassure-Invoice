@@ -588,22 +588,22 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
         return (
           <div key={svc}>
             <div
-              onClick={() => { if (isND && end) setNdRevealed(v => !v); }}
+              onClick={() => { if (isND) setNdRevealed(v => !v); }}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '5px 8px', borderRadius: ndRevealed && isND ? '5px 5px 0 0' : 5,
-                background: clr.bg,
-                cursor: isND && end ? 'pointer' : 'default',
+                padding: isND ? '9px 10px' : '5px 8px', borderRadius: isND && (ndRevealed || onNdFlag) ? '8px 8px 0 0' : isND ? 8 : 5,
+                background: isND ? '#f8fbff' : clr.bg,
+                border: isND ? '1px solid #bfdbfe' : 'none',
+                cursor: isND ? 'pointer' : 'default',
                 userSelect: 'none',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#475569' }}>{label}</span>
-                {isND && end && (
-                  <span style={{ fontSize: 9, color: clr.text, opacity: 0.7 }}>
-                    {ndRevealed ? '▲' : '▼'}
-                  </span>
-                )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: isND ? 8 : 5 }}>
+                {isND && <span style={{ width: 28, height: 28, borderRadius: 8, background: '#dbeafe', color: '#1d4ed8', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><UserCheck size={14} /></span>}
+                <div>
+                  <span style={{ fontSize: isND ? 11.5 : 11, fontWeight: isND ? 750 : 600, color: isND ? '#1e3a5f' : '#475569' }}>{label}</span>
+                  {isND && <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, color: '#2563eb', fontSize: 8.5, fontWeight: 700 }}><ChevronDown size={10} style={{ transform: ndRevealed ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />{ndRevealed ? 'Hide director details' : 'View director details'}</div>}
+                </div>
               </div>
               {end ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -631,23 +631,28 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
 
             {/* ND name reveal panel */}
             {isND && ndRevealed && (
-              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderTop: 'none', borderRadius: ndStrikeOff || ndPending ? '0' : '0 0 5px 5px', padding: '7px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                <UserCheck size={13} color="#16a34a" />
-                {hasNdName
-                  ? <span style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>{info!.ndName}</span>
-                  : <span style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>No director name found in TeamWork</span>
-                }
+              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderTop: 'none', borderRadius: ndStrikeOff || ndPending ? '0' : '0 0 8px 8px', padding: '9px 11px', display: 'flex', alignItems: 'center', gap: 9 }}>
+                <UserCheck size={14} color="#16a34a" />
+                <div>
+                  <div style={{ fontSize: 8, color: '#65a30d', fontWeight: 800, letterSpacing: '0.45px', marginBottom: 2 }}>ASSIGNED DIRECTOR · FROM TEAMWORK</div>
+                  {hasNdName
+                    ? <span style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>{info!.ndName}</span>
+                    : <span style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>No director name found in TeamWork</span>
+                  }
+                </div>
               </div>
             )}
 
             {/* ND special flags — always visible when ND is applicable */}
             {isND && onNdFlag && (
               <div style={{
-                display: 'flex', gap: 6, padding: '5px 8px',
+                padding: '9px 10px 10px',
                 background: (ndStrikeOff || ndPending) ? '#fffbeb' : '#f8fafc',
                 border: '1px solid #e2e8f0', borderTop: 'none',
-                borderRadius: ndRevealed ? '0 0 5px 5px' : (ndStrikeOff || ndPending) ? '0 0 5px 5px' : '0 0 5px 5px',
+                borderRadius: '0 0 8px 8px',
               }}>
+                <div style={{ fontSize: 8, fontWeight: 800, color: '#64748b', letterSpacing: '0.45px', marginBottom: 7 }}>ND WORKFLOW FLAGS · CLICK TO UPDATE</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {/* Strike Off toggle */}
                 <button
                   onClick={() => onNdFlag('dormant', ndStrikeOff ? '' : 'STRIKE_OFF')}
@@ -655,9 +660,10 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                     ? 'Strike-off in progress — initiated but NOT yet confirmed by ACRA. All services (Secretary, Address, ND, etc.) remain active and billable. May be cancelled at any time.'
                     : 'Mark as pending strike-off — all services continue until ACRA formally confirms'}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
-                    fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px', border: 'none',
-                    background: 'transparent', color: ndStrikeOff ? '#c2410c' : '#94a3b8',
+                    display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', flex: '1 1 165px',
+                    fontSize: 10, fontWeight: 700, borderRadius: 7, padding: '7px 9px',
+                    border: `1px solid ${ndStrikeOff ? '#fdba74' : '#e2e8f0'}`,
+                    background: ndStrikeOff ? '#fff7ed' : '#fff', color: ndStrikeOff ? '#c2410c' : '#64748b',
                   }}
                 >
                   {/* Checkbox square */}
@@ -674,8 +680,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                       </svg>
                     )}
                   </span>
-                  {ndStrikeOff ? 'Pending Strike-Off' : 'Strike Off'}
-                  {ndStrikeOff && <span style={{ fontSize: 9, fontWeight: 400, color: '#ea580c' }}>· All svcs. active</span>}
+                  <span style={{ textAlign: 'left' }}><span style={{ display: 'block' }}>Strike-Off Pending</span><span style={{ display: 'block', fontSize: 8, fontWeight: 500, color: ndStrikeOff ? '#ea580c' : '#94a3b8', marginTop: 1 }}>Services remain active until confirmed</span></span>
                 </button>
 
                 {/* ND Pending toggle */}
@@ -683,9 +688,10 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                   onClick={() => onNdFlag('agm_documents', ndPending ? '' : 'ND_PENDING')}
                   title="ND service requested but director not yet assigned"
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer',
-                    fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 7px', border: 'none',
-                    background: 'transparent', color: ndPending ? '#b45309' : '#94a3b8',
+                    display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', flex: '1 1 165px',
+                    fontSize: 10, fontWeight: 700, borderRadius: 7, padding: '7px 9px',
+                    border: `1px solid ${ndPending ? '#fcd34d' : '#e2e8f0'}`,
+                    background: ndPending ? '#fefce8' : '#fff', color: ndPending ? '#b45309' : '#64748b',
                   }}
                 >
                   {/* Checkbox square */}
@@ -702,8 +708,9 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                       </svg>
                     )}
                   </span>
-                  ND Pending
+                  <span style={{ textAlign: 'left' }}><span style={{ display: 'block' }}>ND Assignment Pending</span><span style={{ display: 'block', fontSize: 8, fontWeight: 500, color: ndPending ? '#ca8a04' : '#94a3b8', marginTop: 1 }}>Service requested, director not assigned</span></span>
                 </button>
+                </div>
               </div>
             )}
           </div>
