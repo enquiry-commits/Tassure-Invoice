@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Refined AR Reminder services into a compact active-only summary with
+  service-specific colors and reduced whitespace.
 - Redesigned AR Reminder list services into a bordered 4x2 service panel inside
   a separately spaced company card, improving company-to-service grouping.
 - Added a Resolved archive to Late Filing. Under Review rows now use a teal
@@ -71,6 +73,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Replaced the heavy nested service grid with a compact active-only service
+  summary. Reduced the oversized company column, removed inactive service noise,
+  and used service-specific pill colors; service data and ordering are unchanged.
 - Restyled the desktop AR Reminder list: each company is now a distinct card,
   and its fixed service slots sit in a dedicated 4x2 panel with clearer active
   and inactive states. Service logic and ordering are unchanged.

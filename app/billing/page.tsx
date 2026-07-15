@@ -2132,12 +2132,12 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
             <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>FYE {month.toUpperCase()} {year}</span>
             <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Click row to open full details & edit</span>
           </div>
-          {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(360px,2fr) 100px minmax(300px,1.15fr) 110px 90px', padding: '6px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+          {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(300px,1.45fr) 100px minmax(260px,1fr) 100px 120px', padding: '7px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
             {['', 'Company Name', 'UEN', 'Services', 'Due Date', 'PIC'].map((h, i) => (
               <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px' }}>{h}</div>
             ))}
           </div>}
-          <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto', background: '#f1f5f9', padding: '7px 8px' }}>
+          <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto', background: '#fff' }}>
             {loading && records.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>}
             {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>{records.length > 0 ? 'No matching records' : `No records for FYE ${month} ${year}`}</div>}
             {pageItems.map((r, i) => {
@@ -2171,7 +2171,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
               return (
                 <div key={r.id}
                   onClick={() => setModalRecord(r)}
-                  style={{ display: 'grid', gridTemplateColumns: '28px minmax(360px,2fr) 100px minmax(300px,1.15fr) 110px 90px', alignItems: 'center', padding: '9px 12px', marginBottom: 7, background: '#fff', border: '1px solid #e2e8f0', borderLeft: `4px solid ${accent}`, borderRadius: 9, boxShadow: '0 1px 2px rgba(15,23,42,0.04)', cursor: 'pointer', transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s' }}
+                  style={{ display: 'grid', gridTemplateColumns: '28px minmax(300px,1.45fr) 100px minmax(260px,1fr) 100px 120px', alignItems: 'center', minHeight: 64, padding: '8px 12px', background: '#fff', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf1f5', cursor: 'pointer', transition: 'background 0.15s' }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fff'}
                 >
@@ -2184,18 +2184,19 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   {/* Fixed slots in fixed order — every service always in the
                       same position, so rows align and differences pop out.
                       Blue = auto · green = manual on · grey = off. */}
-                  <div style={{ margin: '0 6px', padding: 6, display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 4, background: '#f8fafc', border: '1px solid #dbe3ee', borderRadius: 8 }}>
-                    {SVC_ORDER.map(k => {
+                  <div style={{ margin: '0 6px', padding: '2px 0 2px 14px', minHeight: 32, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, borderLeft: '1px solid #dbe3ee' }}>
+                    {SVC_ORDER.filter(k => r.services[k]).map(k => {
                       const state = svcStateOf(r.services, r.servicesManual, k);
-                      const st = SVC_STATE_STYLE[state];
+                      const svc = SVC[k];
                       return (
                         <span key={k} title={`${SVC[k].label} — ${state === 'auto-on' ? 'auto' : state === 'manual-on' ? 'manually on' : 'not provided / off'}`}
-                          style={{ minHeight: 25, background: state === 'off' ? '#fff' : st.bg, color: st.color, border: `1px solid ${st.bd}`, borderRadius: 6, padding: '3px 6px', fontSize: 10.5, fontWeight: 800, letterSpacing: '0.2px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, opacity: state === 'off' ? 0.72 : 1, boxShadow: state === 'off' ? 'none' : `inset 0 0 0 1px ${st.bg}` }}>
-                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: state === 'off' ? '#cbd5e1' : st.color, flexShrink: 0 }} />
+                          style={{ background: svc.bg, color: svc.color, border: `1px solid ${svc.color}20`, borderRadius: 999, padding: '4px 9px', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.15px', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                          {state === 'manual-on' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16a34a', flexShrink: 0 }} />}
                           {SVC_SHORT[k]}
                         </span>
                       );
                     })}
+                    {SVC_ORDER.every(k => !r.services[k]) && <span style={{ fontSize: 11, color: '#94a3b8' }}>No active services</span>}
                   </div>
                   <div style={{ padding: '0 6px' }}><DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} /></div>
                   <div style={{ padding: '0 6px', fontSize: 14, color: '#374151', fontWeight: 500 }}>{r.pic || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
