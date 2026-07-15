@@ -413,7 +413,7 @@ export default function LateFilingPage() {
                     <td style={{ padding:'10px 12px', color:'#475569', fontFamily:'monospace', fontSize:12 }}>{row.uen||'—'}</td>
                     <td style={{ padding:'10px 12px' }}>
                       {row.financial_year_end
-                        ? <SemanticStatusPill label={row.financial_year_end} background="#eff6ff" color="#1d4ed8" border="#bfdbfe" />
+                        ? <span style={{ color:'#475569', fontSize:12, fontWeight:600 }}>{row.financial_year_end}</span>
                         : <span style={{ color:'#94a3b8' }}>—</span>}
                     </td>
                     <td style={{ padding:'10px 12px' }}>

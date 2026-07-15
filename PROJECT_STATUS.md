@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Restored Late Filing FYE values to plain text while keeping Late FY and AGM
+  due-date semantic pills.
 - Increased Late Filing page top padding and vertical spacing between its
   header, risk cards, year filters, and table.
 - Standardized populated Companies ND and Address Service pills as green active
@@ -123,6 +125,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Removed the status-pill treatment from Late Filing's FYE column only; Late FY
+  and New AGM Due/Overdue remain semantic pills.
 - Opened up Late Filing's vertical rhythm with 12px page-top padding, taller
   summary cards, 24px section gaps, and a larger header-to-content gap.
 - Updated Companies service semantics so any populated ND or active Address
