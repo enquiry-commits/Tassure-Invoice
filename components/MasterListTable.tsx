@@ -67,7 +67,7 @@ function fyeMonthNum(s: string | null | undefined): number | null {
   return MONTH3[a] ?? null;
 }
 
-type ColumnField = Exclude<keyof MasterListRow, 'id' | 'tw_fye'>;
+type ColumnField = Exclude<keyof MasterListRow, 'id' | 'tw_fye' | 'in_teamwork'>;
 
 // Full column set — the default for every Master List page. A page can pass
 // `fields` to MasterListTable to show only a subset, in a given order
