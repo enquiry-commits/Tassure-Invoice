@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Reorganized the Dashboard as a spacious bento layout with distinct Command,
+  Portfolio Pulse, Planning, Annual Rhythm, and Coverage zones.
 - Refined the Dashboard with a restrained premium palette of deep navy, muted
   teal, bronze, slate blue, soft plum, and brick rose across cards and charts.
 - Rebuilt the Dashboard into a portfolio command centre with an executive
@@ -107,6 +109,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Rebuilt Dashboard information architecture to eliminate card stacking: paired
+  Command and Action centres, added section-level visual pauses, enlarged chart
+  canvases, increased gaps, and separated Planning, FYE, and Coverage zones.
 - Replaced the Dashboard's saturated SaaS palette with a centralized muted
   professional-services palette and applied it consistently to the hero, KPIs,
   action queue, donut, service mix, FYE, and nominee charts.

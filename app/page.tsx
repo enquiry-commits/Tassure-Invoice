@@ -87,6 +87,18 @@ function TextLink({ href, children }: { href: string; children: React.ReactNode 
   return <Link href={href} style={{ fontSize: 11.5, color: DASHBOARD_COLORS.teal, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>{children}<ArrowRight size={12} /></Link>;
 }
 
+function SectionLabel({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
+  return (
+    <div style={{ margin: '30px 0 14px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+      <div>
+        <div style={{ fontSize: 9.5, fontWeight: 800, color: DASHBOARD_COLORS.teal, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 4 }}>{eyebrow}</div>
+        <h2 style={{ margin: 0, color: DASHBOARD_COLORS.ink, fontSize: 18, fontWeight: 800, letterSpacing: '-.025em' }}>{title}</h2>
+      </div>
+      <p style={{ margin: 0, color: '#8493a3', fontSize: 11.5, maxWidth: 460, textAlign: 'right', lineHeight: 1.5 }}>{description}</p>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,29 +132,41 @@ export default function DashboardPage() {
         <div style={{ textAlign: 'center', padding: 90, color: '#94a3b8', fontSize: 13 }}>Loading portfolio intelligence…</div>
       ) : (
         <>
-          <section className="dashboard-hero" style={{ position: 'relative', overflow: 'hidden', borderRadius: 18, background: 'linear-gradient(118deg,#17344b 0%,#244f61 68%,#326f6b 100%)', padding: '22px 26px', marginBottom: 15, color: '#fff', boxShadow: '0 16px 38px rgba(24,52,72,.16)', border: '1px solid rgba(255,255,255,.08)' }}>
-            <div style={{ position: 'absolute', width: 250, height: 250, borderRadius: '50%', right: -65, top: -135, border: '45px solid rgba(255,255,255,.045)' }} />
-            <div className="dashboard-hero-grid" style={{ position: 'relative', display: 'grid', gridTemplateColumns: '1.35fr repeat(3,.55fr)', alignItems: 'center', gap: 18 }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10, fontWeight: 800, color: '#c8ded5', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 8 }}><Sparkles size={12} /> Portfolio command centre</div>
-                <div style={{ fontSize: 19, fontWeight: 750, letterSpacing: '-.02em', lineHeight: 1.25 }}>Your operational picture, in one place.</div>
-                <div style={{ fontSize: 11.5, color: '#c6d8e8', marginTop: 6, maxWidth: 520 }}>Prioritise upcoming annual returns, resolve late-filing risks and monitor service coverage before billing.</div>
-              </div>
-              {[
-                { label: 'Active portfolio', value: data.kpis.activeClients, note: `${data.kpis.cssClients} CSS clients` },
-                { label: 'Next 6 months', value: data.kpis.upcomingAR, note: 'AR obligations' },
-                { label: 'Needs attention', value: data.kpis.lateFiling, note: 'late-filing flags' },
-              ].map(item => (
-                <div key={item.label} style={{ paddingLeft: 18, borderLeft: '1px solid rgba(255,255,255,.16)' }}>
-                  <div style={{ fontSize: 27, fontWeight: 800, letterSpacing: '-.03em' }}>{item.value}</div>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, color: '#fff', marginTop: 2 }}>{item.label}</div>
-                  <div style={{ fontSize: 9.5, color: '#a9c1d5', marginTop: 2 }}>{item.note}</div>
+          <div className="dashboard-command-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.55fr) minmax(330px,.65fr)', gap: 22, alignItems: 'stretch' }}>
+            <section className="dashboard-hero" style={{ position: 'relative', overflow: 'hidden', minHeight: 290, borderRadius: 20, background: 'linear-gradient(118deg,#17344b 0%,#244f61 68%,#326f6b 100%)', padding: '30px 32px', color: '#fff', boxShadow: '0 18px 44px rgba(24,52,72,.17)', border: '1px solid rgba(255,255,255,.08)', display: 'flex', alignItems: 'stretch' }}>
+              <div style={{ position: 'absolute', width: 330, height: 330, borderRadius: '50%', right: -80, top: -180, border: '58px solid rgba(255,255,255,.04)' }} />
+              <div style={{ position: 'absolute', width: 160, height: 160, borderRadius: '50%', right: 100, bottom: -125, border: '28px solid rgba(255,255,255,.035)' }} />
+              <div className="dashboard-hero-grid" style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10, fontWeight: 800, color: '#c8ded5', textTransform: 'uppercase', letterSpacing: '.9px', marginBottom: 12 }}><Sparkles size={12} /> Portfolio command centre</div>
+                  <div style={{ fontSize: 27, fontWeight: 760, letterSpacing: '-.035em', lineHeight: 1.18, maxWidth: 600 }}>Your operational picture,<br />beautifully focused.</div>
+                  <div style={{ fontSize: 12, color: '#c6d8e8', marginTop: 10, maxWidth: 570, lineHeight: 1.6 }}>Prioritise upcoming annual returns, resolve filing risks and understand service coverage before billing begins.</div>
                 </div>
-              ))}
-            </div>
-          </section>
+                <div className="dashboard-hero-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, marginTop: 28, paddingTop: 22, borderTop: '1px solid rgba(255,255,255,.15)' }}>
+                  {[
+                    { label: 'Active portfolio', value: data.kpis.activeClients, note: `${data.kpis.cssClients} CSS clients` },
+                    { label: 'Next 6 months', value: data.kpis.upcomingAR, note: 'AR obligations' },
+                    { label: 'Needs attention', value: data.kpis.lateFiling, note: 'late-filing flags' },
+                  ].map(item => (
+                    <div key={item.label}>
+                      <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.04em' }}>{item.value}</div>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, color: '#fff', marginTop: 3 }}>{item.label}</div>
+                      <div style={{ fontSize: 9.5, color: '#a9c1d5', marginTop: 3 }}>{item.note}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
 
-          <div className="dashboard-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(150px,1fr))', gap: 12, marginBottom: 15 }}>
+            <Card title="Action Centre" eyebrow="Priority queue" icon={<ShieldCheck size={16} />} action={<span style={{ fontSize: 10, color: '#94a3b8' }}>Live counts</span>} style={{ padding: '24px 24px' }}>
+              <ActionItem title="Late-filing review" description="Investigate and resolve flagged entities" value={data.kpis.lateFiling} href="/late-filing" color={DASHBOARD_COLORS.rose} background="#fbf1f2" Icon={AlertTriangle} />
+              <ActionItem title="AR preparation window" description="Review the next six months of filings" value={data.kpis.upcomingAR} href="/billing?tab=ar" color={DASHBOARD_COLORS.gold} background="#fbf5ec" Icon={Clock3} />
+              <ActionItem title="Billing drafts" description="Review services before creating invoices" value="Open" href="/billing?tab=billing" color={DASHBOARD_COLORS.blue} background="#eef3f7" Icon={BriefcaseBusiness} />
+            </Card>
+          </div>
+
+          <SectionLabel eyebrow="Portfolio pulse" title="Key operating metrics" description="Five live indicators covering clients, managed services and statutory obligations." />
+          <div className="dashboard-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,minmax(150px,1fr))', gap: 16 }}>
             <Kpi label="Active Clients" value={data.kpis.activeClients} sub={`${data.kpis.cssClients} CSS clients`} Icon={Building2} tint={DASHBOARD_COLORS.teal} href="/master-list/active-clients" />
             <Kpi label="Nominee Appointments" value={data.kpis.activeNDAppts} sub="active mandates" Icon={UserCheck} tint={DASHBOARD_COLORS.plum} href="/nominee-directors" />
             <Kpi label="Address Service" value={data.kpis.addressClients} sub="registered-address clients" Icon={MapPin} tint={DASHBOARD_COLORS.blue} href="/address-service" />
@@ -150,35 +174,30 @@ export default function DashboardPage() {
             <Kpi label="Late-Filing Watch" value={data.kpis.lateFiling} sub="companies currently flagged" Icon={AlertTriangle} tint={DASHBOARD_COLORS.rose} href="/late-filing" />
           </div>
 
-          <div className="dashboard-grid-primary" style={{ display: 'grid', gridTemplateColumns: '1.45fr .75fr', gap: 15, marginBottom: 15 }}>
+          <SectionLabel eyebrow="Planning" title="Workload and portfolio health" description="See what is coming next and how the active entity portfolio is distributed." />
+          <div className="dashboard-grid-primary" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.45fr) minmax(360px,.65fr)', gap: 22 }}>
             <Card title="Upcoming Annual Return Workload" eyebrow="Six-month outlook" icon={<CalendarClock size={16} />} action={<TextLink href="/billing?tab=ar">Open AR Reminder</TextLink>}>
-              <VBars data={data.upcomingAR} color={DASHBOARD_COLORS.blue} height={156} />
+              <VBars data={data.upcomingAR} color={DASHBOARD_COLORS.blue} height={190} />
             </Card>
-            <Card title="Action Centre" eyebrow="Priority queue" icon={<ShieldCheck size={16} />} action={<span style={{ fontSize: 10, color: '#94a3b8' }}>Live counts</span>}>
-              <ActionItem title="Late-filing review" description="Investigate and resolve flagged entities" value={data.kpis.lateFiling} href="/late-filing" color={DASHBOARD_COLORS.rose} background="#fbf1f2" Icon={AlertTriangle} />
-              <ActionItem title="AR preparation window" description="Review the next six months of filings" value={data.kpis.upcomingAR} href="/billing?tab=ar" color={DASHBOARD_COLORS.gold} background="#fbf5ec" Icon={Clock3} />
-              <ActionItem title="Billing drafts" description="Review services before creating invoices" value="Open" href="/billing?tab=billing" color={DASHBOARD_COLORS.blue} background="#eef3f7" Icon={BriefcaseBusiness} />
-            </Card>
-          </div>
-
-          <div className="dashboard-grid-secondary" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 15, marginBottom: 15 }}>
             <Card title="Client Portfolio Status" eyebrow="Entity lifecycle" icon={<Layers3 size={16} />} action={<TextLink href="/companies">View companies</TextLink>}>
               <Donut segments={data.statusDonut.map((segment, index) => ({ ...segment, color: [DASHBOARD_COLORS.teal, DASHBOARD_COLORS.gold, DASHBOARD_COLORS.rose, DASHBOARD_COLORS.muted][index] }))} size={154} thickness={22} />
             </Card>
+          </div>
+
+          <SectionLabel eyebrow="Annual rhythm" title="Financial year-end landscape" description="The full portfolio calendar, with enough space to expose seasonal workload peaks." />
+          <Card title="Financial Year-End Calendar" eyebrow="Annual distribution" icon={<BarChart3 size={16} />} action={<span style={{ fontSize: 10.5, color: '#94a3b8' }}>active clients by FYE month</span>} style={{ padding: '24px 28px' }}>
+            <VBars data={data.fyeMonths} color={DASHBOARD_COLORS.teal} height={220} />
+          </Card>
+
+          <SectionLabel eyebrow="Coverage" title="Managed service portfolios" description="Compare service adoption with nominee-director appointment concentration." />
+          <div className="dashboard-grid-secondary" style={{ display: 'grid', gridTemplateColumns: 'minmax(360px,.7fr) minmax(0,1.3fr)', gap: 22 }}>
             <Card title="Service Coverage" eyebrow="Active-client mix" icon={<BriefcaseBusiness size={16} />} action={<span style={{ fontSize: 10.5, color: '#94a3b8' }}>number of clients</span>}>
               <HBars data={data.serviceMix.map((service, index) => ({ ...service, color: [DASHBOARD_COLORS.teal, DASHBOARD_COLORS.plum, DASHBOARD_COLORS.blue, DASHBOARD_COLORS.gold, '#688b8a'][index] }))} accent={DASHBOARD_COLORS.teal} labelWidth={105} />
             </Card>
-          </div>
-
-          <div style={{ marginBottom: 15 }}>
-            <Card title="Financial Year-End Calendar" eyebrow="Annual distribution" icon={<BarChart3 size={16} />} action={<span style={{ fontSize: 10.5, color: '#94a3b8' }}>active clients by FYE month</span>}>
-              <VBars data={data.fyeMonths} color={DASHBOARD_COLORS.teal} height={165} />
+            <Card title="Nominee Director Portfolio" eyebrow="Active appointment load" icon={<Users size={16} />} action={<TextLink href="/nominee-directors">Open directory</TextLink>}>
+              {data.topNDs.length > 0 ? <HBars data={data.topNDs} accent={DASHBOARD_COLORS.plum} labelWidth={170} /> : <div style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No active nominee appointments.</div>}
             </Card>
           </div>
-
-          <Card title="Nominee Director Portfolio" eyebrow="Active appointment load" icon={<Users size={16} />} action={<TextLink href="/nominee-directors">Open directory</TextLink>}>
-            {data.topNDs.length > 0 ? <HBars data={data.topNDs} accent={DASHBOARD_COLORS.plum} labelWidth={170} /> : <div style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No active nominee appointments.</div>}
-          </Card>
         </>
       )}
 
@@ -190,17 +209,15 @@ export default function DashboardPage() {
         .dashboard-action:hover { background: #fbfdff; }
         @media (max-width: 1180px) {
           .dashboard-kpis { grid-template-columns: repeat(3,minmax(160px,1fr)) !important; }
-          .dashboard-hero-grid { grid-template-columns: 1fr repeat(3,.45fr) !important; }
+          .dashboard-command-grid { grid-template-columns: minmax(0,1.2fr) minmax(300px,.8fr) !important; }
         }
-        @media (max-width: 860px) {
-          .dashboard-grid-primary, .dashboard-grid-secondary { grid-template-columns: 1fr !important; }
+        @media (max-width: 980px) {
+          .dashboard-command-grid, .dashboard-grid-primary, .dashboard-grid-secondary { grid-template-columns: 1fr !important; }
           .dashboard-kpis { grid-template-columns: repeat(2,minmax(150px,1fr)) !important; }
-          .dashboard-hero-grid { grid-template-columns: 1fr 1fr !important; }
         }
         @media (max-width: 560px) {
-          .dashboard-kpis, .dashboard-hero-grid { grid-template-columns: 1fr !important; }
+          .dashboard-kpis, .dashboard-hero-metrics { grid-template-columns: 1fr !important; }
           .dashboard-hero { padding: 20px !important; }
-          .dashboard-hero-grid > div { border-left: 0 !important; padding-left: 0 !important; }
         }
       `}</style>
     </div>
