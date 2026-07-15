@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Removed dashed auto-state borders from the AR modal service panel and expanded
+  spacing throughout for a calmer, less crowded layout.
 - Refined the AR modal service configuration into a lighter pill-based layout
   while preserving all state guidance and billing warnings.
 - Upgraded the AR detail modal service controls into a prominent review panel
@@ -77,6 +79,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Simplified the service-state visual language by replacing dashed borders with
+  solid borders; AUTO/MANUAL/OFF labels now carry the meaning. Increased panel,
+  section, label, and chip spacing for improved readability.
 - Simplified the AR modal service configuration visual treatment: removed heavy
   nested colored panels, restored service-specific pills, and reduced state
   information to compact badges, dividers, and a subtle billing reminder.

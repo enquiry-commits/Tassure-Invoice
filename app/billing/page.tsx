@@ -256,10 +256,10 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
       title={disabled ? 'No company-master match — cannot override' : isManual ? `${c.label}: manual ${manual ? 'ON' : 'OFF'} · click to restore auto` : `${c.label}: auto (${effective ? 'on' : 'off'}) · click to force ${effective ? 'OFF' : 'ON'}`}
       style={{
         background: chipBg, color: chipColor,
-        border: `1px ${isManual ? 'solid' : 'dashed'} ${chipBorder}`,
-        borderRadius: 999, padding: '6px 9px', fontSize: 10.5, fontWeight: 700,
+        border: `1px solid ${chipBorder}`,
+        borderRadius: 999, padding: '8px 12px', fontSize: 10.5, fontWeight: 700,
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
-        display: 'inline-flex', alignItems: 'center', gap: 6,
+        display: 'inline-flex', alignItems: 'center', gap: 8,
         boxShadow: isManual && manual ? '0 0 0 2px rgba(22,163,74,0.07)' : 'none',
       }}>
       {isManual && <span style={{ width: 5, height: 5, borderRadius: '50%', background: manual ? '#16a34a' : '#94a3b8', flexShrink: 0 }} />}
@@ -1696,37 +1696,37 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
           {/* Row 3: service chips — Secretary/Accounts/Tax/XBRL are clickable
               (auto → manual on → manual off); ND/Address follow TeamWork.
               Blue = auto-detected · green = manually on · grey = off. */}
-          <div style={{ background: '#fff', border: '1px solid #dbe3ee', borderRadius: 10, padding: '9px 11px', boxShadow: '0 3px 12px rgba(15,23,42,0.12)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+          <div style={{ background: '#fff', border: '1px solid #dbe3ee', borderRadius: 12, padding: '14px 16px 16px', boxShadow: '0 3px 12px rgba(15,23,42,0.12)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, marginBottom: 14 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <ShieldCheck size={14} style={{ color: '#1d4ed8' }} />
                   <span style={{ fontSize: 11.5, fontWeight: 800, color: '#1e3a5f' }}>Service configuration</span>
                   <span style={{ padding: '2px 6px', borderRadius: 999, background: '#fff7ed', color: '#b45309', fontSize: 7.5, fontWeight: 800, letterSpacing: '0.35px' }}>REVIEW BEFORE BILLING</span>
                 </div>
-                <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 3 }}>Click an adjustable service to override the system result. Click again to restore automatic detection.</div>
+                <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 5, lineHeight: 1.5 }}>Click an adjustable service to override the system result. Click again to restore automatic detection.</div>
               </div>
-              <div style={{ display: 'flex', gap: 9, flexShrink: 0, fontSize: 8, fontWeight: 700 }}>
-                <span style={{ color: '#64748b' }}>Dashed · Auto</span>
+              <div style={{ display: 'flex', gap: 13, flexShrink: 0, fontSize: 8, fontWeight: 700 }}>
+                <span style={{ color: '#64748b' }}>AUTO · System</span>
                 <span style={{ color: '#15803d' }}>● Manual</span>
                 <span style={{ color: '#94a3b8' }}>Grey · Off</span>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,0.7fr) minmax(500px,2fr)', gap: 12, alignItems: 'center' }}>
-              <div style={{ padding: '2px 0' }}>
-                <div style={{ fontSize: 7.5, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.5px', marginBottom: 5 }}>SYSTEM MANAGED</div>
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(190px,0.7fr) minmax(500px,2fr)', gap: 20, alignItems: 'center' }}>
+              <div style={{ padding: '4px 0' }}>
+                <div style={{ fontSize: 7.5, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.5px', marginBottom: 9 }}>SYSTEM MANAGED</div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {activeSvc.filter(k => !(OVERRIDABLE_SVC as readonly string[]).includes(k)).map(k => {
                     const svc = SVC[k];
-                    return <span key={k} title={`${svc.label}: automatic${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`} style={{ background: svc.bg, color: svc.color, border: `1px dashed ${svc.color}45`, borderRadius: 999, padding: '6px 9px', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}><span>{svc.label}</span><span style={{ fontSize: 7, opacity: 0.65, letterSpacing: '0.35px' }}>LOCKED</span></span>;
+                    return <span key={k} title={`${svc.label}: automatic${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`} style={{ background: svc.bg, color: svc.color, border: `1px solid ${svc.color}30`, borderRadius: 999, padding: '8px 12px', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 7 }}><span>{svc.label}</span><span style={{ fontSize: 7, opacity: 0.65, letterSpacing: '0.35px' }}>LOCKED</span></span>;
                   })}
                 </div>
               </div>
 
-              <div style={{ borderLeft: '1px solid #e2e8f0', padding: '2px 0 2px 12px' }}>
-                <div style={{ fontSize: 7.5, fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: 5 }}>ADJUSTABLE · CLICK TO CHANGE</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div style={{ borderLeft: '1px solid #e2e8f0', padding: '4px 0 4px 20px' }}>
+                <div style={{ fontSize: 7.5, fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: 9 }}>ADJUSTABLE · CLICK TO CHANGE</div>
+                <div style={{ display: 'flex', gap: 10, rowGap: 9, flexWrap: 'wrap' }}>
                   {OVERRIDABLE_SVC.map(k => (
                     <OverrideChip key={k} svc={k}
                       effective={r.services[k as keyof Services]}
