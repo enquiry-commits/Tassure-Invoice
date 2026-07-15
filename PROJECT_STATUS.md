@@ -24,8 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
-- Reduced the Active column to 60px on Active Client only; shared Master List
-  pages retain the default 220px width.
+- Reduced the Active and FYE columns to 60px on Active Client only; shared
+  Master List pages retain their default 220px and 180px widths.
 - Made the AR Reminder table header stay fixed while table rows scroll.
 - Fixed editable-column type checking for `in_teamwork`.
 - Tightened the Non-TeamWork filter to match by UEN.
@@ -65,6 +65,8 @@ one focused Git commit.
 
 - Added per-page Master List column-width overrides and set Active Client's
   `status` column to 60px without changing the shared default.
+- Set Active Client's `fye` column to 60px without changing the shared 180px
+  default used by other Master List pages.
 - Added a bounded vertical scroll area to the AR Reminder table so its sticky
   header remains visible; preserved the existing horizontal scrollbar and
   sticky identity columns.

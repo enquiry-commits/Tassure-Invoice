@@ -22,7 +22,7 @@ export default function ActiveClientsPage() {
       title="Active Client"
       accentColor="#15803d"
       fields={[...ACTIVE_CLIENT_FIELDS]}
-      columnWidths={{ status: 60 }}
+      columnWidths={{ status: 60, fye: 60 }}
       moveTargets={[
         { type: 'strike_off', label: 'Strike Off',          statusValue: 'STRUCK OFF' },
         { type: 'terminated', label: 'Terminated Services', statusValue: 'TERMINATED' },
