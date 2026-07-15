@@ -220,9 +220,9 @@ export default function LateFilingPage() {
     usePagination(displayRows, `${yearFilter}|${catFilter}`);
 
   return (
-    <div>
+    <div style={{ paddingTop:12 }}>
       {/* Header */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:26 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <AlertTriangle size={22} style={{ color:'#dc2626' }} />
           <h1 style={{ fontSize:20, fontWeight:800, color:'#1e3a5f', margin:0 }}>Late Filing Companies</h1>
@@ -243,7 +243,7 @@ export default function LateFilingPage() {
       </div>
 
       {/* Stats — total + risk breakdown (click a card to filter) */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,minmax(0,1fr))', gap:10, marginBottom:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,minmax(0,1fr))', gap:12, marginBottom:24 }}>
         {([
           { key: 'ALL',      label: 'Total Late Filers',            sub: 'all flagged companies',            count: rows.length,   color: '#1e3a5f', bg: '#f8fafc', bd: '#e2e8f0' },
           { key: 'serious',  label: 'Seriously Overdue',            sub: 'over 1 year late / strike-off',     count: cats.serious,  color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
@@ -256,7 +256,7 @@ export default function LateFilingPage() {
           return (
             <button key={c.key} onClick={() => setCatFilter(c.key as LateCategory | 'ALL')}
               style={{ textAlign:'left', cursor:'pointer', background:c.bg, border:`1.5px solid ${active ? c.color : c.bd}`,
-                borderRadius:10, padding:'10px 16px', boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
+                borderRadius:10, padding:'13px 16px', boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
               <div style={{ fontSize:22, fontWeight:800, color:c.color }}>{c.count}</div>
               <div style={{ fontSize:12, fontWeight:700, color:'#334155' }}>{c.label}</div>
               <div style={{ fontSize:10, color:'#94a3b8', marginTop:1 }}>{c.sub}</div>
@@ -266,7 +266,7 @@ export default function LateFilingPage() {
       </div>
 
       {/* Year Filter */}
-      <div style={{ display:'flex', gap:6, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
+      <div style={{ display:'flex', gap:7, marginBottom:24, flexWrap:'wrap', alignItems:'center' }}>
         <span style={{ fontSize:12, color:'#94a3b8', fontWeight:600, marginRight:4 }}>Late FY:</span>
         {(['ALL', ...allYears.map(String)]).map(y => (
           <button key={y} onClick={() => setYearFilter(y)}

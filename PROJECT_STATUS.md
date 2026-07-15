@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Increased Late Filing page top padding and vertical spacing between its
+  header, risk cards, year filters, and table.
 - Standardized populated Companies ND and Address Service pills as green active
   states while retaining grey pills for missing or inactive services.
 - Converted Companies Nominee Director and Address Service cells into semantic
@@ -121,6 +123,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Opened up Late Filing's vertical rhythm with 12px page-top padding, taller
+  summary cards, 24px section gaps, and a larger header-to-content gap.
 - Updated Companies service semantics so any populated ND or active Address
   value is green; empty ND and unused Address values remain grey.
 - Added reusable Companies service pills: populated ND names and active address
