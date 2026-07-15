@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Upgraded the AR detail modal service controls into a prominent review panel
+  with automatic versus adjustable groups, state labels, legend, and guidance.
 - Refined AR Reminder services into a compact active-only summary with
   service-specific colors and reduced whitespace.
 - Redesigned AR Reminder list services into a bordered 4x2 service panel inside
@@ -73,6 +75,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Redesigned the AR detail modal's service configuration as a billing-critical
+  review panel. System services are clearly locked, adjustable services expose
+  AUTO/MANUAL/OFF states, and a legend plus action guidance explains the colors.
 - Replaced the heavy nested service grid with a compact active-only service
   summary. Reduced the oversized company column, removed inactive service noise,
   and used service-specific pill colors; service data and ordering are unchanged.

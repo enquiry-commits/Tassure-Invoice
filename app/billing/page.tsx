@@ -247,18 +247,23 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
   const c = SVC[svc];
   const isManual = manual !== undefined;
   const st = SVC_STATE_STYLE[isManual && manual ? 'manual-on' : effective ? 'auto-on' : 'off'];
+  const stateLabel = isManual ? (manual ? 'MANUAL ON' : 'MANUAL OFF') : (effective ? 'AUTO ON' : 'AUTO OFF');
   return (
     <button onClick={onCycle} disabled={disabled}
       title={disabled ? 'No company-master match — cannot override' : isManual ? `${c.label}: manual ${manual ? 'ON' : 'OFF'} · click to restore auto` : `${c.label}: auto (${effective ? 'on' : 'off'}) · click to force ${effective ? 'OFF' : 'ON'}`}
       style={{
         background: st.bg, color: st.color,
         border: `1.5px ${isManual ? 'solid' : 'dashed'} ${st.bd}`,
-        borderRadius: 5, padding: '3px 9px', fontSize: 11, fontWeight: 700,
+        borderRadius: 8, padding: '7px 9px', minWidth: 116, fontSize: 11, fontWeight: 700,
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
         textDecoration: isManual && !effective ? 'line-through' : 'none',
-        display: 'inline-flex', alignItems: 'center', gap: 4,
+        display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4,
+        boxShadow: isManual && manual ? '0 0 0 2px rgba(22,163,74,0.08)' : 'none',
       }}>
-      {c.label}{isManual && <span style={{ fontSize: 10 }}>✎</span>}
+      <span style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', textDecoration: isManual && !effective ? 'line-through' : 'none' }}>
+        {c.label}{isManual && <span style={{ marginLeft: 'auto', fontSize: 10 }}>✎</span>}
+      </span>
+      <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.5px', opacity: 0.78, textDecoration: 'none' }}>{stateLabel}</span>
     </button>
   );
 }
@@ -1690,18 +1695,47 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
           {/* Row 3: service chips — Secretary/Accounts/Tax/XBRL are clickable
               (auto → manual on → manual off); ND/Address follow TeamWork.
               Blue = auto-detected · green = manually on · grey = off. */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {activeSvc.filter(k => !(OVERRIDABLE_SVC as readonly string[]).includes(k)).map(k => {
-              const st = SVC_STATE_STYLE['auto-on'];
-              return <span key={k} title={`${SVC[k].label}: auto${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`} style={{ background: st.bg, color: st.color, border: `1.5px dashed ${st.bd}`, borderRadius: 5, padding: '3px 9px', fontSize: 11, fontWeight: 700 }}>{SVC[k].label}</span>;
-            })}
-            {OVERRIDABLE_SVC.map(k => (
-              <OverrideChip key={k} svc={k}
-                effective={r.services[k as keyof Services]}
-                manual={r.servicesManual?.[k]}
-                disabled={!r.company_id}
-                onCycle={() => cycleService(k)} />
-            ))}
+          <div style={{ background: '#fff', border: '1px solid rgba(255,255,255,0.5)', borderLeft: '4px solid #f59e0b', borderRadius: 10, padding: '10px 12px', boxShadow: '0 5px 18px rgba(15,23,42,0.18)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 9 }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <ShieldCheck size={14} style={{ color: '#b45309' }} />
+                  <span style={{ fontSize: 11.5, fontWeight: 800, color: '#1e3a5f' }}>Service configuration</span>
+                  <span style={{ padding: '2px 6px', borderRadius: 999, background: '#fff7ed', color: '#b45309', fontSize: 8, fontWeight: 800, letterSpacing: '0.4px' }}>CHECK BEFORE BILLING</span>
+                </div>
+                <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 3 }}>Click an adjustable service to override the system result. Click again to restore automatic detection.</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexShrink: 0, fontSize: 8.5, fontWeight: 700 }}>
+                <span style={{ color: '#1d4ed8' }}>┄ Auto</span>
+                <span style={{ color: '#15803d' }}>● Manual on</span>
+                <span style={{ color: '#94a3b8' }}>○ Off</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(150px,0.7fr) minmax(480px,2fr)', gap: 12, alignItems: 'stretch' }}>
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 8px' }}>
+                <div style={{ fontSize: 8, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.55px', marginBottom: 6 }}>SYSTEM SERVICES · VIEW ONLY</div>
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                  {activeSvc.filter(k => !(OVERRIDABLE_SVC as readonly string[]).includes(k)).map(k => {
+                    const st = SVC_STATE_STYLE['auto-on'];
+                    return <span key={k} title={`${SVC[k].label}: automatic${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`} style={{ background: st.bg, color: st.color, border: `1.5px dashed ${st.bd}`, borderRadius: 7, padding: '5px 8px', fontSize: 10, fontWeight: 700, display: 'inline-flex', flexDirection: 'column', gap: 2 }}><span>{SVC[k].label}</span><span style={{ fontSize: 7.5, opacity: 0.7, letterSpacing: '0.4px' }}>AUTO · LOCKED</span></span>;
+                  })}
+                </div>
+              </div>
+
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '7px 8px' }}>
+                <div style={{ fontSize: 8, fontWeight: 800, color: '#a16207', letterSpacing: '0.55px', marginBottom: 6 }}>ADJUSTABLE SERVICES · CLICK TO CHANGE</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {OVERRIDABLE_SVC.map(k => (
+                    <OverrideChip key={k} svc={k}
+                      effective={r.services[k as keyof Services]}
+                      manual={r.servicesManual?.[k]}
+                      disabled={!r.company_id}
+                      onCycle={() => cycleService(k)} />
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
