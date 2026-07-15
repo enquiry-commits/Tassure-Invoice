@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Centered all Billing Draft columns except Company and PIC, including matching
+  header and row-content alignment.
 - Reduced the Billing Draft company column and arranged Renewal and Annual
   status pills horizontally within their wider dedicated columns.
 - Simplified Billing Draft status spacing to match the AR Reminder list: clean
@@ -91,6 +93,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Center-aligned FYE, Renewal, ND, Annual, TAB, and TAC in Billing Draft while
+  retaining left alignment for Company and PIC.
 - Rebalanced Billing Draft desktop widths: the Company column now uses less
   space while Renewal and Annual service pills stay on one horizontal line.
 - Refined Billing Draft desktop rows to mirror the AR Reminder list language:

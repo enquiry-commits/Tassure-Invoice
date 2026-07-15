@@ -1513,7 +1513,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
               ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                   ND <span style={{ fontSize: 8, fontWeight: 800, background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 3, padding: '0 3px' }}>TAC</span>
                 </div>
-              : (i === 6 || i === 7)
+              : (i >= 2 && i <= 7)
               ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', textAlign: 'center' }}>{h}</div>
               : <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px' }}>{h}</div>
           ))}
@@ -1576,8 +1576,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                     </div>
                     {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen}</div>}
                   </div>
-                  <div style={{ padding: '0 6px', fontSize: 11, color: '#64748b' }}>{c.fyeMonth ?? '—'}</div>
-                  <div style={{ margin: '0 4px', padding: '2px 0 2px 12px', display: 'flex', alignItems: 'center', gap: 7, borderLeft: '1px solid #dbe3ee', whiteSpace: 'nowrap' }}>
+                  <div style={{ padding: '0 6px', fontSize: 11, color: '#64748b', textAlign: 'center' }}>{c.fyeMonth ?? '—'}</div>
+                  <div style={{ margin: '0 4px', padding: '2px 0 2px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, borderLeft: '1px solid #dbe3ee', whiteSpace: 'nowrap' }}>
                     {secR  && <ServiceMini label="SEC"  status={secR.status}  applicable={secR.applicable}  />}
                     {addrR && <ServiceMini label="ADDR" status={addrR.status} applicable={addrR.applicable} />}
                   </div>
@@ -1585,7 +1585,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   <div style={{ padding: '0 6px', display: 'flex', justifyContent: 'center' }}>
                     {ndR && <ServiceMini label="ND" status={ndR.status} applicable={ndR.applicable} />}
                   </div>
-                  <div style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+                  <div style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, whiteSpace: 'nowrap' }}>
                     {arA   && <ServiceMini label="AR"   status={arA.status}   applicable={arA.applicable}   />}
                     {xbrlA && <ServiceMini label="XBRL" status={xbrlA.status} applicable={xbrlA.applicable} />}
                   </div>
