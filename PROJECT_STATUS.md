@@ -231,6 +231,9 @@ one focused Git commit.
 - Added a live Dashboard Excel export. The generated dated workbook contains
   two filterable sheets: all current Active Client master-list records and all
   non-excluded AR Reminder records, with readable column sizing.
+- Restricted QuickBooks PIC Class assignment to Secretary and XBRL invoice
+  lines only. Address, AR, ND, Accounts, Tax, discounts, and other services no
+  longer inherit the company PIC when sharing an invoice.
 - Verification: `npm run build`.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.

@@ -1140,7 +1140,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           <span style={{ fontSize: 11, color: '#64748b' }}>Invoice date</span>
           <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} style={inputStyle} />
         </div>
-        {c.pic && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>PIC: <strong style={{ color: '#334155' }}>{c.pic}</strong></span>}
+        {c.pic && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>SEC / XBRL PIC: <strong style={{ color: '#334155' }}>{c.pic}</strong></span>}
       </div>
 
       {/* TAB — basic services (Secretary/Address/AR/XBRL/Accounts/Tax/Discount).

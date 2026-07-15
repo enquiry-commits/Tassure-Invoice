@@ -15,6 +15,10 @@ export interface DraftLineItem {
   productService?: string;  // exact QB Product/Service name, e.g. "Secretary:Corporate Secretarial Services"
 }
 
+function requiresPicClass(line: DraftLineItem) {
+  return line.service === 'Secretary' || line.service === 'XBRL';
+}
+
 interface CompanyResult {
   invoiceNo?: string;
   qbId?: string;
@@ -104,7 +108,8 @@ async function createInvoiceInCompany(
   // House conventions (see lib/qb-invoice-conventions.ts): sequential
   // DocNumber per company/year series (custom transaction numbers are ON, so
   // an unnumbered create stays blank), Net 7 terms, and — TAB only — the
-  // PIC's person class on every service line (not on government-fee lines).
+  // PIC's person class on Secretary and XBRL lines only. Other services do not
+  // carry a PIC in QuickBooks, even when they share the same TAB invoice.
   const [itemMap, docNumber, termId, picClass] = await Promise.all([
     getItemMap(token, realmId),
     nextDocNumber(token, realmId, company, txnDate),
@@ -124,7 +129,7 @@ async function createInvoiceInCompany(
         ItemRef: { value: item.id, name: item.name },
         Qty:       l.qty ?? 1,
         UnitPrice: l.rate,
-        ...(picClass && !isGovFeeLine(l) ? { ClassRef: picClass } : {}),
+        ...(picClass && requiresPicClass(l) && !isGovFeeLine(l) ? { ClassRef: picClass } : {}),
       },
     };
   });
@@ -172,7 +177,7 @@ export async function POST(req: NextRequest) {
     email?: string;
     txnDate?: string;
     sendEmail?: boolean;
-    pic?: string;          // person-in-charge — becomes the line Class in TAB
+    pic?: string;          // person-in-charge — Class on TAB Secretary/XBRL lines only
     tabLines: DraftLineItem[];
     tacLines: DraftLineItem[];
     fyeMonth?: string;
