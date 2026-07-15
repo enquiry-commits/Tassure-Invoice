@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Reduced the Billing Draft company column and arranged Renewal and Annual
+  status pills horizontally within their wider dedicated columns.
 - Simplified Billing Draft status spacing to match the AR Reminder list: clean
   white rows, borderless pill groups, subtle dividers, and generous whitespace.
 - Restyled the five Billing Draft status columns as semantic pills for renewal
@@ -89,6 +91,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Rebalanced Billing Draft desktop widths: the Company column now uses less
+  space while Renewal and Annual service pills stay on one horizontal line.
 - Refined Billing Draft desktop rows to mirror the AR Reminder list language:
   removed nested status cards, kept semantic pills, and used subtle dividers,
   white rows, wider columns, and calmer spacing.

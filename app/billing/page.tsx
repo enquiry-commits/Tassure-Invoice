@@ -1507,7 +1507,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>BILLING DRAFTS</span>
           <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
-        {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(260px,1.6fr) 70px 140px 100px 160px 110px 110px 80px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
+        {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(220px,1fr) 70px 170px 100px 190px 120px 120px 90px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
           {['', 'Company', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC'].map((h, i) => (
             i === 4
               ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
@@ -1563,7 +1563,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             return (
               <div key={c.companyId}>
                 <div onClick={() => setExpanded(isOpen ? null : c.companyId)}
-                  style={{ display: 'grid', gridTemplateColumns: '28px minmax(260px,1.6fr) 70px 140px 100px 160px 110px 110px 80px', alignItems: 'center', minHeight: 68, columnGap: 4, padding: '9px 12px', background: isOpen ? '#f0f6ff' : '#fff', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf1f5', cursor: 'pointer', transition: 'background 0.15s' }}
+                  style={{ display: 'grid', gridTemplateColumns: '28px minmax(220px,1fr) 70px 170px 100px 190px 120px 120px 90px', alignItems: 'center', minHeight: 64, columnGap: 4, padding: '9px 12px', background: isOpen ? '#f0f6ff' : '#fff', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf1f5', cursor: 'pointer', transition: 'background 0.15s' }}
                   onMouseEnter={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#f0f6ff'; }}
                   onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#fff'; }}>
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
@@ -1577,7 +1577,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                     {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen}</div>}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#64748b' }}>{c.fyeMonth ?? '—'}</div>
-                  <div style={{ margin: '0 4px', padding: '2px 0 2px 12px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, borderLeft: '1px solid #dbe3ee' }}>
+                  <div style={{ margin: '0 4px', padding: '2px 0 2px 12px', display: 'flex', alignItems: 'center', gap: 7, borderLeft: '1px solid #dbe3ee', whiteSpace: 'nowrap' }}>
                     {secR  && <ServiceMini label="SEC"  status={secR.status}  applicable={secR.applicable}  />}
                     {addrR && <ServiceMini label="ADDR" status={addrR.status} applicable={addrR.applicable} />}
                   </div>
@@ -1585,7 +1585,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   <div style={{ padding: '0 6px', display: 'flex', justifyContent: 'center' }}>
                     {ndR && <ServiceMini label="ND" status={ndR.status} applicable={ndR.applicable} />}
                   </div>
-                  <div style={{ padding: '2px 6px', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+                  <div style={{ padding: '2px 6px', display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
                     {arA   && <ServiceMini label="AR"   status={arA.status}   applicable={arA.applicable}   />}
                     {xbrlA && <ServiceMini label="XBRL" status={xbrlA.status} applicable={xbrlA.applicable} />}
                   </div>
