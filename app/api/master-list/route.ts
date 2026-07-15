@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { normalize } from '@/lib/company-name';
 
 const EDITABLE_FIELDS = new Set([
   'update_date', 'internal_code', 'company_name', 'roc_no', 'status',
@@ -29,29 +28,26 @@ export async function GET(req: NextRequest) {
   const { data, error } = await q.order('row_order');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Cross-check against the TeamWork-synced companies table:
+  // Cross-check against the TeamWork-synced companies table, by UEN only:
   //  - tw_fye: authoritative FYE month, to flag mismatches vs the manual fye
-  //  - in_teamwork: whether this row exists in TeamWork at all (UEN match
-  //    first, normalized-name fallback so formatting differences don't
-  //    produce false "non-TeamWork" flags)
-  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month, company_name');
+  //  - in_teamwork: this row's UEN exists in TeamWork. The master list is
+  //    maintained by hand and normally has MORE companies than TeamWork —
+  //    in_teamwork=false marks the ones TeamWork has no record of.
+  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month');
   const twFyeByUen = new Map<string, string>();
   const twUens = new Set<string>();
-  const twNames = new Set<string>();
   for (const c of companies ?? []) {
     const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
-    if (uen) {
-      twUens.add(uen);
-      if (c.fye_month) twFyeByUen.set(uen, c.fye_month);
-    }
-    if (c.company_name) twNames.add(normalize(c.company_name));
+    if (!uen) continue;
+    twUens.add(uen);
+    if (c.fye_month) twFyeByUen.set(uen, c.fye_month);
   }
   const enriched = (data ?? []).map(r => {
     const uen = r.roc_no ? String(r.roc_no).trim().toUpperCase() : null;
     return {
       ...r,
       tw_fye: uen ? (twFyeByUen.get(uen) ?? null) : null,
-      in_teamwork: (uen !== null && twUens.has(uen)) || (r.company_name ? twNames.has(normalize(r.company_name)) : false),
+      in_teamwork: uen !== null && twUens.has(uen),
     };
   });
 
