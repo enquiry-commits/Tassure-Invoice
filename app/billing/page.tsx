@@ -1507,18 +1507,18 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>BILLING DRAFTS</span>
           <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
-        {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(220px,1fr) 70px 170px 100px 190px 120px 120px 90px', padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
-          {['', 'Company', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC'].map((h, i) => (
-            i === 4
-              ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                  ND <span style={{ fontSize: 8, fontWeight: 800, background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 3, padding: '0 3px' }}>TAC</span>
-                </div>
-              : (i >= 2 && i <= 7)
-              ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', textAlign: 'center', backgroundImage: i === 3 || i === 6 ? 'linear-gradient(to right, #dbe3ee 0, #dbe3ee 1px, transparent 1px)' : 'none' }}>{h}</div>
-              : <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px' }}>{h}</div>
-          ))}
-        </div>}
         <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
+          {!isMobile && <div style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: '28px minmax(220px,1fr) 70px 170px 100px 190px 120px 120px 90px', padding: '8px 12px', background: '#f8fafc', borderLeft: '3px solid transparent', borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
+            {['', 'Company', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC'].map((h, i) => (
+              i === 4
+                ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    ND <span style={{ fontSize: 8, fontWeight: 800, background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 3, padding: '0 3px' }}>TAC</span>
+                  </div>
+                : (i >= 2 && i <= 7)
+                ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', textAlign: 'center', backgroundImage: i === 3 || i === 6 ? 'linear-gradient(to right, #dbe3ee 0, #dbe3ee 1px, transparent 1px)' : 'none' }}>{h}</div>
+                : <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px' }}>{h}</div>
+            ))}
+          </div>}
           {loading && !data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>}
           {!loading && arList.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No AR Reminder batch for {month} {year}. Generate/review it on the AR Reminder tab first.</div>}
           {!loading && arList.length > 0 && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No matching records</div>}

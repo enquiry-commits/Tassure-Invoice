@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Moved the Billing Draft header into the same scroll container as its rows so
+  scrollbar width can no longer shift header and body grid tracks apart.
 - Restored Billing Draft group dividers as non-layout background lines so the
   centered headers and contents remain on the exact same vertical axes.
 - Corrected Billing Draft optical alignment by removing offsetting cell
@@ -97,6 +99,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Fixed the remaining Billing Draft header/body mismatch by making the header a
+  sticky row inside the body scroller with the same three-pixel left geometry.
 - Restored visual separators before Renewal and TAB using background gradients;
   unlike borders, these consume no width and do not offset centered content.
 - Fixed apparent Billing Draft misalignment caused by Renewal and TAB left
