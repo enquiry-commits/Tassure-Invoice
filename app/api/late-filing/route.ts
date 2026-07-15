@@ -196,13 +196,33 @@ export async function PATCH(req: NextRequest) {
 
   const sb = createAdminClient();
 
-  // Upsert by UEN or company_name
-  const { error } = await sb
-    .from('late_filing_companies')
-    .upsert(
-      { uen, company_name, ...fields, updated_at: new Date().toISOString() },
-      { onConflict: 'uen' }
-    );
+  const updated_at = new Date().toISOString();
+  let error;
+
+  if (uen) {
+    ({ error } = await sb
+      .from('late_filing_companies')
+      .upsert({ uen, company_name, ...fields, updated_at }, { onConflict: 'uen' }));
+  } else {
+    const { data: existing, error: lookupError } = await sb
+      .from('late_filing_companies')
+      .select('id')
+      .ilike('company_name', company_name)
+      .limit(1)
+      .maybeSingle();
+    if (lookupError) return NextResponse.json({ error: lookupError.message }, { status: 500 });
+
+    if (existing) {
+      ({ error } = await sb
+        .from('late_filing_companies')
+        .update({ company_name, ...fields, updated_at })
+        .eq('id', existing.id));
+    } else {
+      ({ error } = await sb
+        .from('late_filing_companies')
+        .insert({ company_name, ...fields, updated_at }));
+    }
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

@@ -46,9 +46,10 @@ const REMARKS_OPTIONS = [
 //   habitual — a chronic late-filer by history, but its current cycle is NOT
 //              overdue yet (flagged pre-emptively)
 //   review   — manually flagged as possibly-resolved, pending human check
-type LateCategory = 'serious' | 'recent' | 'habitual' | 'review';
+type LateCategory = 'serious' | 'recent' | 'habitual' | 'review' | 'resolved';
 function categorize(row: LateRow): LateCategory {
   const r = row.remarks ?? '';
+  if (/^Resolved:/i.test(r)) return 'resolved';
   if (/^Review:/i.test(r)) return 'review';
 
   const overdueMatch = r.match(/Overdue (\d+) days/);
@@ -75,11 +76,12 @@ function fmtDate(d: string | null) {
 
 function RemarksBadge({ remarks }: { remarks: string | null }) {
   if (!remarks) return null;
+  const isResolved = /^Resolved:/i.test(remarks);
   const isObjn   = remarks.includes('CLIENT LODGED');
   const isStrike = remarks.includes('STRIKE OFF');
-  const bg     = isObjn ? '#fef3c7' : isStrike ? '#fee2e2' : '#f1f5f9';
-  const col    = isObjn ? '#92400e'  : isStrike ? '#991b1b'  : '#475569';
-  const border = isObjn ? '#fcd34d'  : isStrike ? '#fca5a5'  : '#cbd5e1';
+  const bg     = isResolved ? '#f0fdfa' : isObjn ? '#fef3c7' : isStrike ? '#fee2e2' : '#f1f5f9';
+  const col    = isResolved ? '#0f766e' : isObjn ? '#92400e'  : isStrike ? '#991b1b'  : '#475569';
+  const border = isResolved ? '#99f6e4' : isObjn ? '#fcd34d'  : isStrike ? '#fca5a5'  : '#cbd5e1';
   return (
     <span style={{ display:'inline-block', fontSize:11, fontWeight:700,
       padding:'2px 7px', borderRadius:4, background:bg, color:col, border:`1px solid ${border}` }}>
@@ -90,6 +92,7 @@ function RemarksBadge({ remarks }: { remarks: string | null }) {
 
 function rowBg(remarks: string | null) {
   if (!remarks) return '#fff';
+  if (/^Resolved:/i.test(remarks))      return '#f0fdfa';
   if (remarks.includes('CLIENT LODGED')) return '#fffbeb';
   if (remarks.includes('STRIKE OFF'))    return '#fff5f5';
   return '#fff';
@@ -163,6 +166,24 @@ export default function LateFilingPage() {
     load();
   }
 
+  async function resolve(row: LateRow) {
+    const previous = row.remarks?.trim() ?? '';
+    const remarks = /^Review:/i.test(previous)
+      ? previous.replace(/^Review:/i, 'Resolved:')
+      : `Resolved: ${previous || 'Reviewed and completed'}`;
+    const res = await fetch('/api/late-filing', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uen: row.uen, company_name: row.company_name, remarks }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      alert(json.error ?? 'Unable to mark this record as resolved.');
+      return;
+    }
+    load();
+  }
+
   function dateInput(key: keyof EditState, label: string) {
     return (
       <div>
@@ -175,7 +196,7 @@ export default function LateFilingPage() {
   }
 
   // Category counts for the breakdown cards
-  const cats = { serious: 0, recent: 0, habitual: 0, review: 0 } as Record<LateCategory, number>;
+  const cats = { serious: 0, recent: 0, habitual: 0, review: 0, resolved: 0 } as Record<LateCategory, number>;
   const catOf = new Map<string, LateCategory>();
   for (const r of rows) { const c = categorize(r); cats[c]++; catOf.set(r.id, c); }
 
@@ -212,13 +233,14 @@ export default function LateFilingPage() {
       </div>
 
       {/* Stats — total + risk breakdown (click a card to filter) */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,minmax(0,1fr))', gap:10, marginBottom:16 }}>
         {([
           { key: 'ALL',      label: 'Total Late Filers',            sub: 'all flagged companies',            count: rows.length,   color: '#1e3a5f', bg: '#f8fafc', bd: '#e2e8f0' },
           { key: 'serious',  label: 'Seriously Overdue',            sub: 'over 1 year late / strike-off',     count: cats.serious,  color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
           { key: 'recent',   label: 'Recently Overdue',             sub: 'past due within the last year',     count: cats.recent,   color: '#ea580c', bg: '#fff7ed', bd: '#fed7aa' },
           { key: 'habitual', label: 'Habitual Risk',                sub: 'chronic late-filer, not yet due',   count: cats.habitual, color: '#ca8a04', bg: '#fefce8', bd: '#fde68a' },
           { key: 'review',   label: 'Under Review',                 sub: 'possibly resolved — verify',        count: cats.review,   color: '#64748b', bg: '#f8fafc', bd: '#e2e8f0' },
+          { key: 'resolved', label: 'Resolved',                     sub: 'reviewed and retained',              count: cats.resolved, color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4' },
         ] as const).map(c => {
           const active = catFilter === c.key || (c.key === 'ALL' && catFilter === 'ALL');
           return (
@@ -414,11 +436,19 @@ export default function LateFilingPage() {
                         style={{ padding:'4px 8px', borderRadius:5, border:'1px solid #cbd5e1', background:'#fff', color:'#475569', cursor:'pointer', marginRight:4 }}>
                         <Pencil size={12} />
                       </button>
-                      <button onClick={()=>del(row)}
-                        style={{ padding:'4px 8px', borderRadius:5, border:'1px solid #fca5a5', background:'#fff', color:row.source==='manual'?'#dc2626':'#cbd5e1', cursor:'pointer' }}
-                        title={row.source==='auto'?'Auto-detected — edit remarks instead':'Remove'}>
-                        <Trash2 size={12} />
-                      </button>
+                      {catOf.get(row.id) === 'review' ? (
+                        <button onClick={()=>resolve(row)}
+                          style={{ padding:'4px 8px', borderRadius:5, border:'1px solid #5eead4', background:'#f0fdfa', color:'#0f766e', cursor:'pointer' }}
+                          title="Mark as resolved and retain this record">
+                          <Check size={12} />
+                        </button>
+                      ) : (
+                        <button onClick={()=>del(row)}
+                          style={{ padding:'4px 8px', borderRadius:5, border:'1px solid #fca5a5', background:'#fff', color:row.source==='manual'?'#dc2626':'#cbd5e1', cursor:'pointer' }}
+                          title={row.source==='auto'?'Auto-detected — edit remarks instead':'Remove'}>
+                          <Trash2 size={12} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

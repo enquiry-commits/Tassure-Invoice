@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Added a Resolved archive to Late Filing. Under Review rows now use a teal
+  check action that retains the record instead of deleting it.
 - Added independently collapsible SEC/ACC/TAX PIC columns to AR Reminder; SEC
   defaults open while ACC and TAX default collapsed.
 - Tightened AR Reminder workflow columns: UEN is 70px; Reminder through ROND
@@ -67,6 +69,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Added the Late Filing Resolved category. Resolving an Under Review row changes
+  its persisted remark from `Review:` to `Resolved:` and retains it for history;
+  other manual rows keep their existing delete action.
 - Added PIC column collapse controls to AR Reminder. Expanded columns are 100px;
   collapsed columns remain as identifiable 34px tabs. SEC defaults expanded,
   ACC and TAX default collapsed.
