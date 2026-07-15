@@ -246,24 +246,25 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
   { svc: string; effective: boolean; manual: boolean | undefined; disabled: boolean; onCycle: () => void }) {
   const c = SVC[svc];
   const isManual = manual !== undefined;
-  const st = SVC_STATE_STYLE[isManual && manual ? 'manual-on' : effective ? 'auto-on' : 'off'];
   const stateLabel = isManual ? (manual ? 'MANUAL ON' : 'MANUAL OFF') : (effective ? 'AUTO ON' : 'AUTO OFF');
+  const isOn = effective;
+  const chipColor = isOn ? c.color : '#94a3b8';
+  const chipBg = isOn ? c.bg : '#f8fafc';
+  const chipBorder = isManual ? (manual ? '#86efac' : '#cbd5e1') : (isOn ? `${c.color}40` : '#e2e8f0');
   return (
     <button onClick={onCycle} disabled={disabled}
       title={disabled ? 'No company-master match — cannot override' : isManual ? `${c.label}: manual ${manual ? 'ON' : 'OFF'} · click to restore auto` : `${c.label}: auto (${effective ? 'on' : 'off'}) · click to force ${effective ? 'OFF' : 'ON'}`}
       style={{
-        background: st.bg, color: st.color,
-        border: `1.5px ${isManual ? 'solid' : 'dashed'} ${st.bd}`,
-        borderRadius: 8, padding: '7px 9px', minWidth: 116, fontSize: 11, fontWeight: 700,
+        background: chipBg, color: chipColor,
+        border: `1px ${isManual ? 'solid' : 'dashed'} ${chipBorder}`,
+        borderRadius: 999, padding: '6px 9px', fontSize: 10.5, fontWeight: 700,
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
-        textDecoration: isManual && !effective ? 'line-through' : 'none',
-        display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4,
-        boxShadow: isManual && manual ? '0 0 0 2px rgba(22,163,74,0.08)' : 'none',
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+        boxShadow: isManual && manual ? '0 0 0 2px rgba(22,163,74,0.07)' : 'none',
       }}>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', textDecoration: isManual && !effective ? 'line-through' : 'none' }}>
-        {c.label}{isManual && <span style={{ marginLeft: 'auto', fontSize: 10 }}>✎</span>}
-      </span>
-      <span style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.5px', opacity: 0.78, textDecoration: 'none' }}>{stateLabel}</span>
+      {isManual && <span style={{ width: 5, height: 5, borderRadius: '50%', background: manual ? '#16a34a' : '#94a3b8', flexShrink: 0 }} />}
+      <span style={{ textDecoration: isManual && !effective ? 'line-through' : 'none' }}>{c.label}</span>
+      <span style={{ padding: '1px 4px', borderRadius: 999, background: 'rgba(255,255,255,0.62)', fontSize: 7.5, fontWeight: 800, letterSpacing: '0.35px', opacity: 0.78 }}>{stateLabel}</span>
     </button>
   );
 }
@@ -1695,36 +1696,36 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
           {/* Row 3: service chips — Secretary/Accounts/Tax/XBRL are clickable
               (auto → manual on → manual off); ND/Address follow TeamWork.
               Blue = auto-detected · green = manually on · grey = off. */}
-          <div style={{ background: '#fff', border: '1px solid rgba(255,255,255,0.5)', borderLeft: '4px solid #f59e0b', borderRadius: 10, padding: '10px 12px', boxShadow: '0 5px 18px rgba(15,23,42,0.18)' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 9 }}>
+          <div style={{ background: '#fff', border: '1px solid #dbe3ee', borderRadius: 10, padding: '9px 11px', boxShadow: '0 3px 12px rgba(15,23,42,0.12)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <ShieldCheck size={14} style={{ color: '#b45309' }} />
+                  <ShieldCheck size={14} style={{ color: '#1d4ed8' }} />
                   <span style={{ fontSize: 11.5, fontWeight: 800, color: '#1e3a5f' }}>Service configuration</span>
-                  <span style={{ padding: '2px 6px', borderRadius: 999, background: '#fff7ed', color: '#b45309', fontSize: 8, fontWeight: 800, letterSpacing: '0.4px' }}>CHECK BEFORE BILLING</span>
+                  <span style={{ padding: '2px 6px', borderRadius: 999, background: '#fff7ed', color: '#b45309', fontSize: 7.5, fontWeight: 800, letterSpacing: '0.35px' }}>REVIEW BEFORE BILLING</span>
                 </div>
                 <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 3 }}>Click an adjustable service to override the system result. Click again to restore automatic detection.</div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0, fontSize: 8.5, fontWeight: 700 }}>
-                <span style={{ color: '#1d4ed8' }}>┄ Auto</span>
-                <span style={{ color: '#15803d' }}>● Manual on</span>
-                <span style={{ color: '#94a3b8' }}>○ Off</span>
+              <div style={{ display: 'flex', gap: 9, flexShrink: 0, fontSize: 8, fontWeight: 700 }}>
+                <span style={{ color: '#64748b' }}>Dashed · Auto</span>
+                <span style={{ color: '#15803d' }}>● Manual</span>
+                <span style={{ color: '#94a3b8' }}>Grey · Off</span>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(150px,0.7fr) minmax(480px,2fr)', gap: 12, alignItems: 'stretch' }}>
-              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 8px' }}>
-                <div style={{ fontSize: 8, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.55px', marginBottom: 6 }}>SYSTEM SERVICES · VIEW ONLY</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,0.7fr) minmax(500px,2fr)', gap: 12, alignItems: 'center' }}>
+              <div style={{ padding: '2px 0' }}>
+                <div style={{ fontSize: 7.5, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.5px', marginBottom: 5 }}>SYSTEM MANAGED</div>
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                   {activeSvc.filter(k => !(OVERRIDABLE_SVC as readonly string[]).includes(k)).map(k => {
-                    const st = SVC_STATE_STYLE['auto-on'];
-                    return <span key={k} title={`${SVC[k].label}: automatic${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`} style={{ background: st.bg, color: st.color, border: `1.5px dashed ${st.bd}`, borderRadius: 7, padding: '5px 8px', fontSize: 10, fontWeight: 700, display: 'inline-flex', flexDirection: 'column', gap: 2 }}><span>{SVC[k].label}</span><span style={{ fontSize: 7.5, opacity: 0.7, letterSpacing: '0.4px' }}>AUTO · LOCKED</span></span>;
+                    const svc = SVC[k];
+                    return <span key={k} title={`${svc.label}: automatic${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`} style={{ background: svc.bg, color: svc.color, border: `1px dashed ${svc.color}45`, borderRadius: 999, padding: '6px 9px', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}><span>{svc.label}</span><span style={{ fontSize: 7, opacity: 0.65, letterSpacing: '0.35px' }}>LOCKED</span></span>;
                   })}
                 </div>
               </div>
 
-              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '7px 8px' }}>
-                <div style={{ fontSize: 8, fontWeight: 800, color: '#a16207', letterSpacing: '0.55px', marginBottom: 6 }}>ADJUSTABLE SERVICES · CLICK TO CHANGE</div>
+              <div style={{ borderLeft: '1px solid #e2e8f0', padding: '2px 0 2px 12px' }}>
+                <div style={{ fontSize: 7.5, fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: 5 }}>ADJUSTABLE · CLICK TO CHANGE</div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {OVERRIDABLE_SVC.map(k => (
                     <OverrideChip key={k} svc={k}

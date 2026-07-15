@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Refined the AR modal service configuration into a lighter pill-based layout
+  while preserving all state guidance and billing warnings.
 - Upgraded the AR detail modal service controls into a prominent review panel
   with automatic versus adjustable groups, state labels, legend, and guidance.
 - Refined AR Reminder services into a compact active-only summary with
@@ -75,6 +77,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Simplified the AR modal service configuration visual treatment: removed heavy
+  nested colored panels, restored service-specific pills, and reduced state
+  information to compact badges, dividers, and a subtle billing reminder.
 - Redesigned the AR detail modal's service configuration as a billing-critical
   review panel. System services are clearly locked, adjustable services expose
   AUTO/MANUAL/OFF states, and a legend plus action guidance explains the colors.
