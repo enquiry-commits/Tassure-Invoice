@@ -51,7 +51,8 @@ export interface MasterListRow {
   acra_update: string | null;
   mas: string | null;
   grade: string | null;
-  tw_fye?: string | null; // authoritative FYE month from TeamWork (for cross-check)
+  tw_fye?: string | null;      // authoritative FYE month from TeamWork (for cross-check)
+  in_teamwork?: boolean;       // whether this row exists in TeamWork at all
 }
 
 // Normalize any FYE value (month name/abbr, or dd/mm/yyyy date) to a month
@@ -291,7 +292,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [rows, setRows]       = useState<MasterListRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch]   = useState('');
-  const [catFilter, setCatFilter] = useState<'all' | 'fye_mismatch' | 'has_nd' | 'mas'>('all');
+  const [catFilter, setCatFilter] = useState<'all' | 'fye_mismatch' | 'has_nd' | 'mas' | 'non_teamwork'>('all');
   const isMobile = useIsMobile();
 
   const load = useCallback(async () => {
@@ -430,6 +431,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       case 'fye_mismatch': return isFyeMismatch(r);
       case 'has_nd':       return isSet(r.nominee_director);
       case 'mas':          return isSet(r.mas);
+      case 'non_teamwork': return r.in_teamwork === false;
       default:             return true;
     }
   };
@@ -446,6 +448,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     { key: 'fye_mismatch', label: 'FYE Mismatch',   sub: 'differs from TeamWork',     color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
     { key: 'has_nd',       label: 'Has Nominee Dir', sub: 'nominee director on file',  color: '#7c3aed', bg: '#f5f3ff', bd: '#ddd6fe' },
     { key: 'mas',          label: 'MAS Regulated',  sub: 'MAS grade assigned',        color: '#0369a1', bg: '#f0f9ff', bd: '#bae6fd' },
+    { key: 'non_teamwork', label: 'Non-TeamWork',   sub: 'not found in TeamWork',     color: '#b45309', bg: '#fffbeb', bd: '#fde68a' },
   ];
 
   return (

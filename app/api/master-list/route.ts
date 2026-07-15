@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { normalize } from '@/lib/company-name';
 
 const EDITABLE_FIELDS = new Set([
   'update_date', 'internal_code', 'company_name', 'roc_no', 'status',
@@ -28,17 +29,31 @@ export async function GET(req: NextRequest) {
   const { data, error } = await q.order('row_order');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // Attach the authoritative TeamWork FYE month (from companies, synced from
-  // TeamWork) so the client can flag any mismatch against the manual fye.
-  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month');
+  // Cross-check against the TeamWork-synced companies table:
+  //  - tw_fye: authoritative FYE month, to flag mismatches vs the manual fye
+  //  - in_teamwork: whether this row exists in TeamWork at all (UEN match
+  //    first, normalized-name fallback so formatting differences don't
+  //    produce false "non-TeamWork" flags)
+  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month, company_name');
   const twFyeByUen = new Map<string, string>();
+  const twUens = new Set<string>();
+  const twNames = new Set<string>();
   for (const c of companies ?? []) {
-    if (c.registration_no && c.fye_month) twFyeByUen.set(String(c.registration_no).trim().toUpperCase(), c.fye_month);
+    const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
+    if (uen) {
+      twUens.add(uen);
+      if (c.fye_month) twFyeByUen.set(uen, c.fye_month);
+    }
+    if (c.company_name) twNames.add(normalize(c.company_name));
   }
-  const enriched = (data ?? []).map(r => ({
-    ...r,
-    tw_fye: r.roc_no ? (twFyeByUen.get(String(r.roc_no).trim().toUpperCase()) ?? null) : null,
-  }));
+  const enriched = (data ?? []).map(r => {
+    const uen = r.roc_no ? String(r.roc_no).trim().toUpperCase() : null;
+    return {
+      ...r,
+      tw_fye: uen ? (twFyeByUen.get(uen) ?? null) : null,
+      in_teamwork: (uen !== null && twUens.has(uen)) || (r.company_name ? twNames.has(normalize(r.company_name)) : false),
+    };
+  });
 
   return NextResponse.json({ type, total: enriched.length, data: enriched });
 }
