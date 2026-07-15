@@ -55,11 +55,9 @@ function StatusBadge({ status }: { status: string | null }) {
 }
 
 function CompanyServicePill({ label, tone = 'off' }: { label: string; tone?: 'nd' | 'address' | 'off' }) {
-  const palette = tone === 'nd'
-    ? { color: '#6d4aa5', background: '#f7f3ff', border: '#ddd0f5' }
-    : tone === 'address'
-      ? { color: '#25678f', background: '#f0f7fb', border: '#cce3ef' }
-      : { color: '#94a3b8', background: '#f8fafc', border: '#e2e8f0' };
+  const palette = tone === 'off'
+    ? { color: '#94a3b8', background: '#f8fafc', border: '#e2e8f0' }
+    : { color: '#15803d', background: '#f0fdf4', border: '#bbf7d0' };
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', padding: '4px 9px', borderRadius: 999,
       background: palette.background, color: palette.color, border: `1px solid ${palette.border}`, fontSize: 10.5, fontWeight: 700,

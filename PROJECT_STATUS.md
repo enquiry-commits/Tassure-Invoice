@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Standardized populated Companies ND and Address Service pills as green active
+  states while retaining grey pills for missing or inactive services.
 - Converted Companies Nominee Director and Address Service cells into semantic
   service pills for both active and inactive states on desktop and mobile.
 - Replaced Companies status badges with consistent semantic status pills using
@@ -119,8 +121,10 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
-- Added reusable Companies service pills: ND names use muted plum, active
-  address service uses slate blue, and unavailable services use quiet grey.
+- Updated Companies service semantics so any populated ND or active Address
+  value is green; empty ND and unused Address values remain grey.
+- Added reusable Companies service pills: populated ND names and active address
+  services use green, while unavailable services use quiet grey.
   Desktop and mobile now share the same visual language.
 - Standardized Companies Active, Striking Off, Terminated, and Pending Sync
   states as semantic pills; removed emoji/gradient-style status indicators.
