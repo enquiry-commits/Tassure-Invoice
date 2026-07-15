@@ -225,6 +225,9 @@ one focused Git commit.
 - Added a bounded vertical scroll area to the AR Reminder table so its sticky
   header remains visible; preserved the existing horizontal scrollbar and
   sticky identity columns.
+- Refined AR Reminder desktop column sizing: row number is 30px, company is
+  200px, UEN is 80px, and the ten workflow columns are 100px each. Updated the
+  sticky identity-column offsets to match.
 - Verification: `npm run build`.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.

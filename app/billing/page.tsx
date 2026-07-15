@@ -1889,19 +1889,19 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
       <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
         <thead>
           <tr>
-            <TH w={36} center stickyLeft={0}>#</TH>
-            <TH w={240} stickyLeft={36}>Company Name</TH>
-            <TH w={70} stickyLeft={276} lastSticky>UEN</TH>
-            <TH w={90}>Reminder</TH>
-            <TH w={90}>Report Ready</TH>
-            <TH w={90}>AGM</TH>
-            <TH w={90}>To Client</TH>
-            <TH w={90}>Signed</TH>
-            <TH w={90}>AR</TH>
-            <TH w={90}>XBRL</TH>
-            <TH w={90}>TW Update</TH>
-            <TH w={90}>DPO</TH>
-            <TH w={90}>ROND RONS</TH>
+            <TH w={30} center stickyLeft={0}>#</TH>
+            <TH w={200} stickyLeft={30}>Company Name</TH>
+            <TH w={80} stickyLeft={230} lastSticky>UEN</TH>
+            <TH w={100}>Reminder</TH>
+            <TH w={100}>Report Ready</TH>
+            <TH w={100}>AGM</TH>
+            <TH w={100}>To Client</TH>
+            <TH w={100}>Signed</TH>
+            <TH w={100}>AR</TH>
+            <TH w={100}>XBRL</TH>
+            <TH w={100}>TW Update</TH>
+            <TH w={100}>DPO</TH>
+            <TH w={100}>ROND RONS</TH>
             {picHeader('sec', 'SEC PIC')}
             {picHeader('acc', 'ACC PIC')}
             {picHeader('tax', 'TAX PIC')}
@@ -1924,11 +1924,11 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
             return (
               <tr key={r.id} style={{ background: rowBg }}>
                 <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
-                <TD stickyLeft={36}>
+                <TD stickyLeft={30}>
                   <div style={{ fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{r.entity_name}</div>
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
                 </TD>
-                <TD stickyLeft={276} lastSticky><span style={{ fontSize: 10, color: '#64748b' }}>{r.uen || '—'}</span></TD>
+                <TD stickyLeft={230} lastSticky><span style={{ fontSize: 10, color: '#64748b' }}>{r.uen || '—'}</span></TD>
                 <TD><EditField id={r.id} field="reminder_note"   value={r.reminder_note}   onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="prepared_date"   value={r.prepared_date}   onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="date_of_agm"     value={r.date_of_agm}     onSave={onSave} placeholder="—" isDate /></TD>
