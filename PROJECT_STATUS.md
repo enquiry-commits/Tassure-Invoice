@@ -24,6 +24,7 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Made the AR Reminder table header stay fixed while table rows scroll.
 - Fixed editable-column type checking for `in_teamwork`.
 - Tightened the Non-TeamWork filter to match by UEN.
 - Added the Master List Non-TeamWork filter card.
@@ -60,7 +61,10 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Added a bounded vertical scroll area to the AR Reminder table so its sticky
+  header remains visible; preserved the existing horizontal scrollbar and
+  sticky identity columns.
+- Verification: `npm run build`.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.
 - Confirmed the repository was clean before creating the handoff files.
-

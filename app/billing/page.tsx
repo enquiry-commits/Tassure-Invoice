@@ -1806,7 +1806,7 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
 
   return (
     <>
-    <div ref={outerRef} style={{ overflowX: 'hidden', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
+    <div ref={outerRef} style={{ overflowX: 'hidden', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
       <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
         <thead>
           <tr>
