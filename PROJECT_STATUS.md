@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Tightened AR Reminder workflow columns: UEN is 70px; Reminder through ROND
+  RONS are 90px; renamed SW Update to TW Update.
 - Reduced the Active and FYE columns to 60px on Active Client only; shared
   Master List pages retain their default 220px and 180px widths.
 - Made the AR Reminder table header stay fixed while table rows scroll.
@@ -63,6 +65,8 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Updated AR Reminder table column widths and renamed the SW Update header to
+  TW Update; underlying `software_update` data behavior is unchanged.
 - Added per-page Master List column-width overrides and set Active Client's
   `status` column to 60px without changing the shared default.
 - Set Active Client's `fye` column to 60px without changing the shared 180px

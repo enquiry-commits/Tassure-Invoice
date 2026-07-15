@@ -1812,17 +1812,17 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
           <tr>
             <TH w={36} center stickyLeft={0}>#</TH>
             <TH w={240} stickyLeft={36}>Company Name</TH>
-            <TH w={110} stickyLeft={276} lastSticky>UEN</TH>
-            <TH w={120}>Reminder</TH>
-            <TH w={120}>Report Ready</TH>
-            <TH w={120}>AGM</TH>
-            <TH w={120}>To Client</TH>
-            <TH w={120}>Signed</TH>
-            <TH w={120}>AR</TH>
-            <TH w={110}>XBRL</TH>
-            <TH w={120}>SW Update</TH>
-            <TH w={110}>DPO</TH>
-            <TH w={130}>ROND RONS</TH>
+            <TH w={70} stickyLeft={276} lastSticky>UEN</TH>
+            <TH w={90}>Reminder</TH>
+            <TH w={90}>Report Ready</TH>
+            <TH w={90}>AGM</TH>
+            <TH w={90}>To Client</TH>
+            <TH w={90}>Signed</TH>
+            <TH w={90}>AR</TH>
+            <TH w={90}>XBRL</TH>
+            <TH w={90}>TW Update</TH>
+            <TH w={90}>DPO</TH>
+            <TH w={90}>ROND RONS</TH>
             <TH w={100}>SEC PIC</TH>
             <TH w={100}>ACC PIC</TH>
             <TH w={100}>TAX PIC</TH>
