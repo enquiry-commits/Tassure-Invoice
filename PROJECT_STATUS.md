@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Changed shared Master List category cards from fixed-width flex items to an
+  auto-fitting full-width grid across all Master List pages.
 - Combined narrow Active Client FYE mismatches into one editable two-source
   pill showing manual FYE and TeamWork month without vertical text wrapping.
 - Reorganized the Dashboard as a spacious bento layout with distinct Command,
@@ -111,6 +113,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Made all five shared Master List category cards divide the full available
+  page width like AR Reminder, while retaining responsive wrapping on narrow
+  screens. This applies to every page using `MasterListTable`.
 - Added a compact integrated FYE mismatch component for columns at or below
   80px: manual `FYE MMM` and warning `TW MMM` now share one clickable pill;
   wider Master List pages retain their existing comparison layout.
