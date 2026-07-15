@@ -128,10 +128,11 @@ export async function GET(req: NextRequest) {
       .eq('tw_status', 'Active'),
     supabase
       .from('nd_appointments')
-      .select('company_name, nd_id')
+      .select('company_name, nd_id, appointment_date')
       .eq('sub_role', 'Nominee Director')
       .not('appointment_date', 'is', null)
-      .is('cessation_date', null),
+      .is('cessation_date', null)
+      .order('appointment_date', { ascending: false }),
     supabase
       .from('nominee_directors')
       .select('id, name'),
@@ -179,9 +180,13 @@ export async function GET(req: NextRequest) {
   const ndActiveSet = new Set((activeNDs ?? []).map(a => normalize(a.company_name)));
   const ndNameById = new Map((nomineeDirectors ?? []).map(person => [person.id, person.name as string]));
   const activeNdNameByCompany = new Map<string, string>();
+  // TeamWork is authoritative for the TAC PIC. Appointments are newest first,
+  // so retain the first active nominee per company even if older duplicate
+  // appointment records still exist. QB history supplies pricing only.
   for (const appointment of activeNDs ?? []) {
     const name = ndNameById.get(appointment.nd_id);
-    if (name) activeNdNameByCompany.set(normalize(appointment.company_name), name);
+    const companyKey = normalize(appointment.company_name);
+    if (name && !activeNdNameByCompany.has(companyKey)) activeNdNameByCompany.set(companyKey, name);
   }
 
   // Index our own generated-invoice records per company (authoritative record

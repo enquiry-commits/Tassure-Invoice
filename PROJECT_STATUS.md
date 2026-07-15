@@ -240,6 +240,9 @@ one focused Git commit.
 - Consolidated TAC ND billing into one draft line. The named Nominee Director
   fee and its matching deferred ND fee are summed from the same prior invoice,
   while the generated line keeps the named ND item and one-year period text.
+- Made the latest active TeamWork nominee appointment authoritative for TAC PIC
+  and service shorthand. QuickBooks history is used for fee totals and periods,
+  but never overrides the current TeamWork-appointed director.
 - Verification: `npm run build`.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.
