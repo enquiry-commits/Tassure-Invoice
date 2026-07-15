@@ -247,6 +247,9 @@ one focused Git commit.
   draft headers. Both numbers are fetched from their QB realms, revalidated
   together before creation, checked for manual-override duplicates, and safely
   refreshed with a conflict warning if another QB invoice advances a sequence.
+- Added post-creation QuickBooks invoice PDF saving. Successful TAB/TAC results
+  can fetch their official QB PDFs and save one or both directly into a folder
+  selected by the user, with a normal browser-download fallback.
 - Verification: `npm run build`.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.

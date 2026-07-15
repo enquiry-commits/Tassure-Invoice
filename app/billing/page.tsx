@@ -894,6 +894,11 @@ type EditableLine = {
 };
 
 type InvoiceNumberState = { TAB: string; TAC: string };
+type GeneratedPdf = { company: 'TAB' | 'TAC'; invoiceNo: string; qbId: string };
+
+type WritableFileHandle = { createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }> };
+type WritableDirectoryHandle = { getFileHandle: (name: string, options: { create: boolean }) => Promise<WritableFileHandle> };
+type FolderPickerWindow = Window & { showDirectoryPicker?: () => Promise<WritableDirectoryHandle> };
 
 // Textarea that grows to fit its content — the full line description is always
 // visible, no inner scrollbar.
@@ -918,6 +923,9 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const [numberLoading, setNumberLoading] = useState(true);
   const [numberWarning, setNumberWarning] = useState('');
   const [numberRefreshKey, setNumberRefreshKey] = useState(0);
+  const [generatedPdfs, setGeneratedPdfs] = useState<GeneratedPdf[]>([]);
+  const [savingPdfs, setSavingPdfs] = useState(false);
+  const [pdfResult, setPdfResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // Build the editable draft. Each line defaults to how THIS company was last
   // invoiced for that service (same QB item + description wording + rate, from
@@ -1132,6 +1140,12 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       if (json.errors?.tab) errs.push(`TAB: ${json.errors.tab}`);
       if (json.errors?.tac) errs.push(`TAC: ${json.errors.tac}`);
       if (json.success) {
+        const pdfs: GeneratedPdf[] = [
+          ...(json.tab?.qbId && json.tab?.invoiceNo ? [{ company: 'TAB' as const, qbId: String(json.tab.qbId), invoiceNo: String(json.tab.invoiceNo) }] : []),
+          ...(json.tac?.qbId && json.tac?.invoiceNo ? [{ company: 'TAC' as const, qbId: String(json.tac.qbId), invoiceNo: String(json.tac.invoiceNo) }] : []),
+        ];
+        setGeneratedPdfs(pdfs);
+        setPdfResult(null);
         setDraftResult({ ok: true, msg: `Created in QuickBooks — ${parts.join(' · ')}${errs.length ? `  ⚠ ${errs.join('; ')}` : ''} · review & send from QB` });
       } else {
         setDraftResult({ ok: false, msg: errs.join('; ') || json.error || 'QB create failed' });
@@ -1139,6 +1153,58 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     } catch (e: unknown) {
       setDraftResult({ ok: false, msg: e instanceof Error ? e.message : 'Request failed' });
     } finally { setDrafting(false); }
+  };
+
+  const saveInvoicePdfs = async () => {
+    if (!generatedPdfs.length) return;
+    setSavingPdfs(true);
+    setPdfResult(null);
+    try {
+      const picker = (window as FolderPickerWindow).showDirectoryPicker;
+      const directory = picker ? await picker() : null;
+      const safeCompany = c.companyName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim();
+
+      for (const invoice of generatedPdfs) {
+        const response = await fetch(`/api/quickbooks/invoice-pdf?company=${invoice.company}&id=${encodeURIComponent(invoice.qbId)}`);
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.error ?? `Unable to download ${invoice.company} invoice ${invoice.invoiceNo}`);
+        }
+        const blob = await response.blob();
+        const fileName = `${invoice.invoiceNo} - ${safeCompany} - ${invoice.company}.pdf`;
+
+        if (directory) {
+          const fileHandle = await directory.getFileHandle(fileName, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+        } else {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+        }
+      }
+
+      setPdfResult({
+        ok: true,
+        msg: directory
+          ? `${generatedPdfs.length} invoice PDF${generatedPdfs.length > 1 ? 's' : ''} saved to the selected folder.`
+          : `${generatedPdfs.length} invoice PDF${generatedPdfs.length > 1 ? 's' : ''} downloaded.`,
+      });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        setPdfResult({ ok: false, msg: 'Folder selection cancelled. No file was saved.' });
+      } else {
+        setPdfResult({ ok: false, msg: error instanceof Error ? error.message : 'Unable to save invoice PDF.' });
+      }
+    } finally {
+      setSavingPdfs(false);
+    }
   };
 
   const inputStyle: React.CSSProperties = { border: '1px solid #cbd5e1', borderRadius: 5, padding: '6px 6px', fontSize: 12, outline: 'none', background: '#fff' };
@@ -1370,6 +1436,24 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           border: `1px solid ${draftResult.ok ? '#bbf7d0' : '#fecaca'}` }}>
           {draftResult.ok ? '✓ ' : '✕ '}{draftResult.msg}
         </div>
+      )}
+
+      {generatedPdfs.length > 0 && (
+        <div style={{ marginTop: 12, padding: '12px 13px', borderRadius: 9, border: '1px solid #bfdbfe', background: '#f8fbff', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1e3a5f' }}>Invoice PDF ready</div>
+            <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
+              {generatedPdfs.map(pdf => `${pdf.company} #${pdf.invoiceNo}`).join(' · ')} · choose a local folder and save directly
+            </div>
+          </div>
+          <button type="button" onClick={saveInvoicePdfs} disabled={savingPdfs} style={{ border: '1px solid #93c5fd', borderRadius: 7, background: savingPdfs ? '#dbeafe' : '#eff6ff', color: '#1d4ed8', padding: '8px 12px', fontSize: 11.5, fontWeight: 800, cursor: savingPdfs ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <FileText size={13} /> {savingPdfs ? 'Saving PDF…' : `Choose Folder & Save PDF${generatedPdfs.length > 1 ? 's' : ''}`}
+          </button>
+        </div>
+      )}
+
+      {pdfResult && (
+        <div style={{ marginTop: 8, fontSize: 11, fontWeight: 650, color: pdfResult.ok ? '#15803d' : '#b45309' }}>{pdfResult.msg}</div>
       )}
 
       <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, marginTop: 24, fontSize: 10, color: '#94a3b8' }}>
