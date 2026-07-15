@@ -24,6 +24,8 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Standardized Late Filing FYE, Late FY, and Next AGM Due values as semantic
+  status pills, including an integrated overdue state.
 - Redesigned the AR modal Nominee Director area as an explicit interactive card
   with director-detail disclosure and clearly explained workflow flag controls.
 - Restyled AR due dates as semantic status pills matching the Services visual
@@ -83,6 +85,9 @@ one focused Git commit.
 
 ### 2026-07-15 - Codex
 
+- Added a reusable Late Filing `SemanticStatusPill` and applied it to FYE, Late
+  FY, and Next AGM Due. Overdue text is now integrated into the red due-date
+  pill; future due dates use green.
 - Made the Nominee Director service card visibly interactive even without a
   service period. Added a View/Hide director affordance, TeamWork source label,
   and descriptive Strike-Off Pending / ND Assignment Pending state cards.

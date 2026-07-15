@@ -74,6 +74,16 @@ function fmtDate(d: string | null) {
   return fmtDateStr(d);
 }
 
+function SemanticStatusPill({ label, background, color, border }: { label: string; background: string; color: string; border: string }) {
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:999,
+      background, color, border:`1px solid ${border}`, fontSize:10.5, fontWeight:700, whiteSpace:'nowrap' }}>
+      <span style={{ width:5, height:5, borderRadius:'50%', background:color, flexShrink:0 }} />
+      {label}
+    </span>
+  );
+}
+
 function RemarksBadge({ remarks }: { remarks: string | null }) {
   if (!remarks) return null;
   const isResolved = /^Resolved:/i.test(remarks);
@@ -402,18 +412,16 @@ export default function LateFilingPage() {
                     </td>
                     <td style={{ padding:'10px 12px', color:'#475569', fontFamily:'monospace', fontSize:12 }}>{row.uen||'—'}</td>
                     <td style={{ padding:'10px 12px' }}>
-                      <span style={{ display:'inline-block', padding:'2px 8px', borderRadius:4, background:'#eff6ff', color:'#1d4ed8', fontWeight:700, fontSize:12 }}>
-                        {row.financial_year_end||'—'}
-                      </span>
+                      {row.financial_year_end
+                        ? <SemanticStatusPill label={row.financial_year_end} background="#eff6ff" color="#1d4ed8" border="#bfdbfe" />
+                        : <span style={{ color:'#94a3b8' }}>—</span>}
                     </td>
                     <td style={{ padding:'10px 12px' }}>
                       {(() => {
                         const yr = lateYear(row);
-                        return yr ? (
-                          <span style={{ display:'inline-flex', alignItems:'center', gap:4, color:'#dc2626', fontWeight:700, fontSize:12 }}>
-                            <AlertTriangle size={12} />FY {yr}
-                          </span>
-                        ) : '—';
+                        return yr
+                          ? <SemanticStatusPill label={`FY ${yr}`} background="#fef2f2" color="#dc2626" border="#fecaca" />
+                          : '—';
                       })()}
                     </td>
                     <td style={{ padding:'10px 12px', color:'#475569' }}>{fmtDate(row.last_annual_return_date)}</td>
@@ -422,12 +430,12 @@ export default function LateFilingPage() {
                     <td style={{ padding:'10px 12px' }}>
                       {row.next_agm_due_date ? (() => {
                         const isPast = new Date(row.next_agm_due_date) < new Date();
-                        return (
-                          <span style={{ color:isPast?'#dc2626':'#16a34a', fontWeight:isPast?700:400 }}>
-                            {fmtDate(row.next_agm_due_date)}
-                            {isPast && <span style={{ marginLeft:4, fontSize:10, background:'#fee2e2', color:'#dc2626', padding:'1px 5px', borderRadius:3 }}>OVERDUE</span>}
-                          </span>
-                        );
+                        return <SemanticStatusPill
+                          label={`${fmtDateStr(row.next_agm_due_date)}${isPast ? ' · OVERDUE' : ''}`}
+                          background={isPast ? '#fef2f2' : '#f0fdf4'}
+                          color={isPast ? '#dc2626' : '#16a34a'}
+                          border={isPast ? '#fecaca' : '#bbf7d0'}
+                        />;
                       })() : <span style={{ color:'#94a3b8' }}>NA</span>}
                     </td>
                     <td style={{ padding:'10px 12px' }}><RemarksBadge remarks={row.remarks} /></td>
