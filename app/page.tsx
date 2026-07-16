@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   Building2, UserCheck, MapPin, CalendarClock, AlertTriangle, RefreshCw,
   BarChart3, Users, ArrowRight, ShieldCheck, Layers3, Activity, Clock3,
-  BriefcaseBusiness, Sparkles, FileSpreadsheet, Download,
+  BriefcaseBusiness, Sparkles, FileSpreadsheet, Download, ChevronDown,
 } from 'lucide-react';
 import QBConnectButton from '@/components/QBConnectButton';
 import { Donut, VBars, HBars } from '@/components/dashboard/Charts';
@@ -35,6 +35,46 @@ interface AutomationHealth {
     invoiceRequestsNeedingReconciliation: number;
     openIntegrationExceptions: number;
   };
+  exceptionGroups: AutomationExceptionGroup[];
+}
+
+interface AutomationExceptionInvoice {
+  qb_company: string;
+  qb_invoice_id: string;
+  invoice_no: string;
+  customer_name: string;
+  txn_date: string;
+  total_amt: number;
+  balance: number;
+  status: string;
+}
+
+interface AutomationExceptionItem {
+  id: number;
+  source: string;
+  type: string;
+  key: string;
+  name: string | null;
+  details: Record<string, unknown>;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  company: {
+    internalId: string;
+    name: string;
+    uen: string | null;
+    companyType: string | null;
+    teamworkStatus: string | null;
+    active: boolean | null;
+    email: string | null;
+  } | null;
+  invoices: AutomationExceptionInvoice[];
+}
+
+interface AutomationExceptionGroup {
+  source: string;
+  type: string;
+  count: number;
+  items: AutomationExceptionItem[];
 }
 
 const DASHBOARD_COLORS = {
@@ -125,39 +165,255 @@ const AUTOMATION_LABELS: Record<string, string> = {
   late_filing: 'Late Filing',
 };
 
-function AutomationHealthBar({ health }: { health: AutomationHealth }) {
-  const attention = !health.ok;
+const EXCEPTION_SOURCE_LABELS: Record<string, string> = {
+  teamwork_companies: 'TeamWork Companies',
+  teamwork_nd: 'TeamWork ND',
+  quickbooks: 'QuickBooks',
+  ar_generate: 'AR Generate',
+  ar_workflow: 'AR Workflow',
+  late_filing: 'Late Filing',
+};
+
+function exceptionTitle(group: AutomationExceptionGroup) {
+  if (group.type === 'unknown_pic_id') return 'PIC identity needs mapping';
+  const duplicate = group.type.match(/^duplicate_doc_number_(TAB|TAC)_(\d{4})$/);
+  if (duplicate) return `Duplicate invoice numbers · ${duplicate[1]} ${duplicate[2]}`;
+  if (group.type.startsWith('oauth_refresh_')) return 'QuickBooks OAuth connection';
+  return group.type.replaceAll('_', ' ').replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function formatSgtTime(value: string | null | undefined) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-GB', {
+    timeZone: 'Asia/Singapore',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function formatMoney(value: number | null | undefined) {
+  return new Intl.NumberFormat('en-SG', {
+    style: 'currency',
+    currency: 'SGD',
+    minimumFractionDigits: 2,
+  }).format(Number(value ?? 0));
+}
+
+function ExceptionStatus({ value }: { value: string | null | undefined }) {
+  const normalized = String(value ?? 'Unknown');
+  const paid = normalized.toLowerCase() === 'paid';
+  const open = normalized.toLowerCase() === 'open';
   return (
-    <section style={{ marginBottom: 18, border: `1px solid ${attention ? '#f2d6b0' : '#cde8df'}`, background: attention ? '#fffaf3' : '#f4fbf8', borderRadius: 13, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 190 }}>
-        <span style={{ width: 31, height: 31, borderRadius: 9, display: 'grid', placeItems: 'center', color: attention ? '#b45309' : '#0f766e', background: attention ? '#ffedd5' : '#dff5ec' }}>
-          {attention ? <AlertTriangle size={15} /> : <ShieldCheck size={15} />}
-        </span>
-        <span>
-          <strong style={{ display: 'block', fontSize: 11.5, color: DASHBOARD_COLORS.ink }}>Automation health</strong>
-          <span style={{ display: 'block', fontSize: 9.5, color: '#718096', marginTop: 1 }}>{attention ? `${health.attentionCount} item(s) need attention` : 'All scheduled data flows are healthy'}</span>
-        </span>
+    <span style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '3px 7px', fontSize: 9, fontWeight: 800, color: paid ? '#047857' : open ? '#b45309' : '#64748b', background: paid ? '#ecfdf5' : open ? '#fff7ed' : '#f1f5f9', border: `1px solid ${paid ? '#a7f3d0' : open ? '#fed7aa' : '#e2e8f0'}` }}>
+      {normalized}
+    </span>
+  );
+}
+
+function UnknownPicDetails({ items }: { items: AutomationExceptionItem[] }) {
+  const byPicId = new Map<string, AutomationExceptionItem[]>();
+  for (const item of items) {
+    const picId = String(item.details.teamwork_pic_id ?? 'Unknown');
+    byPicId.set(picId, [...(byPicId.get(picId) ?? []), item]);
+  }
+  const picGroups = [...byPicId.entries()].sort((left, right) => right[1].length - left[1].length || left[0].localeCompare(right[0]));
+
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <div style={{ padding: '10px 12px', borderRadius: 9, background: '#fff8ed', border: '1px solid #f6dfbd', color: '#8a551a', fontSize: 10.5, lineHeight: 1.55 }}>
+        TeamWork returned a numeric person-in-charge ID that has no verified staff-name mapping. The system intentionally keeps the visible PIC blank instead of displaying the number.
       </div>
-      <div style={{ display: 'flex', gap: 7, flex: 1, flexWrap: 'wrap' }}>
-        {health.jobs.map(job => {
-          const ok = job.status !== 'attention';
-          return (
-            <span key={job.source} title={job.error ?? undefined} style={{ padding: '5px 8px', borderRadius: 999, border: `1px solid ${ok ? '#cde8df' : '#f2d6b0'}`, background: '#fff', color: ok ? '#176b5b' : '#a6530a', fontSize: 9.5, fontWeight: 750 }}>
-              <span style={{ marginRight: 5 }}>{ok ? '●' : '!'}</span>{AUTOMATION_LABELS[job.source] ?? job.source}
-              <span style={{ color: '#94a3b8', fontWeight: 600, marginLeft: 5 }}>{job.successAgeHours == null ? 'never' : `${job.successAgeHours}h`}</span>
-            </span>
-          );
-        })}
+      {picGroups.map(([picId, picItems]) => (
+        <details key={picId} style={{ background: '#fff', border: '1px solid #e5eaf0', borderRadius: 10, overflow: 'hidden' }}>
+          <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 9, color: DASHBOARD_COLORS.ink, fontSize: 10.5, fontWeight: 800 }}>
+            <ChevronDown size={13} style={{ color: '#94a3b8' }} />
+            TeamWork PIC ID {picId}
+            <span style={{ marginLeft: 'auto', color: '#a6530a', background: '#fff7ed', border: '1px solid #fed7aa', padding: '2px 7px', borderRadius: 999, fontSize: 9 }}>{picItems.length} companies</span>
+          </summary>
+          <div style={{ overflowX: 'auto', borderTop: '1px solid #edf1f5' }}>
+            <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse', fontSize: 10 }}>
+              <thead>
+                <tr style={{ background: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
+                  {['#', 'Company', 'UEN', 'TeamWork Company ID', 'Status', 'Company Type', 'Email', 'Last detected'].map(label => <th key={label} style={{ padding: '8px 10px', fontWeight: 800, borderBottom: '1px solid #e8edf2' }}>{label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {picItems.map((item, index) => (
+                  <tr key={item.id} style={{ borderBottom: '1px solid #eef2f6', color: '#475569' }}>
+                    <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{index + 1}</td>
+                    <td style={{ padding: '8px 10px', color: DASHBOARD_COLORS.ink, fontWeight: 750 }}>{item.company?.name ?? item.name ?? '—'}</td>
+                    <td style={{ padding: '8px 10px' }}>{item.company?.uen ?? '—'}</td>
+                    <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{item.company?.internalId ?? item.key}</td>
+                    <td style={{ padding: '8px 10px' }}><ExceptionStatus value={item.company?.teamworkStatus ?? (item.company?.active ? 'Active' : 'Inactive')} /></td>
+                    <td style={{ padding: '8px 10px' }}>{item.company?.companyType ?? '—'}</td>
+                    <td style={{ padding: '8px 10px' }}>{item.company?.email ?? '—'}</td>
+                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{formatSgtTime(item.lastSeenAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      ))}
+    </div>
+  );
+}
+
+function DuplicateInvoiceDetails({ items }: { items: AutomationExceptionItem[] }) {
+  return (
+    <div style={{ display: 'grid', gap: 9 }}>
+      <div style={{ padding: '10px 12px', borderRadius: 9, background: '#f6f8fb', border: '1px solid #e1e7ee', color: '#536273', fontSize: 10.5, lineHeight: 1.55 }}>
+        QuickBooks contains the same displayed invoice number on more than one immutable invoice record. Nothing is deleted automatically because each QB Invoice ID is a real accounting record.
       </div>
-      {(health.anomalies.numericPics > 0 || health.anomalies.invoiceRequestsNeedingReconciliation > 0 || health.anomalies.openIntegrationExceptions > 0) && (
-        <div style={{ fontSize: 9.5, color: '#9a5a13', fontWeight: 700 }}>
-          {health.anomalies.numericPics > 0 && `${health.anomalies.numericPics} numeric PIC`}
-          {health.anomalies.numericPics > 0 && health.anomalies.invoiceRequestsNeedingReconciliation > 0 && ' · '}
-          {health.anomalies.invoiceRequestsNeedingReconciliation > 0 && `${health.anomalies.invoiceRequestsNeedingReconciliation} invoice reconciliation`}
-          {(health.anomalies.numericPics > 0 || health.anomalies.invoiceRequestsNeedingReconciliation > 0) && health.anomalies.openIntegrationExceptions > 0 && ' · '}
-          {health.anomalies.openIntegrationExceptions > 0 && `${health.anomalies.openIntegrationExceptions} integration exceptions`}
+      {items.map(item => (
+        <div key={item.id} style={{ background: '#fff', border: '1px solid #e1e7ee', borderRadius: 11, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#f8fafc', borderBottom: '1px solid #e8edf2' }}>
+            <span style={{ fontSize: 10, color: '#64748b' }}>Invoice Number</span>
+            <strong style={{ color: DASHBOARD_COLORS.ink, fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{item.name ?? item.key}</strong>
+            <span style={{ marginLeft: 'auto', color: '#9a5a13', fontSize: 9.5, fontWeight: 750 }}>{item.invoices.length} QB records · detected {formatSgtTime(item.lastSeenAt)}</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', minWidth: 850, borderCollapse: 'collapse', fontSize: 10 }}>
+              <thead>
+                <tr style={{ color: '#64748b', textAlign: 'left' }}>
+                  {['QB Company', 'QB Invoice ID', 'Customer', 'Invoice Date', 'Status', 'Total', 'Balance'].map(label => <th key={label} style={{ padding: '8px 10px', borderBottom: '1px solid #edf1f5', fontWeight: 800 }}>{label}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {item.invoices.map(invoice => (
+                  <tr key={`${invoice.qb_company}-${invoice.qb_invoice_id}`} style={{ borderBottom: '1px solid #f0f3f6', color: '#475569' }}>
+                    <td style={{ padding: '8px 10px', fontWeight: 800 }}>{invoice.qb_company}</td>
+                    <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{invoice.qb_invoice_id}</td>
+                    <td style={{ padding: '8px 10px', color: invoice.customer_name.includes('DO NOT USE') ? '#b45309' : DASHBOARD_COLORS.ink, fontWeight: 700 }}>{invoice.customer_name}</td>
+                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{invoice.txn_date}</td>
+                    <td style={{ padding: '8px 10px' }}><ExceptionStatus value={invoice.status} /></td>
+                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{formatMoney(invoice.total_amt)}</td>
+                    <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{formatMoney(invoice.balance)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function GenericExceptionDetails({ items }: { items: AutomationExceptionItem[] }) {
+  return (
+    <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #e5eaf0', borderRadius: 10 }}>
+      <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', fontSize: 10 }}>
+        <thead>
+          <tr style={{ background: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
+            {['Entity', 'Key', 'Details', 'First detected', 'Last detected'].map(label => <th key={label} style={{ padding: '8px 10px', borderBottom: '1px solid #e8edf2', fontWeight: 800 }}>{label}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {items.map(item => (
+            <tr key={item.id} style={{ borderBottom: '1px solid #eef2f6', color: '#475569' }}>
+              <td style={{ padding: '8px 10px', color: DASHBOARD_COLORS.ink, fontWeight: 750 }}>{item.name ?? '—'}</td>
+              <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{item.key}</td>
+              <td style={{ padding: '8px 10px', maxWidth: 480, wordBreak: 'break-word' }}>{Object.entries(item.details).map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`).join(' · ') || '—'}</td>
+              <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{formatSgtTime(item.firstSeenAt)}</td>
+              <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{formatSgtTime(item.lastSeenAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function AutomationExceptionPanel({ health }: { health: AutomationHealth }) {
+  const failedJobs = health.jobs.filter(job => job.status === 'attention');
+  return (
+    <div style={{ borderTop: '1px solid #f0dcc0', padding: '14px 2px 14px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: DASHBOARD_COLORS.ink }}>Integration exception register</div>
+          <div style={{ fontSize: 10, color: '#718096', marginTop: 3 }}>Every open case is listed below with its source record and the information needed for review.</div>
+        </div>
+        <span style={{ borderRadius: 999, padding: '5px 9px', background: '#fff4e5', border: '1px solid #f4d3a5', color: '#9a5a13', fontSize: 9.5, fontWeight: 800 }}>{health.anomalies.openIntegrationExceptions} open cases</span>
+      </div>
+
+      {failedJobs.length > 0 && (
+        <div style={{ display: 'grid', gap: 7, marginBottom: 10 }}>
+          {failedJobs.map(job => (
+            <div key={job.source} style={{ padding: '9px 11px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 9, color: '#9f1239', fontSize: 10 }}>
+              <strong>{AUTOMATION_LABELS[job.source] ?? job.source}</strong> · {job.error ?? 'No successful run within the expected 30-hour window.'}
+            </div>
+          ))}
         </div>
       )}
+
+      <div style={{ display: 'grid', gap: 9, maxHeight: 620, overflowY: 'auto', paddingRight: 3 }}>
+        {health.exceptionGroups.length === 0 ? (
+          <div style={{ padding: 18, textAlign: 'center', color: '#64748b', background: '#fff', border: '1px solid #e5eaf0', borderRadius: 10, fontSize: 10.5 }}>No open integration exceptions.</div>
+        ) : health.exceptionGroups.map(group => (
+          <details key={`${group.source}-${group.type}`} style={{ background: '#fffdf9', border: '1px solid #eddcc5', borderRadius: 11, overflow: 'hidden' }}>
+            <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '11px 13px', display: 'flex', alignItems: 'center', gap: 9 }}>
+              <ChevronDown size={14} style={{ color: '#a87335' }} />
+              <span style={{ color: '#8b5e2d', fontSize: 9, fontWeight: 850, textTransform: 'uppercase', letterSpacing: '.6px' }}>{EXCEPTION_SOURCE_LABELS[group.source] ?? group.source}</span>
+              <strong style={{ color: DASHBOARD_COLORS.ink, fontSize: 10.5 }}>{exceptionTitle(group)}</strong>
+              <span style={{ marginLeft: 'auto', borderRadius: 999, padding: '3px 7px', background: '#fff4e5', border: '1px solid #f4d3a5', color: '#9a5a13', fontSize: 9, fontWeight: 800 }}>{group.count}</span>
+            </summary>
+            <div style={{ padding: '10px 11px 11px', borderTop: '1px solid #f2e5d4' }}>
+              {group.type === 'unknown_pic_id'
+                ? <UnknownPicDetails items={group.items} />
+                : group.type.startsWith('duplicate_doc_number_')
+                  ? <DuplicateInvoiceDetails items={group.items} />
+                  : <GenericExceptionDetails items={group.items} />}
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AutomationHealthBar({ health }: { health: AutomationHealth }) {
+  const [expanded, setExpanded] = useState(false);
+  const attention = !health.ok;
+  return (
+    <section style={{ marginBottom: 18, border: `1px solid ${attention ? '#f2d6b0' : '#cde8df'}`, background: attention ? '#fffaf3' : '#f4fbf8', borderRadius: 13, padding: '0 14px', overflow: 'hidden' }}>
+      <button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded} style={{ width: '100%', border: 0, background: 'transparent', padding: '12px 0', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', cursor: 'pointer', textAlign: 'left' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 190 }}>
+          <span style={{ width: 31, height: 31, borderRadius: 9, display: 'grid', placeItems: 'center', color: attention ? '#b45309' : '#0f766e', background: attention ? '#ffedd5' : '#dff5ec' }}>
+            {attention ? <AlertTriangle size={15} /> : <ShieldCheck size={15} />}
+          </span>
+          <span>
+            <strong style={{ display: 'block', fontSize: 11.5, color: DASHBOARD_COLORS.ink }}>Automation health</strong>
+            <span style={{ display: 'block', fontSize: 9.5, color: '#718096', marginTop: 1 }}>{attention ? `${health.attentionCount} item(s) need attention` : 'All scheduled data flows are healthy'}</span>
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 7, flex: 1, flexWrap: 'wrap' }}>
+          {health.jobs.map(job => {
+            const ok = job.status !== 'attention';
+            return (
+              <span key={job.source} title={job.error ?? undefined} style={{ padding: '5px 8px', borderRadius: 999, border: `1px solid ${ok ? '#cde8df' : '#f2d6b0'}`, background: '#fff', color: ok ? '#176b5b' : '#a6530a', fontSize: 9.5, fontWeight: 750 }}>
+                <span style={{ marginRight: 5 }}>{ok ? '●' : '!'}</span>{AUTOMATION_LABELS[job.source] ?? job.source}
+                <span style={{ color: '#94a3b8', fontWeight: 600, marginLeft: 5 }}>{job.successAgeHours == null ? 'never' : `${job.successAgeHours}h`}</span>
+              </span>
+            );
+          })}
+        </div>
+        {(health.anomalies.numericPics > 0 || health.anomalies.invoiceRequestsNeedingReconciliation > 0 || health.anomalies.openIntegrationExceptions > 0) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 9.5, color: '#9a5a13', fontWeight: 750 }}>
+            {health.anomalies.numericPics > 0 && `${health.anomalies.numericPics} numeric PIC`}
+            {health.anomalies.invoiceRequestsNeedingReconciliation > 0 && `${health.anomalies.invoiceRequestsNeedingReconciliation} invoice reconciliation`}
+            {health.anomalies.openIntegrationExceptions > 0 && `${health.anomalies.openIntegrationExceptions} integration exceptions`}
+            <ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .16s ease' }} />
+          </div>
+        )}
+      </button>
+      {expanded && <AutomationExceptionPanel health={health} />}
     </section>
   );
 }
