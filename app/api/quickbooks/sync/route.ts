@@ -151,9 +151,24 @@ async function syncYear(year: string, company: QbCompany, runId: string) {
       company
     );
     if (!page) {
+      const { data: oauthFailure } = await createAdminClient()
+        .from('automation_exceptions')
+        .select('details')
+        .eq('source', 'quickbooks')
+        .eq('exception_type', `oauth_refresh_${company}`)
+        .eq('entity_key', company)
+        .eq('status', 'open')
+        .limit(1)
+        .maybeSingle();
+      const oauthCode = String((oauthFailure?.details as Record<string, unknown> | null)?.code ?? '');
+      const oauthError = ['invalid_client', 'missing_client_credentials'].includes(oauthCode)
+        ? `QuickBooks ${company} OAuth configuration error (${oauthCode}). Update the Production Client ID/Secret, redeploy, then reconnect.`
+        : oauthCode
+          ? `QuickBooks ${company} connection error (${oauthCode}). Reconnect this company.`
+          : `QuickBooks ${company} not connected or token expired`;
       return { error: realmSeen
         ? `QuickBooks ${company} page failed at STARTPOSITION ${start}; no database writes were made for ${year}.`
-        : `QuickBooks ${company} not connected or token expired` };
+        : oauthError };
     }
     realmSeen = true;
     allRows = allRows.concat(page.rows);

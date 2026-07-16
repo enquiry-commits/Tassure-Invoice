@@ -1,4 +1,5 @@
 import { createAdminClient } from './supabase';
+import { replaceAutomationExceptions } from './automation-sync';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -13,6 +14,53 @@ interface TokenRow {
   expires_at: string;
   refresh_expires_at: string;
   company_label: QbCompany;
+}
+
+type OAuthFailure = { code: string; message: string; httpStatus?: number };
+
+function parseOAuthFailure(raw: string, httpStatus?: number): OAuthFailure {
+  try {
+    const parsed = JSON.parse(raw) as { error?: unknown; error_description?: unknown };
+    return {
+      code: String(parsed.error ?? `http_${httpStatus ?? 'error'}`),
+      message: String(parsed.error_description ?? parsed.error ?? 'QuickBooks OAuth request failed.').slice(0, 500),
+      httpStatus,
+    };
+  } catch {
+    return { code: `http_${httpStatus ?? 'error'}`, message: 'QuickBooks OAuth request failed.', httpStatus };
+  }
+}
+
+export async function recordQuickBooksOAuthFailure(company: QbCompany, failure: OAuthFailure) {
+  await replaceAutomationExceptions('quickbooks', `oauth_refresh_${company}`, [{
+    key: company,
+    name: `${company} QuickBooks connection`,
+    details: {
+      code: failure.code,
+      message: failure.message,
+      http_status: failure.httpStatus ?? null,
+    },
+  }]);
+}
+
+export async function clearQuickBooksOAuthFailure(company: QbCompany) {
+  await replaceAutomationExceptions('quickbooks', `oauth_refresh_${company}`, []);
+}
+
+async function safelyRecordOAuthFailure(company: QbCompany, failure: OAuthFailure) {
+  try {
+    await recordQuickBooksOAuthFailure(company, failure);
+  } catch (error) {
+    console.error(`Unable to record QuickBooks ${company} OAuth failure:`, error instanceof Error ? error.message : error);
+  }
+}
+
+async function safelyClearOAuthFailure(company: QbCompany) {
+  try {
+    await clearQuickBooksOAuthFailure(company);
+  } catch (error) {
+    console.error(`Unable to clear QuickBooks ${company} OAuth failure:`, error instanceof Error ? error.message : error);
+  }
 }
 
 // Get stored tokens for a specific QB company, auto-refresh if expired.
@@ -43,7 +91,13 @@ export async function getValidToken(company: QbCompany = 'TAB'): Promise<TokenRo
   const tokenExpired = new Date(data.expires_at) < now;
   const refreshExpired = new Date(data.refresh_expires_at) < now;
 
-  if (refreshExpired) return null; // must re-auth
+  if (refreshExpired) {
+    await safelyRecordOAuthFailure(company, {
+      code: 'refresh_token_expired',
+      message: 'The QuickBooks refresh token expired. Reconnect this company.',
+    });
+    return null;
+  }
 
   if (!tokenExpired) return data as TokenRow;
 
@@ -79,26 +133,58 @@ export async function getValidToken(company: QbCompany = 'TAB'): Promise<TokenRo
     const refreshSource = (latest.data ?? data) as TokenRow;
 
     // Refresh the access token
-    const clientId     = process.env.QB_CLIENT_ID!;
-    const clientSecret = process.env.QB_CLIENT_SECRET!;
+    const clientId     = process.env.QB_CLIENT_ID;
+    const clientSecret = process.env.QB_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      await safelyRecordOAuthFailure(company, {
+        code: 'missing_client_credentials',
+        message: 'QuickBooks Production Client ID or Client Secret is not configured.',
+      });
+      return null;
+    }
     const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
-    const res = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
-      method: 'POST',
-      headers: {
-        Authorization:  `Basic ${basic}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Accept:         'application/json',
-      },
-      body: new URLSearchParams({
-        grant_type:    'refresh_token',
-        refresh_token: refreshSource.refresh_token,
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
+        method: 'POST',
+        headers: {
+          Authorization:  `Basic ${basic}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept:         'application/json',
+        },
+        body: new URLSearchParams({
+          grant_type:    'refresh_token',
+          refresh_token: refreshSource.refresh_token,
+        }),
+      });
+    } catch {
+      await safelyRecordOAuthFailure(company, {
+        code: 'oauth_network_error',
+        message: 'QuickBooks OAuth could not be reached. The existing connection was preserved.',
+      });
+      return null;
+    }
 
-    if (!res.ok) return null;
+    const responseText = await res.text();
+    if (!res.ok) {
+      await safelyRecordOAuthFailure(company, parseOAuthFailure(responseText, res.status));
+      return null;
+    }
 
-    const tokens = await res.json();
+    const tokens = JSON.parse(responseText) as {
+      access_token?: string;
+      refresh_token?: string;
+      expires_in?: number;
+      x_refresh_token_expires_in?: number;
+    };
+    if (!tokens.access_token || !tokens.refresh_token || !tokens.expires_in || !tokens.x_refresh_token_expires_in) {
+      await safelyRecordOAuthFailure(company, {
+        code: 'invalid_token_response',
+        message: 'QuickBooks returned an incomplete token response. The existing connection was preserved.',
+      });
+      return null;
+    }
     const refreshedAt = new Date();
     const updated = {
       access_token:       tokens.access_token,
@@ -115,11 +201,21 @@ export async function getValidToken(company: QbCompany = 'TAB'): Promise<TokenRo
       .eq('refresh_token', refreshSource.refresh_token)
       .select('*')
       .maybeSingle();
-    if (saved.error) return null;
-    if (saved.data) return saved.data as TokenRow;
+    if (saved.error) {
+      await safelyRecordOAuthFailure(company, {
+        code: 'token_save_failed',
+        message: 'The refreshed QuickBooks connection could not be saved.',
+      });
+      return null;
+    }
+    if (saved.data) {
+      await safelyClearOAuthFailure(company);
+      return saved.data as TokenRow;
+    }
 
     const current = await supabase.from('quickbooks_tokens').select('*')
       .eq('company_label', company).limit(1).maybeSingle();
+    if (current.data && new Date(current.data.expires_at) > new Date()) await safelyClearOAuthFailure(company);
     return current.data as TokenRow | null;
   } finally {
     await supabase.from('quickbooks_token_refresh_locks').delete().eq('company_label', company);

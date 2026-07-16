@@ -6,8 +6,19 @@ import crypto from 'crypto';
 // Intuit echoes back unchanged to the callback.
 export async function GET(req: NextRequest) {
   const company = req.nextUrl.searchParams.get('company') === 'TAC' ? 'TAC' : 'TAB';
-  const clientId    = process.env.QB_CLIENT_ID!;
-  const redirectUri = process.env.QB_REDIRECT_URI!;
+  const clientId    = process.env.QB_CLIENT_ID;
+  const redirectUri = process.env.QB_REDIRECT_URI;
+  if (!clientId || !redirectUri) {
+    return NextResponse.redirect(new URL('/?qb_error=oauth_not_configured', req.url));
+  }
+  try {
+    const callback = new URL(redirectUri);
+    if (process.env.NODE_ENV === 'production' && callback.protocol !== 'https:') {
+      return NextResponse.redirect(new URL('/?qb_error=invalid_redirect_uri', req.url));
+    }
+  } catch {
+    return NextResponse.redirect(new URL('/?qb_error=invalid_redirect_uri', req.url));
+  }
   const state = `${company}:${crypto.randomBytes(16).toString('hex')}`;
 
   const params = new URLSearchParams({

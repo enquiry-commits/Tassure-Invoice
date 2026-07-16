@@ -4,12 +4,24 @@ import { createAdminClient } from '@/lib/supabase';
 export async function GET(req: NextRequest) {
   const company = req.nextUrl.searchParams.get('company') === 'TAC' ? 'TAC' : 'TAB';
   const supabase = createAdminClient();
-  let { data } = await supabase
+  const exceptionType = `oauth_refresh_${company}`;
+  const [{ data: initialData }, { data: oauthException }] = await Promise.all([
+    supabase
     .from('quickbooks_tokens')
     .select('realm_id, expires_at, refresh_expires_at, updated_at, company_label')
     .eq('company_label', company)
     .limit(1)
-    .maybeSingle();
+    .maybeSingle(),
+    supabase.from('automation_exceptions')
+      .select('details, last_seen_at')
+      .eq('source', 'quickbooks')
+      .eq('exception_type', exceptionType)
+      .eq('entity_key', company)
+      .eq('status', 'open')
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  let data = initialData;
 
   // Same pre-migration fallback as lib/quickbooks.ts getValidToken(). Must use
   // select('*') here, NOT an explicit column list naming company_label — if
@@ -40,5 +52,10 @@ export async function GET(req: NextRequest) {
     refreshExpiresAt: data.refresh_expires_at ?? null,
     refreshExpiresInDays,
     lastConnected:  data.updated_at,
+    authError: oauthException ? {
+      code: String((oauthException.details as Record<string, unknown> | null)?.code ?? 'oauth_error'),
+      message: String((oauthException.details as Record<string, unknown> | null)?.message ?? 'QuickBooks OAuth needs attention.'),
+      lastSeenAt: oauthException.last_seen_at,
+    } : null,
   });
 }

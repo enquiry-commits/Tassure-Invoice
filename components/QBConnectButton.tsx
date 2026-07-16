@@ -9,6 +9,7 @@ interface QBStatus {
   lastConnected?: string | null;
   refreshExpired?: boolean;
   refreshExpiresInDays?: number | null;
+  authError?: { code: string; message: string; lastSeenAt?: string | null } | null;
 }
 
 function CompanyBadge({ label, status, onConnect }: { label: string; status: QBStatus | null; onConnect: () => void }) {
@@ -24,6 +25,17 @@ function CompanyBadge({ label, status, onConnect }: { label: string; status: QBS
   if (status.connected) {
     const when = status.lastConnected ? fmtDate(status.lastConnected) : null;
     const days = status.refreshExpiresInDays;
+    if (status.authError) {
+      const configurationError = ['invalid_client', 'missing_client_credentials'].includes(status.authError.code);
+      return (
+        <button onClick={onConnect} title={status.authError.message}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-white hover:opacity-90 transition-opacity"
+          style={{ backgroundColor: '#dc2626' }}>
+          <AlertTriangle size={12} />
+          {label} {configurationError ? 'OAuth setup error' : 'connection error'}
+        </button>
+      );
+    }
     if (status.refreshExpired || (typeof days === 'number' && days <= 0)) {
       return (
         <button onClick={onConnect}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { clearQuickBooksOAuthFailure, recordQuickBooksOAuthFailure, type QbCompany } from '@/lib/quickbooks';
 import crypto from 'crypto';
 
 export async function GET(req: NextRequest) {
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   // Which company this connection is for — encoded as "TAB:<random>" /
   // "TAC:<random>" when the auth flow was started (see auth/route.ts).
-  const company = state.startsWith('TAC:') ? 'TAC' : 'TAB';
+  const company: QbCompany = state.startsWith('TAC:') ? 'TAC' : 'TAB';
 
   if (error || !code || !realmId) {
     return NextResponse.redirect(
@@ -30,9 +31,16 @@ export async function GET(req: NextRequest) {
   }
 
   // Exchange code for tokens
-  const clientId     = process.env.QB_CLIENT_ID!;
-  const clientSecret = process.env.QB_CLIENT_SECRET!;
-  const redirectUri  = process.env.QB_REDIRECT_URI!;
+  const clientId     = process.env.QB_CLIENT_ID;
+  const clientSecret = process.env.QB_CLIENT_SECRET;
+  const redirectUri  = process.env.QB_REDIRECT_URI;
+  if (!clientId || !clientSecret || !redirectUri) {
+    await recordQuickBooksOAuthFailure(company, {
+      code: 'missing_client_credentials',
+      message: 'QuickBooks Production OAuth credentials are not configured.',
+    }).catch(() => undefined);
+    return NextResponse.redirect(new URL('/?qb_error=oauth_not_configured', req.url));
+  }
 
   const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
   const tokenRes = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
@@ -50,6 +58,15 @@ export async function GET(req: NextRequest) {
   });
 
   if (!tokenRes.ok) {
+    const raw = await tokenRes.text();
+    let code = `http_${tokenRes.status}`;
+    let message = 'QuickBooks token exchange failed.';
+    try {
+      const parsed = JSON.parse(raw) as { error?: unknown; error_description?: unknown };
+      code = String(parsed.error ?? code);
+      message = String(parsed.error_description ?? parsed.error ?? message).slice(0, 500);
+    } catch { /* Intuit did not return JSON. */ }
+    await recordQuickBooksOAuthFailure(company, { code, message, httpStatus: tokenRes.status }).catch(() => undefined);
     return NextResponse.redirect(new URL(`/?qb_error=token_exchange_failed`, req.url));
   }
 
@@ -74,6 +91,8 @@ export async function GET(req: NextRequest) {
     console.error('QB token save error:', saveErr.message);
     return NextResponse.redirect(new URL(`/?qb_error=token_save_failed`, req.url));
   }
+
+  await clearQuickBooksOAuthFailure(company).catch(() => undefined);
 
   const response = NextResponse.redirect(new URL(`/?qb_connected=${company}`, req.url));
   response.cookies.delete('qb_oauth_state');
