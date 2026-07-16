@@ -6,13 +6,14 @@ import {
   RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
   AlertTriangle, Clock, CheckCircle2, FileText, Calendar,
   ShieldCheck, MapPin, UserCheck, BarChart3, BookOpen, DollarSign,
-  Plus, Check, X, Trash2,
+  Plus, Check, X, Trash2, History, RotateCcw,
 } from 'lucide-react';
 import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
-import { fmtDate, fmtMonth, toDisplayDate } from '@/lib/date';
+import { fmtDate, fmtMonth, toDisplayDate, toIsoDateValue, todaySGT } from '@/lib/date';
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -208,6 +209,60 @@ interface ARRecord {
   services: Services; stages: Stages; stagesDone: number; invoices: Invoice[];
   servicesAuto?: Services; servicesManual?: Partial<Record<string, boolean>>;
   servicePeriods: ServicePeriods | null;
+  updated_at?: string | null; updated_by_email?: string | null; updated_by_name?: string | null; version?: number;
+}
+
+function recomputeArRecord(record: ARRecord): ARRecord {
+  const stages = {
+    accountsReady: !!record.prepared_date,
+    sentToClient: !!record.sent_date,
+    docsReceived: !!record.received_date,
+    agmHeld: !!record.agm_held_date,
+    arFiled: !!record.filling_date,
+  };
+  const today = new Date(`${todaySGT()}T00:00:00`).getTime();
+  const due = record.due_date ? new Date(`${String(record.due_date).slice(0, 10)}T00:00:00`).getTime() : NaN;
+  return {
+    ...record,
+    stages,
+    stagesDone: Object.values(stages).filter(Boolean).length,
+    daysUntilDue: Number.isFinite(due) ? Math.ceil((due - today) / 86400000) : null,
+  };
+}
+
+type FieldConflict = {
+  currentValue: string | null;
+  updatedByName: string | null;
+  updatedByEmail: string | null;
+  updatedAt: string | null;
+};
+
+type AuditEntry = {
+  id: number;
+  field_name: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_by_name: string | null;
+  changed_by_email: string | null;
+  changed_at: string;
+  version: number;
+};
+
+const AR_FIELD_LABELS: Record<string, string> = {
+  reminder_note: 'Reminder', prepared_date: 'Report Ready', date_of_agm: 'AGM',
+  agm_held_date: 'AGM Held', sent_date: 'To Client', received_date: 'Signed',
+  filling_date: 'AR Filed', ar_status: 'Invoice', xbrl: 'XBRL',
+  software_update: 'TW Update', dpo: 'DPO', ond_ron: 'ROND RONS',
+  pic: 'SEC PIC', acc_pic: 'ACC PIC', tax_pic: 'TAX PIC', remarks: 'Remarks',
+  accounts_status: 'Email Sent', dormant: 'Strike Off', agm_documents: 'ND Pending',
+};
+const AR_DATABASE_DATE_FIELDS = new Set([
+  'prepared_date', 'date_of_agm', 'agm_held_date', 'sent_date', 'received_date', 'filling_date',
+]);
+
+function historyValue(value: string | null) {
+  if (!value) return 'Empty';
+  return toDisplayDate(value) ?? value;
 }
 
 const SVC: Record<string, { label: string; bg: string; color: string }> = {
@@ -283,55 +338,98 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
 
 const EditField = memo(function EditField({ id, field, value, onSave, placeholder = '—', isDate = false }:
   { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; placeholder?: string; isDate?: boolean }) {
+  const inputValue = useCallback((raw: string | null) => isDate ? (toDisplayDate(raw) ?? raw ?? '') : (raw ?? ''), [isDate]);
   const [editing, setEditing] = useState(false);
-  const [val, setVal] = useState(value ?? '');
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [val, setVal] = useState(inputValue(value));
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
+  const [message, setMessage] = useState('');
+  const [conflict, setConflict] = useState<FieldConflict | null>(null);
   const pendingRef = useRef<{ next: string; prev: string }>({ next: '', prev: '' });
+  const committingRef = useRef(false);
+  const requestRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dateRef  = useRef<HTMLInputElement>(null);
-  useEffect(() => { setVal(value ?? ''); }, [value]);
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   const persist = useCallback(async (next: string, prev: string) => {
     pendingRef.current = { next, prev };
     setStatus('saving');
+    setMessage('');
+    setConflict(null);
+    const requestId = ++requestRef.current;
     try {
-      const res = await fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null }) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const res = await fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null, previousValue: prev || null }) });
+      const json = await res.json().catch(() => ({}));
+      if (requestId !== requestRef.current) return;
+      if (res.status === 409) {
+        const current = String(json.currentValue ?? '');
+        onSave(id, field, current);
+        setVal(inputValue(current));
+        setConflict({ currentValue: json.currentValue ?? null, updatedByName: json.updatedByName ?? null, updatedByEmail: json.updatedByEmail ?? null, updatedAt: json.updatedAt ?? null });
+        setStatus('conflict');
+        return;
+      }
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const saved = String(json.value ?? '');
+      onSave(id, field, saved);
+      setVal(inputValue(saved));
       setStatus('saved');
-      setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
-    } catch { setStatus('error'); }
-  }, [id, field]);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Save failed');
+      setStatus('error');
+    } finally {
+      committingRef.current = false;
+    }
+  }, [id, field, inputValue, onSave]);
 
   const save = useCallback(() => {
+    if (committingRef.current) return;
     setEditing(false);
-    const next = val.trim();
-    const prev = (value ?? '').trim();
-    if (next === prev) return;
-    onSave(id, field, next);      // optimistic local update first
-    persist(next, prev);
-  }, [val, value, id, field, onSave, persist]);
+    const typed = val.trim();
+    const next = isDate && typed ? toIsoDateValue(typed) : typed;
+    const prev = isDate && value && AR_DATABASE_DATE_FIELDS.has(field)
+      ? (toIsoDateValue(value) ?? value.trim())
+      : (value ?? '').trim();
+    if (isDate && typed && !next) {
+      setMessage('Use a valid date, e.g. 03 Apr 2026');
+      setStatus('error');
+      return;
+    }
+    if ((next ?? '') === prev) return;
+    committingRef.current = true;
+    onSave(id, field, next ?? '');
+    void persist(next ?? '', prev);
+  }, [val, value, id, field, isDate, onSave, persist]);
 
-  const retry  = useCallback(() => persist(pendingRef.current.next, pendingRef.current.prev), [persist]);
-  const revert = useCallback(() => { const { prev } = pendingRef.current; onSave(id, field, prev); setVal(prev); setStatus('idle'); }, [id, field, onSave]);
+  const retry = useCallback(() => { committingRef.current = true; void persist(pendingRef.current.next, pendingRef.current.prev); }, [persist]);
+  const acceptLatest = useCallback(() => {
+    const latest = String(conflict?.currentValue ?? pendingRef.current.prev ?? '');
+    onSave(id, field, latest); setVal(inputValue(latest)); setConflict(null); setStatus('idle');
+  }, [conflict, field, id, inputValue, onSave]);
+  const overwriteLatest = useCallback(() => {
+    committingRef.current = true;
+    void persist(pendingRef.current.next, String(conflict?.currentValue ?? ''));
+  }, [conflict, persist]);
+  const revert = useCallback(() => { const { prev } = pendingRef.current; onSave(id, field, prev); setVal(inputValue(prev)); setStatus('idle'); }, [id, field, inputValue, onSave]);
 
   const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) return;
-    const d = new Date(e.target.value + 'T00:00:00');
-    setVal(fmtDate(d));
+    setVal(fmtDate(e.target.value));
     e.target.value = '';
     setTimeout(() => inputRef.current?.focus(), 0);
   };
-
-  const formatDisplay = (v: string) => toDisplayDate(v) ?? v;
 
   if (editing) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
       <input ref={inputRef} type="text" value={val}
         onChange={e => setVal(e.target.value)}
         onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) save(); }}
-        onKeyDown={e => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setVal(value ?? ''); setEditing(false); } }}
-        placeholder={isDate ? 'e.g. 05 Jul 2026' : ''}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') { setVal(inputValue(value)); setEditing(false); } }}
+        placeholder={isDate ? 'e.g. 03 Apr 2026' : ''}
         style={{ flex: 1, border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
       />
       {isDate && (
@@ -348,9 +446,21 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     </div>
   );
 
+  if (status === 'conflict') return (
+    <div title={`Updated by ${conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}`} style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 5, padding: '3px 5px', minHeight: 28 }}>
+      <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        Changed by {conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}
+      </div>
+      <div style={{ display: 'flex', gap: 5, marginTop: 2 }}>
+        <button onClick={acceptLatest} style={{ border: 0, background: 'transparent', padding: 0, color: '#64748b', fontSize: 9, cursor: 'pointer' }}>Use latest</button>
+        <button onClick={overwriteLatest} style={{ border: 0, background: 'transparent', padding: 0, color: '#c2410c', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>Keep mine</button>
+      </div>
+    </div>
+  );
+
   if (status === 'error') return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, padding: '1px 4px', minHeight: 24 }}>
-      <span title="Save failed" style={{ fontSize: 12, color: '#b91c1c', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val || '—'}</span>
+      <span title={message || 'Save failed'} style={{ fontSize: 11, color: '#b91c1c', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{message || val || 'Save failed'}</span>
       <button onClick={retry}  title="Retry save"   style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}><RefreshCw size={11} /></button>
       <button onClick={revert} title="Revert change" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={11} /></button>
     </div>
@@ -361,12 +471,12 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
     : status === 'saved' ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
   return (
-    <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
+    <div onClick={() => { setVal(inputValue(value)); setEditing(true); }} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
       {display
         ? isDate
-          ? <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>{formatDisplay(display)}</span>
+          ? <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>{toDisplayDate(display) ?? display}</span>
           : <span style={{ fontSize: 12, color: '#374151' }}>{display}</span>
         : isDate
           ? <span style={{ display:'flex', alignItems:'center', gap:3, color:'#c7d2fe', fontSize:11 }}><Calendar size={11} /><span style={{ color:'#d1d5db' }}>{placeholder}</span></span>
@@ -415,13 +525,17 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
   const [open,   setOpen]   = useState(false);
   const [custom, setCustom] = useState(false);
   const [val,    setVal]    = useState(value ?? '');
-  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
+  const [message, setMessage] = useState('');
+  const [conflict, setConflict] = useState<FieldConflict | null>(null);
   const pendingRef = useRef<{ next: string; prev: string }>({ next: '', prev: '' });
+  const requestRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dateRef  = useRef<HTMLInputElement>(null);
   const wrapRef  = useRef<HTMLDivElement>(null);
-  useEffect(() => { setVal(value ?? ''); }, [value]);
   useEffect(() => { if (custom) inputRef.current?.focus(); }, [custom]);
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -433,19 +547,45 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
   const persist = useCallback(async (next: string, prev: string) => {
     pendingRef.current = { next, prev };
     setStatus('saving');
+    setMessage('');
+    setConflict(null);
+    const requestId = ++requestRef.current;
     try {
-      const res = await fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null }) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const res = await fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null, previousValue: prev || null }) });
+      const json = await res.json().catch(() => ({}));
+      if (requestId !== requestRef.current) return;
+      if (res.status === 409) {
+        const current = String(json.currentValue ?? '');
+        onSave(id, field, current);
+        setVal(current);
+        setConflict({ currentValue: json.currentValue ?? null, updatedByName: json.updatedByName ?? null, updatedByEmail: json.updatedByEmail ?? null, updatedAt: json.updatedAt ?? null });
+        setStatus('conflict');
+        return;
+      }
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const saved = String(json.value ?? '');
+      onSave(id, field, saved);
+      setVal(saved);
       setStatus('saved');
-      setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
-    } catch { setStatus('error'); }
-  }, [id, field]);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Save failed');
+      setStatus('error');
+    }
+  }, [id, field, onSave]);
   const retry  = useCallback(() => persist(pendingRef.current.next, pendingRef.current.prev), [persist]);
   const revert = useCallback(() => { const { prev } = pendingRef.current; onSave(id, field, prev); setVal(prev); setStatus('idle'); }, [id, field, onSave]);
+  const acceptLatest = useCallback(() => {
+    const latest = String(conflict?.currentValue ?? pendingRef.current.prev ?? '');
+    onSave(id, field, latest); setVal(latest); setConflict(null); setStatus('idle');
+  }, [conflict, field, id, onSave]);
+  const overwriteLatest = useCallback(() => persist(pendingRef.current.next, String(conflict?.currentValue ?? '')), [conflict, persist]);
 
   const commit = useCallback((next: string) => {
     setCustom(false); setOpen(false);
-    const trimmed = next.trim();
+    const typed = next.trim();
+    const trimmed = toIsoDateValue(typed) ?? typed;
     const prev = (value ?? '').trim();
     if (trimmed === prev) return;
     onSave(id, field, trimmed);   // optimistic
@@ -454,22 +594,31 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
 
   const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) return;
-    const d = new Date(e.target.value + 'T00:00:00');
-    setVal(fmtDate(d));
+    setVal(fmtDate(e.target.value));
     e.target.value = '';
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
   const display = (value ?? '').trim();
   const chip = display ? options.find(o => o.label === display && !o.type) : null;
-  const isDateValue = /^\d{4}-\d{2}-\d{2}$/.test(display);
+  const isDateValue = !!toDisplayDate(display);
   const statusDot = status === 'saving'
     ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
     : status === 'saved' ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
 
+  if (status === 'conflict') return (
+    <div title={`Updated by ${conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}`} style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 5, padding: '3px 5px', minHeight: 28 }}>
+      <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Changed by {conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}</div>
+      <div style={{ display: 'flex', gap: 5, marginTop: 2 }}>
+        <button onClick={acceptLatest} style={{ border: 0, background: 'transparent', padding: 0, color: '#64748b', fontSize: 9, cursor: 'pointer' }}>Use latest</button>
+        <button onClick={overwriteLatest} style={{ border: 0, background: 'transparent', padding: 0, color: '#c2410c', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>Keep mine</button>
+      </div>
+    </div>
+  );
+
   if (status === 'error') return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, padding: '1px 4px', minHeight: 24 }}>
-      <span title="Save failed" style={{ fontSize: 12, color: '#b91c1c', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val || '—'}</span>
+      <span title={message || 'Save failed'} style={{ fontSize: 11, color: '#b91c1c', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{message || val || 'Save failed'}</span>
       <button onClick={retry}  title="Retry save"   style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}><RefreshCw size={11} /></button>
       <button onClick={revert} title="Revert change" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={11} /></button>
     </div>
@@ -483,7 +632,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
             onChange={e => setVal(e.target.value)}
             onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(val); }}
             onKeyDown={e => { if (e.key === 'Enter') commit(val); if (e.key === 'Escape') { setVal(value ?? ''); setCustom(false); } }}
-            placeholder="e.g. 05 Jul 2026"
+            placeholder="e.g. 03 Apr 2026"
             style={{ flex: 1, border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
           />
           <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -814,8 +963,13 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
             ndStrikeOff={r.dormant === 'STRIKE_OFF'}
             ndPending={r.agm_documents === 'ND_PENDING'}
             onNdFlag={(field, value) => {
+              const previousValue = String((r as unknown as Record<string, string | null>)[field] ?? '');
               onSave(r.id, field, value); // optimistic update — UI responds immediately
-              fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, field, value: value || null }) });
+              fetch('/api/ar-reminder', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, field, value: value || null, previousValue: previousValue || null }) })
+                .then(async response => {
+                  const json = await response.json().catch(() => ({}));
+                  if (!response.ok) onSave(r.id, field, String(json.currentValue ?? previousValue));
+                });
             }}
           />
 
@@ -833,7 +987,7 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
                 {r.invoices.slice(0, 5).map((inv, i) => (
                   <div key={inv.invoice_no} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: i < r.invoices.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
                     <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#475569' }}>{inv.invoice_no}</span>
-                    <span style={{ fontSize: 10, color: '#64748b' }}>{inv.txn_date}</span>
+                    <span style={{ fontSize: 10, color: '#64748b' }}>{fmtDate(inv.txn_date)}</span>
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#1e3a5f' }}>S${(inv.total_amt ?? 0).toLocaleString()}</span>
                     <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 3, padding: '1px 5px',
                       background: inv.status === 'Paid' ? '#dcfce7' : inv.status === 'Overdue' ? '#fef2f2' : '#fef9c3',
@@ -1078,8 +1232,10 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
 
   useEffect(() => {
     const controller = new AbortController();
-    setNumberLoading(true);
-    setNumberWarning('');
+    const startTimer = setTimeout(() => {
+      setNumberLoading(true);
+      setNumberWarning('');
+    }, 0);
     fetch(`/api/quickbooks/next-invoice-numbers?txnDate=${encodeURIComponent(txnDate)}`, { signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error('Unable to read QuickBooks invoice numbers');
@@ -1100,7 +1256,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         if (error instanceof Error && error.name !== 'AbortError') setNumberWarning(error.message);
       })
       .finally(() => { if (!controller.signal.aborted) setNumberLoading(false); });
-    return () => controller.abort();
+    return () => { clearTimeout(startTimer); controller.abort(); };
   }, [txnDate, hasTac, numberRefreshKey]);
 
   const included = lines.filter(l => l.include);
@@ -1559,12 +1715,18 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     finally { setLoading(false); }
   }, [withinDays]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = setTimeout(() => void load(), 0);
+    return () => clearTimeout(timer);
+  }, [load]);
 
   // The master list for a cycle is the AR Reminder (TeamWork-driven, staff-
   // reviewed). Re-fetch it whenever the FYE month/year changes.
   useEffect(() => {
-    if (!month || !year) { setArList([]); return; }
+    if (!month || !year) {
+      const timer = setTimeout(() => setArList([]), 0);
+      return () => clearTimeout(timer);
+    }
     let cancelled = false;
     fetch(`/api/ar-reminder?month=${encodeURIComponent(month)}&year=${year}`)
       .then(r => r.json())
@@ -1841,6 +2003,46 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
 
 // ── AR Detail Modal ───────────────────────────────────────────────────────────
 function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARRecord; onSave: (id: number, field: string, val: string) => void; onClose: () => void; onDelete: (id: number) => void; onServices?: (id: number, services: Services, manual: Partial<Record<string, boolean>>) => void }) {
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyRows, setHistoryRows] = useState<AuditEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [restoringId, setRestoringId] = useState<number | null>(null);
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const response = await fetch(`/api/ar-reminder/history?id=${r.id}`);
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error ?? `HTTP ${response.status}`);
+      setHistoryRows(json.history ?? []);
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : 'Could not load history');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [r.id]);
+
+  const restoreHistory = useCallback(async (entry: AuditEntry) => {
+    setRestoringId(entry.id);
+    setHistoryError('');
+    try {
+      const response = await fetch('/api/ar-reminder/history', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ auditId: entry.id }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.message ?? json.error ?? `HTTP ${response.status}`);
+      onSave(r.id, json.field, String(json.value ?? ''));
+      await loadHistory();
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : 'Restore failed');
+    } finally {
+      setRestoringId(null);
+    }
+  }, [loadHistory, onSave, r.id]);
+
   // Toggle a service override: default is AUTO; one click flips the current
   // effective state (a lit badge becomes manual-OFF, an unlit one manual-ON —
   // always a visible change); clicking again restores AUTO. Optimistic local
@@ -1884,6 +2086,10 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{r.entity_name}</div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
+              <button onClick={() => { const next = !showHistory; setShowHistory(next); if (next) void loadHistory(); }} title="Change history"
+                style={{ background: showHistory ? 'rgba(59,130,246,0.34)' : 'rgba(255,255,255,0.12)', border: 'none', color: '#dbeafe', borderRadius: 8, height: 32, padding: '0 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700 }}>
+                <History size={14} /> History
+              </button>
               <button onClick={() => onDelete(r.id)} title="Remove this company"
                 style={{ background: 'rgba(220,38,38,0.18)', border: 'none', color: '#fecaca', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Trash2 size={15} />
@@ -1897,7 +2103,7 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
             {r.fye_date && (
               <>
                 <span style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
-                <span style={{ fontSize: 11, color: '#fff' }}>FYE {r.fye_date}</span>
+                <span style={{ fontSize: 11, color: '#fff' }}>FYE {fmtDate(r.fye_date)}</span>
               </>
             )}
             <span style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
@@ -1952,6 +2158,44 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
 
         {/* Body */}
         <div style={{ overflowY: 'auto', flex: 1 }}>
+          {showHistory && (
+            <div style={{ margin: '16px 24px 0', border: '1px solid #dbe3ee', borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
+              <div style={{ padding: '10px 13px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f' }}>Change history</div>
+                  <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>Every saved change records who changed it. Restore is protected against newer edits.</div>
+                </div>
+                <button onClick={() => void loadHistory()} disabled={historyLoading} style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 6, padding: '4px 7px', cursor: 'pointer', display: 'flex' }}><RefreshCw size={11} /></button>
+              </div>
+              {historyError && <div style={{ padding: '8px 13px', background: '#fef2f2', color: '#b91c1c', fontSize: 10 }}>{historyError}</div>}
+              {historyLoading && historyRows.length === 0 ? (
+                <div style={{ padding: 18, textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>Loading history…</div>
+              ) : historyRows.length === 0 ? (
+                <div style={{ padding: 18, textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>No saved changes yet.</div>
+              ) : (
+                <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                  {historyRows.map((entry, index) => (
+                    <div key={entry.id} style={{ padding: '9px 13px', borderBottom: index < historyRows.length - 1 ? '1px solid #f1f5f9' : 'none', display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) 150px 66px', gap: 10, alignItems: 'center' }}>
+                      <div style={{ fontSize: 9, fontWeight: 800, color: '#475569' }}>{AR_FIELD_LABELS[entry.field_name] ?? entry.field_name}</div>
+                      <div style={{ minWidth: 0, fontSize: 10, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{historyValue(entry.old_value)}</span>
+                        <span style={{ color: '#cbd5e1' }}>→</span>
+                        <span style={{ color: '#1e3a5f', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{historyValue(entry.new_value)}</span>
+                      </div>
+                      <div style={{ fontSize: 9, color: '#64748b' }}>
+                        <div style={{ fontWeight: 700 }}>{entry.changed_by_name ?? entry.changed_by_email ?? 'System'}</div>
+                        <div style={{ color: '#94a3b8', marginTop: 2 }}>{new Date(entry.changed_at).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+                      </div>
+                      <button onClick={() => void restoreHistory(entry)} disabled={restoringId !== null}
+                        style={{ border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', borderRadius: 6, padding: '4px 6px', fontSize: 9, fontWeight: 700, cursor: restoringId !== null ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                        <RotateCcw size={9} />{restoringId === entry.id ? 'Restoring' : 'Restore'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <DetailPanel r={r} onSave={onSave} />
         </div>
       </div>
@@ -2114,7 +2358,7 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
                 <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
                 <TD stickyLeft={30}>
                   <div style={{ fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{r.entity_name}</div>
-                  {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
+                  {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                 </TD>
                 <TD stickyLeft={230} lastSticky><span style={{ fontSize: 10, color: '#64748b' }}>{r.uen || '—'}</span></TD>
                 <TD><EditField id={r.id} field="reminder_note"   value={r.reminder_note}   onSave={onSave} placeholder="—" isDate /></TD>
@@ -2184,6 +2428,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   const [search,      setSearch]      = useState('');
   const [filter,      setFilter]      = useState('all');
   const [view,        setView]        = useState<'list' | 'table'>('list');
+  const [liveNotice,  setLiveNotice]  = useState('');
 
   const load = useCallback(async () => {
     if (!month || !year) return;
@@ -2197,12 +2442,71 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     finally { setLoading(false); }
   }, [month, year]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = setTimeout(() => void load(), 0);
+    return () => clearTimeout(timer);
+  }, [load]);
+
+  useEffect(() => {
+    if (!month || !year) return;
+    const supabase = getSupabaseBrowserClient();
+    let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const showNotice = (name: string | null | undefined) => {
+      setLiveNotice(name ? `Live update from ${name}` : 'Live update received');
+      if (noticeTimer) clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => setLiveNotice(''), 2600);
+    };
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => void load(), 700);
+    };
+
+    const channel = supabase
+      .channel(`ar-reminder-${year}-${month}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ar_reminder', filter: `fye_year=eq.${year}` }, payload => {
+        const next = payload.new as Partial<ARRecord> & { id?: number; fye_month?: string; fye_year?: number; status?: string };
+        const previous = payload.old as Partial<ARRecord> & { id?: number };
+        const id = next.id ?? previous.id;
+        if (!id) return;
+        if (payload.eventType !== 'DELETE' && (next.fye_month !== month || Number(next.fye_year) !== Number(year))) return;
+
+        if (payload.eventType === 'DELETE' || next.status === 'Excluded') {
+          setRecords(current => current.filter(record => record.id !== id));
+          setModalRecord(current => current?.id === id ? null : current);
+          showNotice(next.updated_by_name);
+          return;
+        }
+
+        if (payload.eventType === 'UPDATE') {
+          const merge = (record: ARRecord) => {
+            if (record.id !== id) return record;
+            return recomputeArRecord({ ...record, ...next } as ARRecord);
+          };
+          setRecords(current => current.map(merge));
+          setModalRecord(current => current?.id === id ? merge(current) : current);
+          showNotice(next.updated_by_name);
+          return;
+        }
+
+        // New rows need normal service/QB enrichment, so coalesce bursts of
+        // generator inserts into one normal reload.
+        showNotice(next.updated_by_name);
+        scheduleReload();
+      })
+      .subscribe();
+
+    return () => {
+      if (noticeTimer) clearTimeout(noticeTimer);
+      if (reloadTimer) clearTimeout(reloadTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [load, month, year]);
 
   const handleSave = useCallback((id: number, field: string, value: string) => {
-    const updated = (r: ARRecord) => r.id === id ? { ...r, [field]: value || null } : r;
+    const updated = (r: ARRecord) => r.id === id ? recomputeArRecord({ ...r, [field]: value || null }) : r;
     setRecords(prev => prev.map(updated));
-    setModalRecord(prev => prev && prev.id === id ? { ...prev, [field]: value || null } : prev);
+    setModalRecord(prev => prev && prev.id === id ? recomputeArRecord({ ...prev, [field]: value || null }) : prev);
   }, []);
 
   // Optimistic local sync after a service-override cycle in the modal.
@@ -2266,13 +2570,18 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
 
   // Paginate AFTER search/filter — shared by both List and Table views.
   const { page, setPage, totalPages, pageItems, startIndex, total: pagedTotal } =
-    usePagination(filtered, `${search}|${filter}|${month}|${year}`);
+    usePagination(filtered, `${search}|${filter}|${month}|${year}`, 40);
   const isMobile = useIsMobile();
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, color: '#1e3a5f', background: '#fff', cursor: 'pointer', outline: 'none' };
 
   return (
     <div>
+      {liveNotice && (
+        <div style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 1500, background: '#0f766e', color: '#fff', borderRadius: 9, padding: '8px 12px', fontSize: 10.5, fontWeight: 700, boxShadow: '0 8px 24px rgba(15,118,110,0.25)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#5eead4' }} />{liveNotice}
+        </div>
+      )}
       {/* Controls */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 14, flexWrap: isMobile ? 'wrap' : undefined }}>
         <select value={month} onChange={e => setMonth(e.target.value)} style={S}>
@@ -2397,7 +2706,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{r.entity_name}</div>
-                      <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${r.fye_date}` : ''}</div>
+                      <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${fmtDate(r.fye_date)}` : ''}</div>
                     </div>
                     <DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} />
                   </div>
@@ -2423,7 +2732,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></div>
                   <div style={{ padding: '0 6px' }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
-                    {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {r.fye_date}</div>}
+                    {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 13, color: '#64748b' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
                   {/* Fixed slots in fixed order — every service always in the

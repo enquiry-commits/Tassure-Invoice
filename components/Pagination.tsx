@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useCallback, type Dispatch, type SetStateAction } from 'react';
 
 export const PAGE_SIZE = 100;
 
@@ -8,15 +8,24 @@ export const PAGE_SIZE = 100;
 // applied to the full dataset BEFORE this hook, so a search always scans
 // everything — pagination only limits what gets rendered to the DOM.
 // `resetKey`: change it (search text, filter, month…) to jump back to page 1.
-export function usePagination<T>(items: T[], resetKey: unknown) {
-  const [page, setPage] = useState(1);
-  useEffect(() => { setPage(1); }, [resetKey]);
-  const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+export function usePagination<T>(items: T[], resetKey: unknown, pageSize = PAGE_SIZE) {
+  const [pageState, setPageState] = useState({ page: 1, resetKey });
+  const page = Object.is(pageState.resetKey, resetKey) ? pageState.page : 1;
+  const setPage: Dispatch<SetStateAction<number>> = useCallback(next => {
+    setPageState(current => {
+      const currentPage = Object.is(current.resetKey, resetKey) ? current.page : 1;
+      return {
+        resetKey,
+        page: typeof next === 'function' ? next(currentPage) : next,
+      };
+    });
+  }, [resetKey]);
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
   const safePage = Math.min(page, totalPages); // clamp when the list shrinks
-  const startIndex = (safePage - 1) * PAGE_SIZE;
+  const startIndex = (safePage - 1) * pageSize;
   const pageItems = useMemo(
-    () => items.slice(startIndex, startIndex + PAGE_SIZE),
-    [items, startIndex],
+    () => items.slice(startIndex, startIndex + pageSize),
+    [items, startIndex, pageSize],
   );
   return { page: safePage, setPage, totalPages, pageItems, startIndex, total: items.length };
 }

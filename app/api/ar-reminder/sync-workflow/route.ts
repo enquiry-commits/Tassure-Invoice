@@ -124,7 +124,11 @@ export async function GET(req: NextRequest) {
       }
 
       if (Object.keys(patch).length) {
-        const { error: upErr } = await supabase.from('ar_reminder').update(patch).eq('id', r.id);
+        const { error: upErr } = await supabase.from('ar_reminder').update({
+          ...patch,
+          updated_by_email: 'system:teamwork',
+          updated_by_name: 'TeamWork Sync',
+        }).eq('id', r.id);
         if (!upErr) { updated++; changes.push({ entity: r.entity_name, patch }); }
       }
     }
