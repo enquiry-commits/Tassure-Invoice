@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { withAutomationRun } from '@/lib/automation-sync';
+import { replaceAutomationExceptions, withAutomationRun } from '@/lib/automation-sync';
 import { scrapeTeamworkNdAppointments, type TeamworkNdPerson } from '@/lib/teamwork-nd';
 
 export const maxDuration = 300;
@@ -36,12 +36,31 @@ async function syncNdAppointments() {
     return NextResponse.json({ ok: false, error: replaceError.message }, { status: 500 });
   }
 
+  await replaceAutomationExceptions(
+    'teamwork_nd',
+    'missing_nominee_subrole',
+    scraped.missingSubroles.map(item => ({
+      key: `${item.nd_id}:${item.appointment_date}:${item.company_name.trim().toUpperCase()}`,
+      name: item.company_name,
+      details: {
+        nd_id: item.nd_id,
+        nd_name: item.nd_name,
+        company_name: item.company_name,
+        appointment_date: item.appointment_date,
+        appointment_status: item.appointment_status,
+        teamwork_subrole: null,
+        reason: 'Appointment date is present and cessation date is empty, but Nominee Director subrole is missing.',
+      },
+    })),
+  );
+
   return NextResponse.json({
     ok: true,
     checked_people: people.length,
     appointment_rows: scraped.appointments.length,
     active_rows: scraped.appointments.filter(row => !row.cessation_date).length,
     ceased_rows: scraped.appointments.filter(row => row.cessation_date).length,
+    missing_subrole_rows: scraped.missingSubroles.length,
     inserted_rows: inserted,
     concurrency: scraped.concurrency,
     slowest_people: scraped.durations.slice(0, 3),

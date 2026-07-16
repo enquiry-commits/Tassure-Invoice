@@ -37,6 +37,10 @@ export async function GET() {
     supabase.from('automation_exceptions')
       .select('id, source, exception_type, entity_key, entity_name, details, first_seen_at, last_seen_at')
       .eq('status', 'open')
+      // Missing ND subroles are a TeamWork data-review queue shown on the ND
+      // page, not an automation failure. Keep the global health count focused
+      // on integrations that are broken or need technical reconciliation.
+      .neq('exception_type', 'missing_nominee_subrole')
       .order('source')
       .order('exception_type')
       .order('entity_name'),

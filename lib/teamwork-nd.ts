@@ -10,9 +10,23 @@ export type TeamworkNdAppointment = {
   cessation_date: string | null;
 };
 
+export type TeamworkNdSubroleReview = {
+  nd_id: number;
+  nd_name: string;
+  company_name: string;
+  appointment_date: string;
+  appointment_status: 'effective' | 'proposed' | 'unknown';
+};
+
 function parseDmy(value: string): string | null {
   const match = (value || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
   return match ? `${match[3]}-${match[2]}-${match[1]}` : null;
+}
+
+function appointmentStatus(value: string): TeamworkNdSubroleReview['appointment_status'] {
+  if (/\(effective\)/i.test(value)) return 'effective';
+  if (/\(proposed\)/i.test(value)) return 'proposed';
+  return 'unknown';
 }
 
 async function launchBrowser(): Promise<Browser> {
@@ -55,7 +69,10 @@ async function scrapeMember(
   context: BrowserContext,
   parserPage: Page,
   person: TeamworkNdPerson,
-): Promise<TeamworkNdAppointment[]> {
+): Promise<{
+  appointments: TeamworkNdAppointment[];
+  missingSubroles: TeamworkNdSubroleReview[];
+}> {
   // The member page exposes this endpoint for its status selector. Calling it
   // directly avoids rendering the full member profile for every ND (roughly
   // 15-50 seconds of unnecessary browser work per person).
@@ -83,7 +100,7 @@ async function scrapeMember(
     });
   }, payload.res);
 
-  return rows
+  const appointments = rows
     .filter(row => row.role === 'Nominee Director')
     .map(row => ({
       nd_id: person.id,
@@ -91,11 +108,31 @@ async function scrapeMember(
       appointment_date: parseDmy(row.appointment),
       cessation_date: parseDmy(row.cessation),
     }));
+
+  // Only inspect the people explicitly configured as Nominee Directors. A
+  // blank role with an appointment date and no cessation date is not promoted
+  // into the active ND portfolio automatically: it is recorded for a person
+  // to confirm and repair in TeamWork first.
+  const missingSubroles = rows.flatMap(row => {
+    const appointmentDate = parseDmy(row.appointment);
+    const cessationDate = parseDmy(row.cessation);
+    if (row.role || !appointmentDate || cessationDate) return [];
+    return [{
+      nd_id: person.id,
+      nd_name: person.name,
+      company_name: row.company,
+      appointment_date: appointmentDate,
+      appointment_status: appointmentStatus(row.appointment),
+    } satisfies TeamworkNdSubroleReview];
+  });
+
+  return { appointments, missingSubroles };
 }
 
 export async function scrapeTeamworkNdAppointments(people: TeamworkNdPerson[]) {
   let browser: Browser | null = null;
   const appointments: TeamworkNdAppointment[] = [];
+  const missingSubroles: TeamworkNdSubroleReview[] = [];
   const errors: Array<{ person: string; error: string }> = [];
   const durations: Array<{ person: string; duration_ms: number }> = [];
   const concurrency = Math.min(3, Math.max(1, people.length));
@@ -118,7 +155,9 @@ export async function scrapeTeamworkNdAppointments(people: TeamworkNdPerson[]) {
 
           for (let attempt = 1; attempt <= 2 && !completed; attempt++) {
             try {
-              appointments.push(...await scrapeMember(context, parserPage, person));
+              const scraped = await scrapeMember(context, parserPage, person);
+              appointments.push(...scraped.appointments);
+              missingSubroles.push(...scraped.missingSubroles);
               completed = true;
             } catch (error) {
               lastError = error instanceof Error ? error.message : String(error);
@@ -153,6 +192,14 @@ export async function scrapeTeamworkNdAppointments(people: TeamworkNdPerson[]) {
   }
 
   appointments.sort((left, right) => left.nd_id - right.nd_id || left.company_name.localeCompare(right.company_name));
+  const uniqueMissingSubroles = [...new Map(missingSubroles.map(item => [
+    `${item.nd_id}|${item.company_name.trim().toUpperCase()}|${item.appointment_date}`,
+    item,
+  ])).values()].sort((left, right) =>
+    right.appointment_date.localeCompare(left.appointment_date)
+    || left.nd_name.localeCompare(right.nd_name)
+    || left.company_name.localeCompare(right.company_name)
+  );
   durations.sort((left, right) => right.duration_ms - left.duration_ms);
-  return { appointments, errors, durations, concurrency };
+  return { appointments, missingSubroles: uniqueMissingSubroles, errors, durations, concurrency };
 }
