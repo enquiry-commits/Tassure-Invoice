@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
+import { getApprovedAccount } from '@/lib/approved-accounts';
 
 const PUBLIC_PATHS = new Set(['/login', '/auth/callback']);
 
@@ -22,7 +23,7 @@ export async function proxy(req: NextRequest) {
     },
   });
   const { data } = await supabase.auth.getUser();
-  const authenticated = !!data.user;
+  const authenticated = !!getApprovedAccount(data.user?.email);
 
   if (isPublic) {
     if (path === '/login' && authenticated) return NextResponse.redirect(new URL('/', req.url));

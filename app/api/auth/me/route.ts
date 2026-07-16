@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { getApprovedAccount } from '@/lib/approved-accounts';
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -9,11 +10,13 @@ export async function GET() {
   });
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return NextResponse.json({ user: null }, { status: 401 });
+  const account = getApprovedAccount(data.user.email);
+  if (!account) return NextResponse.json({ user: null }, { status: 403 });
 
   return NextResponse.json({
     user: {
-      email: data.user.email,
-      name: data.user.user_metadata?.display_name ?? data.user.email?.split('@')[0] ?? 'User',
+      email: account.email,
+      name: account.name,
     },
   });
 }

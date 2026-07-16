@@ -17,11 +17,11 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </div>
           {error && (
             <div className="login-error-simple" role="alert">
-              {error === 'domain' ? 'Please use an approved @tassure.com account.' : 'Google sign-in was not completed. Please try again.'}
+              {error === 'domain' ? 'This Google account is not approved for this system.' : 'Google sign-in was not completed. Please try again.'}
             </div>
           )}
           <form action={signInWithGoogle}><GoogleLoginButton /></form>
-          <p className="login-domain-note">Only @tassure.com accounts can access this system.</p>
+          <p className="login-domain-note">Only approved Tassure Google accounts can access this system.</p>
         </div>
       </section>
     </main>

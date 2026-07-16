@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
+import { getApprovedAccount } from '@/lib/approved-accounts';
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
@@ -25,7 +26,7 @@ export async function GET(req: NextRequest) {
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) return NextResponse.redirect(new URL('/login?error=oauth', req.url));
   const { data } = await supabase.auth.getUser();
-  if (!data.user?.email?.toLowerCase().endsWith('@tassure.com')) {
+  if (!getApprovedAccount(data.user?.email)) {
     await supabase.auth.signOut();
     const denied = NextResponse.redirect(new URL('/login?error=domain', req.url));
     response.cookies.getAll().forEach(cookie => denied.cookies.set(cookie));
