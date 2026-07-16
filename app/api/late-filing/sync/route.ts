@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { parseDmy, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
+import { withAutomationRun } from '@/lib/automation-sync';
 
 /**
  * Auto-detects late filers directly from TeamWork's own per-company event
@@ -38,8 +39,9 @@ import { parseDmy, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
  * company's event history via plain HTTP POST to /company_agm/agm_list_ajax
  * (one lightweight call per company — no further browser use).
  *
- * Only INSERTS newly-detected late companies into late_filing_companies
- * (matched by UEN/name) — never overwrites existing manual entries.
+ * Auto-owned rows (remarks beginning with AUTO:) are refreshed each run.
+ * When their risk clears they move to Review: for a human to verify. Manual,
+ * Review and Resolved remarks are never overwritten by automation.
  */
 
 export const maxDuration = 300;
@@ -50,7 +52,7 @@ const OVERDUE_THRESHOLD_DAYS = 90;
 const HISTORICAL_AVG_THRESHOLD_DAYS = 90;
 const MONTH_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
-export async function GET() {
+async function syncLateFiling() {
   const supabase = createAdminClient();
 
   const cookie = await getSessionCookie();
@@ -64,13 +66,15 @@ export async function GET() {
 
   const targets = companies ?? [];
 
-  const { data: existingManual } = await supabase.from('late_filing_companies').select('uen, company_name');
-  const existingUens = new Set((existingManual ?? []).map(r => r.uen).filter(Boolean));
-  const existingNames = new Set((existingManual ?? []).map(r => r.company_name.toLowerCase()));
+  const { data: existingManual } = await supabase.from('late_filing_companies').select('id, uen, company_name, remarks');
+  const byUen = new Map((existingManual ?? []).filter(row => row.uen).map(row => [row.uen as string, row]));
+  const byName = new Map((existingManual ?? []).map(row => [row.company_name.toLowerCase(), row]));
 
   const today = new Date();
-  let flagged = 0, inserted = 0, errors = 0;
+  let flagged = 0, inserted = 0, refreshed = 0, movedToReview = 0, errors = 0;
   const insertedNames: string[] = [];
+  const evaluatedIds = new Set<number>();
+  const stillFlaggedIds = new Set<number>();
 
   for (const c of targets) {
     let result;
@@ -81,6 +85,9 @@ export async function GET() {
       continue;
     }
     const rows = result.data ?? [];
+    const existing = (c.registration_no ? byUen.get(c.registration_no) : null)
+      ?? byName.get(c.company_name.toLowerCase());
+    if (existing) evaluatedIds.add(existing.id);
 
     const gaps: number[] = [];
     let currentOverdueDays = 0;
@@ -123,15 +130,12 @@ export async function GET() {
     if (!isLate) continue;
     flagged++;
 
-    const alreadyExists = (c.registration_no && existingUens.has(c.registration_no)) || existingNames.has(c.company_name.toLowerCase());
-    if (alreadyExists) continue;
-
     const reasons: string[] = [];
     if (currentOverdueDays > OVERDUE_THRESHOLD_DAYS) reasons.push(`Overdue ${currentOverdueDays} days`);
     if (avgGap > HISTORICAL_AVG_THRESHOLD_DAYS) reasons.push(`Avg ${avgGap} days late over ${gaps.length} cycles`);
 
     const toIso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
-    const { error } = await supabase.from('late_filing_companies').insert({
+    const values = {
       company_name: c.company_name,
       uen: c.registration_no || null,
       financial_year_end: latestFyeMonth,
@@ -139,9 +143,41 @@ export async function GET() {
       last_annual_return_date: toIso(lastArFiled),
       next_agm_due_date: toIso(earliestOutstandingDue) || toIso(newestAgmDue),
       remarks: `AUTO: ${reasons.join('；')}`,
-    });
-    if (!error) { inserted++; insertedNames.push(c.company_name); }
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existing) {
+      stillFlaggedIds.add(existing.id);
+      if (/^AUTO:/i.test(existing.remarks ?? '')) {
+        const { error } = await supabase.from('late_filing_companies').update(values).eq('id', existing.id);
+        if (error) errors++;
+        else refreshed++;
+      }
+      continue;
+    }
+
+    const { error } = await supabase.from('late_filing_companies').insert(values);
+    if (error) errors++;
+    else { inserted++; insertedNames.push(c.company_name); }
   }
 
-  return NextResponse.json({ ok: true, checked: targets.length, flagged, inserted, insertedNames, errors });
+  const reviewDate = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Singapore',
+  }).format(new Date());
+  for (const row of existingManual ?? []) {
+    if (!evaluatedIds.has(row.id) || stillFlaggedIds.has(row.id) || !/^AUTO:/i.test(row.remarks ?? '')) continue;
+    const { error } = await supabase.from('late_filing_companies').update({
+      remarks: `Review: Auto condition cleared on ${reviewDate} — verify before resolving. Previous: ${row.remarks}`,
+      updated_at: new Date().toISOString(),
+    }).eq('id', row.id);
+    if (error) errors++;
+    else movedToReview++;
+  }
+
+  const result = { ok: errors === 0, checked: targets.length, flagged, inserted, refreshed, movedToReview, insertedNames, errors };
+  return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+}
+
+export async function GET(req: NextRequest) {
+  return withAutomationRun(req, 'late_filing', syncLateFiling);
 }

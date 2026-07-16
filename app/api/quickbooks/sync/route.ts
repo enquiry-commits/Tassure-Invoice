@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { qbQuery, type QbCompany } from '@/lib/quickbooks';
 import { createAdminClient } from '@/lib/supabase';
+import { withAutomationRun, replaceAutomationExceptions, type AutomationRun } from '@/lib/automation-sync';
 
 // ── Service classification ───────────────────────────────────────────────────
 // The QB Product/Service item name is authoritative — classify by it FIRST.
@@ -32,16 +33,16 @@ const SERVICE_PATTERNS = [
   { type: 'Deferred',  kw: ['deferred revenue'] },
 ];
 
-function classify(desc: string, product: string): string {
+function classify(desc: string, product: string): { type: string; source: 'product' | 'description' | 'unmapped' } {
   const p = (product || '').toLowerCase();
   for (const { type, match } of PRODUCT_MAP) {
-    if (match.some(m => p.includes(m))) return type;
+    if (match.some(m => p.includes(m))) return { type, source: 'product' };
   }
   const t = `${desc || ''} ${product || ''}`.toLowerCase();
   for (const { type, kw } of SERVICE_PATTERNS) {
-    if (kw.some(k => t.includes(k))) return type;
+    if (kw.some(k => t.includes(k))) return { type, source: 'description' };
   }
-  return 'Other';
+  return { type: 'Other', source: 'unmapped' };
 }
 
 // ── Period date parser (mirrors parse-qb-periods.js) ─────────────────────────
@@ -109,27 +110,35 @@ export const maxDuration = 300; // full-year sync pages through 1500+ invoices (
 // invoices keep being edited into January) for BOTH QB companies — TAB
 // (basic services) and TAC (Nominee Director only). TAC is skipped silently
 // (reported, not fatal) until it's connected.
-export async function GET() {
+async function syncRecentYears(run: AutomationRun) {
   const thisYear = new Date().getFullYear();
   const results: Record<string, unknown>[] = [];
   for (const company of ['TAB', 'TAC'] as QbCompany[]) {
-    for (const year of [String(thisYear - 1), String(thisYear)]) {
-      const res = await syncYear(year, company);
+    for (const year of [String(thisYear - 2), String(thisYear - 1), String(thisYear)]) {
+      const res = await syncYear(year, company, run.id);
       results.push({ company, year, ...res });
     }
   }
-  return NextResponse.json({ ok: true, results });
+  const ok = results.every(result => !result.error && !result.invoice_error && Number(result.items_error ?? 0) === 0);
+  return NextResponse.json({ ok, results }, { status: ok ? 200 : 502 });
+}
+
+export async function GET(req: NextRequest) {
+  return withAutomationRun(req, 'quickbooks', syncRecentYears);
 }
 
 // ── POST /api/quickbooks/sync ─────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  const { year = new Date().getFullYear().toString(), company = 'TAB' } = await req.json().catch(() => ({}));
-  const qbCompany: QbCompany = company === 'TAC' ? 'TAC' : 'TAB';
-  const result = await syncYear(String(year), qbCompany);
-  return NextResponse.json({ year, company: qbCompany, ...result });
+  return withAutomationRun(req, 'quickbooks', async run => {
+    const { year = new Date().getFullYear().toString(), company = 'TAB' } = await req.json().catch(() => ({}));
+    const qbCompany: QbCompany = company === 'TAC' ? 'TAC' : 'TAB';
+    const result = await syncYear(String(year), qbCompany, run.id);
+    const ok = !result.error && !result.invoice_error && Number(result.items_error ?? 0) === 0;
+    return NextResponse.json({ ok, year, company: qbCompany, ...result }, { status: ok ? 200 : 502 });
+  });
 }
 
-async function syncYear(year: string, company: QbCompany) {
+async function syncYear(year: string, company: QbCompany, runId: string) {
 
   // QB caps a query at 1000 results; page with STARTPOSITION so a year with
   // more than 1000 invoices doesn't silently lose the overflow.
@@ -142,8 +151,9 @@ async function syncYear(year: string, company: QbCompany) {
       company
     );
     if (!page) {
-      if (!realmSeen) return { error: `QuickBooks ${company} not connected or token expired` };
-      break;
+      return { error: realmSeen
+        ? `QuickBooks ${company} page failed at STARTPOSITION ${start}; no database writes were made for ${year}.`
+        : `QuickBooks ${company} not connected or token expired` };
     }
     realmSeen = true;
     allRows = allRows.concat(page.rows);
@@ -162,16 +172,22 @@ async function syncYear(year: string, company: QbCompany) {
     const docNo    = inv.DocNumber as string;
     const txnDate  = inv.TxnDate  as string;
     const balance  = inv.Balance  as number;
+    const qbInvoiceId = String(inv.Id ?? '');
+    const qbCustomerId = String(customer.value ?? '');
+    if (!qbInvoiceId) continue;
 
     invoiceRows.push({
+      qb_invoice_id: qbInvoiceId,
       invoice_no:    docNo,
       qb_company:    company,
+      qb_customer_id: qbCustomerId || null,
       customer_name: (customer.name as string) ?? '',
       txn_date:      txnDate,
       total_amt:     inv.TotalAmt ?? 0,
       balance,
-      status:        balance === 0 ? 'Paid' : 'Open',
+      status:        Number(inv.TotalAmt ?? 0) === 0 && balance === 0 ? 'Voided' : balance === 0 ? 'Paid' : 'Open',
       scraped_at:    now,
+      last_seen_sync_run: runId,
     });
 
     const lines = (inv.Line as Record<string, unknown>[]) ?? [];
@@ -184,11 +200,21 @@ async function syncYear(year: string, company: QbCompany) {
       const product = (itemRef.name as string) ?? '';
       const desc    = (line.Description as string) ?? '';
       const parsed  = parsePeriod(desc) ?? {};
+      const classification = classify(desc, product);
+      const requiresPeriod = ['Secretary', 'Address', 'ND', 'Deferred'].includes(classification.type);
+      const requiresFye = ['AR', 'XBRL'].includes(classification.type);
+      const parseStatus = requiresPeriod
+        ? (parsed.period_end ? 'parsed' : 'missing_period')
+        : requiresFye
+          ? (parsed.fye_date ? 'parsed' : 'missing_fye')
+          : 'not_applicable';
 
       itemRows.push({
         invoice_no:      docNo,
         qb_company:      company,
-        qb_invoice_id:   String(inv.Id),
+        qb_invoice_id:   qbInvoiceId,
+        qb_line_id:      String(line.Id ?? lineNum),
+        qb_customer_id:  qbCustomerId || null,
         customer_name:   (customer.name as string) ?? '',
         txn_date:        txnDate,
         line_num:        lineNum,
@@ -197,56 +223,111 @@ async function syncYear(year: string, company: QbCompany) {
         qty:             (detail.Qty as number) ?? null,
         rate:            (detail.UnitPrice as number) ?? null,
         amount:          (line.Amount as number) ?? null,
-        service_type:    classify(desc, product),
+        service_type:    classification.type,
+        classification_source: classification.source,
+        period_parse_status: parseStatus,
         period_start:    parsed.period_start ?? null,
         period_end:      parsed.period_end   ?? null,
         fye_date:        parsed.fye_date     ?? null,
         scraped_at:      now,
+        last_seen_sync_run: runId,
       });
     }
   }
 
-  // QB allows duplicate DocNumbers WITHIN a company; a batch containing the
-  // same invoice_no twice makes Postgres reject the whole upsert ("cannot
-  // affect row a second time"). Dedupe within the batch — keep the newest
-  // TxnDate per (company, number). (Uniqueness is scoped per qb_company —
-  // TAB and TAC each have their own independent DocNumber sequence.)
-  const invKey = (r: Record<string, unknown>) => `${r.qb_company}|${r.invoice_no}`;
+  // QB Id and Line Id are immutable. DocNumber is editable and can be
+  // duplicated, so it must never be used as the database identity.
+  const invKey = (r: Record<string, unknown>) => `${r.qb_company}|${r.qb_invoice_id}`;
   const invByNo = new Map<string, Record<string, unknown>>();
   for (const r of invoiceRows) {
     const k = invKey(r);
-    const prev = invByNo.get(k);
-    if (!prev || String(r.txn_date) > String(prev.txn_date)) invByNo.set(k, r);
+    invByNo.set(k, r);
   }
   const dedupedInvoices = [...invByNo.values()];
+  const invoiceIdsByDoc = new Map<string, string[]>();
+  for (const invoice of dedupedInvoices) {
+    const doc = String(invoice.invoice_no ?? '');
+    if (!doc) continue;
+    const ids = invoiceIdsByDoc.get(doc) ?? [];
+    ids.push(String(invoice.qb_invoice_id));
+    invoiceIdsByDoc.set(doc, ids);
+  }
+  await replaceAutomationExceptions('quickbooks', `duplicate_doc_number_${company}_${year}`,
+    [...invoiceIdsByDoc.entries()]
+      .filter(([, ids]) => ids.length > 1)
+      .map(([doc, ids]) => ({
+        key: `${company}:${doc}`,
+        name: doc,
+        details: { qb_company: company, year, qb_invoice_ids: ids },
+      })));
   const itemByKey = new Map<string, Record<string, unknown>>();
   for (const r of itemRows) {
     // Only keep line items belonging to the invoice occurrence we kept.
     if (invByNo.get(invKey(r))?.txn_date !== r.txn_date) continue;
-    itemByKey.set(`${r.qb_company}|${r.invoice_no}|${r.line_num}`, r);
+    itemByKey.set(`${r.qb_company}|${r.qb_invoice_id}|${r.qb_line_id}`, r);
   }
   const dedupedItems = [...itemByKey.values()];
   itemRows.length = 0; itemRows.push(...dedupedItems);
 
-  // Upsert invoices
-  const { error: invErr } = await supabase
-    .from('quickbooks_invoices')
-    .upsert(dedupedInvoices as Parameters<typeof supabase.from>[0] extends never ? never : never[], { onConflict: 'qb_company,invoice_no' });
+  // Upsert invoices in bounded batches so one large year does not exceed the
+  // request body limit. Reconciliation only happens if every batch succeeds.
+  let invoicesDone = 0;
+  let invErr: { message: string } | null = null;
+  for (let i = 0; i < dedupedInvoices.length; i += 200) {
+    const { error } = await supabase
+      .from('quickbooks_invoices')
+      .upsert(dedupedInvoices.slice(i, i + 200) as Parameters<typeof supabase.from>[0] extends never ? never : never[], { onConflict: 'qb_company,qb_invoice_id' });
+    if (error) { invErr = error; break; }
+    invoicesDone += Math.min(200, dedupedInvoices.length - i);
+  }
 
   // Upsert line items in batches of 200
   let itemsDone = 0, itemsErr = 0;
   for (let i = 0; i < itemRows.length; i += 200) {
     const { error } = await supabase
       .from('quickbooks_invoice_items')
-      .upsert(itemRows.slice(i, i + 200) as Parameters<typeof supabase.from>[0] extends never ? never : never[], { onConflict: 'qb_company,invoice_no,line_num' });
+      .upsert(itemRows.slice(i, i + 200) as Parameters<typeof supabase.from>[0] extends never ? never : never[], { onConflict: 'qb_company,qb_invoice_id,qb_line_id' });
     if (error) itemsErr += Math.min(200, itemRows.length - i);
     else       itemsDone += Math.min(200, itemRows.length - i);
   }
 
+  if (invErr || itemsErr) {
+    return {
+      error: `QuickBooks ${company} ${year} database upsert was incomplete; stale-row reconciliation was skipped.`,
+      invoices_synced: invoicesDone,
+      items_synced: itemsDone,
+      items_error: itemsErr,
+      invoice_error: invErr?.message ?? null,
+    };
+  }
+
+  const startDate = `${year}-01-01`;
+  const endDate = `${year}-12-31`;
+  const staleFilter = `last_seen_sync_run.is.null,last_seen_sync_run.neq.${runId}`;
+  const { error: staleItemsError, count: itemsRemoved } = await supabase
+    .from('quickbooks_invoice_items')
+    .delete({ count: 'exact' })
+    .eq('qb_company', company)
+    .gte('txn_date', startDate)
+    .lte('txn_date', endDate)
+    .or(staleFilter);
+  if (staleItemsError) return { error: `Line-item reconciliation failed: ${staleItemsError.message}` };
+
+  const { error: staleInvoicesError, count: invoicesRemoved } = await supabase
+    .from('quickbooks_invoices')
+    .delete({ count: 'exact' })
+    .eq('qb_company', company)
+    .gte('txn_date', startDate)
+    .lte('txn_date', endDate)
+    .or(staleFilter);
+  if (staleInvoicesError) return { error: `Invoice reconciliation failed: ${staleInvoicesError.message}` };
+
   return {
-    invoices_synced: dedupedInvoices.length,
+    invoices_synced: invoicesDone,
     items_synced:    itemsDone,
     items_error:     itemsErr,
-    invoice_error:   invErr?.message ?? null,
+    invoice_error:   null,
+    stale_invoices_removed: invoicesRemoved ?? 0,
+    stale_items_removed: itemsRemoved ?? 0,
   };
 }

@@ -21,11 +21,12 @@ const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABA
 const DRY = process.argv.includes('--dry-run');
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
-const USERNAME = process.env.TEAMWORK_USERNAME || 'Vincent'; // TODO remove fallback once TEAMWORK_USERNAME is set in Vercel env
-const PASSWORD = process.env.TEAMWORK_PASSWORD || 'Pass@123'; // TODO remove fallback once TEAMWORK_PASSWORD is set in Vercel env
+const USERNAME = process.env.TEAMWORK_USERNAME;
+const PASSWORD = process.env.TEAMWORK_PASSWORD;
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 async function getSessionCookie() {
+  if (!USERNAME || !PASSWORD) throw new Error('TEAMWORK_USERNAME and TEAMWORK_PASSWORD are required.');
   const browser = await chromium.launch({ headless: true });
   try {
     const ctx = await browser.newContext();

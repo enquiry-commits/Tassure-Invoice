@@ -7,8 +7,6 @@ import https from 'https';
 // per-company call is a plain HTTP POST with the extracted PHPSESSID cookie.
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
-const USERNAME = process.env.TEAMWORK_USERNAME || 'Vincent'; // TODO remove fallback once TEAMWORK_USERNAME is set in Vercel env
-const PASSWORD = process.env.TEAMWORK_PASSWORD || 'Pass@123'; // TODO remove fallback once TEAMWORK_PASSWORD is set in Vercel env
 
 export function parseDmy(s: string): Date | null {
   const clean = (s || '').replace(/<[^>]+>/g, '').trim();
@@ -32,14 +30,19 @@ async function getBrowser(): Promise<Browser> {
 }
 
 export async function getSessionCookie(): Promise<string> {
+  const username = process.env.TEAMWORK_USERNAME;
+  const password = process.env.TEAMWORK_PASSWORD;
+  if (!username || !password) {
+    throw new Error('TEAMWORK_USERNAME and TEAMWORK_PASSWORD are required.');
+  }
   const browser = await getBrowser();
   try {
     const context = await browser.newContext();
     const page = await context.newPage();
     await page.goto(`${BASE}/dashboard`, { waitUntil: 'domcontentloaded' });
     if (page.url().includes('welcome')) {
-      await page.getByRole('textbox', { name: 'Username' }).fill(USERNAME);
-      await page.getByRole('textbox', { name: 'Password' }).fill(PASSWORD);
+      await page.getByRole('textbox', { name: 'Username' }).fill(username);
+      await page.getByRole('textbox', { name: 'Password' }).fill(password);
       await page.getByRole('button', { name: ' Login' }).click();
       await page.waitForURL('**/dashboard**', { timeout: 15000, waitUntil: 'domcontentloaded' });
     }
@@ -52,13 +55,24 @@ export async function getSessionCookie(): Promise<string> {
   }
 }
 
+type TeamworkDataTableResult = {
+  data: string[][];
+  recordsTotal?: number;
+  recordsFiltered?: number;
+};
+
 // Per-company AGM/AR event history. Each row (per TeamWork's DataTable):
 // [event, ?, fyeDate, ?, dueDate, heldDate, filingDate, ...] as dd/mm/yyyy
 // strings (possibly wrapped in HTML).
-export function fetchAgmList(cookie: string, companyId: string): Promise<{ data: string[][] }> {
+function fetchAgmPage(
+  cookie: string,
+  companyId: string,
+  start: number,
+  length: number,
+): Promise<TeamworkDataTableResult> {
   return new Promise((resolve, reject) => {
     const params: Record<string, string> = {
-      draw: '1', start: '0', length: '50',
+      draw: String(Math.floor(start / length) + 1), start: String(start), length: String(length),
       'search[value]': '', 'search[regex]': 'false',
       'order[0][column]': '1', 'order[0][dir]': 'desc',
       ci_csrf_token: '', company_id: companyId,
@@ -77,10 +91,49 @@ export function fetchAgmList(cookie: string, companyId: string): Promise<{ data:
     }, (res) => {
       let data = '';
       res.on('data', (c) => (data += c));
-      res.on('end', () => { try { resolve(JSON.parse(data)); } catch (e) { reject(e); } });
+      res.on('end', () => {
+        if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`TeamWork AGM HTTP ${res.statusCode ?? 'unknown'}`));
+          return;
+        }
+        try {
+          const parsed = JSON.parse(data) as TeamworkDataTableResult;
+          if (!Array.isArray(parsed.data)) throw new Error('TeamWork AGM response has no data array.');
+          resolve(parsed);
+        } catch (error) {
+          reject(error);
+        }
+      });
     });
     req.on('error', reject);
+    req.setTimeout(20_000, () => req.destroy(new Error('TeamWork AGM request timed out after 20 seconds.')));
     req.write(body);
     req.end();
   });
+}
+
+export async function fetchAgmList(cookie: string, companyId: string): Promise<{ data: string[][] }> {
+  const pageSize = 100;
+  const maximumRows = 2_000;
+  const rows: string[][] = [];
+  const seen = new Set<string>();
+
+  for (let start = 0; start < maximumRows; start += pageSize) {
+    const page = await fetchAgmPage(cookie, companyId, start, pageSize);
+    for (const row of page.data) {
+      const key = JSON.stringify(row);
+      if (!seen.has(key)) {
+        seen.add(key);
+        rows.push(row);
+      }
+    }
+
+    const total = page.recordsFiltered ?? page.recordsTotal;
+    if (page.data.length < pageSize || (typeof total === 'number' && start + page.data.length >= total)) break;
+    if (page.data.length && rows.length < start + page.data.length) {
+      throw new Error('TeamWork AGM pagination repeated an earlier page.');
+    }
+  }
+
+  return { data: rows };
 }

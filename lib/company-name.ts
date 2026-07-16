@@ -50,3 +50,32 @@ export function matchScore(a: string, b: string): number {
   for (const w of wa) if (wb.has(w)) common++;
   return Math.round((common / Math.max(wa.size, wb.size)) * 100);
 }
+
+/**
+ * Return one defensible fuzzy match. A tied best score is deliberately treated
+ * as ambiguous so billing/workflow code cannot silently pick the first row.
+ */
+export function findUniqueBestMatch<T>(
+  target: string,
+  candidates: readonly T[],
+  getName: (candidate: T) => string,
+  minimumScore = 70,
+): { value: T | null; score: number; ambiguous: boolean } {
+  let best: T | null = null;
+  let bestScore = 0;
+  let tied = false;
+
+  for (const candidate of candidates) {
+    const score = matchScore(target, getName(candidate));
+    if (score < minimumScore) continue;
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+      tied = false;
+    } else if (score === bestScore) {
+      tied = true;
+    }
+  }
+
+  return { value: tied ? null : best, score: bestScore, ambiguous: tied };
+}

@@ -1080,6 +1080,7 @@ function AutoTextarea({ value, onChange, style }: { value: string; onChange: (v:
 }
 
 function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: string }) {
+  const invoiceRequestKey = useRef(globalThis.crypto.randomUUID()).current;
   const [drafting, setDrafting] = useState(false);
   const [draftResult, setDraftResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [email, setEmail] = useState(c.email ?? '');
@@ -1284,6 +1285,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           tabLines: includedTab.map(toApiLine),
           tacLines: includedTac.map(toApiLine),
           fyeMonth: c.fyeMonth, fyeYear, fyeCycle: cycleFye ?? null,
+          idempotencyKey: invoiceRequestKey,
           docNumbers: invoiceNumbers,
           expectedNextNumbers: suggestedNumbers,
         }),
@@ -1307,6 +1309,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       const errs: string[] = [];
       if (json.errors?.tab) errs.push(`TAB: ${json.errors.tab}`);
       if (json.errors?.tac) errs.push(`TAC: ${json.errors.tac}`);
+      if (json.errors?.persistence) errs.push(json.errors.persistence);
       if (json.success) {
         const pdfs: GeneratedPdf[] = [
           ...(json.tab?.qbId && json.tab?.invoiceNo ? [{ company: 'TAB' as const, qbId: String(json.tab.qbId), invoiceNo: String(json.tab.invoiceNo) }] : []),

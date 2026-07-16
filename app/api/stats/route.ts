@@ -16,7 +16,7 @@ export async function GET() {
     supabase.from('companies').select('*', { count: 'exact', head: true }).eq('uses_address', true),
     supabase.from('nominee_directors').select('*', { count: 'exact', head: true }),
     supabase.from('nd_appointments').select('nd_id, company_name, cessation_date'),
-    supabase.from('sync_log').select('synced_at').order('synced_at', { ascending: false }).limit(1),
+    supabase.from('automation_sync_runs').select('finished_at').eq('status', 'success').order('finished_at', { ascending: false }).limit(1),
   ]);
 
   const t = today();
@@ -40,6 +40,6 @@ export async function GET() {
     ceasedOnlyCompanies: [...allNDCompanySet].filter(c => !activeNDCompanySet.has(c)).length,
     activeNDPersons:   activeNDPersonSet.size,
     totalNDPersons:    totalNDPersons ?? 0,
-    lastSynced:        syncRows?.[0]?.synced_at ?? null,
+    lastSynced:        syncRows?.[0]?.finished_at ?? null,
   });
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
 import { pageAll } from '@/lib/page-all';
-import { normalize, matchScore } from '@/lib/company-name';
+import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 
 function daysBetween(from: string, to: string): number {
   return Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86400000);
@@ -245,10 +245,8 @@ export async function GET(req: NextRequest) {
   function getAnnualFee(companyName: string, svc: string): number | null {
     const direct = annualFeeMap.get(normalize(companyName))?.get(svc);
     if (direct?.fee) return direct.fee;
-    for (const [k, m] of annualFeeEntries) {
-      if (matchScore(companyName, k) >= 70) { const f = m.get(svc)?.fee; if (f) return f; }
-    }
-    return null;
+    const match = findUniqueBestMatch(companyName, annualFeeEntries, entry => entry[0], 70).value;
+    return match?.[1].get(svc)?.fee ?? null;
   }
 
   // ── 4c. Prior renewal invoice (the template to clone) ────────────────────
@@ -284,9 +282,8 @@ export async function GET(req: NextRequest) {
     let key = n;
     let hit = priorInvoiceMap.get(n);
     if (!hit) {
-      for (const [k, v] of priorInvoiceEntries) {
-        if (matchScore(companyName, k) >= 70) { hit = v; key = k; break; }
-      }
+      const match = findUniqueBestMatch(companyName, priorInvoiceEntries, entry => entry[0], 70).value;
+      if (match) [key, hit] = match;
     }
     if (!hit) return null;
     return { invoice_no: hit.invoice_no, txn_date: hit.txn_date, lines: carriedByInv.get(`${key}|${hit.invoice_no}`) ?? [] };
@@ -351,13 +348,8 @@ export async function GET(req: NextRequest) {
     const n = normalize(companyName);
     const direct = periodMap.get(n)?.get(svc) ?? annualMap.get(n)?.get(svc);
     if (direct?.length) return direct;
-    for (const [k, svcMap] of entries) {
-      if (matchScore(companyName, k) >= 70) {
-        const periods = svcMap.get(svc);
-        if (periods?.length) return periods;
-      }
-    }
-    return [];
+    const match = findUniqueBestMatch(companyName, entries, entry => entry[0], 70).value;
+    return match?.[1].get(svc) ?? [];
   }
 
   // ── 5. Build per-company billing record ─────────────────────────────────

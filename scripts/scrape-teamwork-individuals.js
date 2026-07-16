@@ -10,8 +10,8 @@ const fs = require('fs');
 const path = require('path');
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
-const USERNAME = process.env.TEAMWORK_USERNAME || 'Vincent'; // TODO remove fallback once TEAMWORK_USERNAME is set in Vercel env
-const PASSWORD = process.env.TEAMWORK_PASSWORD || 'Pass@123'; // TODO remove fallback once TEAMWORK_PASSWORD is set in Vercel env
+const USERNAME = process.env.TEAMWORK_USERNAME;
+const PASSWORD = process.env.TEAMWORK_PASSWORD;
 
 const DATA_DIR = path.join(__dirname, '..', 'data', 'teamwork-scrape');
 const INDIVIDUALS_DIR = path.join(DATA_DIR, 'individuals');
@@ -273,6 +273,7 @@ async function scrapeOne(context, id) {
 }
 
 async function main() {
+  if (!USERNAME || !PASSWORD) throw new Error('TEAMWORK_USERNAME and TEAMWORK_PASSWORD are required.');
   const t0 = Date.now();
   const browser = await chromium.launch({ headless: true });
 

@@ -24,8 +24,8 @@ const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABA
 const DRY_RUN = process.argv.includes('--dry-run');
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
-const USERNAME = process.env.TEAMWORK_USERNAME || 'Vincent'; // TODO remove fallback once TEAMWORK_USERNAME is set in Vercel env
-const PASSWORD = process.env.TEAMWORK_PASSWORD || 'Pass@123'; // TODO remove fallback once TEAMWORK_PASSWORD is set in Vercel env
+const USERNAME = process.env.TEAMWORK_USERNAME;
+const PASSWORD = process.env.TEAMWORK_PASSWORD;
 
 function parseDate(s) {
   const m = (s || '').match(/(\d{2})\/(\d{2})\/(\d{4})/);
@@ -73,6 +73,7 @@ async function scrapeMemberAppointments(page, memberId) {
 }
 
 async function main() {
+  if (!USERNAME || !PASSWORD) throw new Error('TEAMWORK_USERNAME and TEAMWORK_PASSWORD are required.');
   const { data: nds, error } = await sb.from('nominee_directors').select('id, name, member_id');
   if (error) { console.error(error); process.exit(1); }
 
@@ -145,32 +146,30 @@ async function main() {
 
   const ndIdsToRebuild = withMemberId.map(n => n.id);
 
-  if (!DRY_RUN) {
-    const { error: delErr } = await sb.from('nd_appointments').delete().in('nd_id', ndIdsToRebuild);
-    if (delErr) { console.error('DELETE ERROR:', delErr.message); process.exit(1); }
-  }
-
   const toInsert = [];
   for (const nd of withMemberId) {
     const rows = results[nd.id] ?? [];
-    const valid = rows.filter(r => r.role === 'Nominee Director' && !r.cessation.trim());
-    console.log(`  ${nd.name} (nd_id=${nd.id}): ${valid.length} active Nominee Director appointments`);
+    const valid = rows.filter(r => r.role === 'Nominee Director');
+    console.log(`  ${nd.name} (nd_id=${nd.id}): ${valid.length} Nominee Director appointments`);
     for (const r of valid) {
       toInsert.push({
         nd_id: nd.id,
         company_name: r.company,
-        sub_role: 'Nominee Director',
         appointment_date: parseDate(r.doapp),
-        cessation_date: null,
+        cessation_date: parseDate(r.cessation),
       });
     }
   }
 
   console.log(`\n${DRY_RUN ? '[DRY RUN] ' : ''}Total to insert: ${toInsert.length}`);
 
-  if (!DRY_RUN && toInsert.length) {
-    const { error: insErr } = await sb.from('nd_appointments').insert(toInsert);
-    if (insErr) { console.error('INSERT ERROR:', insErr.message); process.exit(1); }
+  if (!DRY_RUN) {
+    const { data: inserted, error: replaceError } = await sb.rpc('replace_nd_appointments', {
+      p_nd_ids: ndIdsToRebuild,
+      p_rows: toInsert,
+    });
+    if (replaceError) { console.error('ATOMIC REPLACE ERROR:', replaceError.message); process.exit(1); }
+    console.log(`Atomic replacement inserted ${inserted} rows.`);
   }
 
   console.log(`${DRY_RUN ? '[DRY RUN] ' : ''}Sync complete at ${new Date().toISOString()}`);

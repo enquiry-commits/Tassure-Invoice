@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { parseDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
-import { normalize, matchScore } from '@/lib/company-name';
+import { normalize, findUniqueBestMatch } from '@/lib/company-name';
+import { withAutomationRun } from '@/lib/automation-sync';
 
 /**
  * Daily AR-workflow sync: fill ar_reminder rows' AGM/filing dates from
@@ -31,13 +32,13 @@ export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
 interface ArRow {
-  id: number; entity_name: string; fye_month: string; fye_year: number;
+  id: number; company_id: number | null; entity_name: string; fye_month: string; fye_year: number;
   fye_date: string | null; due_date: string | null;
   date_of_agm: string | null; agm_held_date: string | null; filling_date: string | null;
-  status: string | null;
+  status: string | null; version: number;
 }
 
-export async function GET(req: NextRequest) {
+async function syncArWorkflow(req: NextRequest) {
   const supabase = createAdminClient();
   const { searchParams } = new URL(req.url);
   const onlyMonth = searchParams.get('month');
@@ -45,8 +46,7 @@ export async function GET(req: NextRequest) {
 
   let q = supabase
     .from('ar_reminder')
-    .select('id, entity_name, fye_month, fye_year, fye_date, due_date, date_of_agm, agm_held_date, filling_date, status')
-    .is('filling_date', null)
+    .select('id, company_id, entity_name, fye_month, fye_year, fye_date, due_date, date_of_agm, agm_held_date, filling_date, status, version')
     .or('status.is.null,status.neq.Excluded');
   if (onlyMonth) q = q.eq('fye_month', onlyMonth);
   if (onlyYear)  q = q.eq('fye_year', parseInt(onlyYear, 10));
@@ -56,39 +56,58 @@ export async function GET(req: NextRequest) {
 
   const { data: companies } = await supabase
     .from('companies')
-    .select('company_name, internal_id')
+    .select('id, company_name, internal_id')
     .not('internal_id', 'is', null);
 
-  // entity_name → TeamWork company_id (exact normalized match, then fuzzy).
-  const byNorm = new Map((companies ?? []).map(c => [normalize(c.company_name), c.internal_id as string]));
-  const normEntries = [...byNorm.entries()];
-  const idOf = (name: string): string | null => {
-    const n = normalize(name);
-    if (byNorm.has(n)) return byNorm.get(n)!;
-    for (const [k, id] of normEntries) if (matchScore(name, k) >= 70) return id;
-    return null;
+  // entity_name → TeamWork company_id. Fuzzy matching is allowed only when
+  // there is one unique best candidate; ties are sent to the exception count.
+  const companyCandidates = companies ?? [];
+  const internalByCompanyId = new Map(companyCandidates.map(company => [company.id, company.internal_id as string]));
+  const idOf = (companyId: number | null, name: string): { id: string | null; ambiguous: boolean } => {
+    if (companyId && internalByCompanyId.has(companyId)) return { id: internalByCompanyId.get(companyId)!, ambiguous: false };
+    const direct = companyCandidates.filter(company => normalize(company.company_name) === normalize(name));
+    if (direct.length === 1) return { id: direct[0].internal_id as string, ambiguous: false };
+    if (direct.length > 1) return { id: null, ambiguous: true };
+    const match = findUniqueBestMatch(name, companyCandidates, company => company.company_name);
+    return { id: match.value?.internal_id as string ?? null, ambiguous: match.ambiguous };
   };
 
   // Group rows by company so each company is fetched once.
   const byCompany = new Map<string, ArRow[]>();
-  let unmatched = 0;
+  let unmatched = 0, ambiguous = 0;
   for (const r of rows as ArRow[]) {
-    const id = idOf(r.entity_name);
-    if (!id) { unmatched++; continue; }
+    const match = idOf(r.company_id, r.entity_name);
+    if (!match.id) {
+      if (match.ambiguous) ambiguous++;
+      else unmatched++;
+      continue;
+    }
+    const id = match.id;
     if (!byCompany.has(id)) byCompany.set(id, []);
     byCompany.get(id)!.push(r);
   }
 
   const cookie = await getSessionCookie();
 
-  let updated = 0, checked = 0, fetchErrors = 0;
+  let updated = 0, checked = 0, fetchErrors = 0, updateErrors = 0, conflicts = 0;
   const changes: { entity: string; patch: Record<string, string> }[] = [];
 
   for (const [companyId, companyRows] of byCompany) {
     checked++;
-    let result: { data: string[][] };
+    let result: { data: string[][] } = { data: [] };
     try {
-      result = await fetchAgmList(cookie, companyId);
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          result = await fetchAgmList(cookie, companyId);
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+          if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 500));
+        }
+      }
+      if (lastError) throw lastError;
     } catch {
       fetchErrors++;
       continue;
@@ -124,23 +143,33 @@ export async function GET(req: NextRequest) {
       }
 
       if (Object.keys(patch).length) {
-        const { error: upErr } = await supabase.from('ar_reminder').update({
+        const { data: updatedRows, error: upErr } = await supabase.from('ar_reminder').update({
           ...patch,
           updated_by_email: 'system:teamwork',
           updated_by_name: 'TeamWork Sync',
-        }).eq('id', r.id);
-        if (!upErr) { updated++; changes.push({ entity: r.entity_name, patch }); }
+        }).eq('id', r.id).eq('version', r.version).select('id');
+        if (upErr) updateErrors++;
+        else if (!updatedRows?.length) conflicts++;
+        else { updated++; changes.push({ entity: r.entity_name, patch }); }
       }
     }
   }
 
-  return NextResponse.json({
-    ok: true,
+  const result = {
+    ok: fetchErrors === 0 && updateErrors === 0,
     rows: rows.length,
     companies_checked: checked,
     unmatched_names: unmatched,
+    ambiguous_names: ambiguous,
     fetch_errors: fetchErrors,
+    update_errors: updateErrors,
+    version_conflicts: conflicts,
     updated,
     changes: changes.slice(0, 30),
-  });
+  };
+  return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+}
+
+export async function GET(req: NextRequest) {
+  return withAutomationRun(req, 'ar_workflow', () => syncArWorkflow(req));
 }

@@ -3,13 +3,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getApprovedAccount } from '@/lib/approved-accounts';
 
 const PUBLIC_PATHS = new Set(['/login', '/auth/callback']);
+const CRON_PATHS = new Set([
+  '/api/teamwork/sync-nd',
+  '/api/teamwork/sync',
+  '/api/ar-reminder/generate',
+  '/api/quickbooks/sync',
+  '/api/ar-reminder/sync-workflow',
+  '/api/late-filing/sync',
+]);
 
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const isPublic = PUBLIC_PATHS.has(path);
   const isApi = path.startsWith('/api/');
   const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && req.headers.get('authorization') === `Bearer ${cronSecret}`) return NextResponse.next();
+  if (
+    cronSecret
+    && req.method === 'GET'
+    && CRON_PATHS.has(path)
+    && req.headers.get('authorization') === `Bearer ${cronSecret}`
+  ) return NextResponse.next();
 
   let response = NextResponse.next({ request: req });
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {

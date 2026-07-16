@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { todaySGT, toIsoDateValue } from '@/lib/date';
 import { pageAll } from '@/lib/page-all';
-import { normalize, matchScore } from '@/lib/company-name';
+import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { getRequestAccount } from '@/lib/request-account';
 
@@ -67,14 +67,8 @@ function getQbItems(supabase: ReturnType<typeof createAdminClient>, year: number
 function wordMatch<T>(target: string, map: Map<string, T>): T | null {
   const exact = map.get(target);
   if (exact !== undefined) return exact;
-
-  const targetWords = new Set(target.split(' ').filter(word => word.length > 1));
-  for (const [candidate, value] of map) {
-    const candidateWords = new Set(candidate.split(' ').filter(word => word.length > 1));
-    const common = [...targetWords].filter(word => candidateWords.has(word)).length;
-    if (common > 0 && common / Math.max(targetWords.size, candidateWords.size) >= 0.6) return value;
-  }
-  return null;
+  const match = findUniqueBestMatch(target, [...map.entries()], entry => entry[0], 70);
+  return match.value?.[1] ?? null;
 }
 
 function normalizeUpdateValue(field: string, value: unknown, rejectInvalidDate: boolean): string | null {
@@ -153,6 +147,7 @@ export async function GET(req: NextRequest) {
   }
 
   const companyMap = new Map((companies ?? []).map(company => [normalize(company.company_name), company]));
+  const companyById = new Map((companies ?? []).map(company => [company.id, company]));
   const invoiceMap = new Map<string, NonNullable<typeof qbInvoices>>();
   for (const invoice of qbInvoices ?? []) {
     const key = normalize(invoice.customer_name);
@@ -204,8 +199,9 @@ export async function GET(req: NextRequest) {
   const today = todaySGT();
   const enriched = arRows.map(row => {
     const normName = normalize(row.entity_name);
-    const compMatch = companyMap.get(normName)
-      ?? (companies ?? []).find(company => matchScore(row.entity_name, company.company_name) >= 70);
+    const compMatch = (row.company_id ? companyById.get(row.company_id) : null)
+      ?? companyMap.get(normName)
+      ?? findUniqueBestMatch(row.entity_name, companies ?? [], company => company.company_name, 70).value;
 
     const qbSvcsRaw = wordMatch(normName, qbServiceMap);
     const qbSvcs = qbSvcsRaw instanceof Set ? qbSvcsRaw : new Set<string>();

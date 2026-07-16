@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
+import { withAutomationRun } from '@/lib/automation-sync';
 
 /**
  * Auto-generates ar_reminder rows for a rolling 6-month window (current
@@ -21,8 +22,9 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 const EXCLUDED_STATUSES = ['Striking Off', 'Terminated'];
 const WINDOW_MONTHS = 6;
 
-function lastDayOfMonth(year: number, monthIndex0: number) {
-  return new Date(Date.UTC(year, monthIndex0 + 1, 0));
+function fyeDateFor(year: number, monthIndex0: number, preferredDay: number | null) {
+  const lastDay = new Date(Date.UTC(year, monthIndex0 + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, monthIndex0, Math.min(preferredDay ?? lastDay, lastDay)));
 }
 
 function toDateStr(d: Date) {
@@ -37,7 +39,7 @@ function addMonths(date: Date, n: number) {
   return d;
 }
 
-export async function GET() {
+async function generateArRows() {
   const supabase = createAdminClient();
 
   const now = new Date();
@@ -52,14 +54,15 @@ export async function GET() {
 
   const { data: companies, error } = await supabase
     .from('companies')
-    .select('company_name, registration_no, fye_month, pic, sec_pic, is_active, tw_status')
+    .select('id, company_name, registration_no, fye_month, fye_day, pic, sec_pic, is_active, tw_status')
     .eq('is_active', true)
     .not('tw_status', 'in', `(${EXCLUDED_STATUSES.map(s => `"${s}"`).join(',')})`);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const summary: { month: string; year: number; matched: number; inserted: number }[] = [];
+  const summary: { month: string; year: number; matched: number; inserted: number; error?: string }[] = [];
   let totalInserted = 0;
+  const errors: string[] = [];
 
   for (const target of targets) {
     const matching = (companies ?? []).filter(c => c.fye_month === target.monthName);
@@ -67,32 +70,41 @@ export async function GET() {
     // Intentionally counts ALL rows for the cycle, including soft-deleted
     // ('Excluded') ones — that's how a user-removed company stays removed and
     // isn't auto-recreated. Do NOT filter out status='Excluded' here.
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('ar_reminder')
-      .select('entity_name')
+      .select('entity_name, company_id')
       .eq('fye_month', target.monthName)
       .eq('fye_year', target.year);
+    if (existingError) {
+      errors.push(`${target.monthName} ${target.year}: ${existingError.message}`);
+      summary.push({ month: target.monthName, year: target.year, matched: matching.length, inserted: 0, error: existingError.message });
+      continue;
+    }
     const existingNames = new Set((existing ?? []).map(r => r.entity_name));
-
-    const fyeDate = lastDayOfMonth(target.year, target.monthIndex0);
-    const dueDate = addMonths(fyeDate, 7);
+    const existingCompanyIds = new Set((existing ?? []).map(r => r.company_id).filter(Boolean));
 
     const toInsert = matching
-      .filter(c => !existingNames.has(c.company_name))
-      .map(c => ({
+      .filter(c => !existingCompanyIds.has(c.id) && !existingNames.has(c.company_name))
+      .map(c => {
+        const fyeDate = fyeDateFor(target.year, target.monthIndex0, c.fye_day);
+        const dueDate = addMonths(fyeDate, 7);
+        return {
         entity_name: c.company_name,
+        company_id: c.id,
         uen: c.registration_no || '',
         fye_month: target.monthName,
         fye_year: target.year,
         fye_date: toDateStr(fyeDate),
         due_date: toDateStr(dueDate),
         pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
-      }));
+        };
+      });
 
     if (toInsert.length) {
       const { error: insErr } = await supabase.from('ar_reminder').insert(toInsert);
       if (insErr) {
-        summary.push({ month: target.monthName, year: target.year, matched: matching.length, inserted: 0 });
+        errors.push(`${target.monthName} ${target.year}: ${insErr.message}`);
+        summary.push({ month: target.monthName, year: target.year, matched: matching.length, inserted: 0, error: insErr.message });
         continue;
       }
     }
@@ -101,5 +113,10 @@ export async function GET() {
     totalInserted += toInsert.length;
   }
 
-  return NextResponse.json({ ok: true, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, summary });
+  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, summary, errors };
+  return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+}
+
+export async function GET(req: NextRequest) {
+  return withAutomationRun(req, 'ar_generate', generateArRows);
 }

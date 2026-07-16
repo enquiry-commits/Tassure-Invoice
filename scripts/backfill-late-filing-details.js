@@ -28,8 +28,8 @@ const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABA
 const DRY_RUN = process.argv.includes('--dry-run');
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
-const USERNAME = process.env.TEAMWORK_USERNAME || 'Vincent'; // TODO remove fallback once TEAMWORK_USERNAME is set in Vercel env
-const PASSWORD = process.env.TEAMWORK_PASSWORD || 'Pass@123'; // TODO remove fallback once TEAMWORK_PASSWORD is set in Vercel env
+const USERNAME = process.env.TEAMWORK_USERNAME;
+const PASSWORD = process.env.TEAMWORK_PASSWORD;
 const MONTH_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
 function parseDmy(s) {
@@ -129,6 +129,7 @@ function analyse(rows, today) {
 function MONTH_ABB_SAFE(d) { return MONTH_ABBR[d.getMonth()]; }
 
 async function main() {
+  if (!USERNAME || !PASSWORD) throw new Error('TEAMWORK_USERNAME and TEAMWORK_PASSWORD are required.');
   console.log('Logging in...');
   const cookie = await getSessionCookie();
 

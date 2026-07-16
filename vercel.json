@@ -5,6 +5,10 @@
   "installCommand": "npm install",
   "crons": [
     {
+      "path": "/api/teamwork/sync-nd",
+      "schedule": "0 0 * * *"
+    },
+    {
       "path": "/api/teamwork/sync",
       "schedule": "30 0 * * *"
     },

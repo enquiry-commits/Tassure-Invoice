@@ -1,6 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
+import { resolveTeamworkPic } from '@/lib/teamwork-pic';
+import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@/lib/automation-sync';
 
 // Daily TeamWork -> companies sync (see vercel.json cron, 00:30 UTC — before
 // the 01:00 ar-reminder generator so new clients enter that day's AR window).
@@ -84,8 +86,13 @@ function fyeMonthOf(fyeDate: string | null): string | null {
   const m = (fyeDate ?? '').match(/^\d{1,2}\/(\d{1,2})$/);   // "31/12" = DD/MM
   return m ? MONTH_NAMES[parseInt(m[1], 10) - 1] ?? null : null;
 }
+function fyeDayOf(fyeDate: string | null): number | null {
+  const match = (fyeDate ?? '').match(/^(\d{1,2})\/\d{1,2}$/);
+  const day = match ? parseInt(match[1], 10) : NaN;
+  return Number.isInteger(day) && day >= 1 && day <= 31 ? day : null;
+}
 
-export async function GET() {
+async function syncTeamworkCompanies() {
   const missing = ENV_KEYS.filter(k => !process.env[k]);
   if (missing.length) return NextResponse.json({ error: `Missing env vars: ${missing.join(', ')}` }, { status: 500 });
 
@@ -103,7 +110,7 @@ export async function GET() {
   const supabase = createAdminClient();
   const { data: rows, error } = await supabase
     .from('companies')
-    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, best_email, uses_address, has_nd');
+    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, fye_day, best_email, uses_address, has_nd, pic, sec_pic');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const byInternal = new Map((rows ?? []).filter(r => r.internal_id).map(r => [r.internal_id as string, r]));
@@ -119,6 +126,8 @@ export async function GET() {
   const now = new Date().toISOString();
   const updates: { id: number; patch: Record<string, unknown> }[] = [];
   const inserts: Record<string, unknown>[] = [];
+  const unknownPicIds: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
+  const ambiguousNames: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
   let matched = 0, backfilled = 0, skippedAmbiguous = 0;
 
   for (const tw of twList) {
@@ -127,7 +136,11 @@ export async function GET() {
 
     if (!row && twName) {
       const cand = byName.get(normalize(twName));
-      if (cand === (AMBIG as never)) { skippedAmbiguous++; continue; }
+      if (cand === (AMBIG as never)) {
+        skippedAmbiguous++;
+        ambiguousNames.push({ key: tw.company_id, name: twName, details: { normalized_name: normalize(twName) } });
+        continue;
+      }
       if (cand) { row = cand; backfilled++; }
     }
 
@@ -135,8 +148,14 @@ export async function GET() {
     const type    = (tw.type ?? '').trim() || null;
     const status  = (tw.status ?? '').trim() || null;
     const fyeMon  = fyeMonthOf(tw.fye_date);
+    const fyeDay  = fyeDayOf(tw.fye_date);
     const email   = (tw.company_email_address ?? '').trim() || null;
     const regAddr = (tw.company_reg_Office_address ?? '').trim();
+    const resolvedPic = resolveTeamworkPic(tw.person_in_charge);
+    const rawPic = String(tw.person_in_charge ?? '').trim();
+    if (/^\d+$/.test(rawPic) && !resolvedPic) {
+      unknownPicIds.push({ key: tw.company_id, name: twName, details: { teamwork_pic_id: rawPic } });
+    }
 
     if (row) {
       matched++;
@@ -146,7 +165,10 @@ export async function GET() {
       if (type   && type   !== row.company_type)                     patch.company_type = type;
       if (status && status !== row.tw_status) { patch.tw_status = status; patch.is_active = status === 'Active'; }
       if (fyeMon && fyeMon !== row.fye_month)                        patch.fye_month = fyeMon;
+      if (fyeDay && fyeDay !== row.fye_day)                          patch.fye_day = fyeDay;
       if (email  && email.toLowerCase() !== (row.best_email ?? '').toLowerCase()) patch.best_email = email;
+      const currentPic = String(row.sec_pic ?? row.pic ?? '').trim();
+      if (/^\d+$/.test(currentPic)) patch.pic = resolvedPic || null;
       // Address service follows the CURRENT TeamWork registered address (both
       // directions — cancelled service flips off, new service flips on). Only
       // when TeamWork actually has an address on file.
@@ -159,8 +181,9 @@ export async function GET() {
         registration_no: regNo,
         company_type: type,
         fye_month: fyeMon,
+        fye_day: fyeDay,
         best_email: email,
-        pic: (tw.person_in_charge ?? '').trim() || null,
+        pic: resolvedPic && !/^\d+$/.test(resolvedPic) ? resolvedPic : null,
         client_type: 'CSS Client',
         tw_status: 'Active',
         is_active: true,
@@ -204,12 +227,16 @@ export async function GET() {
     }
   }
 
-  let updatedCount = 0, updateErrors: string[] = [];
+  let updatedCount = 0;
+  const updateErrors: string[] = [];
   for (let i = 0; i < updates.length; i += 10) {
     const results = await Promise.all(updates.slice(i, i + 10).map(u =>
       supabase.from('companies').update(u.patch).eq('id', u.id).then(r => r.error?.message ?? null)
     ));
-    for (const err of results) err ? updateErrors.push(err) : updatedCount++;
+    for (const err of results) {
+      if (err) updateErrors.push(err);
+      else updatedCount++;
+    }
   }
 
   let insertedCount = 0, insertError: string | null = null;
@@ -219,7 +246,16 @@ export async function GET() {
     else insertedCount = dedupedInserts.length;
   }
 
-  const missingFromTw = (rows ?? []).filter(r => r.internal_id && !twList.some(t => t.company_id === r.internal_id)).length;
+  const teamworkIds = new Set(twList.map(item => item.company_id));
+  const missingRows = (rows ?? []).filter(r => r.internal_id && !teamworkIds.has(r.internal_id));
+  const missingFromTw = missingRows.length;
+  await Promise.all([
+    replaceAutomationExceptions('teamwork_companies', 'missing_from_teamwork', missingRows.map(row => ({
+      key: String(row.internal_id), name: row.company_name, details: { company_id: row.id },
+    }))),
+    replaceAutomationExceptions('teamwork_companies', 'unknown_pic_id', unknownPicIds),
+    replaceAutomationExceptions('teamwork_companies', 'ambiguous_company_name', ambiguousNames),
+  ]);
 
   return NextResponse.json({
     ok: !insertError && !updateErrors.length,
@@ -235,4 +271,27 @@ export async function GET() {
     ...(insertError ? { insert_error: insertError } : {}),
     ...(updateErrors.length ? { update_errors: updateErrors.slice(0, 5) } : {}),
   });
+}
+
+export async function GET(req: NextRequest) {
+  let run: AutomationRun;
+  try {
+    run = await AutomationRun.begin('teamwork_companies', automationTrigger(req.headers.get('authorization')));
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 503 });
+  }
+  if (!run.acquired) {
+    return NextResponse.json({ ok: false, skipped: true, error: 'TeamWork company sync is already running.' }, { status: 409 });
+  }
+
+  try {
+    const response = await syncTeamworkCompanies();
+    const summary = await response.clone().json() as Record<string, unknown>;
+    if (response.ok && summary.ok !== false) await run.succeed(summary);
+    else await run.fail(String(summary.error ?? 'TeamWork company sync failed.'), summary);
+    return response;
+  } catch (error) {
+    await run.fail(error);
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  }
 }

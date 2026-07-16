@@ -19,5 +19,13 @@ export async function GET(req: NextRequest) {
   });
 
   const authUrl = `https://appcenter.intuit.com/connect/oauth2?${params}`;
-  return NextResponse.redirect(authUrl);
+  const response = NextResponse.redirect(authUrl);
+  response.cookies.set('qb_oauth_state', state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 10 * 60,
+    path: '/api/quickbooks/callback',
+  });
+  return response;
 }

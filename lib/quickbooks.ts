@@ -47,41 +47,83 @@ export async function getValidToken(company: QbCompany = 'TAB'): Promise<TokenRo
 
   if (!tokenExpired) return data as TokenRow;
 
-  // Refresh the access token
-  const clientId     = process.env.QB_CLIENT_ID!;
-  const clientSecret = process.env.QB_CLIENT_SECRET!;
-  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
-
-  const res = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
-    method: 'POST',
-    headers: {
-      Authorization:  `Basic ${basic}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept:         'application/json',
-    },
-    body: new URLSearchParams({
-      grant_type:    'refresh_token',
-      refresh_token: data.refresh_token,
-    }),
+  // Intuit rotates refresh tokens. Two simultaneous serverless requests must
+  // not refresh the same old token and then overwrite each other's new token.
+  const lockExpiry = new Date(now.getTime() + 60_000).toISOString();
+  await supabase.from('quickbooks_token_refresh_locks')
+    .delete().eq('company_label', company).lt('expires_at', now.toISOString());
+  const { error: lockError } = await supabase.from('quickbooks_token_refresh_locks').insert({
+    company_label: company,
+    locked_at: now.toISOString(),
+    expires_at: lockExpiry,
   });
 
-  if (!res.ok) return null;
+  if (lockError) {
+    // Another invocation owns the refresh. Wait briefly for its new token
+    // instead of sending the same rotating refresh token twice.
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const current = await supabase.from('quickbooks_tokens').select('*')
+        .eq('company_label', company).limit(1).maybeSingle();
+      if (current.data && new Date(current.data.expires_at) > new Date()) return current.data as TokenRow;
+    }
+    return null;
+  }
 
-  const tokens = await res.json();
-  const updated = {
-    access_token:       tokens.access_token,
-    refresh_token:      tokens.refresh_token,
-    expires_at:         new Date(now.getTime() + tokens.expires_in * 1000).toISOString(),
-    refresh_expires_at: new Date(now.getTime() + tokens.x_refresh_token_expires_in * 1000).toISOString(),
-    updated_at:         now.toISOString(),
-  };
+  try {
+    // Re-read after acquiring the distributed lease. A previous owner may
+    // have completed between our first read and lock acquisition.
+    const latest = await supabase.from('quickbooks_tokens').select('*')
+      .eq('company_label', company).limit(1).maybeSingle();
+    if (latest.data && new Date(latest.data.expires_at) > new Date()) return latest.data as TokenRow;
+    const refreshSource = (latest.data ?? data) as TokenRow;
 
-  await supabase
-    .from('quickbooks_tokens')
-    .update({ ...updated })
-    .eq('realm_id', data.realm_id);
+    // Refresh the access token
+    const clientId     = process.env.QB_CLIENT_ID!;
+    const clientSecret = process.env.QB_CLIENT_SECRET!;
+    const basic = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
 
-  return { ...data, ...updated } as TokenRow;
+    const res = await fetch('https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer', {
+      method: 'POST',
+      headers: {
+        Authorization:  `Basic ${basic}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept:         'application/json',
+      },
+      body: new URLSearchParams({
+        grant_type:    'refresh_token',
+        refresh_token: refreshSource.refresh_token,
+      }),
+    });
+
+    if (!res.ok) return null;
+
+    const tokens = await res.json();
+    const refreshedAt = new Date();
+    const updated = {
+      access_token:       tokens.access_token,
+      refresh_token:      tokens.refresh_token,
+      expires_at:         new Date(refreshedAt.getTime() + tokens.expires_in * 1000).toISOString(),
+      refresh_expires_at: new Date(refreshedAt.getTime() + tokens.x_refresh_token_expires_in * 1000).toISOString(),
+      updated_at:         refreshedAt.toISOString(),
+    };
+
+    const saved = await supabase
+      .from('quickbooks_tokens')
+      .update({ ...updated })
+      .eq('realm_id', refreshSource.realm_id)
+      .eq('refresh_token', refreshSource.refresh_token)
+      .select('*')
+      .maybeSingle();
+    if (saved.error) return null;
+    if (saved.data) return saved.data as TokenRow;
+
+    const current = await supabase.from('quickbooks_tokens').select('*')
+      .eq('company_label', company).limit(1).maybeSingle();
+    return current.data as TokenRow | null;
+  } finally {
+    await supabase.from('quickbooks_token_refresh_locks').delete().eq('company_label', company);
+  }
 }
 
 // Run a QB query against a specific company and return rows.

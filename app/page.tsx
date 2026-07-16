@@ -19,6 +19,23 @@ interface Data {
   upcomingAR: Pt[];
   topNDs: Pt[];
 }
+interface AutomationHealth {
+  ok: boolean;
+  attentionCount: number;
+  jobs: Array<{
+    source: string;
+    status: string;
+    lastSuccessAt: string | null;
+    successAgeHours: number | null;
+    error: string | null;
+  }>;
+  anomalies: {
+    numericPics: number;
+    qbPeriodParseExceptions: number;
+    invoiceRequestsNeedingReconciliation: number;
+    openIntegrationExceptions: number;
+  };
+}
 
 const DASHBOARD_COLORS = {
   ink: '#102a43',
@@ -99,18 +116,67 @@ function SectionLabel({ eyebrow, title, description }: { eyebrow: string; title:
   );
 }
 
+const AUTOMATION_LABELS: Record<string, string> = {
+  teamwork_nd: 'TeamWork ND',
+  teamwork_companies: 'TeamWork Companies',
+  ar_generate: 'AR Generate',
+  quickbooks: 'QuickBooks',
+  ar_workflow: 'AR Workflow',
+  late_filing: 'Late Filing',
+};
+
+function AutomationHealthBar({ health }: { health: AutomationHealth }) {
+  const attention = !health.ok;
+  return (
+    <section style={{ marginBottom: 18, border: `1px solid ${attention ? '#f2d6b0' : '#cde8df'}`, background: attention ? '#fffaf3' : '#f4fbf8', borderRadius: 13, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 190 }}>
+        <span style={{ width: 31, height: 31, borderRadius: 9, display: 'grid', placeItems: 'center', color: attention ? '#b45309' : '#0f766e', background: attention ? '#ffedd5' : '#dff5ec' }}>
+          {attention ? <AlertTriangle size={15} /> : <ShieldCheck size={15} />}
+        </span>
+        <span>
+          <strong style={{ display: 'block', fontSize: 11.5, color: DASHBOARD_COLORS.ink }}>Automation health</strong>
+          <span style={{ display: 'block', fontSize: 9.5, color: '#718096', marginTop: 1 }}>{attention ? `${health.attentionCount} item(s) need attention` : 'All scheduled data flows are healthy'}</span>
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 7, flex: 1, flexWrap: 'wrap' }}>
+        {health.jobs.map(job => {
+          const ok = job.status !== 'attention';
+          return (
+            <span key={job.source} title={job.error ?? undefined} style={{ padding: '5px 8px', borderRadius: 999, border: `1px solid ${ok ? '#cde8df' : '#f2d6b0'}`, background: '#fff', color: ok ? '#176b5b' : '#a6530a', fontSize: 9.5, fontWeight: 750 }}>
+              <span style={{ marginRight: 5 }}>{ok ? '●' : '!'}</span>{AUTOMATION_LABELS[job.source] ?? job.source}
+              <span style={{ color: '#94a3b8', fontWeight: 600, marginLeft: 5 }}>{job.successAgeHours == null ? 'never' : `${job.successAgeHours}h`}</span>
+            </span>
+          );
+        })}
+      </div>
+      {(health.anomalies.numericPics > 0 || health.anomalies.invoiceRequestsNeedingReconciliation > 0 || health.anomalies.openIntegrationExceptions > 0) && (
+        <div style={{ fontSize: 9.5, color: '#9a5a13', fontWeight: 700 }}>
+          {health.anomalies.numericPics > 0 && `${health.anomalies.numericPics} numeric PIC`}
+          {health.anomalies.numericPics > 0 && health.anomalies.invoiceRequestsNeedingReconciliation > 0 && ' · '}
+          {health.anomalies.invoiceRequestsNeedingReconciliation > 0 && `${health.anomalies.invoiceRequestsNeedingReconciliation} invoice reconciliation`}
+          {(health.anomalies.numericPics > 0 || health.anomalies.invoiceRequestsNeedingReconciliation > 0) && health.anomalies.openIntegrationExceptions > 0 && ' · '}
+          {health.anomalies.openIntegrationExceptions > 0 && `${health.anomalies.openIntegrationExceptions} integration exceptions`}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState('');
+  const [automationHealth, setAutomationHealth] = useState<AutomationHealth | null>(null);
 
   const load = () => {
     setLoading(true);
     fetch('/api/dashboard').then(r => r.json()).then(setData).finally(() => setLoading(false));
+    fetch('/api/automation/health').then(r => r.ok ? r.json() : null).then(setAutomationHealth).catch(() => setAutomationHealth(null));
   };
   useEffect(() => {
     fetch('/api/dashboard').then(r => r.json()).then(setData).finally(() => setLoading(false));
+    fetch('/api/automation/health').then(r => r.ok ? r.json() : null).then(setAutomationHealth).catch(() => setAutomationHealth(null));
   }, []);
 
   const exportCompanyData = async () => {
@@ -168,6 +234,8 @@ export default function DashboardPage() {
           <QBConnectButton />
         </div>
       </header>
+
+      {automationHealth && <AutomationHealthBar health={automationHealth} />}
 
       {!data ? (
         <div style={{ textAlign: 'center', padding: 90, color: '#94a3b8', fontSize: 13 }}>Loading portfolio intelligence…</div>
