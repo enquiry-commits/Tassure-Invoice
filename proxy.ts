@@ -2,7 +2,10 @@ import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
 import { getApprovedAccount } from '@/lib/approved-accounts';
 
-const PUBLIC_PATHS = new Set(['/login', '/auth/callback']);
+// Intuit cannot carry a Tassure Google session. The webhook route is public at
+// the session layer and authenticates the exact raw request body with Intuit's
+// HMAC signature before accepting any event.
+const PUBLIC_PATHS = new Set(['/login', '/auth/callback', '/api/quickbooks/webhook']);
 const CRON_PATHS = new Set([
   '/api/teamwork/sync-nd',
   '/api/teamwork/sync',

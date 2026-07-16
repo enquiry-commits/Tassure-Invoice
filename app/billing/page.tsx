@@ -14,6 +14,7 @@ import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { fmtDate, fmtMonth, toDisplayDate, toIsoDateValue, todaySGT } from '@/lib/date';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -345,6 +346,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
   const [message, setMessage] = useState('');
   const [conflict, setConflict] = useState<FieldConflict | null>(null);
   const pendingRef = useRef<{ next: string; prev: string }>({ next: '', prev: '' });
+  const editBaselineRef = useRef(value ?? '');
   const committingRef = useRef(false);
   const requestRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -373,6 +375,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
       }
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       const saved = String(json.value ?? '');
+      editBaselineRef.current = saved;
       onSave(id, field, saved);
       setVal(inputValue(saved));
       setStatus('saved');
@@ -391,9 +394,10 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     setEditing(false);
     const typed = val.trim();
     const next = isDate && typed ? toIsoDateValue(typed) : typed;
-    const prev = isDate && value && AR_DATABASE_DATE_FIELDS.has(field)
-      ? (toIsoDateValue(value) ?? value.trim())
-      : (value ?? '').trim();
+    const baseline = editBaselineRef.current;
+    const prev = isDate && baseline && AR_DATABASE_DATE_FIELDS.has(field)
+      ? (toIsoDateValue(baseline) ?? baseline.trim())
+      : baseline.trim();
     if (isDate && typed && !next) {
       setMessage('Use a valid date, e.g. 03 Apr 2026');
       setStatus('error');
@@ -403,18 +407,19 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     committingRef.current = true;
     onSave(id, field, next ?? '');
     void persist(next ?? '', prev);
-  }, [val, value, id, field, isDate, onSave, persist]);
+  }, [val, id, field, isDate, onSave, persist]);
 
   const retry = useCallback(() => { committingRef.current = true; void persist(pendingRef.current.next, pendingRef.current.prev); }, [persist]);
   const acceptLatest = useCallback(() => {
     const latest = String(conflict?.currentValue ?? pendingRef.current.prev ?? '');
+    editBaselineRef.current = latest;
     onSave(id, field, latest); setVal(inputValue(latest)); setConflict(null); setStatus('idle');
   }, [conflict, field, id, inputValue, onSave]);
   const overwriteLatest = useCallback(() => {
     committingRef.current = true;
     void persist(pendingRef.current.next, String(conflict?.currentValue ?? ''));
   }, [conflict, persist]);
-  const revert = useCallback(() => { const { prev } = pendingRef.current; onSave(id, field, prev); setVal(inputValue(prev)); setStatus('idle'); }, [id, field, inputValue, onSave]);
+  const revert = useCallback(() => { const { prev } = pendingRef.current; editBaselineRef.current = prev; onSave(id, field, prev); setVal(inputValue(prev)); setStatus('idle'); }, [id, field, inputValue, onSave]);
 
   const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) return;
@@ -471,7 +476,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
     : status === 'saved' ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
   return (
-    <div onClick={() => { setVal(inputValue(value)); setEditing(true); }} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
+    <div onClick={() => { editBaselineRef.current = value ?? ''; setVal(inputValue(value)); setEditing(true); }} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
       {display
@@ -529,6 +534,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
   const [message, setMessage] = useState('');
   const [conflict, setConflict] = useState<FieldConflict | null>(null);
   const pendingRef = useRef<{ next: string; prev: string }>({ next: '', prev: '' });
+  const editBaselineRef = useRef(value ?? '');
   const requestRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -564,6 +570,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
       }
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
       const saved = String(json.value ?? '');
+      editBaselineRef.current = saved;
       onSave(id, field, saved);
       setVal(saved);
       setStatus('saved');
@@ -575,9 +582,10 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
     }
   }, [id, field, onSave]);
   const retry  = useCallback(() => persist(pendingRef.current.next, pendingRef.current.prev), [persist]);
-  const revert = useCallback(() => { const { prev } = pendingRef.current; onSave(id, field, prev); setVal(prev); setStatus('idle'); }, [id, field, onSave]);
+  const revert = useCallback(() => { const { prev } = pendingRef.current; editBaselineRef.current = prev; onSave(id, field, prev); setVal(prev); setStatus('idle'); }, [id, field, onSave]);
   const acceptLatest = useCallback(() => {
     const latest = String(conflict?.currentValue ?? pendingRef.current.prev ?? '');
+    editBaselineRef.current = latest;
     onSave(id, field, latest); setVal(latest); setConflict(null); setStatus('idle');
   }, [conflict, field, id, onSave]);
   const overwriteLatest = useCallback(() => persist(pendingRef.current.next, String(conflict?.currentValue ?? '')), [conflict, persist]);
@@ -586,11 +594,11 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
     setCustom(false); setOpen(false);
     const typed = next.trim();
     const trimmed = toIsoDateValue(typed) ?? typed;
-    const prev = (value ?? '').trim();
+    const prev = editBaselineRef.current.trim();
     if (trimmed === prev) return;
     onSave(id, field, trimmed);   // optimistic
     persist(trimmed, prev);
-  }, [id, field, value, onSave, persist]);
+  }, [id, field, onSave, persist]);
 
   const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) return;
@@ -646,7 +654,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
           </div>
         </div>
       ) : (
-        <div onClick={() => setOpen(v => !v)} title="Click to select" style={{ cursor: 'pointer', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
+        <div onClick={() => setOpen(current => { if (!current) editBaselineRef.current = value ?? ''; return !current; })} title="Click to select" style={{ cursor: 'pointer', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
           onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
           onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
           {display
@@ -679,7 +687,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
               Clear
             </div>
           )}
-          <div onClick={() => { setOpen(false); setVal(value ?? ''); setCustom(true); }}
+          <div onClick={() => { editBaselineRef.current = value ?? ''; setOpen(false); setVal(value ?? ''); setCustom(true); }}
             style={{ padding: '7px 12px', cursor: 'pointer', borderTop: '1px solid #f1f5f9', fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fff'}>
@@ -2495,9 +2503,13 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
         }
 
         if (payload.eventType === 'UPDATE') {
+          const realtimePatch = {
+            ...next,
+            ...(Object.prototype.hasOwnProperty.call(next, 'pic') ? { pic: resolveTeamworkPic(next.pic) } : {}),
+          };
           const merge = (record: ARRecord) => {
             if (record.id !== id) return record;
-            return recomputeArRecord({ ...record, ...next } as ARRecord);
+            return recomputeArRecord({ ...record, ...realtimePatch } as ARRecord);
           };
           setRecords(current => current.map(merge));
           setModalRecord(current => current?.id === id ? merge(current) : current);

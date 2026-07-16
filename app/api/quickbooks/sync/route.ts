@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { qbQuery, type QbCompany } from '@/lib/quickbooks';
 import { createAdminClient } from '@/lib/supabase';
 import { withAutomationRun, replaceAutomationExceptions, type AutomationRun } from '@/lib/automation-sync';
+import { processQuickBooksWebhookQueue } from '@/lib/quickbooks-webhook-queue';
 
 // ── Service classification ───────────────────────────────────────────────────
 // The QB Product/Service item name is authoritative — classify by it FIRST.
@@ -111,6 +112,7 @@ export const maxDuration = 300; // full-year sync pages through 1500+ invoices (
 // (basic services) and TAC (Nominee Director only). TAC is skipped silently
 // (reported, not fatal) until it's connected.
 async function syncRecentYears(run: AutomationRun) {
+  const webhookChanges = await processQuickBooksWebhookQueue(run);
   const thisYear = new Date().getFullYear();
   const results: Record<string, unknown>[] = [];
   for (const company of ['TAB', 'TAC'] as QbCompany[]) {
@@ -119,8 +121,9 @@ async function syncRecentYears(run: AutomationRun) {
       results.push({ company, year, ...res });
     }
   }
-  const ok = results.every(result => !result.error && !result.invoice_error && Number(result.items_error ?? 0) === 0);
-  return NextResponse.json({ ok, results }, { status: ok ? 200 : 502 });
+  const ok = webhookChanges.failed === 0
+    && results.every(result => !result.error && !result.invoice_error && Number(result.items_error ?? 0) === 0);
+  return NextResponse.json({ ok, webhook_changes: webhookChanges, results }, { status: ok ? 200 : 502 });
 }
 
 export async function GET(req: NextRequest) {
