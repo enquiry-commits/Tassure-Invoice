@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 
 /**
  * Auto-generates ar_reminder rows for a rolling 6-month window (current
@@ -51,7 +52,7 @@ export async function GET() {
 
   const { data: companies, error } = await supabase
     .from('companies')
-    .select('company_name, registration_no, fye_month, pic, is_active, tw_status')
+    .select('company_name, registration_no, fye_month, pic, sec_pic, is_active, tw_status')
     .eq('is_active', true)
     .not('tw_status', 'in', `(${EXCLUDED_STATUSES.map(s => `"${s}"`).join(',')})`);
 
@@ -85,7 +86,7 @@ export async function GET() {
         fye_year: target.year,
         fye_date: toDateStr(fyeDate),
         due_date: toDateStr(dueDate),
-        pic: c.pic || '',
+        pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
       }));
 
     if (toInsert.length) {

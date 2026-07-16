@@ -94,7 +94,7 @@ async function main() {
         fye_year: target.year,
         fye_date: toDateStr(fyeDate),
         due_date: toDateStr(dueDate),
-        pic: c.pic || '',
+        pic: ({ '9': 'Kah Ye Chin', '10': 'Hoe Chyi Lim', '11': 'Shi Ming Ang', '12': 'Seng Xin Hoo' })[String(c.pic || '').trim()] || c.pic || '',
       }));
 
     console.log(`  ${target.monthName} ${target.year}: ${matching.length} companies match FYE, ${existingNames.size} already in ar_reminder, ${toInsert.length} new to insert`);

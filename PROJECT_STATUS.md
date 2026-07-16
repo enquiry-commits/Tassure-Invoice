@@ -24,6 +24,9 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Corrected AR Reminder SEC PIC values that contained TeamWork numeric user IDs,
+  updated affected company master records, and added ID-to-name normalization
+  for newly generated reminder rows.
 - Imported the Google Drive workbook's January, February, and March 2026 AR
   Reminder batches into Supabase: 15, 17, and 62 rows respectively.
 - Unified AR Reminder and Late Filing UEN typography with the system UI font

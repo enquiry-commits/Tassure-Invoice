@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
 import { pageAll } from '@/lib/page-all';
 import { normalize, matchScore } from '@/lib/company-name';
+import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 
 const EDITABLE_FIELDS = new Set([
   'reminder_note', 'prepared_date', 'date_of_agm', 'agm_held_date',
@@ -201,6 +202,7 @@ export async function GET(req: NextRequest) {
 
     return {
       ...row,
+      pic: resolveTeamworkPic(row.pic),
       company_id: compMatch?.id ?? null,
       services,
       servicesAuto,
