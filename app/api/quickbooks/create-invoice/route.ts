@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
 import { nextDocNumber, invoiceDocNumberExists, getNet7TermId, findPicClass, isGovFeeLine } from '@/lib/qb-invoice-conventions';
 import { createAdminClient } from '@/lib/supabase';
+import { createServerClient } from '@supabase/ssr';
+import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -75,6 +77,25 @@ async function getItemMap(token: string, realmId: string): Promise<Map<string, {
   return map;
 }
 
+async function findLocation(token: string, realmId: string, locationName: string) {
+  const q = encodeURIComponent('SELECT * FROM Department MAXRESULTS 1000');
+  const res = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q}&minorversion=65`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  const target = locationName.trim().toLowerCase();
+  const match = (json.QueryResponse?.Department ?? []).find((department: Record<string, unknown>) => {
+    if (department.Active === false) return false;
+    const name = String(department.FullyQualifiedName ?? department.Name ?? '').trim().toLowerCase();
+    return name === target;
+  });
+  return match ? {
+    value: String(match.Id),
+    name: String(match.FullyQualifiedName ?? match.Name),
+  } : null;
+}
+
 function pickItem(service: string, itemMap: Map<string, { id: string; name: string }>) {
   const keywords: Record<string, string[]> = {
     Secretary: ['secretarial', 'corporate sec', 'secretary'],
@@ -101,6 +122,7 @@ async function createInvoiceInCompany(
   company: QbCompany, companyName: string, lines: DraftLineItem[],
   email: string | undefined, txnDate: string, sendEmail: boolean | undefined,
   pic: string | undefined, docNumber: string | undefined,
+  locationName: string | undefined,
 ): Promise<CompanyResult> {
   const tokenRow = await getValidToken(company);
   if (!tokenRow) return { error: `QuickBooks ${company} not connected` };
@@ -114,11 +136,16 @@ async function createInvoiceInCompany(
   // an unnumbered create stays blank), Net 7 terms, and — TAB only — the
   // PIC's person class on Secretary and XBRL lines only. Other services do not
   // carry a PIC in QuickBooks, even when they share the same TAB invoice.
-  const [itemMap, termId, picClass] = await Promise.all([
+  const [itemMap, termId, picClass, location] = await Promise.all([
     getItemMap(token, realmId),
     getNet7TermId(token, realmId),
     company === 'TAB' && pic ? findPicClass(token, realmId, pic) : Promise.resolve(null),
+    locationName ? findLocation(token, realmId, locationName) : Promise.resolve(null),
   ]);
+
+  if (locationName && !location) {
+    return { error: `QuickBooks ${company} Location not found: "${locationName}"` };
+  }
 
   const invoiceLines = lines.map((l, i) => {
     const exact = l.productService ? itemMap.get(l.productService.toLowerCase()) : undefined;
@@ -147,6 +174,7 @@ async function createInvoiceInCompany(
   };
   if (docNumber) payload.DocNumber = docNumber;
   if (termId)    payload.SalesTermRef = { value: termId };
+  if (location)  payload.DepartmentRef = location;
   if (email) payload.BillEmail = { Address: email };
 
   const createRes = await fetch(`${QB_BASE}/v3/company/${realmId}/invoice?minorversion=65`, {
@@ -170,6 +198,15 @@ async function createInvoiceInCompany(
 // under TAB (the default company); Nominee Director always invoices
 // separately under TAC. A single request can produce up to two invoices.
 export async function POST(req: NextRequest) {
+  const auth = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => req.cookies.getAll(), setAll: () => undefined } },
+  );
+  const { data: authData } = await auth.auth.getUser();
+  const account: ApprovedAccount | null = getApprovedAccount(authData.user?.email);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+
   const body = await req.json();
   const {
     companyName, email, txnDate, sendEmail, pic,
@@ -244,8 +281,8 @@ export async function POST(req: NextRequest) {
   }
 
   const [tab, tac] = await Promise.all([
-    tabLines?.length ? createInvoiceInCompany('TAB', companyName, tabLines, email, date, sendEmail, pic, resolvedNumbers.TAB) : Promise.resolve(null),
-    tacLines?.length ? createInvoiceInCompany('TAC', companyName, tacLines, email, date, sendEmail, pic, resolvedNumbers.TAC) : Promise.resolve(null),
+    tabLines?.length ? createInvoiceInCompany('TAB', companyName, tabLines, email, date, sendEmail, pic, resolvedNumbers.TAB, account.qbLocations?.TAB) : Promise.resolve(null),
+    tacLines?.length ? createInvoiceInCompany('TAC', companyName, tacLines, email, date, sendEmail, pic, resolvedNumbers.TAC, account.qbLocations?.TAC) : Promise.resolve(null),
   ]);
 
   // Persist every successful creation — the authoritative "already invoiced

@@ -24,6 +24,9 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Mapped approved Google login accounts to the existing TAB and TAC QuickBooks
+  Locations and now writes the signed-in user's configured Location onto newly
+  generated invoices without creating any new QB Location records.
 - Implemented the first authentication phase using Supabase Google OAuth: a
   minimal bilingual sign-in screen, approved-account admission, persistent
   sessions, protected pages/APIs, account display, and logout. Supabase Google
