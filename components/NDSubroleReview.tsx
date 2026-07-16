@@ -50,7 +50,7 @@ export default function NDSubroleReview({
           <div>
             <h2 className="text-sm font-bold text-slate-800">TeamWork subrole review is awaiting its first scan</h2>
             <p className="mt-1 text-xs leading-5 text-slate-600">
-              The next ND sync will check only the configured ND people and list active appointment rows whose Nominee Director subrole is blank.
+              The next ND sync will check only the configured ND people and list rows with an Effective appointment date, a blank cessation field, and a blank Nominee Director subrole.
             </p>
           </div>
         </div>
@@ -95,7 +95,7 @@ export default function NDSubroleReview({
             </span>
           </div>
           <p className="mt-1 text-xs leading-5 text-slate-600">
-            Appointment date exists and cessation is blank, but the Nominee Director subrole is missing. Confirm the appointment and repair it in TeamWork before treating it as an active ND record.
+            All three conditions are required: the Nominee Director subrole is blank, an Effective appointment date exists, and the cessation field is blank. Confirm the appointment and repair it in TeamWork before treating it as an active ND record.
           </p>
         </div>
         {open ? <ChevronUp size={18} className="text-slate-500" /> : <ChevronDown size={18} className="text-slate-500" />}

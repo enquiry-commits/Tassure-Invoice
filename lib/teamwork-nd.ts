@@ -115,8 +115,10 @@ async function scrapeMember(
   // to confirm and repair in TeamWork first.
   const missingSubroles = rows.flatMap(row => {
     const appointmentDate = parseDmy(row.appointment);
-    const cessationDate = parseDmy(row.cessation);
-    if (row.role || !appointmentDate || cessationDate) return [];
+    const subroleIsBlank = row.role.trim() === '';
+    const hasEffectiveAppointment = /\(effective\)/i.test(row.appointment) && !!appointmentDate;
+    const cessationIsBlank = row.cessation.trim() === '';
+    if (!subroleIsBlank || !hasEffectiveAppointment || !cessationIsBlank) return [];
     return [{
       nd_id: person.id,
       nd_name: person.name,

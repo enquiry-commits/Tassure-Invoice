@@ -49,7 +49,7 @@ async function syncNdAppointments() {
         appointment_date: item.appointment_date,
         appointment_status: item.appointment_status,
         teamwork_subrole: null,
-        reason: 'Appointment date is present and cessation date is empty, but Nominee Director subrole is missing.',
+        reason: 'Effective appointment date is present and cessation is blank, but Nominee Director subrole is missing.',
       },
     })),
   );
