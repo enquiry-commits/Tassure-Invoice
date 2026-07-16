@@ -16,6 +16,13 @@ interface TokenRow {
   company_label: QbCompany;
 }
 
+interface GetValidTokenOptions {
+  // Used only by the connection-health check. It proves that the stored
+  // refresh token still works with the currently deployed OAuth credentials,
+  // even when the one-hour access token has not expired yet.
+  forceRefresh?: boolean;
+}
+
 type OAuthFailure = { code: string; message: string; httpStatus?: number };
 
 function parseOAuthFailure(raw: string, httpStatus?: number): OAuthFailure {
@@ -66,7 +73,10 @@ async function safelyClearOAuthFailure(company: QbCompany) {
 // Get stored tokens for a specific QB company, auto-refresh if expired.
 // 'TAB' is the default company (all basic services); 'TAC' is the second
 // company used only for Nominee Director invoicing.
-export async function getValidToken(company: QbCompany = 'TAB'): Promise<TokenRow | null> {
+export async function getValidToken(
+  company: QbCompany = 'TAB',
+  options: GetValidTokenOptions = {},
+): Promise<TokenRow | null> {
   const supabase = createAdminClient();
   let { data } = await supabase
     .from('quickbooks_tokens')
@@ -99,7 +109,7 @@ export async function getValidToken(company: QbCompany = 'TAB'): Promise<TokenRo
     return null;
   }
 
-  if (!tokenExpired) return data as TokenRow;
+  if (!tokenExpired && !options.forceRefresh) return data as TokenRow;
 
   // Intuit rotates refresh tokens. Two simultaneous serverless requests must
   // not refresh the same old token and then overwrite each other's new token.
@@ -119,7 +129,11 @@ export async function getValidToken(company: QbCompany = 'TAB'): Promise<TokenRo
       await new Promise(resolve => setTimeout(resolve, 500));
       const current = await supabase.from('quickbooks_tokens').select('*')
         .eq('company_label', company).limit(1).maybeSingle();
-      if (current.data && new Date(current.data.expires_at) > new Date()) return current.data as TokenRow;
+      if (current.data && new Date(current.data.expires_at) > new Date()) {
+        if (!options.forceRefresh || current.data.access_token !== data.access_token) {
+          return current.data as TokenRow;
+        }
+      }
     }
     return null;
   }
@@ -129,7 +143,13 @@ export async function getValidToken(company: QbCompany = 'TAB'): Promise<TokenRo
     // have completed between our first read and lock acquisition.
     const latest = await supabase.from('quickbooks_tokens').select('*')
       .eq('company_label', company).limit(1).maybeSingle();
-    if (latest.data && new Date(latest.data.expires_at) > new Date()) return latest.data as TokenRow;
+    if (
+      latest.data
+      && new Date(latest.data.expires_at) > new Date()
+      && (!options.forceRefresh || latest.data.access_token !== data.access_token)
+    ) {
+      return latest.data as TokenRow;
+    }
     const refreshSource = (latest.data ?? data) as TokenRow;
 
     // Refresh the access token

@@ -12,7 +12,22 @@ interface QBStatus {
   authError?: { code: string; message: string; lastSeenAt?: string | null } | null;
 }
 
-function CompanyBadge({ label, status, onConnect }: { label: string; status: QBStatus | null; onConnect: () => void }) {
+const CONFIGURATION_ERRORS = new Set(['invalid_client', 'missing_client_credentials']);
+const REAUTHORISATION_ERRORS = new Set(['invalid_grant', 'refresh_token_expired']);
+
+function CompanyBadge({
+  label,
+  status,
+  verifying,
+  onConnect,
+  onVerify,
+}: {
+  label: string;
+  status: QBStatus | null;
+  verifying: boolean;
+  onConnect: () => void;
+  onVerify: () => void;
+}) {
   if (!status) {
     return (
       <div className="flex items-center gap-1.5 text-xs text-slate-400">
@@ -26,13 +41,17 @@ function CompanyBadge({ label, status, onConnect }: { label: string; status: QBS
     const when = status.lastConnected ? fmtDate(status.lastConnected) : null;
     const days = status.refreshExpiresInDays;
     if (status.authError) {
-      const configurationError = ['invalid_client', 'missing_client_credentials'].includes(status.authError.code);
+      const configurationError = CONFIGURATION_ERRORS.has(status.authError.code);
+      const reauthorisationRequired = REAUTHORISATION_ERRORS.has(status.authError.code);
       return (
-        <button onClick={onConnect} title={status.authError.message}
+        <button onClick={reauthorisationRequired ? onConnect : onVerify} title={status.authError.message}
+          disabled={verifying}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-white hover:opacity-90 transition-opacity"
-          style={{ backgroundColor: '#dc2626' }}>
-          <AlertTriangle size={12} />
-          {label} {configurationError ? 'OAuth setup error' : 'connection error'}
+          style={{ backgroundColor: '#dc2626', opacity: verifying ? 0.75 : 1 }}>
+          {verifying ? <Loader size={12} className="animate-spin" /> : <AlertTriangle size={12} />}
+          {verifying
+            ? `${label} checking existing connection`
+            : `${label} ${reauthorisationRequired ? 'reconnect required' : configurationError ? 'OAuth setup error — retry' : 'connection error — retry'}`}
         </button>
       );
     }
@@ -81,16 +100,76 @@ function CompanyBadge({ label, status, onConnect }: { label: string; status: QBS
 export default function QBConnectButton() {
   const [tab, setTab] = useState<QBStatus | null>(null);
   const [tac, setTac] = useState<QBStatus | null>(null);
+  const [verifying, setVerifying] = useState<'TAB' | 'TAC' | null>(null);
+
+  const loadStatus = async (company: 'TAB' | 'TAC', verify = false) => {
+    const response = await fetch(`/api/quickbooks/status?company=${company}${verify ? '&verify=true' : ''}`, {
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new Error(`Unable to load ${company} QuickBooks status.`);
+    return response.json() as Promise<QBStatus>;
+  };
+
+  const verifyExistingConnection = async (company: 'TAB' | 'TAC') => {
+    setVerifying(company);
+    try {
+      const status = await loadStatus(company, true);
+      if (company === 'TAB') setTab(status);
+      else setTac(status);
+    } catch {
+      const failed: QBStatus = {
+        connected: true,
+        authError: { code: 'status_check_failed', message: 'QuickBooks connection verification could not be completed.' },
+      };
+      if (company === 'TAB') setTab(failed);
+      else setTac(failed);
+    } finally {
+      setVerifying(null);
+    }
+  };
 
   useEffect(() => {
-    fetch('/api/quickbooks/status?company=TAB').then(r => r.json()).then(setTab).catch(() => setTab({ connected: false }));
-    fetch('/api/quickbooks/status?company=TAC').then(r => r.json()).then(setTac).catch(() => setTac({ connected: false }));
+    void Promise.all([
+      loadStatus('TAB'),
+      loadStatus('TAC'),
+    ]).then(([tabStatus, tacStatus]) => {
+      setTab(tabStatus);
+      setTac(tacStatus);
+
+      // Configuration fixes should recover silently. Genuine invalid_grant or
+      // expired-token failures remain user-driven because they require the
+      // QuickBooks admin to consent again.
+      if (tabStatus.authError && !REAUTHORISATION_ERRORS.has(tabStatus.authError.code)) {
+        void verifyExistingConnection('TAB');
+      }
+      if (tacStatus.authError && !REAUTHORISATION_ERRORS.has(tacStatus.authError.code)) {
+        void verifyExistingConnection('TAC');
+      }
+    }).catch(() => {
+      setTab({ connected: false });
+      setTac({ connected: false });
+    });
+    // Status is checked once when the dashboard mounts. Manual retries are
+    // handled by the badge button and do not create a polling refresh loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <div className="flex items-center gap-4">
-      <CompanyBadge label="TAB" status={tab} onConnect={() => { window.location.href = '/api/quickbooks/auth?company=TAB'; }} />
-      <CompanyBadge label="TAC" status={tac} onConnect={() => { window.location.href = '/api/quickbooks/auth?company=TAC'; }} />
+      <CompanyBadge
+        label="TAB"
+        status={tab}
+        verifying={verifying === 'TAB'}
+        onConnect={() => { window.location.href = '/api/quickbooks/auth?company=TAB'; }}
+        onVerify={() => { void verifyExistingConnection('TAB'); }}
+      />
+      <CompanyBadge
+        label="TAC"
+        status={tac}
+        verifying={verifying === 'TAC'}
+        onConnect={() => { window.location.href = '/api/quickbooks/auth?company=TAC'; }}
+        onVerify={() => { void verifyExistingConnection('TAC'); }}
+      />
     </div>
   );
 }

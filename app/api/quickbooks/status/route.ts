@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { getValidToken } from '@/lib/quickbooks';
 
 export async function GET(req: NextRequest) {
   const company = req.nextUrl.searchParams.get('company') === 'TAC' ? 'TAC' : 'TAB';
+  const verify = req.nextUrl.searchParams.get('verify') === 'true';
+
+  // A normal status read is side-effect free. Verification is explicitly
+  // requested only after the UI sees a stored OAuth failure. It exercises the
+  // existing refresh token with the currently deployed credentials, allowing
+  // a corrected Client ID/Secret to heal the connection without user consent.
+  if (verify) await getValidToken(company, { forceRefresh: true });
+
   const supabase = createAdminClient();
   const exceptionType = `oauth_refresh_${company}`;
   const [{ data: initialData }, { data: oauthException }] = await Promise.all([
