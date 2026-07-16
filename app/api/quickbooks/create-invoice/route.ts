@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import { findUniqueBestMatch } from '@/lib/company-name';
+import { createHash } from 'node:crypto';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -28,6 +29,19 @@ interface CompanyResult {
   total?: number;
   error?: string;
   uncertain?: boolean;
+  numberAdjusted?: boolean;
+  expectedInvoiceNo?: string;
+  numberMode?: InvoiceNumberMode;
+}
+
+type InvoiceNumberMode = 'automatic' | 'manual';
+
+function quickBooksRequestId(company: QbCompany, idempotencyKey: string) {
+  const digest = createHash('sha256')
+    .update(`${company}:${idempotencyKey}`)
+    .digest('hex')
+    .slice(0, 32);
+  return `tcs-${company.toLowerCase()}-${digest}`;
 }
 
 // ── Look up QB Customer by display name ───────────────────────────────────────
@@ -122,6 +136,7 @@ async function createInvoiceInCompany(
   company: QbCompany, companyName: string, lines: DraftLineItem[],
   email: string | undefined, txnDate: string, sendEmail: boolean | undefined,
   pic: string | undefined, docNumber: string | undefined,
+  numberMode: InvoiceNumberMode, requestId: string,
   locationName: string | undefined,
 ): Promise<CompanyResult> {
   const tokenRow = await getValidToken(company);
@@ -131,9 +146,8 @@ async function createInvoiceInCompany(
   const customer = await findCustomer(token, realmId, companyName);
   if (!customer) return { error: `Customer not found in QB ${company}: "${companyName}"` };
 
-  // House conventions (see lib/qb-invoice-conventions.ts): sequential
-  // DocNumber per company/year series (custom transaction numbers are ON, so
-  // an unnumbered create stays blank), Net 7 terms, and — TAB only — the
+  // House conventions (see lib/qb-invoice-conventions.ts): QuickBooks
+  // atomically allocates the sequential DocNumber, Net 7 terms, and — TAB only — the
   // PIC's person class on Secretary and XBRL lines only. Other services do not
   // carry a PIC in QuickBooks, even when they share the same TAB invoice.
   const [itemMap, termId, picClass, location] = await Promise.all([
@@ -172,12 +186,19 @@ async function createInvoiceInCompany(
     // Default: create as a draft for review in QB — do NOT queue for sending.
     EmailStatus: sendEmail && email ? 'NeedToSend' : 'NotSet',
   };
-  if (docNumber) payload.DocNumber = docNumber;
+  // QuickBooks allocates normal numbers inside the create transaction. Unlike
+  // a separate "read next number" query, this cannot race a staff member who
+  // creates an invoice directly in QuickBooks at the same moment.
+  if (numberMode === 'automatic') payload.DocNumber = 'AUTO_GENERATE';
+  else if (docNumber) payload.DocNumber = docNumber;
   if (termId)    payload.SalesTermRef = { value: termId };
   if (location)  payload.DepartmentRef = location;
   if (email) payload.BillEmail = { Address: email };
 
-  const createRes = await fetch(`${QB_BASE}/v3/company/${realmId}/invoice?minorversion=65`, {
+  const createUrl = new URL(`${QB_BASE}/v3/company/${realmId}/invoice`);
+  createUrl.searchParams.set('minorversion', '75');
+  createUrl.searchParams.set('requestid', requestId);
+  const createRes = await fetch(createUrl, {
     method:  'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(payload),
@@ -190,7 +211,21 @@ async function createInvoiceInCompany(
 
   const created = await createRes.json();
   const inv = created.Invoice ?? {};
-  return { invoiceNo: inv.DocNumber, qbId: inv.Id, total: inv.TotalAmt };
+  const invoiceNo = typeof inv.DocNumber === 'string' ? inv.DocNumber : undefined;
+  if (!inv.Id || !invoiceNo) {
+    return {
+      error: `QB ${company} returned an incomplete invoice result. Reconcile request ${requestId} before retrying.`,
+      uncertain: true,
+    };
+  }
+  return {
+    invoiceNo,
+    qbId: inv.Id,
+    total: inv.TotalAmt,
+    numberAdjusted: numberMode === 'automatic' && !!docNumber && invoiceNo !== docNumber,
+    expectedInvoiceNo: docNumber,
+    numberMode,
+  };
 }
 
 // ── POST /api/quickbooks/create-invoice ───────────────────────────────────────
@@ -282,12 +317,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, replayed: true, tab: replay('TAB'), tac: replay('TAC'), errors: {} });
   }
 
-  // Preflight every invoice before creating either one. The modal sends the
-  // next number it originally saw; if QB has advanced since then, abort the
-  // whole request so a TAB invoice cannot be created before a TAC conflict is
-  // discovered (or vice versa). Manual overrides are allowed only when unused.
+  // The modal number is an estimate. Normal creation uses QB's atomic
+  // AUTO_GENERATE so a staff member creating directly in QB cannot take our
+  // number between this lookup and the write. An explicit manual override
+  // still sends a fixed number, after confirming it is currently unused.
   const companiesToCreate = activeCompanies.filter(company => reservationByCompany.get(company)?.status !== 'created');
   const resolvedNumbers: Partial<Record<QbCompany, string>> = {};
+  const reservationNumbers: Partial<Record<QbCompany, string>> = {};
+  const numberModes: Partial<Record<QbCompany, InvoiceNumberMode>> = {};
   const liveNumbers: Partial<Record<QbCompany, string | null>> = {};
   const numberConflicts: Partial<Record<QbCompany, string>> = {};
 
@@ -298,22 +335,32 @@ export async function POST(req: NextRequest) {
     liveNumbers[company] = live;
     const expected = expectedNextNumbers?.[company]?.trim();
     const existingReservation = reservationByCompany.get(company);
-    const requested = existingReservation?.doc_number ?? docNumbers?.[company]?.trim();
+    const existingNumber = String(existingReservation?.doc_number ?? '');
+    const automaticReservation = existingNumber.startsWith('AUTO-');
+    const requested = automaticReservation
+      ? docNumbers?.[company]?.trim()
+      : existingNumber || docNumbers?.[company]?.trim();
 
-    if (!existingReservation && expected && live && expected !== live) {
-      numberConflicts[company] = `QuickBooks advanced from ${expected} to ${live}`;
-      return;
-    }
     if (requested && !/^[A-Za-z0-9-]{1,21}$/.test(requested)) {
       numberConflicts[company] = 'Invoice number must use 1-21 letters, numbers or hyphens';
       return;
     }
-    if (requested && await invoiceDocNumberExists(token.access_token, token.realm_id, requested)) {
+    const manuallyOverridden = !automaticReservation
+      && !!requested
+      && (!expected || requested !== expected)
+      && requested !== live;
+    if (manuallyOverridden && await invoiceDocNumberExists(token.access_token, token.realm_id, requested)) {
       numberConflicts[company] = `${requested} already exists in QuickBooks ${company}`;
       return;
     }
-    const selected = requested || live;
-    if (selected) resolvedNumbers[company] = selected;
+    const selected = manuallyOverridden ? requested : requested || expected || live;
+    if (selected) {
+      resolvedNumbers[company] = selected;
+      numberModes[company] = manuallyOverridden ? 'manual' : 'automatic';
+      reservationNumbers[company] = manuallyOverridden
+        ? selected
+        : `AUTO-${quickBooksRequestId(company, idempotencyKey)}`;
+    }
   }));
 
   if (Object.keys(numberConflicts).length) {
@@ -333,7 +380,7 @@ export async function POST(req: NextRequest) {
       qb_company: company,
       company_name: companyName,
       fye_cycle: fyeCycle ?? null,
-      doc_number: resolvedNumbers[company],
+      doc_number: reservationNumbers[company],
       status: 'pending',
       requested_by_email: account.email,
       updated_at: new Date().toISOString(),
@@ -378,7 +425,8 @@ export async function POST(req: NextRequest) {
     try {
       return await createInvoiceInCompany(
         company, companyName, lines, email, date, sendEmail, pic,
-        resolvedNumbers[company], account.qbLocations?.[company],
+        resolvedNumbers[company], numberModes[company] ?? 'automatic',
+        quickBooksRequestId(company, idempotencyKey), account.qbLocations?.[company],
       );
     } catch (error) {
       return {
@@ -397,13 +445,16 @@ export async function POST(req: NextRequest) {
     ['TAB', tab], ['TAC', tac],
   ] as Array<[QbCompany, CompanyResult | null]>).map(async ([company, result]) => {
     if (!result || replayResult(company)) return;
-    await supabase.from('invoice_creation_reservations').update({
+    const reservationUpdate: Record<string, unknown> = {
       status: result.error ? (result.uncertain ? 'uncertain' : 'failed') : 'created',
       qb_invoice_id: result.qbId ?? null,
       total_amt: result.total ?? null,
       error: result.error ?? null,
       updated_at: new Date().toISOString(),
-    }).eq('idempotency_key', idempotencyKey).eq('qb_company', company);
+    };
+    if (!result.error && result.invoiceNo) reservationUpdate.doc_number = result.invoiceNo;
+    await supabase.from('invoice_creation_reservations').update(reservationUpdate)
+      .eq('idempotency_key', idempotencyKey).eq('qb_company', company);
   }));
 
   // Persist every successful creation — the authoritative "already invoiced
@@ -440,8 +491,22 @@ export async function POST(req: NextRequest) {
   const anySuccess = !!(tab && !tab.error) || !!(tac && !tac.error);
   return NextResponse.json({
     success: anySuccess,
-    tab: tab && !tab.error ? { invoiceNo: tab.invoiceNo, qbId: tab.qbId, total: tab.total } : null,
-    tac: tac && !tac.error ? { invoiceNo: tac.invoiceNo, qbId: tac.qbId, total: tac.total } : null,
+    tab: tab && !tab.error ? {
+      invoiceNo: tab.invoiceNo,
+      qbId: tab.qbId,
+      total: tab.total,
+      numberAdjusted: tab.numberAdjusted,
+      expectedInvoiceNo: tab.expectedInvoiceNo,
+      numberMode: tab.numberMode,
+    } : null,
+    tac: tac && !tac.error ? {
+      invoiceNo: tac.invoiceNo,
+      qbId: tac.qbId,
+      total: tac.total,
+      numberAdjusted: tac.numberAdjusted,
+      expectedInvoiceNo: tac.expectedInvoiceNo,
+      numberMode: tac.numberMode,
+    } : null,
     errors: {
       ...(tab?.error ? { tab: tab.error } : {}),
       ...(tac?.error ? { tac: tac.error } : {}),

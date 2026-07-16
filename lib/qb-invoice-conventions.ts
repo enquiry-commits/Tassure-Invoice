@@ -3,9 +3,10 @@ import type { QbCompany } from './quickbooks';
 // Invoice conventions learned from Tassure's real QB invoices (verified by
 // inspecting manual invoices 02610732 (TAB) and 02680230 (TAC)):
 //
-// 1. DocNumber — both companies run "custom transaction numbers", so the API
-//    MUST supply one or the invoice is created blank. Scheme: 0 + YY + series
-//    digit + 4-digit sequence, where series = 1 for TAB, 8 for TAC
+// 1. DocNumber — both companies run "custom transaction numbers". The billing
+//    screen estimates the next value using the scheme below, while creation
+//    sends AUTO_GENERATE so QuickBooks allocates the number atomically. Scheme:
+//    0 + YY + series digit + 4-digit sequence, where series = 1 for TAB, 8 for TAC
 //    (2026 TAB → 0261xxxx, 2026 TAC → 0268xxxx).
 // 2. Terms — always Net 7 (Term id 7 in both companies; resolved dynamically
 //    in case the id ever differs).
@@ -23,8 +24,9 @@ async function qbGet(token: string, realmId: string, query: string) {
   return (await res.json()).QueryResponse ?? null;
 }
 
-// Next DocNumber in the company's yearly series. Falls back to null (invoice
-// still created, just unnumbered like before) if the lookup fails.
+// Estimated next DocNumber in the company's yearly series. This is for display
+// and manual-override validation only; QuickBooks confirms the actual number
+// during its atomic invoice-create operation.
 export async function nextDocNumber(token: string, realmId: string, company: QbCompany, txnDate: string): Promise<string | null> {
   const yy = String(new Date(txnDate).getFullYear()).slice(-2);
   const prefix = `0${yy}${company === 'TAB' ? '1' : '8'}`;

@@ -1306,11 +1306,24 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       const parts: string[] = [];
       if (json.tab) parts.push(`TAB #${json.tab.invoiceNo ?? '?'} · S$${(json.tab.total ?? 0).toLocaleString()}`);
       if (json.tac) parts.push(`TAC #${json.tac.invoiceNo ?? '?'} · S$${(json.tac.total ?? 0).toLocaleString()}`);
+      const numberAdjustments = [
+        ...(json.tab?.numberAdjusted ? [`TAB ${json.tab.expectedInvoiceNo} → ${json.tab.invoiceNo}`] : []),
+        ...(json.tac?.numberAdjusted ? [`TAC ${json.tac.expectedInvoiceNo} → ${json.tac.invoiceNo}`] : []),
+      ];
       const errs: string[] = [];
       if (json.errors?.tab) errs.push(`TAB: ${json.errors.tab}`);
       if (json.errors?.tac) errs.push(`TAC: ${json.errors.tac}`);
       if (json.errors?.persistence) errs.push(json.errors.persistence);
       if (json.success) {
+        if (json.tab?.invoiceNo || json.tac?.invoiceNo) {
+          setInvoiceNumbers(current => ({
+            TAB: json.tab?.invoiceNo ? String(json.tab.invoiceNo) : current.TAB,
+            TAC: json.tac?.invoiceNo ? String(json.tac.invoiceNo) : current.TAC,
+          }));
+        }
+        if (numberAdjustments.length) {
+          setNumberWarning(`QuickBooks assigned the latest available number: ${numberAdjustments.join(' · ')}. No duplicate invoice number was created.`);
+        }
         const pdfs: GeneratedPdf[] = [
           ...(json.tab?.qbId && json.tab?.invoiceNo ? [{ company: 'TAB' as const, qbId: String(json.tab.qbId), invoiceNo: String(json.tab.invoiceNo) }] : []),
           ...(json.tac?.qbId && json.tac?.invoiceNo ? [{ company: 'TAC' as const, qbId: String(json.tac.qbId), invoiceNo: String(json.tac.invoiceNo) }] : []),
@@ -1387,8 +1400,8 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     return (
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 9px', borderRadius: 8, background: manuallyChanged ? '#fffbeb' : '#f8fafc', border: `1px solid ${manuallyChanged ? '#fcd34d' : '#dbe5ee'}` }}>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-          <span style={{ fontSize: 8, fontWeight: 800, color: manuallyChanged ? '#b45309' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Next QB number'}</span>
-          <span style={{ fontSize: 8.5, color: '#94a3b8' }}>{numberLoading ? 'Checking live…' : 'rechecked before create'}</span>
+          <span style={{ fontSize: 8, fontWeight: 800, color: manuallyChanged ? '#b45309' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
+          <span style={{ fontSize: 8.5, color: '#94a3b8' }}>{numberLoading ? 'Checking live…' : 'QB confirms when created'}</span>
         </div>
         <input
           value={value}
