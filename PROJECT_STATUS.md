@@ -24,6 +24,10 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Implemented the first authentication phase using Supabase Google OAuth: a
+  minimal bilingual sign-in screen, @tassure.com domain admission, persistent
+  sessions, protected pages/APIs, account display, and logout. Supabase Google
+  Provider activation and its Google OAuth credentials are still required.
 - Corrected AR Reminder SEC PIC values that contained TeamWork numeric user IDs,
   updated affected company master records, and added ID-to-name normalization
   for newly generated reminder rows.

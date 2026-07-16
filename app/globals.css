@@ -39,3 +39,59 @@ body {
   /* tighter main padding on phones (desktop keeps p-6 = 24px) */
   main > .p-6 { padding: 12px !important; }
 }
+/* Google account sign-in */
+.login-page-simple {
+  min-height: 100vh;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  background: #f7f8fa;
+  color: #0d2444;
+  padding: 32px;
+}
+.login-box-wrap { width: min(480px, 100%); transform: translateY(-8px); }
+.login-heading { text-align: center; margin-bottom: 38px; }
+.login-heading h1 { margin: 0 0 8px; font-size: 30px; line-height: 1.1; font-weight: 800; letter-spacing: -.02em; color: #061a36; }
+.login-heading p { margin: 0; font-size: 16px; color: #61718a; }
+.login-card-simple {
+  padding: 43px 40px 39px;
+  background: #fff;
+  border: 1px solid #e3e7ec;
+  border-radius: 18px;
+  box-shadow: 0 2px 5px rgba(15, 35, 60, .08), 0 14px 34px rgba(15, 35, 60, .04);
+}
+.login-instruction { display: grid; justify-items: center; gap: 4px; margin-bottom: 26px; }
+.login-instruction strong { font-size: 16px; font-weight: 500; color: #263e5e; }
+.login-instruction span { font-size: 16px; color: #98a3b5; }
+.google-login-button {
+  width: 100%;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  border: 1px solid #cbd3df;
+  border-radius: 10px;
+  background: #fff;
+  color: #1a2d48;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.google-login-button:hover { background: #fbfcfe; border-color: #9fadc0; box-shadow: 0 4px 14px rgba(15, 35, 60, .08); }
+.google-login-button:focus-visible { outline: 3px solid rgba(59, 130, 246, .22); outline-offset: 2px; }
+.google-login-button:disabled { opacity: .65; cursor: wait; }
+.login-domain-note { margin: 27px 0 0; text-align: center; color: #8c98ad; font-size: 13px; }
+.login-error-simple { margin: -9px 0 18px; padding: 10px 12px; border: 1px solid #fecaca; border-radius: 8px; background: #fff7f7; color: #b42318; text-align: center; font-size: 13px; }
+.login-spinner { animation: login-spin .8s linear infinite; }
+.header-logout { border: 1px solid #dbe2ea; background: #fff; color: #1e3a5f; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
+.header-logout:hover { background: #f7f9fc; }
+@keyframes login-spin { to { transform: rotate(360deg); } }
+@media (max-width: 560px) {
+  .login-page-simple { padding: 20px; }
+  .login-box-wrap { transform: none; }
+  .login-heading { margin-bottom: 28px; }
+  .login-card-simple { padding: 34px 24px 30px; border-radius: 15px; }
+}
