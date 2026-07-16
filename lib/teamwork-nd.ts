@@ -1,6 +1,7 @@
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
+const SUBROLE_REVIEW_EXCLUDED_PEOPLE = new Set(['LI JIANWEI', 'ZHANG DAN']);
 
 export type TeamworkNdPerson = { id: number; name: string; member_id: string };
 export type TeamworkNdAppointment = {
@@ -114,6 +115,10 @@ async function scrapeMember(
   // into the active ND portfolio automatically: it is recorded for a person
   // to confirm and repair in TeamWork first.
   const missingSubroles = rows.flatMap(row => {
+    // These two designated ND people are intentionally exempt from subrole
+    // cleanup reminders. Their valid Nominee Director appointments continue
+    // to sync normally above; only the manual-review queue is suppressed.
+    if (SUBROLE_REVIEW_EXCLUDED_PEOPLE.has(person.name.trim().toUpperCase())) return [];
     const appointmentDate = parseDmy(row.appointment);
     const subroleIsBlank = row.role.trim() === '';
     const hasEffectiveAppointment = /\(effective\)/i.test(row.appointment) && !!appointmentDate;
