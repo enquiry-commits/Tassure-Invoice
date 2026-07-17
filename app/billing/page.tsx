@@ -1065,11 +1065,20 @@ type EditableLine = {
 };
 
 type InvoiceNumberState = { TAB: string; TAC: string };
-type GeneratedPdf = { company: 'TAB' | 'TAC'; invoiceNo: string; qbId: string };
+type GeneratedPdf = { company: 'TAB' | 'TAC'; invoiceNo: string; qbId: string; total: number };
 
 function displayInvoiceNo(invoiceNo: string | null | undefined) {
   const value = String(invoiceNo ?? '').trim();
   return value.replace(/^(?:TAB|TAC)(?=\d|[\s#:_-])[\s#:_-]*/i, '');
+}
+
+// House naming convention for saved invoice PDFs — TAB: "INV<no>-<company>-S$<amt>",
+// TAC: "TAC<no>-<company>-S$<amt>" (no spaces around the dashes).
+function invoicePdfFileName(company: 'TAB' | 'TAC', invoiceNo: string, companyName: string, total: number) {
+  const prefix = company === 'TAB' ? 'INV' : 'TAC';
+  const safeCompany = companyName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim();
+  const amount = Number.isInteger(total) ? String(total) : total.toFixed(2);
+  return `${prefix}${displayInvoiceNo(invoiceNo)}-${safeCompany}-S$${amount}.pdf`;
 }
 
 type WritablePdfFileHandle = {
@@ -1089,7 +1098,7 @@ function existingGeneratedPdfs(company: CompanyBilling, cycleFye?: string): Gene
     if (cycleFye && invoice.fyeCycle !== cycleFye) continue;
     if (!invoice.invoiceNo || !invoice.qbId || seen.has(invoice.qbCompany)) continue;
     seen.add(invoice.qbCompany);
-    pdfs.push({ company: invoice.qbCompany, invoiceNo: invoice.invoiceNo, qbId: invoice.qbId });
+    pdfs.push({ company: invoice.qbCompany, invoiceNo: invoice.invoiceNo, qbId: invoice.qbId, total: invoice.totalAmt ?? 0 });
   }
   return pdfs;
 }
@@ -1383,8 +1392,8 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           setNumberWarning(`QuickBooks assigned the latest available number: ${numberAdjustments.join(' · ')}. No duplicate invoice number was created.`);
         }
         const pdfs: GeneratedPdf[] = [
-          ...(json.tab?.qbId && json.tab?.invoiceNo ? [{ company: 'TAB' as const, qbId: String(json.tab.qbId), invoiceNo: String(json.tab.invoiceNo) }] : []),
-          ...(json.tac?.qbId && json.tac?.invoiceNo ? [{ company: 'TAC' as const, qbId: String(json.tac.qbId), invoiceNo: String(json.tac.invoiceNo) }] : []),
+          ...(json.tab?.qbId && json.tab?.invoiceNo ? [{ company: 'TAB' as const, qbId: String(json.tab.qbId), invoiceNo: String(json.tab.invoiceNo), total: json.tab.total ?? 0 }] : []),
+          ...(json.tac?.qbId && json.tac?.invoiceNo ? [{ company: 'TAC' as const, qbId: String(json.tac.qbId), invoiceNo: String(json.tac.invoiceNo), total: json.tac.total ?? 0 }] : []),
         ];
         setGeneratedPdfs(pdfs);
         setPdfResult(null);
@@ -1414,9 +1423,8 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     };
 
     try {
-      const safeCompany = c.companyName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim();
       const visibleInvoiceNo = displayInvoiceNo(invoice.invoiceNo);
-      const fileName = `${visibleInvoiceNo} - ${safeCompany} - ${invoice.company}.pdf`;
+      const fileName = invoicePdfFileName(invoice.company, invoice.invoiceNo, c.companyName, invoice.total);
       const saveFilePicker = (window as SaveFilePickerWindow).showSaveFilePicker;
       let fileHandle: WritablePdfFileHandle | null = null;
       let useDownloadFallback = !saveFilePicker;
