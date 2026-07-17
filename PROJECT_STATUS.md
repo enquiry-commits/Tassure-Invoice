@@ -24,6 +24,24 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Corrected QuickBooks custom-number creation so TAB/TAC invoices always send
+  the latest validated numeric DocNumber and never send the literal
+  `AUTO_GENERATE`. Exact-number reservations now serialize concurrent system
+  users, live duplicate checks run again immediately before the QB create, and
+  reservation persistence failures are surfaced instead of being ignored.
+- Reconciled the four affected TAB invoices after confirming their QB IDs,
+  companies, and totals: 19161-19164 now consistently use 02610852-02610855 in
+  `generated_invoices`, invoice reservations, synced QB invoices, and line
+  items. All four reservations are finalized as `created`; no legacy automatic
+  placeholder remains in either local billing-history table.
+- Improved invoice PDF saving: folder selection requests write access before
+  showing a saving state, user cancellation is handled separately, and a
+  blocked/network folder automatically falls back to a normal browser download
+  with an accurate result message.
+- Fixed AR Reminder ND details so the newest active TeamWork appointment always
+  supplies the director name even when QuickBooks already supplies the ND
+  billing period and rate. Older duplicate appointment rows can no longer
+  replace the current director.
 - Rebuilt the complete Chinese user manual as a formal 29-page monochrome
   document. The cover and document furniture are black on white; only the
   TASSURE logo and 19 verified production screenshots retain colour. The
@@ -148,6 +166,25 @@ one focused Git commit.
    - deployment status, if applicable.
 
 ## Handoff log
+
+### 2026-07-17 - Codex (QB invoice recovery and ND/PDF fixes)
+
+- Removed the invalid `AUTO_GENERATE` QuickBooks DocNumber flow and replaced it
+  with live next-number validation, an exact Supabase reservation, and a final
+  pre-create duplicate check. Retry and local-persistence failures now retain a
+  visible reconciliation trail.
+- Read back QB and Supabase before mutation. QuickBooks had already been
+  manually corrected, so QB was not changed. Repaired only the matching local
+  `generated_invoices` and `invoice_creation_reservations` rows for QB IDs
+  19161-19164, then verified numbers 02610852-02610855, status `created`, exact
+  totals, null errors, and zero remaining `AUTO_GENERATE`/`AUTO-*` placeholders.
+- Made invoice PDF saving resilient to unsupported or non-writable network
+  folders by downloading through the browser when direct folder writing fails.
+- Merged TeamWork's newest active nominee-director name into the AR billing
+  detail independently of whether a QB-derived billing period already exists.
+- Verification: `npm run build` completed successfully; targeted ESLint reported
+  zero errors (six pre-existing unused-code warnings in Billing); `git diff
+  --check` passed. No push or Vercel deployment was performed.
 
 ### 2026-07-17 - Codex
 

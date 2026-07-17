@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
     qbItems,
   ] = await Promise.all([
     supabase.from('companies').select('id, company_name, has_xbrl, has_nd, uses_address, has_accounts, has_tax, services_manual'),
-    supabase.from('nd_appointments').select('company_name, appointment_date, nd_id').eq('sub_role', 'Nominee Director').not('appointment_date', 'is', null).is('cessation_date', null),
+    supabase.from('nd_appointments').select('company_name, appointment_date, nd_id').eq('sub_role', 'Nominee Director').not('appointment_date', 'is', null).is('cessation_date', null).order('appointment_date', { ascending: false }),
     supabase.from('quickbooks_invoices').select('invoice_no, txn_date, customer_name, total_amt, balance, status').gte('txn_date', `${year}-01-01`).lte('txn_date', `${year}-12-31`),
     getQbItems(supabase, year),
   ]);
@@ -138,8 +138,11 @@ export async function GET(req: NextRequest) {
 
   const ndAppointmentMap = new Map<string, { date: string; name: string | null }>();
   for (const appointment of activeNDs ?? []) {
-    if (appointment.appointment_date) {
-      ndAppointmentMap.set(normalize(appointment.company_name), {
+    const companyKey = normalize(appointment.company_name);
+    // Query order is newest first. Keep the first active appointment so older
+    // duplicate TeamWork rows cannot replace the current director.
+    if (appointment.appointment_date && !ndAppointmentMap.has(companyKey)) {
+      ndAppointmentMap.set(companyKey, {
         date: appointment.appointment_date,
         name: ndNameById.get(appointment.nd_id) ?? null,
       });
@@ -214,9 +217,13 @@ export async function GET(req: NextRequest) {
         }
       : { secretary: null, address: null, nd: null };
 
-    if (!qbPeriods.nd?.periodEnd) {
-      const appointment = wordMatch(normName, ndAppointmentMap);
-      if (appointment) {
+    const appointment = wordMatch(normName, ndAppointmentMap);
+    if (appointment) {
+      // QuickBooks remains authoritative for period and price, while the
+      // latest active TeamWork appointment is authoritative for the ND name.
+      if (qbPeriods.nd) {
+        qbPeriods.nd = { ...qbPeriods.nd, ndName: appointment.name };
+      } else {
         const date = new Date(`${appointment.date}T00:00:00`);
         const periodStart = new Date(date.getFullYear(), date.getMonth(), 1);
         const periodEnd = new Date(date.getFullYear() + 1, date.getMonth(), 0);

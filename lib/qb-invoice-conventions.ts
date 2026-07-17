@@ -4,8 +4,10 @@ import type { QbCompany } from './quickbooks';
 // inspecting manual invoices 02610732 (TAB) and 02680230 (TAC)):
 //
 // 1. DocNumber — both companies run "custom transaction numbers". The billing
-//    screen estimates the next value using the scheme below, while creation
-//    sends AUTO_GENERATE so QuickBooks allocates the number atomically. Scheme:
+//    screen estimates the next value using the scheme below, and creation
+//    revalidates then sends that exact number. QuickBooks treats any supplied
+//    DocNumber literally while CustomTxnNumbers is enabled; AUTO_GENERATE must
+//    never be sent as a placeholder. Scheme:
 //    0 + YY + series digit + 4-digit sequence, where series = 1 for TAB, 8 for TAC
 //    (2026 TAB → 0261xxxx, 2026 TAC → 0268xxxx).
 // 2. Terms — always Net 7 (Term id 7 in both companies; resolved dynamically

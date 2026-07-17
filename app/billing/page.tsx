@@ -1060,7 +1060,9 @@ type GeneratedPdf = { company: 'TAB' | 'TAC'; invoiceNo: string; qbId: string };
 
 type WritableFileHandle = { createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }> };
 type WritableDirectoryHandle = { getFileHandle: (name: string, options: { create: boolean }) => Promise<WritableFileHandle> };
-type FolderPickerWindow = Window & { showDirectoryPicker?: () => Promise<WritableDirectoryHandle> };
+type FolderPickerWindow = Window & {
+  showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<WritableDirectoryHandle>;
+};
 
 function existingGeneratedPdfs(company: CompanyBilling, cycleFye?: string): GeneratedPdf[] {
   const seen = new Set<'TAB' | 'TAC'>();
@@ -1349,12 +1351,40 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
 
   const saveInvoicePdfs = async () => {
     if (!generatedPdfs.length) return;
-    setSavingPdfs(true);
     setPdfResult(null);
+
+    const downloadBlob = (blob: Blob, fileName: string) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    };
+
+    let directory: WritableDirectoryHandle | null = null;
+    let folderFallbackReason = '';
+    const picker = (window as FolderPickerWindow).showDirectoryPicker;
+
+    if (picker) {
+      try {
+        directory = await picker({ mode: 'readwrite' });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          setPdfResult({ ok: false, msg: 'Folder selection cancelled. No file was saved.' });
+          return;
+        }
+        folderFallbackReason = 'The selected folder could not be opened for writing.';
+      }
+    }
+
+    setSavingPdfs(true);
     try {
-      const picker = (window as FolderPickerWindow).showDirectoryPicker;
-      const directory = picker ? await picker() : null;
       const safeCompany = c.companyName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim();
+      let folderSavedCount = 0;
+      let downloadedCount = 0;
 
       for (const invoice of generatedPdfs) {
         const response = await fetch(`/api/quickbooks/invoice-pdf?company=${invoice.company}&id=${encodeURIComponent(invoice.qbId)}`);
@@ -1366,34 +1396,33 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         const fileName = `${invoice.invoiceNo} - ${safeCompany} - ${invoice.company}.pdf`;
 
         if (directory) {
-          const fileHandle = await directory.getFileHandle(fileName, { create: true });
-          const writable = await fileHandle.createWritable();
-          await writable.write(blob);
-          await writable.close();
+          try {
+            const fileHandle = await directory.getFileHandle(fileName, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            folderSavedCount += 1;
+          } catch {
+            folderFallbackReason = 'The selected folder did not allow the browser to write the file.';
+            downloadBlob(blob, fileName);
+            downloadedCount += 1;
+          }
         } else {
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = fileName;
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          URL.revokeObjectURL(url);
+          downloadBlob(blob, fileName);
+          downloadedCount += 1;
         }
       }
 
+      const savedParts = [
+        folderSavedCount ? `${folderSavedCount} PDF${folderSavedCount > 1 ? 's' : ''} saved to the selected folder` : '',
+        downloadedCount ? `${downloadedCount} PDF${downloadedCount > 1 ? 's' : ''} downloaded by the browser` : '',
+      ].filter(Boolean);
       setPdfResult({
         ok: true,
-        msg: directory
-          ? `${generatedPdfs.length} invoice PDF${generatedPdfs.length > 1 ? 's' : ''} saved to the selected folder.`
-          : `${generatedPdfs.length} invoice PDF${generatedPdfs.length > 1 ? 's' : ''} downloaded.`,
+        msg: `${savedParts.join('; ')}.${downloadedCount && folderFallbackReason ? ` ${folderFallbackReason}` : ''}`,
       });
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        setPdfResult({ ok: false, msg: 'Folder selection cancelled. No file was saved.' });
-      } else {
-        setPdfResult({ ok: false, msg: error instanceof Error ? error.message : 'Unable to save invoice PDF.' });
-      }
+      setPdfResult({ ok: false, msg: error instanceof Error ? error.message : 'Unable to save invoice PDF.' });
     } finally {
       setSavingPdfs(false);
     }

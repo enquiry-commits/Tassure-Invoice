@@ -34,7 +34,7 @@ interface CompanyResult {
   numberMode?: InvoiceNumberMode;
 }
 
-type InvoiceNumberMode = 'automatic' | 'manual';
+type InvoiceNumberMode = 'sequential' | 'manual';
 
 function quickBooksRequestId(company: QbCompany, idempotencyKey: string) {
   const digest = createHash('sha256')
@@ -186,11 +186,15 @@ async function createInvoiceInCompany(
     // Default: create as a draft for review in QB — do NOT queue for sending.
     EmailStatus: sendEmail && email ? 'NeedToSend' : 'NotSet',
   };
-  // QuickBooks allocates normal numbers inside the create transaction. Unlike
-  // a separate "read next number" query, this cannot race a staff member who
-  // creates an invoice directly in QuickBooks at the same moment.
-  if (numberMode === 'automatic') payload.DocNumber = 'AUTO_GENERATE';
-  else if (docNumber) payload.DocNumber = docNumber;
+  // Both TAB and TAC enable CustomTxnNumbers. In that mode QuickBooks treats
+  // every supplied DocNumber literally; "AUTO_GENERATE" is not a sentinel.
+  // Always send the exact validated number. A final duplicate lookup here
+  // narrows the window between the earlier reservation and this QB write.
+  if (!docNumber) return { error: `QuickBooks ${company} invoice number is required.` };
+  if (await invoiceDocNumberExists(token, realmId, docNumber)) {
+    return { error: `${docNumber} already exists in QuickBooks ${company}. Refresh the invoice number before generating.` };
+  }
+  payload.DocNumber = docNumber;
   if (termId)    payload.SalesTermRef = { value: termId };
   if (location)  payload.DepartmentRef = location;
   if (email) payload.BillEmail = { Address: email };
@@ -222,7 +226,7 @@ async function createInvoiceInCompany(
     invoiceNo,
     qbId: inv.Id,
     total: inv.TotalAmt,
-    numberAdjusted: numberMode === 'automatic' && !!docNumber && invoiceNo !== docNumber,
+    numberAdjusted: numberMode === 'sequential' && invoiceNo !== docNumber,
     expectedInvoiceNo: docNumber,
     numberMode,
   };
@@ -317,10 +321,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, replayed: true, tab: replay('TAB'), tac: replay('TAC'), errors: {} });
   }
 
-  // The modal number is an estimate. Normal creation uses QB's atomic
-  // AUTO_GENERATE so a staff member creating directly in QB cannot take our
-  // number between this lookup and the write. An explicit manual override
-  // still sends a fixed number, after confirming it is currently unused.
+  // The modal number is an estimate. Re-read QuickBooks immediately before
+  // reserving the exact number in Supabase. This serializes simultaneous
+  // system users; createInvoiceInCompany performs one more live duplicate
+  // lookup immediately before the QB write to catch direct QB activity.
   const companiesToCreate = activeCompanies.filter(company => reservationByCompany.get(company)?.status !== 'created');
   const resolvedNumbers: Partial<Record<QbCompany, string>> = {};
   const reservationNumbers: Partial<Record<QbCompany, string>> = {};
@@ -336,8 +340,8 @@ export async function POST(req: NextRequest) {
     const expected = expectedNextNumbers?.[company]?.trim();
     const existingReservation = reservationByCompany.get(company);
     const existingNumber = String(existingReservation?.doc_number ?? '');
-    const automaticReservation = existingNumber.startsWith('AUTO-');
-    const requested = automaticReservation
+    const legacyAutomaticReservation = existingNumber.startsWith('AUTO-') || existingNumber === 'AUTO_GENERATE';
+    const requested = legacyAutomaticReservation
       ? docNumbers?.[company]?.trim()
       : existingNumber || docNumbers?.[company]?.trim();
 
@@ -345,7 +349,7 @@ export async function POST(req: NextRequest) {
       numberConflicts[company] = 'Invoice number must use 1-21 letters, numbers or hyphens';
       return;
     }
-    const manuallyOverridden = !automaticReservation
+    const manuallyOverridden = !legacyAutomaticReservation
       && !!requested
       && (!expected || requested !== expected)
       && requested !== live;
@@ -353,13 +357,15 @@ export async function POST(req: NextRequest) {
       numberConflicts[company] = `${requested} already exists in QuickBooks ${company}`;
       return;
     }
-    const selected = manuallyOverridden ? requested : requested || expected || live;
+    if (!manuallyOverridden && live && requested && requested !== live) {
+      numberConflicts[company] = `${requested} is no longer the next QuickBooks ${company} number. The latest number is ${live}`;
+      return;
+    }
+    const selected = manuallyOverridden ? requested : live || requested || expected;
     if (selected) {
       resolvedNumbers[company] = selected;
-      numberModes[company] = manuallyOverridden ? 'manual' : 'automatic';
-      reservationNumbers[company] = manuallyOverridden
-        ? selected
-        : `AUTO-${quickBooksRequestId(company, idempotencyKey)}`;
+      numberModes[company] = manuallyOverridden ? 'manual' : 'sequential';
+      reservationNumbers[company] = selected;
     }
   }));
 
@@ -425,7 +431,7 @@ export async function POST(req: NextRequest) {
     try {
       return await createInvoiceInCompany(
         company, companyName, lines, email, date, sendEmail, pic,
-        resolvedNumbers[company], numberModes[company] ?? 'automatic',
+        resolvedNumbers[company], numberModes[company] ?? 'sequential',
         quickBooksRequestId(company, idempotencyKey), account.qbLocations?.[company],
       );
     } catch (error) {
@@ -441,6 +447,7 @@ export async function POST(req: NextRequest) {
     safeCreate('TAC', tacLines ?? []),
   ]);
 
+  const reservationUpdateErrors: string[] = [];
   await Promise.all(([
     ['TAB', tab], ['TAC', tac],
   ] as Array<[QbCompany, CompanyResult | null]>).map(async ([company, result]) => {
@@ -453,8 +460,11 @@ export async function POST(req: NextRequest) {
       updated_at: new Date().toISOString(),
     };
     if (!result.error && result.invoiceNo) reservationUpdate.doc_number = result.invoiceNo;
-    await supabase.from('invoice_creation_reservations').update(reservationUpdate)
+    const { error: reservationUpdateError } = await supabase.from('invoice_creation_reservations').update(reservationUpdate)
       .eq('idempotency_key', idempotencyKey).eq('qb_company', company);
+    if (reservationUpdateError) {
+      reservationUpdateErrors.push(`Invoice ${result.qbId ?? result.invoiceNo ?? company} exists in QuickBooks, but its reservation record could not be finalized: ${reservationUpdateError.message}`);
+    }
   }));
 
   // Persist every successful creation — the authoritative "already invoiced
@@ -464,7 +474,9 @@ export async function POST(req: NextRequest) {
   if (tab && !tab.error) toRecord.push({ qb_company: 'TAB', result: tab, lines: tabLines ?? [] });
   if (tac && !tac.error) toRecord.push({ qb_company: 'TAC', result: tac, lines: tacLines ?? [] });
 
-  let persistenceWarning: string | null = null;
+  let persistenceWarning: string | null = reservationUpdateErrors.length
+    ? reservationUpdateErrors.join(' ')
+    : null;
   if (toRecord.length) {
     const { error: recordError } = await supabase.from('generated_invoices').upsert(toRecord.map(({ qb_company, result, lines }) => ({
       company_name: companyName,
@@ -480,7 +492,8 @@ export async function POST(req: NextRequest) {
       idempotency_key: idempotencyKey,
     })), { onConflict: 'idempotency_key,qb_company' });
     if (recordError) {
-      persistenceWarning = `Invoice exists in QuickBooks but local billing history needs reconciliation: ${recordError.message}`;
+      const generatedWarning = `Invoice exists in QuickBooks but local billing history needs reconciliation: ${recordError.message}`;
+      persistenceWarning = persistenceWarning ? `${persistenceWarning} ${generatedWarning}` : generatedWarning;
       await supabase.from('invoice_creation_reservations').update({
         error: `Invoice created but generated_invoices persistence failed: ${recordError.message}`,
         updated_at: new Date().toISOString(),
