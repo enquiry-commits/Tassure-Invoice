@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-15
+Last updated: 2026-07-17
 
 ## Purpose
 
@@ -24,6 +24,15 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Added a formal 25-page Chinese user manual for the complete system, including
+  document control, a clickable three-page table of contents, all visible
+  business pages, operating procedures, data-authority rules, multi-user
+  conflict handling, TeamWork / QuickBooks automation, billing safeguards,
+  troubleshooting, checklists, and a field glossary. Interface figures use
+  anonymised sample company data. The PDF was rendered page by page and checked
+  for A4 sizing, Chinese text extraction, bookmarks, blank pages, clipping, and
+  out-of-bounds content. The source generator is retained under `scripts/` so
+  future system changes can be reflected consistently.
 - Mapped approved Google login accounts to the existing TAB and TAC QuickBooks
   Locations and now writes the signed-in user's configured Location onto newly
   generated invoices without creating any new QB Location records.

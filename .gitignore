@@ -9,3 +9,5 @@ node_modules/
 .vercel
 data/teamwork-api/
 data/teamwork-scrape/
+scripts/__pycache__/
+tmp/pdfs/
