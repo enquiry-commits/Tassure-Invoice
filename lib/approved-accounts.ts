@@ -16,7 +16,7 @@ export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   { name: 'Tey Shemin', email: 'shemin@tassure.com', qbLocations: { TAB: 'Tey Shemin', TAC: 'Shemin' } },
   { name: 'Tan Min Quan', email: 'minquan@tassure.com' },
   { name: 'Esther Loo', email: 'esther@tassure.com', qbLocations: { TAB: 'Esther Loo', TAC: 'Esther Loo' } },
-  { name: 'Chelsea Ang', email: 'chelsea@tassure.com' },
+  { name: 'Chelsea Ang', email: 'chelsea@tassure.com', qbLocations: { TAB: 'Chelsea Ang', TAC: 'Chelsea Ang' } },
 ] as const;
 
 const ACCOUNT_BY_EMAIL = new Map(

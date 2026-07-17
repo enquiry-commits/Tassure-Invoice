@@ -152,8 +152,9 @@ one focused Git commit.
 ### 2026-07-17 - Codex
 
 - Added Chelsea Ang (`chelsea@tassure.com`) to the Google login allowlist and
-  AR Reminder Realtime RLS policy source. No TAB/TAC QuickBooks Location was
-  added, preserving the existing QB Location roster.
+  AR Reminder Realtime RLS policy source. A read-only QuickBooks Department
+  lookup confirmed an active `Chelsea Ang` Location in both TAB and TAC; her
+  login now maps to those two existing records without creating a new Location.
 - Replaced all illustrated/anonymised manual figures with real screenshots
   captured from the signed-in production system on 17 Jul 2026.
 - Added screenshot coverage for Google sign-in, Ad-Hoc, MAS, Strike Off,
