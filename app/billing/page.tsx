@@ -1058,12 +1058,6 @@ type EditableLine = {
 type InvoiceNumberState = { TAB: string; TAC: string };
 type GeneratedPdf = { company: 'TAB' | 'TAC'; invoiceNo: string; qbId: string };
 
-type WritableFileHandle = { createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }> };
-type WritableDirectoryHandle = { getFileHandle: (name: string, options: { create: boolean }) => Promise<WritableFileHandle> };
-type FolderPickerWindow = Window & {
-  showDirectoryPicker?: (options?: { mode?: 'read' | 'readwrite' }) => Promise<WritableDirectoryHandle>;
-};
-
 function existingGeneratedPdfs(company: CompanyBilling, cycleFye?: string): GeneratedPdf[] {
   const seen = new Set<'TAB' | 'TAC'>();
   const pdfs: GeneratedPdf[] = [];
@@ -1352,6 +1346,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const saveInvoicePdfs = async () => {
     if (!generatedPdfs.length) return;
     setPdfResult(null);
+    setSavingPdfs(true);
 
     const downloadBlob = (blob: Blob, fileName: string) => {
       const url = URL.createObjectURL(blob);
@@ -1361,29 +1356,11 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     };
 
-    let directory: WritableDirectoryHandle | null = null;
-    let folderFallbackReason = '';
-    const picker = (window as FolderPickerWindow).showDirectoryPicker;
-
-    if (picker) {
-      try {
-        directory = await picker({ mode: 'readwrite' });
-      } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          setPdfResult({ ok: false, msg: 'Folder selection cancelled. No file was saved.' });
-          return;
-        }
-        folderFallbackReason = 'The selected folder could not be opened for writing.';
-      }
-    }
-
-    setSavingPdfs(true);
     try {
       const safeCompany = c.companyName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim();
-      let folderSavedCount = 0;
       let downloadedCount = 0;
 
       for (const invoice of generatedPdfs) {
@@ -1394,32 +1371,13 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         }
         const blob = await response.blob();
         const fileName = `${invoice.invoiceNo} - ${safeCompany} - ${invoice.company}.pdf`;
-
-        if (directory) {
-          try {
-            const fileHandle = await directory.getFileHandle(fileName, { create: true });
-            const writable = await fileHandle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-            folderSavedCount += 1;
-          } catch {
-            folderFallbackReason = 'The selected folder did not allow the browser to write the file.';
-            downloadBlob(blob, fileName);
-            downloadedCount += 1;
-          }
-        } else {
-          downloadBlob(blob, fileName);
-          downloadedCount += 1;
-        }
+        downloadBlob(blob, fileName);
+        downloadedCount += 1;
       }
 
-      const savedParts = [
-        folderSavedCount ? `${folderSavedCount} PDF${folderSavedCount > 1 ? 's' : ''} saved to the selected folder` : '',
-        downloadedCount ? `${downloadedCount} PDF${downloadedCount > 1 ? 's' : ''} downloaded by the browser` : '',
-      ].filter(Boolean);
       setPdfResult({
         ok: true,
-        msg: `${savedParts.join('; ')}.${downloadedCount && folderFallbackReason ? ` ${folderFallbackReason}` : ''}`,
+        msg: `${downloadedCount} invoice PDF${downloadedCount > 1 ? 's' : ''} sent to Chrome downloads. Enable “Ask where to save each file” in Chrome Downloads settings to choose a folder each time.`,
       });
     } catch (error) {
       setPdfResult({ ok: false, msg: error instanceof Error ? error.message : 'Unable to save invoice PDF.' });
@@ -1664,11 +1622,11 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1e3a5f' }}>Invoice PDF ready</div>
             <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
-              {generatedPdfs.map(pdf => `${pdf.company} #${pdf.invoiceNo}`).join(' · ')} · choose a local folder and save directly
+              {generatedPdfs.map(pdf => `${pdf.company} #${pdf.invoiceNo}`).join(' · ')} · download through Chrome without folder-access restrictions
             </div>
           </div>
           <button type="button" onClick={saveInvoicePdfs} disabled={savingPdfs} style={{ border: '1px solid #93c5fd', borderRadius: 7, background: savingPdfs ? '#dbeafe' : '#eff6ff', color: '#1d4ed8', padding: '8px 12px', fontSize: 11.5, fontWeight: 800, cursor: savingPdfs ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <FileText size={13} /> {savingPdfs ? 'Saving PDF…' : `Choose Folder & Save PDF${generatedPdfs.length > 1 ? 's' : ''}`}
+            <FileText size={13} /> {savingPdfs ? 'Preparing PDF…' : `Download PDF${generatedPdfs.length > 1 ? 's' : ''}`}
           </button>
         </div>
       )}
