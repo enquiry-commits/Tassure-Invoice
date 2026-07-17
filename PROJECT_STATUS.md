@@ -24,6 +24,11 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Normalized Billing Draft invoice-number presentation so legacy QuickBooks
+  values beginning with `TAB` or `TAC` display as the number only (for example,
+  `TAC02580262` becomes `#02580262`). The source QB/database value remains
+  unchanged; the same display-only normalization is used in invoice pills,
+  history summaries, Save As filenames, and PDF status messages.
 - Corrected QuickBooks custom-number creation so TAB/TAC invoices always send
   the latest validated numeric DocNumber and never send the literal
   `AUTO_GENERATE`. Exact-number reservations now serialize concurrent system
@@ -168,6 +173,19 @@ one focused Git commit.
    - deployment status, if applicable.
 
 ## Handoff log
+
+### 2026-07-17 - Codex (invoice number display cleanup)
+
+- Added one display-only invoice-number formatter for Billing Draft. It removes
+  a leading legacy `TAB`/`TAC` company code only when followed by a number or a
+  separator; ordinary numeric invoice numbers remain unchanged.
+- Applied it consistently to desktop/mobile invoice pills, renewal and QB
+  history, prior-ND references, PDF Save As filenames, and PDF result messages.
+  QuickBooks values and Supabase records were not mutated.
+- Verification: explicit formatter cases passed for `TAC02580262`,
+  `TAB02610834`, `TAC-02580262`, and `02610852`; targeted ESLint completed with
+  zero errors (six pre-existing warnings); `npm run build` succeeded. No push
+  or Vercel deployment was performed.
 
 ### 2026-07-17 - Codex (Chrome-protected PDF folders)
 

@@ -90,7 +90,7 @@ function RenewalCard({ r }: { r: RenewalStatus }) {
               {r.history.map((h, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: 10, color: '#64748b' }}>
                   <span>{fmtPeriod(h.period_start, h.period_end)}</span>
-                  <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{h.invoice_no}</span>
+                  <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{displayInvoiceNo(h.invoice_no)}</span>
                 </div>
               ))}
             </div>
@@ -152,7 +152,7 @@ function AnnualCard({ a }: { a: AnnualStatus }) {
               {a.history.map((h, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: 10, color: '#64748b' }}>
                   <span>{fmtDate(h.txn_date)}</span>
-                  <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{h.invoice_no}</span>
+                  <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{displayInvoiceNo(h.invoice_no)}</span>
                 </div>
               ))}
             </div>
@@ -994,7 +994,7 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
               <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
                 {r.invoices.slice(0, 5).map((inv, i) => (
                   <div key={inv.invoice_no} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: i < r.invoices.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-                    <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#475569' }}>{inv.invoice_no}</span>
+                    <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#475569' }}>{displayInvoiceNo(inv.invoice_no)}</span>
                     <span style={{ fontSize: 10, color: '#64748b' }}>{fmtDate(inv.txn_date)}</span>
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#1e3a5f' }}>S${(inv.total_amt ?? 0).toLocaleString()}</span>
                     <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 3, padding: '1px 5px',
@@ -1057,6 +1057,12 @@ type EditableLine = {
 
 type InvoiceNumberState = { TAB: string; TAC: string };
 type GeneratedPdf = { company: 'TAB' | 'TAC'; invoiceNo: string; qbId: string };
+
+function displayInvoiceNo(invoiceNo: string | null | undefined) {
+  const value = String(invoiceNo ?? '').trim();
+  return value.replace(/^(?:TAB|TAC)(?=\d|[\s#:_-])[\s#:_-]*/i, '');
+}
+
 type WritablePdfFileHandle = {
   createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
 };
@@ -1370,7 +1376,8 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
 
     try {
       const safeCompany = c.companyName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim();
-      const fileName = `${invoice.invoiceNo} - ${safeCompany} - ${invoice.company}.pdf`;
+      const visibleInvoiceNo = displayInvoiceNo(invoice.invoiceNo);
+      const fileName = `${visibleInvoiceNo} - ${safeCompany} - ${invoice.company}.pdf`;
       const saveFilePicker = (window as SaveFilePickerWindow).showSaveFilePicker;
       let fileHandle: WritablePdfFileHandle | null = null;
       let useDownloadFallback = !saveFilePicker;
@@ -1410,8 +1417,8 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       setPdfResult({
         ok: true,
         msg: fileHandle && !useDownloadFallback
-          ? `${invoice.company} invoice #${invoice.invoiceNo} saved to the selected location.`
-          : `${invoice.company} invoice #${invoice.invoiceNo} sent to Chrome downloads.`,
+          ? `${invoice.company} invoice #${visibleInvoiceNo} saved to the selected location.`
+          : `${invoice.company} invoice #${visibleInvoiceNo} sent to Chrome downloads.`,
       });
     } catch (error) {
       setPdfResult({ ok: false, msg: error instanceof Error ? error.message : 'Unable to save invoice PDF.' });
@@ -1578,7 +1585,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
                 {ndPrior?.invoice_no
                   ? <span>
                       Based on last invoice
-                      <strong style={{ color: '#9a3412', fontFamily: 'monospace', margin: '0 5px', background: '#ffedd5', border: '1px solid #fed7aa', padding: '1px 7px', borderRadius: 4 }}>#{ndPrior.invoice_no}</strong>
+                      <strong style={{ color: '#9a3412', fontFamily: 'monospace', margin: '0 5px', background: '#ffedd5', border: '1px solid #fed7aa', padding: '1px 7px', borderRadius: 4 }}>#{displayInvoiceNo(ndPrior.invoice_no)}</strong>
                       {ndPrior.txn_date && <> dated <strong style={{ color: '#334155' }}>{fmtDate(ndPrior.txn_date)}</strong></>}
                       {' '}— ND fee &amp; director item carried forward, period rolled to this cycle.
                     </span>
@@ -1656,7 +1663,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1e3a5f' }}>Invoice PDF ready</div>
             <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
-              {generatedPdfs.map(pdf => `${pdf.company} #${pdf.invoiceNo}`).join(' · ')} · Windows Save As, without granting access to the whole folder
+              {generatedPdfs.map(pdf => `#${displayInvoiceNo(pdf.invoiceNo)}`).join(' · ')} · Windows Save As, without granting access to the whole folder
             </div>
           </div>
           {generatedPdfs.map(pdf => (
@@ -1950,8 +1957,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                 </div>
                 {(latestInvoiceNo(c, 'TAB') || latestInvoiceNo(c, 'TAC') || c.pic) && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', marginTop: 7, alignItems: 'center' }}>
-                    {latestInvoiceNo(c, 'TAB') && <BillingStatusPill label={`TAB #${latestInvoiceNo(c, 'TAB')}`} color="#1d4ed8" background="#eff6ff" border="#bfdbfe" />}
-                    {latestInvoiceNo(c, 'TAC') && <BillingStatusPill label={`TAC #${latestInvoiceNo(c, 'TAC')}`} color="#9a3412" background="#fff7ed" border="#fed7aa" />}
+                    {latestInvoiceNo(c, 'TAB') && <BillingStatusPill label={`#${displayInvoiceNo(latestInvoiceNo(c, 'TAB'))}`} color="#1d4ed8" background="#eff6ff" border="#bfdbfe" />}
+                    {latestInvoiceNo(c, 'TAC') && <BillingStatusPill label={`#${displayInvoiceNo(latestInvoiceNo(c, 'TAC'))}`} color="#9a3412" background="#fff7ed" border="#fed7aa" />}
                     {c.pic && <span style={{ fontSize: 10.5, color: '#64748b' }}>PIC: {c.pic}</span>}
                   </div>
                 )}
@@ -1992,7 +1999,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                       authoritative generated_invoices record, not a QB-parsed guess. */}
                   <div style={{ width: '100%', padding: '2px 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box', backgroundImage: 'linear-gradient(to right, #dbe3ee 0, #dbe3ee 1px, transparent 1px)' }}>
                     {latestInvoiceNo(c, 'TAB')
-                      ? <BillingStatusPill label={`#${latestInvoiceNo(c, 'TAB')}`} color="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
+                      ? <BillingStatusPill label={`#${displayInvoiceNo(latestInvoiceNo(c, 'TAB'))}`} color="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
                       : <BillingStatusPill label="Not issued" color="#94a3b8" background="#f8fafc" border="#e2e8f0" />}
                   </div>
                   <div style={{ width: '100%', padding: '0 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
@@ -2003,10 +2010,10 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                       // period, not an FYE-cycle marker, so they can't be keyed
                       // to cycles the way the TAB backfill was) — shown muted.
                       const gen = latestInvoiceNo(c, 'TAC');
-                      if (gen) return <BillingStatusPill label={`#${gen}`} color="#9a3412" background="#fff7ed" border="#fed7aa" />;
+                      if (gen) return <BillingStatusPill label={`#${displayInvoiceNo(gen)}`} color="#9a3412" background="#fff7ed" border="#fed7aa" />;
                       const ndHist = c.renewals.find(r => r.service === 'ND' && r.applicable)?.history?.[0];
                       if (ndHist?.invoice_no) return (
-                        <BillingStatusPill label={`#${ndHist.invoice_no}`} color="#c2712e" background="#fffbf5" border="#fed7aa"
+                        <BillingStatusPill label={`#${displayInvoiceNo(ndHist.invoice_no)}`} color="#c2712e" background="#fffbf5" border="#fed7aa"
                           title={`Last ND invoice${ndHist.txn_date ? ` · ${fmtDate(ndHist.txn_date)}` : ''} — historical, not this cycle`} muted />
                       );
                       return <BillingStatusPill label="Not issued" color="#94a3b8" background="#f8fafc" border="#e2e8f0" />;
