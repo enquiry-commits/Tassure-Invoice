@@ -1,8 +1,8 @@
 """Generate the formal Chinese user manual for TASSURE Corporate Services System.
 
-The document is intentionally generated from structured content so it can be
-updated alongside the product. Interface figures use anonymised sample data and
-mirror the production information architecture without copying client records.
+The document is generated from structured content and verified production
+screenshots.  All document furniture is monochrome; only the TASSURE logo and
+the system screenshots retain their original colour.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT, TA_RIGHT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
+from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
@@ -40,24 +41,25 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = ROOT / "output" / "pdf"
 OUTPUT_FILE = OUTPUT_DIR / "Tassure-Corporate-Services-System-User-Manual-ZH.pdf"
 LOGO = ROOT / "public" / "logo.png"
+SCREENSHOT_DIR = ROOT / "tmp" / "manual-screenshots-real"
 
 PAGE_W, PAGE_H = A4
-NAVY = colors.HexColor("#17395F")
-NAVY_DARK = colors.HexColor("#0D2743")
-TEAL = colors.HexColor("#0F766E")
-TEAL_LIGHT = colors.HexColor("#EAF7F4")
-BLUE = colors.HexColor("#2563EB")
-BLUE_LIGHT = colors.HexColor("#EFF6FF")
-GREEN = colors.HexColor("#15803D")
-GREEN_LIGHT = colors.HexColor("#F0FDF4")
-AMBER = colors.HexColor("#B45309")
-AMBER_LIGHT = colors.HexColor("#FFF7ED")
-RED = colors.HexColor("#C62828")
-RED_LIGHT = colors.HexColor("#FEF2F2")
-SLATE = colors.HexColor("#475569")
-MUTED = colors.HexColor("#8392A8")
-LINE = colors.HexColor("#DDE5EE")
-PAPER = colors.HexColor("#F5F8FB")
+NAVY = colors.black
+NAVY_DARK = colors.black
+TEAL = colors.black
+TEAL_LIGHT = colors.white
+BLUE = colors.black
+BLUE_LIGHT = colors.white
+GREEN = colors.black
+GREEN_LIGHT = colors.white
+AMBER = colors.black
+AMBER_LIGHT = colors.white
+RED = colors.black
+RED_LIGHT = colors.white
+SLATE = colors.black
+MUTED = colors.black
+LINE = colors.HexColor("#B8B8B8")
+PAPER = colors.white
 
 
 def register_fonts() -> None:
@@ -382,12 +384,12 @@ def build_styles():
     styles = {}
     styles["CoverTitle"] = ParagraphStyle(
         "CoverTitle", parent=sample["Title"], fontName="MicrosoftYaHei-Bold",
-        fontSize=27, leading=38, textColor=colors.white, alignment=TA_LEFT,
+        fontSize=27, leading=38, textColor=colors.black, alignment=TA_LEFT,
         spaceAfter=12,
     )
     styles["CoverSub"] = ParagraphStyle(
         "CoverSub", parent=sample["Normal"], fontName="MicrosoftYaHei",
-        fontSize=12, leading=20, textColor=colors.HexColor("#CDE4F5"),
+        fontSize=12, leading=20, textColor=colors.black,
     )
     styles["H1"] = ParagraphStyle(
         "H1", parent=sample["Heading1"], fontName="MicrosoftYaHei-Bold",
@@ -406,7 +408,7 @@ def build_styles():
     )
     styles["Body"] = ParagraphStyle(
         "Body", parent=sample["BodyText"], fontName="MicrosoftYaHei",
-        fontSize=9.25, leading=16.2, textColor=SLATE, alignment=TA_JUSTIFY,
+        fontSize=9.25, leading=16.2, textColor=colors.black, alignment=TA_JUSTIFY,
         spaceAfter=7, wordWrap="CJK",
     )
     styles["Small"] = ParagraphStyle(
@@ -469,13 +471,9 @@ def numbered(items):
 
 
 def callout(title: str, body: str, tone="info"):
-    palette = {
-        "info": (BLUE_LIGHT, colors.HexColor("#BFDBFE"), BLUE),
-        "success": (GREEN_LIGHT, colors.HexColor("#BBF7D0"), GREEN),
-        "warning": (AMBER_LIGHT, colors.HexColor("#FED7AA"), AMBER),
-        "danger": (RED_LIGHT, colors.HexColor("#FECACA"), RED),
-        "neutral": (PAPER, LINE, NAVY),
-    }
+    palette = {name: (colors.white, LINE, colors.black) for name in (
+        "info", "success", "warning", "danger", "neutral"
+    )}
     bg, border, fg = palette[tone]
     data = [[Paragraph(title, ParagraphStyle("ct", parent=STYLES["CalloutTitle"], textColor=fg)), para(body)]]
     t = Table(data, colWidths=[28 * mm, 137 * mm], hAlign="LEFT")
@@ -507,7 +505,7 @@ def data_table(headers, rows, widths=None, font_size=7.4, repeat_rows=1):
         ("FONTNAME", (0, 0), (-1, 0), "MicrosoftYaHei-Bold"),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("GRID", (0, 0), (-1, -1), 0.45, LINE),
-        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.white]),
         ("LEFTPADDING", (0, 0), (-1, -1), 5),
         ("RIGHTPADDING", (0, 0), (-1, -1), 5),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
@@ -516,26 +514,67 @@ def data_table(headers, rows, widths=None, font_size=7.4, repeat_rows=1):
     return table
 
 
-def figure(kind: str, caption: str, height=78 * mm):
+FIGURE_FILES = {
+    "navigation": "02-dashboard.png",
+    "dashboard": "02-dashboard.png",
+    "companies": "03-companies-data.png",
+    "master": "04-active-clients-data.png",
+    "ad_hoc": "14-ad-hoc.png",
+    "mas": "15-mas.png",
+    "strike_off": "16-strike-off.png",
+    "terminated": "17-terminated.png",
+    "name_change": "18-name-change.png",
+    "nd": "05-nominee-directors.png",
+    "address": "06-address-service.png",
+    "ar_list": "07-ar-reminder-data.png",
+    "ar_table": "19-ar-table.png",
+    "ar_modal": "11-ar-detail-modal.png",
+    "ar_history": "12-ar-history.png",
+    "late": "08-late-filing-data.png",
+    "billing_list": "09-billing-drafts-final.png",
+    "invoice_builder": "10-billing-invoice-modal.png",
+    "automation": "13-dashboard-automation.png",
+    "login": "01-login.png",
+}
+
+
+def figure(kind: str, caption: str, height=86 * mm):
+    filename = FIGURE_FILES.get(kind)
+    if not filename:
+        raise KeyError(f"No screenshot is configured for figure kind: {kind}")
+    path = SCREENSHOT_DIR / filename
+    if not path.exists():
+        raise FileNotFoundError(f"Required manual screenshot was not found: {path}")
+    px_w, px_h = ImageReader(str(path)).getSize()
+    draw_w = 165 * mm
+    draw_h = draw_w * px_h / px_w
+    if draw_h > height:
+        draw_h = height
+        draw_w = draw_h * px_w / px_h
+    screenshot = Image(str(path), width=draw_w, height=draw_h)
+    screenshot.hAlign = "CENTER"
+    frame = Table([[screenshot]], colWidths=[draw_w + 2 * mm], hAlign="CENTER")
+    frame.setStyle(TableStyle([
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.black),
+        ("LEFTPADDING", (0, 0), (-1, -1), 1 * mm),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 1 * mm),
+        ("TOPPADDING", (0, 0), (-1, -1), 1 * mm),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 1 * mm),
+        ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+    ]))
     return KeepTogether([
-        InterfaceFigure(kind, height=height),
-        Paragraph(f"界面示意：{caption}（匿名化数据）", STYLES["Caption"]),
+        frame,
+        Paragraph(f"真实系统截图：{caption}（截取于 17 Jul 2026）", STYLES["Caption"]),
     ])
 
 
 def draw_cover(canvas, doc):
     canvas.saveState()
-    canvas.setFillColor(NAVY_DARK)
+    canvas.setFillColor(colors.white)
     canvas.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
-    canvas.setFillColor(colors.HexColor("#1D5162"))
-    canvas.circle(PAGE_W + 10 * mm, PAGE_H - 45 * mm, 72 * mm, fill=1, stroke=0)
-    canvas.setFillColor(colors.HexColor("#266C70"))
-    canvas.circle(PAGE_W - 8 * mm, PAGE_H - 32 * mm, 42 * mm, fill=1, stroke=0)
-    canvas.setFillColor(TEAL)
-    canvas.rect(0, 0, 9 * mm, PAGE_H, fill=1, stroke=0)
-    canvas.setStrokeColor(colors.Color(1, 1, 1, alpha=0.16))
-    canvas.setLineWidth(0.8)
-    canvas.line(25 * mm, 33 * mm, PAGE_W - 25 * mm, 33 * mm)
+    canvas.setStrokeColor(colors.black)
+    canvas.setLineWidth(0.9)
+    canvas.line(25 * mm, 34 * mm, PAGE_W - 25 * mm, 34 * mm)
     canvas.restoreState()
 
 
@@ -546,11 +585,11 @@ def draw_body(canvas, doc):
     canvas.setLineWidth(0.6)
     canvas.line(18 * mm, PAGE_H - 14 * mm, PAGE_W - 18 * mm, PAGE_H - 14 * mm)
     canvas.setFont("MicrosoftYaHei-Bold", 7.2)
-    canvas.setFillColor(NAVY)
+    canvas.setFillColor(colors.black)
     canvas.drawString(18 * mm, PAGE_H - 10.5 * mm, "TASSURE Corporate Services System - 用户操作手册")
     canvas.setFont("MicrosoftYaHei", 6.7)
-    canvas.setFillColor(MUTED)
-    canvas.drawRightString(PAGE_W - 18 * mm, PAGE_H - 10.5 * mm, "版本 1.0 | 内部使用")
+    canvas.setFillColor(colors.black)
+    canvas.drawRightString(PAGE_W - 18 * mm, PAGE_H - 10.5 * mm, "版本 1.1 | 内部使用")
     canvas.line(18 * mm, 13 * mm, PAGE_W - 18 * mm, 13 * mm)
     canvas.drawString(18 * mm, 8.5 * mm, "文档编号：TCS-UM-ZH-001")
     canvas.drawRightString(PAGE_W - 18 * mm, 8.5 * mm, f"第 {page} 页")
@@ -563,7 +602,7 @@ def create_doc():
         str(OUTPUT_FILE), pagesize=A4,
         leftMargin=18 * mm, rightMargin=18 * mm,
         topMargin=20 * mm, bottomMargin=17 * mm,
-        title="TASSURE Corporate Services System 用户操作手册",
+        title="TASSURE Corporate Services System 中文用户操作手册",
         author="TASSURE",
         subject="Corporate services operations system user manual",
         creator="TASSURE Corporate Services System",
@@ -588,20 +627,20 @@ def build_story():
         s.append(img)
         s.append(Spacer(1, 8 * mm))
     s.append(Paragraph("TASSURE Corporate<br/>Services System", STYLES["CoverTitle"]))
-    s.append(Paragraph("中文用户操作手册", ParagraphStyle("cover-cn", parent=STYLES["CoverTitle"], fontSize=19, leading=28, textColor=colors.HexColor("#7DE0D2"))))
+    s.append(Paragraph("中文用户操作手册", ParagraphStyle("cover-cn", parent=STYLES["CoverTitle"], fontSize=19, leading=28, textColor=colors.black)))
     s.append(Spacer(1, 8 * mm))
     s.append(Paragraph("适用于公司资料管理、AR 工作流、Late Filing 监控、Billing Draft 与 QuickBooks 开单", STYLES["CoverSub"]))
     s.append(Spacer(1, 35 * mm))
     cover_meta = Table([
-        [Paragraph("版本", STYLES["Small"]), Paragraph("1.0", STYLES["Small"])],
+        [Paragraph("版本", STYLES["Small"]), Paragraph("1.1", STYLES["Small"])],
         [Paragraph("发布日期", STYLES["Small"]), Paragraph("17 Jul 2026", STYLES["Small"])],
         [Paragraph("系统网址", STYLES["Small"]), Paragraph("https://tassure-corporate-services.vercel.app", STYLES["Small"])],
         [Paragraph("保密级别", STYLES["Small"]), Paragraph("内部使用 / Internal Use Only", STYLES["Small"])],
     ], colWidths=[25 * mm, 105 * mm])
     cover_meta.setStyle(TableStyle([
         ("FONTNAME", (0, 0), (-1, -1), "MicrosoftYaHei"),
-        ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#D9E8F2")),
-        ("LINEBELOW", (0, 0), (-1, -1), 0.5, colors.Color(1, 1, 1, alpha=0.16)),
+        ("TEXTCOLOR", (0, 0), (-1, -1), colors.black),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.5, LINE),
         ("TOPPADDING", (0, 0), (-1, -1), 5),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
@@ -616,7 +655,7 @@ def build_story():
         ["项目", "内容"],
         [
             ["文档编号", "TCS-UM-ZH-001"],
-            ["版本", "1.0"],
+            ["版本", "1.1"],
             ["系统", "TASSURE Corporate Services System"],
             ["适用对象", "Corporate Services、Secretarial、Accounts、Tax、Billing 及管理人员"],
             ["适用环境", "桌面版 Chrome / Edge；移动版主要供查看，不建议执行批量编辑或开单"],
@@ -626,7 +665,7 @@ def build_story():
         widths=[34, 131],
     ))
     s.append(Spacer(1, 6 * mm))
-    s.append(callout("版本说明", "本手册依据 2026 年 7 月 17 日的系统功能编制。系统数据为动态资料；截图式示意图使用匿名化样本，实际数量、公司名称与状态以登录后的页面为准。", "info"))
+    s.append(callout("版本说明", "本手册依据 2026 年 7 月 17 日的系统功能及真实系统界面编制。截图中的数量、公司名称和状态为截取时的系统实时资料；后续实际资料以登录后的页面为准。", "info"))
     s.append(Spacer(1, 8 * mm))
     s.append(heading("阅读方式", 2))
     s.extend(bullets([
@@ -695,6 +734,7 @@ def build_story():
         "选择已获批准的 TASSURE Google Email。",
         "Google 授权成功后，系统会返回 Dashboard，并在右上角显示规范姓名与 Email。",
     ]))
+    s.append(figure("login", "Google 公司账号登录入口"))
     s.append(callout("登录限制", "系统不是只限某一台电脑。任何已获批准的账户都可以在有网络的设备上登录。未列入系统批准名单的 Google 账户会被拒绝。", "info"))
     s.append(heading("2.2 Session 行为", 2))
     s.extend(bullets([
@@ -816,8 +856,10 @@ def build_story():
     s.append(callout("FYE Mismatch", "当人工 FYE 与 TeamWork FYE 月份不一致时，系统显示 FYE mismatch。点击该 FYE 单元格编辑人工值，但在保存前必须先确认 TeamWork 记录是否才是正确来源。", "warning"))
     s.append(heading("6.3 Ad-Hoc", 2))
     s.append(para("Ad-Hoc 记录非标准或单次服务客户，重点字段包括 Sec Agent、KYC Year、ROC、Corporate Tax、E-filing Authorization、Accounts、Audit、GST、Compilation Report、CPF、地址、联系资料、风险与 ACRA Update。"))
+    s.append(figure("ad_hoc", "Ad-Hoc 客户名单与专用服务字段"))
     s.append(heading("6.4 MAS", 2))
     s.append(para("MAS 页面使用较少的专用列：Company Name、ROC No.、FYE、Last Accounts Date、Next AGM Due 与 MAS。用于快速检查受监管客户的到期与账户资料。"))
+    s.append(figure("mas", "MAS 客户名单与监管字段"))
     s.append(heading("6.5 Strike Off / Terminated Services", 2))
     s.extend(bullets([
         "Strike Off 记录处于注销流程的公司；Terminated Services 记录已终止服务的公司。",
@@ -825,8 +867,11 @@ def build_story():
         "移动操作会改变名单类别与指定状态，不等同于在 TeamWork 完成全部状态更新。",
         "删除是不可逆的名单操作，应避免把删除当作归档。",
     ]))
+    s.append(figure("strike_off", "Strike Off 名单、状态与操作栏"))
+    s.append(figure("terminated", "Terminated Services 名单、状态与操作栏"))
     s.append(heading("6.6 Change Co Name", 2))
     s.append(para("Change Co Name 用于跟踪公司更名事项。操作方式与其他 Master List 相同，可搜索、编辑、Add Manual、分页和删除。建议在 Remark 中保留旧名称、正式更名日期与文件状态。"))
+    s.append(figure("name_change", "Change Co Name 名单与更名资料"))
 
     # 7 billing system
     s.append(heading("7. Billing System", 1))
@@ -937,6 +982,7 @@ def build_story():
         ], widths=[52, 113],
     ))
     s.append(heading("7.3.7 History 与还原", 3))
+    s.append(figure("ar_history", "AR Reminder 变更历史与 Restore 区域"))
     s.extend(numbered([
         "点击弹窗右上角 History。",
         "查看字段、旧值、新值、修改人、修改时间与版本。",

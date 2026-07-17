@@ -24,15 +24,16 @@ one focused Git commit.
 
 ## Latest completed work
 
-- Added a formal 25-page Chinese user manual for the complete system, including
-  document control, a clickable three-page table of contents, all visible
-  business pages, operating procedures, data-authority rules, multi-user
-  conflict handling, TeamWork / QuickBooks automation, billing safeguards,
-  troubleshooting, checklists, and a field glossary. Interface figures use
-  anonymised sample company data. The PDF was rendered page by page and checked
-  for A4 sizing, Chinese text extraction, bookmarks, blank pages, clipping, and
-  out-of-bounds content. The source generator is retained under `scripts/` so
-  future system changes can be reflected consistently.
+- Rebuilt the complete Chinese user manual as a formal 29-page monochrome
+  document. The cover and document furniture are black on white; only the
+  TASSURE logo and 19 verified production screenshots retain colour. The
+  screenshots now cover login, Dashboard, Companies, every Master List page,
+  ND, Address Service, AR List/Table/detail/history, Late Filing, Billing
+  Drafts, invoice generation, and Automation Health. The PDF was rendered page
+  by page and checked for A4 sizing, metadata, bookmarks, clickable contents,
+  blank pages, clipping, out-of-bounds objects, screenshot fidelity, and
+  pagination. Production screenshot source files remain local under untracked
+  `tmp/` for confidentiality; the completed PDF and generator are versioned.
 - Mapped approved Google login accounts to the existing TAB and TAC QuickBooks
   Locations and now writes the signed-in user's configured Location onto newly
   generated invoices without creating any new QB Location records.
@@ -147,6 +148,23 @@ one focused Git commit.
    - deployment status, if applicable.
 
 ## Handoff log
+
+### 2026-07-17 - Codex
+
+- Replaced all illustrated/anonymised manual figures with real screenshots
+  captured from the signed-in production system on 17 Jul 2026.
+- Added screenshot coverage for Google sign-in, Ad-Hoc, MAS, Strike Off,
+  Terminated Services, Change Co Name, and AR Reminder History.
+- Restyled the cover, headings, tables, callouts, captions, headers, and footers
+  to black-and-white; only the logo and system screenshots retain colour.
+- Updated the manual to version 1.1 and regenerated
+  `output/pdf/Tassure-Corporate-Services-System-User-Manual-ZH.pdf`.
+- Verification: Python syntax check; 29 A4 pages; 29 top-level PDF outlines;
+  156 link annotations; no blank pages, clipped text, or out-of-bounds images;
+  all 29 rendered pages visually reviewed, including full-size checks of the
+  screenshot-heavy login, Master List, AR, Billing, and Automation pages.
+- Production screenshot PNGs are intentionally left untracked under
+  `tmp/manual-screenshots-real/`; no push or deployment was performed.
 
 ### 2026-07-15 - Codex
 
