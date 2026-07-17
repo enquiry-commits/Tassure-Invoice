@@ -11,12 +11,194 @@ export type ParsedInvoicePeriod = {
   fye_date?: string;
 };
 
-export function isPrimaryRenewalProduct(service: string, productService: string | null | undefined) {
+export type RenewalFeeProduct = {
+  service: 'Secretary' | 'Address' | 'ND';
+  role: 'primary' | 'deferred';
+};
+
+/**
+ * Map each QuickBooks renewal item to the service that owns its value.
+ * Deferred revenue must stay paired with its own visible primary item:
+ * Corp Sec -> Corporate Secretarial Services, Reg Addr -> Address Services.
+ */
+export function classifyRenewalFeeProduct(productService: string | null | undefined): RenewalFeeProduct | null {
   const product = productService ?? '';
-  return service === 'Secretary' ? /Corporate Secretarial Services|Secretary Fees - Offshore/i.test(product)
-    : service === 'Address' ? /Registered Address Services/i.test(product)
-      : service === 'ND' ? /Nominee Director Fees/i.test(product)
-        : false;
+  if (/Deferred(?: Revenue)?\s*-\s*Corp Sec/i.test(product)) {
+    return { service: 'Secretary', role: 'deferred' };
+  }
+  if (/Deferred(?: Revenue)?\s*-\s*Reg Addr/i.test(product)) {
+    return { service: 'Address', role: 'deferred' };
+  }
+  if (/Deferred(?: Revenue)?\s*-\s*ND(?: Fees)?\b/i.test(product)) {
+    return { service: 'ND', role: 'deferred' };
+  }
+  if (/Co(?:r)?porate Secretarial Services|Secretary Fees - Offshore/i.test(product)) {
+    return { service: 'Secretary', role: 'primary' };
+  }
+  if (/Registered Address Services/i.test(product)) {
+    return { service: 'Address', role: 'primary' };
+  }
+  if (/Nominee Director Fees/i.test(product)) {
+    return { service: 'ND', role: 'primary' };
+  }
+  return null;
+}
+
+export function isPrimaryRenewalProduct(service: string, productService: string | null | undefined) {
+  const product = classifyRenewalFeeProduct(productService);
+  return product?.role === 'primary' && product.service === service;
+}
+
+export function compareRenewalPeriodProductLines(
+  service: string,
+  a: { period_end: string | null; product_service: string | null },
+  b: { period_end: string | null; product_service: string | null },
+) {
+  const periodOrder = (b.period_end ?? '').localeCompare(a.period_end ?? '');
+  if (periodOrder) return periodOrder;
+  return Number(isPrimaryRenewalProduct(service, b.product_service))
+    - Number(isPrimaryRenewalProduct(service, a.product_service));
+}
+
+export type RenewalFeeLine = {
+  customer_key: string;
+  qb_company?: string | null;
+  invoice_no: string;
+  txn_date: string | null;
+  product_service: string | null;
+  description: string | null;
+  amount: number | null;
+  generated_invoice?: boolean;
+};
+
+export type AnnualRenewalFee = {
+  invoice_no: string;
+  txn_date: string | null;
+  fee: number;
+  product_service: string;
+};
+
+/**
+ * Build the latest verified annual fee for each company and service.
+ * Deferred amounts are added only to the matching visible primary item in the
+ * same invoice. A primary-only line must still prove that the invoice is an
+ * annual renewal through a readable period, an Annual Return fee, or our own
+ * generated-invoice record. This prevents one-off work such as Share Allotment
+ * from replacing the annual renewal fee while retaining older generic QB
+ * descriptions such as "Sale; Company".
+ */
+export function buildAnnualRenewalFeeMap(lines: RenewalFeeLine[]) {
+  type Group = {
+    sourceInvoiceKey: string;
+    customerKey: string;
+    service: RenewalFeeProduct['service'];
+    invoiceNo: string;
+    txnDate: string | null;
+    sum: number;
+    primaryProduct: string | null;
+    hasDeferred: boolean;
+    hasReadablePeriod: boolean;
+    hasAnnualInvoiceSignal: boolean;
+  };
+
+  const invoiceKey = (line: RenewalFeeLine) =>
+    `${line.customer_key}|${line.qb_company ?? ''}|${line.invoice_no}`;
+  const annualInvoiceSignals = new Set<string>();
+  for (const line of lines) {
+    const product = line.product_service ?? '';
+    const hasAnnualReturnFee = /Government fee for filing Annual Return/i.test(product)
+      || (/Secretary:ACRA Fees/i.test(product) && Math.abs(Number(line.amount ?? 0)) >= 50);
+    if (line.generated_invoice || hasAnnualReturnFee) annualInvoiceSignals.add(invoiceKey(line));
+  }
+
+  const invoiceGroups = new Map<string, Group>();
+  for (const line of lines) {
+    const part = classifyRenewalFeeProduct(line.product_service);
+    if (!part) continue;
+    const sourceInvoiceKey = invoiceKey(line);
+    const key = `${sourceInvoiceKey}|${part.service}`;
+    if (!invoiceGroups.has(key)) {
+      invoiceGroups.set(key, {
+        sourceInvoiceKey,
+        customerKey: line.customer_key,
+        service: part.service,
+        invoiceNo: line.invoice_no,
+        txnDate: line.txn_date,
+        sum: 0,
+        primaryProduct: null,
+        hasDeferred: false,
+        hasReadablePeriod: false,
+        hasAnnualInvoiceSignal: annualInvoiceSignals.has(sourceInvoiceKey),
+      });
+    }
+
+    const group = invoiceGroups.get(key)!;
+    group.sum += Number(line.amount ?? 0) || 0;
+    group.hasReadablePeriod ||= !!parseInvoicePeriod(line.description, part.service)?.period_end;
+    if (part.role === 'primary') group.primaryProduct = line.product_service;
+    else group.hasDeferred = true;
+  }
+
+  const groups = [...invoiceGroups.values()];
+  const isStrongAnnual = (group: Group) => group.hasDeferred
+    || group.hasReadablePeriod
+    || group.hasAnnualInvoiceSignal;
+  const strongByCompanyService = new Map<string, Group[]>();
+  for (const group of groups) {
+    if (!group.primaryProduct || !isStrongAnnual(group)) continue;
+    const key = `${group.customerKey}|${group.service}`;
+    if (!strongByCompanyService.has(key)) strongByCompanyService.set(key, []);
+    strongByCompanyService.get(key)!.push(group);
+  }
+
+  // A small number of legacy QB renewals have only a generic "Sale" text and
+  // no ACRA line. Accept those only when at least two services recur together
+  // in the same invoice about one year after verified annual fees, with
+  // comparable amounts. Requiring two independently matching services keeps a
+  // standalone one-off Secretary item from being mistaken for a renewal.
+  const recurringMatchesByInvoice = new Map<string, Set<Group>>();
+  for (const group of groups) {
+    if (!group.primaryProduct || isStrongAnnual(group) || !group.txnDate) continue;
+    const priorGroups = strongByCompanyService.get(`${group.customerKey}|${group.service}`) ?? [];
+    const currentDate = group.txnDate;
+    const currentTime = Date.parse(currentDate);
+    const hasPriorAnnual = priorGroups.some(prior => {
+      if (!prior.txnDate || prior.txnDate >= currentDate) return false;
+      const days = (currentTime - Date.parse(prior.txnDate)) / 86_400_000;
+      const priorAmount = Math.abs(prior.sum);
+      const ratio = priorAmount ? Math.abs(group.sum) / priorAmount : 0;
+      return days >= 270 && days <= 460 && ratio >= 0.5 && ratio <= 2;
+    });
+    if (!hasPriorAnnual) continue;
+    if (!recurringMatchesByInvoice.has(group.sourceInvoiceKey)) {
+      recurringMatchesByInvoice.set(group.sourceInvoiceKey, new Set());
+    }
+    recurringMatchesByInvoice.get(group.sourceInvoiceKey)!.add(group);
+  }
+  const recurringAnnualGroups = new Set<Group>();
+  for (const matches of recurringMatchesByInvoice.values()) {
+    if (matches.size >= 2) for (const group of matches) recurringAnnualGroups.add(group);
+  }
+
+  const result = new Map<string, Map<RenewalFeeProduct['service'], AnnualRenewalFee>>();
+  for (const group of groups) {
+    if (!group.primaryProduct || (!isStrongAnnual(group) && !recurringAnnualGroups.has(group))) continue;
+    if (!result.has(group.customerKey)) result.set(group.customerKey, new Map());
+    const companyFees = result.get(group.customerKey)!;
+    const current = companyFees.get(group.service);
+    const groupOrder = `${group.txnDate ?? ''}|${group.invoiceNo}`;
+    const currentOrder = current ? `${current.txn_date ?? ''}|${current.invoice_no}` : '';
+    if (!current || groupOrder > currentOrder) {
+      companyFees.set(group.service, {
+        invoice_no: group.invoiceNo,
+        txn_date: group.txnDate,
+        fee: Math.round(group.sum * 100) / 100,
+        product_service: group.primaryProduct,
+      });
+    }
+  }
+
+  return result;
 }
 
 function monthNumber(value: string) {

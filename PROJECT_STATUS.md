@@ -24,6 +24,13 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Corrected Billing Draft renewal-fee pairing for split QuickBooks items.
+  `Deferred Revenue - Corp Sec` now belongs only to Corporate Secretarial
+  Services, while `Deferred Revenue - Reg Addr` belongs only to Registered
+  Address Services; each pair is summed into its visible primary line. The
+  selector also rejects newer one-off work that reused a Secretary product,
+  while retaining verified annual invoices through period, AR/ACRA, generated
+  invoice, or tightly bounded two-service annual recurrence evidence.
 - Hardened Billing Draft period renewal so the latest QuickBooks renewal line
   is always considered even when its description could not previously be
   parsed. Supported historical period formats are reparsed, Accounts/Tax/
@@ -183,6 +190,29 @@ one focused Git commit.
    - deployment status, if applicable.
 
 ## Handoff log
+
+### 2026-07-17 - Codex (renewal fee service pairing)
+
+- Added an explicit primary/deferred classifier for Secretary, Address, and ND
+  QuickBooks products, including the historical `Coporate` spelling.
+- Replaced broad keyword grouping with invoice- and QB-company-scoped pairing.
+  Deferred Corp Sec is added only to the Secretary primary item; Deferred Reg
+  Addr is added only to the Registered Address primary item; generated drafts
+  expose only the primary product name with the combined amount.
+- Prevented later one-off Secretary lines from becoming the annual price or the
+  prior renewal template. Annual evidence is restricted to a matching deferred
+  line, readable service period, Annual Return/normal ACRA fee, the system's own
+  generated-invoice record, or two services recurring together about one year
+  after verified annual fees.
+- Added 24 regression assertions covering the reported 600/200 split, ND
+  1500+1500 pairing, one-off ACRA 5.50 exclusion, generic annual descriptions,
+  generated invoices, typo compatibility, and primary-only display.
+- Live read-only audit covered 870 active companies and 5,472 relevant QB
+  lines. All 335 four-way split invoices produced both service pairs with zero
+  failures; 28 newer one-off Secretary items were correctly excluded.
+- Verification: targeted ESLint, `npm run test:billing-fees`,
+  `npm run test:period`, `npx tsc --noEmit`, and `npm run build` all completed
+  successfully.
 
 ### 2026-07-17 - Codex (invoice period renewal hardening)
 

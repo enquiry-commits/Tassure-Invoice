@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:period": "node --experimental-strip-types scripts/test-invoice-period.mjs",
+    "test:billing-fees": "node --experimental-strip-types scripts/test-renewal-fee-pairing.mjs",
     "backfill:periods": "node --experimental-strip-types --env-file=.env.local scripts/backfill-invoice-periods.mjs",
     "import-data": "node scripts/import-to-supabase.js",
     "scrape-qb": "node scripts/scrape-qb-invoices.js",

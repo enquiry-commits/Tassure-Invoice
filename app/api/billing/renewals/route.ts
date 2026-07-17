@@ -3,7 +3,14 @@ import { createAdminClient } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
-import { isPrimaryRenewalProduct, nextServicePeriod, parseInvoicePeriod } from '@/lib/invoice-period';
+import {
+  buildAnnualRenewalFeeMap,
+  compareRenewalPeriodProductLines,
+  isPrimaryRenewalProduct,
+  nextServicePeriod,
+  parseInvoicePeriod,
+  type RenewalFeeProduct,
+} from '@/lib/invoice-period';
 
 function daysBetween(from: string, to: string): number {
   return Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86400000);
@@ -152,11 +159,11 @@ export async function GET(req: NextRequest) {
       .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; fye_date: string | null; period_start: string | null; period_end: string | null; amount: number | null; rate: number | null; product_service: string | null; description: string | null }>>,
     pageAll(() => supabase
       .from('quickbooks_invoice_items')
-      .select('customer_name, invoice_no, txn_date, product_service, amount')
-      .or('product_service.ilike.%Corporate Secretarial Services%,product_service.ilike.%Deferred Revenue - Corp Sec%,product_service.ilike.%Registered Address Services%,product_service.ilike.%Deferred Revenue - Reg Addr%,product_service.ilike.%Nominee Director Fees%,product_service.ilike.%Deferred%ND%')
+      .select('qb_company, customer_name, invoice_no, txn_date, product_service, description, amount')
+      .or('product_service.ilike.%Corporate Secretarial Services%,product_service.ilike.%Coporate Secretarial Services%,product_service.ilike.%Secretary Fees - Offshore%,product_service.ilike.%Deferred Revenue - Corp Sec%,product_service.ilike.%Registered Address Services%,product_service.ilike.%Deferred Revenue - Reg Addr%,product_service.ilike.%Nominee Director Fees%,product_service.ilike.%Deferred%ND%,product_service.ilike.%Secretary:ACRA Fees%,product_service.ilike.%Government fee for filing Annual Return%')
       .gte('txn_date', cutoff18mStr)
       .order('txn_date', { ascending: false })
-      .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; amount: number | null }>>,
+      .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ qb_company: string | null; customer_name: string; invoice_no: string; txn_date: string | null; product_service: string | null; description: string | null; amount: number | null }>>,
     // Carry-forward candidates only (Discount / Accounts / Tax lines). This
     // used to be a full 24-month scan of ALL invoice items (~9k rows) just to
     // find each company's prior renewal invoice — but that invoice is already
@@ -217,52 +224,46 @@ export async function GET(req: NextRequest) {
   // by service and add them up.
   // key normName|invoice|service → { txn_date, sum }; then keep the latest
   // invoice per (company, service) as the current annual fee.
-  const feeTmp = new Map<string, { n: string; svc: string; txn_date: string | null; sum: number; hasPrimary: boolean }>();
-  for (const it of feeItems ?? []) {
-    const ps = it.product_service ?? '';
-    const svc = /Nominee Director Fees|Deferred.*ND/i.test(ps) ? 'ND'
-              : /Corporate Secretarial|Corp Sec/i.test(ps) ? 'Secretary'
-              : /Registered Address|Reg Addr/i.test(ps) ? 'Address' : null;
-    if (!svc) continue;
-    const n = normalize(it.customer_name);
-    const key = `${n}|${it.invoice_no}|${svc}`;
-    if (!feeTmp.has(key)) feeTmp.set(key, { n, svc, txn_date: it.txn_date, sum: 0, hasPrimary: false });
-    const group = feeTmp.get(key)!;
-    group.sum += +(it.amount ?? 0) || 0;
-    if (svc !== 'ND' || /Nominee Director Fees/i.test(ps)) group.hasPrimary = true;
-  }
-  const annualFeeMap = new Map<string, Map<string, { txn_date: string | null; fee: number }>>();
-  for (const { n, svc, txn_date, sum, hasPrimary } of feeTmp.values()) {
-    if (!hasPrimary) continue;
-    if (!annualFeeMap.has(n)) annualFeeMap.set(n, new Map());
-    const m = annualFeeMap.get(n)!;
-    const cur = m.get(svc);
-    if (!cur || (txn_date ?? '') > (cur.txn_date ?? '')) m.set(svc, { txn_date, fee: Math.round(sum * 100) / 100 });
-  }
+  // Pair each Deferred amount only with its matching visible primary service
+  // in the same invoice. Primary-only lines need a readable period, an Annual
+  // Return fee, or a generated-invoice record, so one-off work that reused a
+  // Secretary item cannot replace the annual renewal template.
+  const generatedInvoiceKeys = new Set((generatedRows ?? [])
+    .filter(row => row.invoice_no)
+    .map(row => `${row.qb_company ?? ''}|${row.invoice_no}`));
+  const annualFeeMap = buildAnnualRenewalFeeMap((feeItems ?? []).map(item => ({
+    ...item,
+    customer_key: normalize(item.customer_name),
+    generated_invoice: generatedInvoiceKeys.has(`${item.qb_company ?? ''}|${item.invoice_no}`),
+  })));
   const annualFeeEntries = [...annualFeeMap.entries()];
-  function getAnnualFee(companyName: string, svc: string): number | null {
+  function getAnnualFeeRecord(companyName: string, svc: RenewalFeeProduct['service']) {
     const direct = annualFeeMap.get(normalize(companyName))?.get(svc);
-    if (direct?.fee) return direct.fee;
+    if (direct) return direct;
     const match = findUniqueBestMatch(companyName, annualFeeEntries, entry => entry[0], 70).value;
-    return match?.[1].get(svc)?.fee ?? null;
+    return match?.[1].get(svc) ?? null;
   }
-
   // ── 4c. Prior renewal invoice (the template to clone) ────────────────────
   // The billing SOP is: take last year's invoice, reuse its items + amounts,
   // just roll the service period forward. The prior renewal invoice — the one
   // carrying the annual retainer / AR govt fee / address line — is already
   // present in the fee + annual queries above, so derive it from those instead
   // of scanning every invoice line (that scan dominated response time).
-  const RENEWAL_LINE = /Corporate Secretarial Services|Government fee for filing Annual Return|Registered Address Services/i;
   const priorInvoiceMap = new Map<string, { invoice_no: string; txn_date: string | null }>();
-  const noteRenewal = (name: string, invoice_no: string, txn_date: string | null, ps: string | null) => {
-    if (!RENEWAL_LINE.test(ps ?? '')) return;
-    const n = normalize(name);
-    const cur = priorInvoiceMap.get(n);
-    if (!cur || (txn_date ?? '') > (cur.txn_date ?? '')) priorInvoiceMap.set(n, { invoice_no, txn_date });
+  const noteRenewal = (companyKey: string, invoice_no: string, txn_date: string | null) => {
+    const cur = priorInvoiceMap.get(companyKey);
+    if (!cur || (txn_date ?? '') > (cur.txn_date ?? '')) {
+      priorInvoiceMap.set(companyKey, { invoice_no, txn_date });
+    }
   };
-  for (const it of feeItems ?? [])    noteRenewal(it.customer_name, it.invoice_no, it.txn_date, it.product_service);
-  for (const it of annualItems ?? []) noteRenewal(it.customer_name, it.invoice_no, it.txn_date, it.product_service);
+  for (const [companyKey, services] of annualFeeMap) {
+    for (const fee of services.values()) noteRenewal(companyKey, fee.invoice_no, fee.txn_date);
+  }
+  for (const item of annualItems ?? []) {
+    if (/Government fee for filing Annual Return/i.test(item.product_service ?? '')) {
+      noteRenewal(normalize(item.customer_name), item.invoice_no, item.txn_date);
+    }
+  }
 
   // Carry-forward lines (Discount/Accounts/Tax) grouped by (company, invoice).
   const carriedByInv = new Map<string, PriorLine[]>();
@@ -387,15 +388,24 @@ export async function GET(req: NextRequest) {
         true; // Secretary always applies
 
       const rawHistory = getHistory(periodEntries, company.company_name, svc);
-      // Deduplicate by (invoice_no, period_end)
+      // Deduplicate by (invoice_no, period_end), retaining the visible primary
+      // product when QB stores its matching Deferred line with the same period.
       const seen = new Set<string>();
-      const history = rawHistory
+      const history = [...rawHistory]
+        .sort((a, b) => compareRenewalPeriodProductLines(svc, a, b))
         .filter(h => {
           const key = `${h.invoice_no}|${h.period_end}`;
           if (seen.has(key)) return false;
           seen.add(key); return true;
-        })
-        .sort((a, b) => (b.period_end ?? '').localeCompare(a.period_end ?? ''));
+        });
+      const annualFeeRecord = getAnnualFeeRecord(company.company_name, svc);
+      const visibleHistory = history.slice(0, 3).map((item, index) => ({
+        ...item,
+        product_service: index === 0
+          ? (annualFeeRecord?.product_service ?? item.product_service)
+          : item.product_service,
+        description: null,
+      }));
 
       const latestPrimary = getLatestPrimary(company.company_name, svc);
       const latestParsed = history[0] ?? null;
@@ -404,7 +414,7 @@ export async function GET(req: NextRequest) {
         && (!latestParsed || (latestPrimary.txn_date ?? '') > (latestParsed.txn_date ?? ''));
 
       if (newerPrimaryIsUnresolved) {
-        const annualFee = getAnnualFee(company.company_name, svc);
+        const annualFee = annualFeeRecord?.fee ?? null;
         return {
           service: svc,
           applicable,
@@ -416,7 +426,7 @@ export async function GET(req: NextRequest) {
           suggestedPeriodEnd: null,
           periodNeedsReview: true,
           periodWarning: `Latest ${svc} invoice #${latestPrimary!.invoice_no} has no readable period. Check QuickBooks before billing.`,
-          history: history.slice(0, 3).map(h => ({ ...h, description: null })),
+          history: visibleHistory,
         };
       }
 
@@ -426,7 +436,7 @@ export async function GET(req: NextRequest) {
         // no parseable period). Surface it so drafts pre-fill the real rate
         // instead of falling back to the catalogue median.
         return { service: svc, applicable, lastPeriodEnd: null,
-          lastRate: getAnnualFee(company.company_name, svc),
+          lastRate: annualFeeRecord?.fee ?? null,
           daysUntilExpiry: null, status: 'not_found', suggestedPeriodStart: null,
           suggestedPeriodEnd: null, periodNeedsReview: false,
           periodWarning: null, history: [] };
@@ -441,7 +451,7 @@ export async function GET(req: NextRequest) {
 
       // Prefer the true annual fee (service + deferred lines summed) for
       // Secretary, Address and ND; fall back to the single parsed line rate.
-      const annualFee = getAnnualFee(company.company_name, svc);
+      const annualFee = annualFeeRecord?.fee ?? null;
       const nextPeriod = nextServicePeriod(lastPeriodEnd);
       return {
         service: svc, applicable, lastPeriodEnd, daysUntilExpiry, status,
@@ -452,7 +462,7 @@ export async function GET(req: NextRequest) {
         periodWarning: null,
         // The UI shows period + invoice_no and reads [0].product_service/rate;
         // the long line descriptions were dead weight in a 2.3MB payload.
-        history: history.slice(0, 3).map(h => ({ ...h, description: null })),
+        history: visibleHistory,
       };
     });
 
