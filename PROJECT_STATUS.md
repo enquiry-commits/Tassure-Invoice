@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-17
+Last updated: 2026-07-18
 
 ## Purpose
 
@@ -24,6 +24,12 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Standardized saved invoice PDF filenames: TAB is
+  `INV<invoiceNo>-<companyName>-S$<amount>.pdf`, TAC is
+  `TAC<invoiceNo>-<companyName>-S$<amount>.pdf` (no spaces around dashes).
+  Extracted a shared `invoicePdfFileName()` helper in `app/billing/page.tsx`
+  and threaded the invoice total through both the post-creation and
+  reopened-draft PDF flows (`GeneratedPdf` now carries `total`).
 - Corrected Billing Draft renewal-fee pairing for split QuickBooks items.
   `Deferred Revenue - Corp Sec` now belongs only to Corporate Secretarial
   Services, while `Deferred Revenue - Reg Addr` belongs only to Registered
@@ -190,6 +196,23 @@ one focused Git commit.
    - deployment status, if applicable.
 
 ## Handoff log
+
+### 2026-07-18 - Claude Code (invoice PDF filename convention)
+
+- Standardized the Save-As filename per company: TAB uses
+  `INV<invoiceNo>-<companyName>-S$<amount>.pdf`, TAC uses
+  `TAC<invoiceNo>-<companyName>-S$<amount>.pdf`, replacing the previous
+  `<no> - <company> - TAB/TAC.pdf` form. Extracted `invoicePdfFileName()`
+  in `app/billing/page.tsx`; `GeneratedPdf` now carries `total` so the
+  amount is available both right after creation and when reopening an
+  already-invoiced draft.
+- Pushed two commits to `origin/main`: `94f0753` (Codex's pending deferred
+  renewal-fee pairing fix, verified already committed locally and pushed
+  on Vincent's request) and `b596b6b` (this filename change).
+- Verification: `npm run build` exit code 0 (confirmed via exit status, not
+  just grepping for "Compiled successfully" - Next.js 16's TypeScript pass
+  runs after that line and can still fail the build).
+- No push conflicts; production Vercel deploy triggered automatically.
 
 ### 2026-07-17 - Codex (renewal fee service pairing)
 
