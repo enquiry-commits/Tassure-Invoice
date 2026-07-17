@@ -24,6 +24,13 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Hardened Billing Draft period renewal so the latest QuickBooks renewal line
+  is always considered even when its description could not previously be
+  parsed. Supported historical period formats are reparsed, Accounts/Tax/
+  Discount template years roll forward, and both the UI and create-invoice API
+  reject missing or overlapping Secretary/Address/ND periods. Unreadable latest
+  periods require an explicit QuickBooks review instead of silently repeating
+  last year's period.
 - Normalized Billing Draft invoice-number presentation so legacy QuickBooks
   values beginning with `TAB` or `TAC` display as the number only (for example,
   `TAC02580262` becomes `#02580262`). The source QB/database value remains
@@ -151,10 +158,13 @@ one focused Git commit.
 
 ## Next actions
 
-1. Confirm the correct Vercel account/team for the existing project.
-2. Relink the local directory only after confirming the target project.
-3. Run `npm run build` before any production deployment.
-4. Record the deployment URL and verification result here.
+1. After deployment, work through Billing Draft's amber period-review cases;
+   317 active latest core-service records currently lack a readable period in
+   their QuickBooks description and must be confirmed rather than guessed.
+2. Confirm the correct Vercel account/team for the existing project.
+3. Relink the local directory only after confirming the target project.
+4. Run `npm run build` before any production deployment.
+5. Record the deployment URL and verification result here.
 
 ## Collaboration rules
 
@@ -173,6 +183,33 @@ one focused Git commit.
    - deployment status, if applicable.
 
 ## Handoff log
+
+### 2026-07-17 - Codex (invoice period renewal hardening)
+
+- Replaced the narrow QuickBooks period parser with a shared service-aware
+  parser covering the real historical month/year, apostrophe-year, full-width
+  bracket, numeric-date, and FYE formats. Future incremental QB syncs now store
+  those results consistently.
+- Billing renewal aggregation now retains the newest primary QB line even when
+  its period is unreadable. It proposes the month after the latest verified
+  period, while unreadable latest records show a review warning and cannot be
+  included until the user enters a complete period and confirms it against QB.
+- Added the same missing/overlap checks to the server-side invoice creation API
+  so a stale UI or direct request cannot bypass the protection. Recurring
+  Accounts, Tax, and Discount descriptions now roll their dated wording forward
+  one year instead of copying last year's period verbatim.
+- Safely backfilled only missing Secretary/Address/ND periods and AR/XBRL FYE
+  values from 12,913 historical QB lines. Existing non-null values and Deferred
+  rows were never overwritten; invalid source dates such as 31 Nov or year 0025
+  remain unparsed for manual review. A final dry run returned zero remaining
+  parseable changes.
+- Real-data regression over 868 active clients found 1,159 latest primary
+  core-service records: 842 are automatically readable, 317 require manual QB
+  review, and zero now produce a repeated-period proposal.
+- Verification: 17 parser/rollover assertions passed; targeted ESLint reported
+  zero errors (six pre-existing Billing warnings); `npx tsc --noEmit`, `npm run
+  build`, and `git diff --check` passed. No push or Vercel deployment was
+  performed.
 
 ### 2026-07-17 - Codex (invoice number display cleanup)
 

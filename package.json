@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:period": "node --experimental-strip-types scripts/test-invoice-period.mjs",
+    "backfill:periods": "node --experimental-strip-types --env-file=.env.local scripts/backfill-invoice-periods.mjs",
     "import-data": "node scripts/import-to-supabase.js",
     "scrape-qb": "node scripts/scrape-qb-invoices.js",
     "scrape-qb-items": "node scripts/scrape-qb-line-items.js",

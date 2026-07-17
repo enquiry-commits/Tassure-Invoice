@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
 import { createAdminClient } from '@/lib/supabase';
+import { parseInvoicePeriod } from '@/lib/invoice-period';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -31,29 +32,6 @@ const SERVICE_PATTERNS = [
   { type: 'Deferred',  kw: ['deferred revenue'] },
 ];
 
-const MONTH_MAP: Record<string, number> = {
-  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
-  jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
-};
-const MONTH_PATTERN = '(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
-const PERIOD_PATTERNS = [
-  new RegExp(`[\\[(]\\s*(?:from\\s+)?(?:\\d{1,2}\\s+)?${MONTH_PATTERN}\\s+(\\d{4})\\s*[-–]\\s*(?:\\d{1,2}\\s+)?${MONTH_PATTERN}\\s+(\\d{4})\\s*[\\])]`, 'i'),
-  new RegExp(`[\\[(]\\s*(?:from\\s+)?(?:\\d{1,2}\\s+)?${MONTH_PATTERN}\\s+(\\d{4})\\s+to\\s+(?:\\d{1,2}\\s+)?${MONTH_PATTERN}\\s+(\\d{4})\\s*[\\])]`, 'i'),
-  new RegExp(`[\\[(]\\s*(?:from\\s+)?(?:\\d{1,2}\\s+)?${MONTH_PATTERN}\\s+(\\d{4})\\s+(?:\\d{1,2}\\s+)?${MONTH_PATTERN}\\s+(\\d{4})\\s*[\\])]`, 'i'),
-  new RegExp(`[\\[(]\\s*(?:from\\s+)?${MONTH_PATTERN}\\s*-\\s*${MONTH_PATTERN}\\s+(\\d{4})\\s*[\\])]`, 'i'),
-];
-const FYE_PATTERNS = [
-  /[[【](?:FYE\s*|YE\s*)(\d{1,2})[.\s](\d{1,2})[.\s](\d{4})[\]】]/i,
-  new RegExp(`[\\[\\u3010](?:FYE\\s*|YE\\s*)(\\d{1,2})\\s+${MONTH_PATTERN}\\s+(\\d{4})[\\]\\u3011]`, 'i'),
-  /FYE\s*(\d{1,2})[.\s](\d{1,2})[.\s](\d{4})/i,
-];
-
-type ParsedPeriod = {
-  period_start?: string;
-  period_end?: string;
-  fye_date?: string;
-};
-
 function classify(description: string, product: string) {
   const normalizedProduct = product.toLowerCase();
   for (const rule of PRODUCT_MAP) {
@@ -68,45 +46,6 @@ function classify(description: string, product: string) {
     }
   }
   return { type: 'Other', source: 'unmapped' as const };
-}
-
-function monthNumber(value: string) {
-  return MONTH_MAP[value.toLowerCase().slice(0, 3)] ?? null;
-}
-
-function isoDate(year: number, month: number, day = new Date(year, month, 0).getDate()) {
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
-function parsePeriod(raw: string | null): ParsedPeriod | null {
-  if (!raw) return null;
-  const description = raw.replace(/[【［]/g, '[').replace(/[】］]/g, ']').replace(/\s+/g, ' ');
-  for (const pattern of PERIOD_PATTERNS) {
-    const match = pattern.exec(description);
-    if (!match) continue;
-    if (match.length === 4) {
-      const startMonth = monthNumber(match[1]);
-      const endMonth = monthNumber(match[2]);
-      const endYear = Number(match[3]);
-      if (!startMonth || !endMonth) continue;
-      const startYear = startMonth > endMonth ? endYear - 1 : endYear;
-      return { period_start: isoDate(startYear, startMonth, 1), period_end: isoDate(endYear, endMonth) };
-    }
-    const startMonth = monthNumber(match[1]);
-    const endMonth = monthNumber(match[3]);
-    if (!startMonth || !endMonth) continue;
-    return { period_start: isoDate(Number(match[2]), startMonth, 1), period_end: isoDate(Number(match[4]), endMonth) };
-  }
-  for (const pattern of FYE_PATTERNS) {
-    const match = pattern.exec(description);
-    if (!match) continue;
-    if (match.length === 4 && !Number.isNaN(Number(match[2]))) {
-      return { fye_date: isoDate(Number(match[3]), Number(match[2]), Number(match[1])) };
-    }
-    const month = monthNumber(match[2]);
-    if (month) return { fye_date: isoDate(Number(match[3]), month, Number(match[1])) };
-  }
-  return null;
 }
 
 function invoiceRows(invoice: Record<string, unknown>, company: QbCompany, observedAt: string) {
@@ -140,8 +79,8 @@ function invoiceRows(invoice: Record<string, unknown>, company: QbCompany, obser
     const itemRef = (detail.ItemRef as Record<string, unknown>) ?? {};
     const product = String(itemRef.name ?? '');
     const description = String(line.Description ?? '');
-    const parsed = parsePeriod(description) ?? {};
     const classification = classify(description, product);
+    const parsed = parseInvoicePeriod(description, classification.type) ?? {};
     const requiresPeriod = ['Secretary', 'Address', 'ND', 'Deferred'].includes(classification.type);
     const requiresFye = ['AR', 'XBRL'].includes(classification.type);
     items.push({

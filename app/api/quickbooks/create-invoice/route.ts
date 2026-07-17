@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import { findUniqueBestMatch } from '@/lib/company-name';
+import { isPrimaryRenewalProduct, parseInvoicePeriod, servicePeriodOverlapError } from '@/lib/invoice-period';
 import { createHash } from 'node:crypto';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
@@ -17,6 +18,7 @@ export interface DraftLineItem {
   rate: number;
   qty?: number;
   productService?: string;  // exact QB Product/Service name, e.g. "Secretary:Corporate Secretarial Services"
+  periodConfirmed?: boolean; // required when the latest QB renewal has no readable period
 }
 
 function requiresPicClass(line: DraftLineItem) {
@@ -129,6 +131,60 @@ function pickItem(service: string, itemMap: Map<string, { id: string; name: stri
   return itemMap.size ? [...itemMap.values()][0] : { id: '1', name: 'Services' };
 }
 
+async function validateRenewalPeriods(
+  company: QbCompany,
+  customerName: string,
+  lines: DraftLineItem[],
+) {
+  const renewalLines = lines.filter(line => ['Secretary', 'Address', 'ND'].includes(line.service));
+  if (!renewalLines.length) return [];
+
+  const services = [...new Set(renewalLines.map(line => line.service))];
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from('quickbooks_invoice_items')
+    .select('invoice_no, txn_date, service_type, product_service, description, period_start, period_end')
+    .eq('qb_company', company)
+    .eq('customer_name', customerName)
+    .in('service_type', services);
+  if (error) return [`Unable to verify prior service periods: ${error.message}`];
+
+  const errors: string[] = [];
+  for (const line of renewalLines) {
+    const rows = (data ?? []).filter(row => row.service_type === line.service);
+    const resolvedRows = rows.map(row => {
+      const parsed = parseInvoicePeriod(row.description, line.service);
+      return {
+        ...row,
+        parsed: {
+          period_start: parsed?.period_start ?? row.period_start ?? undefined,
+          period_end: parsed?.period_end ?? row.period_end ?? undefined,
+        },
+      };
+    });
+    const parsedRows = resolvedRows
+      .filter(row => row.parsed?.period_end)
+      .sort((a, b) => (b.parsed?.period_end ?? '').localeCompare(a.parsed?.period_end ?? ''));
+    const latestParsed = parsedRows[0] ?? null;
+    const latestPrimary = resolvedRows
+      .filter(row => isPrimaryRenewalProduct(line.service, row.product_service))
+      .sort((a, b) => (b.txn_date ?? '').localeCompare(a.txn_date ?? ''))[0] ?? null;
+    const unresolvedLatest = !!latestPrimary
+      && !latestPrimary.parsed?.period_end
+      && (!latestParsed || (latestPrimary.txn_date ?? '') > (latestParsed.txn_date ?? ''));
+
+    if (unresolvedLatest && !line.periodConfirmed) {
+      errors.push(`${line.service}: latest QuickBooks invoice #${latestPrimary!.invoice_no} has no readable period. Confirm it manually before generating.`);
+      continue;
+    }
+
+    const proposed = parseInvoicePeriod(line.description, line.service);
+    const overlap = servicePeriodOverlapError(line.service, proposed, latestParsed?.parsed?.period_end);
+    if (overlap) errors.push(overlap);
+  }
+  return errors;
+}
+
 // Create one invoice in ONE QB company for the given lines. Used twice per
 // request when a draft has both TAB lines (basic services) and TAC lines
 // (Nominee Director) — each is its own invoice in its own QB company.
@@ -145,6 +201,11 @@ async function createInvoiceInCompany(
 
   const customer = await findCustomer(token, realmId, companyName);
   if (!customer) return { error: `Customer not found in QB ${company}: "${companyName}"` };
+
+  const periodErrors = await validateRenewalPeriods(company, customer.name, lines);
+  if (periodErrors.length) {
+    return { error: `Invoice period validation failed. ${periodErrors.join(' ')}` };
+  }
 
   // House conventions (see lib/qb-invoice-conventions.ts): QuickBooks
   // atomically allocates the sequential DocNumber, Net 7 terms, and — TAB only — the

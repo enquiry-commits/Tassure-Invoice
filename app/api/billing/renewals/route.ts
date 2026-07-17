@@ -3,17 +3,11 @@ import { createAdminClient } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
+import { isPrimaryRenewalProduct, nextServicePeriod, parseInvoicePeriod } from '@/lib/invoice-period';
 
 function daysBetween(from: string, to: string): number {
   return Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / 86400000);
 }
-function addOneYear(d: string): string {
-  const dt = new Date(d); dt.setFullYear(dt.getFullYear() + 1); return dt.toISOString().slice(0, 10);
-}
-function firstOfNextMonth(d: string): string {
-  const dt = new Date(d); dt.setDate(1); dt.setMonth(dt.getMonth() + 1); return dt.toISOString().slice(0, 10);
-}
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 export interface ServicePeriod {
   invoice_no: string; txn_date: string | null;
@@ -33,6 +27,8 @@ export interface RenewalStatus {
   status: 'active' | 'expiring_soon' | 'expired' | 'not_found';
   suggestedPeriodStart: string | null;
   suggestedPeriodEnd: string | null;
+  periodNeedsReview: boolean;
+  periodWarning: string | null;
   history: ServicePeriod[];
 }
 
@@ -141,8 +137,10 @@ export async function GET(req: NextRequest) {
       .from('quickbooks_invoice_items')
       .select('customer_name, invoice_no, txn_date, service_type, period_start, period_end, rate, amount, product_service, description')
       .in('service_type', ['Secretary', 'Address', 'ND'])
-      .not('period_end', 'is', null)
-      .order('period_end', { ascending: false })
+      // Re-parse descriptions at read time as well as during sync. This makes
+      // the fix effective for historical QB rows before a backfill runs and
+      // prevents a newer unparsed renewal from being silently skipped.
+      .order('txn_date', { ascending: false })
       // invoice_no+line_num = unique tiebreaker so parallel page boundaries are stable
       .order('invoice_no', { ascending: true }).order('line_num', { ascending: true })) as Promise<Array<{ customer_name: string; invoice_no: string; txn_date: string | null; service_type: string; period_start: string | null; period_end: string | null; rate: number | null; amount: number | null; product_service: string | null; description: string | null }>>,
     pageAll(() => supabase
@@ -289,19 +287,34 @@ export async function GET(req: NextRequest) {
     return { invoice_no: hit.invoice_no, txn_date: hit.txn_date, lines: carriedByInv.get(`${key}|${hit.invoice_no}`) ?? [] };
   }
 
-  // Index period items: normName → service_type → deduplicated ServicePeriod[]
+  // Index period items: normName → service_type → deduplicated ServicePeriod[].
+  // Also retain the newest primary renewal line even when its period cannot
+  // be read; otherwise an older parsed row can incorrectly look like the most
+  // recent invoice and cause the same period to be proposed again.
   const periodMap = new Map<string, Map<string, ServicePeriod[]>>();
+  const latestPrimaryMap = new Map<string, Map<string, ServicePeriod>>();
   for (const item of periodItems ?? []) {
     const n = normalize(item.customer_name);
+    const parsed = parseInvoicePeriod(item.description, item.service_type);
+    const source: ServicePeriod = {
+      invoice_no: item.invoice_no, txn_date: item.txn_date,
+      period_start: parsed?.period_start ?? item.period_start,
+      period_end: parsed?.period_end ?? item.period_end,
+      fye_date: null, rate: item.rate, amount: item.amount,
+      product_service: item.product_service, description: item.description,
+    };
+    if (isPrimaryRenewalProduct(item.service_type, item.product_service)) {
+      if (!latestPrimaryMap.has(n)) latestPrimaryMap.set(n, new Map());
+      const current = latestPrimaryMap.get(n)!.get(item.service_type);
+      if (!current || (source.txn_date ?? '') > (current.txn_date ?? '')) {
+        latestPrimaryMap.get(n)!.set(item.service_type, source);
+      }
+    }
+    if (!source.period_end) continue;
     if (!periodMap.has(n)) periodMap.set(n, new Map());
     const svcMap = periodMap.get(n)!;
     if (!svcMap.has(item.service_type)) svcMap.set(item.service_type, []);
-    svcMap.get(item.service_type)!.push({
-      invoice_no: item.invoice_no, txn_date: item.txn_date,
-      period_start: item.period_start, period_end: item.period_end,
-      fye_date: null, rate: item.rate, amount: item.amount,
-      product_service: item.product_service, description: item.description,
-    });
+    svcMap.get(item.service_type)!.push(source);
   }
 
   // Index annual items: normName → service_type → ServicePeriod[]
@@ -342,6 +355,7 @@ export async function GET(req: NextRequest) {
   }
 
   const periodEntries = [...periodMap.entries()];
+  const latestPrimaryEntries = [...latestPrimaryMap.entries()];
   const annualEntries = [...annualMap.entries()];
 
   function getHistory(entries: [string, Map<string, ServicePeriod[]>][], companyName: string, svc: string): ServicePeriod[] {
@@ -350,6 +364,14 @@ export async function GET(req: NextRequest) {
     if (direct?.length) return direct;
     const match = findUniqueBestMatch(companyName, entries, entry => entry[0], 70).value;
     return match?.[1].get(svc) ?? [];
+  }
+
+  function getLatestPrimary(companyName: string, svc: string): ServicePeriod | null {
+    const n = normalize(companyName);
+    const direct = latestPrimaryMap.get(n)?.get(svc);
+    if (direct) return direct;
+    const match = findUniqueBestMatch(companyName, latestPrimaryEntries, entry => entry[0], 70).value;
+    return match?.[1].get(svc) ?? null;
   }
 
   // ── 5. Build per-company billing record ─────────────────────────────────
@@ -375,6 +397,29 @@ export async function GET(req: NextRequest) {
         })
         .sort((a, b) => (b.period_end ?? '').localeCompare(a.period_end ?? ''));
 
+      const latestPrimary = getLatestPrimary(company.company_name, svc);
+      const latestParsed = history[0] ?? null;
+      const newerPrimaryIsUnresolved = !!latestPrimary
+        && !latestPrimary.period_end
+        && (!latestParsed || (latestPrimary.txn_date ?? '') > (latestParsed.txn_date ?? ''));
+
+      if (newerPrimaryIsUnresolved) {
+        const annualFee = getAnnualFee(company.company_name, svc);
+        return {
+          service: svc,
+          applicable,
+          lastPeriodEnd: latestParsed?.period_end ?? null,
+          lastRate: annualFee ?? history.find(h => h.rate)?.rate ?? null,
+          daysUntilExpiry: null,
+          status: 'not_found' as const,
+          suggestedPeriodStart: null,
+          suggestedPeriodEnd: null,
+          periodNeedsReview: true,
+          periodWarning: `Latest ${svc} invoice #${latestPrimary!.invoice_no} has no readable period. Check QuickBooks before billing.`,
+          history: history.slice(0, 3).map(h => ({ ...h, description: null })),
+        };
+      }
+
       if (!history.length) {
         // No parsed service period — but the TRUE annual fee may still be known
         // from the fee lines (368 active clients have a real Secretary fee yet
@@ -383,7 +428,8 @@ export async function GET(req: NextRequest) {
         return { service: svc, applicable, lastPeriodEnd: null,
           lastRate: getAnnualFee(company.company_name, svc),
           daysUntilExpiry: null, status: 'not_found', suggestedPeriodStart: null,
-          suggestedPeriodEnd: null, history: [] };
+          suggestedPeriodEnd: null, periodNeedsReview: false,
+          periodWarning: null, history: [] };
       }
 
       const latest = history[0];
@@ -396,11 +442,14 @@ export async function GET(req: NextRequest) {
       // Prefer the true annual fee (service + deferred lines summed) for
       // Secretary, Address and ND; fall back to the single parsed line rate.
       const annualFee = getAnnualFee(company.company_name, svc);
+      const nextPeriod = nextServicePeriod(lastPeriodEnd);
       return {
         service: svc, applicable, lastPeriodEnd, daysUntilExpiry, status,
         lastRate: annualFee ?? history.find(h => h.rate)?.rate ?? null,
-        suggestedPeriodStart: firstOfNextMonth(lastPeriodEnd),
-        suggestedPeriodEnd:   addOneYear(lastPeriodEnd),
+        suggestedPeriodStart: nextPeriod?.period_start ?? null,
+        suggestedPeriodEnd: nextPeriod?.period_end ?? null,
+        periodNeedsReview: false,
+        periodWarning: null,
         // The UI shows period + invoice_no and reads [0].product_service/rate;
         // the long line descriptions were dead weight in a 2.3MB payload.
         history: history.slice(0, 3).map(h => ({ ...h, description: null })),

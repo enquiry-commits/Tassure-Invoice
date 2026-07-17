@@ -16,6 +16,7 @@ import { fmtDate, fmtMonth, toDisplayDate, toIsoDateValue, todaySGT } from '@/li
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
+import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
@@ -66,6 +67,11 @@ function RenewalCard({ r }: { r: RenewalStatus }) {
         </div>
         <span style={{ background: statusBg, color: statusColor, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{statusLabel}</span>
       </div>
+      {r.periodNeedsReview && (
+        <div style={{ marginBottom: 8, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', borderRadius: 6, padding: '6px 7px', fontSize: 9.5, fontWeight: 650 }}>
+          {r.periodWarning}
+        </div>
+      )}
       {r.lastPeriodEnd ? (
         <>
           <div style={{ marginBottom: 7 }}>
@@ -1053,6 +1059,9 @@ type EditableLine = {
   include: boolean;
   due: boolean;
   reason: string;
+  previousPeriodEnd?: string | null;
+  periodNeedsReview?: boolean;
+  periodReviewed?: boolean;
 };
 
 type InvoiceNumberState = { TAB: string; TAC: string };
@@ -1155,13 +1164,17 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         description: templateDesc,
         qty: 1,
         rate: r.lastRate ?? MEDIAN_RATE[r.service] ?? 0,
-        include: isND ? true : due,
+        include: r.periodNeedsReview ? false : isND ? true : due,
         due,
-        reason: isND ? 'Active nominee per TeamWork · confirm annual fee (excl. deposit)'
+        reason: r.periodNeedsReview ? 'Check latest QB period'
+              : isND ? 'Active nominee per TeamWork · confirm annual fee (excl. deposit)'
               : r.status === 'expired' ? `Expired ${Math.abs(r.daysUntilExpiry ?? 0)}d ago`
               : r.status === 'expiring_soon' ? `Expiring in ${r.daysUntilExpiry}d`
               : r.status === 'active' ? `Active until ${r.lastPeriodEnd ? fmtDate(r.lastPeriodEnd) : '—'}`
               : 'No prior invoice',
+        previousPeriodEnd: r.lastPeriodEnd,
+        periodNeedsReview: r.periodNeedsReview,
+        periodReviewed: false,
       });
     }
 
@@ -1205,21 +1218,21 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       if (/Discount Given/i.test(ps)) {
         out.push({
           service: 'Discount', productService: ps,
-          description: p.description || 'Discount Given',
+          description: rollRecurringDescriptionForward(p.description || 'Discount Given'),
           qty: 1, rate: p.amount ?? 0, include: true, due: true,
           reason: `Discount from ${priorDate} — confirm it still applies`,
         });
       } else if (/Yearly Accounts Services|Compilation Services|Monthly Accounts Services/i.test(ps) && !/DO NOT USE/i.test(ps)) {
         out.push({
           service: 'Accounts', productService: ps,
-          description: p.description || ps,
+          description: rollRecurringDescriptionForward(p.description || ps),
           qty: 1, rate: p.amount ?? MEDIAN_RATE.Accounts ?? 0, include: false, due: false,
           reason: `On ${priorDate} invoice — confirm if recurring`,
         });
       } else if (/Corporate Tax Services|Personal Income Tax Services|Other Tax Services/i.test(ps)) {
         out.push({
           service: 'Tax', productService: ps,
-          description: p.description || ps,
+          description: rollRecurringDescriptionForward(p.description || ps),
           qty: 1, rate: p.amount ?? MEDIAN_RATE.Tax ?? 0, include: false, due: false,
           reason: `On ${priorDate} invoice — confirm if recurring`,
         });
@@ -1287,12 +1300,38 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const totalTac = includedTac.reduce((s, l) => s + l.qty * l.rate, 0);
   const missingRate = included.some(l => !l.rate);
   const missingInvoiceNumber = (includedTab.length > 0 && !invoiceNumbers.TAB) || (includedTac.length > 0 && !invoiceNumbers.TAC);
+  const periodValidationErrors = included.flatMap(line => {
+    if (!['Secretary', 'Address', 'ND'].includes(line.service)) return [];
+    const errors: string[] = [];
+    if (line.periodNeedsReview && !line.periodReviewed) {
+      errors.push(`${line.service}: confirm the latest period against QuickBooks.`);
+    }
+    const overlap = servicePeriodOverlapError(
+      line.service,
+      parseInvoicePeriod(line.description, line.service),
+      line.previousPeriodEnd,
+    );
+    if (overlap) errors.push(overlap);
+    return errors;
+  });
+  const hasPeriodError = periodValidationErrors.length > 0;
 
   const createInvoice = async () => {
+    if (hasPeriodError) {
+      setDraftResult({ ok: false, msg: periodValidationErrors.join(' ') });
+      return;
+    }
     setDrafting(true); setDraftResult(null);
     try {
       const fyeYear = cycleFye ? +cycleFye.slice(-4) : currentYear;
-      const toApiLine = (l: EditableLine) => ({ service: l.service, productService: l.productService, description: l.description, rate: l.rate, qty: l.qty });
+      const toApiLine = (l: EditableLine) => ({
+        service: l.service,
+        productService: l.productService,
+        description: l.description,
+        rate: l.rate,
+        qty: l.qty,
+        periodConfirmed: l.periodReviewed === true,
+      });
       const res = await fetch('/api/quickbooks/create-invoice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1468,14 +1507,22 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         const ndCode = l.service === 'ND' ? l.productService.match(/Nominee Director Fees\s*-\s*([A-Z]+)/i)?.[1]?.toUpperCase() : null;
         const svcLabel = ndCode ? `ND · ${ndCode}` : cfg?.label ?? (l.productService.includes(':') ? l.productService.split(':').slice(1).join(':') : l.service);
         return (
-          <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, alignItems: 'start', padding: '16px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.55 }}>
+          <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 90px 44px 100px 110px 26px', gap: 0, alignItems: 'start', padding: '16px 10px', borderTop: '1px solid #f1f5f9', background: l.periodNeedsReview ? '#fffaf0' : l.include ? '#fff' : '#fafbfc', opacity: l.include || l.periodNeedsReview ? 1 : 0.55 }}>
             <input type="checkbox" checked={l.include} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }} title={l.productService}>
               {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
               <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svcLabel}</span>
             </div>
             <AutoTextarea value={l.description} onChange={v => setLine(i, { description: v })} style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: l.due ? '#c2410c' : '#94a3b8', textAlign: 'center', padding: '0 8px' }}>{l.reason}</span>
+            <div style={{ fontSize: 10, fontWeight: 600, color: l.periodNeedsReview ? '#b45309' : l.due ? '#c2410c' : '#94a3b8', textAlign: 'center', padding: '0 5px' }}>
+              <span>{l.reason}</span>
+              {l.periodNeedsReview && (
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 6, color: l.periodReviewed ? '#15803d' : '#b45309', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={l.periodReviewed === true} onChange={e => setLine(i, { periodReviewed: e.target.checked })} style={{ width: 12, height: 12, accentColor: '#15803d' }} />
+                  Checked in QB
+                </label>
+              )}
+            </div>
             <input type="number" min={1} value={l.qty} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center', justifySelf: 'center' }} />
             <input type="number" min={0} value={l.rate || ''} placeholder="0" onChange={e => setLine(i, { rate: +e.target.value || 0 })}
               style={{ ...inputStyle, width: 90, textAlign: 'center', justifySelf: 'center', borderColor: l.include && !l.rate ? '#f87171' : '#cbd5e1', background: l.include && !l.rate ? '#fef2f2' : '#fff' }} />
@@ -1626,13 +1673,18 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         </div>
         {missingRate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>⚠ Fill in the highlighted rate(s) before generating</span>}
         {missingInvoiceNumber && !numberLoading && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>Confirm the required QB invoice number</span>}
+        {hasPeriodError && (
+          <div style={{ flexBasis: '100%', border: '1px solid #fecaca', background: '#fef2f2', color: '#b91c1c', borderRadius: 7, padding: '9px 12px', fontSize: 11, fontWeight: 600 }}>
+            Period check required: {periodValidationErrors.slice(0, 3).join(' · ')}
+          </div>
+        )}
         <button
           onClick={createInvoice}
-          disabled={drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber}
+          disabled={drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber || hasPeriodError}
           style={{
             marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none',
-            cursor: (drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber) ? 'not-allowed' : 'pointer',
-            background: (drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+            cursor: (drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber || hasPeriodError) ? 'not-allowed' : 'pointer',
+            background: (drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber || hasPeriodError) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
           }}>
           {
             drafting ? 'Generating…'
@@ -1716,7 +1768,7 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
   const mkRenewal = (service: RenewalStatus['service'], applicable: boolean): RenewalStatus => {
     const m = matched?.renewals.find(r => r.service === service);
     return m ? { ...m, applicable }
-             : { service, applicable, lastPeriodEnd: null, lastRate: null, daysUntilExpiry: null, status: 'not_found', suggestedPeriodStart: null, suggestedPeriodEnd: null, history: [] };
+             : { service, applicable, lastPeriodEnd: null, lastRate: null, daysUntilExpiry: null, status: 'not_found', suggestedPeriodStart: null, suggestedPeriodEnd: null, periodNeedsReview: false, periodWarning: null, history: [] };
   };
   const mkAnnual = (service: AnnualStatus['service'], applicable: boolean): AnnualStatus => {
     const m = matched?.annuals.find(a => a.service === service);
