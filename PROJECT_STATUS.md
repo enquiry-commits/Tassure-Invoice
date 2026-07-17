@@ -41,7 +41,7 @@ one focused Git commit.
   minimal bilingual sign-in screen, approved-account admission, persistent
   sessions, protected pages/APIs, account display, and logout. Supabase Google
   Provider activation and its Google OAuth credentials are still required.
-- Added the initial 11-person Google account allowlist with canonical staff
+- Added the 12-person Google account allowlist with canonical staff
   display names; all approved accounts currently share the same access level.
 - Corrected AR Reminder SEC PIC values that contained TeamWork numeric user IDs,
   updated affected company master records, and added ID-to-name normalization
@@ -151,6 +151,9 @@ one focused Git commit.
 
 ### 2026-07-17 - Codex
 
+- Added Chelsea Ang (`chelsea@tassure.com`) to the Google login allowlist and
+  AR Reminder Realtime RLS policy source. No TAB/TAC QuickBooks Location was
+  added, preserving the existing QB Location roster.
 - Replaced all illustrated/anonymised manual figures with real screenshots
   captured from the signed-in production system on 17 Jul 2026.
 - Added screenshot coverage for Google sign-in, Ad-Hoc, MAS, Strike Off,

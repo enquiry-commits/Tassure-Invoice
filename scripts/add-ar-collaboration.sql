@@ -98,7 +98,7 @@ CREATE POLICY "Authenticated users can receive AR updates"
     'vincent@tassure.com', 'cindyzhang@tassure.com', 'samuell@tassure.com',
     'hoechyi@tassure.com', 'sengxin@tassure.com', 'jennylai@tassure.com',
     'kahye@tassure.com', 'shiming@tassure.com', 'shemin@tassure.com',
-    'minquan@tassure.com', 'esther@tassure.com'
+    'minquan@tassure.com', 'esther@tassure.com', 'chelsea@tassure.com'
   ]));
 
 ALTER TABLE public.ar_reminder_audit ENABLE ROW LEVEL SECURITY;
