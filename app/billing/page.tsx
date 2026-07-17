@@ -1057,6 +1057,15 @@ type EditableLine = {
 
 type InvoiceNumberState = { TAB: string; TAC: string };
 type GeneratedPdf = { company: 'TAB' | 'TAC'; invoiceNo: string; qbId: string };
+type WritablePdfFileHandle = {
+  createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
+};
+type SaveFilePickerWindow = Window & {
+  showSaveFilePicker?: (options: {
+    suggestedName: string;
+    types: Array<{ description: string; accept: Record<string, string[]> }>;
+  }) => Promise<WritablePdfFileHandle>;
+};
 
 function existingGeneratedPdfs(company: CompanyBilling, cycleFye?: string): GeneratedPdf[] {
   const seen = new Set<'TAB' | 'TAC'>();
@@ -1343,8 +1352,8 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     } finally { setDrafting(false); }
   };
 
-  const saveInvoicePdfs = async () => {
-    if (!generatedPdfs.length) return;
+  const saveInvoicePdf = async (invoice: GeneratedPdf) => {
+    if (savingPdfs) return;
     setPdfResult(null);
     setSavingPdfs(true);
 
@@ -1361,23 +1370,48 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
 
     try {
       const safeCompany = c.companyName.replace(/[<>:"/\\|?*\u0000-\u001F]/g, ' ').replace(/\s+/g, ' ').trim();
-      let downloadedCount = 0;
+      const fileName = `${invoice.invoiceNo} - ${safeCompany} - ${invoice.company}.pdf`;
+      const saveFilePicker = (window as SaveFilePickerWindow).showSaveFilePicker;
+      let fileHandle: WritablePdfFileHandle | null = null;
+      let useDownloadFallback = !saveFilePicker;
 
-      for (const invoice of generatedPdfs) {
-        const response = await fetch(`/api/quickbooks/invoice-pdf?company=${invoice.company}&id=${encodeURIComponent(invoice.qbId)}`);
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({}));
-          throw new Error(error.error ?? `Unable to download ${invoice.company} invoice ${invoice.invoiceNo}`);
+      if (saveFilePicker) {
+        try {
+          // Open Save As directly from the button click. Waiting for the PDF
+          // request first can consume Chrome's transient user activation.
+          fileHandle = await saveFilePicker({
+            suggestedName: fileName,
+            types: [{ description: 'PDF document', accept: { 'application/pdf': ['.pdf'] } }],
+          });
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            setPdfResult({ ok: false, msg: 'Save cancelled. No PDF was saved.' });
+            return;
+          }
+          useDownloadFallback = true;
         }
-        const blob = await response.blob();
-        const fileName = `${invoice.invoiceNo} - ${safeCompany} - ${invoice.company}.pdf`;
+      }
+
+      const response = await fetch(`/api/quickbooks/invoice-pdf?company=${invoice.company}&id=${encodeURIComponent(invoice.qbId)}`);
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error ?? `Unable to download ${invoice.company} invoice ${invoice.invoiceNo}`);
+      }
+      const blob = await response.blob();
+
+      if (fileHandle && !useDownloadFallback) {
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+      } else {
         downloadBlob(blob, fileName);
-        downloadedCount += 1;
       }
 
       setPdfResult({
         ok: true,
-        msg: `${downloadedCount} invoice PDF${downloadedCount > 1 ? 's' : ''} sent to Chrome downloads. Enable “Ask where to save each file” in Chrome Downloads settings to choose a folder each time.`,
+        msg: fileHandle && !useDownloadFallback
+          ? `${invoice.company} invoice #${invoice.invoiceNo} saved to the selected location.`
+          : `${invoice.company} invoice #${invoice.invoiceNo} sent to Chrome downloads.`,
       });
     } catch (error) {
       setPdfResult({ ok: false, msg: error instanceof Error ? error.message : 'Unable to save invoice PDF.' });
@@ -1622,12 +1656,14 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1e3a5f' }}>Invoice PDF ready</div>
             <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
-              {generatedPdfs.map(pdf => `${pdf.company} #${pdf.invoiceNo}`).join(' · ')} · download through Chrome without folder-access restrictions
+              {generatedPdfs.map(pdf => `${pdf.company} #${pdf.invoiceNo}`).join(' · ')} · Windows Save As, without granting access to the whole folder
             </div>
           </div>
-          <button type="button" onClick={saveInvoicePdfs} disabled={savingPdfs} style={{ border: '1px solid #93c5fd', borderRadius: 7, background: savingPdfs ? '#dbeafe' : '#eff6ff', color: '#1d4ed8', padding: '8px 12px', fontSize: 11.5, fontWeight: 800, cursor: savingPdfs ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <FileText size={13} /> {savingPdfs ? 'Preparing PDF…' : `Download PDF${generatedPdfs.length > 1 ? 's' : ''}`}
-          </button>
+          {generatedPdfs.map(pdf => (
+            <button key={`${pdf.company}-${pdf.qbId}`} type="button" onClick={() => saveInvoicePdf(pdf)} disabled={savingPdfs} style={{ border: '1px solid #93c5fd', borderRadius: 7, background: savingPdfs ? '#dbeafe' : '#eff6ff', color: '#1d4ed8', padding: '8px 12px', fontSize: 11.5, fontWeight: 800, cursor: savingPdfs ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <FileText size={13} /> {savingPdfs ? 'Preparing PDF…' : `Save ${pdf.company} PDF`}
+            </button>
+          ))}
         </div>
       )}
 

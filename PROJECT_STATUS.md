@@ -34,11 +34,12 @@ one focused Git commit.
   `generated_invoices`, invoice reservations, synced QB invoices, and line
   items. All four reservations are finalized as `created`; no legacy automatic
   placeholder remains in either local billing-history table.
-- Replaced invoice PDF folder access with standard Chrome downloads after the
-  browser rejected some network folders as containing protected system files.
-  Downloads retain the real invoice/company filename; users who enable Chrome's
-  "Ask where to save each file" setting can choose the target folder each time
-  without granting the website access to the entire directory.
+- Replaced whole-folder invoice PDF access with a per-invoice Windows Save As
+  flow after Chrome rejected some network folders as containing protected
+  system files. Separate TAB/TAC buttons open Save As directly from the click,
+  prefill the real invoice/company filename, and fetch/write the QB PDF only
+  after the user chooses the file location. Unsupported picker errors fall back
+  to a normal Chrome download.
 - Fixed AR Reminder ND details so the newest active TeamWork appointment always
   supplies the director name even when QuickBooks already supplies the ND
   billing period and rate. Older duplicate appointment rows can no longer
@@ -173,11 +174,12 @@ one focused Git commit.
 - Reproduced the remaining failure boundary from the production screenshot:
   Chrome rejected the selected directory inside its own folder picker before
   the page could receive an error and activate the previous fallback.
-- Removed the File System Access directory picker from Billing Draft PDF saves.
-  The action now fetches the verified QB PDF and sends it through Chrome's
-  normal download manager with the invoice number, company, and QB company in
-  the filename. Chrome's per-download location prompt remains available through
-  its "Ask where to save each file" setting.
+- Removed the whole-directory File System Access picker from Billing Draft PDF
+  saves. Each available TAB/TAC PDF now has its own button which opens a
+  single-file Save As dialog immediately from the click, with the invoice
+  number, company, and QB company already in the filename. The verified QB PDF
+  is fetched and written after location selection, eliminating the manual drag
+  step; unsupported save pickers fall back to Chrome downloads.
 - Verification: targeted ESLint completed with zero errors (the same six
   pre-existing unused-code warnings); `npm run build` completed successfully.
   No push or Vercel deployment was performed.
