@@ -24,6 +24,9 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Rebalanced the Billing Draft line-item table columns in
+  `app/billing/page.tsx`: Status 90->110px, Rate (S$) 100->90px, Amount
+  110->100px, Qty unchanged at 44px. Header and row grids kept in sync.
 - Standardized saved invoice PDF filenames: TAB is
   `INV<invoiceNo>-<companyName>-S$<amount>.pdf`, TAC is
   `TAC<invoiceNo>-<companyName>-S$<amount>.pdf` (no spaces around dashes).
