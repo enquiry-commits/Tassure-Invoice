@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { Mail, Check, X, ChevronDown, ChevronRight } from 'lucide-react';
 import CommsTabs from '@/components/client-communications/CommsTabs';
 
@@ -41,6 +42,7 @@ function DraftsInner() {
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [loading, setLoading] = useState(false);
+  const [campaignsLoading, setCampaignsLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [filter, setFilter] = useState<'all' | 'pending' | 'sent' | 'skipped'>('pending');
   const [me, setMe] = useState<{ email: string; name: string } | null>(null);
@@ -54,7 +56,7 @@ function DraftsInner() {
       const list = j.data ?? [];
       setCampaigns(list);
       if (!campaignId && list.length) setCampaignId(list[0].id);
-    });
+    }).finally(() => setCampaignsLoading(false));
   }, [campaignId]);
 
   const load = useCallback(() => {
@@ -83,6 +85,37 @@ function DraftsInner() {
 
   const filtered = drafts.filter(d => filter === 'all' || d.status === filter);
   const counts = { pending: drafts.filter(d => d.status === 'pending').length, sent: drafts.filter(d => d.status === 'sent').length, skipped: drafts.filter(d => d.status === 'skipped').length };
+
+  // First-run empty state: no campaign exists anywhere yet. Show this
+  // instead of a blank dropdown + "No drafts" with no explanation. Gated on
+  // campaignsLoading (not the per-campaign `loading`) so it never flashes
+  // before the initial campaigns fetch has actually returned.
+  if (campaignsLoading) {
+    return (
+      <div>
+        <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Client Communications</div>
+        <CommsTabs />
+        <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading…</div>
+      </div>
+    );
+  }
+  if (campaigns.length === 0) {
+    return (
+      <div>
+        <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Client Communications</div>
+        <CommsTabs />
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 40, textAlign: 'center' }}>
+          <Mail size={28} style={{ color: '#cbd5e1', marginBottom: 10 }} />
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', marginBottom: 6 }}>No campaigns yet</div>
+          <div style={{ fontSize: 12.5, color: '#94a3b8', marginBottom: 16 }}>Drafts show up here after you generate a campaign.</div>
+          <Link href="/client-communications/campaigns"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, background: '#1d3a5c', color: '#fff', fontWeight: 700, fontSize: 12.5, textDecoration: 'none' }}>
+            Go to Campaign Centre →
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
