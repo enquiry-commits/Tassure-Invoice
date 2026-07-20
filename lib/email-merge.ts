@@ -22,7 +22,12 @@ export function mergeTemplate(template: string, fields: Partial<MergeFields>): s
   });
 }
 
-export type InvoiceRef = { qbCompany: 'TAB' | 'TAC' | 'TAO'; invoiceNo: string; amount: number };
+// qbInvoiceId is the internal QuickBooks invoice Id (not the human DocNumber
+// in invoiceNo) — present when the source invoice record has one, which is
+// what lets Draft Review offer a "download this invoice PDF" button so staff
+// can attach the real invoice before sending (mailto: links cannot carry
+// attachments — see app/client-communications/drafts/page.tsx).
+export type InvoiceRef = { qbCompany: 'TAB' | 'TAC' | 'TAO'; invoiceNo: string; amount: number; qbInvoiceId?: string | null };
 
 // Renders the invoice list the same way the Excel's <INV>/<Invoice TAB 1>
 // columns did — one line per invoice, company-prefixed.

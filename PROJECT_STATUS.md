@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-20 (Client Communications: review-before-generate)
+Last updated: 2026-07-20 (Client Communications: invoice PDF attachment)
 
 ## Purpose
 
@@ -243,6 +243,51 @@ one focused Git commit.
    - deployment status, if applicable.
 
 ## Handoff log
+
+### 2026-07-20 - Claude Code (Client Communications: invoice PDF attachment)
+
+Vincent's real workflow always attaches the actual invoice PDF when sending
+these emails - the drafts built so far only prepared To/CC/Subject/Body via
+a `mailto:` link, which cannot carry a file. `mailto:` has no attachment
+mechanism in any browser/OS for security reasons — there's no way around
+that within a `mailto:` link itself.
+
+- Traced the closest fixable gap: `InvoiceRef` (`lib/email-merge.ts`) only
+  carried `qbCompany`/`invoiceNo`/`amount`, not QuickBooks' own internal
+  invoice Id — but `generated_invoices.qb_invoice_id` and
+  `quickbooks_invoices.qb_invoice_id` both already store it, and
+  `/api/quickbooks/invoice-pdf?company=&id=` (built for Billing Draft's
+  "save PDF" button) already streams the real PDF given that Id. Wired
+  the missing piece: `lib/client-comms-resolve.ts`'s `loadInvoicesByCompany`
+  now selects `qb_invoice_id` and threads it through as `qbInvoiceId` on
+  every `InvoiceRef` (optional field — no DB migration needed, it just
+  rides along in the existing `email_drafts.invoice_refs` jsonb).
+- Extracted `invoicePdfFileName()`/`displayInvoiceNo()` out of
+  `app/billing/page.tsx` into a new shared `lib/invoice-filename.ts`, so a
+  PDF downloaded from Draft Review has the exact same
+  `INV<no>-<company>-S$<amt>.pdf` / `TAC<no>-...` name as one saved from
+  Billing. Left billing/page.tsx's own copy in place rather than editing it
+  to import the new module — that file has a `\u0000-\u001F` regex literal
+  that corrupted the source once already this session when touched via the
+  Edit tool's escape handling (see the file-corruption entry below); not
+  worth the risk for a pure dedup with no user-facing change.
+- Draft Review (`app/client-communications/drafts/page.tsx`): each invoice
+  badge with a resolvable `qbInvoiceId` (TAB/TAC only — TAO still isn't
+  connected) now has a small download icon that fetches the PDF and saves
+  it under the house filename. A one-line note appears above "Compose in
+  Outlook" on any draft with a downloadable invoice, explaining plainly
+  that mailto: can't attach files and the PDF has to be downloaded first,
+  then dragged into the Outlook window that opens - this is a manual
+  two-step by necessity, not a bug to "fix" later; there is no browser API
+  that lets a mailto: link pre-attach a file.
+- Historical-import drafts (BULK.xlsm) and letter-type drafts correctly
+  show no download button - the import script never had a QB invoice Id
+  to record, and letters have no invoices at all.
+- Verification: `npm run build` exit code 0. Not verified in a live
+  logged-in browser session (same login-gate limitation as prior entries)
+  - the actual QuickBooks PDF fetch (`getValidToken` + Intuit API call)
+    needs a real, currently-connected QB OAuth session for TAB/TAC to
+    confirm end-to-end, which only exists in production.
 
 ### 2026-07-20 - Claude Code (Client Communications: review-before-generate)
 

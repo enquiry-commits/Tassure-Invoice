@@ -64,20 +64,20 @@ export async function loadInvoicesByCompany(
   if (type === 'ar' && fyeMonth && fyeYear) {
     const fyeCycle = fyeCycleString(fyeMonth, fyeYear);
     const { data: rows } = await supabase.from('generated_invoices')
-      .select('company_name, qb_company, invoice_no, total_amt')
+      .select('company_name, qb_company, invoice_no, total_amt, qb_invoice_id')
       .eq('fye_cycle', fyeCycle);
     for (const r of rows ?? []) {
       const key = normalize(r.company_name);
       if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
-      if (r.invoice_no) invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as 'TAB' | 'TAC', invoiceNo: r.invoice_no, amount: Number(r.total_amt ?? 0) });
+      if (r.invoice_no) invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as 'TAB' | 'TAC', invoiceNo: r.invoice_no, amount: Number(r.total_amt ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
     }
   } else if (type === 'soa') {
     const { data: rows } = await supabase.from('quickbooks_invoices')
-      .select('customer_name, qb_company, invoice_no, balance').gt('balance', 0);
+      .select('customer_name, qb_company, invoice_no, balance, qb_invoice_id').gt('balance', 0);
     for (const r of rows ?? []) {
       const key = normalize(r.customer_name);
       if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
-      invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as 'TAB' | 'TAC', invoiceNo: r.invoice_no, amount: Number(r.balance ?? 0) });
+      invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as 'TAB' | 'TAC', invoiceNo: r.invoice_no, amount: Number(r.balance ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
     }
   }
   return invoicesByCompany;

@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Mail, Check, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { Mail, Check, X, ChevronDown, ChevronRight, Download, Loader2 } from 'lucide-react';
 import CommsTabs from '@/components/client-communications/CommsTabs';
+import { invoicePdfFileName } from '@/lib/invoice-filename';
 
-interface InvoiceRef { qbCompany: string; invoiceNo: string; amount: number }
+interface InvoiceRef { qbCompany: string; invoiceNo: string; amount: number; qbInvoiceId?: string | null }
 interface Draft {
   id: number; company_name: string; to_email: string | null; cc_email: string | null;
   subject: string; body: string; invoice_refs: InvoiceRef[]; total_amount: number | null;
@@ -93,6 +94,32 @@ function DraftsInner() {
     window.location.href = buildMailto(d);
   };
 
+  // mailto: links cannot carry attachments — that's a hard limit of the URI
+  // scheme, not something a workaround can fix. The closest we can get is
+  // downloading the real invoice PDF straight from QuickBooks (same endpoint
+  // Billing Draft's "save PDF" uses) with the house filename convention, so
+  // whoever is sending just drags it into the Outlook window this page opens.
+  const [downloadingRef, setDownloadingRef] = useState<string | null>(null);
+  const downloadInvoicePdf = async (r: InvoiceRef, companyName: string, key: string) => {
+    if (!r.qbInvoiceId || (r.qbCompany !== 'TAB' && r.qbCompany !== 'TAC')) return;
+    setDownloadingRef(key);
+    try {
+      const res = await fetch(`/api/quickbooks/invoice-pdf?company=${r.qbCompany}&id=${encodeURIComponent(r.qbInvoiceId)}`);
+      if (!res.ok) { const j = await res.json().catch(() => ({})); alert(j.error ?? 'Unable to download invoice PDF.'); return; }
+      const blob = await res.blob();
+      const fileName = invoicePdfFileName(r.qbCompany as 'TAB' | 'TAC', r.invoiceNo, companyName, r.amount);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Unable to download invoice PDF.');
+    } finally {
+      setDownloadingRef(null);
+    }
+  };
+
   const filtered = drafts.filter(d => filter === 'all' || d.status === filter);
   const counts = { pending: drafts.filter(d => d.status === 'pending').length, sent: drafts.filter(d => d.status === 'sent').length, skipped: drafts.filter(d => d.status === 'skipped').length };
 
@@ -176,11 +203,22 @@ function DraftsInner() {
                 <div style={{ padding: '4px 14px 16px 38px' }}>
                   {d.invoice_refs?.length > 0 && (
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                      {d.invoice_refs.map((r, j) => (
-                        <span key={j} style={{ fontSize: 10.5, fontFamily: 'monospace', fontWeight: 700, color: r.qbCompany === 'TAB' ? '#1d4ed8' : '#9a3412', background: r.qbCompany === 'TAB' ? '#eff6ff' : '#ffedd5', border: `1px solid ${r.qbCompany === 'TAB' ? '#dbeafe' : '#fed7aa'}`, borderRadius: 4, padding: '2px 7px' }}>
-                          {r.qbCompany} #{r.invoiceNo} · S${r.amount.toLocaleString()}
-                        </span>
-                      ))}
+                      {d.invoice_refs.map((r, j) => {
+                        const downloadKey = `${d.id}-${j}`;
+                        const downloadable = !!r.qbInvoiceId && (r.qbCompany === 'TAB' || r.qbCompany === 'TAC');
+                        const isDownloading = downloadingRef === downloadKey;
+                        return (
+                          <span key={j} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontFamily: 'monospace', fontWeight: 700, color: r.qbCompany === 'TAB' ? '#1d4ed8' : '#9a3412', background: r.qbCompany === 'TAB' ? '#eff6ff' : '#ffedd5', border: `1px solid ${r.qbCompany === 'TAB' ? '#dbeafe' : '#fed7aa'}`, borderRadius: 4, padding: '2px 6px 2px 7px' }}>
+                            {r.qbCompany} #{r.invoiceNo} · S${r.amount.toLocaleString()}
+                            {downloadable && (
+                              <button onClick={() => downloadInvoicePdf(r, d.company_name, downloadKey)} disabled={isDownloading}
+                                title="Download the invoice PDF to attach in Outlook" style={{ border: 'none', background: 'transparent', padding: 0, display: 'flex', alignItems: 'center', color: 'inherit', cursor: isDownloading ? 'wait' : 'pointer' }}>
+                                {isDownloading ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={11} />}
+                              </button>
+                            )}
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
                   <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Subject</div>
@@ -189,6 +227,11 @@ function DraftsInner() {
                   <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Body</div>
                   <textarea value={d.body} onChange={e => setDrafts(prev => prev.map(x => x.id === d.id ? { ...x, body: e.target.value } : x))}
                     rows={7} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px', fontSize: 12.5, fontFamily: 'inherit', resize: 'vertical', marginBottom: 12 }} />
+                  {d.invoice_refs?.some(r => r.qbInvoiceId && (r.qbCompany === 'TAB' || r.qbCompany === 'TAC')) && (
+                    <div style={{ fontSize: 10.5, color: '#94a3b8', marginBottom: 10 }}>
+                      A mailto: link can&apos;t carry an attachment — download the invoice PDF above (⬇ icon) first, then drag it into the Outlook window Compose opens.
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={() => { updateDraft(d, { subject: d.subject, body: d.body }); openInOutlook(d); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 7, border: 'none', background: '#1d3a5c', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
@@ -219,6 +262,7 @@ function DraftsInner() {
           );
         })}
       </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }
