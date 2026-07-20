@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-20
+Last updated: 2026-07-20 (Client Communications: review-before-generate)
 
 ## Purpose
 
@@ -23,6 +23,12 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- Client Communications: Campaign Centre now previews the resolved company
+  list and lets a reviewer edit it BEFORE anything is written, instead of
+  generating drafts directly from an opaque auto-resolution. See the
+  2026-07-20 (review-before-generate) handoff entry below for the full
+  design and files touched.
 
 - Fixed a broken seed in `scripts/add-client-communications.sql` (the 3
   default-template INSERTs declared 5 columns but selected only 4 values,
@@ -231,6 +237,66 @@ one focused Git commit.
    - deployment status, if applicable.
 
 ## Handoff log
+
+### 2026-07-20 - Claude Code (Client Communications: review-before-generate)
+
+Vincent's feedback on the first cut of Campaign Centre: template flexibility
+is low (several fixed templates), so beyond automated resolution he wanted
+to be able to add/remove companies himself per template, wanted Recent
+Campaigns to support deleting a wrongly-generated campaign, and wanted
+Generate Drafts to first show exactly which companies would get a draft so
+a reviewer can check it before anything is created.
+
+- Split candidate resolution from draft creation so they can no longer
+  drift apart:
+  - New `lib/client-comms-resolve.ts` holds the shared resolver (company
+    lookup/fuzzy match, per-type invoice lookup for ar/soa, the AR-cycle/
+    unpaid-SOA/manual-letter target list, and `buildRow()` which decides
+    the suggested checkbox state + a human-readable reason). Both the
+    preview and the create endpoint now import this — previously the
+    logic lived inline in the POST handler and any future edit could
+    silently make preview and creation disagree.
+  - New `POST /api/client-communications/campaigns/preview` resolves the
+    same candidate set Campaign Centre would generate, without writing
+    anything, and returns each row's include/exclude suggestion + reason
+    (already sent this cycle / no invoice found / no email on file).
+  - New `GET /api/client-communications/campaigns/preview?lookup=<name>&
+    type=...` resolves ONE company on demand, deliberately outside the
+    auto target-list membership check, for the Campaign Centre "add a
+    company" control - the reviewer can pull in someone the automatic
+    rules wouldn't have picked (e.g. no invoice synced yet) and decide
+    for themselves whether to include them.
+  - `POST /api/client-communications/campaigns` no longer resolves
+    anything itself. It now requires a `companies: FinalizedCompany[]`
+    array (companyName/companyId/toEmail/ccEmail/contactName/
+    invoiceRefs/totalAmount) and writes exactly that list. This is a
+    breaking change to the route's request shape - anything else calling
+    it with the old `companyNames`-only body will get a 400.
+- `app/client-communications/campaigns/page.tsx` reworked into a two-step
+  flow: `setup` (unchanged form, button now reads "Preview Companies") ->
+  `review` (editable table: checkbox per row, remove-row trash icon, a
+  debounced "add a company by name" search box backed by `/api/companies`
+  + the single-lookup endpoint above, a live "N of M selected" counter,
+  and only then "Confirm & Generate N Drafts"). Checkboxes are disabled
+  only when there is truly no email on file (nothing to send to);
+  "already sent" / "no invoice found" rows default unchecked but stay
+  toggleable, since those are judgement calls, not hard blocks.
+- Added `DELETE` to `app/api/client-communications/campaigns/[id]/route.ts`
+  and a per-row trash-icon button in Recent Campaigns (with a confirm
+  dialog). `email_drafts.campaign_id` already has `on delete cascade` in
+  the schema, so deleting a campaign removes its drafts automatically -
+  no extra cleanup query needed.
+- Verification: `npm run build` exit code 0 (checked via the real file-
+  written exit code, not a background task's own reported code, per the
+  standing rule in this log). Did not verify in a live logged-in browser
+  session - the whole app now requires Google OAuth (see the entry
+  below), so this needs Vincent (or a session with real login cookies)
+  to click through Campaign Centre once in production.
+- Known gap carried over: the "add a company" lookup and the bulk preview
+  both still only see TAB/TAC invoices (TAO not connected), so a manually
+  added company whose only invoice is TAO-only will show "no invoice
+  found" even though one genuinely exists - the reviewer can still tick
+  it on with $0/blank invoice list if they know this is the case.
 
 ### 2026-07-20 - Claude Code (Client Communications: historical import + fixes)
 
