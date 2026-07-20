@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { Send, RefreshCw, ArrowLeft, Trash2, Plus, Loader2 } from 'lucide-react';
 import CommsTabs from '@/components/client-communications/CommsTabs';
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 
 const FYE_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const TYPE_LABEL: Record<string, string> = { ar: 'AR Renewal Reminder', soa: 'Statement of Account', letter: 'Document Reminder' };
@@ -45,6 +46,7 @@ export default function CampaignCentrePage() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [pendingDeleteCampaign, setPendingDeleteCampaign] = useState<{ id: number; name: string } | null>(null);
   const [me, setMe] = useState<{ email: string; name: string } | null>(null);
 
   const [rows, setRows] = useState<Row[]>([]);
@@ -181,11 +183,18 @@ export default function CampaignCentrePage() {
 
   const toggleRow = (i: number) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, included: !r.included } : r));
   const removeRow = (i: number) => setRows(prev => prev.filter((_, idx) => idx !== i));
+  const updateRowEmail = (i: number, value: string) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, toEmail: value } : r));
   const includedCount = rows.filter(r => r.included).length;
 
-  const deleteCampaign = async (id: number, e: React.MouseEvent) => {
+  const requestDeleteCampaign = (c: Campaign, e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
-    if (!confirm('Delete this campaign and all its drafts? This cannot be undone.')) return;
+    setPendingDeleteCampaign({ id: c.id, name: c.name });
+  };
+
+  const confirmDeleteCampaign = async () => {
+    if (!pendingDeleteCampaign) return;
+    const { id } = pendingDeleteCampaign;
+    setPendingDeleteCampaign(null);
     setDeletingId(id);
     try {
       const res = await fetch(`/api/client-communications/campaigns/${id}`, { method: 'DELETE' });
@@ -338,22 +347,29 @@ export default function CampaignCentrePage() {
               <span /><span>Company</span><span>Email</span><span>Invoices</span><span>Amount</span><span>Note</span><span />
             </div>
             <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-              {rows.map((r, i) => (
-                <div key={`${r.companyName}-${i}`} style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f1f5f9', background: r.included ? '#fff' : '#fafbfc', opacity: r.included ? 1 : 0.65 }}>
-                  <input type="checkbox" checked={r.included} disabled={!r.toEmail} onChange={() => toggleRow(i)} style={{ cursor: r.toEmail ? 'pointer' : 'not-allowed' }} />
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.companyName}>{r.companyName}</span>
-                  <span style={{ fontSize: 11.5, color: r.toEmail ? '#64748b' : '#dc2626', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.toEmail ?? 'no email on file'}</span>
-                  <span style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.invoiceRefs.map(x => `${x.qbCompany} #${x.invoiceNo}`).join(', ')}>
-                    {r.invoiceRefs.length ? r.invoiceRefs.map(x => `${x.qbCompany}#${x.invoiceNo}`).join(', ') : '—'}
-                  </span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#0f766e' }}>{r.totalAmount ? `S$${r.totalAmount.toLocaleString()}` : '—'}</span>
-                  <span style={{ fontSize: 10.5, color: '#c2410c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.reason ?? ''}>{r.reason ?? ''}</span>
-                  <button onClick={() => removeRow(i)} title="Remove from this campaign"
-                    style={{ border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              ))}
+              {rows.map((r, i) => {
+                const hasEmail = !!r.toEmail?.trim();
+                // Once a reviewer types in a missing email, the original "no email"
+                // reason no longer applies — drop it so the note doesn't look stale.
+                const displayReason = r.reason === 'No email on file' && hasEmail ? null : r.reason;
+                return (
+                  <div key={`${r.companyName}-${i}`} style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f1f5f9', background: r.included ? '#fff' : '#fafbfc', opacity: r.included ? 1 : 0.65 }}>
+                    <input type="checkbox" checked={r.included} disabled={!hasEmail} onChange={() => toggleRow(i)} style={{ cursor: hasEmail ? 'pointer' : 'not-allowed' }} />
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.companyName}>{r.companyName}</span>
+                    <input value={r.toEmail ?? ''} onChange={e => updateRowEmail(i, e.target.value)} placeholder="Enter email…"
+                      style={{ fontSize: 11.5, padding: '4px 6px', borderRadius: 6, border: `1px solid ${hasEmail ? '#e2e8f0' : '#fecaca'}`, background: hasEmail ? '#fff' : '#fef2f2', color: '#1e3a5f', outline: 'none', width: '100%' }} />
+                    <span style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.invoiceRefs.map(x => `${x.qbCompany} #${x.invoiceNo}`).join(', ')}>
+                      {r.invoiceRefs.length ? r.invoiceRefs.map(x => `${x.qbCompany}#${x.invoiceNo}`).join(', ') : '—'}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0f766e' }}>{r.totalAmount ? `S$${r.totalAmount.toLocaleString()}` : '—'}</span>
+                    <span style={{ fontSize: 10.5, color: '#c2410c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={displayReason ?? ''}>{displayReason ?? ''}</span>
+                    <button onClick={() => removeRow(i)} title="Remove from this campaign"
+                      style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
@@ -395,14 +411,22 @@ export default function CampaignCentrePage() {
             <span style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 4, padding: '2px 7px' }}>{TYPE_LABEL[c.type]}</span>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#1e3a5f' }}>{c.name}</span>
             <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{c.email_drafts?.[0]?.count ?? 0} drafts · {new Date(c.created_at).toLocaleDateString()}</span>
-            <button onClick={e => deleteCampaign(c.id, e)} disabled={deletingId === c.id} title="Delete campaign"
-              style={{ border: 'none', background: 'transparent', color: '#cbd5e1', cursor: deletingId === c.id ? 'default' : 'pointer', display: 'flex', alignItems: 'center', padding: 2 }}>
+            <button onClick={e => requestDeleteCampaign(c, e)} disabled={deletingId === c.id} title="Delete campaign"
+              style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: deletingId === c.id ? 'default' : 'pointer', display: 'flex', alignItems: 'center', padding: 2 }}>
               {deletingId === c.id ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Trash2 size={14} />}
             </button>
           </Link>
         ))}
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {pendingDeleteCampaign && (
+        <ConfirmDeleteModal
+          label={pendingDeleteCampaign.name}
+          onCancel={() => setPendingDeleteCampaign(null)}
+          onConfirm={confirmDeleteCampaign}
+        />
+      )}
     </div>
   );
 }
