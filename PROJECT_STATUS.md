@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 ## Purpose
 
@@ -24,6 +24,29 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Fixed a broken seed in `scripts/add-client-communications.sql` (the 3
+  default-template INSERTs declared 5 columns but selected only 4 values,
+  missing `is_default` — Postgres rejected it and Supabase's SQL editor
+  rolled back the WHOLE script, including the CREATE TABLE statements,
+  since it runs as one transaction). Vincent re-ran the fixed migration
+  successfully; all 4 tables + seed data confirmed present.
+- Fixed Draft Review's first-run UX: an empty campaign list showed a
+  blank `<select>` and "No drafts in this view" with no explanation.
+  Now shows a proper empty state with a link to Campaign Centre, gated
+  on a dedicated loading flag so it can't flash before the initial
+  fetch resolves.
+- Imported the historical `BULK.xlsm` records (`scripts/import-bulk-
+  history.js`) into Client Communications so Delivery History starts
+  populated instead of empty: 1914 drafts across 5 campaigns (List_soa2
+  had no real rows). See the 2026-07-20 handoff entry for the full
+  parsing approach and caveats (invoice-company attribution, "UNKNOWN"
+  prefix on unparseable free-text invoice refs, etc).
+- Noted: `tassure-invoice.vercel.app` now 307-redirects to the actual
+  current production domain, `tassure-corporate-services.vercel.app`
+  (Codex or Vincent renamed the Vercel project at some point — use the
+  new domain going forward). The whole app now requires Google OAuth
+  login (including API routes), so `curl`-based production checks from
+  an agent session no longer work without a real session cookie.
 - Added a new Billing System > Client Communications section (4 pages:
   Campaign Centre, Draft Review, Delivery History, Templates & Senders)
   replacing the manual `BULK.xlsm` bulk-email workbook found on Vincent's
@@ -208,6 +231,64 @@ one focused Git commit.
    - deployment status, if applicable.
 
 ## Handoff log
+
+### 2026-07-20 - Claude Code (Client Communications: historical import + fixes)
+
+- Ran the `add-client-communications.sql` migration after fixing the
+  missing `is_default` value bug (see Latest completed work). Confirmed
+  live: `email_senders` (2 rows), `email_templates` (3 rows), empty
+  `email_campaigns`/`email_drafts`.
+- Vincent's first look at Draft Review (empty state, before any campaign
+  existed) read as "the system feels incomplete" - clarified this meant
+  two things: (1) a genuine UX gap (blank dropdown, no guidance - fixed,
+  see Latest completed work), and (2) he wanted the BULK.xlsm's own
+  historical records imported so the system doesn't start from zero.
+- Built `scripts/import-bulk-history.js` to parse and import all 5 data
+  sheets (List_letter 1758 rows, List_AR1/2/3 68+16+11, List_SOA1 61 -
+  List_SOA2 had zero real rows among its "1100" template rows). Key
+  findings from inspecting the raw workbook before writing the parser:
+  - Column layout is completely different per sheet; fields are located
+    by header text (the `<Placeholder>` cells), never a hardcoded index.
+  - `Send Email ?` is NOT a sent/not-sent flag - rows marked "n"/"N"
+    still had real send timestamps in the tracking columns after them.
+    The actual sent evidence is a numeric Excel date serial (~40000-
+    60000) anywhere after the named columns; used the earliest one found
+    as `sent_at`. Zero such values -> would be `pending`, but in practice
+    every real row across all 5 sheets had at least one, so the imported
+    set is 100% `status='sent'` - these sheets are apparently an archive
+    of already-processed batches, not a full active/pending client list.
+  - List_AR1/AR3's free-text `<INV>` column and AR2's `<INV 1/2/3>` are
+    regex-parsed into `(company-prefix?, invoiceNumber)` pairs; a prefix-
+    less number inherits the last-seen prefix in the same cell, or
+    `qbCompany: 'UNKNOWN'` if none appeared yet. List_SOA1's structured
+    `<Invoice TAB/TAO/TAC N>` + matching amount columns are read directly
+    (no regex needed) - more trustworthy than the AR sheets' free text.
+  - Verified the "SOA1 shows 1100 rows but I only parsed 61" discrepancy
+    by direct inspection before trusting the parser: 1038 of those rows
+    are fully blank template rows (Amount cell defaults to 0, every
+    other cell is `''`) - not a parsing bug.
+  - Company matching reuses the same normalize+fuzzy approach as the
+    rest of the app (inlined here rather than importing `lib/company-
+    name.ts`, since this is a one-off Node script, not app code) - left
+    `company_id` null rather than guessing when a match was ambiguous.
+  - Ran `--dry-run` first (the default; `--commit` writes), inspected
+    per-sheet stats and 2 sample rows per sheet, only then committed.
+- Result written to Supabase: 5 `email_campaigns` (`status: 'completed'`,
+  named `Historical Import — <SheetName>`), 1914 `email_drafts` total,
+  all `status: 'sent'` with real historical `sent_at` timestamps and
+  `sent_by_name: 'BULK.xlsm Import'`. Verified row counts directly
+  against the table after the commit run, not just the script's own log.
+- Also discovered while testing the earlier build: `tassure-
+  invoice.vercel.app` now 307-redirects to `tassure-corporate-
+  services.vercel.app` (the real current production domain), and the
+  whole app - including every API route - now requires a Google OAuth
+  session. Both are noted in Latest completed work; the practical effect
+  is that an agent session can no longer curl-verify production without
+  a real logged-in browser session.
+- Verification: `npm run build` exit code 0 for the empty-state fix;
+  the import script's own dry-run/commit output plus a direct Supabase
+  read-back for the historical import (no build step involved there -
+  it's a standalone data migration script, not application code).
 
 ### 2026-07-19 - Claude Code (Client Communications: bulk email prep)
 
