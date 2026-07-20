@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-18
+Last updated: 2026-07-19
 
 ## Purpose
 
@@ -24,6 +24,15 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Added a new Billing System > Client Communications section (4 pages:
+  Campaign Centre, Draft Review, Delivery History, Templates & Senders)
+  replacing the manual `BULK.xlsm` bulk-email workbook found on Vincent's
+  desktop. Generates AR renewal / SOA / letter reminder drafts from real
+  `generated_invoices`/`quickbooks_invoices`/`ar_reminder` data instead of
+  hand-maintained Excel rows. Sending stays manual via each staff member's
+  own Outlook (mailto: link) per Vincent's explicit decision — no email
+  API/SMTP was wired up. See "2026-07-19 - Claude Code" below for full
+  detail, known gaps, and the required SQL migration.
 - Rebalanced the Billing Draft line-item table columns in
   `app/billing/page.tsx`: Status 90->110px, Rate (S$) 100->90px, Amount
   110->100px, Qty unchanged at 44px. Header and row grids kept in sync.
@@ -199,6 +208,64 @@ one focused Git commit.
    - deployment status, if applicable.
 
 ## Handoff log
+
+### 2026-07-19 - Claude Code (Client Communications: bulk email prep)
+
+- Context: Vincent's team runs bulk reminder emails today from a manual
+  Excel/VBA workbook on the desktop (`BULK.xlsm`, 5 sheets: List_letter
+  1762 rows, List_AR1/AR2/AR3, List_SOA1/SOA2 1100+ rows) with columns
+  mail-merging company name, contact, invoice numbers/amounts across
+  THREE QuickBooks companies referenced in the sheet: TAB, TAC, and a
+  previously-unknown **TAO** (confirmed by Vincent as a third real QB
+  company, not yet connected to this system the way TAB/TAC are).
+- Built a system-native replacement under a new nav group (Sidebar.tsx):
+  Billing System > Client Communications > {Campaign Centre, Draft
+  Review, Delivery History, Templates & Senders} - the exact structure
+  Vincent specified.
+- New tables (`scripts/add-client-communications.sql`, **not yet run** -
+  needs the Supabase SQL editor, same as every prior migration in this
+  project): `email_senders`, `email_templates`, `email_campaigns`,
+  `email_drafts`. Seeded with the two known senders
+  (finance@/contact@tassure.com) and one default template per type.
+- `POST /api/client-communications/campaigns` generates drafts:
+  - `type=ar`: pulls the AR Reminder batch for a chosen FYE month/year,
+    matches each company (via `lib/company-name.ts` normalize/fuzzy-match,
+    same helper the rest of the app uses) to its `generated_invoices` for
+    that exact `fye_cycle`, sums TAB+TAC amounts, skips companies with no
+    invoice yet or no email on file.
+  - `type=soa`: pulls every company with `balance > 0` on a synced
+    `quickbooks_invoices` row (TAB/TAC only).
+  - `type=letter`: manual company-name list (no invoice data needed).
+  - Drafts are optimistic-locked (`version` column) on update, same
+    pattern as the AR workflow sync Codex added, so two staff reviewing
+    one campaign can't silently overwrite each other's "mark as sent".
+- Draft Review's "Compose in Outlook" builds a `mailto:` link (truncates
+  the body under ~1900 chars with a notice, since mailto: has no hard
+  standard but most clients choke well before Outlook's own limits) -
+  this is intentionally the ONLY send mechanism. Vincent explicitly ruled
+  out building real email-sending (Gmail API/SMTP/Resend) for now:
+  "邮件发送功能先不管，我们是用 outlook 的."
+- Known gaps / next steps for whoever picks this up:
+  1. **Run `scripts/add-client-communications.sql`** before anyone opens
+     these pages - GET routes will error on the missing tables until then.
+  2. **TAO is not connected.** AR/SOA totals silently miss any TAO-only
+     invoice until someone with TAO admin rights authorizes it via
+     `/api/quickbooks/auth?company=TAO`-equivalent (TAO doesn't exist yet
+     in `lib/quickbooks.ts`'s `QbCompany` type - that needs extending
+     to `'TAB' | 'TAC' | 'TAO'` first, mirroring how TAC was added).
+  3. Email template body/subject wording was written fresh (not
+     reverse-engineered from the Excel's VBA macros, which would need
+     unzipping the .xlsm and decompiling `vbaProject.bin`) - staff should
+     paste their exact existing wording into Templates & Senders before
+     relying on this for real client communication.
+  4. Not yet verified against a live Supabase instance (migration hasn't
+     been run) - only `npm run build` (exit code 0) has confirmed this
+     end-to-end. Vincent should generate one small test AR campaign after
+     running the migration and sanity-check the merged amounts against a
+     real company before broader use.
+- Verification: `npm run build` exit code 0 (checked directly, not via
+  grep on "Compiled successfully" — see 2026-07-18 entry for why that
+  matters on this machine's Turbopack).
 
 ### 2026-07-18 - Claude Code (invoice PDF filename convention)
 
