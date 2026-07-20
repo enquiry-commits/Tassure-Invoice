@@ -26,7 +26,9 @@ interface Row {
 interface CompanySearchHit { companyName: string; bestEmail: string | null }
 
 const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, background: '#fff', outline: 'none', color: '#1e3a5f' };
-const ROW_GRID = '30px minmax(150px,1.3fr) minmax(150px,1.3fr) minmax(160px,1.6fr) 90px minmax(120px,1.2fr) 28px';
+// checkbox | company | to | cc | invoices | amount | note | remove
+const ROW_GRID = '28px minmax(140px,1.2fr) minmax(170px,1.5fr) minmax(150px,1.3fr) minmax(140px,1.3fr) 84px minmax(110px,1fr) 26px';
+const ROW_GRID_MIN_WIDTH = 980;
 
 export default function CampaignCentrePage() {
   const [step, setStep] = useState<'setup' | 'review'>('setup');
@@ -184,6 +186,7 @@ export default function CampaignCentrePage() {
   const toggleRow = (i: number) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, included: !r.included } : r));
   const removeRow = (i: number) => setRows(prev => prev.filter((_, idx) => idx !== i));
   const updateRowEmail = (i: number, value: string) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, toEmail: value } : r));
+  const updateRowCc = (i: number, value: string) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ccEmail: value || null } : r));
   const includedCount = rows.filter(r => r.included).length;
 
   const requestDeleteCampaign = (c: Campaign, e: React.MouseEvent) => {
@@ -313,6 +316,7 @@ export default function CampaignCentrePage() {
           </div>
           <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 14 }}>
             Review who gets a draft before anything is generated. Uncheck to skip someone, add a company manually, or remove a row entirely.
+            To/CC accept more than one address — separate with a comma or semicolon (e.g. <span style={{ fontFamily: 'monospace' }}>jane@acme.com, finance@acme.com</span>); every address in the list receives the email.
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -342,34 +346,38 @@ export default function CampaignCentrePage() {
           </div>
           {addError && <div style={{ fontSize: 11.5, color: '#dc2626', marginBottom: 10, marginTop: -4 }}>{addError}</div>}
 
-          <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', marginBottom: 16 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 8, padding: '8px 10px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
-              <span /><span>Company</span><span>Email</span><span>Invoices</span><span>Amount</span><span>Note</span><span />
-            </div>
-            <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-              {rows.map((r, i) => {
-                const hasEmail = !!r.toEmail?.trim();
-                // Once a reviewer types in a missing email, the original "no email"
-                // reason no longer applies — drop it so the note doesn't look stale.
-                const displayReason = r.reason === 'No email on file' && hasEmail ? null : r.reason;
-                return (
-                  <div key={`${r.companyName}-${i}`} style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f1f5f9', background: r.included ? '#fff' : '#fafbfc', opacity: r.included ? 1 : 0.65 }}>
-                    <input type="checkbox" checked={r.included} disabled={!hasEmail} onChange={() => toggleRow(i)} style={{ cursor: hasEmail ? 'pointer' : 'not-allowed' }} />
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.companyName}>{r.companyName}</span>
-                    <input value={r.toEmail ?? ''} onChange={e => updateRowEmail(i, e.target.value)} placeholder="Enter email…"
-                      style={{ fontSize: 11.5, padding: '4px 6px', borderRadius: 6, border: `1px solid ${hasEmail ? '#e2e8f0' : '#fecaca'}`, background: hasEmail ? '#fff' : '#fef2f2', color: '#1e3a5f', outline: 'none', width: '100%' }} />
-                    <span style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.invoiceRefs.map(x => `${x.qbCompany} #${x.invoiceNo}`).join(', ')}>
-                      {r.invoiceRefs.length ? r.invoiceRefs.map(x => `${x.qbCompany}#${x.invoiceNo}`).join(', ') : '—'}
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0f766e' }}>{r.totalAmount ? `S$${r.totalAmount.toLocaleString()}` : '—'}</span>
-                    <span style={{ fontSize: 10.5, color: '#c2410c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={displayReason ?? ''}>{displayReason ?? ''}</span>
-                    <button onClick={() => removeRow(i)} title="Remove from this campaign"
-                      style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                );
-              })}
+          <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'auto', marginBottom: 16 }}>
+            <div style={{ minWidth: ROW_GRID_MIN_WIDTH }}>
+              <div style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 8, padding: '8px 10px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                <span /><span>Company</span><span>To</span><span>CC</span><span>Invoices</span><span>Amount</span><span>Note</span><span />
+              </div>
+              <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+                {rows.map((r, i) => {
+                  const hasEmail = !!r.toEmail?.trim();
+                  // Once a reviewer types in a missing email, the original "no email"
+                  // reason no longer applies — drop it so the note doesn't look stale.
+                  const displayReason = r.reason === 'No email on file' && hasEmail ? null : r.reason;
+                  return (
+                    <div key={`${r.companyName}-${i}`} style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f1f5f9', background: r.included ? '#fff' : '#fafbfc', opacity: r.included ? 1 : 0.65 }}>
+                      <input type="checkbox" checked={r.included} disabled={!hasEmail} onChange={() => toggleRow(i)} style={{ cursor: hasEmail ? 'pointer' : 'not-allowed' }} />
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.companyName}>{r.companyName}</span>
+                      <input value={r.toEmail ?? ''} onChange={e => updateRowEmail(i, e.target.value)} placeholder="name@company.com, name2@company.com"
+                        style={{ fontSize: 11.5, padding: '4px 6px', borderRadius: 6, border: `1px solid ${hasEmail ? '#e2e8f0' : '#fecaca'}`, background: hasEmail ? '#fff' : '#fef2f2', color: '#1e3a5f', outline: 'none', width: '100%' }} />
+                      <input value={r.ccEmail ?? ''} onChange={e => updateRowCc(i, e.target.value)} placeholder="optional CC"
+                        style={{ fontSize: 11.5, padding: '4px 6px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f', outline: 'none', width: '100%' }} />
+                      <span style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.invoiceRefs.map(x => `${x.qbCompany} #${x.invoiceNo}`).join(', ')}>
+                        {r.invoiceRefs.length ? r.invoiceRefs.map(x => `${x.qbCompany}#${x.invoiceNo}`).join(', ') : '—'}
+                      </span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#0f766e' }}>{r.totalAmount ? `S$${r.totalAmount.toLocaleString()}` : '—'}</span>
+                      <span style={{ fontSize: 10.5, color: '#c2410c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={displayReason ?? ''}>{displayReason ?? ''}</span>
+                      <button onClick={() => removeRow(i)} title="Remove from this campaign"
+                        style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
 

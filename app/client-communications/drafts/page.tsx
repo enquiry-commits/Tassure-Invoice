@@ -20,9 +20,19 @@ interface Campaign {
 // mailto: links are size-limited (~2000 chars is the safe cross-client
 // ceiling) — long merged bodies still open Outlook with To/CC/Subject
 // filled in and a truncation notice instead of silently failing to open.
+//
+// Reviewers type multiple recipients as either comma- or semicolon-
+// separated (Outlook's own compose window shows semicolons) — the mailto:
+// spec (RFC 6068) only recognises commas, so normalise before building the
+// link. Comma-separating them here is what actually makes them arrive as
+// separate To/CC recipients instead of one broken address.
+function normalizeRecipients(raw: string): string {
+  return raw.split(/[;,]/).map(s => s.trim()).filter(Boolean).join(',');
+}
+
 function buildMailto(d: Draft): string {
-  const to = d.to_email ?? '';
-  const cc = d.cc_email ?? '';
+  const to = normalizeRecipients(d.to_email ?? '');
+  const cc = normalizeRecipients(d.cc_email ?? '');
   let body = d.body;
   const params = new URLSearchParams();
   if (cc) params.set('cc', cc);
