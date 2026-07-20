@@ -41,6 +41,15 @@ const tree: Node[] = [
       { label: 'AR Reminder',       href: '/billing?tab=ar' },
       { label: 'Late Filing',       href: '/late-filing' },
       { label: 'Billing Drafts',    href: '/billing?tab=billing' },
+      {
+        id: 'client-communications', label: 'Client Communications',
+        children: [
+          { label: 'Campaign Centre',     href: '/client-communications/campaigns' },
+          { label: 'Draft Review',        href: '/client-communications/drafts' },
+          { label: 'Delivery History',    href: '/client-communications/history' },
+          { label: 'Templates & Senders', href: '/client-communications/templates' },
+        ],
+      },
     ],
   },
 ];
