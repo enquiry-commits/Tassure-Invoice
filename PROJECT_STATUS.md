@@ -26,7 +26,13 @@ one focused Git commit.
 
 - Client Communications: Campaign Centre now previews the resolved company
   list and lets a reviewer edit it BEFORE anything is written, instead of
-  generating drafts directly from an opaque auto-resolution. See the
+  generating drafts directly from an opaque auto-resolution. Follow-up
+  polish: delete actions use the app's existing `ConfirmDeleteModal` (red
+  icon, real confirm dialog) instead of a browser `confirm()`; the review
+  table's To field is directly editable for companies with no email on
+  file; a CC column was added; and both fields accept more than one
+  address (comma- or semicolon-separated — normalized to RFC 6068 commas
+  when the Outlook mailto: link is built in Draft Review). See the
   2026-07-20 (review-before-generate) handoff entry below for the full
   design and files touched.
 
@@ -297,6 +303,29 @@ a reviewer can check it before anything is created.
   added company whose only invoice is TAO-only will show "no invoice
   found" even though one genuinely exists - the reviewer can still tick
   it on with $0/blank invoice list if they know this is the case.
+
+**Same-day follow-up (Vincent's feedback on the first review-step UI):**
+
+- Delete now goes through `components/ConfirmDeleteModal.tsx` (already
+  used by `app/late-filing/page.tsx`) instead of `window.confirm()`, and
+  every delete/trash icon on the page is red (`#dc2626`) rather than grey,
+  matching the rest of the app's destructive-action styling.
+- The review table's "To" cell is now a real `<input>`, not static text -
+  a company with no email on file shows a red-bordered empty box the
+  reviewer can type straight into; its checkbox unlocks the instant a
+  non-empty value is typed, and the stale "No email on file" note clears
+  itself once resolved.
+- Added a "CC" column (same free-text input, optional) - Vincent pointed
+  out most companies realistically have more than one relevant contact,
+  not just one email.
+- Both To and CC accept multiple addresses. Storage keeps whatever the
+  reviewer typed (comma or semicolon separated - Outlook's own compose
+  window displays semicolons, so that's the format staff will reach for
+  first). `app/client-communications/drafts/page.tsx`'s `buildMailto()`
+  now runs both fields through `normalizeRecipients()` (split on `[;,]`,
+  trim, rejoin on `,`) before building the `mailto:` link, since RFC 6068
+  only recognises comma as the recipient separator - semicolon-separated
+  input would otherwise arrive as one malformed address.
 
 ### 2026-07-20 - Claude Code (Client Communications: historical import + fixes)
 
