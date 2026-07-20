@@ -91,17 +91,20 @@ on conflict (email) do nothing;
 insert into email_templates (type, name, subject_template, body_template, is_default)
 select 'ar', 'AR Renewal Reminder (default)',
   'Corporate Secretarial Services Renewal - {{companyName}}',
-  E'Dear {{contactName}},\n\nPlease find attached the renewal invoice(s) for {{companyName}}:\n\n{{invoiceList}}\n\nTotal amount due: S${{totalAmount}}\n\nKindly arrange payment at your earliest convenience.\n\nThank you.'
+  E'Dear {{contactName}},\n\nPlease find attached the renewal invoice(s) for {{companyName}}:\n\n{{invoiceList}}\n\nTotal amount due: S${{totalAmount}}\n\nKindly arrange payment at your earliest convenience.\n\nThank you.',
+  true
 where not exists (select 1 from email_templates where type = 'ar' and is_default);
 
 insert into email_templates (type, name, subject_template, body_template, is_default)
 select 'soa', 'Statement of Account (default)',
   'Statement of Account - {{companyName}}',
-  E'Dear {{contactName}},\n\nPlease find below the outstanding invoices for {{companyName}}:\n\n{{invoiceList}}\n\nTotal outstanding: S${{totalAmount}}\n\nKindly settle at your earliest convenience.\n\nThank you.'
+  E'Dear {{contactName}},\n\nPlease find below the outstanding invoices for {{companyName}}:\n\n{{invoiceList}}\n\nTotal outstanding: S${{totalAmount}}\n\nKindly settle at your earliest convenience.\n\nThank you.',
+  true
 where not exists (select 1 from email_templates where type = 'soa' and is_default);
 
 insert into email_templates (type, name, subject_template, body_template, is_default)
 select 'letter', 'Document Reminder (default)',
   'Reminder - Outstanding Document for {{companyName}}',
-  E'Dear {{contactName}},\n\nThis is a reminder that we are still awaiting the following document(s) from {{companyName}}.\n\nKindly send these to us at your earliest convenience.\n\nThank you.'
+  E'Dear {{contactName}},\n\nThis is a reminder that we are still awaiting the following document(s) from {{companyName}}.\n\nKindly send these to us at your earliest convenience.\n\nThank you.',
+  true
 where not exists (select 1 from email_templates where type = 'letter' and is_default);
