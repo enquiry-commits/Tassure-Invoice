@@ -87,12 +87,14 @@ export async function getSessionCookie(): Promise<string> {
   try {
     const context = await browser.newContext();
     const page = await context.newPage();
-    await page.goto(`${BASE}/dashboard`, { waitUntil: 'domcontentloaded' });
+    page.setDefaultTimeout(15_000);
+    page.setDefaultNavigationTimeout(20_000);
+    await page.goto(`${BASE}/dashboard`, { waitUntil: 'domcontentloaded', timeout: 20_000 });
     if (page.url().includes('welcome')) {
       await page.getByRole('textbox', { name: 'Username' }).fill(username);
       await page.getByRole('textbox', { name: 'Password' }).fill(password);
       await page.getByRole('button', { name: ' Login' }).click();
-      await page.waitForURL('**/dashboard**', { timeout: 15000, waitUntil: 'domcontentloaded' });
+      await page.waitForURL('**/dashboard**', { timeout: 20_000, waitUntil: 'domcontentloaded' });
     }
     const cookies = await context.cookies();
     const phpsessid = cookies.find(c => c.name === 'PHPSESSID');
@@ -117,8 +119,13 @@ function fetchAgmPage(
   companyId: string,
   start: number,
   length: number,
+  signal?: AbortSignal,
 ): Promise<TeamworkDataTableResult> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason instanceof Error ? signal.reason : new Error('TeamWork AGM request was cancelled.'));
+      return;
+    }
     const params: Record<string, string> = {
       draw: String(Math.floor(start / length) + 1), start: String(start), length: String(length),
       'search[value]': '', 'search[regex]': 'false',
@@ -153,6 +160,11 @@ function fetchAgmPage(
         }
       });
     });
+    const abortRequest = () => req.destroy(
+      signal?.reason instanceof Error ? signal.reason : new Error('TeamWork AGM request was cancelled.'),
+    );
+    signal?.addEventListener('abort', abortRequest, { once: true });
+    req.on('close', () => signal?.removeEventListener('abort', abortRequest));
     req.on('error', reject);
     req.setTimeout(20_000, () => req.destroy(new Error('TeamWork AGM request timed out after 20 seconds.')));
     req.write(body);
@@ -160,14 +172,18 @@ function fetchAgmPage(
   });
 }
 
-export async function fetchAgmList(cookie: string, companyId: string): Promise<{ data: string[][] }> {
+export async function fetchAgmList(
+  cookie: string,
+  companyId: string,
+  signal?: AbortSignal,
+): Promise<{ data: string[][] }> {
   const pageSize = 100;
   const maximumRows = 2_000;
   const rows: string[][] = [];
   const seen = new Set<string>();
 
   for (let start = 0; start < maximumRows; start += pageSize) {
-    const page = await fetchAgmPage(cookie, companyId, start, pageSize);
+    const page = await fetchAgmPage(cookie, companyId, start, pageSize, signal);
     for (const row of page.data) {
       const key = JSON.stringify(row);
       if (!seen.has(key)) {
