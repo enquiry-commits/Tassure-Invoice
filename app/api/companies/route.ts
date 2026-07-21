@@ -35,7 +35,10 @@ export async function GET(req: NextRequest) {
   }
 
   // Build Supabase query
-  let q = supabase.from('companies').select('*');
+  // Shareholder / related entities (TeamWork's non_client flag) are not
+  // clients of ours and never belong on this page, regardless of any other
+  // filter selected below.
+  let q = supabase.from('companies').select('*').eq('is_non_client', false);
 
   if (search) {
     q = q.or(`company_name.ilike.%${search}%,registration_no.ilike.%${search}%`);

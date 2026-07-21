@@ -19,8 +19,16 @@ import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@
 //    registration_no / fye_month / best_email because TeamWork has a gap.
 //  - Never touch company_name on existing rows (manual typo fixes live here)
 //    and never touch QB-derived fields (has_*, *_pic, client_type, …).
-//  - Unmatched TeamWork records are INSERTED only if client=1 AND
-//    status=Active — shareholder entities, prospects etc. stay out.
+//  - Unmatched TeamWork records are INSERTED only if non_client!=='1' AND
+//    status=Active — shareholder entities stay out. (TeamWork's `client`
+//    field looks like the obvious flag for this but isn't reliable: several
+//    genuinely Active corp-sec clients carry client="0". `non_client` is
+//    the field that actually distinguishes a real client from a
+//    Shareholder/related entity like "1X EXCHANGE PSS LIMITED" — verified
+//    against live TeamWork data 2026-07-21.)
+//  - is_non_client is kept in sync unconditionally on every matched row
+//    (unlike the "only overwrite non-empty" fields above), since it's
+//    always present in TeamWork and should always reflect current truth.
 //  - Nothing is ever deleted; rows whose internal_id vanished from TeamWork
 //    are only counted in the summary.
 export const maxDuration = 300;
@@ -37,7 +45,10 @@ interface TwCompany {
   fye_date: string | null;            // "DD/MM"
   company_email_address: string | null;
   person_in_charge: string | null;
-  client: string;                     // "1" | "0"
+  client: string;                     // "1" | "0" — NOT reliable for "is a real client"; several genuinely Active
+                                       // corp-sec clients carry client="0". Kept only for reference.
+  non_client: string;                 // "1" | "0" — the field that actually distinguishes a real client from a
+                                       // Shareholder/related entity (verified against live TeamWork data).
   company_reg_Office_address: string | null;
 }
 
@@ -110,7 +121,7 @@ async function syncTeamworkCompanies() {
   const supabase = createAdminClient();
   const { data: rows, error } = await supabase
     .from('companies')
-    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, fye_day, best_email, uses_address, has_nd, pic, sec_pic');
+    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, fye_day, best_email, uses_address, has_nd, pic, sec_pic, is_non_client');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const byInternal = new Map((rows ?? []).filter(r => r.internal_id).map(r => [r.internal_id as string, r]));
@@ -173,8 +184,16 @@ async function syncTeamworkCompanies() {
       // directions — cancelled service flips off, new service flips on). Only
       // when TeamWork actually has an address on file.
       if (regAddr && usesOurAddress(regAddr) !== (row.uses_address === true)) patch.uses_address = usesOurAddress(regAddr);
+      // Unconditionally kept in sync (unlike the fields above, which only
+      // overwrite on a non-empty TeamWork value) — non_client is always
+      // present and is the authoritative "is this a Shareholder/related
+      // entity, not a real client" signal, verified against live TeamWork
+      // data (the `client` field looked plausible but several genuinely
+      // Active corp-sec clients carry client="0").
+      const isNonClient = tw.non_client === '1';
+      if (isNonClient !== (row.is_non_client === true)) patch.is_non_client = isNonClient;
       if (Object.keys(patch).length) { patch.synced_at = now; updates.push({ id: row.id, patch }); }
-    } else if (tw.client === '1' && status === 'Active' && twName) {
+    } else if (tw.non_client !== '1' && status === 'Active' && twName) {
       inserts.push({
         company_name: twName,
         internal_id: tw.company_id,
@@ -187,6 +206,7 @@ async function syncTeamworkCompanies() {
         client_type: 'CSS Client',
         tw_status: 'Active',
         is_active: true,
+        is_non_client: false,
         uses_address: regAddr ? usesOurAddress(regAddr) : false,
         synced_at: now,
       });
