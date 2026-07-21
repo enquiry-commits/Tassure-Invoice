@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-21 (Active Client checkbox+name columns, cross-page leak fix)
+Last updated: 2026-07-21 (TeamWork non_client fix; stale invoice-reservation unlock)
 
 ## Purpose
 
@@ -24,6 +24,75 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Fixed the TeamWork sync's real client-detection bug** (`app/api/teamwork/sync/route.ts`),
+  reported by Vincent as two symptoms that turned out to share one root
+  cause: Master List → Active Client's "Non-TeamWork" filter was flagging
+  genuine clients, and the Companies page had no way to exclude Shareholder/
+  related entities that Vincent said shouldn't be there.
+  - Diagnosed by calling TeamWork's own `getCompanies` API directly (not our
+    stale Supabase mirror) and diffing raw fields between a known real
+    client and a known Shareholder ("1X EXCHANGE PSS LIMITED"). The `client`
+    field our insert filter relied on (`client==='1' && status==='Active'`)
+    is NOT reliable — BIC Systems Asia Pacific, Blue Eagle Supply Chain,
+    Benfold Shipping, Billiongold Marine, Bistro Bugis, Care Property
+    Holdings, and 26 others are all genuinely Active clients with a proper
+    `client_id` (CB003, CB025, ...) yet carry `client="0"`. The field that
+    actually distinguishes a real client from a Shareholder/related entity
+    is `non_client` (confirmed against every example checked). Why `client`
+    is unreliable is still unconfirmed (Vincent's own theory: different
+    `client_id` prefixes — C8xxx vs CBxxx/CCxxx — suggest two onboarding
+    batches, and the flag may only have been maintained for the older one).
+  - Added `companies.is_non_client boolean default false`
+    (`scripts/add-companies-non-client-flag.sql`, run by Vincent). Sync now
+    uses `non_client !== '1'` for the insert filter and keeps
+    `is_non_client` unconditionally up to date on every matched row
+    (unlike the other TeamWork-sourced fields, which only overwrite on a
+    non-empty value — this one should always reflect current truth).
+    `/api/companies` now filters `.eq('is_non_client', false)`.
+  - Verified end-to-end after deploying and running a fresh sync: Active
+    Client's false "Non-TeamWork" flags dropped from 21 to 1 (the one
+    remaining, BYTESFORCE TECHNOLOGIES PTE. LTD., is a genuinely different
+    case — it already exists in `companies` but TeamWork's own `non_client`
+    flags IT as a Shareholder; needs Vincent to confirm with TeamWork
+    whether that classification or the master_list entry is wrong, not a
+    code bug). 32 previously-missing real clients got inserted in that
+    sync. Companies table: 930 total, 12 correctly flagged
+    `is_non_client=true` (listed to Vincent for a sanity check; not yet
+    confirmed as of this entry — BYTESFORCE TECHNOLOGIES, ENGAREAT, FIRE
+    ROCK HOLDINGS, NORTHWEST INTERIOR DESIGN, PRIMATECH, Q & E ENERGY
+    EFFICIENT, REZNOS DESIGN, SICHUAN BAIJIA AKUAN FOOD, TAFOS CAPITAL,
+    World Precision Machinery, ZJJ FAMILY OFFICE, ZTT HONGKONG).
+  - Also fixed one unrelated data-entry bug found while investigating: a
+    trailing `)` in master_list's ROCKFOREST HOLDINGS PTE. LTD. roc_no
+    (`202552132E)`) broke its UEN match to `companies` — corrected directly
+    in Supabase.
+- **Diagnosed and manually unblocked a stale invoice-number reservation**
+  for JZ.M SHIPPING PTE. LTD. (TAB). Vincent's real workflow: generate an
+  invoice → find an error in it → delete it directly in QuickBooks → try
+  to recreate it with the same DocNumber → blocked. The blocker was NOT
+  QuickBooks itself and NOT a live numbering race — it's
+  `invoice_creation_reservations`, a table with a partial unique index on
+  `(qb_company, doc_number) WHERE status IN ('pending','created',
+  'uncertain')` that exists to stop two staff from creating the same
+  invoice number at once. Deleting an invoice directly in QuickBooks (vs.
+  through this app) never updates that table, so the OLD `status=
+  'created'` row keeps blocking reuse of that exact number forever — every
+  retry hits the same generic "Invoice number changed in QuickBooks" 409
+  with no useful detail, because the code path that fires here
+  (`reservationError` on insert conflict, `app/api/quickbooks/create-
+  invoice/route.ts` ~line 459) returns `numberConflict:true` without
+  populating `conflicts`/`nextNumbers` — refreshing the number front-end
+  never helps because the real problem is a DB row, not the QB API.
+  Confirmed live via QuickBooks' own API before touching anything: TAB
+  invoice #21209 (doc 02610876) returned `400 Object Not Found` (genuinely
+  deleted); TAC invoice #3826 (doc 02680242, the ND line) returned `200`
+  (still live — left untouched). Updated only the TAB reservation row's
+  `status` to `'failed'` with an explanatory `error` note, which removes it
+  from the partial index's blocking set. **Vincent asked to keep this as a
+  manual per-incident fix (report to Claude Code, verify via live QB API,
+  update the stale row) rather than building automatic detection or a
+  self-serve "release" button** — revisit only if this starts happening
+  often enough to be worth automating.
 - **Superseded the entry below** ("Services" badge column) after Vincent
   saw it live and reconsidered the design, and — separately — pointed out
   a real bug in it: the combined 6-badge column had been added to
