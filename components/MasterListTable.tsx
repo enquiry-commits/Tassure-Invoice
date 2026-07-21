@@ -759,6 +759,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     thumb.style.left = `${tl}px`;
   }, []);
 
+  // Re-runs on `view` too — Active Client's List/Table toggle means the
+  // table (and outerRef's real DOM node) doesn't exist at mount time when
+  // List is the default view, so a mount-only effect would forever bind to
+  // a null ref and the drag-to-scroll bar would never work after switching
+  // to Table. Every other Master List page always renders the table, so
+  // `view` never changes there and this re-run is a no-op for them.
   useEffect(() => {
     const el = outerRef.current;
     if (!el) return;
@@ -786,7 +792,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
     };
-  }, [updateSb]);
+  }, [updateSb, view]);
 
   const stickyLeftOf = (field: string) => {
     if (field === 'company_name') return 0;
