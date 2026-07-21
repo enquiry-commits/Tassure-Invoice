@@ -34,11 +34,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Build Supabase query
-  // Shareholder / related entities (TeamWork's non_client flag) are not
-  // clients of ours and never belong on this page, regardless of any other
-  // filter selected below.
-  let q = supabase.from('companies').select('*').eq('is_non_client', false);
+  // Build Supabase query. Shareholder/related entities (TeamWork's
+  // non_client flag) are included, not hard-excluded — the frontend shows
+  // them as a separate toggleable "Shareholder" card so staff can still see
+  // them without them cluttering the default CSS Client view.
+  let q = supabase.from('companies').select('*');
 
   if (search) {
     q = q.or(`company_name.ilike.%${search}%,registration_no.ilike.%${search}%`);
@@ -79,6 +79,7 @@ export async function GET(req: NextRequest) {
       bestEmail:          c.best_email,
       primaryContact:     c.primary_contact,
       clientStatus:       c.tw_status ?? null,
+      isShareholder:      c.is_non_client === true,
     };
   });
 

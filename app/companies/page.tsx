@@ -16,9 +16,10 @@ interface Company {
   bestEmail: string | null;
   primaryContact: { contactName: string } | null;
   clientStatus: string | null;
+  isShareholder: boolean;
 }
 
-type CompanyCat = 'all' | 'active' | 'strike_off' | 'terminated' | 'nd' | 'address' | 'nd_ceased';
+type CompanyCat = 'all' | 'active' | 'strike_off' | 'terminated' | 'nd' | 'address' | 'nd_ceased' | 'css_client' | 'shareholder';
 
 const isActiveStatus     = (s: string | null) => (s ?? '').toLowerCase() === 'active';
 const isStrikeOffStatus  = (s: string | null) => /strik/i.test(s ?? '');
@@ -31,6 +32,8 @@ function matchesCat(c: Company, cat: CompanyCat): boolean {
     case 'nd':          return c.hasActiveND;
     case 'address':     return c.usesAddressService;
     case 'nd_ceased':   return c.hadND && !c.hasActiveND;
+    case 'css_client':  return !c.isShareholder;
+    case 'shareholder': return c.isShareholder;
     default:            return true;
   }
 }
@@ -102,6 +105,8 @@ export default function CompaniesPage() {
 
   const cards: { key: CompanyCat; label: string; sub: string; color: string; bg: string; bd: string }[] = [
     { key: 'all',        label: 'All Companies',  sub: 'total on file',           color: '#1e3a8a', bg: '#f8fafc', bd: '#e2e8f0' },
+    { key: 'css_client', label: 'CSS Client',     sub: 'real corp-sec client',    color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4' },
+    { key: 'shareholder', label: 'Shareholder',   sub: 'related entity, not a client', color: '#64748b', bg: '#f8fafc', bd: '#e2e8f0' },
     { key: 'active',     label: 'Active',         sub: 'TeamWork status active',  color: '#15803d', bg: '#f0fdf4', bd: '#bbf7d0' },
     { key: 'strike_off', label: 'Striking Off',   sub: 'in strike-off process',   color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
     { key: 'terminated', label: 'Terminated',     sub: 'services terminated',     color: '#b45309', bg: '#fff7ed', bd: '#fed7aa' },
