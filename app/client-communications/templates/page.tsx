@@ -10,6 +10,10 @@ interface Sender { id: number; email: string; display_name: string | null; is_de
 const TYPE_LABEL: Record<string, string> = { ar: 'AR Renewal Reminder', soa: 'Statement of Account', letter: 'Document Reminder' };
 const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, outline: 'none', width: '100%' };
 const MERGE_FIELDS = ['companyName', 'contactName', 'toEmail', 'ccEmail', 'totalAmount', 'invoiceList', 'dueDate', 'fyeMonth', 'fyeYear'];
+// Grow the textarea to fit whatever's actually in it, so the full template
+// body is visible without an internal scrollbar — a fixed row count clipped
+// longer templates behind a tiny scroll window.
+const bodyRows = (text: string | undefined) => Math.max(6, (text ?? '').split('\n').length + 1);
 
 export default function TemplatesSendersPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -101,7 +105,7 @@ export default function TemplatesSendersPage() {
                 <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 3 }}>Body</div>
                 <textarea value={e.body_template} onChange={ev => setEditing(p => ({ ...p, [t.id]: { ...e, body_template: ev.target.value } }))}
                   onBlur={() => patchTemplate(t.id, 'body_template', e.body_template)}
-                  rows={6} style={{ ...S, fontFamily: 'inherit', resize: 'vertical' }} />
+                  rows={bodyRows(e.body_template)} style={{ ...S, fontFamily: 'inherit', resize: 'vertical' }} />
               </div>
             );
           })}
@@ -110,7 +114,7 @@ export default function TemplatesSendersPage() {
             <div style={{ padding: '12px 16px', background: '#f8fafc' }}>
               <input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} placeholder="Template name" style={{ ...S, marginBottom: 8 }} />
               <input value={draft.subject_template} onChange={e => setDraft(d => ({ ...d, subject_template: e.target.value }))} placeholder="Subject" style={{ ...S, marginBottom: 8 }} />
-              <textarea value={draft.body_template} onChange={e => setDraft(d => ({ ...d, body_template: e.target.value }))} placeholder="Body" rows={5} style={{ ...S, fontFamily: 'inherit', resize: 'vertical', marginBottom: 8 }} />
+              <textarea value={draft.body_template} onChange={e => setDraft(d => ({ ...d, body_template: e.target.value }))} placeholder="Body" rows={bodyRows(draft.body_template)} style={{ ...S, fontFamily: 'inherit', resize: 'vertical', marginBottom: 8 }} />
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => createTemplate(type)} style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#1d3a5c', color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Save</button>
                 <button onClick={() => setShowNewTemplate(null)} style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Cancel</button>
