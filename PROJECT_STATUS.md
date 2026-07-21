@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-20 (Client Communications: invoice PDF attachment)
+Last updated: 2026-07-21 (automation cron schedule shift + CRON_SECRET rotation)
 
 ## Purpose
 
@@ -24,6 +24,34 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Shifted all six `vercel.json` cron schedules 3 hours earlier at Vincent's
+  request (same 30-min spacing/order preserved): ND 21:00 UTC (05:00 SGT),
+  Companies 21:30, AR Generate 22:00, QuickBooks 22:30, AR Workflow 23:00,
+  Late Filing 00:00 UTC next day (08:00 SGT). Deployed 2026-07-20; since the
+  new AR Generate/AR Workflow/Late Filing trigger times had already passed
+  by deploy time, those three skipped their run that day (Vercel cron does
+  not backfill missed times). Claude Code could not trigger them directly
+  (no `CRON_SECRET`, no production login session — see the rotation note
+  below), so gave Vincent the three endpoint URLs to open manually in his
+  own logged-in browser, in order, waiting for each to finish; whether he
+  actually did this is not confirmed in this log. No action needed for the
+  schedule itself going forward — tomorrow's run fires at the new times
+  regardless.
+- Generated a fresh `CRON_SECRET` and saved it locally in `.env.local`
+  (not committed, per this file's standing rule — see CLAUDE.md). Vincent
+  asked what access would let Claude Code trigger the automation endpoints
+  directly instead of hitting the "no session / no secret" wall from
+  earlier today; wanted to hand over the existing value but couldn't
+  locate it in Vercel, so we're rotating it instead of chasing the old
+  one. **Vincent still needs to set this same value in Vercel → Settings →
+  Environment Variables → `CRON_SECRET` (Production, and Preview if used)
+  and redeploy** — until he does, Vercel's cron invocations keep using
+  whatever value (if any) is currently live there, completely unaffected;
+  only once Vercel's value is overwritten to match the local one will
+  Claude Code actually be able to authenticate as `curl -H "Authorization:
+  Bearer $CRON_SECRET" https://tassure-corporate-services.vercel.app/api/
+  ..."` — and at that same moment the old Vercel value (whatever it was)
+  stops working, so this is a real cutover, not an additive change.
 - Auto-grew the Templates & Senders body textarea to fit its content
   (`rows` now derived from line count, min 6) instead of a fixed 6 rows
   that clipped longer templates behind an internal scrollbar.
