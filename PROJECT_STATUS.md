@@ -30,28 +30,35 @@ one focused Git commit.
   Late Filing 00:00 UTC next day (08:00 SGT). Deployed 2026-07-20; since the
   new AR Generate/AR Workflow/Late Filing trigger times had already passed
   by deploy time, those three skipped their run that day (Vercel cron does
-  not backfill missed times). Claude Code could not trigger them directly
-  (no `CRON_SECRET`, no production login session — see the rotation note
-  below), so gave Vincent the three endpoint URLs to open manually in his
-  own logged-in browser, in order, waiting for each to finish; whether he
-  actually did this is not confirmed in this log. No action needed for the
-  schedule itself going forward — tomorrow's run fires at the new times
-  regardless.
-- Generated a fresh `CRON_SECRET` and saved it locally in `.env.local`
-  (not committed, per this file's standing rule — see CLAUDE.md). Vincent
-  asked what access would let Claude Code trigger the automation endpoints
-  directly instead of hitting the "no session / no secret" wall from
-  earlier today; wanted to hand over the existing value but couldn't
-  locate it in Vercel, so we're rotating it instead of chasing the old
-  one. **Vincent still needs to set this same value in Vercel → Settings →
-  Environment Variables → `CRON_SECRET` (Production, and Preview if used)
-  and redeploy** — until he does, Vercel's cron invocations keep using
-  whatever value (if any) is currently live there, completely unaffected;
-  only once Vercel's value is overwritten to match the local one will
-  Claude Code actually be able to authenticate as `curl -H "Authorization:
-  Bearer $CRON_SECRET" https://tassure-corporate-services.vercel.app/api/
-  ..."` — and at that same moment the old Vercel value (whatever it was)
-  stops working, so this is a real cutover, not an additive change.
+  not backfill missed times). Backfilled manually the same day once
+  `CRON_SECRET` was working end-to-end (see below) — AR Generate: 3
+  inserted; AR Workflow: 740 rows checked, 2 unmatched names, 0 conflicts;
+  Late Filing: 878 companies checked, 39 flagged, 36 refreshed. No action
+  needed for the schedule itself going forward — tomorrow's run fires at
+  the new times normally.
+- Rotated `CRON_SECRET` (Vincent asked what access would let Claude Code
+  trigger automation endpoints directly instead of hitting a "no session /
+  no secret" wall; couldn't locate the old value in Vercel to hand over,
+  so generated a fresh one instead). Saved locally in `.env.local` (not
+  committed, per this file's standing rule — see CLAUDE.md); Vincent set
+  the matching value in Vercel → Settings → Environment Variables and
+  redeployed. **Gotcha hit while verifying, worth remembering**: the first
+  three `curl` tests against production kept 401ing even after Vincent
+  confirmed the Vercel value matched byte-for-byte — turned out the local
+  shell's working directory had silently drifted to `C:\Users\vincent`
+  (home) between commands, so `.env.local` was being read from an
+  unrelated project there (one with no `CRON_SECRET` at all), not
+  `tassure-invoice`'s real one. Always `cd` to the repo root (or use an
+  absolute path) immediately before reading `.env.local` in a script or
+  `source` command — don't assume the shell's cwd persisted correctly
+  across an unrelated tool call earlier in the session. Confirmed working
+  after fixing the path: `curl -H "Authorization: Bearer $CRON_SECRET"
+  https://tassure-corporate-services.vercel.app/api/<cron-path>` returns
+  200 with the real job result. `ar-reminder/sync-workflow` and
+  `late-filing/sync` can take 2-5 minutes (concurrent TeamWork fetches) -
+  give `curl --max-time 320` or longer, a client-side timeout around
+  60-90s will kill the connection while the server keeps working, which
+  looks like a failure but isn't.
 - Auto-grew the Templates & Senders body textarea to fit its content
   (`rows` now derived from line count, min 6) instead of a fixed 6 rows
   that clipped longer templates behind an internal scrollbar.
