@@ -2273,7 +2273,7 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
         {/* Body */}
         <div style={{ overflowY: 'auto', flex: 1 }}>
           {showHistory && (
-            <div style={{ margin: '16px 24px 0', border: '1px solid #dbe3ee', borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
+            <div style={{ margin: '16px 24px 20px', border: '1px solid #dbe3ee', borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
               <div style={{ padding: '10px 13px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f' }}>Change history</div>
