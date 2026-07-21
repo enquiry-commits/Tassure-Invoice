@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-21 (TeamWork non_client fix; stale invoice-reservation unlock)
+Last updated: 2026-07-22 (Master List: column filters + Active Client List/modal)
 
 ## Purpose
 
@@ -24,6 +24,39 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Two Master List feature additions to `components/MasterListTable.tsx`**,
+  both requested together by Vincent, scoped differently on purpose (asked
+  explicitly before building — see the two AskUserQuestion confirmations
+  in this session's history):
+  - **Excel-style column filters, all 6 Master List pages.** Every column
+    header gets a funnel icon; clicking it opens a checkbox dropdown of
+    every distinct value in that column (with per-value counts, a search
+    box, Select All / Clear, OK/Cancel) — true Excel AutoFilter
+    interaction, per Vincent's explicit choice over a plain text-search
+    box. Deliberate simplification: the value list is computed from the
+    full loaded row set, not re-narrowed by other active filters
+    (non-cascading) — flagged as a scope cut, not an oversight. Combines
+    with the search box and category cards via AND. State:
+    `columnFilters: Partial<Record<ColumnField, Set<string>>>`; an empty
+    entry is never stored (removing the last unchecked box collapses back
+    to "no filter" via `applyColumnFilter`), so newly-synced values in a
+    column can never be silently hidden by a stale filter.
+  - **Active Client "List" view + detail modal**, opt-in via a new
+    `enableListView` prop (`false` by default — every other Master List
+    page unaffected). Mirrors AR Reminder's existing List/Table pattern:
+    a toggle next to the search bar, List as the default view, each row
+    company name/ROC/status/ND·SEC·ACC·TAX checkboxes/FYE, click opens
+    `CompanyDetailModal` — every field the page's `fields` prop resolves
+    to (respects Active Client's already-reduced field set, not the full
+    `MasterListRow` universe), grouped into fixed sections (Company Info /
+    Contact & Address / Services / Compliance / Admin / Notes) via a
+    `FIELD_SECTIONS` lookup with an "Other" fallback for anything
+    unmapped — a deliberate degrade-gracefully choice in case this prop is
+    ever turned on for a page with a different field mix later. Edits
+    save through the exact same `/api/master-list` PATCH + optimistic
+    `handleSave` the table's inline `EditCell` already uses, so a change
+    made in the modal is reflected in the table (and vice versa)
+    immediately, no separate sync step.
 - **Fixed the TeamWork sync's real client-detection bug** (`app/api/teamwork/sync/route.ts`),
   reported by Vincent as two symptoms that turned out to share one root
   cause: Master List → Active Client's "Non-TeamWork" filter was flagging
