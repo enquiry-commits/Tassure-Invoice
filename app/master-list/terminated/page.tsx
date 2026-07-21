@@ -5,7 +5,6 @@ export default function TerminatedPage() {
     <MasterListTable
       listType="terminated"
       title="Terminated Services"
-      accentColor="#b45309"
       moveTargets={[
         { type: 'active_client', label: 'Active Client', statusValue: 'YES' },
       ]}

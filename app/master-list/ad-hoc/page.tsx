@@ -18,7 +18,6 @@ export default function AdHocPage() {
     <MasterListTable
       listType="ad_hoc"
       title="Ad-Hoc"
-      accentColor="#0e7490"
       fields={[...AD_HOC_FIELDS]}
     />
   );

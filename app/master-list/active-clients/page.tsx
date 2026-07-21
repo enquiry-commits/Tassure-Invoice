@@ -20,7 +20,6 @@ export default function ActiveClientsPage() {
     <MasterListTable
       listType="active_client"
       title="Active Client"
-      accentColor="#15803d"
       fields={[...ACTIVE_CLIENT_FIELDS]}
       columnWidths={{ status: 60, fye: 60 }}
       moveTargets={[

@@ -10,7 +10,6 @@ export default function MasPage() {
     <MasterListTable
       listType="mas"
       title="MAS"
-      accentColor="#7c3aed"
       fields={[...MAS_FIELDS]}
     />
   );
