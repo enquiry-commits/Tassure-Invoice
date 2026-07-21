@@ -33,14 +33,23 @@ export async function GET(req: NextRequest) {
   //  - in_teamwork: this row's UEN exists in TeamWork. The master list is
   //    maintained by hand and normally has MORE companies than TeamWork —
   //    in_teamwork=false marks the ones TeamWork has no record of.
-  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month');
+  //  - addr_active/nd_active/xbrl_active: clean service booleans that only
+  //    live on `companies` (TeamWork-synced), not on the hand-maintained
+  //    master_list sheet — feed the Services badge column.
+  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month, uses_address, has_nd, has_xbrl');
   const twFyeByUen = new Map<string, string>();
+  const addrByUen = new Map<string, boolean>();
+  const ndByUen = new Map<string, boolean>();
+  const xbrlByUen = new Map<string, boolean>();
   const twUens = new Set<string>();
   for (const c of companies ?? []) {
     const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
     if (!uen) continue;
     twUens.add(uen);
     if (c.fye_month) twFyeByUen.set(uen, c.fye_month);
+    addrByUen.set(uen, !!c.uses_address);
+    ndByUen.set(uen, !!c.has_nd);
+    xbrlByUen.set(uen, !!c.has_xbrl);
   }
   const enriched = (data ?? []).map(r => {
     const uen = r.roc_no ? String(r.roc_no).trim().toUpperCase() : null;
@@ -48,6 +57,9 @@ export async function GET(req: NextRequest) {
       ...r,
       tw_fye: uen ? (twFyeByUen.get(uen) ?? null) : null,
       in_teamwork: uen !== null && twUens.has(uen),
+      addr_active: uen ? (addrByUen.get(uen) ?? null) : null,
+      nd_active: uen ? (ndByUen.get(uen) ?? null) : null,
+      xbrl_active: uen ? (xbrlByUen.get(uen) ?? null) : null,
     };
   });
 

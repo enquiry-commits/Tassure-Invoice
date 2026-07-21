@@ -7,7 +7,7 @@ import MasterListTable from '@/components/MasterListTable';
 // Other Master List pages (Ad-Hoc/MAS/Strike Off/Terminated/Name Change)
 // still use the full column set via MasterListTable's default.
 const ACTIVE_CLIENT_FIELDS = [
-  'company_name', 'roc_no', 'status', 'internal_code', 'join_date',
+  'company_name', 'roc_no', 'status', 'services', 'internal_code', 'join_date',
   'add_here', 'invoice_address', 'contact_window', 'email', 'tel',
   'nominee_director', 'secretary', 'annual_return', 'fye',
   'last_ar_date', 'last_agm_date', 'last_accounts_date', 'next_agm_due_date',

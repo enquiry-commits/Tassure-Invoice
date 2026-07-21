@@ -53,6 +53,9 @@ export interface MasterListRow {
   grade: string | null;
   tw_fye?: string | null;      // authoritative FYE month from TeamWork (for cross-check)
   in_teamwork?: boolean;       // whether this row exists in TeamWork at all
+  addr_active?: boolean | null; // companies.uses_address, joined by UEN
+  nd_active?: boolean | null;   // companies.has_nd, joined by UEN
+  xbrl_active?: boolean | null; // companies.has_xbrl, joined by UEN
 }
 
 // Normalize any FYE value (month name/abbr, or dd/mm/yyyy date) to a month
@@ -67,7 +70,10 @@ function fyeMonthNum(s: string | null | undefined): number | null {
   return MONTH3[a] ?? null;
 }
 
-type ColumnField = Exclude<keyof MasterListRow, 'id' | 'tw_fye' | 'in_teamwork'>;
+// 'services' is a derived, read-only pseudo-column (the SEC/ADDR/ND/ACC/TAX/
+// XBRL badge cluster) — it has no single matching MasterListRow property, so
+// it isn't just `keyof MasterListRow`.
+type ColumnField = Exclude<keyof MasterListRow, 'id' | 'tw_fye' | 'in_teamwork' | 'addr_active' | 'nd_active' | 'xbrl_active'> | 'services';
 
 // Full column set — the default for every Master List page. A page can pass
 // `fields` to MasterListTable to show only a subset, in a given order
@@ -76,6 +82,7 @@ const COLUMNS: { field: ColumnField; label: string; w: number }[] = [
   { field: 'company_name',               label: 'Company Name',    w: 240 },
   { field: 'roc_no',                     label: 'ROC No.',         w: 110 },
   { field: 'status',                     label: 'Active',          w: 220 },
+  { field: 'services',                   label: 'Services',        w: 158 },
   { field: 'internal_code',              label: 'Code',            w: 70  },
   { field: 'update_date',                label: 'Update Date',     w: 100 },
   { field: 'join_date',                  label: 'Join Date',       w: 100 },
@@ -118,6 +125,61 @@ const COLUMNS: { field: ColumnField; label: string; w: number }[] = [
 ];
 
 const STICKY_WIDTHS = [240, 110, 110]; // company_name, roc_no, status
+
+// A free-text master_list cell counts as "set" (service in use) when it
+// holds anything beyond the common ways staff mark something absent.
+function isSet(v: string | null | undefined) {
+  const t = (v ?? '').trim().toUpperCase();
+  return t !== '' && !['NO', 'NA', 'N.A.', 'NONE', '-', '—', '0'].includes(t);
+}
+
+const SERVICE_BADGES: { key: 'sec' | 'addr' | 'nd' | 'acc' | 'tax' | 'xbrl'; label: string }[] = [
+  { key: 'sec',  label: 'SEC'  },
+  { key: 'addr', label: 'ADDR' },
+  { key: 'nd',   label: 'ND'   },
+  { key: 'acc',  label: 'ACC'  },
+  { key: 'tax',  label: 'TAX'  },
+  { key: 'xbrl', label: 'XBRL' },
+];
+
+// SEC/ACC/TAX come from the hand-maintained master_list sheet (does the
+// column have a value at all — there's no clean boolean for these anywhere
+// else). ADDR/ND/XBRL come from the TeamWork-synced `companies` table
+// (joined by UEN server-side), which is authoritative where it's known.
+function serviceActive(row: MasterListRow, key: (typeof SERVICE_BADGES)[number]['key']): boolean {
+  switch (key) {
+    case 'sec':  return isSet(row.secretary);
+    case 'addr': return row.addr_active === true;
+    case 'nd':   return row.nd_active === true;
+    case 'acc':  return isSet(row.ac);
+    case 'tax':  return isSet(row.corporate_tax);
+    case 'xbrl': return row.xbrl_active === true;
+  }
+}
+
+function ServiceBadges({ row }: { row: MasterListRow }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+      {SERVICE_BADGES.map(({ key, label }) => {
+        const active = serviceActive(row, key);
+        return (
+          <span key={key}
+            title={`${label}: ${active ? 'active' : 'not active / no data'}`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              padding: '1.5px 5px', borderRadius: 999, fontSize: 8, fontWeight: 750, lineHeight: 1.4,
+              color: active ? '#15803d' : '#94a3b8',
+              background: active ? '#f0fdf4' : '#f8fafc',
+              border: `1px solid ${active ? '#bbf7d0' : '#e2e8f0'}`,
+            }}>
+            <span aria-hidden="true" style={{ width: 4, height: 4, borderRadius: '50%', background: active ? '#16a34a' : '#cbd5e1', flexShrink: 0 }} />
+            {label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 function statusColor(v: string | null) {
   const s = (v ?? '').toUpperCase();
@@ -441,10 +503,6 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   };
 
   // ── Category breakdown (click a card to filter) ──────────────────────────
-  const isSet = (v: string | null) => {
-    const t = (v ?? '').trim().toUpperCase();
-    return t !== '' && !['NO', 'NA', 'N.A.', 'NONE', '-', '—', '0'].includes(t);
-  };
   const isFyeMismatch = (r: MasterListRow) =>
     !!r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye);
   const catMatch = (r: MasterListRow, cat: typeof catFilter) => {
@@ -596,7 +654,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         background: sl !== undefined ? (i % 2 === 0 ? '#fff' : '#f8fafc') : undefined,
                         boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.12)' : undefined,
                       }}>
-                        {c.field === 'fye' && r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye) ? (
+                        {c.field === 'services' ? (
+                          <ServiceBadges row={r} />
+                        ) : c.field === 'fye' && r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye) ? (
                           (c.w ?? 180) <= 80
                             ? <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} compactFyeMismatch={r.tw_fye} />
                             : <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
