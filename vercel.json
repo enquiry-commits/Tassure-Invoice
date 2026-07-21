@@ -6,27 +6,27 @@
   "crons": [
     {
       "path": "/api/teamwork/sync-nd",
-      "schedule": "0 0 * * *"
+      "schedule": "0 21 * * *"
     },
     {
       "path": "/api/teamwork/sync",
-      "schedule": "30 0 * * *"
+      "schedule": "30 21 * * *"
     },
     {
       "path": "/api/ar-reminder/generate",
-      "schedule": "0 1 * * *"
+      "schedule": "0 22 * * *"
     },
     {
       "path": "/api/ar-reminder/sync-workflow",
-      "schedule": "0 2 * * *"
+      "schedule": "0 23 * * *"
     },
     {
       "path": "/api/late-filing/sync",
-      "schedule": "0 3 * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/quickbooks/sync",
-      "schedule": "30 1 * * *"
+      "schedule": "30 22 * * *"
     }
   ]
 }
