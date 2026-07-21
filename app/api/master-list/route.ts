@@ -12,7 +12,16 @@ const EDITABLE_FIELDS = new Set([
   'last_agm_date', 'last_accounts_date', 'next_agm_due_date', 'months_from_last_accounts', 'remark',
   'referral', 'risk_level', 'incorp_with_us', 'acra_update',
   'mas', 'grade',
+  // Active Client Services section — the ND/Secretary/ACC/TAX checkboxes are
+  // manually toggleable, independent of whether a name is on file; ACC/TAX's
+  // name is a manual override that takes precedence over AR Reminder's
+  // synced value once set (see GET below).
+  'nd_active', 'secretary_active', 'acc_pic_override', 'acc_active', 'tax_pic_override', 'tax_active',
 ]);
+
+// These store true/false, not text — `value || null` (used for every other
+// field) would turn `false` into `null`, so they need their own coercion.
+const BOOLEAN_FIELDS = new Set(['nd_active', 'secretary_active', 'acc_active', 'tax_active']);
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -47,6 +56,9 @@ export async function GET(req: NextRequest) {
   // Active Client only: pull ACC/TAX PIC from ar_reminder (joined by UEN —
   // same exact-match approach as tw_fye above). This is the only list type
   // that shows the checkbox+PIC columns, so skip the extra query elsewhere.
+  // `acc_pic_override`/`tax_pic_override` (a master_list column staff can
+  // edit directly) wins when set — AR Reminder's value is only the default
+  // shown until someone overrides it here.
   const accByUen = new Map<string, string>();
   const taxByUen = new Map<string, string>();
   if (type === 'active_client') {
@@ -67,8 +79,8 @@ export async function GET(req: NextRequest) {
       ...r,
       tw_fye: uen ? (twFyeByUen.get(uen) ?? null) : null,
       in_teamwork: uen !== null && twUens.has(uen),
-      acc_pic: uen ? (accByUen.get(uen) ?? null) : null,
-      tax_pic: uen ? (taxByUen.get(uen) ?? null) : null,
+      acc_pic: r.acc_pic_override?.trim() || (uen ? (accByUen.get(uen) ?? null) : null),
+      tax_pic: r.tax_pic_override?.trim() || (uen ? (taxByUen.get(uen) ?? null) : null),
     };
   });
 
@@ -119,9 +131,10 @@ export async function PATCH(req: NextRequest) {
   if (!EDITABLE_FIELDS.has(field)) return NextResponse.json({ error: 'Field not editable' }, { status: 400 });
 
   const supabase = createAdminClient();
+  const stored = BOOLEAN_FIELDS.has(field) ? !!value : (value || null);
   const { error } = await supabase
     .from('master_list')
-    .update({ [field]: value || null, updated_at: new Date().toISOString() })
+    .update({ [field]: stored, updated_at: new Date().toISOString() })
     .eq('id', id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

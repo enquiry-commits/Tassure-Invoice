@@ -53,8 +53,15 @@ export interface MasterListRow {
   grade: string | null;
   tw_fye?: string | null;      // authoritative FYE month from TeamWork (for cross-check)
   in_teamwork?: boolean;       // whether this row exists in TeamWork at all
-  acc_pic?: string | null;    // ar_reminder.acc_pic, joined by UEN — Active Client only
-  tax_pic?: string | null;    // ar_reminder.tax_pic, joined by UEN — Active Client only
+  acc_pic?: string | null;    // acc_pic_override if set, else ar_reminder.acc_pic joined by UEN — Active Client only
+  tax_pic?: string | null;    // tax_pic_override if set, else ar_reminder.tax_pic joined by UEN — Active Client only
+  acc_pic_override?: string | null;
+  tax_pic_override?: string | null;
+  // Manually toggleable, independent of whether a name is on file — Active Client only.
+  nd_active?: boolean | null;
+  secretary_active?: boolean | null;
+  acc_active?: boolean | null;
+  tax_active?: boolean | null;
 }
 
 // Normalize any FYE value (month name/abbr, or dd/mm/yyyy date) to a month
@@ -69,7 +76,11 @@ function fyeMonthNum(s: string | null | undefined): number | null {
   return MONTH3[a] ?? null;
 }
 
-type ColumnField = Exclude<keyof MasterListRow, 'id' | 'tw_fye' | 'in_teamwork'>;
+// acc_pic_override/tax_pic_override/*_active are facets of the acc_pic/
+// tax_pic/nominee_director/secretary columns, not columns of their own —
+// excluded here so they can never be added to a `fields` list by mistake.
+type ColumnField = Exclude<keyof MasterListRow,
+  'id' | 'tw_fye' | 'in_teamwork' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active'>;
 
 // Full column set — the default for every Master List page that passes no
 // `fields` prop (Strike Off, Terminated, Change Co Name). A page can pass
@@ -145,28 +156,46 @@ function isSet(v: string | null | undefined) {
   return t !== '' && !['NO', 'NA', 'N.A.', 'NONE', '-', '—', '0'].includes(t);
 }
 
-// Small on/off indicator used by Active Client's Nominee Dir./Secretary/ACC/
-// TAX columns — green+check when a name is on file, grey when not.
-function CheckSquare({ checked }: { checked: boolean }) {
+// On/off indicator for Active Client's Nominee Dir./Secretary/ACC/TAX
+// checkboxes — green+check when active. Freely toggleable (independent of
+// whether a name is on file) when `onToggle` is given; purely visual
+// otherwise.
+function CheckSquare({ checked, onToggle }: { checked: boolean; onToggle?: () => void }) {
   return (
-    <span aria-hidden="true" style={{
-      width: 14, height: 14, minWidth: 14, borderRadius: 4, flexShrink: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: checked ? '#16a34a' : '#e5e7eb',
-      border: `1px solid ${checked ? '#15803d' : '#cbd5e1'}`,
-    }}>
+    <span aria-hidden={!onToggle} onClick={onToggle ? e => { e.stopPropagation(); onToggle(); } : undefined}
+      title={onToggle ? (checked ? 'Click to turn off' : 'Click to turn on') : undefined}
+      style={{
+        width: 14, height: 14, minWidth: 14, borderRadius: 4, flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: checked ? '#16a34a' : '#e5e7eb',
+        border: `1px solid ${checked ? '#15803d' : '#cbd5e1'}`,
+        cursor: onToggle ? 'pointer' : undefined,
+      }}>
       {checked && <Check size={10} color="#fff" strokeWidth={3} />}
     </span>
   );
 }
 
-// Read-only checkbox+name cell for the derived ACC/TAX PIC columns.
-function PicCell({ name }: { name: string | null | undefined }) {
-  const has = !!name?.trim();
+// Editable checkbox+name cell for ACC/TAX. The name defaults to AR
+// Reminder's synced PIC but can be overridden here (saved to
+// acc_pic_override/tax_pic_override) — `onSaveName` reloads from the server
+// afterwards so the resolved value (override vs. AR Reminder fallback)
+// always reflects real DB state rather than a hand-rolled guess.
+function PicCell({ name, active, onToggleActive, onSaveName }: {
+  name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void;
+}) {
+  const [val, setVal] = useState(name ?? '');
+  useEffect(() => { setVal(name ?? ''); }, [name]);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 22 }}>
-      <CheckSquare checked={has} />
-      <span style={{ fontSize: 11, color: has ? '#374151' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{has ? name : '—'}</span>
+      <CheckSquare checked={active} onToggle={onToggleActive} />
+      <input value={val} onChange={e => setVal(e.target.value)}
+        onBlur={() => { const next = val.trim(); if (next !== (name ?? '').trim()) onSaveName(next); }}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        onClick={e => e.stopPropagation()}
+        placeholder="—" style={{ flex: 1, minWidth: 0, border: '1px solid transparent', borderRadius: 4, padding: '1px 3px', fontSize: 11, outline: 'none', background: 'transparent', color: '#374151' }}
+        onFocus={e => (e.currentTarget.style.border = '1px solid #2563eb')}
+        onBlurCapture={e => (e.currentTarget.style.border = '1px solid transparent')} />
     </div>
   );
 }
@@ -480,6 +509,13 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave }:
     } catch { setStatus('error'); }
   }, [val, value, id, field, onSave]);
 
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const resize = useCallback(() => {
+    const el = taRef.current;
+    if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
+  }, []);
+  useEffect(() => { resize(); }, [val, resize]);
+
   return (
     <div>
       <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -488,18 +524,22 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave }:
         {status === 'saved' && <Check size={10} style={{ color: '#16a34a' }} />}
         {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
       </div>
-      <input value={val} onChange={e => setVal(e.target.value)} onBlur={commit}
-        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-        style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b' }} />
+      {/* Textarea, not input — long values (addresses, remarks) were getting
+          clipped behind a single-line box with no way to see the full text. */}
+      <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)} onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
+        style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
     </div>
   );
 });
 
-function CompanyDetailModal({ row, fieldColumns, onClose, onSave }: {
+function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive, onSaveOverride }: {
   row: MasterListRow;
   fieldColumns: { field: ColumnField; label: string }[];
   onClose: () => void;
   onSave: (id: number, field: string, val: string) => void;
+  onToggleActive: (id: number, field: 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active', current: boolean | null | undefined) => void;
+  onSaveOverride: (id: number, field: 'acc_pic_override' | 'tax_pic_override', val: string) => void;
 }) {
   const sections = useMemo(() => {
     const groups = new Map<string, { field: ColumnField; label: string }[]>();
@@ -533,14 +573,24 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave }: {
               <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>{section.name}</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 12 }}>
                 {section.fields.map(c => {
-                  if (c.field === 'acc_pic') return <div key={c.field}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>ACC</div><PicCell name={row.acc_pic} /></div>;
-                  if (c.field === 'tax_pic') return <div key={c.field}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>TAX</div><PicCell name={row.tax_pic} /></div>;
+                  if (c.field === 'acc_pic') return (
+                    <div key={c.field}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>ACC</div>
+                      <PicCell name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
+                    </div>
+                  );
+                  if (c.field === 'tax_pic') return (
+                    <div key={c.field}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>TAX</div>
+                      <PicCell name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
+                    </div>
+                  );
                   if (c.field === 'nominee_director' || c.field === 'secretary') {
                     const value = c.field === 'nominee_director' ? row.nominee_director : row.secretary;
+                    const activeField = c.field === 'nominee_director' ? 'nd_active' : 'secretary_active';
+                    const active = c.field === 'nominee_director' ? row.nd_active : row.secretary_active;
                     return (
                       <div key={c.field}>
                         <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <CheckSquare checked={isSet(value)} />{c.label}
+                          <CheckSquare checked={!!active} onToggle={() => onToggleActive(row.id, activeField, active)} />{c.label}
                         </div>
                         <input defaultValue={value ?? ''} onBlur={e => {
                           const next = e.target.value.trim();
@@ -600,6 +650,24 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const handleSave = useCallback((id: number, field: string, val: string) => {
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: val || null } : r));
   }, []);
+
+  // Nominee Dir./Secretary/ACC/TAX checkboxes — freely toggleable, independent
+  // of whether a name is on file. Optimistic; a checkbox flip is low-risk
+  // enough not to need retry/error UI.
+  const toggleActive = useCallback((id: number, field: 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active', current: boolean | null | undefined) => {
+    const next = !current;
+    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: next } : r));
+    fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next }) });
+  }, []);
+
+  // ACC/TAX name edits write to the *_override column, which only takes
+  // effect ahead of AR Reminder's synced value once set server-side — reload
+  // afterwards instead of hand-rolling the override-vs-AR-Reminder
+  // resolution locally, so the displayed value always matches real DB state.
+  const saveOverride = useCallback((id: number, field: 'acc_pic_override' | 'tax_pic_override', val: string) => {
+    fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: val || null }) })
+      .then(() => load());
+  }, [load]);
 
   // ── Add Manual ──────────────────────────────────────────────────────────
   const [showAddForm, setShowAddForm] = useState(false);
@@ -886,10 +954,10 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                   )}
                   {!isMobile && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <span title="Nominee Director" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={isSet(r.nominee_director)} />ND</span>
-                      <span title="Secretary" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={isSet(r.secretary)} />SEC</span>
-                      <span title="ACC PIC" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.acc_pic} />ACC</span>
-                      <span title="TAX PIC" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.tax_pic} />TAX</span>
+                      <span title="Nominee Director" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.nd_active} />ND</span>
+                      <span title="Secretary" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.secretary_active} />SEC</span>
+                      <span title="ACC PIC" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.acc_active} />ACC</span>
+                      <span title="TAX PIC" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.tax_active} />TAX</span>
                     </div>
                   )}
                   {!isMobile && <div style={{ fontSize: 11, color: '#64748b' }}>{r.fye ?? '—'}</div>}
@@ -955,17 +1023,17 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.12)' : undefined,
                       }}>
                         {c.field === 'acc_pic' ? (
-                          <PicCell name={r.acc_pic} />
+                          <PicCell name={r.acc_pic} active={!!r.acc_active} onToggleActive={() => toggleActive(r.id, 'acc_active', r.acc_active)} onSaveName={val => saveOverride(r.id, 'acc_pic_override', val)} />
                         ) : c.field === 'tax_pic' ? (
-                          <PicCell name={r.tax_pic} />
+                          <PicCell name={r.tax_pic} active={!!r.tax_active} onToggleActive={() => toggleActive(r.id, 'tax_active', r.tax_active)} onSaveName={val => saveOverride(r.id, 'tax_pic_override', val)} />
                         ) : listType === 'active_client' && c.field === 'nominee_director' ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <CheckSquare checked={isSet(r.nominee_director)} />
+                            <CheckSquare checked={!!r.nd_active} onToggle={() => toggleActive(r.id, 'nd_active', r.nd_active)} />
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
                           </div>
                         ) : listType === 'active_client' && c.field === 'secretary' ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <CheckSquare checked={isSet(r.secretary)} />
+                            <CheckSquare checked={!!r.secretary_active} onToggle={() => toggleActive(r.id, 'secretary_active', r.secretary_active)} />
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
                           </div>
                         ) : c.field === 'fye' && r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye) ? (
@@ -1037,6 +1105,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           fieldColumns={columns.filter(c => c.field !== 'company_name' && c.field !== 'roc_no' && c.field !== 'status')}
           onClose={() => setSelectedRowId(null)}
           onSave={handleSave}
+          onToggleActive={toggleActive}
+          onSaveOverride={saveOverride}
         />
       )}
     </div>
