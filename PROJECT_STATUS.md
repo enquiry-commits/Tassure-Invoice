@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-21 (Billing Drafts default-month fix)
+Last updated: 2026-07-21 (Active Client Services badge column)
 
 ## Purpose
 
@@ -24,6 +24,28 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Added a "Services" badge column (SEC/ADDR/ND/ACC/TAX/XBRL) to Master List
+  → Active Client, at Vincent's request ("Active Client 第一版采用 SEC /
+  ADDR / ND / ACC / TAX / XBRL"). The hand-maintained `master_list` sheet
+  has no clean boolean for address/ND/XBRL subscription — only `companies`
+  (TeamWork-synced) does — so before implementing, confirmed the data
+  source split with Vincent rather than guessing: **ADDR/ND/XBRL** read
+  `companies.uses_address/has_nd/has_xbrl`, joined by UEN in
+  `/api/master-list` (same pattern as the existing `tw_fye`/`in_teamwork`
+  cross-check — extend that same join, don't add a second one).
+  **SEC/ACC/TAX** have no such source anywhere, so they read whether the
+  matching `master_list` column (`secretary`/`ac`/`corporate_tax`) has any
+  value at all, reusing the existing `isSet()` helper (now lifted to
+  module scope in `components/MasterListTable.tsx` so both the category
+  filter cards and the new badges share it). This is an explicit v1 proxy,
+  not a true subscription flag — sampled live data before shipping:
+  `secretary` is reliably filled (staff names), but `ac`/`corporate_tax`
+  were null on every sampled row, so ACC/TAX will read mostly "off" for
+  now purely because that data isn't populated yet, not because of a bug.
+  `services` is a derived, non-editable pseudo-column (`ColumnField` type
+  extended to include the literal `'services'` alongside real
+  `MasterListRow` keys) — clicking a badge does nothing, unlike every
+  other cell which is click-to-edit.
 - Fixed `/api/ar-reminder/latest` (drives which FYE cycle Billing Drafts /
   AR Reminder open to by default). It picked the max `(fye_year,
   fye_month)` pair present in `ar_reminder`, which tracks how far AR
