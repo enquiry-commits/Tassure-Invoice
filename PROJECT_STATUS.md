@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-21 (automation cron schedule shift + CRON_SECRET rotation)
+Last updated: 2026-07-21 (Billing Drafts default-month fix)
 
 ## Purpose
 
@@ -24,6 +24,17 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Fixed `/api/ar-reminder/latest` (drives which FYE cycle Billing Drafts /
+  AR Reminder open to by default). It picked the max `(fye_year,
+  fye_month)` pair present in `ar_reminder`, which tracks how far AR
+  Generate's 6-month rolling window has reached — usually a future cycle
+  with zero invoices yet, not the cycle staff are actually working. Now
+  defaults to the `fye_month`/`fye_year` of the most recently created
+  `generated_invoices` row (falls back to the old logic, then January of
+  the current year, if no invoices exist yet). Verified against live data
+  before shipping: the newest `generated_invoices` row was FYE May 2026
+  (created 2026-07-17), matching what Vincent's screenshot showed as the
+  page's current default.
 - Shifted all six `vercel.json` cron schedules 3 hours earlier at Vincent's
   request (same 30-min spacing/order preserved): ND 21:00 UTC (05:00 SGT),
   Companies 21:30, AR Generate 22:00, QuickBooks 22:30, AR Workflow 23:00,
