@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronDown, Pencil } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { usePagination, PaginationBar } from './Pagination';
 import { toDisplayDate } from '@/lib/date';
@@ -167,6 +167,88 @@ function PicCell({ name }: { name: string | null | undefined }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 22 }}>
       <CheckSquare checked={has} />
       <span style={{ fontSize: 11, color: has ? '#374151' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{has ? name : '—'}</span>
+    </div>
+  );
+}
+
+// Excel-style column filter: click the funnel to see every distinct value in
+// that column (counted across the full loaded list, not just what's
+// currently visible after other filters — simpler than cascading Excel
+// filters, but still lets staff narrow any column to a handful of values).
+// `selected === null` means "no restriction" (every value passes); toggling
+// back to all-checked collapses to null again so newly-appearing values
+// aren't silently excluded by a stale explicit set.
+function ColumnFilterMenu({ field, label, rows, selected, onApply }: {
+  field: ColumnField; label: string; rows: MasterListRow[];
+  selected: Set<string> | null; onApply: (next: Set<string> | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearchLocal] = useState('');
+  const [draft, setDraft] = useState<Set<string> | null>(selected);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { if (open) { setDraft(selected); setSearchLocal(''); } }, [open, selected]);
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [open]);
+
+  const options = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      const raw = String((r as unknown as Record<string, string | null>)[field] ?? '').trim();
+      const key = raw === '' ? '(Blank)' : raw;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [rows, field]);
+
+  const filteredOptions = search ? options.filter(([v]) => v.toLowerCase().includes(search.toLowerCase())) : options;
+  const isChecked = (v: string) => draft === null || draft.has(v);
+  const toggle = (v: string) => setDraft(prev => {
+    const base = prev === null ? new Set(options.map(([value]) => value)) : new Set(prev);
+    if (base.has(v)) base.delete(v); else base.add(v);
+    return base.size === options.length ? null : base;
+  });
+  const active = selected !== null;
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button onClick={e => { e.stopPropagation(); setOpen(v => !v); }} title={`Filter ${label}`}
+        style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', color: active ? '#fde047' : 'rgba(255,255,255,0.6)' }}>
+        <Filter size={11} fill={active ? 'currentColor' : 'none'} />
+      </button>
+      {open && (
+        <div onClick={e => e.stopPropagation()} style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 30, background: '#fff',
+          border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 210, padding: 8,
+          textTransform: 'none', fontWeight: 400, letterSpacing: 'normal', color: '#334155',
+        }}>
+          <input value={search} onChange={e => setSearchLocal(e.target.value)} placeholder="Search values…"
+            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 5, padding: '4px 6px', fontSize: 11, marginBottom: 6, outline: 'none', color: '#1e293b', boxSizing: 'border-box' }} />
+          <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
+            <button onClick={() => setDraft(null)} style={{ fontSize: 10, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 700 }}>Select All</button>
+            <button onClick={() => setDraft(new Set())} style={{ fontSize: 10, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 700 }}>Clear</button>
+          </div>
+          <div style={{ maxHeight: 200, overflowY: 'auto', borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9', padding: '4px 0' }}>
+            {filteredOptions.length === 0 ? (
+              <div style={{ fontSize: 11, color: '#94a3b8', padding: '4px 2px' }}>No values</div>
+            ) : filteredOptions.map(([v, valueCount]) => (
+              <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 2px', fontSize: 11, cursor: 'pointer' }}>
+                <input type="checkbox" checked={isChecked(v)} onChange={() => toggle(v)} style={{ width: 12, height: 12, cursor: 'pointer', flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v}>{v}</span>
+                <span style={{ color: '#94a3b8', fontSize: 9.5, flexShrink: 0 }}>{valueCount}</span>
+              </label>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => setOpen(false)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 5, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', cursor: 'pointer' }}>Cancel</button>
+            <button onClick={() => { onApply(draft); setOpen(false); }} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 5, border: 'none', background: '#1d3a5c', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>OK</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -370,6 +452,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [loading, setLoading] = useState(false);
   const [search, setSearch]   = useState('');
   const [catFilter, setCatFilter] = useState<'all' | 'fye_mismatch' | 'has_nd' | 'mas' | 'non_teamwork'>('all');
+  const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnField, Set<string>>>>({});
   const isMobile = useIsMobile();
 
   const load = useCallback(async () => {
@@ -509,11 +592,24 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     }
   };
   const catCount = (cat: typeof catFilter) => rows.filter(r => catMatch(r, cat)).length;
-  const visibleRows = rows.filter(r => catMatch(r, catFilter));
-  // Paginate AFTER search (server-side) + category filter — search always
-  // covers the full list; only rendering is capped at 100 rows per page.
+  const columnMatch = (r: MasterListRow) => {
+    for (const [field, allowed] of Object.entries(columnFilters) as [ColumnField, Set<string>][]) {
+      const raw = String((r as unknown as Record<string, string | null>)[field] ?? '').trim();
+      if (!allowed.has(raw === '' ? '(Blank)' : raw)) return false;
+    }
+    return true;
+  };
+  const applyColumnFilter = (field: ColumnField, next: Set<string> | null) => setColumnFilters(prev => {
+    if (next === null) { const { [field]: _drop, ...rest } = prev; return rest; }
+    return { ...prev, [field]: next };
+  });
+  const activeColumnFilterCount = Object.keys(columnFilters).length;
+  const columnFilterKey = Object.entries(columnFilters).map(([f, s]) => `${f}=${[...s].sort().join(',')}`).sort().join('&');
+  const visibleRows = rows.filter(r => catMatch(r, catFilter) && columnMatch(r));
+  // Paginate AFTER search (server-side) + category filter + column filters —
+  // search always covers the full list; only rendering is capped per page.
   const { page, setPage, totalPages, pageItems, startIndex, total } =
-    usePagination(visibleRows, `${listType}|${search}|${catFilter}`);
+    usePagination(visibleRows, `${listType}|${search}|${catFilter}|${columnFilterKey}`);
 
   useEffect(() => { updateSb(); }, [rows, page, updateSb]);
   const catCards: { key: typeof catFilter; label: string; sub: string; color: string; bg: string; bd: string }[] = [
@@ -558,7 +654,13 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         >
           <Plus size={14} />Add Manual
         </button>
-        <span className="text-sm text-slate-400 ml-auto">{visibleRows.length} shown{catFilter !== 'all' ? ` of ${rows.length}` : ''}</span>
+        {activeColumnFilterCount > 0 && (
+          <button onClick={() => setColumnFilters({})}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 7, border: '1px solid #fde68a', background: '#fffbeb', color: '#b45309', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <Filter size={11} />{activeColumnFilterCount} column filter{activeColumnFilterCount === 1 ? '' : 's'} · Clear
+          </button>
+        )}
+        <span className="text-sm text-slate-400 ml-auto">{visibleRows.length} shown{(catFilter !== 'all' || activeColumnFilterCount > 0) ? ` of ${rows.length}` : ''}</span>
       </div>
 
       {showAddForm && (
@@ -621,7 +723,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                       padding: '7px 8px', whiteSpace: 'nowrap', minWidth: c.w, width: c.w,
                       borderRight: '1px solid rgba(255,255,255,0.12)',
                       boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.18)' : undefined,
-                    }}>{c.label}</th>
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'space-between' }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.label}</span>
+                        <ColumnFilterMenu field={c.field} label={c.label} rows={rows} selected={columnFilters[c.field] ?? null} onApply={next => applyColumnFilter(c.field, next)} />
+                      </div>
+                    </th>
                   );
                 })}
                 <th style={{ position: 'sticky', top: 0, zIndex: 2, background: accentColor, color: '#fff', fontSize: 9, fontWeight: 700, padding: '7px 8px', minWidth: 50, width: 50, textAlign: 'center' }}></th>
