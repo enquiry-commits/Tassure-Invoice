@@ -360,9 +360,16 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
   const [val, setVal] = useState(value ?? '');
   const [status, setStatus] = useState<SaveStatus>('idle');
   const pendingRef = useRef<{ next: string; prev: string }>({ next: '', prev: '' });
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { setVal(value ?? ''); }, [value]);
-  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+  useEffect(() => {
+    if (!editing) return;
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [editing]);
 
   // Persist just this field of this row. Optimistic: the local value is already
   // updated by the caller before the request; on failure we surface an error
@@ -393,12 +400,23 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
   const revert = useCallback(() => { const { prev } = pendingRef.current; onSave(id, field, prev); setVal(prev); setStatus('idle'); }, [id, field, onSave]);
 
   if (editing) return (
-    <input
-      ref={inputRef} type="text" value={val}
-      onChange={e => setVal(e.target.value)}
+    <textarea
+      ref={inputRef} value={val} rows={1}
+      onChange={e => {
+        setVal(e.target.value);
+        const el = e.target;
+        el.style.height = 'auto';
+        el.style.height = `${el.scrollHeight}px`;
+      }}
       onBlur={commit}
-      onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setVal(value ?? ''); setEditing(false); } }}
-      style={{ width: '100%', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 5px', fontSize: 11, outline: 'none', background: '#eff6ff' }}
+      onKeyDown={e => {
+        // Enter commits (matches every other single-line cell in this
+        // table); Shift+Enter inserts a real line break instead, for
+        // fields like Remark/addresses that read better multi-line.
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') { setVal(value ?? ''); setEditing(false); }
+      }}
+      style={{ width: '100%', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 5px', fontSize: 11, outline: 'none', background: '#eff6ff', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, display: 'block' }}
     />
   );
 
