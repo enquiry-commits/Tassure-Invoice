@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 
 const EDITABLE_FIELDS = new Set([
   'update_date', 'internal_code', 'company_name', 'roc_no', 'status',
@@ -33,33 +34,41 @@ export async function GET(req: NextRequest) {
   //  - in_teamwork: this row's UEN exists in TeamWork. The master list is
   //    maintained by hand and normally has MORE companies than TeamWork —
   //    in_teamwork=false marks the ones TeamWork has no record of.
-  //  - addr_active/nd_active/xbrl_active: clean service booleans that only
-  //    live on `companies` (TeamWork-synced), not on the hand-maintained
-  //    master_list sheet — feed the Services badge column.
-  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month, uses_address, has_nd, has_xbrl');
+  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month');
   const twFyeByUen = new Map<string, string>();
-  const addrByUen = new Map<string, boolean>();
-  const ndByUen = new Map<string, boolean>();
-  const xbrlByUen = new Map<string, boolean>();
   const twUens = new Set<string>();
   for (const c of companies ?? []) {
     const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
     if (!uen) continue;
     twUens.add(uen);
     if (c.fye_month) twFyeByUen.set(uen, c.fye_month);
-    addrByUen.set(uen, !!c.uses_address);
-    ndByUen.set(uen, !!c.has_nd);
-    xbrlByUen.set(uen, !!c.has_xbrl);
   }
+
+  // Active Client only: pull ACC/TAX PIC from ar_reminder (joined by UEN —
+  // same exact-match approach as tw_fye above). This is the only list type
+  // that shows the checkbox+PIC columns, so skip the extra query elsewhere.
+  const accByUen = new Map<string, string>();
+  const taxByUen = new Map<string, string>();
+  if (type === 'active_client') {
+    const { data: arRows } = await supabase.from('ar_reminder').select('uen, acc_pic, tax_pic');
+    for (const a of arRows ?? []) {
+      const uen = a.uen ? String(a.uen).trim().toUpperCase() : null;
+      if (!uen) continue;
+      const acc = resolveTeamworkPic(a.acc_pic);
+      const tax = resolveTeamworkPic(a.tax_pic);
+      if (acc) accByUen.set(uen, acc);
+      if (tax) taxByUen.set(uen, tax);
+    }
+  }
+
   const enriched = (data ?? []).map(r => {
     const uen = r.roc_no ? String(r.roc_no).trim().toUpperCase() : null;
     return {
       ...r,
       tw_fye: uen ? (twFyeByUen.get(uen) ?? null) : null,
       in_teamwork: uen !== null && twUens.has(uen),
-      addr_active: uen ? (addrByUen.get(uen) ?? null) : null,
-      nd_active: uen ? (ndByUen.get(uen) ?? null) : null,
-      xbrl_active: uen ? (xbrlByUen.get(uen) ?? null) : null,
+      acc_pic: uen ? (accByUen.get(uen) ?? null) : null,
+      tax_pic: uen ? (taxByUen.get(uen) ?? null) : null,
     };
   });
 

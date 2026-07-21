@@ -53,9 +53,8 @@ export interface MasterListRow {
   grade: string | null;
   tw_fye?: string | null;      // authoritative FYE month from TeamWork (for cross-check)
   in_teamwork?: boolean;       // whether this row exists in TeamWork at all
-  addr_active?: boolean | null; // companies.uses_address, joined by UEN
-  nd_active?: boolean | null;   // companies.has_nd, joined by UEN
-  xbrl_active?: boolean | null; // companies.has_xbrl, joined by UEN
+  acc_pic?: string | null;    // ar_reminder.acc_pic, joined by UEN — Active Client only
+  tax_pic?: string | null;    // ar_reminder.tax_pic, joined by UEN — Active Client only
 }
 
 // Normalize any FYE value (month name/abbr, or dd/mm/yyyy date) to a month
@@ -70,19 +69,23 @@ function fyeMonthNum(s: string | null | undefined): number | null {
   return MONTH3[a] ?? null;
 }
 
-// 'services' is a derived, read-only pseudo-column (the SEC/ADDR/ND/ACC/TAX/
-// XBRL badge cluster) — it has no single matching MasterListRow property, so
-// it isn't just `keyof MasterListRow`.
-type ColumnField = Exclude<keyof MasterListRow, 'id' | 'tw_fye' | 'in_teamwork' | 'addr_active' | 'nd_active' | 'xbrl_active'> | 'services';
+type ColumnField = Exclude<keyof MasterListRow, 'id' | 'tw_fye' | 'in_teamwork'>;
 
-// Full column set — the default for every Master List page. A page can pass
-// `fields` to MasterListTable to show only a subset, in a given order
-// (e.g. Active Client's reduced view), without affecting any other page.
+// Full column set — the default for every Master List page that passes no
+// `fields` prop (Strike Off, Terminated, Change Co Name). A page can pass
+// `fields` to show a specific subset/order instead (e.g. Active Client's
+// reduced view) without affecting any other page.
+//
+// IMPORTANT: this array is the default for every page that doesn't pass an
+// explicit `fields` list — adding a column here makes it appear EVERYWHERE,
+// not just the page you're building it for (this bit us once already: a
+// "Services" column meant only for Active Client leaked onto Strike Off/
+// Terminated/Change Co Name). Page-specific derived columns belong in
+// EXTRA_COLUMNS below instead, and must be opted into via `fields`.
 const COLUMNS: { field: ColumnField; label: string; w: number }[] = [
   { field: 'company_name',               label: 'Company Name',    w: 240 },
   { field: 'roc_no',                     label: 'ROC No.',         w: 110 },
   { field: 'status',                     label: 'Active',          w: 220 },
-  { field: 'services',                   label: 'Services',        w: 158 },
   { field: 'internal_code',              label: 'Code',            w: 70  },
   { field: 'update_date',                label: 'Update Date',     w: 100 },
   { field: 'join_date',                  label: 'Join Date',       w: 100 },
@@ -124,6 +127,15 @@ const COLUMNS: { field: ColumnField; label: string; w: number }[] = [
   { field: 'grade',                      label: 'Grade',           w: 80  },
 ];
 
+// Derived, page-opt-in-only columns — not part of the default COLUMNS set,
+// so they only ever appear on a page whose `fields` prop names them
+// explicitly (Active Client). Values come from a join done server-side in
+// /api/master-list, not from an editable master_list column.
+const EXTRA_COLUMNS: { field: ColumnField; label: string; w: number }[] = [
+  { field: 'acc_pic', label: 'ACC', w: 120 },
+  { field: 'tax_pic', label: 'TAX', w: 120 },
+];
+
 const STICKY_WIDTHS = [240, 110, 110]; // company_name, roc_no, status
 
 // A free-text master_list cell counts as "set" (service in use) when it
@@ -133,50 +145,28 @@ function isSet(v: string | null | undefined) {
   return t !== '' && !['NO', 'NA', 'N.A.', 'NONE', '-', '—', '0'].includes(t);
 }
 
-const SERVICE_BADGES: { key: 'sec' | 'addr' | 'nd' | 'acc' | 'tax' | 'xbrl'; label: string }[] = [
-  { key: 'sec',  label: 'SEC'  },
-  { key: 'addr', label: 'ADDR' },
-  { key: 'nd',   label: 'ND'   },
-  { key: 'acc',  label: 'ACC'  },
-  { key: 'tax',  label: 'TAX'  },
-  { key: 'xbrl', label: 'XBRL' },
-];
-
-// SEC/ACC/TAX come from the hand-maintained master_list sheet (does the
-// column have a value at all — there's no clean boolean for these anywhere
-// else). ADDR/ND/XBRL come from the TeamWork-synced `companies` table
-// (joined by UEN server-side), which is authoritative where it's known.
-function serviceActive(row: MasterListRow, key: (typeof SERVICE_BADGES)[number]['key']): boolean {
-  switch (key) {
-    case 'sec':  return isSet(row.secretary);
-    case 'addr': return row.addr_active === true;
-    case 'nd':   return row.nd_active === true;
-    case 'acc':  return isSet(row.ac);
-    case 'tax':  return isSet(row.corporate_tax);
-    case 'xbrl': return row.xbrl_active === true;
-  }
+// Small on/off indicator used by Active Client's Nominee Dir./Secretary/ACC/
+// TAX columns — green+check when a name is on file, grey when not.
+function CheckSquare({ checked }: { checked: boolean }) {
+  return (
+    <span aria-hidden="true" style={{
+      width: 14, height: 14, minWidth: 14, borderRadius: 4, flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: checked ? '#16a34a' : '#e5e7eb',
+      border: `1px solid ${checked ? '#15803d' : '#cbd5e1'}`,
+    }}>
+      {checked && <Check size={10} color="#fff" strokeWidth={3} />}
+    </span>
+  );
 }
 
-function ServiceBadges({ row }: { row: MasterListRow }) {
+// Read-only checkbox+name cell for the derived ACC/TAX PIC columns.
+function PicCell({ name }: { name: string | null | undefined }) {
+  const has = !!name?.trim();
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-      {SERVICE_BADGES.map(({ key, label }) => {
-        const active = serviceActive(row, key);
-        return (
-          <span key={key}
-            title={`${label}: ${active ? 'active' : 'not active / no data'}`}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              padding: '1.5px 5px', borderRadius: 999, fontSize: 8, fontWeight: 750, lineHeight: 1.4,
-              color: active ? '#15803d' : '#94a3b8',
-              background: active ? '#f0fdf4' : '#f8fafc',
-              border: `1px solid ${active ? '#bbf7d0' : '#e2e8f0'}`,
-            }}>
-            <span aria-hidden="true" style={{ width: 4, height: 4, borderRadius: '50%', background: active ? '#16a34a' : '#cbd5e1', flexShrink: 0 }} />
-            {label}
-          </span>
-        );
-      })}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 22 }}>
+      <CheckSquare checked={has} />
+      <span style={{ fontSize: 11, color: has ? '#374151' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{has ? name : '—'}</span>
     </div>
   );
 }
@@ -364,7 +354,11 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
 
 export default function MasterListTable({ listType, title, accentColor = '#1d3a5c', moveTargets, fields, columnWidths }: { listType: string; title: string; accentColor?: string; moveTargets?: MoveTarget[]; fields?: ColumnField[]; columnWidths?: Partial<Record<ColumnField, number>> }) {
   const columns = useMemo(() => {
-    const byField = new Map(COLUMNS.map(c => [c.field, c]));
+    // `fields` can name an EXTRA_COLUMNS entry (e.g. Active Client's acc_pic/
+    // tax_pic); the no-`fields` default deliberately only ever falls back to
+    // COLUMNS, never EXTRA_COLUMNS, so a derived column can't leak onto a
+    // page that didn't ask for it.
+    const byField = new Map([...COLUMNS, ...EXTRA_COLUMNS].map(c => [c.field, c]));
     const selected = fields
       ? fields.map(f => byField.get(f)).filter((c): c is typeof COLUMNS[number] => !!c)
       : COLUMNS;
@@ -654,8 +648,20 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         background: sl !== undefined ? (i % 2 === 0 ? '#fff' : '#f8fafc') : undefined,
                         boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.12)' : undefined,
                       }}>
-                        {c.field === 'services' ? (
-                          <ServiceBadges row={r} />
+                        {c.field === 'acc_pic' ? (
+                          <PicCell name={r.acc_pic} />
+                        ) : c.field === 'tax_pic' ? (
+                          <PicCell name={r.tax_pic} />
+                        ) : listType === 'active_client' && c.field === 'nominee_director' ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <CheckSquare checked={isSet(r.nominee_director)} />
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                          </div>
+                        ) : listType === 'active_client' && c.field === 'secretary' ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <CheckSquare checked={isSet(r.secretary)} />
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                          </div>
                         ) : c.field === 'fye' && r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye) ? (
                           (c.w ?? 180) <= 80
                             ? <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} compactFyeMismatch={r.tw_fye} />
