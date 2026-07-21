@@ -31,6 +31,7 @@ export default function ActiveClientsPage() {
       title="Active Client"
       fields={[...ACTIVE_CLIENT_FIELDS]}
       columnWidths={{ status: 60, fye: 60 }}
+      enableListView
       moveTargets={[
         { type: 'strike_off', label: 'Strike Off',          statusValue: 'STRUCK OFF' },
         { type: 'terminated', label: 'Terminated Services', statusValue: 'TERMINATED' },

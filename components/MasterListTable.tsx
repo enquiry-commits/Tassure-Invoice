@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronDown, Pencil } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronRight } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { usePagination, PaginationBar } from './Pagination';
 import { toDisplayDate } from '@/lib/date';
@@ -434,7 +434,135 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
   );
 });
 
-export default function MasterListTable({ listType, title, accentColor = '#1d3a5c', moveTargets, fields, columnWidths }: { listType: string; title: string; accentColor?: string; moveTargets?: MoveTarget[]; fields?: ColumnField[]; columnWidths?: Partial<Record<ColumnField, number>> }) {
+// ── Active Client "List" view + detail modal ────────────────────────────────
+// Opt-in via `enableListView` (Active Client only, per Vincent's request —
+// every other Master List page stays table-only). Fields shown are grouped
+// under a fixed set of section headers that make sense for Active Client's
+// column set specifically; any field not named below falls back to "Other"
+// so this degrades gracefully if ever reused for a page with a different
+// field mix, rather than breaking.
+const FIELD_SECTIONS: Record<string, string> = {
+  internal_code: 'Company Info', join_date: 'Company Info', inc_date: 'Company Info',
+  fye: 'Company Info', annual_return: 'Company Info', update_date: 'Company Info',
+  add_here: 'Contact & Address', invoice_address: 'Contact & Address', mailing_address: 'Contact & Address',
+  contact_window: 'Contact & Address', mailing_list: 'Contact & Address', email: 'Contact & Address', tel: 'Contact & Address',
+  nominee_director: 'Services', secretary: 'Services', acc_pic: 'Services', tax_pic: 'Services',
+  last_ar_date: 'Compliance', last_agm_date: 'Compliance', last_accounts_date: 'Compliance',
+  next_agm_due_date: 'Compliance', months_from_last_accounts: 'Compliance', acra_update: 'Compliance',
+  sec_agent: 'Admin', kyc_year: 'Admin', register_of_controllers: 'Admin', corporate_tax: 'Admin',
+  efiling_authorization: 'Admin', ac: 'Admin', audit: 'Admin', gst: 'Admin', compil_report: 'Admin',
+  cpf_submit: 'Admin', shareholders: 'Admin', directors: 'Admin',
+  remark: 'Notes', referral: 'Notes', risk_level: 'Notes', incorp_with_us: 'Notes', mas: 'Notes', grade: 'Notes',
+};
+const SECTION_ORDER = ['Company Info', 'Contact & Address', 'Services', 'Compliance', 'Admin', 'Notes', 'Other'];
+
+// Always-visible input + on-blur save, for the modal (unlike EditCell's
+// click-to-reveal, which exists to keep table cells compact — the modal has
+// room to just show every input at once).
+const ModalField = memo(function ModalField({ id, field, label, value, onSave }: {
+  id: number; field: string; label: string; value: string | null; onSave: (id: number, field: string, val: string) => void;
+}) {
+  const [val, setVal] = useState(value ?? '');
+  const [status, setStatus] = useState<SaveStatus>('idle');
+  useEffect(() => { setVal(value ?? ''); }, [value]);
+
+  const commit = useCallback(async () => {
+    const next = val.trim();
+    const prev = (value ?? '').trim();
+    if (next === prev) return;
+    onSave(id, field, next);
+    setStatus('saving');
+    try {
+      const res = await fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null }) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setStatus('saved');
+      setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
+    } catch { setStatus('error'); }
+  }, [val, value, id, field, onSave]);
+
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+        {label}
+        {status === 'saving' && <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />}
+        {status === 'saved' && <Check size={10} style={{ color: '#16a34a' }} />}
+        {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
+      </div>
+      <input value={val} onChange={e => setVal(e.target.value)} onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b' }} />
+    </div>
+  );
+});
+
+function CompanyDetailModal({ row, fieldColumns, onClose, onSave }: {
+  row: MasterListRow;
+  fieldColumns: { field: ColumnField; label: string }[];
+  onClose: () => void;
+  onSave: (id: number, field: string, val: string) => void;
+}) {
+  const sections = useMemo(() => {
+    const groups = new Map<string, { field: ColumnField; label: string }[]>();
+    for (const c of fieldColumns) {
+      const section = FIELD_SECTIONS[c.field] ?? 'Other';
+      if (!groups.has(section)) groups.set(section, []);
+      groups.get(section)!.push(c);
+    }
+    return SECTION_ORDER.filter(s => groups.has(s)).map(s => ({ name: s, fields: groups.get(s)! }));
+  }, [fieldColumns]);
+
+  const colors = statusColor(row.status);
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 880, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+        <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px', flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{row.company_name}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              {row.roc_no && <span style={{ fontSize: 11, color: '#fff', background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4 }}>{row.roc_no}</span>}
+              {row.status && <span style={{ fontSize: 10, fontWeight: 700, background: colors?.bg ?? 'rgba(255,255,255,0.12)', color: colors?.color ?? '#fff', borderRadius: 4, padding: '2px 8px' }}>{row.status}</span>}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
+        </div>
+
+        <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px', background: '#f8fafc' }}>
+          {sections.map(section => (
+            <div key={section.name} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>{section.name}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 12 }}>
+                {section.fields.map(c => {
+                  if (c.field === 'acc_pic') return <div key={c.field}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>ACC</div><PicCell name={row.acc_pic} /></div>;
+                  if (c.field === 'tax_pic') return <div key={c.field}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>TAX</div><PicCell name={row.tax_pic} /></div>;
+                  if (c.field === 'nominee_director' || c.field === 'secretary') {
+                    const value = c.field === 'nominee_director' ? row.nominee_director : row.secretary;
+                    return (
+                      <div key={c.field}>
+                        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <CheckSquare checked={isSet(value)} />{c.label}
+                        </div>
+                        <input defaultValue={value ?? ''} onBlur={e => {
+                          const next = e.target.value.trim();
+                          if (next === (value ?? '').trim()) return;
+                          onSave(row.id, c.field, next);
+                          fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: next || null }) });
+                        }} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b' }} />
+                      </div>
+                    );
+                  }
+                  return <ModalField key={c.field} id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} />;
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function MasterListTable({ listType, title, accentColor = '#1d3a5c', moveTargets, fields, columnWidths, enableListView = false }: { listType: string; title: string; accentColor?: string; moveTargets?: MoveTarget[]; fields?: ColumnField[]; columnWidths?: Partial<Record<ColumnField, number>>; enableListView?: boolean }) {
   const columns = useMemo(() => {
     // `fields` can name an EXTRA_COLUMNS entry (e.g. Active Client's acc_pic/
     // tax_pic); the no-`fields` default deliberately only ever falls back to
@@ -453,6 +581,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [search, setSearch]   = useState('');
   const [catFilter, setCatFilter] = useState<'all' | 'fye_mismatch' | 'has_nd' | 'mas' | 'non_teamwork'>('all');
   const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnField, Set<string>>>>({});
+  const [view, setView] = useState<'list' | 'table'>('list');
+  const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const isMobile = useIsMobile();
 
   const load = useCallback(async () => {
@@ -606,6 +736,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const activeColumnFilterCount = Object.keys(columnFilters).length;
   const columnFilterKey = Object.entries(columnFilters).map(([f, s]) => `${f}=${[...s].sort().join(',')}`).sort().join('&');
   const visibleRows = rows.filter(r => catMatch(r, catFilter) && columnMatch(r));
+  const modalRow = selectedRowId !== null ? rows.find(r => r.id === selectedRowId) ?? null : null;
   // Paginate AFTER search (server-side) + category filter + column filters —
   // search always covers the full list; only rendering is capped per page.
   const { page, setPage, totalPages, pageItems, startIndex, total } =
@@ -661,6 +792,15 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           </button>
         )}
         <span className="text-sm text-slate-400 ml-auto">{visibleRows.length} shown{(catFilter !== 'all' || activeColumnFilterCount > 0) ? ` of ${rows.length}` : ''}</span>
+        {enableListView && !isMobile && (
+          <div style={{ display: 'flex', gap: 3, background: '#f1f5f9', borderRadius: 7, padding: 3 }}>
+            {([{ k: 'list', icon: '☰', label: 'List' }, { k: 'table', icon: '⊞', label: 'Table' }] as const).map(({ k, icon, label }) => (
+              <button key={k} onClick={() => setView(k)} style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 5, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, background: view === k ? accentColor : 'transparent', color: view === k ? '#fff' : '#64748b', transition: 'all 0.15s' }}>
+                <span>{icon}</span>{label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {showAddForm && (
@@ -701,6 +841,65 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         </div>
       )}
 
+      {enableListView && view === 'list' ? (
+        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div className="px-4 py-3" style={{ backgroundColor: accentColor, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h2 className="text-white font-semibold text-sm">{title}</h2>
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>Click a company to open full details & edit</span>
+          </div>
+          {!isMobile && (
+            <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(220px,1.6fr) 110px 90px minmax(200px,1.2fr) 100px', padding: '7px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+              {['', 'Company Name', 'ROC No.', 'Status', 'Services', 'FYE'].map((h, i) => (
+                <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{h}</div>
+              ))}
+            </div>
+          )}
+          <div style={{ maxHeight: 'calc(100vh - 380px)', overflowY: 'auto' }}>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>
+            ) : visibleRows.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No data</div>
+            ) : pageItems.map((r, i) => {
+              const rowColors = statusColor(r.status);
+              return (
+                <div key={r.id} onClick={() => setSelectedRowId(r.id)}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr auto' : '28px minmax(220px,1.6fr) 110px 90px minmax(200px,1.2fr) 100px',
+                    alignItems: 'center', gap: 8, padding: '10px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer',
+                    background: i % 2 === 0 ? '#fff' : '#fafbfc',
+                  }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? '#fff' : '#fafbfc'}>
+                  {!isMobile && <span style={{ fontSize: 10, color: '#cbd5e1' }}>{startIndex + i + 1}</span>}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.company_name}</div>
+                    {r.roc_no && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{r.roc_no}</div>}
+                  </div>
+                  {!isMobile && <div style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>{r.roc_no ?? '—'}</div>}
+                  {!isMobile && (
+                    <div>
+                      {r.status
+                        ? <span style={{ fontSize: 10, fontWeight: 700, background: rowColors?.bg ?? '#f1f5f9', color: rowColors?.color ?? '#64748b', borderRadius: 4, padding: '2px 6px' }}>{r.status}</span>
+                        : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+                    </div>
+                  )}
+                  {!isMobile && (
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <span title="Nominee Director" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={isSet(r.nominee_director)} />ND</span>
+                      <span title="Secretary" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={isSet(r.secretary)} />SEC</span>
+                      <span title="ACC PIC" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.acc_pic} />ACC</span>
+                      <span title="TAX PIC" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.tax_pic} />TAX</span>
+                    </div>
+                  )}
+                  {!isMobile && <div style={{ fontSize: 11, color: '#64748b' }}>{r.fye ?? '—'}</div>}
+                  {isMobile && <ChevronRight size={14} style={{ color: '#94a3b8' }} />}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         <div className="px-4 py-3" style={{ backgroundColor: accentColor }}>
           <h2 className="text-white font-semibold text-sm">{title}</h2>
@@ -795,11 +994,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           </table>
         </div>
       </div>
+      )}
 
       <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
 
-      {/* Mirrored scrollbar */}
-      {!isMobile && <div
+      {/* Mirrored scrollbar — table view only, list view has no wide table to scroll */}
+      {(!enableListView || view === 'table') && !isMobile && <div
         ref={sbRef}
         style={{ position: 'fixed', bottom: 0, display: 'none', height: 23, zIndex: 50, cursor: 'pointer' }}
         onClick={e => {
@@ -828,6 +1028,15 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           label={pendingDelete.company_name ?? 'this record'}
           onCancel={() => setPendingDelete(null)}
           onConfirm={confirmDeleteRow}
+        />
+      )}
+
+      {modalRow && (
+        <CompanyDetailModal
+          row={modalRow}
+          fieldColumns={columns.filter(c => c.field !== 'company_name' && c.field !== 'roc_no' && c.field !== 'status')}
+          onClose={() => setSelectedRowId(null)}
+          onSave={handleSave}
         />
       )}
     </div>
