@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-22 (Master List: column filters + Active Client List/modal)
+Last updated: 2026-07-22 (Active Client Services: free-toggle checkboxes, editable ACC/TAX)
 
 ## Purpose
 
@@ -24,6 +24,29 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Follow-up on the Active Client detail modal, from Vincent's first-look
+  feedback** (screenshot of the real modal): (1) long values — addresses,
+  remarks — were clipped behind a single-line input with no way to see the
+  full text; `ModalField` now renders an auto-resizing textarea instead.
+  (2) Nominee Dir./Secretary checkboxes were purely derived from "does the
+  name field have text", not something staff could set independently;
+  (3) ACC/TAX were read-only, showing only AR Reminder's synced PIC.
+  Asked Vincent where ACC/TAX's data should live once editable before
+  building — confirmed: default to AR Reminder's value, but let Master
+  List override it once someone edits it here. Added
+  `master_list.nd_active/secretary_active/acc_active/tax_active` (freely
+  toggleable, independent of any name field — new `CheckSquare` accepts an
+  optional `onToggle`) and `acc_pic_override`/`tax_pic_override` (take
+  precedence over AR Reminder's value in `/api/master-list`'s GET once
+  set — `r.acc_pic_override?.trim() || arDerivedValue`). Editing ACC/TAX's
+  name reloads from the server afterwards rather than hand-rolling the
+  override-vs-AR-Reminder resolution client-side, so the displayed value
+  can never drift from real DB state. `scripts/add-master-list-service-
+  toggles.sql` backfills the four boolean columns from today's existing
+  derived state (isSet(text) for ND/Secretary, AR Reminder presence for
+  ACC/TAX) so nothing visually changed until someone manually re-toggles
+  it — confirmed live after Vincent ran it (e.g. YINDA PTE. LTD. correctly
+  came back with secretary/acc/tax all true).
 - **Two Master List feature additions to `components/MasterListTable.tsx`**,
   both requested together by Vincent, scoped differently on purpose (asked
   explicitly before building — see the two AskUserQuestion confirmations
