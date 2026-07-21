@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-21 (Active Client Services badge column)
+Last updated: 2026-07-21 (Active Client checkbox+name columns, cross-page leak fix)
 
 ## Purpose
 
@@ -24,6 +24,37 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Superseded the entry below** ("Services" badge column) after Vincent
+  saw it live and reconsidered the design, and — separately — pointed out
+  a real bug in it: the combined 6-badge column had been added to
+  `MasterListTable`'s shared default `COLUMNS` array, so it silently
+  leaked onto Strike Off/Terminated/Change Co Name too (any page that
+  doesn't pass an explicit `fields` prop shows every column in that
+  default array — adding a column there makes it appear everywhere,
+  not just the page it was built for). Replaced it with four separate
+  columns, Active-Client-only:
+  - **Nominee Dir. / Secretary**: still the existing `master_list`
+    columns, now rendered with a green/grey checkbox next to the name
+    instead of plain text — gated on `listType === 'active_client'` in
+    `MasterListTable.tsx`, so every other page keeps the old plain-text
+    rendering of these same two columns unchanged.
+  - **ACC / TAX**: new columns, sourced from `ar_reminder.acc_pic`/
+    `tax_pic`, joined by UEN in `/api/master-list` (identical exact-match
+    pattern to the existing `tw_fye`/`in_teamwork` cross-check). These
+    live in a new `EXTRA_COLUMNS` array that is deliberately NOT part of
+    the default `COLUMNS` set — a page must name them in its `fields`
+    prop to show them, which structurally prevents this exact class of
+    leak from recurring for any future derived column.
+  - Verified against live data before shipping: ALTSTAKE PTE. LTD.
+    resolves to `acc=JAY, tax=QT`, matching its AR Reminder detail panel
+    exactly. Sampled 300 Active Client rows: ~20% currently have an ACC/
+    TAX PIC in `ar_reminder` at all — the rest will show the grey/empty
+    state, which reflects that data not being filled in yet on the AR
+    Reminder side, not a bug here.
+  - Also reverted the `companies.uses_address/has_nd/has_xbrl` join added
+    for the old design (unused now — ADDR/XBRL were dropped from this
+    view entirely per Vincent's decision, not carried over to the new
+    columns).
 - Added a "Services" badge column (SEC/ADDR/ND/ACC/TAX/XBRL) to Master List
   → Active Client, at Vincent's request ("Active Client 第一版采用 SEC /
   ADDR / ND / ACC / TAX / XBRL"). The hand-maintained `master_list` sheet
