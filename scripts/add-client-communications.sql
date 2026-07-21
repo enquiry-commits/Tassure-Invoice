@@ -103,7 +103,7 @@ select 'soa', 'Statement of Account (default)',
 where not exists (select 1 from email_templates where type = 'soa' and is_default);
 
 insert into email_templates (type, name, subject_template, body_template, is_default)
-select 'letter', 'Document Reminder (default)',
+select 'letter', 'Document Reminder',
   'Reminder - Outstanding Document for {{companyName}}',
   E'Dear {{contactName}},\n\nThis is a reminder that we are still awaiting the following document(s) from {{companyName}}.\n\nKindly send these to us at your earliest convenience.\n\nThank you.',
   true

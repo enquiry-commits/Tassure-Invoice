@@ -24,6 +24,25 @@ one focused Git commit.
 
 ## Latest completed work
 
+- Auto-grew the Templates & Senders body textarea to fit its content
+  (`rows` now derived from line count, min 6) instead of a fixed 6 rows
+  that clipped longer templates behind an internal scrollbar.
+- Fixed the letter default template's `name` having "(default)" baked
+  into the literal string, which combined with Campaign Centre's own
+  `{t.is_default ? ' (default)' : ''}` dropdown suffix to render
+  "Document Reminder (default) (default)". Renamed the live row (id 3)
+  directly in Supabase to just "Document Reminder" via a one-off script
+  (run and deleted, not committed), and changed the seed literal in
+  `scripts/add-client-communications.sql` (letter row only) so a fresh
+  install won't reintroduce it. Deliberately did NOT touch the `ar`/`soa`
+  seed literals ("AR Renewal Reminder (default)" / "Statement of Account
+  (default)") even though they have the same baked-in suffix — those
+  exact strings are the `WHERE name = '...'` match condition in
+  `scripts/split-templates-by-sheet.sql`'s AR1/SOA1 rename step, so
+  changing them would silently break that script's match on a fresh
+  install (0 rows updated, template stuck with the generic name). No
+  such downstream script touches the letter template, so it was safe to
+  rename outright.
 - Client Communications: Campaign Centre now previews the resolved company
   list and lets a reviewer edit it BEFORE anything is written, instead of
   generating drafts directly from an opaque auto-resolution. Follow-up
