@@ -2283,9 +2283,9 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
               </div>
               {historyError && <div style={{ padding: '8px 13px', background: '#fef2f2', color: '#b91c1c', fontSize: 10 }}>{historyError}</div>}
               {historyLoading && historyRows.length === 0 ? (
-                <div style={{ padding: 18, textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>Loading history…</div>
+                <div style={{ padding: '18px 18px 28px', textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>Loading history…</div>
               ) : historyRows.length === 0 ? (
-                <div style={{ padding: 18, textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>No saved changes yet.</div>
+                <div style={{ padding: '18px 18px 28px', textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>No saved changes yet.</div>
               ) : (
                 <div style={{ maxHeight: 220, overflowY: 'auto' }}>
                   {historyRows.map((entry, index) => (
