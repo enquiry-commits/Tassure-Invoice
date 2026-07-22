@@ -62,6 +62,17 @@ export default function CampaignCentrePage() {
     fetch('/api/auth/me').then(r => r.ok ? r.json() : { user: null }).then(j => setMe(j.user ?? null)).catch(() => setMe(null));
   }, []);
 
+  // Default FYE Month/Year to the cycle staff are actually invoicing right
+  // now (same source Billing Drafts uses), not just today's calendar month —
+  // the two used to disagree whenever the current month hadn't been billed
+  // yet.
+  useEffect(() => {
+    fetch('/api/ar-reminder/latest')
+      .then(r => r.json())
+      .then(({ month: m, year: y }) => { if (m) setFyeMonth(String(m)); if (y) setFyeYear(String(y)); })
+      .catch(() => {});
+  }, []);
+
   const loadCampaigns = useCallback(() => {
     setLoadingCampaigns(true);
     fetch('/api/client-communications/campaigns').then(r => r.json()).then(j => setCampaigns(j.data ?? [])).finally(() => setLoadingCampaigns(false));
