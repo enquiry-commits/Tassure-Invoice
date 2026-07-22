@@ -2426,23 +2426,26 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
   const metaRef   = useRef({ tw: 0, sbW: 0 });
   const [picOpen, setPicOpen] = useState({ sec: true, acc: false, tax: false });
 
-  const picHeader = (key: keyof typeof picOpen, label: string) => {
+  const picHeader = (key: keyof typeof picOpen, label: string, field: ARColumnKey) => {
     const open = picOpen[key];
     return (
       <TH w={open ? 100 : 34} center>
-        <button
-          type="button"
-          onClick={() => setPicOpen(current => ({ ...current, [key]: !current[key] }))}
-          title={open ? `Collapse ${label} to the left` : `Expand ${label}`}
-          style={{
-            width: '100%', padding: 0, border: 0, background: 'transparent', color: '#fff',
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            gap: open ? 4 : 1, fontSize: open ? 9 : 8, fontWeight: 700,
-          }}
-        >
-          {open ? <ChevronLeft size={11} /> : <ChevronRight size={10} />}
-          <span>{open ? label : label.replace(' PIC', '')}</span>
-        </button>
+        {open ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, width: '100%' }}>
+            <button type="button" onClick={() => setPicOpen(current => ({ ...current, [key]: !current[key] }))}
+              title={`Collapse ${label} to the left`}
+              style={{ padding: 0, border: 0, background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700 }}>
+              <ChevronLeft size={11} /><span>{label}</span>
+            </button>
+            <ARColumnFilterMenu field={field} label={label} records={allRecords} selected={columnFilters[field] ?? null} onApply={next => onApplyFilter(field, next)} />
+          </div>
+        ) : (
+          <button type="button" onClick={() => setPicOpen(current => ({ ...current, [key]: !current[key] }))}
+            title={`Expand ${label}`}
+            style={{ width: '100%', padding: 0, border: 0, background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, fontSize: 8, fontWeight: 700 }}>
+            <ChevronRight size={10} /><span>{label.replace(' PIC', '')}</span>
+          </button>
+        )}
       </TH>
     );
   };
@@ -2549,9 +2552,9 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             <TH w={100}>{HF('software_update', 'TW Update')}</TH>
             <TH w={100}>{HF('dpo', 'DPO')}</TH>
             <TH w={100}>{HF('ond_ron', 'ROND RONS')}</TH>
-            {picHeader('sec', 'SEC PIC')}
-            {picHeader('acc', 'ACC PIC')}
-            {picHeader('tax', 'TAX PIC')}
+            {picHeader('sec', 'SEC PIC', 'pic')}
+            {picHeader('acc', 'ACC PIC', 'acc_pic')}
+            {picHeader('tax', 'TAX PIC', 'tax_pic')}
             <TH w={180}>{HF('remarks', 'Remarks')}</TH>
             <TH w={150} finance>{HF('ar_status', 'Invoice')}</TH>
             <TH w={150} finance>{HF('accounts_status', 'Email Sent')}</TH>
