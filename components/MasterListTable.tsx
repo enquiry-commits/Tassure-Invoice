@@ -502,6 +502,11 @@ const FIELD_SECTIONS: Record<string, string> = {
   remark: 'Notes', referral: 'Notes', risk_level: 'Notes', incorp_with_us: 'Notes', mas: 'Notes', grade: 'Notes',
 };
 const SECTION_ORDER = ['Company Info', 'Contact & Address', 'Services', 'Compliance', 'Admin', 'Notes', 'Other'];
+// Addresses/notes/lists routinely wrap to several lines. In a fixed-column
+// grid that stretches every cell in the row to match the tallest one, which
+// left short neighbours (Email, Contact Window, …) sitting in a mostly-empty
+// cell. These fields get a wider flex basis instead of a cramped narrow one.
+const WIDE_MODAL_FIELDS = new Set(['invoice_address', 'mailing_address', 'mailing_list', 'remark', 'referral', 'shareholders', 'directors']);
 
 // Always-visible input + on-blur save, for the modal (unlike EditCell's
 // click-to-reveal, which exists to keep table cells compact — the modal has
@@ -589,15 +594,17 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
           {sections.map(section => (
             <div key={section.name} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>{section.name}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 12 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 }}>
                 {section.fields.map(c => {
+                  const wide = WIDE_MODAL_FIELDS.has(c.field);
+                  const itemStyle: React.CSSProperties = { flex: wide ? '1 1 260px' : '1 1 150px', minWidth: wide ? 220 : 150, maxWidth: wide ? 400 : 220 };
                   if (c.field === 'acc_pic') return (
-                    <div key={c.field}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>ACC</div>
+                    <div key={c.field} style={itemStyle}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>ACC</div>
                       <PicCell name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
                     </div>
                   );
                   if (c.field === 'tax_pic') return (
-                    <div key={c.field}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>TAX</div>
+                    <div key={c.field} style={itemStyle}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>TAX</div>
                       <PicCell name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
                     </div>
                   );
@@ -606,7 +613,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                     const activeField = c.field === 'nominee_director' ? 'nd_active' : 'secretary_active';
                     const active = c.field === 'nominee_director' ? row.nd_active : row.secretary_active;
                     return (
-                      <div key={c.field}>
+                      <div key={c.field} style={itemStyle}>
                         <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
                           <CheckSquare checked={!!active} onToggle={() => onToggleActive(row.id, activeField, active)} />{c.label}
                         </div>
@@ -619,7 +626,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                       </div>
                     );
                   }
-                  return <ModalField key={c.field} id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} />;
+                  return <div key={c.field} style={itemStyle}><ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} /></div>;
                 })}
               </div>
             </div>
