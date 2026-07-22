@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Building2, CheckCircle2, MapPin, UserRoundCheck, UserRoundX, type LucideIcon } from 'lucide-react';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
 
@@ -17,12 +16,15 @@ interface Company {
   bestEmail: string | null;
   primaryContact: { contactName: string } | null;
   clientStatus: string | null;
+  isShareholder: boolean;
 }
 
-type CompanyCat = 'all' | 'nd' | 'address' | 'nd_ceased';
+type CompanyCat = 'all' | 'css_client' | 'shareholder' | 'nd' | 'address' | 'nd_ceased';
 
 function matchesCat(c: Company, cat: CompanyCat): boolean {
   switch (cat) {
+    case 'css_client':  return !c.isShareholder;
+    case 'shareholder': return c.isShareholder;
     case 'nd':          return c.hasActiveND;
     case 'address':     return c.usesAddressService;
     case 'nd_ceased':   return c.hadND && !c.hasActiveND;
@@ -106,57 +108,37 @@ export default function CompaniesPage() {
   const { page, setPage, totalPages, pageItems, startIndex, total } =
     usePagination(filtered, `${search}|${cat}`);
 
-  const cards: { key: CompanyCat; label: string; sub: string; color: string; soft: string; icon: LucideIcon }[] = [
-    { key: 'all',       label: 'Active Companies', sub: 'complete active roster', color: '#15803d', soft: '#f0fdf4', icon: Building2 },
-    { key: 'nd',        label: 'Active ND',        sub: 'nominee director on file', color: '#6d28d9', soft: '#f5f3ff', icon: UserRoundCheck },
-    { key: 'address',   label: 'Address Service',  sub: 'using our registered address', color: '#0369a1', soft: '#f0f9ff', icon: MapPin },
-    { key: 'nd_ceased', label: 'ND Ceased',        sub: 'no active ND coverage', color: '#be123c', soft: '#fff1f2', icon: UserRoundX },
+  const cards: { key: CompanyCat; label: string; sub: string; color: string; bg: string; border: string }[] = [
+    { key: 'all',         label: 'Total Active',        sub: 'Internal CSS Status = Active', color: '#1e3a5f', bg: '#f8fafc', border: '#cbd5e1' },
+    { key: 'css_client',  label: 'Client (CSS Client)', sub: 'active corporate services client', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4' },
+    { key: 'shareholder', label: 'Shareholder',         sub: 'active related entity', color: '#a16207', bg: '#fffbeb', border: '#fde68a' },
+    { key: 'nd',          label: 'Active ND',           sub: 'nominee director on file', color: '#6d28d9', bg: '#f5f3ff', border: '#ddd6fe' },
+    { key: 'address',     label: 'Address Service',     sub: 'using our registered address', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd' },
+    { key: 'nd_ceased',   label: 'ND Ceased',           sub: 'no active ND coverage', color: '#be123c', bg: '#fff1f2', border: '#fecdd3' },
   ];
 
   return (
     <div>
-      <section className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
-          <div>
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Dashboard / Companies</div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">Company Directory</h1>
-            <p className="mt-1 text-xs text-slate-500">A single operational view of companies currently managed by the corporate services team.</p>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-            <CheckCircle2 size={15} />
-            Internal CSS Status · Active only
-          </div>
-        </div>
+      <div className="mb-4 text-sm text-slate-500">Dashboard › Companies</div>
 
-        {/* One connected metric strip — every item is also a table filter. */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))' }}>
-          {cards.map((c, index) => {
+      {/* Active roster summary — each card filters the same Active-only dataset. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(175px,1fr))', gap: 12, marginBottom: 16, width: '100%' }}>
+          {cards.map(c => {
             const active = cat === c.key;
-            const Icon = c.icon;
             return (
               <button key={c.key} onClick={() => setCat(c.key)} aria-pressed={active}
-                style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 13, minWidth: 0, padding: '15px 18px',
-                  textAlign: 'left', cursor: 'pointer', background: active ? c.soft : '#fff', border: 0,
-                  borderRight: index < cards.length - 1 ? '1px solid #f1f5f9' : 0,
-                  boxShadow: active ? `inset 0 -3px 0 ${c.color}` : 'none' }}>
-                <span style={{ display: 'inline-flex', width: 38, height: 38, flexShrink: 0, alignItems: 'center', justifyContent: 'center',
-                  borderRadius: 11, color: c.color, background: c.soft, border: `1px solid ${c.color}20` }}>
-                  <Icon size={19} strokeWidth={2} />
-                </span>
-                <span style={{ minWidth: 0, flex: 1 }}>
-                  <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                    <strong style={{ color: '#0f172a', fontSize: 22, lineHeight: 1, letterSpacing: '-0.03em' }}>{count(c.key)}</strong>
-                    <span style={{ color: '#334155', fontSize: 12, fontWeight: 750 }}>{c.label}</span>
-                  </span>
-                  <span style={{ display: 'block', overflow: 'hidden', marginTop: 5, color: '#94a3b8', fontSize: 10.5,
-                    textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.sub}</span>
-                </span>
+                style={{ minWidth: 0, minHeight: 94, padding: '15px 18px', textAlign: 'left', cursor: 'pointer',
+                  borderRadius: 11, background: c.bg, border: `${active ? 2 : 1}px solid ${active ? c.color : c.border}`,
+                  boxShadow: active ? `0 0 0 2px ${c.color}12, 0 2px 5px rgba(15,23,42,.06)` : 'none' }}>
+                <div style={{ color: c.color, fontSize: 24, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.03em' }}>{count(c.key)}</div>
+                <div style={{ marginTop: 7, color: '#1e293b', fontSize: 12, fontWeight: 750 }}>{c.label}</div>
+                <div style={{ overflow: 'hidden', marginTop: 3, color: '#94a3b8', fontSize: 10.5, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.sub}</div>
               </button>
             );
           })}
-        </div>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
           <input
             type="text"
             placeholder="Search company name or UEN..."
@@ -165,8 +147,7 @@ export default function CompaniesPage() {
             className="min-w-48 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-blue-400"
           />
           <span className="ml-auto text-xs font-medium text-slate-400">{filtered.length} companies shown</span>
-        </div>
-      </section>
+      </div>
 
       {/* Phone: view-only card list (desktop table untouched below) */}
       {isMobile ? (
