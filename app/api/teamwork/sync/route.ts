@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@/lib/automation-sync';
+import { todaySGT } from '@/lib/date';
 import { syncTeamworkCampaignRecipients } from '@/lib/teamwork-recipients';
 
 // Daily TeamWork -> companies sync (see vercel.json cron, 00:30 UTC — before
@@ -226,20 +227,29 @@ async function syncTeamworkCompanies() {
     return true;
   });
 
-  // ── has_nd follows the ND appointments register (TeamWork officials) ──────
+  // ── has_nd / master_list.nd_active follow the ND appointments register ────
   // Same principle as uses_address: QB history only proves a PAST bill; the
-  // Nominee Directors page's own data (active appointment = has appointment
-  // date, no cessation date) is the truth. Keeps the companies flag mirroring
-  // exactly what the ND page shows.
+  // Nominee Directors page's own data is the truth. "Active" here uses the
+  // exact same rule as that page (app/api/nominee-directors/route.ts):
+  // no cessation_date, or a cessation_date still in the future. Previously
+  // this used a stricter "cessation_date IS NULL" check, and Master List's
+  // "Has Nominee Dir" card read a free-text field that staff don't keep in
+  // sync with actual resignations — both are now tied to this one set so
+  // every page agrees with the ND page's number.
   let ndFlagUpdates = 0;
+  let ndActiveUpdates = 0;
   {
-    const { data: activeNDs } = await supabase
+    const t = todaySGT();
+    const { data: appts } = await supabase
       .from('nd_appointments')
-      .select('company_name')
+      .select('company_name, cessation_date')
       .eq('sub_role', 'Nominee Director')
-      .not('appointment_date', 'is', null)
-      .is('cessation_date', null);
-    const ndSet = new Set((activeNDs ?? []).map(a => normalize(a.company_name)));
+      .not('appointment_date', 'is', null);
+    const ndSet = new Set(
+      (appts ?? [])
+        .filter(a => !a.cessation_date || a.cessation_date > t)
+        .map(a => normalize(a.company_name)),
+    );
     const ndPatches = (rows ?? [])
       .filter(r => ndSet.has(normalize(r.company_name)) !== (r.has_nd === true))
       .map(r => ({ id: r.id, has_nd: ndSet.has(normalize(r.company_name)) }));
@@ -248,6 +258,17 @@ async function syncTeamworkCompanies() {
         supabase.from('companies').update({ has_nd: p.has_nd, synced_at: now }).eq('id', p.id).then(r => r.error?.message ?? null)
       ));
       ndFlagUpdates += results.filter(e => !e).length;
+    }
+
+    const { data: mlRows } = await supabase.from('master_list').select('id, company_name, nd_active');
+    const mlPatches = (mlRows ?? [])
+      .filter(r => ndSet.has(normalize(r.company_name)) !== (r.nd_active === true))
+      .map(r => ({ id: r.id, nd_active: ndSet.has(normalize(r.company_name)) }));
+    for (let i = 0; i < mlPatches.length; i += 10) {
+      const results = await Promise.all(mlPatches.slice(i, i + 10).map(p =>
+        supabase.from('master_list').update({ nd_active: p.nd_active }).eq('id', p.id).then(r => r.error?.message ?? null)
+      ));
+      ndActiveUpdates += results.filter(e => !e).length;
     }
   }
 
@@ -296,6 +317,7 @@ async function syncTeamworkCompanies() {
     internal_id_backfilled: backfilled,
     updated: updatedCount,
     nd_flag_updates: ndFlagUpdates,
+    nd_active_updates: ndActiveUpdates,
     inserted: insertedCount,
     inserted_names: dedupedInserts.map(r => r.company_name),
     skipped_ambiguous_names: skippedAmbiguous,

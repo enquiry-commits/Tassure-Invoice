@@ -807,7 +807,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const catMatch = (r: MasterListRow, cat: typeof catFilter) => {
     switch (cat) {
       case 'fye_mismatch': return isFyeMismatch(r);
-      case 'has_nd':       return isSet(r.nominee_director);
+      case 'has_nd':       return !!r.nd_active;
       case 'mas':          return isSet(r.mas);
       case 'non_teamwork': return r.in_teamwork === false;
       default:             return true;
