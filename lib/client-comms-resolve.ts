@@ -91,12 +91,23 @@ export async function loadInvoicesByCompany(
   if (type === 'ar' && fyeMonth && fyeYear) {
     const fyeCycle = fyeCycleString(fyeMonth, fyeYear);
     const { data: rows } = await supabase.from('generated_invoices')
-      .select('company_name, qb_company, invoice_no, total_amt, qb_invoice_id')
-      .eq('fye_cycle', fyeCycle);
+      .select('company_name, qb_company, invoice_no, total_amt, qb_invoice_id, created_at')
+      .eq('fye_cycle', fyeCycle)
+      .order('created_at', { ascending: true });
+    // A wrongly-issued invoice that gets deleted and reissued in QuickBooks
+    // keeps its DocNumber, but `generated_invoices` is an append-only log —
+    // the old row for the deleted invoice never goes away. Dedupe on
+    // (company, qb_company, invoice_no), keeping the latest logged row,
+    // so a reused number doesn't show up twice in the review list.
+    const latest = new Map<string, { company_name: string; qb_company: string; invoice_no: string | null; total_amt: number | null; qb_invoice_id: string | null }>();
     for (const r of rows ?? []) {
+      if (!r.invoice_no) continue;
+      latest.set(`${normalize(r.company_name)}|${r.qb_company}|${r.invoice_no}`, r);
+    }
+    for (const r of latest.values()) {
       const key = normalize(r.company_name);
       if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
-      if (r.invoice_no) invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as 'TAB' | 'TAC', invoiceNo: r.invoice_no, amount: Number(r.total_amt ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
+      invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as 'TAB' | 'TAC', invoiceNo: r.invoice_no!, amount: Number(r.total_amt ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
     }
   } else if (type === 'soa') {
     const { data: rows } = await supabase.from('quickbooks_invoices')
