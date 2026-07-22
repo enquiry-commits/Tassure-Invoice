@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronRight } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronRight, Calendar } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { usePagination, PaginationBar } from './Pagination';
-import { toDisplayDate } from '@/lib/date';
+import { toDisplayDate, fmtDate } from '@/lib/date';
 import { useIsMobile } from '@/lib/use-is-mobile';
 
 export interface MasterListRow {
@@ -149,6 +149,13 @@ const EXTRA_COLUMNS: { field: ColumnField; label: string; w: number }[] = [
 ];
 
 const STICKY_WIDTHS = [240, 110, 110]; // company_name, roc_no, status
+
+// Fields whose values are actual dates (confirmed by sampling real data —
+// e.g. kyc_year despite its name holds a full date, while acra_update/
+// annual_return etc. hold YES/NO). These get a calendar-picker button in
+// both the table's inline editor and the modal, like AR Reminder's date
+// fields.
+const DATE_FIELDS = new Set<ColumnField>(['update_date', 'join_date', 'inc_date', 'last_ar_date', 'last_agm_date', 'last_accounts_date', 'next_agm_due_date', 'kyc_year']);
 
 // A free-text master_list cell counts as "set" (service in use) when it
 // holds anything beyond the common ways staff mark something absent.
@@ -362,6 +369,14 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
   const [status, setStatus] = useState<SaveStatus>('idle');
   const pendingRef = useRef<{ next: string; prev: string }>({ next: '', prev: '' });
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const dateRef  = useRef<HTMLInputElement>(null);
+  const isDateField = DATE_FIELDS.has(field as ColumnField);
+  const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.value) return;
+    setVal(fmtDate(e.target.value));
+    e.target.value = '';
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
   useEffect(() => { setVal(value ?? ''); }, [value]);
   useEffect(() => {
     if (!editing) return;
@@ -401,24 +416,37 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
   const revert = useCallback(() => { const { prev } = pendingRef.current; onSave(id, field, prev); setVal(prev); setStatus('idle'); }, [id, field, onSave]);
 
   if (editing) return (
-    <textarea
-      ref={inputRef} value={val} rows={1}
-      onChange={e => {
-        setVal(e.target.value);
-        const el = e.target;
-        el.style.height = 'auto';
-        el.style.height = `${el.scrollHeight}px`;
-      }}
-      onBlur={commit}
-      onKeyDown={e => {
-        // Enter commits (matches every other single-line cell in this
-        // table); Shift+Enter inserts a real line break instead, for
-        // fields like Remark/addresses that read better multi-line.
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
-        if (e.key === 'Escape') { setVal(value ?? ''); setEditing(false); }
-      }}
-      style={{ width: '100%', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 5px', fontSize: 11, outline: 'none', background: '#eff6ff', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, display: 'block' }}
-    />
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+      <textarea
+        ref={inputRef} value={val} rows={1}
+        onChange={e => {
+          setVal(e.target.value);
+          const el = e.target;
+          el.style.height = 'auto';
+          el.style.height = `${el.scrollHeight}px`;
+        }}
+        onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(); }}
+        onKeyDown={e => {
+          // Enter commits (matches every other single-line cell in this
+          // table); Shift+Enter inserts a real line break instead, for
+          // fields like Remark/addresses that read better multi-line.
+          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
+          if (e.key === 'Escape') { setVal(value ?? ''); setEditing(false); }
+        }}
+        style={{ flex: 1, minWidth: 0, border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 5px', fontSize: 11, outline: 'none', background: '#eff6ff', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, display: 'block' }}
+      />
+      {isDateField && (
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button type="button" data-cal-btn="1" tabIndex={0}
+            onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
+            style={{ border: '1px solid #c7d2fe', borderRadius: 4, background: '#eef2ff', color: '#4338ca', cursor: 'pointer', padding: '2px 5px', display: 'flex', alignItems: 'center' }}>
+            <Calendar size={12} />
+          </button>
+          <input ref={dateRef} type="date" onChange={handleDatePick}
+            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
+        </div>
+      )}
+    </div>
   );
 
   // On save failure, show an inline error with retry/revert (non-destructive —
@@ -534,11 +562,19 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave }:
   }, [val, value, id, field, onSave]);
 
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
+  const isDateField = DATE_FIELDS.has(field as ColumnField);
   const resize = useCallback(() => {
     const el = taRef.current;
     if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
   }, []);
   useEffect(() => { resize(); }, [val, resize]);
+  const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.value) return;
+    setVal(fmtDate(e.target.value));
+    e.target.value = '';
+    setTimeout(() => taRef.current?.focus(), 0);
+  };
 
   return (
     <div>
@@ -548,11 +584,25 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave }:
         {status === 'saved' && <Check size={10} style={{ color: '#16a34a' }} />}
         {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
       </div>
-      {/* Textarea, not input — long values (addresses, remarks) were getting
-          clipped behind a single-line box with no way to see the full text. */}
-      <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)} onBlur={commit}
-        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
-        style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+        {/* Textarea, not input — long values (addresses, remarks) were getting
+            clipped behind a single-line box with no way to see the full text. */}
+        <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)}
+          onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(); }}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
+          style={{ flex: 1, minWidth: 0, border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
+        {isDateField && (
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button type="button" data-cal-btn="1" tabIndex={0}
+              onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
+              style={{ border: '1px solid #c7d2fe', borderRadius: 6, background: '#eef2ff', color: '#4338ca', cursor: 'pointer', padding: '5px 8px', display: 'flex', alignItems: 'center' }}>
+              <Calendar size={13} />
+            </button>
+            <input ref={dateRef} type="date" onChange={handleDatePick}
+              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
+          </div>
+        )}
+      </div>
     </div>
   );
 });
