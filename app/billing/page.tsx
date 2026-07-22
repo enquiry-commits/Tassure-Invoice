@@ -487,7 +487,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
       {display
         ? isDate
-          ? <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', fontSize: 11, fontWeight: 700 }}>{toDisplayDate(display) ?? display}</span>
+          ? <span style={{ fontSize: 12, color: '#374151' }}>{toDisplayDate(display) ?? display}</span>
           : <span style={{ fontSize: 12, color: '#374151' }}>{display}</span>
         : isDate
           ? <span style={{ display:'flex', alignItems:'center', gap:3, color:'#c7d2fe', fontSize:11 }}><Calendar size={11} /><span style={{ color:'#d1d5db' }}>{placeholder}</span></span>
