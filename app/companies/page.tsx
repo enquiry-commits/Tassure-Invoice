@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
+import { Building2, CheckCircle2, MapPin, UserRoundCheck, UserRoundX, type LucideIcon } from 'lucide-react';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
 
@@ -16,24 +17,15 @@ interface Company {
   bestEmail: string | null;
   primaryContact: { contactName: string } | null;
   clientStatus: string | null;
-  isShareholder: boolean;
 }
 
-type CompanyCat = 'all' | 'active' | 'strike_off' | 'terminated' | 'nd' | 'address' | 'nd_ceased' | 'css_client' | 'shareholder';
+type CompanyCat = 'all' | 'nd' | 'address' | 'nd_ceased';
 
-const isActiveStatus     = (s: string | null) => (s ?? '').toLowerCase() === 'active';
-const isStrikeOffStatus  = (s: string | null) => /strik/i.test(s ?? '');
-const isTerminatedStatus = (s: string | null) => /terminat/i.test(s ?? '');
 function matchesCat(c: Company, cat: CompanyCat): boolean {
   switch (cat) {
-    case 'active':      return isActiveStatus(c.clientStatus);
-    case 'strike_off':  return isStrikeOffStatus(c.clientStatus);
-    case 'terminated':  return isTerminatedStatus(c.clientStatus);
     case 'nd':          return c.hasActiveND;
     case 'address':     return c.usesAddressService;
     case 'nd_ceased':   return c.hadND && !c.hasActiveND;
-    case 'css_client':  return !c.isShareholder;
-    case 'shareholder': return c.isShareholder;
     default:            return true;
   }
 }
@@ -85,16 +77,27 @@ export default function CompaniesPage() {
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    const params = new URLSearchParams({ page: '1', limit: '10000', search, filter: '' });
-    const res = await fetch(`/api/companies?${params}`);
-    const json: APIResponse = await res.json();
-    setData(json);
-    setLoading(false);
-  }, [search]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ page: '1', limit: '10000', search, filter: '' });
+        const res = await fetch(`/api/companies?${params}`, { signal: controller.signal });
+        const json: APIResponse = await res.json();
+        setData(json);
+      } catch (error) {
+        if (!controller.signal.aborted) console.error('Failed to load companies', error);
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, 150);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [search]);
 
   const rows = data?.data ?? [];
   const count = (c: CompanyCat) => rows.filter(r => matchesCat(r, c)).length;
@@ -103,49 +106,67 @@ export default function CompaniesPage() {
   const { page, setPage, totalPages, pageItems, startIndex, total } =
     usePagination(filtered, `${search}|${cat}`);
 
-  const cards: { key: CompanyCat; label: string; sub: string; color: string; bg: string; bd: string }[] = [
-    { key: 'all',        label: 'All Companies',  sub: 'total on file',           color: '#1e3a8a', bg: '#f8fafc', bd: '#e2e8f0' },
-    { key: 'css_client', label: 'CSS Client',     sub: 'real corp-sec client',    color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4' },
-    { key: 'shareholder', label: 'Shareholder',   sub: 'related entity, not a client', color: '#64748b', bg: '#f8fafc', bd: '#e2e8f0' },
-    { key: 'active',     label: 'Active',         sub: 'TeamWork status active',  color: '#15803d', bg: '#f0fdf4', bd: '#bbf7d0' },
-    { key: 'strike_off', label: 'Striking Off',   sub: 'in strike-off process',   color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
-    { key: 'terminated', label: 'Terminated',     sub: 'services terminated',     color: '#b45309', bg: '#fff7ed', bd: '#fed7aa' },
-    { key: 'nd',         label: 'Active ND',       sub: 'has a nominee director',  color: '#7c3aed', bg: '#f5f3ff', bd: '#ddd6fe' },
-    { key: 'address',    label: 'Address Service', sub: 'uses our address',        color: '#0369a1', bg: '#f0f9ff', bd: '#bae6fd' },
-    { key: 'nd_ceased',  label: 'ND Ceased',       sub: 'ND left, no cover now',   color: '#be123c', bg: '#fff1f2', bd: '#fecdd3' },
+  const cards: { key: CompanyCat; label: string; sub: string; color: string; soft: string; icon: LucideIcon }[] = [
+    { key: 'all',       label: 'Active Companies', sub: 'complete active roster', color: '#15803d', soft: '#f0fdf4', icon: Building2 },
+    { key: 'nd',        label: 'Active ND',        sub: 'nominee director on file', color: '#6d28d9', soft: '#f5f3ff', icon: UserRoundCheck },
+    { key: 'address',   label: 'Address Service',  sub: 'using our registered address', color: '#0369a1', soft: '#f0f9ff', icon: MapPin },
+    { key: 'nd_ceased', label: 'ND Ceased',        sub: 'no active ND coverage', color: '#be123c', soft: '#fff1f2', icon: UserRoundX },
   ];
 
   return (
     <div>
-      <div className="mb-4 text-sm text-slate-500">Dashboard › Companies</div>
+      <section className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
+          <div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Dashboard / Companies</div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Company Directory</h1>
+            <p className="mt-1 text-xs text-slate-500">A single operational view of companies currently managed by the corporate services team.</p>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+            <CheckCircle2 size={15} />
+            Internal CSS Status · Active only
+          </div>
+        </div>
 
-      {/* Stat cards — click to filter */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: 12, marginBottom: 16, width: '100%' }}>
-        {cards.map(c => {
-          const active = cat === c.key;
-          return (
-            <button key={c.key} onClick={() => setCat(c.key)}
-              style={{ textAlign: 'left', cursor: 'pointer', background: c.bg, border: `1.5px solid ${active ? c.color : c.bd}`,
-                borderRadius: 10, padding: '12px 16px', width: '100%', minWidth: 0, boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: c.color }}>{count(c.key)}</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{c.label}</div>
-              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{c.sub}</div>
-            </button>
-          );
-        })}
-      </div>
+        {/* One connected metric strip — every item is also a table filter. */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))' }}>
+          {cards.map((c, index) => {
+            const active = cat === c.key;
+            const Icon = c.icon;
+            return (
+              <button key={c.key} onClick={() => setCat(c.key)} aria-pressed={active}
+                style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 13, minWidth: 0, padding: '15px 18px',
+                  textAlign: 'left', cursor: 'pointer', background: active ? c.soft : '#fff', border: 0,
+                  borderRight: index < cards.length - 1 ? '1px solid #f1f5f9' : 0,
+                  boxShadow: active ? `inset 0 -3px 0 ${c.color}` : 'none' }}>
+                <span style={{ display: 'inline-flex', width: 38, height: 38, flexShrink: 0, alignItems: 'center', justifyContent: 'center',
+                  borderRadius: 11, color: c.color, background: c.soft, border: `1px solid ${c.color}20` }}>
+                  <Icon size={19} strokeWidth={2} />
+                </span>
+                <span style={{ minWidth: 0, flex: 1 }}>
+                  <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <strong style={{ color: '#0f172a', fontSize: 22, lineHeight: 1, letterSpacing: '-0.03em' }}>{count(c.key)}</strong>
+                    <span style={{ color: '#334155', fontSize: 12, fontWeight: 750 }}>{c.label}</span>
+                  </span>
+                  <span style={{ display: 'block', overflow: 'hidden', marginTop: 5, color: '#94a3b8', fontSize: 10.5,
+                    textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.sub}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Search */}
-      <div className="bg-white rounded-xl shadow-sm p-4 mb-4 flex flex-wrap items-center gap-3">
-        <input
-          type="text"
-          placeholder="Search company name or UEN..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="flex-1 min-w-48 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400"
-        />
-        <span className="text-sm text-slate-400 ml-auto">{filtered.length} shown</span>
-      </div>
+        <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+          <input
+            type="text"
+            placeholder="Search company name or UEN..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="min-w-48 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-blue-400"
+          />
+          <span className="ml-auto text-xs font-medium text-slate-400">{filtered.length} companies shown</span>
+        </div>
+      </section>
 
       {/* Phone: view-only card list (desktop table untouched below) */}
       {isMobile ? (
@@ -185,7 +206,7 @@ export default function CompaniesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr>
-                {['#','Company Name','Status','UEN','Type','Nominee Director','Address Svc','Contact','PIC'].map(h => (
+                {['#','Company Name','Internal CSS Status','UEN','Type','Nominee Director','Address Svc','Contact','PIC'].map(h => (
                   <th key={h} className="text-left px-4 py-2.5 font-semibold text-slate-600"
                     style={{ position: 'sticky', top: 0, zIndex: 2, background: '#f8fafc', boxShadow: 'inset 0 -1px 0 #f1f5f9' }}>
                     {h}

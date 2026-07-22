@@ -34,11 +34,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Build Supabase query. Shareholder/related entities (TeamWork's
-  // non_client flag) are included, not hard-excluded — the frontend shows
-  // them as a separate toggleable "Shareholder" card so staff can still see
-  // them without them cluttering the default CSS Client view.
-  let q = supabase.from('companies').select('*');
+  // The Companies roster is governed only by TeamWork Internal CSS Status.
+  // CSS Client / Shareholder flags and Entity Status are not roster gates.
+  let q = supabase.from('companies').select('*').eq('tw_status', 'Active');
 
   if (search) {
     q = q.or(`company_name.ilike.%${search}%,registration_no.ilike.%${search}%`);
@@ -79,7 +77,6 @@ export async function GET(req: NextRequest) {
       bestEmail:          c.best_email,
       primaryContact:     c.primary_contact,
       clientStatus:       c.tw_status ?? null,
-      isShareholder:      c.is_non_client === true,
     };
   });
 

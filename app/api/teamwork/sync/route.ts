@@ -15,20 +15,16 @@ import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@
 //  - Match by companies.internal_id === TeamWork company_id (authoritative).
 //  - Rows without internal_id are matched by normalized name once, which
 //    backfills internal_id so the next run matches directly.
-//  - Only overwrite a field with a NON-EMPTY TeamWork value; never blank out
+//  - Only overwrite most fields with a NON-EMPTY TeamWork value; never blank
 //    registration_no / fye_month / best_email because TeamWork has a gap.
+//    Internal CSS Status is the exception: it is always authoritative, and
+//    an empty value means Not Specified (therefore not Active).
 //  - Never touch company_name on existing rows (manual typo fixes live here)
 //    and never touch QB-derived fields (has_*, *_pic, client_type, …).
-//  - Unmatched TeamWork records are INSERTED only if non_client!=='1' AND
-//    status=Active — shareholder entities stay out. (TeamWork's `client`
-//    field looks like the obvious flag for this but isn't reliable: several
-//    genuinely Active corp-sec clients carry client="0". `non_client` is
-//    the field that actually distinguishes a real client from a
-//    Shareholder/related entity like "1X EXCHANGE PSS LIMITED" — verified
-//    against live TeamWork data 2026-07-21.)
-//  - is_non_client is kept in sync unconditionally on every matched row
-//    (unlike the "only overwrite non-empty" fields above), since it's
-//    always present in TeamWork and should always reflect current truth.
+//  - Unmatched TeamWork records are inserted only when Internal CSS Status is
+//    Active. `client`, `non_client`, and Entity Status are not roster gates.
+//  - is_non_client is retained as reference data only; it does not determine
+//    whether a company appears on the Companies page.
 //  - Nothing is ever deleted; rows whose internal_id vanished from TeamWork
 //    are only counted in the summary.
 export const maxDuration = 300;
@@ -158,6 +154,7 @@ async function syncTeamworkCompanies() {
     const regNo   = (tw.company_registration_Num ?? '').trim() || null;
     const type    = (tw.type ?? '').trim() || null;
     const status  = (tw.status ?? '').trim() || null;
+    const internalCssActive = (status ?? '').toLowerCase() === 'active';
     const fyeMon  = fyeMonthOf(tw.fye_date);
     const fyeDay  = fyeDayOf(tw.fye_date);
     const email   = (tw.company_email_address ?? '').trim() || null;
@@ -174,7 +171,8 @@ async function syncTeamworkCompanies() {
       if (!row.internal_id)                                          patch.internal_id = tw.company_id;
       if (regNo  && regNo  !== (row.registration_no ?? '').trim())   patch.registration_no = regNo;
       if (type   && type   !== row.company_type)                     patch.company_type = type;
-      if (status && status !== row.tw_status) { patch.tw_status = status; patch.is_active = status === 'Active'; }
+      if (status !== row.tw_status)                                  patch.tw_status = status;
+      if (internalCssActive !== (row.is_active === true))             patch.is_active = internalCssActive;
       if (fyeMon && fyeMon !== row.fye_month)                        patch.fye_month = fyeMon;
       if (fyeDay && fyeDay !== row.fye_day)                          patch.fye_day = fyeDay;
       if (email  && email.toLowerCase() !== (row.best_email ?? '').toLowerCase()) patch.best_email = email;
@@ -184,16 +182,12 @@ async function syncTeamworkCompanies() {
       // directions — cancelled service flips off, new service flips on). Only
       // when TeamWork actually has an address on file.
       if (regAddr && usesOurAddress(regAddr) !== (row.uses_address === true)) patch.uses_address = usesOurAddress(regAddr);
-      // Unconditionally kept in sync (unlike the fields above, which only
-      // overwrite on a non-empty TeamWork value) — non_client is always
-      // present and is the authoritative "is this a Shareholder/related
-      // entity, not a real client" signal, verified against live TeamWork
-      // data (the `client` field looked plausible but several genuinely
-      // Active corp-sec clients carry client="0").
+      // Retain TeamWork's non_client flag for reference and reporting only.
+      // It no longer controls the Companies roster.
       const isNonClient = tw.non_client === '1';
       if (isNonClient !== (row.is_non_client === true)) patch.is_non_client = isNonClient;
       if (Object.keys(patch).length) { patch.synced_at = now; updates.push({ id: row.id, patch }); }
-    } else if (tw.non_client !== '1' && status === 'Active' && twName) {
+    } else if (internalCssActive && twName) {
       inserts.push({
         company_name: twName,
         internal_id: tw.company_id,
@@ -203,10 +197,12 @@ async function syncTeamworkCompanies() {
         fye_day: fyeDay,
         best_email: email,
         pic: resolvedPic && !/^\d+$/.test(resolvedPic) ? resolvedPic : null,
-        client_type: 'CSS Client',
+        // Retain the legacy classification for downstream billing rules, but
+        // do not use it to decide whether the Companies page includes a row.
+        client_type: tw.non_client === '1' ? 'Shareholder' : 'CSS Client',
         tw_status: 'Active',
         is_active: true,
-        is_non_client: false,
+        is_non_client: tw.non_client === '1',
         uses_address: regAddr ? usesOurAddress(regAddr) : false,
         synced_at: now,
       });
