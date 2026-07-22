@@ -543,13 +543,19 @@ const WIDE_MODAL_FIELDS = new Set(['invoice_address', 'mailing_address', 'mailin
 const ModalField = memo(function ModalField({ id, field, label, value, onSave }: {
   id: number; field: string; label: string; value: string | null; onSave: (id: number, field: string, val: string) => void;
 }) {
-  const [val, setVal] = useState(value ?? '');
+  // Dates are stored in whatever mixed format staff originally typed them in
+  // ("23/11/2022", "29.07.2025", "12/31/24", …) — normalize to the same
+  // "DD MMM YYYY" the table's EditCell already shows, so the modal isn't the
+  // one place still displaying the raw inconsistent text.
+  const isDateField = DATE_FIELDS.has(field as ColumnField);
+  const displayValue = useCallback((raw: string | null) => isDateField ? (toDisplayDate(raw) ?? raw ?? '') : (raw ?? ''), [isDateField]);
+  const [val, setVal] = useState(displayValue(value));
   const [status, setStatus] = useState<SaveStatus>('idle');
-  useEffect(() => { setVal(value ?? ''); }, [value]);
+  useEffect(() => { setVal(displayValue(value)); }, [value, displayValue]);
 
   const commit = useCallback(async () => {
     const next = val.trim();
-    const prev = (value ?? '').trim();
+    const prev = displayValue(value).trim();
     if (next === prev) return;
     onSave(id, field, next);
     setStatus('saving');
@@ -563,7 +569,6 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave }:
 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
-  const isDateField = DATE_FIELDS.has(field as ColumnField);
   const resize = useCallback(() => {
     const el = taRef.current;
     if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
