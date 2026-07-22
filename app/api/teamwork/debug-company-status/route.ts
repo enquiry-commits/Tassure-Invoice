@@ -6,7 +6,7 @@ import { getSessionCookie } from '@/lib/teamwork-agm';
 // view_company/{id} particulars page, distinct from the "Entity Status"
 // field already synced as companies.tw_status). Delete after use.
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -15,19 +15,26 @@ export async function GET(req: NextRequest) {
   }
   const id = req.nextUrl.searchParams.get('id') ?? '1075';
 
-  const cookie = await getSessionCookie();
-  const res = await fetch(`https://apps.teamworkcss.com/tassure_asia/view_company/${id}/?comp`, {
-    headers: { Cookie: cookie },
-  });
-  const html = await res.text();
+  try {
+    const cookie = await getSessionCookie();
+    const res = await fetch(`https://apps.teamworkcss.com/tassure_asia/view_company/${id}/?comp`, {
+      headers: { Cookie: cookie },
+    });
+    const html = await res.text();
 
-  const idx = html.indexOf('Internal CSS Status');
-  const snippet = idx >= 0 ? html.slice(Math.max(0, idx - 400), idx + 800) : null;
+    const idx = html.indexOf('Internal CSS Status');
+    const snippet = idx >= 0 ? html.slice(Math.max(0, idx - 400), idx + 800) : null;
 
-  return NextResponse.json({
-    status: res.status,
-    foundLabel: idx >= 0,
-    snippet,
-    htmlLength: html.length,
-  });
+    return NextResponse.json({
+      status: res.status,
+      foundLabel: idx >= 0,
+      snippet,
+      htmlLength: html.length,
+    });
+  } catch (error) {
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack?.slice(0, 2000) : undefined,
+    }, { status: 500 });
+  }
 }
