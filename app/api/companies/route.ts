@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
       bestEmail:          c.best_email,
       primaryContact:     c.primary_contact,
       clientStatus:       c.tw_status ?? null,
+      isCssClient:        c.client_type === 'CSS Client',
       isShareholder:      c.is_non_client === true,
     };
   });

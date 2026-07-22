@@ -16,6 +16,7 @@ interface Company {
   bestEmail: string | null;
   primaryContact: { contactName: string } | null;
   clientStatus: string | null;
+  isCssClient: boolean;
   isShareholder: boolean;
 }
 
@@ -23,7 +24,7 @@ type CompanyCat = 'all' | 'css_client' | 'shareholder' | 'nd' | 'address' | 'nd_
 
 function matchesCat(c: Company, cat: CompanyCat): boolean {
   switch (cat) {
-    case 'css_client':  return !c.isShareholder;
+    case 'css_client':  return c.isCssClient;
     case 'shareholder': return c.isShareholder;
     case 'nd':          return c.hasActiveND;
     case 'address':     return c.usesAddressService;
@@ -110,8 +111,8 @@ export default function CompaniesPage() {
 
   const cards: { key: CompanyCat; label: string; sub: string; color: string; bg: string; border: string }[] = [
     { key: 'all',         label: 'Total Active',        sub: 'Internal CSS Status = Active', color: '#1e3a5f', bg: '#f8fafc', border: '#cbd5e1' },
-    { key: 'css_client',  label: 'Client (CSS Client)', sub: 'active corporate services client', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4' },
-    { key: 'shareholder', label: 'Shareholder',         sub: 'active related entity', color: '#a16207', bg: '#fffbeb', border: '#fde68a' },
+    { key: 'css_client',  label: 'Client (CSS Client)', sub: 'TeamWork Client column · may overlap', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4' },
+    { key: 'shareholder', label: 'Shareholder',         sub: 'TeamWork shareholder · may overlap', color: '#a16207', bg: '#fffbeb', border: '#fde68a' },
     { key: 'nd',          label: 'Active ND Companies', sub: 'active companies with nominee director', color: '#6d28d9', bg: '#f5f3ff', border: '#ddd6fe' },
     { key: 'address',     label: 'Address Service',     sub: 'using our registered address', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd' },
     { key: 'nd_ceased',   label: 'ND Ceased',           sub: 'no active ND coverage', color: '#be123c', bg: '#fff1f2', border: '#fecdd3' },

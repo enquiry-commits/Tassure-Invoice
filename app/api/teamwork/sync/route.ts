@@ -20,11 +20,14 @@ import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@
 //    Internal CSS Status is the exception: it is always authoritative, and
 //    an empty value means Not Specified (therefore not Active).
 //  - Never touch company_name on existing rows (manual typo fixes live here)
-//    and never touch QB-derived fields (has_*, *_pic, client_type, …).
+//    and never touch QB-derived service fields (has_*, *_pic, …).
 //  - Unmatched TeamWork records are inserted only when Internal CSS Status is
 //    Active. `client`, `non_client`, and Entity Status are not roster gates.
-//  - is_non_client is retained as reference data only; it does not determine
-//    whether a company appears on the Companies page.
+//  - TeamWork's Client column is derived from two independent flags:
+//      corporate_shareholder_client="1" => CSS Client
+//      corporate_shareholder="1"        => Shareholder
+//    A company may be both. The legacy is_non_client column stores the
+//    Shareholder flag so existing deployments do not need a schema migration.
 //  - Nothing is ever deleted; rows whose internal_id vanished from TeamWork
 //    are only counted in the summary.
 export const maxDuration = 300;
@@ -43,8 +46,9 @@ interface TwCompany {
   person_in_charge: string | null;
   client: string;                     // "1" | "0" — NOT reliable for "is a real client"; several genuinely Active
                                        // corp-sec clients carry client="0". Kept only for reference.
-  non_client: string;                 // "1" | "0" — the field that actually distinguishes a real client from a
-                                       // Shareholder/related entity (verified against live TeamWork data).
+  non_client: string;                 // "1" | "0" — TeamWork Non-Client flag; not the Shareholder indicator.
+  corporate_shareholder: string;      // "1" => Client column includes "(Shareholder)".
+  corporate_shareholder_client: string; // "1" => Client column includes "CSS Client".
   company_reg_Office_address: string | null;
 }
 
@@ -117,7 +121,7 @@ async function syncTeamworkCompanies() {
   const supabase = createAdminClient();
   const { data: rows, error } = await supabase
     .from('companies')
-    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, fye_day, best_email, uses_address, has_nd, pic, sec_pic, is_non_client');
+    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, fye_day, best_email, uses_address, has_nd, pic, sec_pic, client_type, is_non_client');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const byInternal = new Map((rows ?? []).filter(r => r.internal_id).map(r => [r.internal_id as string, r]));
@@ -159,6 +163,9 @@ async function syncTeamworkCompanies() {
     const fyeDay  = fyeDayOf(tw.fye_date);
     const email   = (tw.company_email_address ?? '').trim() || null;
     const regAddr = (tw.company_reg_Office_address ?? '').trim();
+    const isCssClient = tw.corporate_shareholder_client === '1';
+    const isShareholder = tw.corporate_shareholder === '1';
+    const clientType = isCssClient ? 'CSS Client' : isShareholder ? 'Shareholder' : 'Other';
     const resolvedPic = resolveTeamworkPic(tw.person_in_charge);
     const rawPic = String(tw.person_in_charge ?? '').trim();
     if (/^\d+$/.test(rawPic) && !resolvedPic) {
@@ -182,10 +189,10 @@ async function syncTeamworkCompanies() {
       // directions — cancelled service flips off, new service flips on). Only
       // when TeamWork actually has an address on file.
       if (regAddr && usesOurAddress(regAddr) !== (row.uses_address === true)) patch.uses_address = usesOurAddress(regAddr);
-      // Retain TeamWork's non_client flag for reference and reporting only.
-      // It no longer controls the Companies roster.
-      const isNonClient = tw.non_client === '1';
-      if (isNonClient !== (row.is_non_client === true)) patch.is_non_client = isNonClient;
+      // Mirror TeamWork's displayed Client column. CSS Client and Shareholder
+      // are independent identities, so a company can appear in both filters.
+      if (clientType !== row.client_type) patch.client_type = clientType;
+      if (isShareholder !== (row.is_non_client === true)) patch.is_non_client = isShareholder;
       if (Object.keys(patch).length) { patch.synced_at = now; updates.push({ id: row.id, patch }); }
     } else if (internalCssActive && twName) {
       inserts.push({
@@ -197,12 +204,12 @@ async function syncTeamworkCompanies() {
         fye_day: fyeDay,
         best_email: email,
         pic: resolvedPic && !/^\d+$/.test(resolvedPic) ? resolvedPic : null,
-        // Retain the legacy classification for downstream billing rules, but
-        // do not use it to decide whether the Companies page includes a row.
-        client_type: tw.non_client === '1' ? 'Shareholder' : 'CSS Client',
+        // Client classification mirrors TeamWork's Client column; roster
+        // inclusion remains governed only by Internal CSS Status.
+        client_type: clientType,
         tw_status: 'Active',
         is_active: true,
-        is_non_client: tw.non_client === '1',
+        is_non_client: isShareholder,
         uses_address: regAddr ? usesOurAddress(regAddr) : false,
         synced_at: now,
       });
