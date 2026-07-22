@@ -112,7 +112,7 @@ export default function CompaniesPage() {
     { key: 'all',         label: 'Total Active',        sub: 'Internal CSS Status = Active', color: '#1e3a5f', bg: '#f8fafc', border: '#cbd5e1' },
     { key: 'css_client',  label: 'Client (CSS Client)', sub: 'active corporate services client', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4' },
     { key: 'shareholder', label: 'Shareholder',         sub: 'active related entity', color: '#a16207', bg: '#fffbeb', border: '#fde68a' },
-    { key: 'nd',          label: 'Active ND',           sub: 'nominee director on file', color: '#6d28d9', bg: '#f5f3ff', border: '#ddd6fe' },
+    { key: 'nd',          label: 'Active ND Companies', sub: 'active companies with nominee director', color: '#6d28d9', bg: '#f5f3ff', border: '#ddd6fe' },
     { key: 'address',     label: 'Address Service',     sub: 'using our registered address', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd' },
     { key: 'nd_ceased',   label: 'ND Ceased',           sub: 'no active ND coverage', color: '#be123c', bg: '#fff1f2', border: '#fecdd3' },
   ];
