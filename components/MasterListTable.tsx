@@ -53,6 +53,7 @@ export interface MasterListRow {
   grade: string | null;
   tw_fye?: string | null;      // authoritative FYE month from TeamWork (for cross-check)
   in_teamwork?: boolean;       // whether this row exists in TeamWork at all
+  is_css_client?: boolean | null; // TeamWork client_type === 'CSS Client' (null when not matched to a TeamWork company at all)
   acc_pic?: string | null;    // acc_pic_override if set, else ar_reminder.acc_pic joined by UEN — Active Client only
   tax_pic?: string | null;    // tax_pic_override if set, else ar_reminder.tax_pic joined by UEN — Active Client only
   acc_pic_override?: string | null;
@@ -80,7 +81,7 @@ function fyeMonthNum(s: string | null | undefined): number | null {
 // tax_pic/nominee_director/secretary columns, not columns of their own —
 // excluded here so they can never be added to a `fields` list by mistake.
 type ColumnField = Exclude<keyof MasterListRow,
-  'id' | 'tw_fye' | 'in_teamwork' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active'>;
+  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active'>;
 
 // Full column set — the default for every Master List page that passes no
 // `fields` prop (Strike Off, Terminated, Change Co Name). A page can pass
@@ -654,7 +655,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [rows, setRows]       = useState<MasterListRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch]   = useState('');
-  const [catFilter, setCatFilter] = useState<'all' | 'fye_mismatch' | 'has_nd' | 'mas' | 'non_teamwork'>('all');
+  const [catFilter, setCatFilter] = useState<'all' | 'tw_css_client' | 'fye_mismatch' | 'has_nd' | 'mas' | 'non_teamwork'>('all');
   const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnField, Set<string>>>>({});
   const [view, setView] = useState<'list' | 'table'>('list');
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -813,11 +814,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     !!r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye);
   const catMatch = (r: MasterListRow, cat: typeof catFilter) => {
     switch (cat) {
-      case 'fye_mismatch': return isFyeMismatch(r);
-      case 'has_nd':       return !!r.nd_active;
-      case 'mas':          return isSet(r.mas);
-      case 'non_teamwork': return r.in_teamwork === false;
-      default:             return true;
+      case 'tw_css_client': return r.is_css_client === true;
+      case 'fye_mismatch':  return isFyeMismatch(r);
+      case 'has_nd':        return !!r.nd_active;
+      case 'mas':           return isSet(r.mas);
+      case 'non_teamwork':  return r.in_teamwork === false;
+      default:              return true;
     }
   };
   const catCount = (cat: typeof catFilter) => rows.filter(r => catMatch(r, cat)).length;
@@ -844,6 +846,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   useEffect(() => { updateSb(); }, [rows, page, updateSb]);
   const catCards: { key: typeof catFilter; label: string; sub: string; color: string; bg: string; bd: string }[] = [
     { key: 'all',          label: 'Total Records',  sub: 'in this list',              color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0' },
+    { key: 'tw_css_client', label: 'TW CSS Clients', sub: 'synced as CSS Client (Companies page)', color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4' },
     { key: 'fye_mismatch', label: 'FYE Mismatch',   sub: 'differs from TeamWork',     color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
     { key: 'has_nd',       label: 'Has Nominee Dir', sub: 'nominee director on file',  color: '#7c3aed', bg: '#f5f3ff', bd: '#ddd6fe' },
     { key: 'mas',          label: 'MAS Regulated',  sub: 'MAS grade assigned',        color: '#0369a1', bg: '#f0f9ff', bd: '#bae6fd' },

@@ -43,14 +43,16 @@ export async function GET(req: NextRequest) {
   //  - in_teamwork: this row's UEN exists in TeamWork. The master list is
   //    maintained by hand and normally has MORE companies than TeamWork —
   //    in_teamwork=false marks the ones TeamWork has no record of.
-  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month');
+  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month, client_type');
   const twFyeByUen = new Map<string, string>();
   const twUens = new Set<string>();
+  const cssClientByUen = new Map<string, boolean>();
   for (const c of companies ?? []) {
     const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
     if (!uen) continue;
     twUens.add(uen);
     if (c.fye_month) twFyeByUen.set(uen, c.fye_month);
+    cssClientByUen.set(uen, c.client_type === 'CSS Client');
   }
 
   // Active Client only: pull ACC/TAX PIC from ar_reminder (joined by UEN —
@@ -79,6 +81,7 @@ export async function GET(req: NextRequest) {
       ...r,
       tw_fye: uen ? (twFyeByUen.get(uen) ?? null) : null,
       in_teamwork: uen !== null && twUens.has(uen),
+      is_css_client: uen ? (cssClientByUen.get(uen) ?? null) : null,
       acc_pic: r.acc_pic_override?.trim() || (uen ? (accByUen.get(uen) ?? null) : null),
       tax_pic: r.tax_pic_override?.trim() || (uen ? (taxByUen.get(uen) ?? null) : null),
     };
