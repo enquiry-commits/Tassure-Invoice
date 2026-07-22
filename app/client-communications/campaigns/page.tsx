@@ -22,6 +22,9 @@ interface Row {
   toEmail: string | null; ccEmail: string | null; contactName: string;
   invoiceRefs: InvoiceRef[]; totalAmount: number;
   included: boolean; reason: string | null;
+  recipientSource: 'teamwork_report' | 'company_fallback' | 'missing';
+  recipientSyncedAt: string | null;
+  recipientReviewRequired: boolean;
 }
 interface CompanySearchHit { companyName: string; bestEmail: string | null }
 
@@ -184,7 +187,7 @@ export default function CampaignCentrePage() {
       const json = await res.json();
       if (!res.ok) { setAddError(json.error ?? 'Company not found.'); return; }
       const row = json.row as Row;
-      const finalRow: Row = { ...row, included: !!row.toEmail };
+      const finalRow: Row = { ...row };
       setRows(prev => {
         const idx = prev.findIndex(r => r.companyName.toLowerCase() === finalRow.companyName.toLowerCase());
         const next = idx >= 0 ? prev.map((r, i) => i === idx ? finalRow : r) : [...prev, finalRow];
@@ -327,7 +330,9 @@ export default function CampaignCentrePage() {
           </div>
           <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 14 }}>
             Review who gets a draft before anything is generated. Uncheck to skip someone, add a company manually, or remove a row entirely.
-            To/CC accept more than one address — separate with a comma or semicolon (e.g. <span style={{ fontFamily: 'monospace' }}>jane@acme.com, finance@acme.com</span>); every address in the list receives the email.
+            The TeamWork Report recipient list is used by all three campaign types. Customer emails go to To and Tassure emails go to CC.
+            Each address is shown on its own line and remains editable for the final human review.
+            Rules applied: cindy@tassure.com is excluded; hoechyi@tassure.com is always CC; when kahye@tassure.com is present, sengxin@tassure.com is excluded.
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -371,11 +376,19 @@ export default function CampaignCentrePage() {
                   return (
                     <div key={`${r.companyName}-${i}`} style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f1f5f9', background: r.included ? '#fff' : '#fafbfc', opacity: r.included ? 1 : 0.65 }}>
                       <input type="checkbox" checked={r.included} disabled={!hasEmail} onChange={() => toggleRow(i)} style={{ cursor: hasEmail ? 'pointer' : 'not-allowed' }} />
-                      <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.companyName}>{r.companyName}</span>
-                      <input value={r.toEmail ?? ''} onChange={e => updateRowEmail(i, e.target.value)} placeholder="name@company.com, name2@company.com"
-                        style={{ fontSize: 11.5, padding: '4px 6px', borderRadius: 6, border: `1px solid ${hasEmail ? '#e2e8f0' : '#fecaca'}`, background: hasEmail ? '#fff' : '#fef2f2', color: '#1e3a5f', outline: 'none', width: '100%' }} />
-                      <input value={r.ccEmail ?? ''} onChange={e => updateRowCc(i, e.target.value)} placeholder="optional CC"
-                        style={{ fontSize: 11.5, padding: '4px 6px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f', outline: 'none', width: '100%' }} />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 12.5, fontWeight: 600, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.companyName}>{r.companyName}</div>
+                        <div title={r.recipientSyncedAt ? `Last synced ${new Date(r.recipientSyncedAt).toLocaleString()}` : undefined}
+                          style={{ marginTop: 3, fontSize: 9.5, fontWeight: 700, color: r.recipientSource === 'teamwork_report' ? '#15803d' : '#c2410c' }}>
+                          {r.recipientSource === 'teamwork_report' ? 'TEAMWORK REPORT' : r.recipientSource === 'company_fallback' ? 'FALLBACK · REVIEW' : 'NO RECIPIENT DATA'}
+                        </div>
+                      </div>
+                      <textarea value={r.toEmail ?? ''} onChange={e => updateRowEmail(i, e.target.value)} placeholder={'customer@company.com\nfinance@company.com'}
+                        rows={Math.max(2, Math.min(5, (r.toEmail ?? '').split(/\r?\n/).filter(Boolean).length))}
+                        style={{ fontSize: 11.5, lineHeight: 1.45, padding: '5px 7px', borderRadius: 6, border: `1px solid ${hasEmail ? '#e2e8f0' : '#fecaca'}`, background: hasEmail ? '#fff' : '#fef2f2', color: '#1e3a5f', outline: 'none', width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
+                      <textarea value={r.ccEmail ?? ''} onChange={e => updateRowCc(i, e.target.value)} placeholder={'hoechyi@tassure.com\noptional@tassure.com'}
+                        rows={Math.max(2, Math.min(5, (r.ccEmail ?? '').split(/\r?\n/).filter(Boolean).length))}
+                        style={{ fontSize: 11.5, lineHeight: 1.45, padding: '5px 7px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f', outline: 'none', width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
                       <span style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.invoiceRefs.map(x => `${x.qbCompany} #${x.invoiceNo}`).join(', ')}>
                         {r.invoiceRefs.length ? r.invoiceRefs.map(x => `${x.qbCompany}#${x.invoiceNo}`).join(', ') : '—'}
                       </span>

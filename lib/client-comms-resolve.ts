@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import type { InvoiceRef } from '@/lib/email-merge';
+import { applyCampaignRecipientRules, parseEmailList, recipientLines } from '@/lib/campaign-recipients';
 
 /**
  * Shared company/invoice resolution for Client Communications, used by both
@@ -16,6 +17,8 @@ const FYE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'Jul
 export interface CompanyRow {
   id: number; company_name: string; best_email: string | null;
   primary_contact: { email?: string; contactName?: string } | null;
+  tw_to_emails: string[] | null; tw_cc_emails: string[] | null;
+  tw_recipient_source: string | null; tw_recipient_synced_at: string | null;
 }
 
 export interface ResolvedRow {
@@ -23,20 +26,44 @@ export interface ResolvedRow {
   toEmail: string | null; ccEmail: string | null; contactName: string;
   invoiceRefs: InvoiceRef[]; totalAmount: number;
   included: boolean; reason: string | null;
+  recipientSource: 'teamwork_report' | 'company_fallback' | 'missing';
+  recipientSyncedAt: string | null;
+  recipientReviewRequired: boolean;
 }
 
 export function pickContact(company: CompanyRow | null) {
   const primary = company?.primary_contact as { email?: string; contactName?: string } | null;
+  const hasTeamworkDirectory = company?.tw_recipient_source === 'teamwork_report';
+  if (hasTeamworkDirectory) {
+    const { toEmails, ccEmails } = applyCampaignRecipientRules([
+      ...(company?.tw_to_emails ?? []),
+      ...(company?.tw_cc_emails ?? []),
+    ]);
+    return {
+      email: recipientLines(toEmails),
+      ccEmail: recipientLines(ccEmails),
+      contactName: primary?.contactName ?? company?.company_name ?? '',
+      source: 'teamwork_report' as const,
+      syncedAt: company?.tw_recipient_synced_at ?? null,
+      reviewRequired: false,
+    };
+  }
+
+  const fallback = parseEmailList(company?.best_email ?? primary?.email ?? '');
   return {
-    email: company?.best_email ?? primary?.email ?? null,
+    email: recipientLines(fallback),
+    ccEmail: null,
     contactName: primary?.contactName ?? company?.company_name ?? '',
+    source: fallback.length ? 'company_fallback' as const : 'missing' as const,
+    syncedAt: null,
+    reviewRequired: true,
   };
 }
 
 export async function loadCompanies(supabase: SupabaseClient): Promise<CompanyRow[]> {
   const { data } = await supabase
     .from('companies')
-    .select('id, company_name, best_email, primary_contact')
+    .select('id, company_name, best_email, primary_contact, tw_to_emails, tw_cc_emails, tw_recipient_source, tw_recipient_synced_at')
     .eq('is_active', true);
   return (data ?? []) as CompanyRow[];
 }
@@ -148,16 +175,20 @@ export function buildRow(
   if (alreadySent.has(key)) { included = false; reason = 'Already sent this cycle'; }
   if (type !== 'letter' && !refs.length) { included = false; reason = 'No invoice found (TAB/TAC only — check TAO manually)'; }
   if (!contact.email) { included = false; reason = 'No email on file'; }
+  else if (contact.reviewRequired) { included = false; reason = 'TeamWork Report recipients unavailable — confirm To/CC manually'; }
 
   return {
     companyName: rawName,
     companyId: company?.id ?? null,
     toEmail: contact.email ?? null,
-    ccEmail: null,
+    ccEmail: contact.ccEmail,
     contactName: contact.contactName || rawName,
     invoiceRefs: refs,
     totalAmount,
     included,
     reason,
+    recipientSource: contact.source,
+    recipientSyncedAt: contact.syncedAt,
+    recipientReviewRequired: contact.reviewRequired,
   };
 }

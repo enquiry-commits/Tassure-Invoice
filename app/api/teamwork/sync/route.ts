@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@/lib/automation-sync';
+import { syncTeamworkCampaignRecipients } from '@/lib/teamwork-recipients';
 
 // Daily TeamWork -> companies sync (see vercel.json cron, 00:30 UTC — before
 // the 01:00 ar-reminder generator so new clients enter that day's AR window).
@@ -280,8 +281,16 @@ async function syncTeamworkCompanies() {
     replaceAutomationExceptions('teamwork_companies', 'ambiguous_company_name', ambiguousNames),
   ]);
 
+  let recipientSync: Awaited<ReturnType<typeof syncTeamworkCampaignRecipients>> | null = null;
+  let recipientSyncError: string | null = null;
+  try {
+    recipientSync = await syncTeamworkCampaignRecipients(supabase);
+  } catch (error) {
+    recipientSyncError = error instanceof Error ? error.message : String(error);
+  }
+
   return NextResponse.json({
-    ok: !insertError && !updateErrors.length,
+    ok: !insertError && !updateErrors.length && !recipientSyncError,
     tw_total: twList.length,
     matched,
     internal_id_backfilled: backfilled,
@@ -291,6 +300,8 @@ async function syncTeamworkCompanies() {
     inserted_names: dedupedInserts.map(r => r.company_name),
     skipped_ambiguous_names: skippedAmbiguous,
     rows_missing_from_teamwork: missingFromTw,
+    campaign_recipients: recipientSync,
+    ...(recipientSyncError ? { campaign_recipient_error: recipientSyncError } : {}),
     ...(insertError ? { insert_error: insertError } : {}),
     ...(updateErrors.length ? { update_errors: updateErrors.slice(0, 5) } : {}),
   });

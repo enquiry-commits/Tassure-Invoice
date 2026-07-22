@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-22 (Active Client Services: free-toggle checkboxes, editable ACC/TAX)
+Last updated: 2026-07-22 (Campaign Centre: TeamWork Report recipient directory)
 
 ## Purpose
 
@@ -23,6 +23,27 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Campaign Centre now has one TeamWork-backed recipient policy for all three
+  campaign types** (AR Renewal, SOA and Document Reminder). The daily
+  TeamWork Companies automation also reads Report → Reminder Upcoming To Be
+  Sent → Recipients, groups the rows by company, and stores external customer
+  addresses separately from Tassure internal addresses. The canonical rules
+  live in `lib/campaign-recipients.ts`: external addresses → To, Tassure/
+  Tasure domains → CC, exclude `cindy@tassure.com`, always add
+  `hoechyi@tassure.com`, and remove `sengxin@tassure.com` whenever
+  `kahye@tassure.com` is present. Campaign preview renders To/CC as multiline
+  textareas (one address per line) with a TeamWork/fallback source badge;
+  fallback or missing Report records start unchecked for human confirmation.
+  Draft creation normalizes and validates the final reviewer-edited lists,
+  and Outlook mailto generation now accepts newline-separated recipients.
+  Added idempotent migration `scripts/add-teamwork-campaign-recipients.sql`
+  and rule tests (`npm run test:campaign-recipients`). Verified against the
+  live TeamWork report: 476 rows, 352 with external To, 124 without external
+  To (held for review), 42 Kah Ye/Seng Xin cases correctly suppress Seng Xin,
+  Hoe Chyi present in every computed CC list. Production build passes. The
+  migration must be run before this code is deployed and the first TeamWork
+  sync/backfill is triggered.
 
 - **Follow-up on the Active Client detail modal, from Vincent's first-look
   feedback** (screenshot of the real modal): (1) long values — addresses,

@@ -16,6 +16,10 @@ create table if not exists companies (
   best_email      text,
   primary_contact jsonb,                 -- { contactName, email, phone }
   contact_persons jsonb default '[]',
+  tw_to_emails text[] not null default '{}',
+  tw_cc_emails text[] not null default '{}',
+  tw_recipient_source text,
+  tw_recipient_synced_at timestamptz,
   synced_at       timestamptz default now(),
   created_at      timestamptz default now()
 );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { mergeTemplate, formatInvoiceList, formatAmount, type InvoiceRef } from '@/lib/email-merge';
+import { normalizeRecipientLines } from '@/lib/campaign-recipients';
 
 // Client Communications: generates draft emails from real system data,
 // replacing the manual BULK.xlsm mail-merge. Sending stays manual (Outlook,
@@ -70,15 +71,17 @@ export async function POST(req: NextRequest) {
     const key = c.companyName.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    if (!c.toEmail) { skipped.push({ name: c.companyName, reason: 'no email on file' }); continue; }
+    const toEmail = normalizeRecipientLines(c.toEmail);
+    const ccEmail = normalizeRecipientLines(c.ccEmail);
+    if (!toEmail) { skipped.push({ name: c.companyName, reason: 'no valid external recipient' }); continue; }
 
     const refs = c.invoiceRefs ?? [];
     const totalAmount = c.totalAmount ?? refs.reduce((s, r) => s + r.amount, 0);
     const fields = {
       companyName: c.companyName,
       contactName: c.contactName || c.companyName,
-      toEmail: c.toEmail,
-      ccEmail: c.ccEmail ?? '',
+      toEmail,
+      ccEmail,
       totalAmount: formatAmount(totalAmount),
       invoiceList: formatInvoiceList(refs),
       dueDate: '',
@@ -90,8 +93,8 @@ export async function POST(req: NextRequest) {
       campaign_id: campaign.id,
       company_id: c.companyId ?? null,
       company_name: c.companyName,
-      to_email: c.toEmail,
-      cc_email: c.ccEmail || null,
+      to_email: toEmail,
+      cc_email: ccEmail || null,
       subject: mergeTemplate(template.subject_template, fields),
       body: mergeTemplate(template.body_template, fields),
       invoice_refs: refs,

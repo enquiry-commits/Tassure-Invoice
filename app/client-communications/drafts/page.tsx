@@ -28,7 +28,7 @@ interface Campaign {
 // link. Comma-separating them here is what actually makes them arrive as
 // separate To/CC recipients instead of one broken address.
 function normalizeRecipients(raw: string): string {
-  return raw.split(/[;,]/).map(s => s.trim()).filter(Boolean).join(',');
+  return raw.split(/[;,\n\r]+/).map(s => s.trim()).filter(Boolean).join(',');
 }
 
 function buildMailto(d: Draft): string {
