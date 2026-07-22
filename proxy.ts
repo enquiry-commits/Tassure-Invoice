@@ -13,7 +13,6 @@ const CRON_PATHS = new Set([
   '/api/quickbooks/sync',
   '/api/ar-reminder/sync-workflow',
   '/api/late-filing/sync',
-  '/api/teamwork/debug-company-status', // TEMPORARY — remove alongside the route once used
 ]);
 
 export async function proxy(req: NextRequest) {

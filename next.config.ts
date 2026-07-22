@@ -8,11 +8,6 @@ const nextConfig: NextConfig = {
       './node_modules/playwright-core/**',
       './node_modules/@sparticuz/chromium/**',
     ],
-    // TEMPORARY — remove alongside the route once used
-    '/api/teamwork/debug-company-status': [
-      './node_modules/playwright-core/**',
-      './node_modules/@sparticuz/chromium/**',
-    ],
   },
 };
 
