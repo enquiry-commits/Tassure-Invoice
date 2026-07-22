@@ -1,7 +1,7 @@
 const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
 const INTERNAL_DOMAINS = new Set(['tassure.com', 'tasure.com']);
-const EXCLUDED_INTERNAL_EMAILS = new Set(['cindy@tassure.com']);
+const EXCLUDED_INTERNAL_EMAILS = new Set(['cindyzhang@tassure.com']);
 const ALWAYS_CC_EMAIL = 'hoechyi@tassure.com';
 const KAHYE_EMAIL = 'kahye@tassure.com';
 const SENGXIN_EMAIL = 'sengxin@tassure.com';
@@ -43,7 +43,7 @@ export function isTassureEmail(email: string): boolean {
  *
  * - customer/external addresses -> To
  * - Tassure addresses -> CC
- * - cindy@tassure.com is excluded
+ * - cindyzhang@tassure.com is excluded
  * - hoechyi@tassure.com is always CC'd
  * - when kahye@tassure.com is present, sengxin@tassure.com is excluded
  */
