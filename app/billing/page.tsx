@@ -6,7 +6,7 @@ import {
   RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
   AlertTriangle, Clock, CheckCircle2, FileText, Calendar,
   ShieldCheck, MapPin, UserCheck, BarChart3, BookOpen, DollarSign,
-  Plus, Check, X, Trash2, History, RotateCcw,
+  Plus, Check, X, Trash2, History, RotateCcw, Filter,
 } from 'lucide-react';
 import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
@@ -2320,7 +2320,100 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
 // ─────────────────────────────────────────────────────────────────────────────
 // AR TABLE VIEW
 // ─────────────────────────────────────────────────────────────────────────────
-function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: ARRecord[]; onSave: (id: number, field: string, val: string) => void; onDelete: (id: number) => void; startIndex?: number }) {
+type ARColumnKey = 'reminder_note' | 'prepared_date' | 'date_of_agm' | 'sent_date' | 'received_date'
+  | 'filling_date' | 'xbrl' | 'software_update' | 'dpo' | 'ond_ron' | 'pic' | 'acc_pic' | 'tax_pic'
+  | 'remarks' | 'ar_status' | 'accounts_status';
+const AR_DATE_COLUMNS = new Set<ARColumnKey>(['reminder_note', 'prepared_date', 'date_of_agm', 'sent_date', 'received_date', 'filling_date', 'software_update', 'accounts_status']);
+
+function arColumnValue(r: ARRecord, field: ARColumnKey): string {
+  const raw = (r as unknown as Record<string, string | null>)[field] ?? '';
+  return AR_DATE_COLUMNS.has(field) ? (toDisplayDate(raw) ?? raw) : raw;
+}
+
+// Excel-style per-column filter, mirroring components/MasterListTable.tsx's
+// ColumnFilterMenu — options are computed from the full loaded month/year
+// record set (non-cascading), not re-narrowed by other active filters.
+function ARColumnFilterMenu({ field, label, records, selected, onApply }: {
+  field: ARColumnKey; label: string; records: ARRecord[];
+  selected: Set<string> | null; onApply: (next: Set<string> | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearchLocal] = useState('');
+  const [draft, setDraft] = useState<Set<string> | null>(selected);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { if (open) { setDraft(selected); setSearchLocal(''); } }, [open, selected]);
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [open]);
+
+  const options = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of records) {
+      const raw = arColumnValue(r, field).trim();
+      const key = raw === '' ? '(Blank)' : raw;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [records, field]);
+
+  const filteredOptions = search ? options.filter(([v]) => v.toLowerCase().includes(search.toLowerCase())) : options;
+  const isChecked = (v: string) => draft === null || draft.has(v);
+  const toggle = (v: string) => setDraft(prev => {
+    const base = prev === null ? new Set(options.map(([value]) => value)) : new Set(prev);
+    if (base.has(v)) base.delete(v); else base.add(v);
+    return base.size === options.length ? null : base;
+  });
+  const active = selected !== null;
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button onClick={e => { e.stopPropagation(); setOpen(v => !v); }} title={`Filter ${label}`}
+        style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', color: active ? '#fde047' : 'rgba(255,255,255,0.6)' }}>
+        <Filter size={11} fill={active ? 'currentColor' : 'none'} />
+      </button>
+      {open && (
+        <div onClick={e => e.stopPropagation()} style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 30, background: '#fff',
+          border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 210, padding: 8,
+          textTransform: 'none', fontWeight: 400, letterSpacing: 'normal', color: '#334155',
+        }}>
+          <input value={search} onChange={e => setSearchLocal(e.target.value)} placeholder="Search values…"
+            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 5, padding: '4px 6px', fontSize: 11, marginBottom: 6, outline: 'none', color: '#1e293b', boxSizing: 'border-box' }} />
+          <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
+            <button onClick={() => setDraft(null)} style={{ fontSize: 10, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 700 }}>Select All</button>
+            <button onClick={() => setDraft(new Set())} style={{ fontSize: 10, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 700 }}>Clear</button>
+          </div>
+          <div style={{ maxHeight: 200, overflowY: 'auto', borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9', padding: '4px 0' }}>
+            {filteredOptions.length === 0 ? (
+              <div style={{ fontSize: 11, color: '#94a3b8', padding: '4px 2px' }}>No values</div>
+            ) : filteredOptions.map(([v, valueCount]) => (
+              <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 2px', fontSize: 11, cursor: 'pointer' }}>
+                <input type="checkbox" checked={isChecked(v)} onChange={() => toggle(v)} style={{ width: 12, height: 12, cursor: 'pointer', flexShrink: 0 }} />
+                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v}>{v}</span>
+                <span style={{ color: '#94a3b8', flexShrink: 0 }}>{valueCount}</span>
+              </label>
+            ))}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 6 }}>
+            <button onClick={() => setOpen(false)} style={{ fontSize: 10, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '3px 6px' }}>Cancel</button>
+            <button onClick={() => { onApply(draft); setOpen(false); }} style={{ fontSize: 10, fontWeight: 700, color: '#fff', background: '#1d3a5c', border: 'none', borderRadius: 5, cursor: 'pointer', padding: '3px 8px' }}>OK</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave, onDelete, startIndex = 0 }: {
+  records: ARRecord[]; allRecords: ARRecord[];
+  columnFilters: Partial<Record<ARColumnKey, Set<string>>>;
+  onApplyFilter: (field: ARColumnKey, next: Set<string> | null) => void;
+  onSave: (id: number, field: string, val: string) => void; onDelete: (id: number) => void; startIndex?: number;
+}) {
   // Finance columns get a teal header + tinted cell bg
   const FIN_HDR = '#0f766e';
   const FIN_CELL = 'rgba(20,184,166,0.06)';
@@ -2429,6 +2522,14 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
     }}>{children}</td>
   );
 
+  // Column label + Excel-style filter icon, for the plain (non-PIC) headers.
+  const HF = (field: ARColumnKey, label: string) => (
+    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+      <span>{label}</span>
+      <ARColumnFilterMenu field={field} label={label} records={allRecords} selected={columnFilters[field] ?? null} onApply={next => onApplyFilter(field, next)} />
+    </span>
+  );
+
   return (
     <>
     <div ref={outerRef} style={{ overflowX: 'hidden', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
@@ -2438,22 +2539,22 @@ function ARTableView({ records, onSave, onDelete, startIndex = 0 }: { records: A
             <TH w={30} center stickyLeft={0}>#</TH>
             <TH w={200} stickyLeft={30}>Company Name</TH>
             <TH w={80} stickyLeft={230} lastSticky>UEN</TH>
-            <TH w={100}>Reminder</TH>
-            <TH w={100}>Report Ready</TH>
-            <TH w={100}>AGM</TH>
-            <TH w={100}>To Client</TH>
-            <TH w={100}>Signed</TH>
-            <TH w={100}>AR</TH>
-            <TH w={100}>XBRL</TH>
-            <TH w={100}>TW Update</TH>
-            <TH w={100}>DPO</TH>
-            <TH w={100}>ROND RONS</TH>
+            <TH w={100}>{HF('reminder_note', 'Reminder')}</TH>
+            <TH w={100}>{HF('prepared_date', 'Report Ready')}</TH>
+            <TH w={100}>{HF('date_of_agm', 'AGM')}</TH>
+            <TH w={100}>{HF('sent_date', 'To Client')}</TH>
+            <TH w={100}>{HF('received_date', 'Signed')}</TH>
+            <TH w={100}>{HF('filling_date', 'AR')}</TH>
+            <TH w={100}>{HF('xbrl', 'XBRL')}</TH>
+            <TH w={100}>{HF('software_update', 'TW Update')}</TH>
+            <TH w={100}>{HF('dpo', 'DPO')}</TH>
+            <TH w={100}>{HF('ond_ron', 'ROND RONS')}</TH>
             {picHeader('sec', 'SEC PIC')}
             {picHeader('acc', 'ACC PIC')}
             {picHeader('tax', 'TAX PIC')}
-            <TH w={180}>Remarks</TH>
-            <TH w={150} finance>Invoice</TH>
-            <TH w={150} finance>Email Sent</TH>
+            <TH w={180}>{HF('remarks', 'Remarks')}</TH>
+            <TH w={150} finance>{HF('ar_status', 'Invoice')}</TH>
+            <TH w={150} finance>{HF('accounts_status', 'Email Sent')}</TH>
             <TH w={44} center>{''}</TH>
           </tr>
         </thead>
@@ -2541,6 +2642,12 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   const [modalRecord, setModalRecord] = useState<ARRecord | null>(null);
   const [search,      setSearch]      = useState('');
   const [filter,      setFilter]      = useState('all');
+  const [columnFilters, setColumnFilters] = useState<Partial<Record<ARColumnKey, Set<string>>>>({});
+  const applyColumnFilter = useCallback((field: ARColumnKey, next: Set<string> | null) => setColumnFilters(prev => {
+    if (next === null) { const { [field]: _drop, ...rest } = prev; return rest; }
+    return { ...prev, [field]: next };
+  }), []);
+  const columnFilterKey = Object.entries(columnFilters).map(([f, s]) => `${f}=${[...s].sort().join(',')}`).sort().join('&');
   const [view,        setView]        = useState<'list' | 'table'>('list');
   const [liveNotice,  setLiveNotice]  = useState('');
 
@@ -2671,12 +2778,16 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
 
   const filtered = useMemo(() => records.filter(r => {
     if (search && !r.entity_name.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filter === 'filed')       return r.stages.arFiled;
-    if (filter === 'in_progress') return r.stagesDone > 0 && !r.stages.arFiled;
-    if (filter === 'pending')     return r.stagesDone === 0;
-    if (filter === 'overdue')     return !r.stages.arFiled && r.daysUntilDue !== null && r.daysUntilDue < 0;
+    if (filter === 'filed'       && !r.stages.arFiled) return false;
+    if (filter === 'in_progress' && !(r.stagesDone > 0 && !r.stages.arFiled)) return false;
+    if (filter === 'pending'     && r.stagesDone !== 0) return false;
+    if (filter === 'overdue'     && !(!r.stages.arFiled && r.daysUntilDue !== null && r.daysUntilDue < 0)) return false;
+    for (const [field, allowed] of Object.entries(columnFilters) as [ARColumnKey, Set<string>][]) {
+      const raw = arColumnValue(r, field).trim();
+      if (!allowed.has(raw === '' ? '(Blank)' : raw)) return false;
+    }
     return true;
-  }), [records, search, filter]);
+  }), [records, search, filter, columnFilters]);
 
   const stats = useMemo(() => ({
     total:      records.length,
@@ -2688,7 +2799,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
 
   // Paginate AFTER search/filter — shared by both List and Table views.
   const { page, setPage, totalPages, pageItems, startIndex, total: pagedTotal } =
-    usePagination(filtered, `${search}|${filter}|${month}|${year}`, 40);
+    usePagination(filtered, `${search}|${filter}|${month}|${year}|${columnFilterKey}`, 40);
   const isMobile = useIsMobile();
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, color: '#1e3a5f', background: '#fff', cursor: 'pointer', outline: 'none' };
@@ -2892,7 +3003,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           </div>
           {loading && records.length === 0
             ? <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>
-            : <ARTableView records={pageItems} onSave={handleSave} onDelete={handleDelete} startIndex={startIndex} />
+            : <ARTableView records={pageItems} allRecords={records} columnFilters={columnFilters} onApplyFilter={applyColumnFilter} onSave={handleSave} onDelete={handleDelete} startIndex={startIndex} />
           }
         </>
       )}
