@@ -260,8 +260,15 @@ async function syncTeamworkCompanies() {
       ndFlagUpdates += results.filter(e => !e).length;
     }
 
-    const { data: mlRows } = await supabase.from('master_list').select('id, company_name, nd_active');
-    const mlPatches = (mlRows ?? [])
+    // master_list has more rows than PostgREST's default page size (1000), so
+    // an unpaginated select silently truncates — page through it explicitly.
+    const mlRows: { id: number; company_name: string; nd_active: boolean | null }[] = [];
+    for (let start = 0; ; start += 1000) {
+      const { data: page } = await supabase.from('master_list').select('id, company_name, nd_active').range(start, start + 999);
+      mlRows.push(...(page ?? []));
+      if (!page || page.length < 1000) break;
+    }
+    const mlPatches = mlRows
       .filter(r => ndSet.has(normalize(r.company_name)) !== (r.nd_active === true))
       .map(r => ({ id: r.id, nd_active: ndSet.has(normalize(r.company_name)) }));
     for (let i = 0; i < mlPatches.length; i += 10) {
