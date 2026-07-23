@@ -1,5 +1,14 @@
 const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 
+// TeamWork's own data occasionally has a stray space or other typo baked
+// into an email field (e.g. "name@company mail.com") — sending that
+// straight to QuickBooks as BillEmail makes invoice creation fail outright
+// instead of just going out without a billing email. Centralized here so
+// every place that picks "the" contact email applies the same check.
+export function isValidEmail(value: string | null | undefined): value is string {
+  return !!value && EMAIL_PATTERN.test(value.trim());
+}
+
 const INTERNAL_DOMAINS = new Set(['tassure.com', 'tasure.com']);
 const EXCLUDED_INTERNAL_EMAILS = new Set(['cindyzhang@tassure.com']);
 const ALWAYS_CC_EMAIL = 'hoechyi@tassure.com';

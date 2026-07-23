@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import { findUniqueBestMatch } from '@/lib/company-name';
+import { isValidEmail } from '@/lib/campaign-recipients';
 import { isPrimaryRenewalProduct, parseInvoicePeriod, servicePeriodOverlapError } from '@/lib/invoice-period';
 import { createHash } from 'node:crypto';
 
@@ -258,7 +259,11 @@ async function createInvoiceInCompany(
   payload.DocNumber = docNumber;
   if (termId)    payload.SalesTermRef = { value: termId };
   if (location)  payload.DepartmentRef = location;
-  if (email) payload.BillEmail = { Address: email };
+  // Guard here too, not just at the source that resolves `email` — a
+  // malformed address (e.g. a stray space from a TeamWork data typo) makes
+  // QuickBooks reject the whole invoice create with an RFC 822 validation
+  // fault instead of just going out without a billing email.
+  if (isValidEmail(email)) payload.BillEmail = { Address: email };
 
   const createUrl = new URL(`${QB_BASE}/v3/company/${realmId}/invoice`);
   createUrl.searchParams.set('minorversion', '75');

@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
+import { isValidEmail } from '@/lib/campaign-recipients';
 import {
   buildAnnualRenewalFeeMap,
   compareRenewalPeriodProductLines,
@@ -515,7 +516,13 @@ export async function GET(req: NextRequest) {
       urgency,
       renewals,
       annuals,
-      email: company.best_email ?? primary?.email ?? null,
+      // best_email comes from TeamWork's own "company email address" field,
+      // which occasionally has a typo (e.g. a stray space) that still isn't
+      // null/empty — so the old `??` fallback never reached primary_contact's
+      // email even when it was the correct one. Prefer whichever is actually
+      // a valid address; a malformed value falls through to null rather than
+      // reaching QuickBooks and hard-failing invoice creation.
+      email: isValidEmail(company.best_email) ? company.best_email : isValidEmail(primary?.email) ? primary!.email! : null,
       contactName: primary?.contactName ?? null,
       billedCycles: [...(billedCyclesMap.get(normName) ?? [])],
       priorLines: carriedLines,
