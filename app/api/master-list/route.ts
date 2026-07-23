@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   //  - in_teamwork: this row's UEN exists in TeamWork. The master list is
   //    maintained by hand and normally has MORE companies than TeamWork —
   //    in_teamwork=false marks the ones TeamWork has no record of.
-  const { data: companies } = await supabase.from('companies').select('registration_no, fye_month, client_type');
+  const { data: companies } = await supabase.from('companies').select('company_name, registration_no, fye_month, client_type');
   const twFyeByUen = new Map<string, string>();
   const twUens = new Set<string>();
   const cssClientByUen = new Map<string, boolean>();
@@ -87,7 +87,27 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ type, total: enriched.length, data: enriched });
+  // Active Client only: TeamWork companies confirmed as a genuine CSS Client
+  // (same field the Companies page's "Client (CSS Client)" card uses) that
+  // have no row at all in Active Client's own list — independent of the
+  // `search` box, since this checks against the full roster either way.
+  let missingCssClients: { company_name: string; registration_no: string | null }[] = [];
+  if (type === 'active_client') {
+    const { data: allActiveClientRows } = await supabase.from('master_list').select('roc_no').eq('list_type', 'active_client');
+    const activeClientUens = new Set(
+      (allActiveClientRows ?? []).map(r => (r.roc_no ? String(r.roc_no).trim().toUpperCase() : null)).filter((v): v is string => !!v),
+    );
+    missingCssClients = (companies ?? [])
+      .filter(c => c.client_type === 'CSS Client')
+      .filter(c => {
+        const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
+        return !uen || !activeClientUens.has(uen);
+      })
+      .map(c => ({ company_name: c.company_name, registration_no: c.registration_no }))
+      .sort((a, b) => a.company_name.localeCompare(b.company_name));
+  }
+
+  return NextResponse.json({ type, total: enriched.length, data: enriched, missingCssClients });
 }
 
 export async function POST(req: NextRequest) {

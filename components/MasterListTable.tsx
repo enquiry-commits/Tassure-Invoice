@@ -715,6 +715,11 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [view, setView] = useState<'list' | 'table'>('list');
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
   const isMobile = useIsMobile();
+  // Active Client only: TeamWork CSS Clients with no row here at all — can't
+  // be shown by filtering the table (there's nothing to filter to), so it's
+  // its own small panel instead of a catFilter card.
+  const [missingCssClients, setMissingCssClients] = useState<{ company_name: string; registration_no: string | null }[]>([]);
+  const [showMissingPanel, setShowMissingPanel] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -723,6 +728,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       const res  = await fetch(`/api/master-list?${params}`);
       const json = await res.json();
       setRows(json.data ?? []);
+      setMissingCssClients(json.missingCssClients ?? []);
     } finally { setLoading(false); }
   }, [listType, search]);
 
@@ -926,7 +932,36 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             </button>
           );
         })}
+        {listType === 'active_client' && (
+          <button onClick={() => setShowMissingPanel(v => !v)}
+            style={{ textAlign: 'left', cursor: 'pointer', background: '#fff7ed', border: `1.5px solid ${showMissingPanel ? '#c2410c' : '#fed7aa'}`,
+              borderRadius: 10, padding: '12px 16px', width: '100%', minWidth: 0, boxShadow: showMissingPanel ? '0 0 0 2px #c2410c22' : 'none' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#c2410c' }}>{missingCssClients.length}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Missing from Active Client</div>
+            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>TW CSS Client, no row here yet</div>
+          </button>
+        )}
       </div>
+
+      {showMissingPanel && listType === 'active_client' && (
+        <div style={{ background: '#fff', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#9a3412', marginBottom: 8 }}>
+            {missingCssClients.length} TeamWork CSS Client{missingCssClients.length === 1 ? '' : 's'} not yet in Active Client
+          </div>
+          {missingCssClients.length === 0 ? (
+            <div style={{ fontSize: 11.5, color: '#94a3b8' }}>None — every TeamWork CSS Client has a row here.</div>
+          ) : (
+            <div style={{ maxHeight: 220, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: '2px 16px' }}>
+              {missingCssClients.map(c => (
+                <div key={c.registration_no ?? c.company_name} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '4px 0', borderBottom: '1px solid #fef3ee', fontSize: 11.5 }}>
+                  <span style={{ color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.company_name}</span>
+                  <span style={{ color: '#94a3b8', fontFamily: 'monospace', flexShrink: 0 }}>{c.registration_no ?? '—'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm p-4 mb-4 flex flex-wrap items-center gap-3">
         <input
