@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronRight, Calendar } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronRight, Calendar, Building2, MapPin, ShieldCheck, CalendarCheck2, FileText, StickyNote } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { usePagination, PaginationBar } from './Pagination';
 import { toDisplayDate, fmtDate } from '@/lib/date';
@@ -204,6 +204,38 @@ function PicCell({ name, active, onToggleActive, onSaveName }: {
         placeholder="—" style={{ flex: 1, minWidth: 0, border: '1px solid transparent', borderRadius: 4, padding: '1px 3px', fontSize: 11, outline: 'none', background: 'transparent', color: '#374151' }}
         onFocus={e => (e.currentTarget.style.border = '1px solid #2563eb')}
         onBlurCapture={e => (e.currentTarget.style.border = '1px solid transparent')} />
+    </div>
+  );
+}
+
+// Service on/off card for the Active Client modal (ND/Secretary/ACC/TAX) —
+// a colored check tile + stacked uppercase label/name, matching the same
+// on-green/off-muted language AR Reminder's OverrideChip uses, instead of a
+// plain checkbox next to a bare input.
+function ServiceChip({ label, name, active, onToggleActive, onSaveName }: {
+  label: string; name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void;
+}) {
+  const [val, setVal] = useState(name ?? '');
+  useEffect(() => { setVal(name ?? ''); }, [name]);
+  return (
+    <div onClick={e => e.stopPropagation()} style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, boxSizing: 'border-box', width: '100%',
+      background: active ? '#f0fdf4' : '#fbfcfe', border: `1px solid ${active ? '#bbf7d0' : '#eef1f6'}`,
+    }}>
+      <span onClick={onToggleActive} title={active ? 'Click to turn off' : 'Click to turn on'} style={{
+        width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: active ? '#16a34a' : '#e5e9f0', color: '#fff',
+      }}>
+        {active && <Check size={12} strokeWidth={3} />}
+      </span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.4px', color: '#94a3b8', marginBottom: 1 }}>{label}</div>
+        <input value={val} onChange={e => setVal(e.target.value)}
+          onBlur={() => { const next = val.trim(); if (next !== (name ?? '').trim()) onSaveName(next); }}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          placeholder="Not assigned"
+          style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', padding: 0, fontSize: 13, fontWeight: 650, color: val ? '#1c2b40' : '#c3cbd8', boxSizing: 'border-box' }} />
+      </div>
     </div>
   );
 }
@@ -531,6 +563,20 @@ const FIELD_SECTIONS: Record<string, string> = {
   remark: 'Notes', referral: 'Notes', risk_level: 'Notes', incorp_with_us: 'Notes', mas: 'Notes', grade: 'Notes',
 };
 const SECTION_ORDER = ['Company Info', 'Contact & Address', 'Services', 'Compliance', 'Admin', 'Notes', 'Other'];
+const SECTION_ICONS: Record<string, typeof Building2> = {
+  'Company Info': Building2, 'Contact & Address': MapPin, Services: ShieldCheck,
+  Compliance: CalendarCheck2, Admin: FileText, Notes: StickyNote,
+};
+// A short field whose value is literally a yes/no flag (not free text that
+// happens to start with those letters) reads as a status, not a sentence —
+// tinting the row green/neutral makes that scannable at a glance instead of
+// every field looking the same regardless of what it's actually saying.
+function yesNoTint(value: string | null | undefined): 'yes' | 'no' | null {
+  const v = (value ?? '').trim().toUpperCase();
+  if (v === 'YES') return 'yes';
+  if (v === 'NO') return 'no';
+  return null;
+}
 // Addresses/notes/lists routinely wrap to several lines. In a fixed-column
 // grid that stretches every cell in the row to match the tallest one, which
 // left short neighbours (Email, Contact Window, …) sitting in a mostly-empty
@@ -585,8 +631,8 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
     <div style={{ position: 'relative', flexShrink: 0 }}>
       <button type="button" data-cal-btn="1" tabIndex={0}
         onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
-        style={{ border: '1px solid #c7d2fe', borderRadius: 5, background: '#eef2ff', color: '#4338ca', cursor: 'pointer', padding: compact ? '3px 5px' : '5px 8px', display: 'flex', alignItems: 'center' }}>
-        <Calendar size={compact ? 11 : 13} />
+        style={{ border: 'none', borderRadius: 5, background: '#eef1ff', color: '#4f46e5', cursor: 'pointer', width: compact ? 22 : 26, height: compact ? 22 : 26, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Calendar size={compact ? 12 : 14} />
       </button>
       <input ref={dateRef} type="date" onChange={handleDatePick}
         style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
@@ -596,19 +642,30 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
     ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
     : status === 'saved' ? <Check size={10} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
 
-  // Compact = AR Reminder's row chrome (label fixed-width on the left, value
-  // inline on the right, in a subtle bordered pill) — for short single-line
-  // values, given a wide enough flex-basis by the caller (CompanyDetailModal)
-  // that the value has real room; this collapsed to unreadable vertical text
-  // the first time round when squeezed into a ~150-220px item. Long free-text
-  // fields keep the label-above-textarea block, matching AR's Notes section.
+  // Compact = the field-row chrome used across the modal for short values:
+  // fixed-width muted label on the left, value inline on the right, subtle
+  // bordered pill — given a wide enough flex-basis by the caller that the
+  // value has real room (narrower than ~300px collapsed the text into an
+  // unreadable vertical column the first time round). A YES/NO value tints
+  // the whole row so status reads at a glance instead of every field looking
+  // the same regardless of what it says. Long free-text fields keep the
+  // label-above-textarea block instead (see the non-compact branch below).
+  const tint = yesNoTint(val);
   if (compact) return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9', width: '100%', boxSizing: 'border-box' }}>
-      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 88, flexShrink: 0 }}>{label}</span>
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', width: '100%', boxSizing: 'border-box', borderRadius: 8,
+      background: tint === 'yes' ? '#f0fdf4' : '#fbfcfe',
+      border: `1px solid ${tint === 'yes' ? '#bbf7d0' : '#eef1f6'}`,
+    }}>
+      <span style={{ fontSize: 10.5, color: '#8493a8', fontWeight: 650, minWidth: 92, flexShrink: 0 }}>{label}</span>
       <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)}
         onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(); }}
         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
-        style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', padding: '3px 0', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, whiteSpace: 'nowrap' }} />
+        style={{
+          flex: 1, minWidth: 0, border: 'none', background: 'transparent', padding: 0, outline: 'none', boxSizing: 'border-box',
+          fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, whiteSpace: 'nowrap',
+          fontSize: 13, fontWeight: tint ? 750 : 500, color: tint === 'yes' ? '#16803d' : tint === 'no' ? '#94a3b8' : val ? '#1c2b40' : '#c3cbd8',
+        }} />
       {calButton}
       {statusDot}
       {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9, flexShrink: 0 }}>save failed</span>}
@@ -669,11 +726,16 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
         </div>
 
-        <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px', background: '#f8fafc' }}>
-          {sections.map(section => (
-            <div key={section.name} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>{section.name}</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ overflowY: 'auto', flex: 1, padding: '20px 24px 24px', background: '#f6f8fb' }}>
+          {sections.map(section => {
+            const SectionIcon = SECTION_ICONS[section.name];
+            return (
+            <div key={section.name} style={{ background: '#fff', border: '1px solid #e7ecf3', borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 13 }}>
+                {SectionIcon && <SectionIcon size={14} style={{ color: '#94a3b8', flexShrink: 0 }} />}
+                <div style={{ fontSize: 10.5, fontWeight: 800, color: '#7c8aa0', textTransform: 'uppercase', letterSpacing: '0.6px' }}>{section.name}</div>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 10 }}>
                 {section.fields.map(c => {
                   const wide = WIDE_MODAL_FIELDS.has(c.field);
                   // Compact rows need real room for label + value + calendar
@@ -684,22 +746,14 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                   const itemStyle: React.CSSProperties = wide
                     ? { flex: '1 1 260px', minWidth: 220, maxWidth: 400 }
                     : { flex: '1 1 360px', minWidth: 300 };
-                  const pillStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9', width: '100%', boxSizing: 'border-box' };
-                  const pillLabelStyle: React.CSSProperties = { fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 88, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 };
                   if (c.field === 'acc_pic') return (
                     <div key={c.field} style={itemStyle}>
-                      <div style={pillStyle}>
-                        <span style={pillLabelStyle}>ACC</span>
-                        <PicCell name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
-                      </div>
+                      <ServiceChip label="Accounting" name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
                     </div>
                   );
                   if (c.field === 'tax_pic') return (
                     <div key={c.field} style={itemStyle}>
-                      <div style={pillStyle}>
-                        <span style={pillLabelStyle}>TAX</span>
-                        <PicCell name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
-                      </div>
+                      <ServiceChip label="Tax" name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
                     </div>
                   );
                   if (c.field === 'nominee_director' || c.field === 'secretary') {
@@ -708,17 +762,12 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                     const active = c.field === 'nominee_director' ? row.nd_active : row.secretary_active;
                     return (
                       <div key={c.field} style={itemStyle}>
-                        <div style={pillStyle}>
-                          <span style={pillLabelStyle}>
-                            <CheckSquare checked={!!active} onToggle={() => onToggleActive(row.id, activeField, active)} />{c.label}
-                          </span>
-                          <input defaultValue={value ?? ''} onBlur={e => {
-                            const next = e.target.value.trim();
-                            if (next === (value ?? '').trim()) return;
-                            onSave(row.id, c.field, next);
-                            fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: next || null }) });
-                          }} style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', padding: '3px 0', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b' }} />
-                        </div>
+                        <ServiceChip label={c.field === 'nominee_director' ? 'Nominee Director' : 'Secretary'} name={value} active={!!active}
+                          onToggleActive={() => onToggleActive(row.id, activeField, active)}
+                          onSaveName={val => {
+                            onSave(row.id, c.field, val);
+                            fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: val || null }) });
+                          }} />
                       </div>
                     );
                   }
@@ -726,7 +775,8 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
