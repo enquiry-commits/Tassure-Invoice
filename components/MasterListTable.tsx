@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronRight, Calendar, Building2, MapPin, ShieldCheck, CalendarCheck2, FileText, StickyNote } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronRight, Calendar } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { usePagination, PaginationBar } from './Pagination';
 import { toDisplayDate, fmtDate } from '@/lib/date';
@@ -212,29 +212,44 @@ function PicCell({ name, active, onToggleActive, onSaveName }: {
 // a colored check tile + stacked uppercase label/name, matching the same
 // on-green/off-muted language AR Reminder's OverrideChip uses, instead of a
 // plain checkbox next to a bare input.
-function ServiceChip({ label, name, active, onToggleActive, onSaveName }: {
-  label: string; name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void;
+// Same per-service colors as AR Reminder's own SVC map (app/billing/page.tsx)
+// — nd/secretary/accounts/tax each have a distinct identity there, not a
+// generic uniform on/off green, and the off-state matches OverrideChip's own
+// off colors (bg #f8fafc, color #94a3b8, border #e2e8f0).
+const SERVICE_CHIP_COLORS: Record<string, { bg: string; color: string }> = {
+  nd: { bg: '#dcfce7', color: '#15803d' },
+  secretary: { bg: '#f5f3ff', color: '#6d28d9' },
+  accounts: { bg: '#fef9c3', color: '#92400e' },
+  tax: { bg: '#ffedd5', color: '#c2410c' },
+};
+
+function ServiceChip({ label, name, active, onToggleActive, onSaveName, svcKey }: {
+  label: string; name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void; svcKey: keyof typeof SERVICE_CHIP_COLORS;
 }) {
   const [val, setVal] = useState(name ?? '');
   useEffect(() => { setVal(name ?? ''); }, [name]);
+  const c = SERVICE_CHIP_COLORS[svcKey];
+  const chipColor = active ? c.color : '#94a3b8';
+  const chipBg = active ? c.bg : '#f8fafc';
+  const chipBorder = active ? `${c.color}40` : '#e2e8f0';
   return (
     <div onClick={e => e.stopPropagation()} style={{
       display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, boxSizing: 'border-box', width: '100%',
-      background: active ? '#f0fdf4' : '#fbfcfe', border: `1px solid ${active ? '#bbf7d0' : '#eef1f6'}`,
+      background: chipBg, border: `1px solid ${chipBorder}`,
     }}>
       <span onClick={onToggleActive} title={active ? 'Click to turn off' : 'Click to turn on'} style={{
         width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: active ? '#16a34a' : '#e5e9f0', color: '#fff',
+        background: active ? chipColor : '#e5e9f0', color: '#fff',
       }}>
         {active && <Check size={12} strokeWidth={3} />}
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.4px', color: '#94a3b8', marginBottom: 1 }}>{label}</div>
+        <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.4px', color: chipColor, marginBottom: 1 }}>{label}</div>
         <input value={val} onChange={e => setVal(e.target.value)}
           onBlur={() => { const next = val.trim(); if (next !== (name ?? '').trim()) onSaveName(next); }}
           onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
           placeholder="Not assigned"
-          style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', padding: 0, fontSize: 13, fontWeight: 650, color: val ? '#1c2b40' : '#c3cbd8', boxSizing: 'border-box' }} />
+          style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', padding: 0, fontSize: 13, fontWeight: 650, color: val ? '#1e293b' : '#94a3b8', boxSizing: 'border-box' }} />
       </div>
     </div>
   );
@@ -333,11 +348,12 @@ function statusColor(v: string | null) {
 
 export type MoveTarget = { type: string; label: string; statusValue?: string };
 
-function RowActionMenu({ row, moveTargets, onMove, onDelete }: {
+function RowActionMenu({ row, moveTargets, onMove, onDelete, dark = false }: {
   row: MasterListRow;
   moveTargets?: MoveTarget[];
   onMove: (row: MasterListRow, target: MoveTarget) => void;
   onDelete: (row: MasterListRow) => void;
+  dark?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -352,7 +368,9 @@ function RowActionMenu({ row, moveTargets, onMove, onDelete }: {
   if (!moveTargets?.length) {
     return (
       <button onClick={() => onDelete(row)} title="Remove"
-        style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', cursor: 'pointer', display: 'inline-flex' }}>
+        style={dark
+          ? { padding: '3px 6px', borderRadius: 5, border: 'none', background: 'transparent', color: '#fecaca', cursor: 'pointer', display: 'inline-flex' }
+          : { padding: '3px 6px', borderRadius: 5, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', cursor: 'pointer', display: 'inline-flex' }}>
         <Trash2 size={11} />
       </button>
     );
@@ -361,7 +379,9 @@ function RowActionMenu({ row, moveTargets, onMove, onDelete }: {
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
       <button onClick={() => setOpen(v => !v)} title="Actions"
-        style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: 'pointer', display: 'inline-flex' }}>
+        style={dark
+          ? { padding: '3px 6px', borderRadius: 5, border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', display: 'inline-flex' }
+          : { padding: '3px 6px', borderRadius: 5, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: 'pointer', display: 'inline-flex' }}>
         <MoreVertical size={12} />
       </button>
       {open && (
@@ -563,20 +583,6 @@ const FIELD_SECTIONS: Record<string, string> = {
   remark: 'Notes', referral: 'Notes', risk_level: 'Notes', incorp_with_us: 'Notes', mas: 'Notes', grade: 'Notes',
 };
 const SECTION_ORDER = ['Company Info', 'Contact & Address', 'Services', 'Compliance', 'Admin', 'Notes', 'Other'];
-const SECTION_ICONS: Record<string, typeof Building2> = {
-  'Company Info': Building2, 'Contact & Address': MapPin, Services: ShieldCheck,
-  Compliance: CalendarCheck2, Admin: FileText, Notes: StickyNote,
-};
-// A short field whose value is literally a yes/no flag (not free text that
-// happens to start with those letters) reads as a status, not a sentence —
-// tinting the row green/neutral makes that scannable at a glance instead of
-// every field looking the same regardless of what it's actually saying.
-function yesNoTint(value: string | null | undefined): 'yes' | 'no' | null {
-  const v = (value ?? '').trim().toUpperCase();
-  if (v === 'YES') return 'yes';
-  if (v === 'NO') return 'no';
-  return null;
-}
 // Addresses/notes/lists routinely wrap to several lines. In a fixed-column
 // grid that stretches every cell in the row to match the tallest one, which
 // left short neighbours (Email, Contact Window, …) sitting in a mostly-empty
@@ -586,22 +592,30 @@ const WIDE_MODAL_FIELDS = new Set(['invoice_address', 'mailing_address', 'mailin
 // Always-visible input + on-blur save, for the modal (unlike EditCell's
 // click-to-reveal, which exists to keep table cells compact — the modal has
 // room to just show every input at once).
+// Mirrors AR Reminder's EditField exactly (app/billing/page.tsx) for compact
+// fields: a plain read-only-looking row by default, click to reveal a real
+// input; blur/Enter commits. An empty date shows a muted calendar glyph +
+// em-dash (display-only, not the picker button) exactly as EditField does.
+// Long free-text fields (addresses, remarks, …) skip this — they stay an
+// always-visible auto-resizing textarea since a single-line click-to-edit
+// input would clip wrapped content.
 const ModalField = memo(function ModalField({ id, field, label, value, onSave, compact = false }: {
   id: number; field: string; label: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compact?: boolean;
 }) {
-  // Dates are stored in whatever mixed format staff originally typed them in
-  // ("23/11/2022", "29.07.2025", "12/31/24", …) — normalize to the same
-  // "DD MMM YYYY" the table's EditCell already shows, so the modal isn't the
-  // one place still displaying the raw inconsistent text.
   const isDateField = DATE_FIELDS.has(field as ColumnField);
-  const displayValue = useCallback((raw: string | null) => isDateField ? (toDisplayDate(raw) ?? raw ?? '') : (raw ?? ''), [isDateField]);
-  const [val, setVal] = useState(displayValue(value));
+  const inputValue = useCallback((raw: string | null) => isDateField ? (toDisplayDate(raw) ?? raw ?? '') : (raw ?? ''), [isDateField]);
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(inputValue(value));
   const [status, setStatus] = useState<SaveStatus>('idle');
-  useEffect(() => { setVal(displayValue(value)); }, [value, displayValue]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const dateRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { setVal(inputValue(value)); }, [value, inputValue]);
+  useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
   const commit = useCallback(async () => {
     const next = val.trim();
-    const prev = displayValue(value).trim();
+    const prev = inputValue(value).trim();
     if (next === prev) return;
     onSave(id, field, next);
     setStatus('saving');
@@ -611,66 +625,68 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
       setStatus('saved');
       setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
     } catch { setStatus('error'); }
-  }, [val, value, id, field, onSave]);
+  }, [val, value, id, field, onSave, inputValue]);
 
-  const taRef = useRef<HTMLTextAreaElement>(null);
-  const dateRef = useRef<HTMLInputElement>(null);
-  const resize = useCallback(() => {
-    const el = taRef.current;
-    if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
-  }, []);
-  useEffect(() => { resize(); }, [val, resize]);
   const handleDatePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.value) return;
     setVal(fmtDate(e.target.value));
     e.target.value = '';
-    setTimeout(() => taRef.current?.focus(), 0);
+    setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const calButton = isDateField && (
-    <div style={{ position: 'relative', flexShrink: 0 }}>
-      <button type="button" data-cal-btn="1" tabIndex={0}
-        onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
-        style={{ border: 'none', borderRadius: 5, background: '#eef1ff', color: '#4f46e5', cursor: 'pointer', width: compact ? 22 : 26, height: compact ? 22 : 26, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Calendar size={compact ? 12 : 14} />
-      </button>
-      <input ref={dateRef} type="date" onChange={handleDatePick}
-        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
-    </div>
-  );
   const statusDot = status === 'saving'
     ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
-    : status === 'saved' ? <Check size={10} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
+    : status === 'saved' ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
 
-  // Compact = the field-row chrome used across the modal for short values:
-  // fixed-width muted label on the left, value inline on the right, subtle
-  // bordered pill — given a wide enough flex-basis by the caller that the
-  // value has real room (narrower than ~300px collapsed the text into an
-  // unreadable vertical column the first time round). A YES/NO value tints
-  // the whole row so status reads at a glance instead of every field looking
-  // the same regardless of what it says. Long free-text fields keep the
-  // label-above-textarea block instead (see the non-compact branch below).
-  const tint = yesNoTint(val);
-  if (compact) return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', width: '100%', boxSizing: 'border-box', borderRadius: 8,
-      background: tint === 'yes' ? '#f0fdf4' : '#fbfcfe',
-      border: `1px solid ${tint === 'yes' ? '#bbf7d0' : '#eef1f6'}`,
-    }}>
-      <span style={{ fontSize: 10.5, color: '#8493a8', fontWeight: 650, minWidth: 92, flexShrink: 0 }}>{label}</span>
-      <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)} placeholder="—"
-        onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(); }}
-        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
-        style={{
-          flex: 1, minWidth: 0, border: 'none', background: 'transparent', padding: 0, outline: 'none', boxSizing: 'border-box',
-          fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, whiteSpace: 'nowrap',
-          fontSize: 13, fontWeight: tint ? 750 : 500, color: tint === 'yes' ? '#16803d' : tint === 'no' ? '#94a3b8' : val ? '#1c2b40' : '#c3cbd8',
-        }} />
-      {calButton}
-      {statusDot}
-      {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9, flexShrink: 0 }}>save failed</span>}
-    </div>
-  );
+  // `compact` never changes for a given field once mounted, but hooks still
+  // need to run unconditionally every render (not skipped by an early
+  // return), so the wide-field auto-resize is declared here rather than
+  // after the compact branch's returns.
+  const resize = useCallback(() => {
+    const el = taRef.current;
+    if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
+  }, []);
+  useEffect(() => { if (!compact) resize(); }, [val, resize, compact]);
+
+  if (compact) {
+    if (editing) return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <input ref={inputRef} type="text" value={val}
+          onChange={e => setVal(e.target.value)}
+          onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) { setEditing(false); commit(); } }}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setEditing(false); commit(); } if (e.key === 'Escape') { setVal(inputValue(value)); setEditing(false); } }}
+          placeholder={isDateField ? 'e.g. 03 Apr 2026' : ''}
+          style={{ flex: 1, border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
+        />
+        {isDateField && (
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <button type="button" data-cal-btn="1" tabIndex={0}
+              onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
+              style={{ border: '1px solid #c7d2fe', borderRadius: 4, background: '#eef2ff', color: '#4338ca', cursor: 'pointer', padding: '2px 5px', display: 'flex', alignItems: 'center' }}>
+              <Calendar size={12} />
+            </button>
+            <input ref={dateRef} type="date" onChange={handleDatePick}
+              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
+          </div>
+        )}
+      </div>
+    );
+
+    const display = val.trim();
+    return (
+      <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
+        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
+        onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
+        {display
+          ? <span style={{ fontSize: 12, color: '#374151' }}>{display}</span>
+          : isDateField
+            ? <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#c7d2fe', fontSize: 11 }}><Calendar size={11} /><span style={{ color: '#d1d5db' }}>—</span></span>
+            : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+        {statusDot}
+        {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -679,26 +695,23 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
         {statusDot}
         {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
-        {/* Textarea, not input — long values (addresses, remarks) were getting
-            clipped behind a single-line box with no way to see the full text. */}
-        <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)} placeholder="—"
-          onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(); }}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
-          style={{ flex: 1, minWidth: 0, border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
-        {calButton}
-      </div>
+      <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)} onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
+        style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
     </div>
   );
 });
 
-function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive, onSaveOverride }: {
+function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive, onSaveOverride, moveTargets, onMove, onDelete }: {
   row: MasterListRow;
   fieldColumns: { field: ColumnField; label: string }[];
   onClose: () => void;
   onSave: (id: number, field: string, val: string) => void;
   onToggleActive: (id: number, field: 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active', current: boolean | null | undefined) => void;
   onSaveOverride: (id: number, field: 'acc_pic_override' | 'tax_pic_override', val: string) => void;
+  moveTargets?: MoveTarget[];
+  onMove: (row: MasterListRow, target: MoveTarget) => void;
+  onDelete: (row: MasterListRow) => void;
 }) {
   const sections = useMemo(() => {
     const groups = new Map<string, { field: ColumnField; label: string }[]>();
@@ -707,7 +720,17 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
       if (!groups.has(section)) groups.set(section, []);
       groups.get(section)!.push(c);
     }
-    return SECTION_ORDER.filter(s => groups.has(s)).map(s => ({ name: s, fields: groups.get(s)! }));
+    // Wide (long free-text) fields render after the compact ones within a
+    // section regardless of declared field order — e.g. Contact & Address
+    // lists invoice_address second, but a full-width address box belongs
+    // below the short Tel/Email/Contact Window rows, not sandwiched between
+    // them forcing an awkward wrap.
+    return SECTION_ORDER.filter(s => groups.has(s)).map(s => {
+      const all = groups.get(s)!;
+      const compact = all.filter(c => !WIDE_MODAL_FIELDS.has(c.field));
+      const wide = all.filter(c => WIDE_MODAL_FIELDS.has(c.field));
+      return { name: s, compact, wide };
+    });
   }, [fieldColumns]);
 
   const colors = statusColor(row.status);
@@ -723,37 +746,36 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
               {row.status && <span style={{ fontSize: 10, fontWeight: 700, background: colors?.bg ?? 'rgba(255,255,255,0.12)', color: colors?.color ?? '#fff', borderRadius: 4, padding: '2px 8px' }}>{row.status}</span>}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
+            <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <RowActionMenu row={row} moveTargets={moveTargets} onMove={onMove} onDelete={onDelete} dark />
+            </div>
+            <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          </div>
         </div>
 
-        <div style={{ overflowY: 'auto', flex: 1, padding: '20px 24px 24px', background: '#f6f8fb' }}>
-          {sections.map(section => {
-            const SectionIcon = SECTION_ICONS[section.name];
-            return (
-            <div key={section.name} style={{ background: '#fff', border: '1px solid #e7ecf3', borderRadius: 12, padding: '16px 18px', marginBottom: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 13 }}>
-                {SectionIcon && <SectionIcon size={14} style={{ color: '#94a3b8', flexShrink: 0 }} />}
-                <div style={{ fontSize: 10.5, fontWeight: 800, color: '#7c8aa0', textTransform: 'uppercase', letterSpacing: '0.6px' }}>{section.name}</div>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: 10 }}>
-                {section.fields.map(c => {
-                  const wide = WIDE_MODAL_FIELDS.has(c.field);
-                  // Compact rows need real room for label + value + calendar
-                  // button (verified against a static mockup after the first
-                  // attempt at ~150-220px squeezed the value into unreadable
-                  // vertical text) — 360px gives two per row in the modal's
-                  // ~812px section width; wide fields keep their own sizing.
-                  const itemStyle: React.CSSProperties = wide
-                    ? { flex: '1 1 260px', minWidth: 220, maxWidth: 400 }
-                    : { flex: '1 1 360px', minWidth: 300 };
+        <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px', background: '#f8fafc' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            {sections.map(section => (
+              <div key={section.name} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>{section.name}</div>
+
+                {/* Compact fields: AR Reminder's exact row chrome, stacked full-width. */}
+                {section.compact.map(c => {
                   if (c.field === 'acc_pic') return (
-                    <div key={c.field} style={itemStyle}>
-                      <ServiceChip label="Accounting" name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
+                    <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>ACC</span>
+                      <div style={{ flex: 1 }}>
+                        <ServiceChip label="Accounting" svcKey="accounts" name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
+                      </div>
                     </div>
                   );
                   if (c.field === 'tax_pic') return (
-                    <div key={c.field} style={itemStyle}>
-                      <ServiceChip label="Tax" name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
+                    <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>TAX</span>
+                      <div style={{ flex: 1 }}>
+                        <ServiceChip label="Tax" svcKey="tax" name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
+                      </div>
                     </div>
                   );
                   if (c.field === 'nominee_director' || c.field === 'secretary') {
@@ -761,22 +783,39 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                     const activeField = c.field === 'nominee_director' ? 'nd_active' : 'secretary_active';
                     const active = c.field === 'nominee_director' ? row.nd_active : row.secretary_active;
                     return (
-                      <div key={c.field} style={itemStyle}>
-                        <ServiceChip label={c.field === 'nominee_director' ? 'Nominee Director' : 'Secretary'} name={value} active={!!active}
-                          onToggleActive={() => onToggleActive(row.id, activeField, active)}
-                          onSaveName={val => {
-                            onSave(row.id, c.field, val);
-                            fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: val || null }) });
-                          }} />
+                      <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{c.label}</span>
+                        <div style={{ flex: 1 }}>
+                          <ServiceChip label={c.field === 'nominee_director' ? 'Nominee Director' : 'Secretary'} svcKey={c.field === 'nominee_director' ? 'nd' : 'secretary'} name={value} active={!!active}
+                            onToggleActive={() => onToggleActive(row.id, activeField, active)}
+                            onSaveName={val => {
+                              onSave(row.id, c.field, val);
+                              fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: val || null }) });
+                            }} />
+                        </div>
                       </div>
                     );
                   }
-                  return <div key={c.field} style={itemStyle}><ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} compact={!wide} /></div>;
+                  return (
+                    <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{c.label}</span>
+                      <div style={{ flex: 1 }}>
+                        <ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} compact />
+                      </div>
+                    </div>
+                  );
                 })}
+
+                {/* Wide free-text fields last, each its own labeled box — same
+                    convention AR Reminder uses for Notes/Finance. */}
+                {section.wide.map(c => (
+                  <div key={c.field} style={{ marginTop: section.compact.length ? 8 : 0 }}>
+                    <ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} />
+                  </div>
+                ))}
               </div>
-            </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -1321,6 +1360,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           onSave={handleSave}
           onToggleActive={toggleActive}
           onSaveOverride={saveOverride}
+          moveTargets={moveTargets}
+          onMove={moveRow}
+          onDelete={deleteRow}
         />
       )}
     </div>
