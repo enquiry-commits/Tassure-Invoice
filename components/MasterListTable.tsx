@@ -658,7 +658,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
       border: `1px solid ${tint === 'yes' ? '#bbf7d0' : '#eef1f6'}`,
     }}>
       <span style={{ fontSize: 10.5, color: '#8493a8', fontWeight: 650, minWidth: 92, flexShrink: 0 }}>{label}</span>
-      <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)}
+      <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)} placeholder="—"
         onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(); }}
         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
         style={{
@@ -682,7 +682,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
         {/* Textarea, not input — long values (addresses, remarks) were getting
             clipped behind a single-line box with no way to see the full text. */}
-        <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)}
+        <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)} placeholder="—"
           onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(); }}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
           style={{ flex: 1, minWidth: 0, border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
