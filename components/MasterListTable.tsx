@@ -540,8 +540,8 @@ const WIDE_MODAL_FIELDS = new Set(['invoice_address', 'mailing_address', 'mailin
 // Always-visible input + on-blur save, for the modal (unlike EditCell's
 // click-to-reveal, which exists to keep table cells compact — the modal has
 // room to just show every input at once).
-const ModalField = memo(function ModalField({ id, field, label, value, onSave }: {
-  id: number; field: string; label: string; value: string | null; onSave: (id: number, field: string, val: string) => void;
+const ModalField = memo(function ModalField({ id, field, label, value, onSave, compact = false }: {
+  id: number; field: string; label: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compact?: boolean;
 }) {
   // Dates are stored in whatever mixed format staff originally typed them in
   // ("23/11/2022", "29.07.2025", "12/31/24", …) — normalize to the same
@@ -581,12 +581,43 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave }:
     setTimeout(() => taRef.current?.focus(), 0);
   };
 
+  const calButton = isDateField && (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <button type="button" data-cal-btn="1" tabIndex={0}
+        onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
+        style={{ border: '1px solid #c7d2fe', borderRadius: 5, background: '#eef2ff', color: '#4338ca', cursor: 'pointer', padding: compact ? '3px 5px' : '5px 8px', display: 'flex', alignItems: 'center' }}>
+        <Calendar size={compact ? 11 : 13} />
+      </button>
+      <input ref={dateRef} type="date" onChange={handleDatePick}
+        style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
+    </div>
+  );
+  const statusDot = status === 'saving'
+    ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
+    : status === 'saved' ? <Check size={10} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
+
+  // Compact = AR Reminder's row chrome (label fixed-width on the left, value
+  // inline on the right, in a subtle bordered pill) — for short single-line
+  // values. Long free-text fields (addresses, remarks, …) keep the
+  // label-above-textarea block, matching AR's own Notes/Finance sections.
+  if (compact) return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9', width: '100%', boxSizing: 'border-box' }}>
+      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 88, flexShrink: 0 }}>{label}</span>
+      <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)}
+        onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(); }}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
+        style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', padding: '3px 0', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
+      {calButton}
+      {statusDot}
+      {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9, flexShrink: 0 }}>save failed</span>}
+    </div>
+  );
+
   return (
     <div>
       <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
         {label}
-        {status === 'saving' && <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b' }} />}
-        {status === 'saved' && <Check size={10} style={{ color: '#16a34a' }} />}
+        {statusDot}
         {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
       </div>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
@@ -596,17 +627,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave }:
           onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(); }}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
           style={{ flex: 1, minWidth: 0, border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
-        {isDateField && (
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <button type="button" data-cal-btn="1" tabIndex={0}
-              onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
-              style={{ border: '1px solid #c7d2fe', borderRadius: 6, background: '#eef2ff', color: '#4338ca', cursor: 'pointer', padding: '5px 8px', display: 'flex', alignItems: 'center' }}>
-              <Calendar size={13} />
-            </button>
-            <input ref={dateRef} type="date" onChange={handleDatePick}
-              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
-          </div>
-        )}
+        {calButton}
       </div>
     </div>
   );
@@ -654,14 +675,26 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                 {section.fields.map(c => {
                   const wide = WIDE_MODAL_FIELDS.has(c.field);
                   const itemStyle: React.CSSProperties = { flex: wide ? '1 1 260px' : '1 1 150px', minWidth: wide ? 220 : 150, maxWidth: wide ? 400 : 220 };
+                  // Compact fields share AR Reminder's row chrome: a subtle
+                  // bordered pill, label fixed-width on the left, value inline
+                  // on the right — same wrapper for every short field so PIC/
+                  // ND/Secretary don't look like a different component family.
+                  const pillStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9', width: '100%', boxSizing: 'border-box' };
+                  const pillLabelStyle: React.CSSProperties = { fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 88, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4 };
                   if (c.field === 'acc_pic') return (
-                    <div key={c.field} style={itemStyle}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>ACC</div>
-                      <PicCell name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
+                    <div key={c.field} style={itemStyle}>
+                      <div style={pillStyle}>
+                        <span style={pillLabelStyle}>ACC</span>
+                        <PicCell name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
+                      </div>
                     </div>
                   );
                   if (c.field === 'tax_pic') return (
-                    <div key={c.field} style={itemStyle}><div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>TAX</div>
-                      <PicCell name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
+                    <div key={c.field} style={itemStyle}>
+                      <div style={pillStyle}>
+                        <span style={pillLabelStyle}>TAX</span>
+                        <PicCell name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
+                      </div>
                     </div>
                   );
                   if (c.field === 'nominee_director' || c.field === 'secretary') {
@@ -670,19 +703,21 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                     const active = c.field === 'nominee_director' ? row.nd_active : row.secretary_active;
                     return (
                       <div key={c.field} style={itemStyle}>
-                        <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 5 }}>
-                          <CheckSquare checked={!!active} onToggle={() => onToggleActive(row.id, activeField, active)} />{c.label}
+                        <div style={pillStyle}>
+                          <span style={pillLabelStyle}>
+                            <CheckSquare checked={!!active} onToggle={() => onToggleActive(row.id, activeField, active)} />{c.label}
+                          </span>
+                          <input defaultValue={value ?? ''} onBlur={e => {
+                            const next = e.target.value.trim();
+                            if (next === (value ?? '').trim()) return;
+                            onSave(row.id, c.field, next);
+                            fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: next || null }) });
+                          }} style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', padding: '3px 0', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b' }} />
                         </div>
-                        <input defaultValue={value ?? ''} onBlur={e => {
-                          const next = e.target.value.trim();
-                          if (next === (value ?? '').trim()) return;
-                          onSave(row.id, c.field, next);
-                          fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: next || null }) });
-                        }} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b' }} />
                       </div>
                     );
                   }
-                  return <div key={c.field} style={itemStyle}><ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} /></div>;
+                  return <div key={c.field} style={itemStyle}><ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} compact={!wide} /></div>;
                 })}
               </div>
             </div>
