@@ -44,6 +44,67 @@ function buildMailto(d: Draft): string {
   return `${base}&body=${encodeURIComponent(body)}`;
 }
 
+function isPlainAscii(value: string): boolean {
+  for (let i = 0; i < value.length; i++) if (value.charCodeAt(i) > 127) return false;
+  return true;
+}
+
+// RFC 2047 encoded-word, for headers that may contain non-ASCII (Chinese
+// contact names, etc.) — plain ASCII passes through untouched.
+function encodeHeader(value: string): string {
+  if (isPlainAscii(value)) return value;
+  return `=?UTF-8?B?${btoa(unescape(encodeURIComponent(value)))}?=`;
+}
+
+// Base64-encode an ArrayBuffer in chunks (spreading a huge Uint8Array into
+// String.fromCharCode blows the call stack on multi-MB PDFs), wrapped at the
+// MIME-standard 76 chars/line.
+function arrayBufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  const b64 = btoa(binary);
+  return b64.replace(/(.{76})/g, '$1\r\n');
+}
+
+// A self-contained .eml (RFC 5322 multipart/mixed) with the invoice PDF(s)
+// embedded as real attachments — double-clicking it opens straight in
+// Outlook with To/CC/Subject/Body/attachment already in place, no manual
+// drag-and-drop step. mailto: can't do this (no attachment support in the
+// URI scheme); this sidesteps that limit entirely by building the message
+// file itself instead of asking the OS mail handler to do it.
+function buildEmlBlob(d: Draft, attachments: { fileName: string; data: ArrayBuffer }[]): Blob {
+  const boundary = `----tassure-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const to = normalizeRecipients(d.to_email ?? '');
+  const cc = normalizeRecipients(d.cc_email ?? '');
+  const lines: string[] = [];
+  if (to) lines.push(`To: ${to}`);
+  if (cc) lines.push(`Cc: ${cc}`);
+  lines.push(`Subject: ${encodeHeader(d.subject)}`);
+  lines.push('MIME-Version: 1.0');
+  lines.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+  lines.push('');
+  lines.push(`--${boundary}`);
+  lines.push('Content-Type: text/plain; charset="UTF-8"');
+  lines.push('Content-Transfer-Encoding: base64');
+  lines.push('');
+  lines.push(arrayBufferToBase64(new TextEncoder().encode(d.body).buffer as ArrayBuffer));
+  for (const att of attachments) {
+    lines.push(`--${boundary}`);
+    lines.push(`Content-Type: application/pdf; name="${att.fileName}"`);
+    lines.push('Content-Transfer-Encoding: base64');
+    lines.push(`Content-Disposition: attachment; filename="${att.fileName}"`);
+    lines.push('');
+    lines.push(arrayBufferToBase64(att.data));
+  }
+  lines.push(`--${boundary}--`);
+  lines.push('');
+  return new Blob([lines.join('\r\n')], { type: 'message/rfc822' });
+}
+
 function DraftsInner() {
   const searchParams = useSearchParams();
   const campaignIdParam = searchParams.get('campaignId');
@@ -117,6 +178,32 @@ function DraftsInner() {
       alert(e instanceof Error ? e.message : 'Unable to download invoice PDF.');
     } finally {
       setDownloadingRef(null);
+    }
+  };
+
+  // One-click equivalent of the old Excel tool: builds a single .eml with
+  // every downloadable invoice already attached, ready to open in Outlook.
+  const [emlBuildingId, setEmlBuildingId] = useState<number | null>(null);
+  const downloadEml = async (d: Draft) => {
+    setEmlBuildingId(d.id);
+    try {
+      const downloadableRefs = (d.invoice_refs ?? []).filter(r => r.qbInvoiceId && (r.qbCompany === 'TAB' || r.qbCompany === 'TAC'));
+      const attachments = await Promise.all(downloadableRefs.map(async r => {
+        const res = await fetch(`/api/quickbooks/invoice-pdf?company=${r.qbCompany}&id=${encodeURIComponent(r.qbInvoiceId!)}`);
+        if (!res.ok) throw new Error(`Unable to download ${r.qbCompany} #${r.invoiceNo}.`);
+        return { fileName: invoicePdfFileName(r.qbCompany as 'TAB' | 'TAC', r.invoiceNo, d.company_name, r.amount), data: await res.arrayBuffer() };
+      }));
+      const blob = buildEmlBlob(d, attachments);
+      const safeCompany = d.company_name.replace(/[<>:"/\\|?*]/g, ' ').replace(/\s+/g, ' ').trim();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${safeCompany}.eml`;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Unable to generate the email file.');
+    } finally {
+      setEmlBuildingId(null);
     }
   };
 
@@ -229,10 +316,17 @@ function DraftsInner() {
                     rows={7} style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px', fontSize: 12.5, fontFamily: 'inherit', resize: 'vertical', marginBottom: 12 }} />
                   {d.invoice_refs?.some(r => r.qbInvoiceId && (r.qbCompany === 'TAB' || r.qbCompany === 'TAC')) && (
                     <div style={{ fontSize: 10.5, color: '#94a3b8', marginBottom: 10 }}>
-                      A mailto: link can&apos;t carry an attachment — download the invoice PDF above (⬇ icon) first, then drag it into the Outlook window Compose opens.
+                      Download Email builds a ready-to-send .eml with the invoice(s) already attached — double-click it to open in Outlook. Compose in Outlook opens a blank draft instead (no attachment; mailto: links can&apos;t carry one).
                     </div>
                   )}
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {d.invoice_refs?.some(r => r.qbInvoiceId && (r.qbCompany === 'TAB' || r.qbCompany === 'TAC')) && (
+                      <button onClick={() => { updateDraft(d, { subject: d.subject, body: d.body }); downloadEml(d); }} disabled={emlBuildingId === d.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 7, border: 'none', background: '#0f766e', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: emlBuildingId === d.id ? 'wait' : 'pointer' }}>
+                        {emlBuildingId === d.id ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={13} />}
+                        {emlBuildingId === d.id ? 'Building…' : 'Download Email (with invoice)'}
+                      </button>
+                    )}
                     <button onClick={() => { updateDraft(d, { subject: d.subject, body: d.body }); openInOutlook(d); }}
                       style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 7, border: 'none', background: '#1d3a5c', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
                       <Mail size={13} />Compose in Outlook
