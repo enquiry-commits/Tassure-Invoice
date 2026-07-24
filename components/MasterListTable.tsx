@@ -1202,7 +1202,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
               <button onClick={cancelAdd} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 {([
                   { key: 'company_name', label: 'Company Name *', normalize: (v: string) => v.toUpperCase() },
                   { key: 'roc_no',       label: 'ROC No.',        normalize: (v: string) => v.toUpperCase() },
