@@ -1209,7 +1209,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                   { key: 'status',       label: 'Active / Status', normalize: (v: string) => v.toUpperCase() },
                   { key: 'fye',          label: 'FYE',            normalize: undefined },
                 ] as const).map(f => (
-                  <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                  <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                     <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 92, flexShrink: 0 }}>{f.label}</span>
                     <input value={newRow[f.key] ?? ''} onChange={e => setNewRow(v => ({ ...v, [f.key]: f.normalize ? f.normalize(e.target.value) : e.target.value }))}
                       onBlur={f.key === 'fye' ? e => setNewRow(v => ({ ...v, fye: normalizeFyeInput(e.target.value) })) : undefined}
