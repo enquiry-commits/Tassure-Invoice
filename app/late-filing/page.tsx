@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
-import { AlertTriangle, Plus, Trash2, Check, X, RefreshCw, Zap } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { AlertTriangle, Plus, Trash2, Check, X, RefreshCw, Zap, Calendar } from 'lucide-react';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
-import { fmtDate as fmtDateStr } from '@/lib/date';
+import { fmtDate as fmtDateStr, toDisplayDate, toIsoDateValue } from '@/lib/date';
 
 const FYE_MONTHS = ['ALL','JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
@@ -72,6 +72,44 @@ function categorize(row: LateRow): LateCategory {
 function fmtDate(d: string | null) {
   if (!d) return <span style={{ color: '#94a3b8' }}>NA</span>;
   return fmtDateStr(d);
+}
+
+// Text field showing "D MMM YYYY" (e.g. 30 Sep 2021), with a calendar button
+// that opens a hidden native date input purely to pick a value — the native
+// input itself is never shown, so its locale-dependent yyyy/mm/dd rendering
+// never appears. `value`/`onChange` are the canonical ISO (yyyy-mm-dd) form.
+function DateField({ label, value, onChange }: { label: string; value: string | null | undefined; onChange: (iso: string | null) => void }) {
+  const [text, setText] = useState(toDisplayDate(value ?? null) ?? '');
+  const dateRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { setText(toDisplayDate(value ?? null) ?? ''); }, [value]);
+  const commit = () => {
+    const trimmed = text.trim();
+    if (!trimmed) { onChange(null); return; }
+    const iso = toIsoDateValue(trimmed);
+    if (iso) { onChange(iso); setText(toDisplayDate(iso) ?? ''); }
+    else { setText(toDisplayDate(value ?? null) ?? ''); }
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: '1 1 200px', minWidth: 0 }}>
+        <input type="text" value={text} onChange={e => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } if (e.key === 'Escape') { setText(toDisplayDate(value ?? null) ?? ''); } }}
+          placeholder="e.g. 03 Apr 2026"
+          style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button type="button" data-cal-btn="1" tabIndex={0}
+            onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
+            style={{ border: '1px solid #c7d2fe', borderRadius: 4, background: '#eef2ff', color: '#4338ca', cursor: 'pointer', padding: '3px 6px', display: 'flex', alignItems: 'center' }}>
+            <Calendar size={12} />
+          </button>
+          <input ref={dateRef} type="date" onChange={e => { const v = e.target.value || null; onChange(v); e.target.value = ''; }}
+            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SemanticStatusPill({ label, background, color, border }: { label: string; background: string; color: string; border: string }) {
@@ -197,14 +235,10 @@ export default function LateFilingPage() {
     load();
   }
 
-  function dateInput(key: keyof EditState, label: string) {
+  function dateField(key: keyof EditState, label: string) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
-        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>{label}</span>
-        <input type="date" value={(editForm[key] as string) ?? ''}
-          onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value || null }))}
-          style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
-      </div>
+      <DateField label={label} value={editForm[key] as string | null | undefined}
+        onChange={v => setEditForm(f => ({ ...f, [key]: v }))} />
     );
   }
 
@@ -330,10 +364,10 @@ export default function LateFilingPage() {
                       style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                   </div>
                 )}
-                {dateInput('last_annual_return_date', 'Last AR Date')}
-                {dateInput('last_agm_date', 'Last AGM Date')}
-                {dateInput('last_accounts_date', 'Last Accounts Date')}
-                {dateInput('next_agm_due_date', 'Next AGM Due')}
+                {dateField('last_annual_return_date', 'Last AR Date')}
+                {dateField('last_agm_date', 'Last AGM Date')}
+                {dateField('last_accounts_date', 'Last Accounts Date')}
+                {dateField('next_agm_due_date', 'Next AGM Due')}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={save} disabled={saving || !editForm.company_name}

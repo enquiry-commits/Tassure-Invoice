@@ -2635,6 +2635,44 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
   );
 }
 
+// Text field showing "D MMM YYYY" (e.g. 30 Sep 2021), with a calendar button
+// that opens a hidden native date input purely to pick a value — the native
+// input itself is never shown, so its locale-dependent yyyy/mm/dd rendering
+// never appears. `value`/`onChange` are the canonical ISO (yyyy-mm-dd) form.
+function AddManualDateField({ label, value, onChange }: { label: string; value: string; onChange: (iso: string) => void }) {
+  const [text, setText] = useState(toDisplayDate(value) ?? '');
+  const dateRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { setText(toDisplayDate(value) ?? ''); }, [value]);
+  const commit = () => {
+    const trimmed = text.trim();
+    if (!trimmed) { onChange(''); return; }
+    const iso = toIsoDateValue(trimmed);
+    if (iso) { onChange(iso); setText(toDisplayDate(iso) ?? ''); }
+    else { setText(toDisplayDate(value) ?? ''); }
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 92, flexShrink: 0 }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: '1 1 200px', minWidth: 0 }}>
+        <input type="text" value={text} onChange={e => setText(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } if (e.key === 'Escape') { setText(toDisplayDate(value) ?? ''); } }}
+          placeholder="e.g. 03 Apr 2026"
+          style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button type="button" data-cal-btn="1" tabIndex={0}
+            onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
+            style={{ border: '1px solid #c7d2fe', borderRadius: 4, background: '#eef2ff', color: '#4338ca', cursor: 'pointer', padding: '3px 6px', display: 'flex', alignItems: 'center' }}>
+            <Calendar size={12} />
+          </button>
+          <input ref={dateRef} type="date" onChange={e => { onChange(e.target.value || ''); e.target.value = ''; }}
+            style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AR TAB
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2845,7 +2883,6 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   { label: 'Company Name *', value: newEntity, set: setNewEntity, type: 'text', normalize: (v: string) => v.toUpperCase() },
                   { label: 'UEN',            value: newUen,    set: setNewUen,    type: 'text', normalize: (v: string) => v.toUpperCase() },
                   { label: 'PIC',            value: newPic,    set: setNewPic,    type: 'text' },
-                  { label: 'Due Date',       value: newDueDate, set: setNewDueDate, type: 'date' },
                 ] as const).map(f => (
                   <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                     <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 92, flexShrink: 0 }}>{f.label}</span>
@@ -2853,6 +2890,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                       style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                   </div>
                 ))}
+                <AddManualDateField label="Due Date" value={newDueDate} onChange={setNewDueDate} />
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={saveNewEntity} disabled={adding || !newEntity.trim()}
