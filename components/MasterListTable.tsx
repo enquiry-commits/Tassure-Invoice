@@ -212,26 +212,18 @@ function PicCell({ name, active, onToggleActive, onSaveName }: {
 // a colored check tile + stacked uppercase label/name, matching the same
 // on-green/off-muted language AR Reminder's OverrideChip uses, instead of a
 // plain checkbox next to a bare input.
-// Same per-service colors as AR Reminder's own SVC map (app/billing/page.tsx)
-// — nd/secretary/accounts/tax each have a distinct identity there, not a
-// generic uniform on/off green, and the off-state matches OverrideChip's own
-// off colors (bg #f8fafc, color #94a3b8, border #e2e8f0).
-const SERVICE_CHIP_COLORS: Record<string, { bg: string; color: string }> = {
-  nd: { bg: '#dcfce7', color: '#15803d' },
-  secretary: { bg: '#f5f3ff', color: '#6d28d9' },
-  accounts: { bg: '#fef9c3', color: '#92400e' },
-  tax: { bg: '#ffedd5', color: '#c2410c' },
-};
+// Same green used everywhere else in this table for "active" (CheckSquare's
+// checked state, the status pills, …) — not a distinct color per service.
+const SERVICE_CHIP_ACTIVE = { bg: '#f0fdf4', color: '#16a34a' };
 
-function ServiceChip({ label, name, active, onToggleActive, onSaveName, svcKey }: {
-  label: string; name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void; svcKey: keyof typeof SERVICE_CHIP_COLORS;
+function ServiceChip({ label, name, active, onToggleActive, onSaveName }: {
+  label: string; name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void;
 }) {
   const [val, setVal] = useState(name ?? '');
   useEffect(() => { setVal(name ?? ''); }, [name]);
-  const c = SERVICE_CHIP_COLORS[svcKey];
-  const chipColor = active ? c.color : '#94a3b8';
-  const chipBg = active ? c.bg : '#f8fafc';
-  const chipBorder = active ? `${c.color}40` : '#e2e8f0';
+  const chipColor = active ? SERVICE_CHIP_ACTIVE.color : '#94a3b8';
+  const chipBg = active ? SERVICE_CHIP_ACTIVE.bg : '#f8fafc';
+  const chipBorder = active ? '#bbf7d0' : '#e2e8f0';
   return (
     <div onClick={e => e.stopPropagation()} style={{
       display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, boxSizing: 'border-box', width: '100%',
@@ -766,7 +758,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                     <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                       <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>ACC</span>
                       <div style={{ flex: 1 }}>
-                        <ServiceChip label="Accounting" svcKey="accounts" name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
+                        <ServiceChip label="Accounting" name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
                       </div>
                     </div>
                   );
@@ -774,7 +766,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                     <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                       <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>TAX</span>
                       <div style={{ flex: 1 }}>
-                        <ServiceChip label="Tax" svcKey="tax" name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
+                        <ServiceChip label="Tax" name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
                       </div>
                     </div>
                   );
@@ -786,7 +778,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                       <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                         <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{c.label}</span>
                         <div style={{ flex: 1 }}>
-                          <ServiceChip label={c.field === 'nominee_director' ? 'Nominee Director' : 'Secretary'} svcKey={c.field === 'nominee_director' ? 'nd' : 'secretary'} name={value} active={!!active}
+                          <ServiceChip label={c.field === 'nominee_director' ? 'Nominee Director' : 'Secretary'} name={value} active={!!active}
                             onToggleActive={() => onToggleActive(row.id, activeField, active)}
                             onSaveName={val => {
                               onSave(row.id, c.field, val);
