@@ -1220,7 +1220,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={saveNew} disabled={saving || !newRow.company_name?.trim()}
-                  style={{ padding: '7px 16px', borderRadius: 7, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: saving || !newRow.company_name?.trim() ? 0.6 : 1 }}>
+                  style={{ padding: '7px 16px', borderRadius: 9, border: '1px solid rgba(21,94,89,.2)', background: '#397f78', color: '#fff', fontWeight: 750, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 5px 14px rgba(57,127,120,.14)', opacity: saving || !newRow.company_name?.trim() ? 0.6 : 1 }}>
                   <Check size={14} />{saving ? 'Saving…' : 'Save'}
                 </button>
                 <button onClick={cancelAdd}
