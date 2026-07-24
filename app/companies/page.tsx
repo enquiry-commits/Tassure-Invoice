@@ -180,7 +180,7 @@ export default function CompaniesPage() {
         </div>
       ) : (
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3" style={{ backgroundColor: '#1e3a8a' }}>
+        <div className="px-4 py-3" style={{ backgroundColor: '#1d3a5c' }}>
           <h2 className="text-white font-semibold text-sm">Company List</h2>
         </div>
 
