@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (AR1/AR2/AR3 templates rewritten to match real BULK.xlsm wording)
+Last updated: 2026-07-24 (Billing Drafts + AR Reminder List: shared cross-cycle search, UEN)
 
 ## Purpose
 
@@ -23,6 +23,26 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Billing Drafts + AR Reminder List: shared cross-cycle search, now with
+  UEN** (`app/billing/page.tsx`). Vincent reported the earlier Billing
+  Drafts-only cross-month auto-switch (previous entry below) still wasn't
+  finding companies in other months, and asked for the same capability on
+  AR Reminder List too, plus UEN as a searchable field on both. Likely root
+  cause of the original miss: the auto-switch correctly changed the FYE
+  month, but the *other* active filter (status filter on Billing Drafts;
+  status/column filters on AR Reminder List) could still hide the
+  newly-loaded company, making it look like nothing happened. Extracted
+  the escalation logic into one shared `useCrossCycleSearch` hook (defined
+  once, used by both `BillingTab` and `ARTab`): local search now checks
+  company name OR UEN; when that comes up empty, it escalates to
+  `/api/companies?search=` (already matches both `company_name` and
+  `registration_no`/UEN server-side) and, if found, switches the month
+  selector to that company's real FYE month — **and now also resets the
+  tab's own status/column filters back to 'all'/cleared** so the found
+  company can't stay hidden behind an unrelated filter. Both pages' search
+  placeholders updated to mention UEN. Production build passes; committed
+  locally only, not yet pushed.
 
 - **AR1/AR2/AR3 email templates rewritten to match the real legacy wording**
   (Supabase `email_templates` table, ids 1/4/5 — a direct data fix, not a

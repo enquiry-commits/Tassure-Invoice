@@ -1809,6 +1809,61 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
   };
 }
 
+// Both Billing Drafts and AR Reminder List are scoped to one FYE month/year
+// batch at a time (each company has a single fixed FYE month, and the
+// numbers shown are computed against that specific cycle) — so searching
+// for a company outside the current batch previously just showed "no
+// matching records" with no explanation. When the local (name-or-UEN)
+// search comes up empty, this escalates to a company-wide lookup
+// (`/api/companies?search=`, which already matches both company_name and
+// registration_no/UEN) and, if found, jumps the month selector to that
+// company's real FYE month so the numbers stay accurate (year is left
+// as-is). `onSwitch` lets each tab clear its own status/column filters so
+// the newly-loaded company can't end up hidden by an unrelated filter.
+function useCrossCycleSearch(
+  items: { companyName: string; uen: string | null }[],
+  month: string,
+  setMonth: (v: string) => void,
+  search: string,
+  onSwitch: () => void,
+): string | null {
+  const [notice, setNotice] = useState<string | null>(null);
+  const itemsRef = useRef(items);
+  useEffect(() => { itemsRef.current = items; }, [items]);
+  const monthRef = useRef(month);
+  useEffect(() => { monthRef.current = month; }, [month]);
+  const onSwitchRef = useRef(onSwitch);
+  useEffect(() => { onSwitchRef.current = onSwitch; }, [onSwitch]);
+
+  useEffect(() => {
+    const term = search.trim();
+    if (!term) { setNotice(null); return; }
+    const timer = setTimeout(async () => {
+      const q = term.toLowerCase();
+      const localMatch = itemsRef.current.some(c => c.companyName.toLowerCase().includes(q) || (c.uen ?? '').toLowerCase().includes(q));
+      if (localMatch) { setNotice(null); return; }
+      try {
+        const res = await fetch(`/api/companies?search=${encodeURIComponent(term)}&limit=5`);
+        const json = await res.json();
+        const matches: { company_name: string; fye_month: string | null }[] = json.data ?? [];
+        if (matches.length === 0) { setNotice(`No company found matching "${term}".`); return; }
+        const match = matches[0];
+        if (!match.fye_month) { setNotice(`${match.company_name} has no FYE month on file — can't switch automatically.`); return; }
+        if (match.fye_month !== monthRef.current) {
+          setNotice(`Switched to ${match.fye_month} — ${match.company_name}'s FYE month.`);
+          setMonth(match.fye_month);
+          onSwitchRef.current();
+        } else {
+          setNotice(null);
+        }
+      } catch { setNotice(null); }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search, setMonth]);
+
+  return notice;
+}
+
 function BillingTab({ month, year, setMonth, setYear }: { month: string; year: string; setMonth: (v: string) => void; setYear: (v: string) => void }) {
   const [data,       setData]       = useState<{ summary: BillingSummary; companies: CompanyBilling[] } | null>(null);
   const [loading,    setLoading]    = useState(false);
@@ -1967,41 +2022,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     return arList.map(ar => arToBillingRow(ar, findMatch(ar.entity_name), month));
   }, [arList, renewalByName, month]);
 
-  // Search is scoped to the selected FYE month/year's batch (each company has
-  // one fixed FYE month, and billing math/invoice matching is computed
-  // against that specific cycle) — so a name outside the current batch would
-  // otherwise just show as "no matching records" with no explanation. When
-  // the local search comes up empty, escalate to a company-wide lookup and,
-  // if found, jump the month selector to that company's real FYE month so
-  // the numbers shown are actually correct for it (year is left as-is).
-  const [crossMonthNotice, setCrossMonthNotice] = useState<string | null>(null);
-  const monthCompaniesRef = useRef(monthCompanies);
-  useEffect(() => { monthCompaniesRef.current = monthCompanies; }, [monthCompanies]);
-  const monthRef = useRef(month);
-  useEffect(() => { monthRef.current = month; }, [month]);
-  useEffect(() => {
-    const term = search.trim();
-    if (!term) { setCrossMonthNotice(null); return; }
-    const timer = setTimeout(async () => {
-      const localMatch = monthCompaniesRef.current.some(c => c.companyName.toLowerCase().includes(term.toLowerCase()));
-      if (localMatch) { setCrossMonthNotice(null); return; }
-      try {
-        const res = await fetch(`/api/companies?search=${encodeURIComponent(term)}&limit=5`);
-        const json = await res.json();
-        const matches: { company_name: string; fye_month: string | null }[] = json.data ?? [];
-        if (matches.length === 0) { setCrossMonthNotice(`No company found matching "${term}".`); return; }
-        const match = matches[0];
-        if (!match.fye_month) { setCrossMonthNotice(`${match.company_name} has no FYE month on file — can't switch automatically.`); return; }
-        if (match.fye_month !== monthRef.current) {
-          setCrossMonthNotice(`Switched to ${match.fye_month} — ${match.company_name}'s FYE month.`);
-          setMonth(match.fye_month);
-        } else {
-          setCrossMonthNotice(null);
-        }
-      } catch { setCrossMonthNotice(null); }
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [search, setMonth]);
+  const crossMonthNotice = useCrossCycleSearch(monthCompanies, month, setMonth, search, useCallback(() => { setFilter('all'); }, []));
 
   // "Needs billing" for month-driven invoicing = this FYE cycle hasn't been
   // invoiced yet. Prefer our own generated_invoices record (exact — we made
@@ -2024,7 +2045,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     : !(c.billedCycles ?? []).includes(currentFye);
   const needsCount = monthCompanies.filter(notInvoicedYet).length;
   const filtered = monthCompanies.filter(c => {
-    if (search && !c.companyName.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !c.companyName.toLowerCase().includes(search.toLowerCase()) && !(c.uen ?? '').toLowerCase().includes(search.toLowerCase())) return false;
     if (filter === 'needs') return notInvoicedYet(c);
     if (filter === 'active') return !notInvoicedYet(c); // already invoiced this cycle
     if (filter !== 'all' && c.urgency !== filter) return false;
@@ -2091,7 +2112,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       {/* Filter */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="text" placeholder="Search company name… (any FYE month)" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
+          <input type="text" placeholder="Search company name or UEN… (any FYE month)" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
           <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{filtered.length} companies</span>
         </div>
         {crossMonthNotice && <div style={{ fontSize: 11, color: '#2563eb', marginTop: 6 }}>{crossMonthNotice}</div>}
@@ -2982,7 +3003,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   };
 
   const filtered = useMemo(() => records.filter(r => {
-    if (search && !r.entity_name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !r.entity_name.toLowerCase().includes(search.toLowerCase()) && !(r.uen ?? '').toLowerCase().includes(search.toLowerCase())) return false;
     if (filter === 'filed'       && !r.stages.arFiled) return false;
     if (filter === 'in_progress' && !(r.stagesDone > 0 && !r.stages.arFiled)) return false;
     if (filter === 'pending'     && r.stagesDone !== 0) return false;
@@ -2993,6 +3014,11 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     }
     return true;
   }), [records, search, filter, columnFilters]);
+
+  // See useCrossCycleSearch's own comment (defined above BillingTab) — same
+  // cross-cycle escalation, adapted to AR Reminder's own field names/state.
+  const arRecordsForSearch = useMemo(() => records.map(r => ({ companyName: r.entity_name, uen: r.uen })), [records]);
+  const crossMonthNotice = useCrossCycleSearch(arRecordsForSearch, month, setMonth, search, useCallback(() => { setFilter('all'); setColumnFilters({}); }, []));
 
   const stats = useMemo(() => ({
     total:      records.length,
@@ -3095,8 +3121,9 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: '#dc2626', fontSize: 12, marginBottom: 12 }}>{error}</div>}
 
       {/* Search + view toggle */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input type="text" placeholder="Search company name or UEN… (any FYE month)" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
         {filter !== 'all' && (
           <button onClick={() => setFilter('all')} style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', cursor: 'pointer', whiteSpace: 'nowrap' }}>Clear filter ✕</button>
         )}
@@ -3109,6 +3136,8 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
             </button>
           ))}
         </div>}
+       </div>
+       {crossMonthNotice && <div style={{ fontSize: 11, color: '#2563eb', marginTop: 6 }}>{crossMonthNotice}</div>}
       </div>
 
       {/* List view */}
