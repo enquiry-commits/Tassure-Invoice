@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (AR Reminder List: Due Date badges now explain "Filed"/"Xd left")
+Last updated: 2026-07-24 (Billing Drafts modal header: exact ARDetailModal markup)
 
 ## Purpose
 
@@ -23,6 +23,22 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Billing Drafts modal header now reproduces `ARDetailModal`'s exact
+  markup**, not just its colors. Vincent pasted the real DevTools output
+  of AR's header showing a two-row structure (name+close row, then a
+  UEN-chip-and-vertical-bar-divider row) and pointed out the divider
+  between UEN/FYE/etc. is a `|`-style 1px vertical bar
+  (`background: rgba(255,255,255,0.2)`), not the `·` middot text
+  separator the previous fix (color/spacing only) still used. Restructured
+  to match exactly: row 1 = company name + close button
+  (`justify-content: space-between`, `marginBottom: 8`); row 2 = UEN
+  rendered as its own pill (`background: rgba(255,255,255,0.08)`,
+  `padding: 2px 6px`, `borderRadius: 4`) separated from "FYE {month}" and
+  "Build & generate invoice" by real vertical-bar dividers; also added the
+  urgency-colored `borderLeft: 4px solid ${accent}` the real modal has
+  (computed the same way the table row's own accent already is). Production
+  build passes; committed locally, pushed.
 
 - **AR Reminder List's Due Date badges now explain themselves**
   (`app/billing/page.tsx`, `DueBadge` — used by AR Reminder List's row
