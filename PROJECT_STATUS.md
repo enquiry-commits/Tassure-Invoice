@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (Add Manual modals: uppercase Company Name/UEN, FYE Month dropdown)
+Last updated: 2026-07-24 (Add Manual modals: date fields no longer locale-dependent)
 
 ## Purpose
 
@@ -23,6 +23,25 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Add Manual/Edit modal date fields no longer locale-dependent.** AR
+  Reminder's Add Manual Due Date field and Late Filing's 4 modal date
+  fields (Last AR/AGM/Accounts Date, Next AGM Due) were plain
+  `<input type="date">`, so the visible placeholder/format followed the
+  browser/OS locale — showed Chinese `年/月/日` on Vincent's machine
+  instead of an English format. Replaced with a new `AddManualDateField`
+  component (`app/billing/page.tsx`) / `DateField` component
+  (`app/late-filing/page.tsx`), each showing a "D MMM YYYY" text field
+  (e.g. `30 Sep 2021`) with a calendar icon button that opens a hidden
+  (opacity 0, zero-size) native `<input type="date">` purely to invoke the
+  browser's picker via `showPicker()` — the native input itself is never
+  rendered, so its locale text never appears. Typing directly into the
+  text field is also supported, parsed via `lib/date.ts`'s
+  `toIsoDateValue`/`toDisplayDate` (same helpers AR's own `EditField`
+  already uses for its date columns) with invalid input reverting to the
+  last known-good display on blur. The canonical value held in
+  state/sent to the API is unchanged — still ISO `yyyy-mm-dd` — so no
+  API/DB changes were needed. Production build passes; not yet pushed.
 
 - **Add Manual modal field-behavior polish** (AR Reminder, Late Filing,
   Master List): Company Name and UEN inputs in AR Reminder's Add Manual
