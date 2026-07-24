@@ -749,7 +749,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
         <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px', background: '#f8fafc' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {sections.map(section => (
-              <div key={section.name} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 12 }}>
+              <div key={section.name} style={{ background: 'transparent', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 12 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>{section.name}</div>
 
                 {/* Compact fields: AR Reminder's exact row chrome, stacked full-width. */}
