@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (Billing Drafts: search now crosses FYE months)
+Last updated: 2026-07-24 (AR1/AR2/AR3 templates rewritten to match real BULK.xlsm wording)
 
 ## Purpose
 
@@ -23,6 +23,39 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **AR1/AR2/AR3 email templates rewritten to match the real legacy wording**
+  (Supabase `email_templates` table, ids 1/4/5 — a direct data fix, not a
+  code change). Vincent asked to confirm the three AR templates
+  ("AR1 - Standard Renewal", "AR2 - Multi-Invoice Renewal",
+  "AR3 - Renewal (Batch)" — pre-existing rows from an earlier session, not
+  created by this one) actually matched the real desktop docx files
+  (`AR-AUTO EMAIL.docx`, `AR2-auto email.docx`, `AR3.docx`, read in full
+  earlier this session). They didn't: all three had generic one-line
+  English-only placeholder bodies, and AR3's body was byte-for-byte
+  identical to AR1's — none of the real bilingual EN/CN wording, the
+  distinct tone per template (AR1 = service already ended, AR2 = multiple
+  invoices + other outstanding statements, AR3 = advance/pre-emptive
+  billing — confirmed genuinely different in the source docs), or the
+  `PAYMENT METHOD付款方式:` sign-off line. Rewrote all three
+  subject/body_template fields to faithfully port the real wording, mapping
+  the legacy `<User Name>`/`<Company Name>`/`<AMOUNT>`/`<INV[...]>`
+  placeholders onto the existing merge engine's `{{contactName}}`/
+  `{{companyName}}`/`{{totalAmount}}`/`{{invoiceList}}` fields. One
+  deliberate structural adaptation (flagged to Vincent, not silently
+  assumed): the legacy docs embed the invoice number inline mid-sentence
+  ("invoice TAB<INV>"); the current merge model always renders
+  `{{invoiceList}}` as a block (one line per matched invoice, needed since
+  a company can have 1-3+ invoices), so sentences were reworded to
+  introduce the block ("...enclosed herewith our service renewal
+  invoice(s) below:\n\n{{invoiceList}}") rather than force an inline
+  substitution. Also renamed id 5 to "AR3 - Advance Renewal Notice" for
+  clarity, since "(Batch)" didn't describe what actually distinguishes it.
+  Applied directly via the Supabase REST API (`scripts` were run ad hoc,
+  not committed) after Vincent explicitly confirmed writing straight to
+  production. Any future edits to wording should happen in the Templates
+  & Senders page (`app/client-communications/templates/page.tsx`), which
+  already supports inline editing of these fields.
 
 - **Billing Drafts search now crosses FYE months** (`app/billing/page.tsx`,
   `BillingTab`). The table's company list is scoped to whichever FYE
