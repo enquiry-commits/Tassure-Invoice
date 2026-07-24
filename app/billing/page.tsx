@@ -1947,6 +1947,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     return () => document.removeEventListener('mousedown', onClickOutside);
   }, [draftPopoverFor]);
 
+
   // The billing list for a cycle = the AR Reminder rows for that FYE month/year
   // (the definitive, staff-reviewed set), each joined to its renewals record for
   // accurate fees. Match by normalised name; unmatched AR rows (new companies
@@ -1965,6 +1966,43 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     };
     return arList.map(ar => arToBillingRow(ar, findMatch(ar.entity_name), month));
   }, [arList, renewalByName, month]);
+
+  // Search is scoped to the selected FYE month/year's batch (each company has
+  // one fixed FYE month, and billing math/invoice matching is computed
+  // against that specific cycle) — so a name outside the current batch would
+  // otherwise just show as "no matching records" with no explanation. When
+  // the local search comes up empty, escalate to a company-wide lookup and,
+  // if found, jump the month selector to that company's real FYE month so
+  // the numbers shown are actually correct for it (year is left as-is).
+  const [crossMonthNotice, setCrossMonthNotice] = useState<string | null>(null);
+  const monthCompaniesRef = useRef(monthCompanies);
+  useEffect(() => { monthCompaniesRef.current = monthCompanies; }, [monthCompanies]);
+  const monthRef = useRef(month);
+  useEffect(() => { monthRef.current = month; }, [month]);
+  useEffect(() => {
+    const term = search.trim();
+    if (!term) { setCrossMonthNotice(null); return; }
+    const timer = setTimeout(async () => {
+      const localMatch = monthCompaniesRef.current.some(c => c.companyName.toLowerCase().includes(term.toLowerCase()));
+      if (localMatch) { setCrossMonthNotice(null); return; }
+      try {
+        const res = await fetch(`/api/companies?search=${encodeURIComponent(term)}&limit=5`);
+        const json = await res.json();
+        const matches: { company_name: string; fye_month: string | null }[] = json.data ?? [];
+        if (matches.length === 0) { setCrossMonthNotice(`No company found matching "${term}".`); return; }
+        const match = matches[0];
+        if (!match.fye_month) { setCrossMonthNotice(`${match.company_name} has no FYE month on file — can't switch automatically.`); return; }
+        if (match.fye_month !== monthRef.current) {
+          setCrossMonthNotice(`Switched to ${match.fye_month} — ${match.company_name}'s FYE month.`);
+          setMonth(match.fye_month);
+        } else {
+          setCrossMonthNotice(null);
+        }
+      } catch { setCrossMonthNotice(null); }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search, setMonth]);
+
   // "Needs billing" for month-driven invoicing = this FYE cycle hasn't been
   // invoiced yet. Prefer our own generated_invoices record (exact — we made
   // it) over the billedCycles heuristic (fuzzy-parsed from QB descriptions;
@@ -2051,9 +2089,12 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: '#dc2626', fontSize: 12, marginBottom: 12 }}>{error}</div>}
 
       {/* Filter */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
-        <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
-        <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{filtered.length} companies</span>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="text" placeholder="Search company name… (any FYE month)" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
+          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{filtered.length} companies</span>
+        </div>
+        {crossMonthNotice && <div style={{ fontSize: 11, color: '#2563eb', marginTop: 6 }}>{crossMonthNotice}</div>}
       </div>
 
       {/* Table */}

@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (Billing Drafts: one-click "Email Drafts" per row)
+Last updated: 2026-07-24 (Billing Drafts: search now crosses FYE months)
 
 ## Purpose
 
@@ -23,6 +23,26 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Billing Drafts search now crosses FYE months** (`app/billing/page.tsx`,
+  `BillingTab`). The table's company list is scoped to whichever FYE
+  month/year is selected (each company has one fixed FYE month, and billing
+  math/invoice matching is computed against that specific cycle) — so
+  searching for a company outside the current month/year previously just
+  showed "no matching records" with no explanation. Vincent asked whether
+  search could find any company regardless of month; confirmed via a direct
+  question that the desired behaviour is auto-switching the month selector
+  to that company's real FYE month (not a flat, cycle-blind company list,
+  which would show inaccurate numbers). Now: when the local search comes up
+  empty, a debounced (400ms) escalation queries `/api/companies?search=`
+  (company-wide, no FYE filter) — if found, the month selector jumps to
+  that company's actual `fye_month` (year unchanged) and a small blue notice
+  explains the switch; if genuinely not found, the notice says so instead
+  of a silent empty table. Implemented with `monthCompaniesRef`/`monthRef`
+  refs so the debounce effect only re-runs on search-text changes, not on
+  every re-render of the (now up-to-date) company list — avoids a
+  notice-flicker/re-trigger loop. Production build passes; committed
+  locally only.
 
 - **Billing Drafts: one-click "Email Drafts" button per row**
   (`app/billing/page.tsx`, `BillingTab`'s main table — the `tab=billing`
