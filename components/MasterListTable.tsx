@@ -216,8 +216,8 @@ function PicCell({ name, active, onToggleActive, onSaveName }: {
 // checked state, the status pills, …) — not a distinct color per service.
 const SERVICE_CHIP_ACTIVE = { bg: '#f0fdf4', color: '#16a34a' };
 
-function ServiceChip({ label, name, active, onToggleActive, onSaveName }: {
-  label: string; name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void;
+function ServiceChip({ name, active, onToggleActive, onSaveName }: {
+  name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void;
 }) {
   const [val, setVal] = useState(name ?? '');
   useEffect(() => { setVal(name ?? ''); }, [name]);
@@ -236,7 +236,6 @@ function ServiceChip({ label, name, active, onToggleActive, onSaveName }: {
         {active && <Check size={12} strokeWidth={3} />}
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.4px', color: chipColor, marginBottom: 1 }}>{label}</div>
         <input value={val} onChange={e => setVal(e.target.value)}
           onBlur={() => { const next = val.trim(); if (next !== (name ?? '').trim()) onSaveName(next); }}
           onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
@@ -743,7 +742,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
       <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
         <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>ACC</span>
         <div style={{ flex: 1 }}>
-          <ServiceChip label="Accounting" name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
+          <ServiceChip name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
         </div>
       </div>
     );
@@ -751,7 +750,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
       <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
         <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>TAX</span>
         <div style={{ flex: 1 }}>
-          <ServiceChip label="Tax" name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
+          <ServiceChip name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
         </div>
       </div>
     );
@@ -763,7 +762,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
         <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
           <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{c.label}</span>
           <div style={{ flex: 1 }}>
-            <ServiceChip label={c.field === 'nominee_director' ? 'Nominee Director' : 'Secretary'} name={value} active={!!active}
+            <ServiceChip name={value} active={!!active}
               onToggleActive={() => onToggleActive(row.id, activeField, active)}
               onSaveName={val => {
                 onSave(row.id, c.field, val);
