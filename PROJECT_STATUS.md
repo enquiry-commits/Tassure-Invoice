@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-22 (Campaign Centre: TeamWork Report recipient directory)
+Last updated: 2026-07-24 (Add Manual modals: uppercase Company Name/UEN, FYE Month dropdown)
 
 ## Purpose
 
@@ -23,6 +23,21 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Add Manual modal field-behavior polish** (AR Reminder, Late Filing,
+  Master List): Company Name and UEN inputs in AR Reminder's Add Manual
+  Entry modal (`app/billing/page.tsx`) and Late Filing's unified Add/Edit
+  modal (`app/late-filing/page.tsx`, shared between creating new rows and
+  editing existing ones) now uppercase on every keystroke — AR's own
+  `ARDetailModal`/`EditField` (editing an existing entry's fields inline)
+  was deliberately left untouched, scoped to the Add Manual entry points
+  only per Vincent's clarification. Master List's Add Manual modal FYE
+  field (`components/MasterListTable.tsx`) changed from a free-text input
+  with on-blur normalization to a real `<select>` labeled "FYE Month",
+  reusing the existing `MONTH3_ABBR` constant as its options — mirrors
+  Late Filing's already-existing FYE Month dropdown pattern. The now-dead
+  `normalizeFyeInput()` helper was removed (only consumer was the removed
+  on-blur handler). Production build passes; not yet pushed/deployed.
 
 - **Campaign Centre now has one TeamWork-backed recipient policy for all three
   campaign types** (AR Renewal, SOA and Document Reminder). The daily
