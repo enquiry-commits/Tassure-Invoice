@@ -77,14 +77,6 @@ function fyeMonthNum(s: string | null | undefined): number | null {
   const a = t.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
   return MONTH3[a] ?? null;
 }
-// "January", "december", "DEC", "dec" — anything recognizable as a month —
-// all collapse to the same 3-letter abbreviation the rest of the app uses
-// for FYE. Unrecognized input (e.g. a typo) is left as typed, just
-// uppercased, rather than silently discarded.
-function normalizeFyeInput(raw: string): string {
-  const m = fyeMonthNum(raw);
-  return m ? MONTH3_ABBR[m - 1] : raw.toUpperCase();
-}
 
 // acc_pic_override/tax_pic_override/*_active are facets of the acc_pic/
 // tax_pic/nominee_director/secretary columns, not columns of their own —
@@ -1207,14 +1199,21 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                   { key: 'company_name', label: 'Company Name *', normalize: (v: string) => v.toUpperCase() },
                   { key: 'roc_no',       label: 'ROC No.',        normalize: (v: string) => v.toUpperCase() },
                   { key: 'status',       label: 'Active / Status', normalize: (v: string) => v.toUpperCase() },
-                  { key: 'fye',          label: 'FYE',            normalize: undefined },
+                  { key: 'fye',          label: 'FYE Month',      normalize: undefined },
                 ] as const).map(f => (
                   <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                     <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 92, flexShrink: 0 }}>{f.label}</span>
-                    <input value={newRow[f.key] ?? ''} onChange={e => setNewRow(v => ({ ...v, [f.key]: f.normalize ? f.normalize(e.target.value) : e.target.value }))}
-                      onBlur={f.key === 'fye' ? e => setNewRow(v => ({ ...v, fye: normalizeFyeInput(e.target.value) })) : undefined}
-                      placeholder="—"
-                      style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+                    {f.key === 'fye' ? (
+                      <select value={newRow.fye ?? ''} onChange={e => setNewRow(v => ({ ...v, fye: e.target.value }))}
+                        style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }}>
+                        <option value="">—</option>
+                        {MONTH3_ABBR.map(m => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                    ) : (
+                      <input value={newRow[f.key] ?? ''} onChange={e => setNewRow(v => ({ ...v, [f.key]: f.normalize ? f.normalize(e.target.value) : e.target.value }))}
+                        placeholder="—"
+                        style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+                    )}
                   </div>
                 ))}
               </div>

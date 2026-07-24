@@ -2842,14 +2842,14 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
             <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 {([
-                  { label: 'Company Name *', value: newEntity, set: setNewEntity, type: 'text' },
-                  { label: 'UEN',            value: newUen,    set: setNewUen,    type: 'text' },
+                  { label: 'Company Name *', value: newEntity, set: setNewEntity, type: 'text', normalize: (v: string) => v.toUpperCase() },
+                  { label: 'UEN',            value: newUen,    set: setNewUen,    type: 'text', normalize: (v: string) => v.toUpperCase() },
                   { label: 'PIC',            value: newPic,    set: setNewPic,    type: 'text' },
                   { label: 'Due Date',       value: newDueDate, set: setNewDueDate, type: 'date' },
                 ] as const).map(f => (
                   <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                     <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 92, flexShrink: 0 }}>{f.label}</span>
-                    <input type={f.type} value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.type === 'text' ? '—' : undefined}
+                    <input type={f.type} value={f.value} onChange={e => f.set('normalize' in f && f.normalize ? f.normalize(e.target.value) : e.target.value)} placeholder={f.type === 'text' ? '—' : undefined}
                       style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                   </div>
                 ))}

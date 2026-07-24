@@ -295,12 +295,12 @@ export default function LateFilingPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                   <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>Company Name *</span>
-                  <input value={editForm.company_name ?? ''} onChange={e => setEditForm(f => ({ ...f, company_name: e.target.value }))} placeholder="—"
+                  <input value={editForm.company_name ?? ''} onChange={e => setEditForm(f => ({ ...f, company_name: e.target.value.toUpperCase() }))} placeholder="—"
                     style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                   <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>UEN</span>
-                  <input value={editForm.uen ?? ''} onChange={e => setEditForm(f => ({ ...f, uen: e.target.value }))} placeholder="—"
+                  <input value={editForm.uen ?? ''} onChange={e => setEditForm(f => ({ ...f, uen: e.target.value.toUpperCase() }))} placeholder="—"
                     style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
