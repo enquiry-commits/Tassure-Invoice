@@ -591,8 +591,8 @@ const WIDE_MODAL_FIELDS = new Set(['invoice_address', 'mailing_address', 'mailin
 // Long free-text fields (addresses, remarks, …) skip this — they stay an
 // always-visible auto-resizing textarea since a single-line click-to-edit
 // input would clip wrapped content.
-const ModalField = memo(function ModalField({ id, field, label, value, onSave, compact = false }: {
-  id: number; field: string; label: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compact?: boolean;
+const ModalField = memo(function ModalField({ id, field, label, value, onSave, compact = false, dark = false }: {
+  id: number; field: string; label: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compact?: boolean; dark?: boolean;
 }) {
   const isDateField = DATE_FIELDS.has(field as ColumnField);
   const inputValue = useCallback((raw: string | null) => isDateField ? (toDisplayDate(raw) ?? raw ?? '') : (raw ?? ''), [isDateField]);
@@ -667,13 +667,13 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
     const display = val.trim();
     return (
       <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
-        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
+        onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = dark ? 'rgba(255,255,255,0.1)' : '#f0f6ff'}
         onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
         {display
-          ? <span style={{ fontSize: 12, color: '#374151' }}>{display}</span>
+          ? <span style={{ fontSize: 12, color: dark ? '#fff' : '#374151' }}>{display}</span>
           : isDateField
-            ? <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#c7d2fe', fontSize: 11 }}><Calendar size={11} /><span style={{ color: '#d1d5db' }}>—</span></span>
-            : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+            ? <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: dark ? 'rgba(255,255,255,0.5)' : '#c7d2fe', fontSize: 11 }}><Calendar size={11} /><span style={{ color: dark ? 'rgba(255,255,255,0.4)' : '#d1d5db' }}>—</span></span>
+            : <span style={{ color: dark ? 'rgba(255,255,255,0.4)' : '#d1d5db', fontSize: 11 }}>—</span>}
         {statusDot}
         {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
       </div>
@@ -705,109 +705,179 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
   onMove: (row: MasterListRow, target: MoveTarget) => void;
   onDelete: (row: MasterListRow) => void;
 }) {
-  const sections = useMemo(() => {
-    const groups = new Map<string, { field: ColumnField; label: string }[]>();
+  const groups = useMemo(() => {
+    const m = new Map<string, { field: ColumnField; label: string }[]>();
     for (const c of fieldColumns) {
       const section = FIELD_SECTIONS[c.field] ?? 'Other';
-      if (!groups.has(section)) groups.set(section, []);
-      groups.get(section)!.push(c);
+      if (!m.has(section)) m.set(section, []);
+      m.get(section)!.push(c);
     }
-    // Wide (long free-text) fields render after the compact ones within a
-    // section regardless of declared field order — e.g. Contact & Address
-    // lists invoice_address second, but a full-width address box belongs
-    // below the short Tel/Email/Contact Window rows, not sandwiched between
-    // them forcing an awkward wrap.
-    return SECTION_ORDER.filter(s => groups.has(s)).map(s => {
-      const all = groups.get(s)!;
-      const compact = all.filter(c => !WIDE_MODAL_FIELDS.has(c.field));
-      const wide = all.filter(c => WIDE_MODAL_FIELDS.has(c.field));
-      return { name: s, compact, wide };
-    });
+    return m;
   }, [fieldColumns]);
 
+  // Wide (long free-text) fields render after the compact ones within a
+  // group regardless of declared field order — e.g. Contact & Address lists
+  // invoice_address second, but a full-width address box belongs below the
+  // short Tel/Email/Contact Window rows, not sandwiched between them.
+  const split = useCallback((name: string, exclude: string[] = []) => {
+    const all = (groups.get(name) ?? []).filter(c => !exclude.includes(c.field));
+    return { compact: all.filter(c => !WIDE_MODAL_FIELDS.has(c.field)), wide: all.filter(c => WIDE_MODAL_FIELDS.has(c.field)) };
+  }, [groups]);
+
+  const companyInfo = split('Company Info');
+  const compliance = split('Compliance');
+  const contactAddress = split('Contact & Address');
+  const services = split('Services');
+  const notes = split('Notes', ['referral', 'remark']);
+  const referralField = fieldColumns.find(c => c.field === 'referral') ?? null;
+  const remarkField = fieldColumns.find(c => c.field === 'remark') ?? null;
+
   const colors = statusColor(row.status);
+
+  const sectionLabel = (text: string) => (
+    <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>{text}</div>
+  );
+
+  const renderField = (c: { field: ColumnField; label: string }) => {
+    if (c.field === 'acc_pic') return (
+      <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>ACC</span>
+        <div style={{ flex: 1 }}>
+          <ServiceChip label="Accounting" name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
+        </div>
+      </div>
+    );
+    if (c.field === 'tax_pic') return (
+      <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>TAX</span>
+        <div style={{ flex: 1 }}>
+          <ServiceChip label="Tax" name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
+        </div>
+      </div>
+    );
+    if (c.field === 'nominee_director' || c.field === 'secretary') {
+      const value = c.field === 'nominee_director' ? row.nominee_director : row.secretary;
+      const activeField = c.field === 'nominee_director' ? 'nd_active' : 'secretary_active';
+      const active = c.field === 'nominee_director' ? row.nd_active : row.secretary_active;
+      return (
+        <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{c.label}</span>
+          <div style={{ flex: 1 }}>
+            <ServiceChip label={c.field === 'nominee_director' ? 'Nominee Director' : 'Secretary'} name={value} active={!!active}
+              onToggleActive={() => onToggleActive(row.id, activeField, active)}
+              onSaveName={val => {
+                onSave(row.id, c.field, val);
+                fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: val || null }) });
+              }} />
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{c.label}</span>
+        <div style={{ flex: 1 }}>
+          <ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} compact />
+        </div>
+      </div>
+    );
+  };
+
+  const renderWideField = (c: { field: ColumnField; label: string }, marginTop = 8) => (
+    <div key={c.field} style={{ marginTop }}>
+      <ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} />
+    </div>
+  );
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 880, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
-        <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px', flexShrink: 0, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div>
+        <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{row.company_name}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-              {row.roc_no && <span style={{ fontSize: 11, color: '#fff', background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4 }}>{row.roc_no}</span>}
-              {row.status && <span style={{ fontSize: 10, fontWeight: 700, background: colors?.bg ?? 'rgba(255,255,255,0.12)', color: colors?.color ?? '#fff', borderRadius: 4, padding: '2px 8px' }}>{row.status}</span>}
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
+              <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <RowActionMenu row={row} moveTargets={moveTargets} onMove={onMove} onDelete={onDelete} dark />
+              </div>
+              <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
-            <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <RowActionMenu row={row} moveTargets={moveTargets} onMove={onMove} onDelete={onDelete} dark />
-            </div>
-            <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {row.roc_no && <span style={{ fontSize: 11, color: '#fff', background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4 }}>{row.roc_no}</span>}
+            {row.status && (
+              <span style={{ background: colors?.bg ?? 'rgba(255,255,255,0.12)', color: colors?.color ?? '#fff', border: `1px solid ${colors?.color ?? '#fff'}40`, borderRadius: 999, padding: '5px 10px', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: colors?.color ?? '#fff', flexShrink: 0 }} />
+                {row.status}
+              </span>
+            )}
           </div>
+          {referralField && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontWeight: 600, minWidth: 60, flexShrink: 0 }}>Referral</span>
+                <ModalField id={row.id} field={referralField.field} label={referralField.label} value={row.referral} onSave={onSave} compact dark />
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px', background: '#f8fafc' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            {sections.map(section => (
-              <div key={section.name} style={{ background: 'transparent', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14, marginBottom: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>{section.name}</div>
+            {/* Left: Company Info + Compliance, sequential — no card outline. */}
+            <div>
+              {(companyInfo.compact.length > 0 || companyInfo.wide.length > 0) && (
+                <div>
+                  {sectionLabel('Company Info')}
+                  {companyInfo.compact.map(renderField)}
+                  {companyInfo.wide.map(c => renderWideField(c))}
+                </div>
+              )}
+              {(compliance.compact.length > 0 || compliance.wide.length > 0) && (
+                <div style={{ marginTop: companyInfo.compact.length || companyInfo.wide.length ? 16 : 0 }}>
+                  {sectionLabel('Compliance')}
+                  {compliance.compact.map(renderField)}
+                  {compliance.wide.map(c => renderWideField(c))}
+                </div>
+              )}
+            </div>
 
-                {/* Compact fields: AR Reminder's exact row chrome, stacked full-width. */}
-                {section.compact.map(c => {
-                  if (c.field === 'acc_pic') return (
-                    <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
-                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>ACC</span>
-                      <div style={{ flex: 1 }}>
-                        <ServiceChip label="Accounting" name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
-                      </div>
-                    </div>
-                  );
-                  if (c.field === 'tax_pic') return (
-                    <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
-                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>TAX</span>
-                      <div style={{ flex: 1 }}>
-                        <ServiceChip label="Tax" name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
-                      </div>
-                    </div>
-                  );
-                  if (c.field === 'nominee_director' || c.field === 'secretary') {
-                    const value = c.field === 'nominee_director' ? row.nominee_director : row.secretary;
-                    const activeField = c.field === 'nominee_director' ? 'nd_active' : 'secretary_active';
-                    const active = c.field === 'nominee_director' ? row.nd_active : row.secretary_active;
-                    return (
-                      <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
-                        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{c.label}</span>
-                        <div style={{ flex: 1 }}>
-                          <ServiceChip label={c.field === 'nominee_director' ? 'Nominee Director' : 'Secretary'} name={value} active={!!active}
-                            onToggleActive={() => onToggleActive(row.id, activeField, active)}
-                            onSaveName={val => {
-                              onSave(row.id, c.field, val);
-                              fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: val || null }) });
-                            }} />
-                        </div>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
-                      <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{c.label}</span>
-                      <div style={{ flex: 1 }}>
-                        <ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} compact />
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Wide free-text fields last, each its own labeled box — same
-                    convention AR Reminder uses for Notes/Finance. */}
-                {section.wide.map(c => (
-                  <div key={c.field} style={{ marginTop: section.compact.length ? 8 : 0 }}>
-                    <ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} />
+            {/* Right: Contact & Address + Services, combined in one card. */}
+            {(contactAddress.compact.length > 0 || contactAddress.wide.length > 0 || services.compact.length > 0 || services.wide.length > 0) && (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 14 }}>
+                {(contactAddress.compact.length > 0 || contactAddress.wide.length > 0) && (
+                  <div>
+                    {sectionLabel('Contact & Address')}
+                    {contactAddress.compact.map(renderField)}
+                    {contactAddress.wide.map(c => renderWideField(c))}
                   </div>
-                ))}
+                )}
+                {(services.compact.length > 0 || services.wide.length > 0) && (
+                  <div style={{ marginTop: contactAddress.compact.length || contactAddress.wide.length ? 16 : 0 }}>
+                    {sectionLabel('Services')}
+                    {services.compact.map(renderField)}
+                    {services.wide.map(c => renderWideField(c))}
+                  </div>
+                )}
               </div>
-            ))}
+            )}
           </div>
+
+          {/* Notes — no card, just a divider line, 2-up grid. */}
+          {notes.compact.length > 0 && (
+            <div style={{ marginTop: 16, borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+              {sectionLabel('Notes')}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {notes.compact.map(renderField)}
+              </div>
+            </div>
+          )}
+
+          {/* Remark — its own divider, full-width row. */}
+          {remarkField && (
+            <div style={{ marginTop: 16, borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+              {renderWideField(remarkField, 0)}
+            </div>
+          )}
         </div>
       </div>
     </div>
