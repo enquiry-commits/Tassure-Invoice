@@ -7,8 +7,11 @@ Before changing this repository:
 3. Inspect and preserve all pre-existing changes.
 
 After a meaningful unit of work, verify the result, update
-`PROJECT_STATUS.md`, and make a focused local commit. Do not push to GitHub,
-change external services, or deploy to Vercel unless Vincent explicitly asks.
+`PROJECT_STATUS.md`, and make a focused local commit. Pushing to GitHub
+(origin main) is pre-authorized — this repo only ever pushes to one fixed
+account/remote, so no need to ask each time; push once the commit is ready.
+Do not change external services or deploy to Vercel directly (Vercel
+deploys automatically on push) unless Vincent explicitly asks.
 
 Never expose or commit values from `.env.local`.
 
