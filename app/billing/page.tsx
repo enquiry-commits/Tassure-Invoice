@@ -2283,10 +2283,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           <div onClick={() => setExpanded(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
             <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 1040, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
               <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <DollarSign size={16} style={{ color: '#93c5fd' }} />
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{c.companyName}</div>
-                  <div style={{ fontSize: 11, color: '#93c5fd' }}>{c.uen ?? ''} · FYE {c.fyeMonth ?? '—'} · Build &amp; generate invoice</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', marginBottom: 8 }}>{c.companyName}</div>
+                  <div style={{ fontSize: 11, color: '#fff' }}>{c.uen ?? ''} · FYE {c.fyeMonth ?? '—'} · Build &amp; generate invoice</div>
                 </div>
                 <button onClick={() => setExpanded(null)} style={{ marginLeft: 'auto', background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
               </div>

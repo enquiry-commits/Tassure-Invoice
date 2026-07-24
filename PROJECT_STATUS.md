@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (Fixed real bug: cross-cycle search field-name mismatch)
+Last updated: 2026-07-24 (Billing Drafts modal header now matches AR modal's chrome)
 
 ## Purpose
 
@@ -23,6 +23,20 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Billing Drafts modal header now matches AR modal's chrome**
+  (`app/billing/page.tsx`, the "Build & generate invoice" modal opened from
+  the Billing Drafts table). Per Vincent's screenshot: removed the leading
+  `$` `DollarSign` icon (same "no decorative icon" preference already
+  applied to the AR/Active Client modal earlier this session), added an
+  8px gap between the company name and the UEN/FYE line (was touching,
+  no spacing), and changed that UEN/FYE line from light blue (`#93c5fd`)
+  to white (`#fff`) — mirroring `ARDetailModal`'s own header exactly
+  (`marginBottom: 8` between name and UEN row; UEN/FYE text `color: '#fff'`),
+  per Vincent's explicit "reference the AR page's modal" instruction.
+  Production build passes; committed locally, pushed (push to origin main
+  is now pre-authorized for this repo per Vincent's instruction — see
+  `feedback_tassure_invoice_push` memory and this repo's own `CLAUDE.md`).
 
 - **Fixed the real bug behind the cross-cycle search "still doesn't work"
   report**: Vincent tested with "AI APEX" and its UEN "202436415C" (same
