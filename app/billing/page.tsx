@@ -1845,13 +1845,13 @@ function useCrossCycleSearch(
       try {
         const res = await fetch(`/api/companies?search=${encodeURIComponent(term)}&limit=5`);
         const json = await res.json();
-        const matches: { company_name: string; fye_month: string | null }[] = json.data ?? [];
+        const matches: { companyName: string; fyeMonth: string | null }[] = json.data ?? [];
         if (matches.length === 0) { setNotice(`No company found matching "${term}".`); return; }
         const match = matches[0];
-        if (!match.fye_month) { setNotice(`${match.company_name} has no FYE month on file — can't switch automatically.`); return; }
-        if (match.fye_month !== monthRef.current) {
-          setNotice(`Switched to ${match.fye_month} — ${match.company_name}'s FYE month.`);
-          setMonth(match.fye_month);
+        if (!match.fyeMonth) { setNotice(`${match.companyName} has no FYE month on file — can't switch automatically.`); return; }
+        if (match.fyeMonth !== monthRef.current) {
+          setNotice(`Switched to ${match.fyeMonth} — ${match.companyName}'s FYE month.`);
+          setMonth(match.fyeMonth);
           onSwitchRef.current();
         } else {
           setNotice(null);

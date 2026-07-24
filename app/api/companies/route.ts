@@ -69,6 +69,7 @@ export async function GET(req: NextRequest) {
       companyName:        c.company_name,
       registrationNo:     c.registration_no,
       companyType:        c.company_type,
+      fyeMonth:           c.fye_month,
       pic:                c.pic,
       usesAddressService: c.uses_address,
       hasActiveND:        ndIds.length > 0,

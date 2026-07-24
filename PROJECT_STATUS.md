@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (Billing Drafts + AR Reminder List: shared cross-cycle search, UEN)
+Last updated: 2026-07-24 (Fixed real bug: cross-cycle search field-name mismatch)
 
 ## Purpose
 
@@ -23,6 +23,26 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed the real bug behind the cross-cycle search "still doesn't work"
+  report**: Vincent tested with "AI APEX" and its UEN "202436415C" (same
+  company, `AI APEX FOUNDATION LTD.`, FYE June) and got
+  "undefined has no FYE month on file" instead of a switch to June. Root
+  cause, found by re-reading `/api/companies/route.ts` end to end instead
+  of guessing again: its response shape is camelCase (`companyName`,
+  `registrationNo`, etc.) — I had written `useCrossCycleSearch`
+  (`app/billing/page.tsx`) assuming snake_case (`company_name`), so
+  `match.companyName` was always `undefined`. Worse, `fye_month` wasn't
+  even in the response's field projection at all (the route selects
+  `company.*` from Supabase but only re-maps a subset of fields into its
+  `enriched` response object) — so the switch could never have worked
+  regardless of the naming fix. Fixed both: added `fyeMonth: c.fye_month`
+  to the route's projection, and corrected the client-side field names to
+  `companyName`/`fyeMonth`. Verified directly against the real data (this
+  specific company/UEN resolves to `fye_month: "June"`) before shipping.
+  The previous two "fixes" in this thread (auto-switch, then filter-reset)
+  were real improvements but neither addressed this — this was the actual
+  blocker. Production build passes; committed locally only, not yet pushed.
 
 - **Billing Drafts + AR Reminder List: shared cross-cycle search, now with
   UEN** (`app/billing/page.tsx`). Vincent reported the earlier Billing
