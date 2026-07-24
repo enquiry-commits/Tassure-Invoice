@@ -441,7 +441,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
         onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) save(); }}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') { setVal(inputValue(value)); setEditing(false); } }}
         placeholder={isDate ? 'e.g. 03 Apr 2026' : ''}
-        style={{ flex: 1, border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
+        style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
       />
       {isDate && (
         <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -647,7 +647,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
             onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(val); }}
             onKeyDown={e => { if (e.key === 'Enter') commit(val); if (e.key === 'Escape') { setVal(value ?? ''); setCustom(false); } }}
             placeholder="e.g. 03 Apr 2026"
-            style={{ flex: 1, border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
+            style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
           />
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <button data-cal-btn="1" tabIndex={0}
@@ -2850,7 +2850,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                     <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 92, flexShrink: 0 }}>{f.label}</span>
                     <input type={f.type} value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.type === 'text' ? '—' : undefined}
-                      style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+                      style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                   </div>
                 ))}
               </div>

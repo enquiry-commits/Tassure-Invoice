@@ -656,7 +656,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
           onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) { setEditing(false); commit(); } }}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setEditing(false); commit(); } if (e.key === 'Escape') { setVal(inputValue(value)); setEditing(false); } }}
           placeholder={isDateField ? 'e.g. 03 Apr 2026' : ''}
-          style={{ flex: 1, border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
+          style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
         />
         {isDateField && (
           <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -1214,7 +1214,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                     <input value={newRow[f.key] ?? ''} onChange={e => setNewRow(v => ({ ...v, [f.key]: f.normalize ? f.normalize(e.target.value) : e.target.value }))}
                       onBlur={f.key === 'fye' ? e => setNewRow(v => ({ ...v, fye: normalizeFyeInput(e.target.value) })) : undefined}
                       placeholder="—"
-                      style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+                      style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                   </div>
                 ))}
               </div>
