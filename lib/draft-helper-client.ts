@@ -30,6 +30,29 @@ export interface DraftOpenResult {
   error?: string;
 }
 
+// Reviewers type multiple recipients as either comma- or semicolon-separated
+// — the mailto: spec (RFC 6068) only recognises commas, so normalise first.
+function normalizeRecipients(raw: string): string {
+  return raw.split(/[;,\n\r]+/).map(s => s.trim()).filter(Boolean).join(',');
+}
+
+// Fallback for staff who haven't installed the Draft Helper: a blank Outlook
+// draft with To/CC/Subject/Body filled in, same ~1900-char body budget as
+// the rest of Client Communications (mailto: URIs have no attachment
+// support — that's the whole reason the Helper exists).
+export function buildMailtoLink(d: Pick<DraftLike, 'to_email' | 'cc_email' | 'subject' | 'body'>): string {
+  const to = normalizeRecipients(d.to_email ?? '');
+  const cc = normalizeRecipients(d.cc_email ?? '');
+  let body = d.body;
+  const params = new URLSearchParams();
+  if (cc) params.set('cc', cc);
+  params.set('subject', d.subject);
+  const base = `mailto:${encodeURIComponent(to)}?${params.toString()}`;
+  const budget = 1900 - base.length;
+  if (body.length > budget) body = body.slice(0, Math.max(0, budget - 40)) + '\n\n[Truncated — copy the rest from Draft Review]';
+  return `${base}&body=${encodeURIComponent(body)}`;
+}
+
 export async function checkHelperHealth(timeoutMs = 800): Promise<boolean> {
   try {
     const controller = new AbortController();

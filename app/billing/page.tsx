@@ -6,7 +6,7 @@ import {
   RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
   AlertTriangle, Clock, CheckCircle2, FileText, Calendar,
   ShieldCheck, MapPin, UserCheck, BarChart3, BookOpen, DollarSign,
-  Plus, Check, X, Trash2, History, RotateCcw, Filter,
+  Plus, Check, X, Trash2, History, RotateCcw, Filter, Mail, Send, Loader2,
 } from 'lucide-react';
 import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
@@ -17,6 +17,8 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
+import { mergeTemplate, formatInvoiceList, formatAmount } from '@/lib/email-merge';
+import { checkHelperHealth, openDraftsInOutlook, buildMailtoLink } from '@/lib/draft-helper-client';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
@@ -1818,6 +1820,87 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
 
   const [arList, setArList] = useState<ARCompany[]>([]);
 
+  // Quick "EMAIL DRAFTS" action: pick a template, jump straight to Outlook,
+  // without the Campaign Centre wizard. Reuses the same recipient/invoice
+  // resolution and merge logic as Client Communications, and still records
+  // a campaign+draft (type 'ar') so it shows up in Delivery History like
+  // every other draft — just without the multi-step review screen first.
+  const [me, setMe] = useState<{ email: string; name: string } | null>(null);
+  useEffect(() => {
+    fetch('/api/auth/me').then(r => r.ok ? r.json() : { user: null }).then(j => setMe(j.user ?? null)).catch(() => setMe(null));
+  }, []);
+  const [helperAvailable, setHelperAvailable] = useState<boolean | null>(null);
+  useEffect(() => { checkHelperHealth().then(setHelperAvailable); }, []);
+  const [emailTemplates, setEmailTemplates] = useState<{ id: number; name: string; subject_template: string; body_template: string; is_default: boolean }[]>([]);
+  useEffect(() => {
+    fetch('/api/client-communications/templates?type=ar').then(r => r.json()).then(j => {
+      const list = j.data ?? [];
+      setEmailTemplates(list);
+      setSelectedTemplateId(prev => prev ?? list.find((t: { is_default: boolean }) => t.is_default)?.id ?? list[0]?.id ?? null);
+    }).catch(() => {});
+  }, []);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [draftPopoverFor, setDraftPopoverFor] = useState<number | null>(null);
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
+
+  const quickEmailDraft = async (c: CompanyBilling) => {
+    const templateId = selectedTemplateId;
+    if (!templateId) { setDraftError('No AR template found — add one in Client Communications › Templates.'); return; }
+    setDrafting(true);
+    setDraftError(null);
+    try {
+      const previewRes = await fetch(`/api/client-communications/campaigns/preview?lookup=${encodeURIComponent(c.companyName)}&type=ar&fyeMonth=${encodeURIComponent(month)}&fyeYear=${year}`);
+      const previewJson = await previewRes.json();
+      if (!previewRes.ok || !previewJson.row) throw new Error(previewJson.error ?? 'Unable to resolve this company.');
+      const row = previewJson.row as {
+        companyName: string; companyId: number | null; toEmail: string | null; ccEmail: string | null;
+        contactName: string; invoiceRefs: { qbCompany: 'TAB' | 'TAC' | 'TAO'; invoiceNo: string; amount: number; qbInvoiceId?: string | null }[];
+        totalAmount: number;
+      };
+      if (!row.toEmail) throw new Error('No valid recipient email — resolve this in Campaign Centre first.');
+
+      const template = emailTemplates.find(t => t.id === templateId);
+      if (!template) throw new Error('Selected template not found.');
+      const fields = {
+        companyName: row.companyName,
+        contactName: row.contactName || row.companyName,
+        toEmail: row.toEmail,
+        ccEmail: row.ccEmail ?? '',
+        totalAmount: formatAmount(row.totalAmount),
+        invoiceList: formatInvoiceList(row.invoiceRefs),
+        dueDate: '',
+        fyeMonth: month,
+        fyeYear: String(year),
+      };
+      const subject = mergeTemplate(template.subject_template, fields);
+      const body = mergeTemplate(template.body_template, fields);
+
+      const createRes = await fetch('/api/client-communications/campaigns', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'ar', name: `Quick Draft - ${row.companyName} - ${month} ${year}`, fyeMonth: month, fyeYear: Number(year),
+          templateId, companies: [row], createdByEmail: me?.email, createdByName: me?.name,
+        }),
+      });
+      const createJson = await createRes.json();
+      if (!createRes.ok || !createJson.ok) throw new Error(createJson.error ?? 'Unable to save this draft.');
+
+      const draftForOutlook = { company_name: row.companyName, to_email: row.toEmail, cc_email: row.ccEmail, subject, body, invoice_refs: row.invoiceRefs };
+      if (helperAvailable) {
+        const [result] = await openDraftsInOutlook([draftForOutlook]);
+        if (!result.ok) throw new Error(result.error ?? 'Helper failed to open the draft.');
+      } else {
+        window.location.href = buildMailtoLink(draftForOutlook);
+      }
+      setDraftPopoverFor(null);
+    } catch (e: unknown) {
+      setDraftError(e instanceof Error ? e.message : 'Unable to create this draft.');
+    } finally {
+      setDrafting(false);
+    }
+  };
+
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
@@ -1855,6 +1938,14 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [expanded]);
+
+  const draftPopoverRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (draftPopoverFor === null) return;
+    const onClickOutside = (e: MouseEvent) => { if (draftPopoverRef.current && !draftPopoverRef.current.contains(e.target as Node)) setDraftPopoverFor(null); };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [draftPopoverFor]);
 
   // The billing list for a cycle = the AR Reminder rows for that FYE month/year
   // (the definitive, staff-reviewed set), each joined to its renewals record for
@@ -1972,8 +2063,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
         <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
-          {!isMobile && <div style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: '28px minmax(180px,1fr) 110px 70px 170px 100px 190px 120px 120px 90px', columnGap: 4, padding: '8px 12px', background: '#f8fafc', borderLeft: '3px solid transparent', borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
-            {['', 'Company', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC'].map((h, i) => (
+          {!isMobile && <div style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: '28px minmax(180px,1fr) 110px 70px 170px 100px 190px 120px 120px 90px 36px', columnGap: 4, padding: '8px 12px', background: '#f8fafc', borderLeft: '3px solid transparent', borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
+            {['', 'Company', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC', ''].map((h, i) => (
               i === 5
                 ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                     ND <span style={{ fontSize: 8, fontWeight: 800, background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 3, padding: '0 3px' }}>TAC</span>
@@ -2027,7 +2118,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             return (
               <div key={c.companyId}>
                 <div onClick={() => setExpanded(isOpen ? null : c.companyId)}
-                  style={{ display: 'grid', gridTemplateColumns: '28px minmax(180px,1fr) 110px 70px 170px 100px 190px 120px 120px 90px', alignItems: 'center', minHeight: 64, columnGap: 4, padding: '9px 12px', background: isOpen ? '#f0f6ff' : '#fff', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf1f5', cursor: 'pointer', transition: 'background 0.15s' }}
+                  style={{ display: 'grid', gridTemplateColumns: '28px minmax(180px,1fr) 110px 70px 170px 100px 190px 120px 120px 90px 36px', alignItems: 'center', minHeight: 64, columnGap: 4, padding: '9px 12px', background: isOpen ? '#f0f6ff' : '#fff', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf1f5', cursor: 'pointer', transition: 'background 0.15s' }}
                   onMouseEnter={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#f0f6ff'; }}
                   onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#fff'; }}>
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
@@ -2080,6 +2171,37 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                     })()}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ?? '—'}</div>
+                  <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                    <button title="Email Drafts" onClick={e => { e.stopPropagation(); setDraftError(null); setDraftPopoverFor(v => v === c.companyId ? null : c.companyId); }}
+                      style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: draftPopoverFor === c.companyId ? '#1d3a5c' : '#94a3b8' }}>
+                      <Mail size={15} />
+                    </button>
+                    {draftPopoverFor === c.companyId && (
+                      <div ref={draftPopoverRef} onClick={e => e.stopPropagation()} style={{
+                        position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 30, background: '#fff',
+                        border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 260, padding: 12,
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>Email Drafts — {c.companyName}</div>
+                        <select value={selectedTemplateId ?? ''} onChange={e => setSelectedTemplateId(Number(e.target.value))}
+                          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
+                          {emailTemplates.length === 0 && <option value="">No AR templates found</option>}
+                          {emailTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                        {draftError && <div style={{ fontSize: 10.5, color: '#b91c1c', marginBottom: 8 }}>{draftError}</div>}
+                        <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8 }}>
+                          {helperAvailable ? 'Opens directly in Outlook with the invoice attached.' : 'Draft Helper not detected — opens a blank Outlook draft (no attachment) instead.'}
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          <button onClick={() => setDraftPopoverFor(null)} style={{ fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '5px 8px' }}>Cancel</button>
+                          <button onClick={() => quickEmailDraft(c)} disabled={drafting || !selectedTemplateId}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: drafting ? 'wait' : 'pointer', padding: '6px 12px', opacity: !selectedTemplateId ? 0.6 : 1 }}>
+                            {drafting ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
+                            {drafting ? 'Drafting…' : 'Draft'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -2111,6 +2233,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           </div>
         );
       })()}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

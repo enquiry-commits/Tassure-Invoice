@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (Client Communications: local Outlook Draft Helper)
+Last updated: 2026-07-24 (Billing Drafts: one-click "Email Drafts" per row)
 
 ## Purpose
 
@@ -23,6 +23,32 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Billing Drafts: one-click "Email Drafts" button per row**
+  (`app/billing/page.tsx`, `BillingTab`'s main table — the `tab=billing`
+  view). Vincent wanted the Campaign Centre wizard skippable for the common
+  single-company case: an envelope icon now sits in a new column right of
+  PIC; clicking it opens a small popover (mirrors `ARColumnFilterMenu`'s
+  positioning/click-outside pattern) to pick an AR template and hit "Draft"
+  — no campaign setup, no review screen, no separate Drafts-page visit.
+  Under the hood it reuses existing Client Communications infrastructure
+  end-to-end rather than duplicating logic: `GET
+  /api/client-communications/campaigns/preview?lookup=...&type=ar` for the
+  same recipient/invoice resolution Campaign Centre uses, `GET
+  .../templates?type=ar` for the picker, `mergeTemplate`/`formatInvoiceList`/
+  `formatAmount` (`lib/email-merge.ts`) for the merge, then `POST
+  .../campaigns` to actually persist a (single-row) campaign + draft — so
+  it still shows up in Delivery History like every other draft, just
+  without the multi-step review first. Opening in Outlook reuses the
+  Draft Helper from the change above (`openDraftsInOutlook`) when detected,
+  falling back to a new shared `buildMailtoLink()` export in
+  `lib/draft-helper-client.ts` otherwise (extracted from the same logic
+  already in `drafts/page.tsx`, not duplicated by hand). Deliberately does
+  NOT block when `ResolvedRow.included` is false for soft reasons (already
+  sent this cycle, recipient needs review) — only a genuinely missing
+  `toEmail` stops it — since this is a manual, deliberate, single-company
+  action where the person clicking already has full context, unlike a
+  blind 40-company batch. Production build passes; committed locally only.
 
 - **Client Communications: local "Tassure Draft Helper" companion app**,
   closing the gap vs. the legacy `BULK.xlsm` VBA workflow (read in full this
