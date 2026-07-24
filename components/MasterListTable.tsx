@@ -1242,7 +1242,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           {!isMobile && (
             <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(220px,1.6fr) 110px 90px minmax(200px,1.2fr) 100px', padding: '7px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
               {['', 'Company Name', 'ROC No.', 'Status', 'Services', 'FYE'].map((h, i) => (
-                <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{h}</div>
+                <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{h}</div>
               ))}
             </div>
           )}
@@ -1263,12 +1263,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                   }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
                   onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? '#fff' : '#fafbfc'}>
-                  {!isMobile && <span style={{ fontSize: 10, color: '#cbd5e1' }}>{startIndex + i + 1}</span>}
+                  {!isMobile && <span style={{ fontSize: 11, color: '#cbd5e1' }}>{startIndex + i + 1}</span>}
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.company_name}</div>
-                    {r.roc_no && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{r.roc_no}</div>}
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.company_name}</div>
+                    {r.roc_no && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>{r.roc_no}</div>}
                   </div>
-                  {!isMobile && <div style={{ fontSize: 11, color: '#64748b', fontFamily: 'monospace' }}>{r.roc_no ?? '—'}</div>}
+                  {!isMobile && <div style={{ fontSize: 13, color: '#64748b' }}>{r.roc_no ?? '—'}</div>}
                   {!isMobile && (
                     <div>
                       {r.status
