@@ -841,26 +841,26 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
               )}
             </div>
 
-            {/* Right: Contact & Address + Services, combined in one card. */}
-            {(contactAddress.compact.length > 0 || contactAddress.wide.length > 0 || services.compact.length > 0 || services.wide.length > 0) && (
+            {/* Right: Contact & Address, its own card. */}
+            {(contactAddress.compact.length > 0 || contactAddress.wide.length > 0) && (
               <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: 14 }}>
-                {(contactAddress.compact.length > 0 || contactAddress.wide.length > 0) && (
-                  <div>
-                    {sectionLabel('Contact & Address')}
-                    {contactAddress.compact.map(renderField)}
-                    {contactAddress.wide.map(c => renderWideField(c))}
-                  </div>
-                )}
-                {(services.compact.length > 0 || services.wide.length > 0) && (
-                  <div style={{ marginTop: contactAddress.compact.length || contactAddress.wide.length ? 16 : 0 }}>
-                    {sectionLabel('Services')}
-                    {services.compact.map(renderField)}
-                    {services.wide.map(c => renderWideField(c))}
-                  </div>
-                )}
+                {sectionLabel('Contact & Address')}
+                {contactAddress.compact.map(renderField)}
+                {contactAddress.wide.map(c => renderWideField(c))}
               </div>
             )}
           </div>
+
+          {/* Services — no card, divider line, 2-up grid (ND/Secretary/ACC/TAX). */}
+          {services.compact.length > 0 && (
+            <div style={{ marginTop: 16, borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
+              {sectionLabel('Services')}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {services.compact.map(renderField)}
+              </div>
+              {services.wide.map(c => renderWideField(c))}
+            </div>
+          )}
 
           {/* Notes — no card, just a divider line, 2-up grid. */}
           {notes.compact.length > 0 && (
