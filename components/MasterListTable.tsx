@@ -1262,7 +1262,10 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                   {!isMobile && (
                     <div>
                       {r.status
-                        ? <span style={{ fontSize: 10, fontWeight: 700, background: rowColors?.bg ?? '#f1f5f9', color: rowColors?.color ?? '#64748b', borderRadius: 4, padding: '2px 6px' }}>{r.status}</span>
+                        ? <span style={{ fontSize: 10, fontWeight: 700, background: rowColors?.bg ?? '#f1f5f9', color: rowColors?.color ?? '#64748b', border: `1px solid ${rowColors?.color ?? '#64748b'}40`, borderRadius: 999, padding: '3px 9px', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: rowColors?.color ?? '#64748b', flexShrink: 0 }} />
+                            {r.status}
+                          </span>
                         : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
                     </div>
                   )}
