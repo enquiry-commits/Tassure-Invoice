@@ -68,6 +68,7 @@ export interface MasterListRow {
 // Normalize any FYE value (month name/abbr, or dd/mm/yyyy date) to a month
 // number 1-12 for comparison. Returns null when not recognizable.
 const MONTH3: Record<string, number> = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+const MONTH3_ABBR = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 function fyeMonthNum(s: string | null | undefined): number | null {
   if (!s) return null;
   const t = String(s).trim();
@@ -75,6 +76,14 @@ function fyeMonthNum(s: string | null | undefined): number | null {
   if (dm) { const m = parseInt(dm[1], 10); return m >= 1 && m <= 12 ? m : null; }
   const a = t.toLowerCase().replace(/[^a-z]/g, '').slice(0, 3);
   return MONTH3[a] ?? null;
+}
+// "January", "december", "DEC", "dec" — anything recognizable as a month —
+// all collapse to the same 3-letter abbreviation the rest of the app uses
+// for FYE. Unrecognized input (e.g. a typo) is left as typed, just
+// uppercased, rather than silently discarded.
+function normalizeFyeInput(raw: string): string {
+  const m = fyeMonthNum(raw);
+  return m ? MONTH3_ABBR[m - 1] : raw.toUpperCase();
 }
 
 // acc_pic_override/tax_pic_override/*_active are facets of the acc_pic/
@@ -1191,22 +1200,23 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 12 }}>
             <div>
               <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Company Name *</div>
-              <input value={newRow.company_name ?? ''} onChange={e => setNewRow(f => ({ ...f, company_name: e.target.value }))}
+              <input value={newRow.company_name ?? ''} onChange={e => setNewRow(f => ({ ...f, company_name: e.target.value.toUpperCase() }))}
                 style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
             </div>
             <div>
               <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>ROC No.</div>
-              <input value={newRow.roc_no ?? ''} onChange={e => setNewRow(f => ({ ...f, roc_no: e.target.value }))}
+              <input value={newRow.roc_no ?? ''} onChange={e => setNewRow(f => ({ ...f, roc_no: e.target.value.toUpperCase() }))}
                 style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
             </div>
             <div>
               <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Active / Status</div>
-              <input value={newRow.status ?? ''} onChange={e => setNewRow(f => ({ ...f, status: e.target.value }))}
+              <input value={newRow.status ?? ''} onChange={e => setNewRow(f => ({ ...f, status: e.target.value.toUpperCase() }))}
                 style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
             </div>
             <div>
               <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>FYE</div>
               <input value={newRow.fye ?? ''} onChange={e => setNewRow(f => ({ ...f, fye: e.target.value }))}
+                onBlur={e => setNewRow(f => ({ ...f, fye: normalizeFyeInput(e.target.value) }))}
                 style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
             </div>
           </div>
