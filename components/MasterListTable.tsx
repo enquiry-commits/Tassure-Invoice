@@ -689,7 +689,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
       </div>
       <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)} onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
-        style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
+        style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', fontSize: 12, outline: 'none', boxSizing: 'border-box', background: '#fff', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
     </div>
   );
 });
