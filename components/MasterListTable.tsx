@@ -1197,7 +1197,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       {showAddForm && (
         <div onClick={cancelAdd} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
-            <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ background: accentColor, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add Manual Entry</div>
               <button onClick={cancelAdd} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
@@ -1220,7 +1220,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={saveNew} disabled={saving || !newRow.company_name?.trim()}
-                  style={{ padding: '7px 16px', borderRadius: 9, border: '1px solid rgba(21,94,89,.2)', background: '#397f78', color: '#fff', fontWeight: 750, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 5px 14px rgba(57,127,120,.14)', opacity: saving || !newRow.company_name?.trim() ? 0.6 : 1 }}>
+                  style={{ padding: '7px 16px', borderRadius: 9, border: listType === 'strike_off' ? 'none' : '1px solid rgba(21,94,89,.2)', background: listType === 'strike_off' ? accentColor : '#397f78', color: '#fff', fontWeight: 750, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: listType === 'strike_off' ? 'none' : '0 5px 14px rgba(57,127,120,.14)', opacity: saving || !newRow.company_name?.trim() ? 0.6 : 1 }}>
                   <Check size={14} />{saving ? 'Saving…' : 'Save'}
                 </button>
                 <button onClick={cancelAdd}
