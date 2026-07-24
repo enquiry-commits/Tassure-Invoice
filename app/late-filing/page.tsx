@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { AlertTriangle, Plus, Pencil, Trash2, Check, X, RefreshCw, Zap } from 'lucide-react';
+import { AlertTriangle, Plus, Trash2, Check, X, RefreshCw, Zap } from 'lucide-react';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { fmtDate as fmtDateStr } from '@/lib/date';
@@ -122,6 +122,7 @@ export default function LateFilingPage() {
   const [editForm, setEditForm] = useState<EditState & { financial_year_end?: string; }>({});
   const [saving, setSaving]     = useState(false);
   const [pendingDelete, setPendingDelete] = useState<LateRow | null>(null);
+  const [customRemarks, setCustomRemarks] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -138,14 +139,16 @@ export default function LateFilingPage() {
     setEditForm({
       uen: row.uen, company_name: row.company_name,
       remarks: row.remarks,
+      financial_year_end: row.financial_year_end,
       last_annual_return_date: row.last_annual_return_date,
       last_agm_date: row.last_agm_date,
       last_accounts_date: row.last_accounts_date,
       next_agm_due_date: row.next_agm_due_date,
     });
+    setCustomRemarks(!!row.remarks && !REMARKS_OPTIONS.includes(row.remarks));
   }
-  function startNew() { setEditId('new'); setEditForm({ financial_year_end: '' }); }
-  function cancelEdit() { setEditId(null); setEditForm({}); }
+  function startNew() { setEditId('new'); setEditForm({ financial_year_end: '' }); setCustomRemarks(false); }
+  function cancelEdit() { setEditId(null); setEditForm({}); setCustomRemarks(false); }
 
   async function save() {
     setSaving(true);
@@ -280,12 +283,12 @@ export default function LateFilingPage() {
         ))}
       </div>
 
-      {/* New entry — modal, same navy/grey/white chrome as Master List's */}
-      {editId === 'new' && (
+      {/* Add / Edit — one modal, same navy/grey/white chrome as Master List's */}
+      {editId !== null && (
         <div onClick={cancelEdit} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
             <div style={{ background: '#1d3a5c', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add Manual Entry</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{editId === 'new' ? 'Add Manual Entry' : 'Edit Company'}</div>
               <button onClick={cancelEdit} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
@@ -310,11 +313,23 @@ export default function LateFilingPage() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                   <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>Remarks</span>
-                  <select value={editForm.remarks ?? ''} onChange={e => setEditForm(f => ({ ...f, remarks: e.target.value || null }))}
+                  <select value={customRemarks ? 'Other' : (editForm.remarks ?? '')}
+                    onChange={e => {
+                      if (e.target.value === 'Other') { setCustomRemarks(true); setEditForm(f => ({ ...f, remarks: '' })); }
+                      else { setCustomRemarks(false); setEditForm(f => ({ ...f, remarks: e.target.value || null })); }
+                    }}
                     style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }}>
                     {REMARKS_OPTIONS.map(o => <option key={o} value={o}>{o || '(none)'}</option>)}
+                    <option value="Other">Other…</option>
                   </select>
                 </div>
+                {customRemarks && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>Custom Remarks</span>
+                    <input value={editForm.remarks ?? ''} onChange={e => setEditForm(f => ({ ...f, remarks: e.target.value }))} placeholder="Type your own remarks — "
+                      style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+                  </div>
+                )}
                 {dateInput('last_annual_return_date', 'Last AR Date')}
                 {dateInput('last_agm_date', 'Last AGM Date')}
                 {dateInput('last_accounts_date', 'Last Accounts Date')}
@@ -357,59 +372,10 @@ export default function LateFilingPage() {
               </tr>
             </thead>
             <tbody>
-              {pageItems.map((row, idx) =>
-                editId === row.id ? (
-                  /* Edit row */
-                  <tr key={row.id} style={{ background:'#eff6ff' }}>
-                    <td style={{ padding:'6px 12px', color:'#64748b' }}>{startIndex + idx + 1}</td>
-                    <td style={{ padding:'4px 8px' }}>
-                      <input value={editForm.company_name??''} onChange={e=>setEditForm(f=>({...f,company_name:e.target.value}))}
-                        style={{ width:'100%', padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:12 }} />
-                    </td>
-                    <td style={{ padding:'4px 8px' }}>
-                      <input value={editForm.uen??''} onChange={e=>setEditForm(f=>({...f,uen:e.target.value}))}
-                        style={{ width:'100%', padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:12 }} />
-                    </td>
-                    <td style={{ padding:'4px 8px', color:'#64748b', fontSize:12 }}>{row.financial_year_end}</td>
-                    <td style={{ padding:'4px 8px', color:'#64748b', fontSize:12 }}>{row.late_fy||'—'}</td>
-                    <td style={{ padding:'4px 8px' }}>
-                      <input type="date" value={editForm.last_annual_return_date??''} onChange={e=>setEditForm(f=>({...f,last_annual_return_date:e.target.value||null}))}
-                        style={{ padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:12 }} />
-                    </td>
-                    <td style={{ padding:'4px 8px' }}>
-                      <input type="date" value={editForm.last_agm_date??''} onChange={e=>setEditForm(f=>({...f,last_agm_date:e.target.value||null}))}
-                        style={{ padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:12 }} />
-                    </td>
-                    <td style={{ padding:'4px 8px' }}>
-                      <input type="date" value={editForm.last_accounts_date??''} onChange={e=>setEditForm(f=>({...f,last_accounts_date:e.target.value||null}))}
-                        style={{ padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:12 }} />
-                    </td>
-                    <td style={{ padding:'4px 8px' }}>
-                      <input type="date" value={editForm.next_agm_due_date??''} onChange={e=>setEditForm(f=>({...f,next_agm_due_date:e.target.value||null}))}
-                        style={{ padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:12 }} />
-                    </td>
-                    <td style={{ padding:'4px 8px' }}>
-                      <select value={editForm.remarks??''} onChange={e=>setEditForm(f=>({...f,remarks:e.target.value||null}))}
-                        style={{ padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:12 }}>
-                        {REMARKS_OPTIONS.map(o=><option key={o} value={o}>{o||'(none)'}</option>)}
-                      </select>
-                    </td>
-                    <td style={{ padding:'4px 8px', whiteSpace:'nowrap' }}>
-                      <button onClick={save} disabled={saving}
-                        style={{ padding:'4px 10px', borderRadius:5, border:'none', background:'#16a34a', color:'#fff', fontWeight:700, fontSize:12, cursor:'pointer', marginRight:4 }}>
-                        {saving ? '…' : <Check size={12} />}
-                      </button>
-                      <button onClick={cancelEdit}
-                        style={{ padding:'4px 10px', borderRadius:5, border:'1px solid #cbd5e1', background:'#fff', color:'#475569', fontSize:12, cursor:'pointer' }}>
-                        <X size={12} />
-                      </button>
-                    </td>
-                  </tr>
-                ) : (
-                  /* Normal row */
-                  <tr key={row.id}
-                    style={{ background:rowBg(row.remarks), borderBottom:'1px solid #f1f5f9' }}
-                    onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f8fafc'}
+              {pageItems.map((row, idx) => (
+                  <tr key={row.id} onClick={() => startEdit(row)}
+                    style={{ background:rowBg(row.remarks), borderBottom:'1px solid #f1f5f9', cursor: 'pointer' }}
+                    onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f0f6ff'}
                     onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=rowBg(row.remarks)}>
                     <td style={{ padding:'10px 12px', color:'#94a3b8', fontWeight:600 }}>{startIndex + idx + 1}</td>
                     <td style={{ padding:'10px 12px', fontWeight:600, color:'#1e3a5f', maxWidth:260 }}>
@@ -444,11 +410,7 @@ export default function LateFilingPage() {
                       })() : <span style={{ color:'#94a3b8' }}>NA</span>}
                     </td>
                     <td style={{ padding:'10px 12px' }}><RemarksBadge remarks={row.remarks} /></td>
-                    <td style={{ padding:'10px 12px', whiteSpace:'nowrap' }}>
-                      <button onClick={()=>startEdit(row)}
-                        style={{ padding:'4px 8px', borderRadius:5, border:'1px solid #cbd5e1', background:'#fff', color:'#475569', cursor:'pointer', marginRight:4 }}>
-                        <Pencil size={12} />
-                      </button>
+                    <td style={{ padding:'10px 12px', whiteSpace:'nowrap' }} onClick={e => e.stopPropagation()}>
                       {catOf.get(row.id) === 'review' ? (
                         <button onClick={()=>resolve(row)}
                           style={{ padding:'4px 8px', borderRadius:5, border:'1px solid #5eead4', background:'#f0fdfa', color:'#0f766e', cursor:'pointer' }}
