@@ -2831,41 +2831,40 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
         </button>
       </div>
 
-      {/* Add Manual form */}
+      {/* Add Manual — modal, same navy/grey/white chrome as Master List's */}
       {showAddForm && (
-        <div style={{ background: '#faf5ff', border: '1.5px solid #ddd6fe', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, color: '#6d28d9', marginBottom: 10 }}>Add Manual Entry — FYE {month} {year}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Company Name *</div>
-              <input value={newEntity} onChange={e => setNewEntity(e.target.value)}
-                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
+        <div onClick={() => setShowAddForm(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+            <div style={{ background: '#1d3a5c', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add Manual Entry — FYE {month} {year}</div>
+              <button onClick={() => setShowAddForm(false)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>UEN</div>
-              <input value={newUen} onChange={e => setNewUen(e.target.value)}
-                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
+            <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {([
+                  { label: 'Company Name *', value: newEntity, set: setNewEntity, type: 'text' },
+                  { label: 'UEN',            value: newUen,    set: setNewUen,    type: 'text' },
+                  { label: 'PIC',            value: newPic,    set: setNewPic,    type: 'text' },
+                  { label: 'Due Date',       value: newDueDate, set: setNewDueDate, type: 'date' },
+                ] as const).map(f => (
+                  <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 92, flexShrink: 0 }}>{f.label}</span>
+                    <input type={f.type} value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.type === 'text' ? '—' : undefined}
+                      style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={saveNewEntity} disabled={adding || !newEntity.trim()}
+                  style={{ padding: '7px 16px', borderRadius: 9, border: '1px solid rgba(21,94,89,.2)', background: '#397f78', color: '#fff', fontWeight: 750, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 5px 14px rgba(57,127,120,.14)', opacity: adding || !newEntity.trim() ? 0.6 : 1 }}>
+                  <Check size={14} />{adding ? 'Saving…' : 'Save'}
+                </button>
+                <button onClick={() => setShowAddForm(false)}
+                  style={{ padding: '7px 14px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <X size={14} />Cancel
+                </button>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>PIC</div>
-              <input value={newPic} onChange={e => setNewPic(e.target.value)}
-                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Due Date</div>
-              <input type="date" value={newDueDate} onChange={e => setNewDueDate(e.target.value)}
-                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={saveNewEntity} disabled={adding || !newEntity.trim()}
-              style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: '#7c3aed', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Check size={14} />{adding ? 'Saving…' : 'Save'}
-            </button>
-            <button onClick={() => setShowAddForm(false)}
-              style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <X size={14} />Cancel
-            </button>
           </div>
         </div>
       )}

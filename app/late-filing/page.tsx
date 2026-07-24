@@ -196,11 +196,11 @@ export default function LateFilingPage() {
 
   function dateInput(key: keyof EditState, label: string) {
     return (
-      <div>
-        <div style={{ fontSize:11, color:'#64748b', marginBottom:2 }}>{label}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>{label}</span>
         <input type="date" value={(editForm[key] as string) ?? ''}
           onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value || null }))}
-          style={{ width:'100%', padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:13 }} />
+          style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
       </div>
     );
   }
@@ -280,52 +280,57 @@ export default function LateFilingPage() {
         ))}
       </div>
 
-      {/* New entry form */}
+      {/* New entry — modal, same navy/grey/white chrome as Master List's */}
       {editId === 'new' && (
-        <div style={{ background:'#eff6ff', border:'1.5px solid #bfdbfe', borderRadius:10, padding:16, marginBottom:16 }}>
-          <div style={{ fontWeight:700, color:'#1e40af', marginBottom:10 }}>Add Manual Entry</div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:8 }}>
-            <div>
-              <div style={{ fontSize:11, color:'#64748b', marginBottom:2 }}>Company Name *</div>
-              <input value={editForm.company_name??''} onChange={e=>setEditForm(f=>({...f,company_name:e.target.value}))}
-                style={{ width:'100%', padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:13 }} />
+        <div onClick={cancelEdit} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+            <div style={{ background: '#1d3a5c', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add Manual Entry</div>
+              <button onClick={cancelEdit} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
-            <div>
-              <div style={{ fontSize:11, color:'#64748b', marginBottom:2 }}>UEN</div>
-              <input value={editForm.uen??''} onChange={e=>setEditForm(f=>({...f,uen:e.target.value}))}
-                style={{ width:'100%', padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:13 }} />
+            <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>Company Name *</span>
+                  <input value={editForm.company_name ?? ''} onChange={e => setEditForm(f => ({ ...f, company_name: e.target.value }))} placeholder="—"
+                    style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>UEN</span>
+                  <input value={editForm.uen ?? ''} onChange={e => setEditForm(f => ({ ...f, uen: e.target.value }))} placeholder="—"
+                    style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>FYE Month</span>
+                  <select value={editForm.financial_year_end ?? ''} onChange={e => setEditForm(f => ({ ...f, financial_year_end: e.target.value }))}
+                    style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }}>
+                    <option value="">—</option>
+                    {FYE_MONTHS.filter(m => m !== 'ALL').map(m => <option key={m}>{m}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>Remarks</span>
+                  <select value={editForm.remarks ?? ''} onChange={e => setEditForm(f => ({ ...f, remarks: e.target.value || null }))}
+                    style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }}>
+                    {REMARKS_OPTIONS.map(o => <option key={o} value={o}>{o || '(none)'}</option>)}
+                  </select>
+                </div>
+                {dateInput('last_annual_return_date', 'Last AR Date')}
+                {dateInput('last_agm_date', 'Last AGM Date')}
+                {dateInput('last_accounts_date', 'Last Accounts Date')}
+                {dateInput('next_agm_due_date', 'Next AGM Due')}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={save} disabled={saving || !editForm.company_name}
+                  style={{ padding: '7px 16px', borderRadius: 9, border: '1px solid rgba(21,94,89,.2)', background: '#397f78', color: '#fff', fontWeight: 750, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 5px 14px rgba(57,127,120,.14)', opacity: saving || !editForm.company_name ? 0.6 : 1 }}>
+                  <Check size={14} />{saving ? 'Saving…' : 'Save'}
+                </button>
+                <button onClick={cancelEdit}
+                  style={{ padding: '7px 14px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <X size={14} />Cancel
+                </button>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize:11, color:'#64748b', marginBottom:2 }}>FYE Month</div>
-              <select value={editForm.financial_year_end??''} onChange={e=>setEditForm(f=>({...f,financial_year_end:e.target.value}))}
-                style={{ width:'100%', padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:13 }}>
-                <option value="">—</option>
-                {FYE_MONTHS.filter(m=>m!=='ALL').map(m=><option key={m}>{m}</option>)}
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize:11, color:'#64748b', marginBottom:2 }}>Remarks</div>
-              <select value={editForm.remarks??''} onChange={e=>setEditForm(f=>({...f,remarks:e.target.value||null}))}
-                style={{ width:'100%', padding:'3px 6px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:13 }}>
-                {REMARKS_OPTIONS.map(o=><option key={o} value={o}>{o||'(none)'}</option>)}
-              </select>
-            </div>
-          </div>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:12 }}>
-            {dateInput('last_annual_return_date','Last AR Date')}
-            {dateInput('last_agm_date','Last AGM Date')}
-            {dateInput('last_accounts_date','Last Accounts Date')}
-            {dateInput('next_agm_due_date','Next AGM Due')}
-          </div>
-          <div style={{ display:'flex', gap:8 }}>
-            <button onClick={save} disabled={saving||!editForm.company_name}
-              style={{ padding:'6px 16px', borderRadius:6, border:'none', background:'#1e3a5f', color:'#fff', fontWeight:700, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
-              <Check size={14} />{saving?'Saving…':'Save'}
-            </button>
-            <button onClick={cancelEdit}
-              style={{ padding:'6px 14px', borderRadius:6, border:'1px solid #cbd5e1', background:'#fff', color:'#475569', fontWeight:600, fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
-              <X size={14} />Cancel
-            </button>
           </div>
         </div>
       )}
