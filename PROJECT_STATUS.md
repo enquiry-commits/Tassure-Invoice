@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (Billing Drafts modal header now matches AR modal's chrome)
+Last updated: 2026-07-24 (AR Reminder List: Due Date badges now explain "Filed"/"Xd left")
 
 ## Purpose
 
@@ -23,6 +23,18 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **AR Reminder List's Due Date badges now explain themselves**
+  (`app/billing/page.tsx`, `DueBadge` — used by AR Reminder List's row
+  cells, its mobile card, and `ARDetailModal`'s header). Vincent's
+  screenshot showed a column of "Filed"/"160d left" pills with no
+  indication of what they meant. Added a `title` (native hover tooltip) to
+  every badge state explaining it in a full sentence (e.g. "160 day(s)
+  remain until the Annual Return filing deadline for this FYE cycle."),
+  plus a small "?" info icon next to the List view's "Due Date" column
+  header with a tooltip summarizing all three states at once (Filed /
+  "Xd left" / "Xd overdue") for anyone who wants the full picture without
+  hovering each row. Production build passes; committed locally, pushed.
 
 - **Billing Drafts modal header now matches AR modal's chrome**
   (`app/billing/page.tsx`, the "Build & generate invoice" modal opened from
