@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Mail, Check, X, ChevronDown, ChevronRight, Download, Loader2 } from 'lucide-react';
+import { Mail, Check, X, ChevronDown, ChevronRight, Download, Loader2, Send } from 'lucide-react';
 import CommsTabs from '@/components/client-communications/CommsTabs';
 import { invoicePdfFileName } from '@/lib/invoice-filename';
+import { checkHelperHealth, openDraftsInOutlook } from '@/lib/draft-helper-client';
 
 interface InvoiceRef { qbCompany: string; invoiceNo: string; amount: number; qbInvoiceId?: string | null }
 interface Draft {
@@ -122,6 +123,46 @@ function DraftsInner() {
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.ok ? r.json() : { user: null }).then(j => setMe(j.user ?? null)).catch(() => setMe(null));
   }, []);
+
+  // Tassure Draft Helper: a small local app staff install once (see
+  // lib/draft-helper-client.ts) that opens real Outlook drafts with invoice
+  // PDFs already attached. Detected via a localhost health check — if it's
+  // not running, the existing mailto:/.eml buttons below still work as-is.
+  const [helperAvailable, setHelperAvailable] = useState<boolean | null>(null);
+  const [helperBannerDismissed, setHelperBannerDismissed] = useState(false);
+  const recheckHelper = useCallback(() => { checkHelperHealth().then(setHelperAvailable); }, []);
+  useEffect(() => { recheckHelper(); }, [recheckHelper]);
+
+  const [openingId, setOpeningId] = useState<number | 'batch' | null>(null);
+  const [openErrors, setOpenErrors] = useState<Record<number, string>>({});
+
+  const openInHelper = async (d: Draft) => {
+    setOpeningId(d.id);
+    setOpenErrors(prev => { const next = { ...prev }; delete next[d.id]; return next; });
+    try {
+      const [result] = await openDraftsInOutlook([d]);
+      if (!result.ok) setOpenErrors(prev => ({ ...prev, [d.id]: result.error ?? 'Failed to open.' }));
+    } catch (e: unknown) {
+      setOpenErrors(prev => ({ ...prev, [d.id]: e instanceof Error ? e.message : 'Failed to open.' }));
+    } finally {
+      setOpeningId(null);
+    }
+  };
+
+  const openAllPendingInHelper = async () => {
+    const pending = drafts.filter(d => d.status === 'pending');
+    if (pending.length === 0) return;
+    if (!window.confirm(`Open ${pending.length} pending draft(s) as Outlook compose windows?`)) return;
+    setOpeningId('batch');
+    try {
+      const results = await openDraftsInOutlook(pending);
+      const errors: Record<number, string> = {};
+      pending.forEach((d, i) => { if (!results[i]?.ok) errors[d.id] = results[i]?.error ?? 'Failed to open.'; });
+      setOpenErrors(errors);
+    } finally {
+      setOpeningId(null);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/client-communications/campaigns').then(r => r.json()).then(j => {
@@ -265,6 +306,34 @@ function DraftsInner() {
         </div>
       </div>
 
+      {helperAvailable === false && !helperBannerDismissed && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, padding: '10px 14px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb' }}>
+          <span style={{ fontSize: 12.5, color: '#92400e', flex: 1 }}>
+            未检测到 Tassure Draft Helper — 一次性安装后即可在这里一键开好 Outlook 草稿并自动带上发票附件。
+          </span>
+          <a href="/downloads/TassureDraftHelper.exe" download
+            style={{ fontSize: 12, fontWeight: 700, padding: '6px 12px', borderRadius: 6, background: '#b45309', color: '#fff', textDecoration: 'none' }}>
+            下载 Helper
+          </a>
+          <button onClick={recheckHelper} style={{ fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 6, border: '1px solid #fde68a', background: '#fff', color: '#92400e', cursor: 'pointer' }}>
+            重新检测
+          </button>
+          <button onClick={() => setHelperBannerDismissed(true)} title="Dismiss" style={{ border: 'none', background: 'transparent', color: '#92400e', cursor: 'pointer', display: 'flex' }}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {helperAvailable && counts.pending > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <button onClick={openAllPendingInHelper} disabled={openingId === 'batch'}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#397f78', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: openingId === 'batch' ? 'wait' : 'pointer' }}>
+            {openingId === 'batch' ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />}
+            {openingId === 'batch' ? 'Opening…' : `Open All Pending in Outlook (${counts.pending})`}
+          </button>
+        </div>
+      )}
+
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading…</div>
@@ -319,7 +388,17 @@ function DraftsInner() {
                       Download Email builds a ready-to-send .eml with the invoice(s) already attached — double-click it to open in Outlook. Compose in Outlook opens a blank draft instead (no attachment; mailto: links can&apos;t carry one).
                     </div>
                   )}
+                  {openErrors[d.id] && (
+                    <div style={{ fontSize: 11, color: '#b91c1c', marginBottom: 8 }}>{openErrors[d.id]}</div>
+                  )}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {helperAvailable && (
+                      <button onClick={() => { updateDraft(d, { subject: d.subject, body: d.body }); openInHelper(d); }} disabled={openingId === d.id}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 7, border: 'none', background: '#397f78', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: openingId === d.id ? 'wait' : 'pointer' }}>
+                        {openingId === d.id ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={13} />}
+                        {openingId === d.id ? 'Opening…' : 'Open in Outlook (with attachment)'}
+                      </button>
+                    )}
                     {d.invoice_refs?.some(r => r.qbInvoiceId && (r.qbCompany === 'TAB' || r.qbCompany === 'TAC')) && (
                       <button onClick={() => { updateDraft(d, { subject: d.subject, body: d.body }); downloadEml(d); }} disabled={emlBuildingId === d.id}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 7, border: 'none', background: '#0f766e', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: emlBuildingId === d.id ? 'wait' : 'pointer' }}>

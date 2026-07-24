@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (Add Manual modals: date fields no longer locale-dependent)
+Last updated: 2026-07-24 (Client Communications: local Outlook Draft Helper)
 
 ## Purpose
 
@@ -23,6 +23,44 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Client Communications: local "Tassure Draft Helper" companion app**,
+  closing the gap vs. the legacy `BULK.xlsm` VBA workflow (read in full this
+  session, including the `Start_Email` macro) where one click opened ~40
+  pre-filled Outlook drafts with matching invoice PDFs already attached —
+  something a browser-sandboxed web page cannot do directly (no COM access
+  to the user's local Outlook). Built a separate small Windows app at
+  `C:\Users\vincent\tassure-draft-helper\` (Python + `pywin32`, packaged as
+  a single PyInstaller onefile exe — no installer; it self-registers into
+  `HKCU\...\Run` on first launch via `main.py::_register_for_startup`, so
+  "download once, run once" is the entire install step, matching the
+  already-proven Tassure Proposal Generator distribution model). It serves
+  `http://127.0.0.1:51820` (localhost-only, CORS-restricted to the known
+  app origins): `GET /health` for detection, `POST /drafts/open` which
+  creates real Outlook `MailItem`s via COM and calls `.Display()` only
+  (never `.Send()` — a human still reviews/sends every email, unchanged
+  from the existing design). The built exe is committed at
+  `tassure-invoice/public/downloads/TassureDraftHelper.exe` (~35MB — worth
+  knowing this add a real binary to the git history and Vercel's static
+  assets, flagged for Vincent rather than assumed fine).
+  On the web side, new `lib/draft-helper-client.ts` (`checkHelperHealth`,
+  `openDraftsInOutlook` — reuses the existing `/api/quickbooks/invoice-pdf`
+  route and `invoicePdfFileName()` exactly like the page's existing
+  `downloadEml` already does) and `app/client-communications/drafts/page.tsx`
+  gained: a dismissible banner + download link when the helper isn't
+  detected, a per-draft "Open in Outlook (with attachment)" button, and a
+  batch "Open All Pending in Outlook (N)" action — all additive; the
+  existing mailto:/.eml buttons are untouched, per Vincent's explicit
+  choice, so nothing breaks for staff who haven't installed the helper.
+  TAO-book invoices remain unsupported (same pre-existing gap as today's
+  PDF download) — explicitly deferred, not fixed here, per Vincent's
+  choice. Verified: helper's `/health` + CORS behavior tested directly via
+  curl against the running exe (allowed origins get the CORS header,
+  others don't); self-registration into the Startup key confirmed via the
+  registry, then cleaned up since it pointed at a dev-build path. Full
+  plan at `C:\Users\vincent\.claude\plans\atomic-wandering-locket.md`.
+  Production build passes; committed locally only, not yet pushed (repo
+  policy — ask before pushing/deploying).
 
 - **Add Manual/Edit modal date fields no longer locale-dependent.** AR
   Reminder's Add Manual Due Date field and Late Filing's 4 modal date
