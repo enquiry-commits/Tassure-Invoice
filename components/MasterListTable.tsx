@@ -1195,40 +1195,39 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       </div>
 
       {showAddForm && (
-        <div style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-          <div style={{ fontWeight: 700, color: '#1e40af', marginBottom: 10 }}>Add Manual Entry</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 12 }}>
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Company Name *</div>
-              <input value={newRow.company_name ?? ''} onChange={e => setNewRow(f => ({ ...f, company_name: e.target.value.toUpperCase() }))}
-                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
+        <div onClick={cancelAdd} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 520, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+            <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add Manual Entry</div>
+              <button onClick={cancelAdd} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>ROC No.</div>
-              <input value={newRow.roc_no ?? ''} onChange={e => setNewRow(f => ({ ...f, roc_no: e.target.value.toUpperCase() }))}
-                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
+            <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+                {([
+                  { key: 'company_name', label: 'Company Name *', normalize: (v: string) => v.toUpperCase() },
+                  { key: 'roc_no',       label: 'ROC No.',        normalize: (v: string) => v.toUpperCase() },
+                  { key: 'status',       label: 'Active / Status', normalize: (v: string) => v.toUpperCase() },
+                  { key: 'fye',          label: 'FYE',            normalize: undefined },
+                ] as const).map(f => (
+                  <div key={f.key} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 92, flexShrink: 0 }}>{f.label}</span>
+                    <input value={newRow[f.key] ?? ''} onChange={e => setNewRow(v => ({ ...v, [f.key]: f.normalize ? f.normalize(e.target.value) : e.target.value }))}
+                      onBlur={f.key === 'fye' ? e => setNewRow(v => ({ ...v, fye: normalizeFyeInput(e.target.value) })) : undefined}
+                      style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={saveNew} disabled={saving || !newRow.company_name?.trim()}
+                  style={{ padding: '7px 16px', borderRadius: 7, border: 'none', background: accentColor, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: saving || !newRow.company_name?.trim() ? 0.6 : 1 }}>
+                  <Check size={14} />{saving ? 'Saving…' : 'Save'}
+                </button>
+                <button onClick={cancelAdd}
+                  style={{ padding: '7px 14px', borderRadius: 7, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <X size={14} />Cancel
+                </button>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>Active / Status</div>
-              <input value={newRow.status ?? ''} onChange={e => setNewRow(f => ({ ...f, status: e.target.value.toUpperCase() }))}
-                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 2 }}>FYE</div>
-              <input value={newRow.fye ?? ''} onChange={e => setNewRow(f => ({ ...f, fye: e.target.value }))}
-                onBlur={e => setNewRow(f => ({ ...f, fye: normalizeFyeInput(e.target.value) }))}
-                style={{ width: '100%', padding: '4px 6px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: 13 }} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={saveNew} disabled={saving || !newRow.company_name?.trim()}
-              style={{ padding: '6px 16px', borderRadius: 6, border: 'none', background: accentColor, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Check size={14} />{saving ? 'Saving…' : 'Save'}
-            </button>
-            <button onClick={cancelAdd}
-              style={{ padding: '6px 14px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <X size={14} />Cancel
-            </button>
           </div>
         </div>
       )}
