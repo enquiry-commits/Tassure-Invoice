@@ -1213,13 +1213,14 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                     <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 92, flexShrink: 0 }}>{f.label}</span>
                     <input value={newRow[f.key] ?? ''} onChange={e => setNewRow(v => ({ ...v, [f.key]: f.normalize ? f.normalize(e.target.value) : e.target.value }))}
                       onBlur={f.key === 'fye' ? e => setNewRow(v => ({ ...v, fye: normalizeFyeInput(e.target.value) })) : undefined}
+                      placeholder="—"
                       style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                   </div>
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={saveNew} disabled={saving || !newRow.company_name?.trim()}
-                  style={{ padding: '7px 16px', borderRadius: 7, border: 'none', background: accentColor, color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: saving || !newRow.company_name?.trim() ? 0.6 : 1 }}>
+                  style={{ padding: '7px 16px', borderRadius: 7, border: 'none', background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: saving || !newRow.company_name?.trim() ? 0.6 : 1 }}>
                   <Check size={14} />{saving ? 'Saving…' : 'Save'}
                 </button>
                 <button onClick={cancelAdd}
