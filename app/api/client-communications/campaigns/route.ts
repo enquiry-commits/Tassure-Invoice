@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
       campaign_id: campaign.id,
       company_id: c.companyId ?? null,
       company_name: c.companyName,
+      contact_name: c.contactName || c.companyName,
       to_email: toEmail,
       cc_email: ccEmail || null,
       subject: mergeTemplate(template.subject_template, fields),
@@ -103,15 +104,18 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  let createdDrafts: Record<string, unknown>[] = [];
   if (draftRows.length) {
-    const { error: draftErr } = await supabase.from('email_drafts').insert(draftRows);
+    const { data, error: draftErr } = await supabase.from('email_drafts').insert(draftRows).select('*');
     if (draftErr) return NextResponse.json({ error: draftErr.message, campaignId: campaign.id }, { status: 500 });
+    createdDrafts = data ?? [];
   }
 
   return NextResponse.json({
     ok: true,
     campaignId: campaign.id,
-    draftsCreated: draftRows.length,
+    draftsCreated: createdDrafts.length,
+    drafts: createdDrafts,
     skipped,
   });
 }

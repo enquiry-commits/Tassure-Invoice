@@ -1,223 +1,494 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Send, RefreshCw, ArrowLeft, Trash2, Plus, Loader2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  FilePlus2,
+  Loader2,
+  Mail,
+  Paperclip,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  X,
+} from 'lucide-react';
 import CommsTabs from '@/components/client-communications/CommsTabs';
-import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
+import {
+  checkHelperHealth,
+  openDraftsInOutlook,
+  type DraftLike,
+  type DraftOpenResult,
+} from '@/lib/draft-helper-client';
 
-const FYE_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const TYPE_LABEL: Record<string, string> = { ar: 'AR Renewal Reminder', soa: 'Statement of Account', letter: 'Document Reminder' };
+const FYE_MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
-interface Template { id: number; type: string; name: string; is_default: boolean }
-interface Sender { id: number; email: string; display_name: string | null; is_default: boolean }
-interface Campaign {
-  id: number; type: string; name: string; fye_month: string | null; fye_year: number | null;
-  status: string; created_at: string; created_by_name: string | null;
-  email_drafts: { count: number }[];
+const TYPE_LABEL: Record<CampaignType, string> = {
+  ar: 'AR Renewal',
+  soa: 'Statement of Account',
+  letter: 'Document Letter',
+};
+
+type CampaignType = 'ar' | 'soa' | 'letter';
+
+interface Template {
+  id: number;
+  type: CampaignType;
+  name: string;
+  subject_template: string;
+  body_template: string;
+  is_default: boolean;
 }
-interface InvoiceRef { qbCompany: string; invoiceNo: string; amount: number }
-interface Row {
-  companyName: string; companyId: number | null;
-  toEmail: string | null; ccEmail: string | null; contactName: string;
-  invoiceRefs: InvoiceRef[]; totalAmount: number;
-  included: boolean; reason: string | null;
+
+interface Sender {
+  id: number;
+  email: string;
+  display_name: string | null;
+  is_default: boolean;
+}
+
+interface InvoiceRef {
+  qbCompany: 'TAB' | 'TAC' | 'TAO';
+  invoiceNo: string;
+  amount: number;
+  qbInvoiceId?: string | null;
+}
+
+interface WorkbenchRow {
+  companyName: string;
+  companyId: number | null;
+  toEmail: string | null;
+  ccEmail: string | null;
+  contactName: string;
+  invoiceRefs: InvoiceRef[];
+  totalAmount: number;
+  included: boolean;
+  reason: string | null;
   recipientSource: 'teamwork_report' | 'company_fallback' | 'missing';
   recipientSyncedAt: string | null;
   recipientReviewRequired: boolean;
 }
-interface CompanySearchHit { companyName: string; bestEmail: string | null }
 
-const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, background: '#fff', outline: 'none', color: '#1e3a5f' };
-// checkbox | company | to | cc | invoices | amount | note | remove
-const ROW_GRID = '28px minmax(140px,1.2fr) minmax(170px,1.5fr) minmax(150px,1.3fr) minmax(140px,1.3fr) 84px minmax(110px,1fr) 26px';
-const ROW_GRID_MIN_WIDTH = 980;
+interface CreatedDraft extends DraftLike {
+  id: number;
+  version: number;
+}
 
-export default function CampaignCentrePage() {
-  const [step, setStep] = useState<'setup' | 'review'>('setup');
-  const [type, setType] = useState<'ar' | 'soa' | 'letter'>('ar');
+interface CompanySearchHit {
+  companyName: string;
+}
+
+interface AuthUser {
+  email: string;
+  name: string;
+}
+
+const fieldStyle: React.CSSProperties = {
+  width: '100%',
+  minWidth: 0,
+  border: '1px solid #d9e2ec',
+  borderRadius: 7,
+  padding: '7px 9px',
+  background: '#fff',
+  color: '#18324f',
+  fontSize: 12,
+  outline: 'none',
+};
+
+function rowKey(row: Pick<WorkbenchRow, 'companyId' | 'companyName'>) {
+  return row.companyId ? String(row.companyId) : row.companyName.trim().toLowerCase();
+}
+
+function splitRecipients(value: string | null) {
+  return (value ?? '').split(/[;,\n\r]+/).map(v => v.trim()).filter(Boolean);
+}
+
+function recipientLines(value: string | null) {
+  return splitRecipients(value).join('\n');
+}
+
+function hasEmail(value: string | null) {
+  return splitRecipients(value).some(v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v));
+}
+
+function invoiceLabel(ref: InvoiceRef) {
+  return `${ref.qbCompany} #${ref.invoiceNo}`;
+}
+
+function getRowWarnings(
+  row: WorkbenchRow,
+  type: CampaignType,
+  manualFileCount: number,
+) {
+  const warnings: string[] = [];
+  if (!row.contactName.trim()) warnings.push('Missing User Name');
+  if (!hasEmail(row.toEmail)) warnings.push('Missing valid To email');
+  if (row.recipientReviewRequired) warnings.push('Recipient requires review');
+  if (type !== 'letter' && row.invoiceRefs.length === 0 && manualFileCount === 0) {
+    warnings.push('No invoice or manual attachment');
+  }
+  const unsupported = row.invoiceRefs.filter(
+    ref => ref.qbCompany === 'TAO' || !ref.qbInvoiceId,
+  );
+  if (unsupported.length > manualFileCount) {
+    warnings.push(`${unsupported.length} invoice file(s) need manual attachment`);
+  }
+  return warnings;
+}
+
+function templateShortName(template: Template) {
+  const upper = template.name.toUpperCase();
+  if (upper.includes('AR1')) return 'AR1';
+  if (upper.includes('AR2')) return 'AR2';
+  if (upper.includes('AR3')) return 'AR3';
+  return template.name;
+}
+
+export default function EmailDraftWorkbenchPage() {
   const now = new Date();
+  const [type, setType] = useState<CampaignType>('ar');
   const [fyeMonth, setFyeMonth] = useState(FYE_MONTHS[now.getMonth()]);
   const [fyeYear, setFyeYear] = useState(String(now.getFullYear()));
-  const [letterCompanies, setLetterCompanies] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [senders, setSenders] = useState<Sender[]>([]);
   const [templateId, setTemplateId] = useState<number | null>(null);
   const [senderId, setSenderId] = useState<number | null>(null);
-  const [name, setName] = useState('');
-  const [previewing, setPreviewing] = useState(false);
-  const [generating, setGenerating] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; msg: string; campaignId?: number } | null>(null);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [pendingDeleteCampaign, setPendingDeleteCampaign] = useState<{ id: number; name: string } | null>(null);
-  const [me, setMe] = useState<{ email: string; name: string } | null>(null);
-
-  const [rows, setRows] = useState<Row[]>([]);
+  const [rows, setRows] = useState<WorkbenchRow[]>([]);
+  const [letterCompanies, setLetterCompanies] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [helperAvailable, setHelperAvailable] = useState<boolean | null>(null);
+  const [me, setMe] = useState<AuthUser | null>(null);
+  const [message, setMessage] = useState<{ tone: 'success' | 'warning' | 'error'; text: string } | null>(null);
+  const [commonFiles, setCommonFiles] = useState<File[]>([]);
+  const [rowFiles, setRowFiles] = useState<Record<string, File[]>>({});
+  const [lastCreated, setLastCreated] = useState<CreatedDraft[]>([]);
+  const [lastOpenResults, setLastOpenResults] = useState<DraftOpenResult[]>([]);
   const [addName, setAddName] = useState('');
   const [addResults, setAddResults] = useState<CompanySearchHit[]>([]);
   const [adding, setAdding] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    fetch('/api/auth/me').then(r => r.ok ? r.json() : { user: null }).then(j => setMe(j.user ?? null)).catch(() => setMe(null));
-  }, []);
-
-  // Default FYE Month/Year to the cycle staff are actually invoicing right
-  // now (same source Billing Drafts uses), not just today's calendar month —
-  // the two used to disagree whenever the current month hadn't been billed
-  // yet.
-  useEffect(() => {
-    fetch('/api/ar-reminder/latest')
-      .then(r => r.json())
-      .then(({ month: m, year: y }) => { if (m) setFyeMonth(String(m)); if (y) setFyeYear(String(y)); })
-      .catch(() => {});
-  }, []);
-
-  const loadCampaigns = useCallback(() => {
-    setLoadingCampaigns(true);
-    fetch('/api/client-communications/campaigns').then(r => r.json()).then(j => setCampaigns(j.data ?? [])).finally(() => setLoadingCampaigns(false));
-  }, []);
-
-  useEffect(() => {
-    fetch('/api/client-communications/templates').then(r => r.json()).then(j => setTemplates(j.data ?? []));
-    fetch('/api/client-communications/senders').then(r => r.json()).then(j => {
-      setSenders(j.data ?? []);
-      const def = (j.data ?? []).find((s: Sender) => s.is_default);
-      if (def) setSenderId(def.id);
-    });
-    loadCampaigns();
-  }, [loadCampaigns]);
-
-  // Default the template to the type's default whenever type or the template list changes.
-  useEffect(() => {
-    const match = templates.find(t => t.type === type && t.is_default) ?? templates.find(t => t.type === type);
-    setTemplateId(match?.id ?? null);
-  }, [type, templates]);
-
-  useEffect(() => {
-    if (type === 'ar') setName(`AR Renewal - FYE ${fyeMonth} ${fyeYear}`);
-    else if (type === 'soa') setName(`SOA Reminder - ${new Date().toISOString().slice(0, 10)}`);
-    else setName(`Document Reminder - ${new Date().toISOString().slice(0, 10)}`);
-  }, [type, fyeMonth, fyeYear]);
-
+  const selectedTemplate = templates.find(t => t.id === templateId) ?? null;
+  const selectedSender = senders.find(s => s.id === senderId) ?? null;
   const typeTemplates = templates.filter(t => t.type === type);
 
-  const preview = async () => {
-    if (!templateId) { setResult({ ok: false, msg: 'Choose a template first.' }); return; }
-    const companyNames = type === 'letter'
-      ? letterCompanies.split('\n').map(s => s.trim()).filter(Boolean)
-      : undefined;
-    if (type === 'letter' && !companyNames?.length) { setResult({ ok: false, msg: 'Enter at least one company name.' }); return; }
+  const recheckHelper = useCallback(() => {
+    checkHelperHealth().then(setHelperAvailable);
+  }, []);
 
-    setPreviewing(true); setResult(null);
-    try {
-      const res = await fetch('/api/client-communications/campaigns/preview', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type, companyNames, onlyUnsent: true,
-          fyeMonth: type === 'ar' ? fyeMonth : undefined,
-          fyeYear: type === 'ar' ? Number(fyeYear) : undefined,
-        }),
-      });
-      const json = await res.json();
-      if (!res.ok) { setResult({ ok: false, msg: json.error ?? 'Failed to preview companies.' }); return; }
-      if (!json.rows.length) { setResult({ ok: false, msg: 'No companies matched this selection.' }); return; }
-      setRows(json.rows);
-      setAddName(''); setAddResults([]); setAddError(null);
-      setStep('review');
-    } catch (e: unknown) {
-      setResult({ ok: false, msg: e instanceof Error ? e.message : 'Request failed' });
-    } finally { setPreviewing(false); }
+  useEffect(() => {
+    recheckHelper();
+    fetch('/api/auth/me')
+      .then(r => r.ok ? r.json() : { user: null })
+      .then(j => setMe(j.user ?? null))
+      .catch(() => setMe(null));
+    fetch('/api/ar-reminder/latest')
+      .then(r => r.json())
+      .then(({ month, year }) => {
+        if (month) setFyeMonth(String(month));
+        if (year) setFyeYear(String(year));
+      })
+      .catch(() => {});
+  }, [recheckHelper]);
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/client-communications/templates').then(r => r.json()),
+      fetch('/api/client-communications/senders').then(r => r.json()),
+    ]).then(([templateJson, senderJson]) => {
+      const loadedTemplates = (templateJson.data ?? []) as Template[];
+      const loadedSenders = (senderJson.data ?? []) as Sender[];
+      setTemplates(loadedTemplates);
+      setSenders(loadedSenders);
+      const defaultTemplate = loadedTemplates.find(t => t.type === 'ar' && t.is_default)
+        ?? loadedTemplates.find(t => t.type === 'ar');
+      setTemplateId(defaultTemplate?.id ?? null);
+      const defaultSender = loadedSenders.find(s => s.is_default) ?? loadedSenders[0];
+      setSenderId(defaultSender?.id ?? null);
+    }).catch(() => setMessage({ tone: 'error', text: 'Unable to load templates or senders.' }));
+  }, []);
+
+  const chooseType = (nextType: CampaignType) => {
+    const nextTemplates = templates.filter(template => template.type === nextType);
+    const match = nextTemplates.find(template => template.is_default) ?? nextTemplates[0];
+    setType(nextType);
+    setTemplateId(match?.id ?? null);
+    setRows([]);
+    setRowFiles({});
+    setLastCreated([]);
+    setLastOpenResults([]);
+    setMessage(null);
   };
 
-  const confirmGenerate = async () => {
-    const included = rows.filter(r => r.included);
-    if (!included.length) { setResult({ ok: false, msg: 'Select at least one company.' }); return; }
-    if (!templateId) { setResult({ ok: false, msg: 'Choose a template first.' }); return; }
-    setGenerating(true); setResult(null);
+  const includedRows = useMemo(() => rows.filter(row => row.included), [rows]);
+  const readyCount = useMemo(() => rows.filter(row => {
+    const warnings = getRowWarnings(row, type, rowFiles[rowKey(row)]?.length ?? 0);
+    return warnings.length === 0;
+  }).length, [rowFiles, rows, type]);
+  const warningCount = rows.length - readyCount;
+
+  const updateRow = (index: number, patch: Partial<WorkbenchRow>) => {
+    setRows(current => current.map((row, i) => i === index ? { ...row, ...patch } : row));
+    setLastCreated([]);
+    setLastOpenResults([]);
+  };
+
+  const loadCompanies = async () => {
+    if (!templateId) {
+      setMessage({ tone: 'error', text: 'Choose a template first.' });
+      return;
+    }
+    const companyNames = type === 'letter'
+      ? letterCompanies.split('\n').map(v => v.trim()).filter(Boolean)
+      : undefined;
+    if (type === 'letter' && !companyNames?.length) {
+      setMessage({ tone: 'error', text: 'Enter at least one company name for this letter batch.' });
+      return;
+    }
+    setLoading(true);
+    setMessage(null);
+    setLastCreated([]);
+    setLastOpenResults([]);
     try {
-      const res = await fetch('/api/client-communications/campaigns', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const response = await fetch('/api/client-communications/campaigns/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type, name, templateId, senderId,
+          type,
+          companyNames,
+          onlyUnsent: true,
           fyeMonth: type === 'ar' ? fyeMonth : undefined,
           fyeYear: type === 'ar' ? Number(fyeYear) : undefined,
-          companies: included.map(r => ({
-            companyName: r.companyName, companyId: r.companyId, toEmail: r.toEmail,
-            ccEmail: r.ccEmail, contactName: r.contactName, invoiceRefs: r.invoiceRefs, totalAmount: r.totalAmount,
-          })),
-          createdByEmail: me?.email, createdByName: me?.name,
         }),
       });
-      const json = await res.json();
-      if (!res.ok) { setResult({ ok: false, msg: json.error ?? 'Failed to generate drafts.' }); return; }
-      const skippedMsg = json.skipped?.length ? ` · ${json.skipped.length} skipped` : '';
-      setResult({ ok: true, msg: `${json.draftsCreated} draft(s) created${skippedMsg}.`, campaignId: json.campaignId });
-      setStep('setup'); setRows([]);
-      loadCampaigns();
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error ?? 'Unable to load companies.');
+      setRows((json.rows ?? []).map((row: WorkbenchRow) => ({
+        ...row,
+        toEmail: recipientLines(row.toEmail),
+        ccEmail: recipientLines(row.ccEmail),
+      })));
+      if (!json.rows?.length) {
+        setMessage({ tone: 'warning', text: 'No companies matched this selection.' });
+      }
     } catch (e: unknown) {
-      setResult({ ok: false, msg: e instanceof Error ? e.message : 'Request failed' });
-    } finally { setGenerating(false); }
+      setMessage({ tone: 'error', text: e instanceof Error ? e.message : 'Unable to load companies.' });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const searchCompanies = (term: string) => {
     setAddName(term);
-    setAddError(null);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!term.trim()) { setAddResults([]); return; }
+    if (!term.trim()) {
+      setAddResults([]);
+      return;
+    }
     searchTimer.current = setTimeout(async () => {
-      const res = await fetch(`/api/companies?search=${encodeURIComponent(term.trim())}`);
-      const json = await res.json();
-      const already = new Set(rows.map(r => r.companyName.toLowerCase()));
-      setAddResults((json.data ?? []).filter((c: CompanySearchHit) => !already.has(c.companyName.toLowerCase())).slice(0, 8));
+      const response = await fetch(`/api/companies?search=${encodeURIComponent(term.trim())}`);
+      const json = await response.json();
+      const existing = new Set(rows.map(row => row.companyName.toLowerCase()));
+      setAddResults((json.data ?? [])
+        .filter((company: CompanySearchHit) => !existing.has(company.companyName.toLowerCase()))
+        .slice(0, 8));
     }, 300);
   };
 
-  const addCompanyByName = async (rawName: string) => {
-    const trimmed = rawName.trim();
-    if (!trimmed) return;
-    setAddError(null); setAdding(true);
+  const addCompany = async (companyName: string) => {
+    setAdding(true);
+    setMessage(null);
     try {
-      const params = new URLSearchParams({ lookup: trimmed, type });
-      if (type === 'ar') { params.set('fyeMonth', fyeMonth); params.set('fyeYear', fyeYear); }
-      const res = await fetch(`/api/client-communications/campaigns/preview?${params.toString()}`);
-      const json = await res.json();
-      if (!res.ok) { setAddError(json.error ?? 'Company not found.'); return; }
-      const row = json.row as Row;
-      const finalRow: Row = { ...row };
-      setRows(prev => {
-        const idx = prev.findIndex(r => r.companyName.toLowerCase() === finalRow.companyName.toLowerCase());
-        const next = idx >= 0 ? prev.map((r, i) => i === idx ? finalRow : r) : [...prev, finalRow];
-        return next.sort((a, b) => a.companyName.localeCompare(b.companyName));
+      const params = new URLSearchParams({ lookup: companyName, type });
+      if (type === 'ar') {
+        params.set('fyeMonth', fyeMonth);
+        params.set('fyeYear', fyeYear);
+      }
+      const response = await fetch(`/api/client-communications/campaigns/preview?${params}`);
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error ?? 'Company not found.');
+      const row = json.row as WorkbenchRow;
+      setRows(current => [...current, {
+        ...row,
+        toEmail: recipientLines(row.toEmail),
+        ccEmail: recipientLines(row.ccEmail),
+      }].sort((a, b) => a.companyName.localeCompare(b.companyName)));
+      setAddName('');
+      setAddResults([]);
+      setLastCreated([]);
+    } catch (e: unknown) {
+      setMessage({ tone: 'error', text: e instanceof Error ? e.message : 'Unable to add company.' });
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const markOpened = async (draft: CreatedDraft) => {
+    const response = await fetch('/api/client-communications/drafts', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: draft.id,
+        version: draft.version,
+        patch: { status: 'opened' },
+        sentByEmail: me?.email,
+        sentByName: me?.name,
+      }),
+    });
+    if (!response.ok) {
+      const json = await response.json().catch(() => ({}));
+      throw new Error(json.error ?? 'Opened draft could not be recorded.');
+    }
+  };
+
+  const openCreatedDrafts = async (drafts: CreatedDraft[]) => {
+    if (!selectedSender) throw new Error('Choose a sender first.');
+    const prepared = drafts.map(draft => {
+      const matchingRow = rows.find(row => row.companyName === draft.company_name);
+      return {
+        ...draft,
+        sender_email: selectedSender.email,
+        additional_attachments: matchingRow ? rowFiles[rowKey(matchingRow)] ?? [] : [],
+      };
+    });
+    const results = await openDraftsInOutlook(prepared, commonFiles);
+    await Promise.all(results.map(async (result, index) => {
+      if (!result.ok) return;
+      try {
+        await markOpened(drafts[index]);
+      } catch {
+        // The Outlook draft is already open; keep the per-draft result as a
+        // success and report the audit warning in the batch summary instead.
+      }
+    }));
+    return results;
+  };
+
+  const createAndOpen = async () => {
+    if (!selectedTemplate || !selectedSender) {
+      setMessage({ tone: 'error', text: 'Choose a template and sender first.' });
+      return;
+    }
+    if (!includedRows.length) {
+      setMessage({ tone: 'error', text: 'Select at least one company.' });
+      return;
+    }
+    const hardInvalid = includedRows.filter(row =>
+      !row.contactName.trim() || !hasEmail(row.toEmail),
+    );
+    if (hardInvalid.length) {
+      setMessage({
+        tone: 'error',
+        text: `${hardInvalid.length} selected row(s) are missing User Name or a valid To email.`,
       });
-      setAddName(''); setAddResults([]);
-    } finally { setAdding(false); }
-  };
+      return;
+    }
+    if (!helperAvailable) {
+      setMessage({
+        tone: 'error',
+        text: 'Tassure Draft Helper is not running. Download or start it, then click Recheck.',
+      });
+      return;
+    }
 
-  const toggleRow = (i: number) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, included: !r.included } : r));
-  const removeRow = (i: number) => setRows(prev => prev.filter((_, idx) => idx !== i));
-  const updateRowEmail = (i: number, value: string) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, toEmail: value } : r));
-  const updateRowCc = (i: number, value: string) => setRows(prev => prev.map((r, idx) => idx === i ? { ...r, ccEmail: value || null } : r));
-  const includedCount = rows.filter(r => r.included).length;
-
-  const requestDeleteCampaign = (c: Campaign, e: React.MouseEvent) => {
-    e.preventDefault(); e.stopPropagation();
-    setPendingDeleteCampaign({ id: c.id, name: c.name });
-  };
-
-  const confirmDeleteCampaign = async () => {
-    if (!pendingDeleteCampaign) return;
-    const { id } = pendingDeleteCampaign;
-    setPendingDeleteCampaign(null);
-    setDeletingId(id);
+    setCreating(true);
+    setMessage(null);
     try {
-      const res = await fetch(`/api/client-communications/campaigns/${id}`, { method: 'DELETE' });
-      if (!res.ok) { const j = await res.json().catch(() => ({})); alert(j.error ?? 'Delete failed.'); return; }
-      loadCampaigns();
-    } finally { setDeletingId(null); }
+      const batchName = type === 'ar'
+        ? `${templateShortName(selectedTemplate)} - FYE ${fyeMonth} ${fyeYear}`
+        : `${TYPE_LABEL[type]} - ${new Date().toISOString().slice(0, 10)}`;
+      const response = await fetch('/api/client-communications/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          name: batchName,
+          templateId,
+          senderId,
+          fyeMonth: type === 'ar' ? fyeMonth : undefined,
+          fyeYear: type === 'ar' ? Number(fyeYear) : undefined,
+          companies: includedRows.map(row => ({
+            companyName: row.companyName,
+            companyId: row.companyId,
+            contactName: row.contactName.trim(),
+            toEmail: row.toEmail,
+            ccEmail: row.ccEmail,
+            invoiceRefs: row.invoiceRefs,
+            totalAmount: row.totalAmount,
+          })),
+          createdByEmail: me?.email,
+          createdByName: me?.name,
+        }),
+      });
+      const json = await response.json();
+      if (!response.ok) throw new Error(json.error ?? 'Unable to prepare drafts.');
+      const created = (json.drafts ?? []) as CreatedDraft[];
+      setLastCreated(created);
+      if (!created.length) throw new Error('No drafts were created.');
+      const results = await openCreatedDrafts(created);
+      setLastOpenResults(results);
+      const opened = results.filter(result => result?.ok).length;
+      const failed = results.length - opened;
+      setMessage({
+        tone: failed ? 'warning' : 'success',
+        text: failed
+          ? `${opened} Outlook draft(s) opened. ${failed} need attention below. Nothing was sent automatically.`
+          : `${opened} Outlook draft(s) opened with attachments. Review and send them in Outlook.`,
+      });
+    } catch (e: unknown) {
+      setMessage({ tone: 'error', text: e instanceof Error ? e.message : 'Unable to create drafts.' });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const retryFailed = async () => {
+    const failedIndexes = lastCreated
+      .map((_, index) => (!lastOpenResults[index]?.ok ? index : -1))
+      .filter(index => index >= 0);
+    const failedDrafts = failedIndexes.map(index => lastCreated[index]);
+    if (!failedDrafts.length) return;
+    setCreating(true);
+    try {
+      const results = await openCreatedDrafts(failedDrafts);
+      const mergedResults = [...lastOpenResults];
+      failedIndexes.forEach((originalIndex, retryIndex) => {
+        mergedResults[originalIndex] = results[retryIndex];
+      });
+      setLastOpenResults(mergedResults);
+      const opened = results.filter(result => result?.ok).length;
+      setMessage({
+        tone: opened === results.length ? 'success' : 'warning',
+        text: `${opened} of ${results.length} retry draft(s) opened in Outlook.`,
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const setRowAttachmentFiles = (row: WorkbenchRow, files: FileList | null) => {
+    setRowFiles(current => ({ ...current, [rowKey(row)]: files ? Array.from(files) : [] }));
+    setLastCreated([]);
+    setLastOpenResults([]);
+  };
+
+  const setBatchAttachmentFiles = (files: FileList | null) => {
+    setCommonFiles(files ? Array.from(files) : []);
+    setLastCreated([]);
+    setLastOpenResults([]);
+  };
+
+  const selectAllReady = () => {
+    setRows(current => current.map(row => {
+      const warnings = getRowWarnings(row, type, rowFiles[rowKey(row)]?.length ?? 0);
+      return { ...row, included: warnings.length === 0 };
+    }));
   };
 
   return (
@@ -225,240 +496,268 @@ export default function CampaignCentrePage() {
       <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Client Communications</div>
       <CommsTabs />
 
-      {step === 'setup' && (
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20, marginBottom: 20 }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: '#1e3a5f', marginBottom: 14 }}>New Campaign</div>
-
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            {(['ar', 'soa', 'letter'] as const).map(t => (
-              <button key={t} onClick={() => setType(t)}
-                style={{ padding: '7px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
-                  border: `1.5px solid ${type === t ? '#1d3a5c' : '#e2e8f0'}`,
-                  background: type === t ? '#1d3a5c' : '#fff', color: type === t ? '#fff' : '#64748b' }}>
-                {TYPE_LABEL[t]}
-              </button>
-            ))}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div>
+          <h1 style={{ margin: 0, color: '#102f50', fontSize: 22, fontWeight: 800 }}>Email Drafts</h1>
+          <div style={{ color: '#718399', fontSize: 12, marginTop: 3 }}>
+            Prepare a batch here, then complete the final review and sending in Outlook.
           </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 14 }}>
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Campaign name</div>
-              <input value={name} onChange={e => setName(e.target.value)} style={{ ...S, width: '100%' }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Template</div>
-              <select value={templateId ?? ''} onChange={e => setTemplateId(Number(e.target.value))} style={{ ...S, width: '100%' }}>
-                {typeTemplates.map(t => <option key={t.id} value={t.id}>{t.name}{t.is_default ? ' (default)' : ''}</option>)}
-              </select>
-            </div>
-
-            {type === 'ar' && (
-              <>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>FYE Month</div>
-                  <select value={fyeMonth} onChange={e => setFyeMonth(e.target.value)} style={{ ...S, width: '100%' }}>
-                    {FYE_MONTHS.map(m => <option key={m}>{m}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>FYE Year</div>
-                  <select value={fyeYear} onChange={e => setFyeYear(e.target.value)} style={{ ...S, width: '100%' }}>
-                    {['2024','2025','2026','2027'].map(y => <option key={y}>{y}</option>)}
-                  </select>
-                </div>
-              </>
-            )}
-
-            <div>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Sender (display only — you still send from your own Outlook)</div>
-              <select value={senderId ?? ''} onChange={e => setSenderId(Number(e.target.value))} style={{ ...S, width: '100%' }}>
-                {senders.map(s => <option key={s.id} value={s.id}>{s.display_name ? `${s.display_name} <${s.email}>` : s.email}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {type === 'letter' && (
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 4 }}>Company names (one per line)</div>
-              <textarea value={letterCompanies} onChange={e => setLetterCompanies(e.target.value)}
-                rows={5} style={{ ...S, width: '100%', fontFamily: 'inherit', resize: 'vertical' }}
-                placeholder={'CHINA SHIPBUILDING\nCABC\nHONG XIN DA'} />
-            </div>
-          )}
-
-          {type === 'ar' && (
-            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>
-              Pulls this cycle&apos;s AR Reminder batch, matches each company to its TAB/TAC invoices generated for FYE {fyeMonth} {fyeYear}.
-              The next step shows exactly who is included before anything is created, so you can uncheck, remove, or add companies yourself.
-              TAO is not connected yet — TAO-only invoices will be missing from the total.
-            </div>
-          )}
-          {type === 'soa' && (
-            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>
-              Pulls every company with an outstanding (unpaid) balance on a synced TAB/TAC invoice. TAO is not connected yet.
-              The next step shows exactly who is included before anything is created, so you can uncheck, remove, or add companies yourself.
-            </div>
-          )}
-
-          <button onClick={preview} disabled={previewing}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', borderRadius: 8, border: 'none', background: '#1d3a5c', color: '#fff', fontWeight: 700, fontSize: 13, cursor: previewing ? 'default' : 'pointer', opacity: previewing ? 0.7 : 1 }}>
-            {previewing ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />}
-            {previewing ? 'Loading companies…' : 'Preview Companies'}
-          </button>
-
-          {result && (
-            <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, fontSize: 12.5, background: result.ok ? '#f0fdf4' : '#fef2f2', color: result.ok ? '#16a34a' : '#dc2626', border: `1px solid ${result.ok ? '#bbf7d0' : '#fecaca'}` }}>
-              {result.msg}
-              {result.ok && result.campaignId && (
-                <> · <Link href={`/client-communications/drafts?campaignId=${result.campaignId}`} style={{ color: '#1d4ed8', fontWeight: 700 }}>Review drafts →</Link></>
-              )}
-            </div>
-          )}
         </div>
-      )}
+        <Link href="/client-communications/templates" title="Templates & Senders"
+          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, color: '#526b85', textDecoration: 'none', fontSize: 12, fontWeight: 700, padding: '7px 10px', border: '1px solid #dbe4ed', borderRadius: 7, background: '#fff' }}>
+          <Settings size={14} /> Settings
+        </Link>
+      </div>
 
-      {step === 'review' && (
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: 20, marginBottom: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <button onClick={() => setStep('setup')}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, border: 'none', background: 'transparent', color: '#64748b', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', padding: '4px 0' }}>
-              <ArrowLeft size={14} />Back
+      <section style={{ background: '#fff', border: '1px solid #dfe7ef', borderRadius: 11, padding: 16, marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 }}>
+          {(Object.keys(TYPE_LABEL) as CampaignType[]).map(value => (
+            <button key={value} onClick={() => chooseType(value)}
+              style={{ border: `1px solid ${type === value ? '#173b63' : '#d9e2ec'}`, borderRadius: 7, padding: '7px 13px', background: type === value ? '#173b63' : '#fff', color: type === value ? '#fff' : '#526b85', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              {TYPE_LABEL[value]}
             </button>
-            <div style={{ fontSize: 14, fontWeight: 800, color: '#1e3a5f' }}>{name}</div>
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 4, padding: '2px 7px' }}>{TYPE_LABEL[type]}</span>
-            {type === 'ar' && <span style={{ fontSize: 11, color: '#94a3b8' }}>FYE {fyeMonth} {fyeYear}</span>}
-          </div>
-          <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 14 }}>
-            Review who gets a draft before anything is generated. Uncheck to skip someone, add a company manually, or remove a row entirely.
-            The TeamWork Report recipient list is used by all three campaign types. Customer emails go to To and Tassure emails go to CC.
-            Each address is shown on its own line and remains editable for the final human review.
-            Rules applied: cindy@tassure.com is excluded; hoechyi@tassure.com is always CC; when kahye@tassure.com is present, sengxin@tassure.com is excluded.
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) repeat(3,minmax(130px,0.8fr)) auto', gap: 10, alignItems: 'end' }}>
+          <div>
+            <label style={{ display: 'block', color: '#718399', fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>TEMPLATE</label>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {typeTemplates.map(template => (
+                <button key={template.id} onClick={() => setTemplateId(template.id)}
+                  title={template.name}
+                  style={{ border: `1px solid ${templateId === template.id ? '#15803d' : '#d9e2ec'}`, borderRadius: 6, padding: '7px 10px', background: templateId === template.id ? '#f0fdf4' : '#fff', color: templateId === template.id ? '#15803d' : '#526b85', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}>
+                  {templateShortName(template)}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-            <div style={{ position: 'relative', flex: '1 1 260px', minWidth: 220 }}>
-              <input value={addName} onChange={e => searchCompanies(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') addCompanyByName(addName); }}
-                placeholder="Add a company by name…" style={{ ...S, width: '100%' }} />
-              {(addResults.length > 0 || adding) && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 4px 14px rgba(15,23,42,0.08)', zIndex: 10, maxHeight: 220, overflowY: 'auto' }}>
-                  {adding && <div style={{ padding: '8px 12px', fontSize: 12, color: '#94a3b8' }}>Looking up…</div>}
-                  {addResults.map(c => (
-                    <div key={c.companyName} onClick={() => addCompanyByName(c.companyName)}
-                      style={{ padding: '8px 12px', fontSize: 12.5, cursor: 'pointer', borderBottom: '1px solid #f1f5f9', color: '#1e3a5f' }}
-                      onMouseDown={e => e.preventDefault()}>
-                      {c.companyName}
-                      {!c.bestEmail && <span style={{ color: '#dc2626', fontSize: 10.5, marginLeft: 6 }}>no email on file</span>}
-                    </div>
-                  ))}
-                </div>
+          {type === 'ar' ? (
+            <>
+              <div>
+                <label style={{ display: 'block', color: '#718399', fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>FYE MONTH</label>
+                <select value={fyeMonth} onChange={e => setFyeMonth(e.target.value)} style={fieldStyle}>
+                  {FYE_MONTHS.map(month => <option key={month}>{month}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', color: '#718399', fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>FYE YEAR</label>
+                <select value={fyeYear} onChange={e => setFyeYear(e.target.value)} style={fieldStyle}>
+                  {['2024', '2025', '2026', '2027', '2028'].map(year => <option key={year}>{year}</option>)}
+                </select>
+              </div>
+            </>
+          ) : (
+            <div style={{ gridColumn: 'span 2' }}>
+              <label style={{ display: 'block', color: '#718399', fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>
+                {type === 'letter' ? 'COMPANY NAMES — ONE PER LINE' : 'SOURCE'}
+              </label>
+              {type === 'letter' ? (
+                <textarea value={letterCompanies} onChange={e => setLetterCompanies(e.target.value)}
+                  rows={2} placeholder={'ABC PTE. LTD.\nXYZ PTE. LTD.'}
+                  style={{ ...fieldStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+              ) : (
+                <div style={{ ...fieldStyle, background: '#f8fafc', color: '#526b85' }}>All customers with an outstanding QuickBooks balance</div>
               )}
             </div>
-            <button onClick={() => addCompanyByName(addName)} disabled={!addName.trim() || adding}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 12px', borderRadius: 8, border: '1px solid #1d3a5c', background: '#fff', color: '#1d3a5c', fontWeight: 700, fontSize: 12.5, cursor: 'pointer' }}>
-              <Plus size={13} />Add
-            </button>
-            <span style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 700, color: '#1e3a5f' }}>{includedCount} of {rows.length} selected</span>
-          </div>
-          {addError && <div style={{ fontSize: 11.5, color: '#dc2626', marginBottom: 10, marginTop: -4 }}>{addError}</div>}
+          )}
 
-          <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'auto', marginBottom: 16 }}>
-            <div style={{ minWidth: ROW_GRID_MIN_WIDTH }}>
-              <div style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 8, padding: '8px 10px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
-                <span /><span>Company</span><span>To</span><span>CC</span><span>Invoices</span><span>Amount</span><span>Note</span><span />
+          <div>
+            <label style={{ display: 'block', color: '#718399', fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>OUTLOOK SENDER</label>
+            <select value={senderId ?? ''} onChange={e => setSenderId(Number(e.target.value))} style={fieldStyle}>
+              {senders.map(sender => (
+                <option key={sender.id} value={sender.id}>
+                  {sender.display_name ? `${sender.display_name} — ` : ''}{sender.email}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button onClick={loadCompanies} disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 34, border: 0, borderRadius: 7, padding: '0 15px', background: '#173b63', color: '#fff', fontSize: 12, fontWeight: 800, cursor: loading ? 'wait' : 'pointer' }}>
+            {loading ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
+            {rows.length ? 'Reload' : 'Load Companies'}
+          </button>
+        </div>
+
+        {selectedTemplate && (
+          <details style={{ marginTop: 10, color: '#718399', fontSize: 11 }}>
+            <summary style={{ cursor: 'pointer', fontWeight: 700 }}>Template: {selectedTemplate.name}</summary>
+            <div style={{ marginTop: 7, padding: 9, borderRadius: 7, background: '#f8fafc', whiteSpace: 'pre-wrap' }}>
+              <strong>Subject:</strong> {selectedTemplate.subject_template}
+              <br /><br />
+              {selectedTemplate.body_template}
+            </div>
+          </details>
+        )}
+      </section>
+
+      {rows.length > 0 && (
+        <>
+          <section style={{ background: '#fff', border: '1px solid #dfe7ef', borderRadius: 11, marginBottom: 12, overflow: 'visible' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderBottom: '1px solid #e6edf3', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#18324f' }}>{rows.length} companies</div>
+              <span style={{ color: '#15803d', fontSize: 11, fontWeight: 700 }}>{readyCount} ready</span>
+              {warningCount > 0 && <span style={{ color: '#b45309', fontSize: 11, fontWeight: 700 }}>{warningCount} need review</span>}
+              <button onClick={selectAllReady}
+                style={{ border: 0, background: 'transparent', color: '#1d4ed8', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                Select ready rows
+              </button>
+
+              <div style={{ marginLeft: 'auto', position: 'relative' }}>
+                <Search size={13} style={{ position: 'absolute', left: 9, top: 9, color: '#94a3b8' }} />
+                <input value={addName} onChange={e => searchCompanies(e.target.value)}
+                  placeholder="Add another company…"
+                  style={{ ...fieldStyle, width: 230, paddingLeft: 29 }} />
+                {addResults.length > 0 && (
+                  <div style={{ position: 'absolute', zIndex: 30, top: 37, left: 0, right: 0, background: '#fff', border: '1px solid #d9e2ec', borderRadius: 7, boxShadow: '0 8px 20px rgba(15,23,42,.12)', overflow: 'hidden' }}>
+                    {addResults.map(company => (
+                      <button key={company.companyName} onClick={() => addCompany(company.companyName)}
+                        disabled={adding}
+                        style={{ display: 'block', width: '100%', border: 0, borderBottom: '1px solid #edf2f7', background: '#fff', textAlign: 'left', padding: '8px 10px', color: '#18324f', fontSize: 11, cursor: 'pointer' }}>
+                        {company.companyName}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div style={{ maxHeight: 420, overflowY: 'auto' }}>
-                {rows.map((r, i) => {
-                  const hasEmail = !!r.toEmail?.trim();
-                  // Once a reviewer types in a missing email, the original "no email"
-                  // reason no longer applies — drop it so the note doesn't look stale.
-                  const displayReason = r.reason === 'No email on file' && hasEmail ? null : r.reason;
+            </div>
+
+            <div style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 390px)', overflowY: 'auto' }}>
+              <div style={{ minWidth: 1260 }}>
+                <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 8, padding: '8px 10px', background: '#f5f8fb', borderBottom: '1px solid #dfe7ef', color: '#60758c', fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }}>
+                  <div>Draft</div><div>Company</div><div>User Name</div><div>To</div><div>CC</div><div>Invoices / Files</div><div style={{ textAlign: 'right' }}>Amount</div><div>Status</div><div />
+                </div>
+
+                {rows.map((row, index) => {
+                  const files = rowFiles[rowKey(row)] ?? [];
+                  const warnings = getRowWarnings(row, type, files.length);
                   return (
-                    <div key={`${r.companyName}-${i}`} style={{ display: 'grid', gridTemplateColumns: ROW_GRID, gap: 8, alignItems: 'center', padding: '8px 10px', borderBottom: '1px solid #f1f5f9', background: r.included ? '#fff' : '#fafbfc', opacity: r.included ? 1 : 0.65 }}>
-                      <input type="checkbox" checked={r.included} disabled={!hasEmail} onChange={() => toggleRow(i)} style={{ cursor: hasEmail ? 'pointer' : 'not-allowed' }} />
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 12.5, fontWeight: 600, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.companyName}>{r.companyName}</div>
-                        <div title={r.recipientSyncedAt ? `Last synced ${new Date(r.recipientSyncedAt).toLocaleString()}` : undefined}
-                          style={{ marginTop: 3, fontSize: 9.5, fontWeight: 700, color: r.recipientSource === 'teamwork_report' ? '#15803d' : '#c2410c' }}>
-                          {r.recipientSource === 'teamwork_report' ? 'TEAMWORK REPORT' : r.recipientSource === 'company_fallback' ? 'FALLBACK · REVIEW' : 'NO RECIPIENT DATA'}
+                    <div key={rowKey(row)}
+                      style={{ display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 8, alignItems: 'start', padding: '9px 10px', borderBottom: '1px solid #edf2f7', background: row.included ? '#fff' : '#fbfcfd' }}>
+                      <div style={{ textAlign: 'center', paddingTop: 6 }}>
+                        <input type="checkbox" checked={row.included} onChange={() => updateRow(index, { included: !row.included })} title="Y = create an Outlook draft; this does not send the email" />
+                      </div>
+                      <div>
+                        <div style={{ color: '#18324f', fontSize: 11.5, fontWeight: 800 }}>{row.companyName}</div>
+                        <div style={{ marginTop: 4, color: row.recipientSource === 'teamwork_report' ? '#15803d' : '#b45309', fontSize: 9.5, fontWeight: 800 }}>
+                          {row.recipientSource === 'teamwork_report' ? 'TEAMWORK REPORT' : row.recipientSource === 'company_fallback' ? 'FALLBACK — REVIEW' : 'NO RECIPIENT SOURCE'}
                         </div>
                       </div>
-                      <textarea value={r.toEmail ?? ''} onChange={e => updateRowEmail(i, e.target.value)} placeholder={'customer@company.com\nfinance@company.com'}
-                        rows={Math.max(2, Math.min(5, (r.toEmail ?? '').split(/\r?\n/).filter(Boolean).length))}
-                        style={{ fontSize: 11.5, lineHeight: 1.45, padding: '5px 7px', borderRadius: 6, border: `1px solid ${hasEmail ? '#e2e8f0' : '#fecaca'}`, background: hasEmail ? '#fff' : '#fef2f2', color: '#1e3a5f', outline: 'none', width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
-                      <textarea value={r.ccEmail ?? ''} onChange={e => updateRowCc(i, e.target.value)} placeholder={'hoechyi@tassure.com\noptional@tassure.com'}
-                        rows={Math.max(2, Math.min(5, (r.ccEmail ?? '').split(/\r?\n/).filter(Boolean).length))}
-                        style={{ fontSize: 11.5, lineHeight: 1.45, padding: '5px 7px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f', outline: 'none', width: '100%', resize: 'vertical', fontFamily: 'inherit' }} />
-                      <span style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.invoiceRefs.map(x => `${x.qbCompany} #${x.invoiceNo}`).join(', ')}>
-                        {r.invoiceRefs.length ? r.invoiceRefs.map(x => `${x.qbCompany}#${x.invoiceNo}`).join(', ') : '—'}
-                      </span>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#0f766e' }}>{r.totalAmount ? `S$${r.totalAmount.toLocaleString()}` : '—'}</span>
-                      <span style={{ fontSize: 10.5, color: '#c2410c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={displayReason ?? ''}>{displayReason ?? ''}</span>
-                      <button onClick={() => removeRow(i)} title="Remove from this campaign"
-                        style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                        <Trash2 size={13} />
+                      <input value={row.contactName} onChange={e => updateRow(index, { contactName: e.target.value })}
+                        placeholder="Greeting name" style={fieldStyle} />
+                      <textarea value={row.toEmail ?? ''} onChange={e => updateRow(index, { toEmail: e.target.value })}
+                        rows={Math.max(2, Math.min(4, splitRecipients(row.toEmail).length))}
+                        placeholder={'customer@email.com\nsecond@email.com'}
+                        style={{ ...fieldStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.35 }} />
+                      <textarea value={row.ccEmail ?? ''} onChange={e => updateRow(index, { ccEmail: e.target.value })}
+                        rows={Math.max(2, Math.min(4, splitRecipients(row.ccEmail).length))}
+                        placeholder={'hoechyi@tassure.com\nother@email.com'}
+                        style={{ ...fieldStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.35 }} />
+                      <div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {row.invoiceRefs.map((ref, refIndex) => (
+                            <span key={`${ref.qbCompany}-${ref.invoiceNo}-${refIndex}`}
+                              title={`S$${ref.amount.toLocaleString()}${ref.qbInvoiceId ? ' — PDF available' : ' — add file manually'}`}
+                              style={{ padding: '2px 5px', borderRadius: 4, background: ref.qbInvoiceId && ref.qbCompany !== 'TAO' ? '#eff6ff' : '#fff7ed', color: ref.qbInvoiceId && ref.qbCompany !== 'TAO' ? '#1d4ed8' : '#b45309', fontSize: 9.5, fontWeight: 800 }}>
+                              {invoiceLabel(ref)}
+                            </span>
+                          ))}
+                          {!row.invoiceRefs.length && <span style={{ color: '#94a3b8', fontSize: 10 }}>No system invoice</span>}
+                        </div>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 6, color: '#526b85', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
+                          <FilePlus2 size={12} /> {files.length ? `${files.length} manual file(s)` : 'Add files'}
+                          <input type="file" multiple hidden onChange={e => setRowAttachmentFiles(row, e.target.files)} />
+                        </label>
+                      </div>
+                      <div style={{ textAlign: 'right', paddingTop: 6, color: '#0f766e', fontSize: 11.5, fontWeight: 800 }}>
+                        {row.totalAmount ? `S$${row.totalAmount.toLocaleString()}` : '—'}
+                      </div>
+                      <div style={{ paddingTop: 3 }}>
+                        {warnings.length === 0 ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#15803d', fontSize: 10, fontWeight: 800 }}><Check size={12} /> Ready</span>
+                        ) : warnings.map(warning => (
+                          <div key={warning} style={{ display: 'flex', alignItems: 'flex-start', gap: 3, color: '#b45309', fontSize: 9.5, lineHeight: 1.3, marginBottom: 3 }}>
+                            <AlertTriangle size={10} style={{ marginTop: 1, flexShrink: 0 }} /> {warning}
+                          </div>
+                        ))}
+                      </div>
+                      <button onClick={() => setRows(current => current.filter((_, i) => i !== index))}
+                        title="Remove row"
+                        style={{ border: 0, background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 4 }}>
+                        <X size={14} />
                       </button>
                     </div>
                   );
                 })}
               </div>
             </div>
-          </div>
+          </section>
 
-          <button onClick={confirmGenerate} disabled={generating || !includedCount}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px', borderRadius: 8, border: 'none', background: '#1d3a5c', color: '#fff', fontWeight: 700, fontSize: 13, cursor: (generating || !includedCount) ? 'default' : 'pointer', opacity: (generating || !includedCount) ? 0.6 : 1 }}>
-            {generating ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />}
-            {generating ? 'Generating…' : `Confirm & Generate ${includedCount} Draft${includedCount === 1 ? '' : 's'}`}
-          </button>
+          <section style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px', background: '#fff', border: '1px solid #dfe7ef', borderRadius: 11, flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#526b85', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              <Paperclip size={13} />
+              {commonFiles.length ? `${commonFiles.length} common attachment(s)` : 'Add common attachment to every draft'}
+              <input type="file" multiple hidden onChange={e => setBatchAttachmentFiles(e.target.files)} />
+            </label>
+            {commonFiles.map(file => (
+              <span key={`${file.name}-${file.size}`} style={{ padding: '2px 6px', borderRadius: 4, background: '#f1f5f9', color: '#526b85', fontSize: 9.5 }}>{file.name}</span>
+            ))}
 
-          {result && !result.ok && (
-            <div style={{ marginTop: 12, padding: '9px 12px', borderRadius: 8, fontSize: 12.5, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca' }}>
-              {result.msg}
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+              {helperAvailable === false ? (
+                <>
+                  <a href="/downloads/TassureDraftHelper.exe" download
+                    style={{ color: '#b45309', fontSize: 11, fontWeight: 800 }}>Download Outlook Helper</a>
+                  <button onClick={recheckHelper} style={{ border: '1px solid #d9e2ec', background: '#fff', borderRadius: 6, padding: '7px 10px', color: '#526b85', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Recheck</button>
+                </>
+              ) : (
+                <span style={{ color: helperAvailable ? '#15803d' : '#718399', fontSize: 10.5, fontWeight: 700 }}>
+                  {helperAvailable ? 'Outlook Helper ready' : 'Checking Outlook Helper…'}
+                </span>
+              )}
+              <button onClick={createAndOpen} disabled={creating || !includedRows.length || !helperAvailable}
+                style={{ display: 'flex', alignItems: 'center', gap: 7, border: 0, borderRadius: 8, padding: '9px 16px', background: '#0f766e', color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: creating ? 'wait' : 'pointer', opacity: creating || !includedRows.length || !helperAvailable ? 0.55 : 1 }}>
+                {creating ? <Loader2 size={14} className="spin" /> : <Mail size={14} />}
+                {creating ? 'Preparing & Opening…' : `Create ${includedRows.length} Outlook Draft${includedRows.length === 1 ? '' : 's'}`}
+              </button>
             </div>
-          )}
-        </div>
+          </section>
+        </>
       )}
 
-      {result && result.ok && step === 'setup' && (
-        <div style={{ marginBottom: 20, padding: '9px 12px', borderRadius: 8, fontSize: 12.5, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0' }}>
-          {result.msg}
-          {result.campaignId && (
-            <> · <Link href={`/client-communications/drafts?campaignId=${result.campaignId}`} style={{ color: '#1d4ed8', fontWeight: 700 }}>Review drafts →</Link></>
-          )}
-        </div>
-      )}
-
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#1e3a5f' }}>Recent Campaigns</span>
-          <button onClick={loadCampaigns} style={{ marginLeft: 'auto', border: 'none', background: 'transparent', cursor: 'pointer', color: '#64748b', display: 'flex', alignItems: 'center' }}>
-            <RefreshCw size={13} style={{ animation: loadingCampaigns ? 'spin 1s linear infinite' : 'none' }} />
-          </button>
-        </div>
-        {campaigns.length === 0 ? (
-          <div style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No campaigns yet.</div>
-        ) : campaigns.map(c => (
-          <Link key={c.id} href={`/client-communications/drafts?campaignId=${c.id}`}
-            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', borderBottom: '1px solid #f1f5f9', textDecoration: 'none' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 4, padding: '2px 7px' }}>{TYPE_LABEL[c.type]}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#1e3a5f' }}>{c.name}</span>
-            <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{c.email_drafts?.[0]?.count ?? 0} drafts · {new Date(c.created_at).toLocaleDateString()}</span>
-            <button onClick={e => requestDeleteCampaign(c, e)} disabled={deletingId === c.id} title="Delete campaign"
-              style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: deletingId === c.id ? 'default' : 'pointer', display: 'flex', alignItems: 'center', padding: 2 }}>
-              {deletingId === c.id ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Trash2 size={14} />}
+      {message && (
+        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, border: `1px solid ${message.tone === 'success' ? '#bbf7d0' : message.tone === 'warning' ? '#fed7aa' : '#fecaca'}`, background: message.tone === 'success' ? '#f0fdf4' : message.tone === 'warning' ? '#fff7ed' : '#fef2f2', color: message.tone === 'success' ? '#15803d' : message.tone === 'warning' ? '#b45309' : '#b91c1c', fontSize: 11.5, fontWeight: 700 }}>
+          {message.text}
+          {lastOpenResults.some(result => result && !result.ok) && (
+            <button onClick={retryFailed} disabled={creating}
+              style={{ marginLeft: 10, border: '1px solid currentColor', background: '#fff', borderRadius: 5, padding: '3px 8px', color: 'inherit', fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}>
+              Retry failed drafts
             </button>
-          </Link>
-        ))}
-      </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
-      {pendingDeleteCampaign && (
-        <ConfirmDeleteModal
-          label={pendingDeleteCampaign.name}
-          onCancel={() => setPendingDeleteCampaign(null)}
-          onConfirm={confirmDeleteCampaign}
-        />
+          )}
+        </div>
       )}
+
+      {lastOpenResults.some(result => result && !result.ok) && (
+        <div style={{ marginTop: 8, background: '#fff', border: '1px solid #fed7aa', borderRadius: 8, padding: 10 }}>
+          {lastOpenResults.map((result, index) => !result?.ok ? (
+            <div key={index} style={{ color: '#b45309', fontSize: 10.5, marginBottom: 3 }}>
+              {lastCreated[index]?.company_name ?? `Draft ${index + 1}`}: {result?.error ?? 'Unable to open.'}
+            </div>
+          ) : null)}
+        </div>
+      )}
+
+      {!rows.length && !loading && (
+        <div style={{ padding: '38px 20px', textAlign: 'center', color: '#718399', background: '#fff', border: '1px dashed #cfdbe7', borderRadius: 11 }}>
+          <Plus size={18} style={{ margin: '0 auto 8px' }} />
+          <div style={{ fontSize: 12, fontWeight: 700 }}>Choose a template and load a company batch.</div>
+          <div style={{ fontSize: 10.5, marginTop: 4 }}>Y means “create an Outlook draft”; this page never sends email automatically.</div>
+        </div>
+      )}
+
+      <style>{`.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }

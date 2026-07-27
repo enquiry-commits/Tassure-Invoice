@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ data: data ?? [] });
 }
 
-// PATCH: update a draft's status (sent/skipped) or edited body/subject.
+// PATCH: update a draft's lifecycle status or reviewed fields.
 // Optimistic-locked on `version`, matching the pattern the AR workflow sync
 // uses — two staff reviewing the same campaign can't silently clobber each
 // other's "mark as sent".
@@ -32,7 +32,14 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { id, version, patch, sentByEmail, sentByName } = body as {
     id: number; version: number;
-    patch: Partial<{ status: 'pending' | 'sent' | 'skipped'; subject: string; body: string; to_email: string; cc_email: string }>;
+    patch: Partial<{
+      status: 'pending' | 'opened' | 'sent' | 'skipped';
+      subject: string;
+      body: string;
+      contact_name: string;
+      to_email: string;
+      cc_email: string;
+    }>;
     sentByEmail?: string; sentByName?: string;
   };
   if (!id || version === undefined || !patch) return NextResponse.json({ error: 'id, version and patch required' }, { status: 400 });
@@ -43,6 +50,10 @@ export async function PATCH(req: NextRequest) {
     update.sent_at = new Date().toISOString();
     update.sent_by_email = sentByEmail ?? null;
     update.sent_by_name = sentByName ?? null;
+  } else if (patch.status === 'opened') {
+    update.opened_at = new Date().toISOString();
+    update.opened_by_email = sentByEmail ?? null;
+    update.opened_by_name = sentByName ?? null;
   }
 
   const { data, error } = await supabase.from('email_drafts')

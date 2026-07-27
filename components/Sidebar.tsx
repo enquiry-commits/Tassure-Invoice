@@ -44,10 +44,8 @@ const tree: Node[] = [
       {
         id: 'client-communications', label: 'Client Communications',
         children: [
-          { label: 'Campaign Centre',     href: '/client-communications/campaigns' },
-          { label: 'Draft Review',        href: '/client-communications/drafts' },
-          { label: 'Delivery History',    href: '/client-communications/history' },
-          { label: 'Templates & Senders', href: '/client-communications/templates' },
+          { label: 'Email Drafts', href: '/client-communications/campaigns' },
+          { label: 'History', href: '/client-communications/history' },
         ],
       },
     ],

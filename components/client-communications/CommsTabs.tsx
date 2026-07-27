@@ -4,10 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const TABS = [
-  { label: 'Campaign Centre',     href: '/client-communications/campaigns' },
-  { label: 'Draft Review',        href: '/client-communications/drafts' },
-  { label: 'Delivery History',    href: '/client-communications/history' },
-  { label: 'Templates & Senders', href: '/client-communications/templates' },
+  { label: 'Email Drafts', href: '/client-communications/campaigns' },
+  { label: 'History', href: '/client-communications/history' },
 ];
 
 export default function CommsTabs() {

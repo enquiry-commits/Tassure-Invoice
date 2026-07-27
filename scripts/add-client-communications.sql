@@ -7,9 +7,9 @@
 -- Run ONCE in the Supabase SQL editor. Idempotent — safe to re-run.
 
 -- ── Senders ──────────────────────────────────────────────────────────────
--- Mirrors the Excel's "Sender Email list" sheet — which mailbox a campaign is
--- drafted as being "from" (display only; actual send is the staff member's
--- own Outlook, so this does not need mailbox credentials).
+-- Mirrors the Excel's "Sender Email list" sheet. The local Outlook helper
+-- resolves this address against the staff member's configured Outlook
+-- accounts and assigns the matching SendUsingAccount to every draft.
 create table if not exists email_senders (
   id bigserial primary key,
   email text not null unique,
@@ -62,13 +62,17 @@ create table if not exists email_drafts (
   campaign_id bigint not null references email_campaigns(id) on delete cascade,
   company_id bigint references companies(id),
   company_name text not null,
+  contact_name text,
   to_email text,
   cc_email text,
   subject text not null,
   body text not null,
   invoice_refs jsonb not null default '[]'::jsonb,
   total_amount numeric,
-  status text not null default 'pending' check (status in ('pending', 'sent', 'skipped')),
+  status text not null default 'pending' check (status in ('pending', 'opened', 'sent', 'skipped')),
+  opened_at timestamptz,
+  opened_by_email text,
+  opened_by_name text,
   sent_at timestamptz,
   sent_by_email text,
   sent_by_name text,

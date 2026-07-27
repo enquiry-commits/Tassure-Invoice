@@ -1,10 +1,5 @@
-// Client for the local "Tassure Draft Helper" companion app — a small
-// Windows program staff install once (per BUILD.md in the separate
-// tassure-draft-helper project) that opens real Outlook compose windows via
-// COM automation, with invoice PDF(s) already attached. Only ever calls
-// Outlook's .Display(), never .Send() — a human still reviews and sends
-// every email, same as the legacy BULK.xlsm macro and the existing
-// mailto:/​.eml paths on this page.
+// Browser client for the local Tassure Draft Helper. The helper is bound to
+// localhost and creates Outlook MailItems with .Display() only — never Send().
 import { invoicePdfFileName } from './invoice-filename';
 
 export const DRAFT_HELPER_URL = 'http://127.0.0.1:51820';
@@ -17,12 +12,16 @@ interface DraftInvoiceRef {
 }
 
 export interface DraftLike {
+  id?: number;
+  version?: number;
   company_name: string;
+  sender_email?: string | null;
   to_email: string | null;
   cc_email: string | null;
   subject: string;
   body: string;
   invoice_refs: DraftInvoiceRef[];
+  additional_attachments?: File[];
 }
 
 export interface DraftOpenResult {
@@ -30,16 +29,10 @@ export interface DraftOpenResult {
   error?: string;
 }
 
-// Reviewers type multiple recipients as either comma- or semicolon-separated
-// — the mailto: spec (RFC 6068) only recognises commas, so normalise first.
 function normalizeRecipients(raw: string): string {
   return raw.split(/[;,\n\r]+/).map(s => s.trim()).filter(Boolean).join(',');
 }
 
-// Fallback for staff who haven't installed the Draft Helper: a blank Outlook
-// draft with To/CC/Subject/Body filled in, same ~1900-char body budget as
-// the rest of Client Communications (mailto: URIs have no attachment
-// support — that's the whole reason the Helper exists).
 export function buildMailtoLink(d: Pick<DraftLike, 'to_email' | 'cc_email' | 'subject' | 'body'>): string {
   const to = normalizeRecipients(d.to_email ?? '');
   const cc = normalizeRecipients(d.cc_email ?? '');
@@ -49,7 +42,7 @@ export function buildMailtoLink(d: Pick<DraftLike, 'to_email' | 'cc_email' | 'su
   params.set('subject', d.subject);
   const base = `mailto:${encodeURIComponent(to)}?${params.toString()}`;
   const budget = 1900 - base.length;
-  if (body.length > budget) body = body.slice(0, Math.max(0, budget - 40)) + '\n\n[Truncated — copy the rest from Draft Review]';
+  if (body.length > budget) body = body.slice(0, Math.max(0, budget - 40)) + '\n\n[Truncated — open the full draft in the system]';
   return `${base}&body=${encodeURIComponent(body)}`;
 }
 
@@ -65,8 +58,6 @@ export async function checkHelperHealth(timeoutMs = 800): Promise<boolean> {
   }
 }
 
-// Chunked to avoid blowing the call stack on multi-MB PDFs (spreading a huge
-// Uint8Array into String.fromCharCode all at once fails for large files).
 function arrayBufferToBase64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   let binary = '';
@@ -77,58 +68,115 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
   return btoa(binary);
 }
 
-async function fetchAttachments(d: DraftLike): Promise<{ fileName: string; base64: string }[]> {
-  const downloadableRefs = (d.invoice_refs ?? []).filter(r => r.qbInvoiceId && (r.qbCompany === 'TAB' || r.qbCompany === 'TAC'));
-  return Promise.all(downloadableRefs.map(async r => {
-    const res = await fetch(`/api/quickbooks/invoice-pdf?company=${r.qbCompany}&id=${encodeURIComponent(r.qbInvoiceId!)}`);
-    if (!res.ok) throw new Error(`Unable to download ${r.qbCompany} #${r.invoiceNo}.`);
-    const buf = await res.arrayBuffer();
-    return {
-      fileName: invoicePdfFileName(r.qbCompany as 'TAB' | 'TAC', r.invoiceNo, d.company_name, r.amount),
-      base64: arrayBufferToBase64(buf),
-    };
-  }));
+async function fileToAttachment(file: File) {
+  return { fileName: file.name, base64: arrayBufferToBase64(await file.arrayBuffer()) };
 }
 
-// Opens one Outlook compose window per draft, each with its invoice PDF(s)
-// already attached. Returns one result per input draft, same order — a
-// failure on one draft (e.g. an invoice PDF fetch error) never stops the
-// rest of the batch from opening.
-export async function openDraftsInOutlook(drafts: DraftLike[]): Promise<DraftOpenResult[]> {
+async function fetchAttachments(d: DraftLike): Promise<{ fileName: string; base64: string }[]> {
+  const downloadableRefs = (d.invoice_refs ?? []).filter(
+    r => r.qbInvoiceId && (r.qbCompany === 'TAB' || r.qbCompany === 'TAC'),
+  );
+  const systemAttachments = await Promise.all(downloadableRefs.map(async r => {
+    const res = await fetch(`/api/quickbooks/invoice-pdf?company=${r.qbCompany}&id=${encodeURIComponent(r.qbInvoiceId!)}`);
+    if (!res.ok) throw new Error(`Unable to download ${r.qbCompany} #${r.invoiceNo}.`);
+    return {
+      fileName: invoicePdfFileName(
+        r.qbCompany as 'TAB' | 'TAC',
+        r.invoiceNo,
+        d.company_name,
+        r.amount,
+      ),
+      base64: arrayBufferToBase64(await res.arrayBuffer()),
+    };
+  }));
+  const manualAttachments = await Promise.all((d.additional_attachments ?? []).map(fileToAttachment));
+  return [...systemAttachments, ...manualAttachments];
+}
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  worker: (value: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(values.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (cursor < values.length) {
+      const index = cursor++;
+      results[index] = await worker(values[index], index);
+    }
+  });
+  await Promise.all(runners);
+  return results;
+}
+
+// Prepares invoice PDFs with bounded concurrency, then sends the helper small
+// batches so a 40-company run does not create one very large localhost request.
+export async function openDraftsInOutlook(
+  drafts: DraftLike[],
+  commonAttachments: File[] = [],
+): Promise<DraftOpenResult[]> {
   const results: DraftOpenResult[] = new Array(drafts.length);
-  const payload: { to: string; cc: string; subject: string; body: string; attachments: { fileName: string; base64: string }[] }[] = [];
+  const common = await Promise.all(commonAttachments.map(fileToAttachment));
+  const prepared = await mapWithConcurrency(drafts, 4, async (draft, index) => {
+    try {
+      return { index, attachments: await fetchAttachments(draft) };
+    } catch (e: unknown) {
+      results[index] = {
+        ok: false,
+        error: e instanceof Error ? e.message : 'Unable to prepare attachments.',
+      };
+      return null;
+    }
+  });
+
+  const payload: {
+    senderEmail: string;
+    to: string;
+    cc: string;
+    subject: string;
+    body: string;
+    attachments: { fileName: string; base64: string }[];
+  }[] = [];
   const payloadIndex: number[] = [];
 
-  for (let i = 0; i < drafts.length; i++) {
-    try {
-      const attachments = await fetchAttachments(drafts[i]);
-      payload.push({
-        to: drafts[i].to_email ?? '',
-        cc: drafts[i].cc_email ?? '',
-        subject: drafts[i].subject,
-        body: drafts[i].body,
-        attachments,
-      });
-      payloadIndex.push(i);
-    } catch (e: unknown) {
-      results[i] = { ok: false, error: e instanceof Error ? e.message : 'Unable to prepare attachments.' };
-    }
+  for (const item of prepared) {
+    if (!item) continue;
+    const draft = drafts[item.index];
+    payload.push({
+      senderEmail: draft.sender_email ?? '',
+      to: draft.to_email ?? '',
+      cc: draft.cc_email ?? '',
+      subject: draft.subject,
+      body: draft.body,
+      attachments: [...item.attachments, ...common],
+    });
+    payloadIndex.push(item.index);
   }
 
-  if (payload.length > 0) {
-    const res = await fetch(`${DRAFT_HELPER_URL}/drafts/open`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ drafts: payload }),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      const message = j.error ?? `Helper returned HTTP ${res.status}`;
-      for (const idx of payloadIndex) results[idx] = { ok: false, error: message };
-    } else {
-      const j = await res.json();
-      const helperResults: DraftOpenResult[] = j.results ?? [];
-      payloadIndex.forEach((idx, k) => { results[idx] = helperResults[k] ?? { ok: false, error: 'No result returned.' }; });
+  for (let start = 0; start < payload.length; start += 10) {
+    const payloadChunk = payload.slice(start, start + 10);
+    const indexChunk = payloadIndex.slice(start, start + 10);
+    try {
+      const res = await fetch(`${DRAFT_HELPER_URL}/drafts/open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ drafts: payloadChunk }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        const message = j.error ?? `Helper returned HTTP ${res.status}`;
+        for (const idx of indexChunk) results[idx] = { ok: false, error: message };
+      } else {
+        const j = await res.json();
+        const helperResults: DraftOpenResult[] = j.results ?? [];
+        indexChunk.forEach((idx, k) => {
+          results[idx] = helperResults[k] ?? { ok: false, error: 'No result returned.' };
+        });
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Unable to reach Tassure Draft Helper.';
+      for (const idx of indexChunk) results[idx] = { ok: false, error: message };
     }
   }
 

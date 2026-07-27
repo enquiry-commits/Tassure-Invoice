@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-24 (Billing Drafts modal header: exact ARDetailModal markup)
+Last updated: 2026-07-27 (Client Communications simplified into one Outlook draft workbench)
 
 ## Purpose
 
@@ -23,6 +23,26 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Client Communications now follows the familiar BULK Excel workflow in one
+  `Email Drafts` workbench** instead of splitting preparation and review across
+  several screens. Staff choose AR Renewal / SOA / Document Letter, template,
+  FYE period and the real Outlook sender account; then review one spreadsheet-
+  style row per company (Draft, Company, User Name, To, CC, invoice/files,
+  amount and readiness), add missing companies/files, and open the selected
+  rows as fully populated Outlook drafts in one batch. Nothing is sent
+  automatically: Outlook remains the final review and send control. The helper
+  now assigns the selected `SendUsingAccount`, supports common and per-company
+  attachments, prepares invoice PDFs with bounded concurrency, and opens large
+  batches in groups of ten. Draft state now distinguishes `pending` from
+  `opened`, while `sent` remains an explicit staff confirmation. The former
+  Draft Review route redirects to the new workbench; navigation now shows only
+  Email Drafts and History, with Templates & Senders available from Settings.
+  Recipient rules also exclude both Cindy aliases, always CC Hoe Chyi, and
+  remove Seng Xin when Kah Ye is present. Production build, TypeScript and
+  recipient tests pass. Before deployment, run
+  `scripts/simplify-client-communications.sql` in Supabase; the updated Windows
+  helper binary is `public/downloads/TassureDraftHelper.exe`.
 
 - **Billing Drafts modal header now reproduces `ARDetailModal`'s exact
   markup**, not just its colors. Vincent pasted the real DevTools output
