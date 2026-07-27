@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-27 (Client Communications simplified into one Outlook draft workbench)
+Last updated: 2026-07-27 (prepared Outlook drafts can be reviewed and reopened)
 
 ## Purpose
 
@@ -23,6 +23,18 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Client Communications History can now review and reopen prepared Outlook
+  drafts.** Every activity row has a `View` action that opens the saved sender,
+  To, CC, user name, subject, full body, invoice references, amounts and status.
+  Pending/opened records can be reopened as a complete Outlook draft with the
+  QuickBooks invoice PDF rebuilt and attached; local/manual attachments must be
+  selected again because browsers cannot retain local file access. Older
+  campaigns that did not save a sender can use the configured default sender
+  from the modal. Staff can also explicitly mark a record as sent or skip it,
+  with optimistic version checks preventing silent concurrent overwrites.
+  Reopening never sends the email automatically. TypeScript, targeted ESLint,
+  diff checks and the full 50-route production build pass.
 
 - **Client Communications now follows the familiar BULK Excel workflow in one
   `Email Drafts` workbench** instead of splitting preparation and review across

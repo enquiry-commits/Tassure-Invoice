@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '200', 10), 500);
 
   let q = supabase.from('email_drafts')
-    .select('*, email_campaigns!inner(id, type, name, fye_month, fye_year, created_at)')
+    .select('*, email_campaigns!inner(id, type, name, fye_month, fye_year, created_at, email_senders(email, display_name))')
     .order('updated_at', { ascending: false })
     .limit(limit);
   if (status) q = q.eq('status', status);
