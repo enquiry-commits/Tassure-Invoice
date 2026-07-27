@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-27 (prepared Outlook drafts can be reviewed and reopened)
+Last updated: 2026-07-27 (Active Client list rows visibly open company details)
 
 ## Purpose
 
@@ -23,6 +23,16 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Active Client's List view now uses the same unmistakable clickable-row
+  design as Billing and AR.** Desktop rows have a persistent right-chevron,
+  move the row number beside the company name, use a status-coloured left
+  border, and show a blue highlighted outline on hover or keyboard focus.
+  A footer explains that clicking any row opens the full company details and
+  edit modal. Enter and Space now open the selected row as well, while the
+  existing mobile chevron and modal behaviour remain unchanged. TypeScript,
+  changed-file lint (with the component's pre-existing effect/unused rules
+  excluded), diff checks and the full 50-route production build pass.
 
 - **Client Communications History can now review and reopen prepared Outlook
   drafts.** Every activity row has a `View` action that opens the saved sender,

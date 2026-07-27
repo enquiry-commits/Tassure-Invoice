@@ -1252,19 +1252,57 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
               <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No data</div>
             ) : pageItems.map((r, i) => {
               const rowColors = statusColor(r.status);
+              const rowAccent = rowColors?.color ?? '#16a34a';
+              const openDetails = () => setSelectedRowId(r.id);
               return (
-                <div key={r.id} onClick={() => setSelectedRowId(r.id)}
+                <div
+                  key={r.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open full details for ${r.company_name}`}
+                  title="Click to open full details and edit"
+                  onClick={openDetails}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      openDetails();
+                    }
+                  }}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: isMobile ? '1fr auto' : '28px minmax(220px,1.6fr) 110px 90px minmax(200px,1.2fr) 100px',
-                    alignItems: 'center', gap: 8, padding: '10px 16px', borderBottom: '1px solid #f1f5f9', cursor: 'pointer',
-                    background: i % 2 === 0 ? '#fff' : '#fafbfc',
+                    alignItems: 'center', gap: 8, minHeight: 64, padding: '9px 16px',
+                    borderLeft: `3px solid ${rowAccent}`, borderBottom: '1px solid #edf1f5',
+                    cursor: 'pointer', background: '#fff', transition: 'background 0.15s, box-shadow 0.15s',
+                    outline: 'none',
                   }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? '#fff' : '#fafbfc'}>
-                  {!isMobile && <span style={{ fontSize: 11, color: '#cbd5e1' }}>{startIndex + i + 1}</span>}
+                  onMouseEnter={event => {
+                    event.currentTarget.style.background = '#f0f6ff';
+                    event.currentTarget.style.boxShadow = 'inset 0 0 0 1px #dbeafe';
+                  }}
+                  onMouseLeave={event => {
+                    event.currentTarget.style.background = '#fff';
+                    event.currentTarget.style.boxShadow = 'none';
+                  }}
+                  onFocus={event => {
+                    event.currentTarget.style.background = '#f0f6ff';
+                    event.currentTarget.style.boxShadow = 'inset 0 0 0 2px #93c5fd';
+                  }}
+                  onBlur={event => {
+                    event.currentTarget.style.background = '#fff';
+                    event.currentTarget.style.boxShadow = 'none';
+                  }}
+                >
+                  {!isMobile && (
+                    <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}>
+                      <ChevronRight size={14} />
+                    </div>
+                  )}
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.company_name}</div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ color: '#cbd5e1', marginRight: 6, fontSize: 11 }}>{startIndex + i + 1}</span>
+                      {r.company_name}
+                    </div>
                     {r.roc_no && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>{r.roc_no}</div>}
                   </div>
                   {!isMobile && <div style={{ fontSize: 13, color: '#64748b' }}>{r.roc_no ?? '—'}</div>}
@@ -1291,6 +1329,11 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                 </div>
               );
             })}
+          </div>
+          <div style={{ borderTop: '1px solid #f1f5f9', padding: '6px 16px', background: '#f8fafc' }}>
+            <span style={{ fontSize: 11, color: '#94a3b8' }}>
+              Arrow and highlighted row indicate that the company can be opened. Click any row to view full details and edit.
+            </span>
           </div>
         </div>
       ) : (
