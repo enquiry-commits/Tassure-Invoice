@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-27 (Active Client list rows visibly open company details)
+Last updated: 2026-07-27 (Email Drafts company names match other system lists)
 
 ## Purpose
 
@@ -23,6 +23,13 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Email Drafts' Company column now matches the typography used by Active
+  Client, Billing and AR.** Company names inherit the application font and use
+  the standard 14px/700 list-row treatment instead of the previous unusually
+  small 11.5px/800 combination. No campaign, recipient or draft behaviour was
+  changed. TypeScript, targeted ESLint, diff checks and the full 50-route
+  production build pass.
 
 - **Active Client's List view now uses the same unmistakable clickable-row
   design as Billing and AR.** Desktop rows have a persistent right-chevron,

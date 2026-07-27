@@ -640,7 +640,16 @@ export default function EmailDraftWorkbenchPage() {
                         <input type="checkbox" checked={row.included} onChange={() => updateRow(index, { included: !row.included })} title="Y = create an Outlook draft; this does not send the email" />
                       </div>
                       <div>
-                        <div style={{ color: '#18324f', fontSize: 11.5, fontWeight: 800 }}>{row.companyName}</div>
+                        <div style={{
+                          color: '#1e3a5f',
+                          fontSize: 14,
+                          fontWeight: 700,
+                          lineHeight: 1.3,
+                          fontFamily: 'inherit',
+                          letterSpacing: 'normal',
+                        }}>
+                          {row.companyName}
+                        </div>
                         <div style={{ marginTop: 4, color: row.recipientSource === 'teamwork_report' ? '#15803d' : '#b45309', fontSize: 9.5, fontWeight: 800 }}>
                           {row.recipientSource === 'teamwork_report' ? 'TEAMWORK REPORT' : row.recipientSource === 'company_fallback' ? 'FALLBACK — REVIEW' : 'NO RECIPIENT SOURCE'}
                         </div>
