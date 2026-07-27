@@ -598,8 +598,14 @@ export default function EmailDraftWorkbenchPage() {
           <section style={{ background: '#fff', border: '1px solid #dfe7ef', borderRadius: 11, marginBottom: 12, overflow: 'visible' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderBottom: '1px solid #e6edf3', flexWrap: 'wrap' }}>
               <div style={{ fontSize: 12, fontWeight: 800, color: '#18324f' }}>{rows.length} companies</div>
-              <span style={{ color: '#15803d', fontSize: 11, fontWeight: 700 }}>{readyCount} ready</span>
-              {warningCount > 0 && <span style={{ color: '#b45309', fontSize: 11, fontWeight: 700 }}>{warningCount} need review</span>}
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#15803d', flexShrink: 0 }} />{readyCount} ready
+              </span>
+              {warningCount > 0 && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#b45309', flexShrink: 0 }} />{warningCount} need review
+                </span>
+              )}
               <button onClick={selectAllReady}
                 style={{ border: 0, background: 'transparent', color: '#1d4ed8', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                 Select ready rows
@@ -650,9 +656,18 @@ export default function EmailDraftWorkbenchPage() {
                         }}>
                           {row.companyName}
                         </div>
-                        <div style={{ marginTop: 4, color: row.recipientSource === 'teamwork_report' ? '#15803d' : '#b45309', fontSize: 9.5, fontWeight: 800 }}>
-                          {row.recipientSource === 'teamwork_report' ? 'TEAMWORK REPORT' : row.recipientSource === 'company_fallback' ? 'FALLBACK — REVIEW' : 'NO RECIPIENT SOURCE'}
-                        </div>
+                        {(() => {
+                          const src = row.recipientSource === 'teamwork_report'
+                            ? { label: 'TEAMWORK REPORT', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' }
+                            : row.recipientSource === 'company_fallback'
+                            ? { label: 'FALLBACK — REVIEW', bg: '#fffbeb', color: '#b45309', border: '#fde68a' }
+                            : { label: 'NO RECIPIENT SOURCE', bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' };
+                          return (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 8px', borderRadius: 999, background: src.bg, color: src.color, border: `1px solid ${src.border}`, fontSize: 9.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                              <span style={{ width: 4, height: 4, borderRadius: '50%', background: src.color, flexShrink: 0 }} />{src.label}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <input value={row.contactName} onChange={e => updateRow(index, { contactName: e.target.value })}
                         placeholder="Greeting name" style={fieldStyle} />

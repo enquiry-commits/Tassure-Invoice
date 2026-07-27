@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-27 (top summary cards use one system-wide design)
+Last updated: 2026-07-27 (Email Drafts workbench: pill-style ready/review badges)
 
 ## Purpose
 
@@ -23,6 +23,26 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Email Drafts workbench: ready/review badges are now pills**
+  (`app/client-communications/campaigns/page.tsx`, the merged workbench —
+  read fresh since Codex's recent commits substantially restructured this
+  page, per this file's own note above about that merge). Vincent's
+  screenshot pointed at four plain-text indicators he wanted "胶囊格式"
+  (capsule/pill shape): the header's "{N} ready" / "{N} need review"
+  counts, and each row's recipient-source label ("TEAMWORK REPORT" /
+  "FALLBACK — REVIEW" / "NO RECIPIENT SOURCE"). Converted all four to the
+  same rounded-pill convention already established elsewhere in the app
+  (`DueBadge`/`BillingStatusPill` in `app/billing/page.tsx`): small dot +
+  label, tinted background, colored border, `borderRadius: 999` — this
+  file didn't have that convention yet (it used flat text/small rect
+  chips), so this introduces it here to match Vincent's repeated pill
+  preference app-wide. Colors: ready/TEAMWORK REPORT green, need
+  review/FALLBACK amber, and NO RECIPIENT SOURCE red (a harder blocker —
+  no email at all, vs. a fallback that still resolved something —
+  deliberately distinguished from the amber fallback case rather than
+  reusing the same color). Production build passes; committed locally,
+  pushed.
 
 - **Top summary and filter cards now use one shared visual system across the
   application.** Dashboard, Companies, Active Client and the other Master
