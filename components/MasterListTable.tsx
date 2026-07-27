@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronRight, Calendar } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronRight, Calendar, Building2, Users, UserCheck, Landmark, CloudOff } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
+import MetricCard from './MetricCard';
 import { usePagination, PaginationBar } from './Pagination';
 import { toDisplayDate, fmtDate } from '@/lib/date';
 import { useIsMobile } from '@/lib/use-is-mobile';
@@ -1096,13 +1097,13 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     usePagination(visibleRows, `${listType}|${search}|${catFilter}|${columnFilterKey}`);
 
   useEffect(() => { updateSb(); }, [rows, page, updateSb]);
-  const catCards: { key: typeof catFilter; label: string; sub: string; color: string; bg: string; bd: string }[] = [
-    { key: 'all',          label: 'Total Records',  sub: 'in this list',              color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0' },
-    { key: 'tw_css_client', label: 'TW CSS Clients', sub: 'synced as CSS Client (Companies page)', color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4' },
-    { key: 'fye_mismatch', label: 'FYE Mismatch',   sub: 'differs from TeamWork',     color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
-    { key: 'has_nd',       label: 'Has Nominee Dir', sub: 'nominee director on file',  color: '#7c3aed', bg: '#f5f3ff', bd: '#ddd6fe' },
-    { key: 'mas',          label: 'MAS Regulated',  sub: 'MAS grade assigned',        color: '#0369a1', bg: '#f0f9ff', bd: '#bae6fd' },
-    { key: 'non_teamwork', label: 'Non-TeamWork',   sub: 'not found in TeamWork',     color: '#b45309', bg: '#fffbeb', bd: '#fde68a' },
+  const catCards: { key: typeof catFilter; label: string; sub: string; color: string; Icon: typeof Building2 }[] = [
+    { key: 'all',           label: 'Total Records',   sub: 'in this list',                          color: '#1d3a5c', Icon: Building2 },
+    { key: 'tw_css_client', label: 'TW CSS Clients',  sub: 'synced as CSS Client (Companies page)', color: '#0f766e', Icon: Users },
+    { key: 'fye_mismatch',  label: 'FYE Mismatch',    sub: 'differs from TeamWork',                 color: '#dc2626', Icon: AlertTriangle },
+    { key: 'has_nd',        label: 'Has Nominee Dir', sub: 'nominee director on file',              color: '#7c3aed', Icon: UserCheck },
+    { key: 'mas',           label: 'MAS Regulated',   sub: 'MAS grade assigned',                    color: '#0369a1', Icon: Landmark },
+    { key: 'non_teamwork',  label: 'Non-TeamWork',    sub: 'not found in TeamWork',                 color: '#b45309', Icon: CloudOff },
   ];
 
   return (
@@ -1114,23 +1115,30 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         {catCards.map(c => {
           const active = catFilter === c.key;
           return (
-            <button key={c.key} onClick={() => setCatFilter(c.key)}
-              style={{ textAlign: 'left', cursor: 'pointer', background: c.bg, border: `1.5px solid ${active ? c.color : c.bd}`,
-                borderRadius: 10, padding: '12px 16px', width: '100%', minWidth: 0, boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: c.color }}>{catCount(c.key)}</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{c.label}</div>
-              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{c.sub}</div>
-            </button>
+            <MetricCard
+              key={c.key}
+              onClick={() => setCatFilter(c.key)}
+              active={active}
+              value={catCount(c.key)}
+              label={c.label}
+              sub={c.sub}
+              icon={<c.Icon size={16} />}
+              color={c.color}
+              ariaLabel={`Filter records by ${c.label}`}
+            />
           );
         })}
         {listType === 'active_client' && (
-          <button onClick={() => setShowMissingPanel(v => !v)}
-            style={{ textAlign: 'left', cursor: 'pointer', background: '#fff7ed', border: `1.5px solid ${showMissingPanel ? '#c2410c' : '#fed7aa'}`,
-              borderRadius: 10, padding: '12px 16px', width: '100%', minWidth: 0, boxShadow: showMissingPanel ? '0 0 0 2px #c2410c22' : 'none' }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#c2410c' }}>{missingCssClients.length}</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>Missing from Active Client</div>
-            <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>TW CSS Client, no row here yet</div>
-          </button>
+          <MetricCard
+            onClick={() => setShowMissingPanel(v => !v)}
+            active={showMissingPanel}
+            value={missingCssClients.length}
+            label="Missing from Active Client"
+            sub="TW CSS Client, no row here yet"
+            icon={<AlertTriangle size={16} />}
+            color="#c2410c"
+            ariaLabel="Show TeamWork CSS clients missing from Active Client"
+          />
         )}
       </div>
 

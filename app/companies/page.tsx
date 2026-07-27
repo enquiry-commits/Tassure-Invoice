@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Building2, BriefcaseBusiness, MapPin, UserCheck, Users, UserX } from 'lucide-react';
+import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
 
@@ -109,13 +111,13 @@ export default function CompaniesPage() {
   const { page, setPage, totalPages, pageItems, startIndex, total } =
     usePagination(filtered, `${search}|${cat}`);
 
-  const cards: { key: CompanyCat; label: string; sub: string; color: string; bg: string; border: string }[] = [
-    { key: 'all',         label: 'Total Active',        sub: 'Internal CSS Status = Active', color: '#1e3a5f', bg: '#f8fafc', border: '#cbd5e1' },
-    { key: 'css_client',  label: 'Client (CSS Client)', sub: 'TeamWork Client column · may overlap', color: '#0f766e', bg: '#f0fdfa', border: '#99f6e4' },
-    { key: 'shareholder', label: 'Shareholder',         sub: 'TeamWork shareholder · may overlap', color: '#a16207', bg: '#fffbeb', border: '#fde68a' },
-    { key: 'nd',          label: 'Active ND Companies', sub: 'active companies with nominee director', color: '#6d28d9', bg: '#f5f3ff', border: '#ddd6fe' },
-    { key: 'address',     label: 'Address Service',     sub: 'using our registered address', color: '#0369a1', bg: '#f0f9ff', border: '#bae6fd' },
-    { key: 'nd_ceased',   label: 'ND Ceased',           sub: 'no active ND coverage', color: '#be123c', bg: '#fff1f2', border: '#fecdd3' },
+  const cards: { key: CompanyCat; label: string; sub: string; color: string; Icon: typeof Building2 }[] = [
+    { key: 'all',         label: 'Total Active',        sub: 'Internal CSS Status = Active', color: '#1e3a5f', Icon: Building2 },
+    { key: 'css_client',  label: 'Client (CSS Client)', sub: 'TeamWork Client column · may overlap', color: '#0f766e', Icon: BriefcaseBusiness },
+    { key: 'shareholder', label: 'Shareholder',         sub: 'TeamWork shareholder · may overlap', color: '#a16207', Icon: Users },
+    { key: 'nd',          label: 'Active ND Companies', sub: 'active companies with nominee director', color: '#6d28d9', Icon: UserCheck },
+    { key: 'address',     label: 'Address Service',     sub: 'using our registered address', color: '#0369a1', Icon: MapPin },
+    { key: 'nd_ceased',   label: 'ND Ceased',           sub: 'no active ND coverage', color: '#be123c', Icon: UserX },
   ];
 
   return (
@@ -127,14 +129,17 @@ export default function CompaniesPage() {
           {cards.map(c => {
             const active = cat === c.key;
             return (
-              <button key={c.key} onClick={() => setCat(c.key)} aria-pressed={active}
-                style={{ minWidth: 0, minHeight: 94, padding: '15px 18px', textAlign: 'left', cursor: 'pointer',
-                  borderRadius: 11, background: c.bg, border: `${active ? 2 : 1}px solid ${active ? c.color : c.border}`,
-                  boxShadow: active ? `0 0 0 2px ${c.color}12, 0 2px 5px rgba(15,23,42,.06)` : 'none' }}>
-                <div style={{ color: c.color, fontSize: 24, fontWeight: 800, lineHeight: 1, letterSpacing: '-0.03em' }}>{count(c.key)}</div>
-                <div style={{ marginTop: 7, color: '#1e293b', fontSize: 12, fontWeight: 750 }}>{c.label}</div>
-                <div style={{ overflow: 'hidden', marginTop: 3, color: '#94a3b8', fontSize: 10.5, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.sub}</div>
-              </button>
+              <MetricCard
+                key={c.key}
+                onClick={() => setCat(c.key)}
+                active={active}
+                value={count(c.key)}
+                label={c.label}
+                sub={c.sub}
+                icon={<c.Icon size={16} />}
+                color={c.color}
+                ariaLabel={`Filter companies by ${c.label}`}
+              />
             );
           })}
       </div>

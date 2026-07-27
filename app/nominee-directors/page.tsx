@@ -1,6 +1,8 @@
 import NDDirectory from '@/components/NDDirectory';
 import NDSubroleReview, { type NDSubroleReviewItem } from '@/components/NDSubroleReview';
+import MetricCard from '@/components/MetricCard';
 import { createAdminClient } from '@/lib/supabase';
+import { AlertTriangle, BriefcaseBusiness, UserCheck, Users } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,15 +93,19 @@ export default async function NomineDirectorsPage() {
       {/* Summary bar */}
       <div className="grid grid-cols-2 gap-4 mb-6 xl:grid-cols-4">
         {[
-          { label: 'Total NDs',                 value: persons.length, color: '#1d4ed8' },
-          { label: 'Active NDs',                value: activePersons,  color: '#16a34a' },
-          { label: 'Total Active Appointments', value: totalActive,    color: '#d97706' },
-          { label: 'TeamWork Review',            value: reviewScanCompleted ? reviewItems.length : 'Pending', color: '#dc2626' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-white rounded-xl p-4 shadow-sm">
-            <div className="text-2xl font-bold" style={{ color }}>{value}</div>
-            <div className="text-xs text-slate-500 mt-0.5">{label}</div>
-          </div>
+          { label: 'Total NDs',                 sub: 'nominee directors on file', value: persons.length,                                          color: '#1d4ed8', Icon: Users },
+          { label: 'Active NDs',                sub: 'directors with active mandates', value: activePersons,                                      color: '#16a34a', Icon: UserCheck },
+          { label: 'Total Active Appointments', sub: 'active company appointments', value: totalActive,                                          color: '#d97706', Icon: BriefcaseBusiness },
+          { label: 'TeamWork Review',           sub: reviewScanCompleted ? 'records requiring staff review' : 'review scan has not completed', value: reviewScanCompleted ? reviewItems.length : 'Pending', color: '#dc2626', Icon: AlertTriangle },
+        ].map(({ label, sub, value, color, Icon }) => (
+          <MetricCard
+            key={label}
+            value={value}
+            label={label}
+            sub={sub}
+            icon={<Icon size={16} />}
+            color={color}
+          />
         ))}
       </div>
 

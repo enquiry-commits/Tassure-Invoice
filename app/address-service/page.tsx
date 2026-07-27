@@ -1,6 +1,8 @@
 import SectionCard from '@/components/SectionCard';
 import AddressServiceTable from '@/components/AddressServiceTable';
+import MetricCard from '@/components/MetricCard';
 import { supabase } from '@/lib/supabase';
+import { Building2, Layers3, MapPin } from 'lucide-react';
 
 // Live view of companies.uses_address (kept current by the daily TeamWork
 // sync from each company's registered office address) — this page previously
@@ -32,6 +34,8 @@ export default async function AddressServicePage() {
     const t = c.companyType || 'Unknown';
     byType[t] = (byType[t] || 0) + 1;
   });
+  const sortedTypes = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+  const topType = sortedTypes[0];
 
   return (
     <div>
@@ -39,27 +43,27 @@ export default async function AddressServicePage() {
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <div className="text-3xl font-bold text-blue-700">{companies.length}</div>
-          <div className="text-sm text-slate-500 mt-1">Total Address Service Clients</div>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <div className="text-sm font-semibold text-slate-600 mb-2">By Company Type</div>
-          {Object.entries(byType).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([type, count]) => (
-            <div key={type} className="flex justify-between text-xs text-slate-500 py-0.5">
-              <span>{type}</span>
-              <span className="font-semibold">{count}</span>
-            </div>
-          ))}
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm">
-          <div className="text-sm font-semibold text-slate-600 mb-1">Registered Address</div>
-          <div className="text-xs text-slate-500 leading-relaxed">
-            10 Anson Road<br />
-            #12-08 International Plaza<br />
-            Singapore 079903
-          </div>
-        </div>
+        <MetricCard
+          value={companies.length}
+          label="Total Address Service Clients"
+          sub="active registered-address clients"
+          icon={<Building2 size={16} />}
+          color="#1d4ed8"
+        />
+        <MetricCard
+          value={sortedTypes.length}
+          label="Company Types"
+          sub={topType ? `Largest group: ${topType[0]} · ${topType[1]}` : 'No company type data'}
+          icon={<Layers3 size={16} />}
+          color="#6d28d9"
+        />
+        <MetricCard
+          value="079903"
+          label="Registered Address"
+          sub="10 Anson Road · #12-08 International Plaza"
+          icon={<MapPin size={16} />}
+          color="#0f766e"
+        />
       </div>
 
       {/* Table — client component so it can paginate (100 rows/page) */}

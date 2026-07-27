@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-27 (Email Drafts company names match other system lists)
+Last updated: 2026-07-27 (top summary cards use one system-wide design)
 
 ## Purpose
 
@@ -23,6 +23,18 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Top summary and filter cards now use one shared visual system across the
+  application.** Dashboard, Companies, Active Client and the other Master
+  Lists, Billing Drafts, AR, Late Filing, Nominee Directors and Address Service
+  now share the same white card, light border, rounded shape, tinted icon,
+  number, label and supporting-text hierarchy. Cards that filter or navigate
+  retain their existing behaviour and show a right arrow, hover/focus feedback
+  and a clear selected state; information-only cards intentionally have no
+  arrow. No counts, service rules or filtering criteria were changed.
+  TypeScript, targeted ESLint, diff checks and the full 50-route production
+  build pass. Local visual verification reached the expected authenticated
+  login boundary, so no login was bypassed.
 
 - **Email Drafts' Company column now matches the typography used by Active
   Client, Billing and AR.** Company names inherit the application font and use

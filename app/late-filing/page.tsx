@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { AlertTriangle, Plus, Trash2, Check, X, RefreshCw, Zap, Calendar } from 'lucide-react';
+import { AlertTriangle, Plus, Trash2, Check, X, RefreshCw, Zap, Calendar, Building2, Clock } from 'lucide-react';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
+import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { fmtDate as fmtDateStr, toDisplayDate, toIsoDateValue } from '@/lib/date';
 
@@ -282,22 +283,26 @@ export default function LateFilingPage() {
       {/* Stats — total + risk breakdown (click a card to filter) */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(6,minmax(0,1fr))', gap:12, marginBottom:24 }}>
         {([
-          { key: 'ALL',      label: 'Total Late Filers',            sub: 'all flagged companies',            count: rows.length,   color: '#1e3a5f', bg: '#f8fafc', bd: '#e2e8f0' },
-          { key: 'serious',  label: 'Seriously Overdue',            sub: 'over 1 year late / strike-off',     count: cats.serious,  color: '#dc2626', bg: '#fef2f2', bd: '#fecaca' },
-          { key: 'recent',   label: 'Recently Overdue',             sub: 'past due within the last year',     count: cats.recent,   color: '#ea580c', bg: '#fff7ed', bd: '#fed7aa' },
-          { key: 'habitual', label: 'Habitual Risk',                sub: 'chronic late-filer, not yet due',   count: cats.habitual, color: '#ca8a04', bg: '#fefce8', bd: '#fde68a' },
-          { key: 'review',   label: 'Under Review',                 sub: 'possibly resolved — verify',        count: cats.review,   color: '#64748b', bg: '#f8fafc', bd: '#e2e8f0' },
-          { key: 'resolved', label: 'Resolved',                     sub: 'reviewed and retained',              count: cats.resolved, color: '#0f766e', bg: '#f0fdfa', bd: '#99f6e4' },
+          { key: 'ALL',      label: 'Total Late Filers', sub: 'all flagged companies',          count: rows.length,   color: '#1e3a5f', Icon: Building2 },
+          { key: 'serious',  label: 'Seriously Overdue', sub: 'over 1 year late / strike-off',   count: cats.serious,  color: '#dc2626', Icon: AlertTriangle },
+          { key: 'recent',   label: 'Recently Overdue',  sub: 'past due within the last year',   count: cats.recent,   color: '#ea580c', Icon: Clock },
+          { key: 'habitual', label: 'Habitual Risk',     sub: 'chronic late-filer, not yet due', count: cats.habitual, color: '#ca8a04', Icon: RefreshCw },
+          { key: 'review',   label: 'Under Review',      sub: 'possibly resolved — verify',      count: cats.review,   color: '#64748b', Icon: Calendar },
+          { key: 'resolved', label: 'Resolved',          sub: 'reviewed and retained',           count: cats.resolved, color: '#0f766e', Icon: Check },
         ] as const).map(c => {
           const active = catFilter === c.key || (c.key === 'ALL' && catFilter === 'ALL');
           return (
-            <button key={c.key} onClick={() => setCatFilter(c.key as LateCategory | 'ALL')}
-              style={{ textAlign:'left', cursor:'pointer', background:c.bg, border:`1.5px solid ${active ? c.color : c.bd}`,
-                borderRadius:10, padding:'13px 16px', boxShadow: active ? `0 0 0 2px ${c.color}22` : 'none' }}>
-              <div style={{ fontSize:22, fontWeight:800, color:c.color }}>{c.count}</div>
-              <div style={{ fontSize:12, fontWeight:700, color:'#334155' }}>{c.label}</div>
-              <div style={{ fontSize:10, color:'#94a3b8', marginTop:1 }}>{c.sub}</div>
-            </button>
+            <MetricCard
+              key={c.key}
+              onClick={() => setCatFilter(c.key as LateCategory | 'ALL')}
+              active={active}
+              value={c.count}
+              label={c.label}
+              sub={c.sub}
+              icon={<c.Icon size={16} />}
+              color={c.color}
+              ariaLabel={`Filter late filing records by ${c.label}`}
+            />
           );
         })}
       </div>

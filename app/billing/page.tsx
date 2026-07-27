@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
+import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { fmtDate, fmtMonth, toDisplayDate, toIsoDateValue, todaySGT } from '@/lib/date';
@@ -2095,18 +2096,23 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       {arList.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
           {([
-            { key: 'all',    label: `AR Reminder · FYE ${month || '—'} ${year}`, sub: 'staff-reviewed batch this cycle', value: mCount.total,    color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText     },
-            { key: 'needs',  label: 'Needs Billing',               sub: 'not yet invoiced this cycle',  value: mCount.needs,    color: '#c2410c', bg: '#fff7ed', bd: '#fed7aa', Icon: null         },
-            { key: 'active', label: 'Invoiced',                    sub: 'already invoiced this cycle',   value: mCount.invoiced, color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2 },
-          ] as const).map(({ key, label, sub, value, color, bg, bd, Icon }) => {
+            { key: 'all',    label: `AR Reminder · FYE ${month || '—'} ${year}`, sub: 'staff-reviewed batch this cycle', value: mCount.total,    color: '#1d3a5c', Icon: FileText },
+            { key: 'needs',  label: 'Needs Billing',               sub: 'not yet invoiced this cycle',  value: mCount.needs,    color: '#c2410c', Icon: AlertTriangle },
+            { key: 'active', label: 'Invoiced',                    sub: 'already invoiced this cycle',   value: mCount.invoiced, color: '#16a34a', Icon: CheckCircle2 },
+          ] as const).map(({ key, label, sub, value, color, Icon }) => {
             const active = filter === key;
             return (
-              <button key={key} onClick={() => setFilter(key)}
-                style={{ textAlign: 'left', cursor: 'pointer', background: bg, borderRadius: 10, border: `1.5px solid ${active ? color : bd}`, padding: '12px 16px', boxShadow: active ? `0 0 0 2px ${color}22` : 'none' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>{Icon && <Icon size={13} style={{ color }} />}<span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>{label}</span></div>
-                <div style={{ fontSize: 26, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
-                <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{sub}</div>
-              </button>
+              <MetricCard
+                key={key}
+                onClick={() => setFilter(key)}
+                active={active}
+                value={value}
+                label={label}
+                sub={sub}
+                icon={<Icon size={16} />}
+                color={color}
+                ariaLabel={`Filter billing drafts by ${label}`}
+              />
             );
           })}
         </div>
@@ -3111,20 +3117,25 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       {/* Stats — click a card to filter */}
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
         {([
-          { key: 'all',         label: 'Total Companies', sub: 'in this FYE cycle',       value: stats.total,      color: '#1d3a5c', bg: '#f8fafc', bd: '#e2e8f0', Icon: FileText      },
-          { key: 'filed',       label: 'AR Filed',        sub: 'annual return filed',     value: stats.filed,      color: '#16a34a', bg: '#f0fdf4', bd: '#bbf7d0', Icon: CheckCircle2  },
-          { key: 'in_progress', label: 'In Progress',     sub: 'some steps done',         value: stats.inProgress, color: '#b45309', bg: '#fffbeb', bd: '#fde68a', Icon: Clock         },
-          { key: 'pending',     label: 'Not Started',     sub: 'no steps yet',            value: stats.pending,    color: '#64748b', bg: '#f8fafc', bd: '#e2e8f0', Icon: Calendar      },
-          { key: 'overdue',     label: 'Overdue',         sub: 'past due, not filed',     value: stats.overdue,    color: '#dc2626', bg: '#fef2f2', bd: '#fecaca', Icon: AlertTriangle },
-        ] as const).map(({ key, label, sub, value, color, bg, bd, Icon }) => {
+          { key: 'all',         label: 'Total Companies', sub: 'in this FYE cycle',       value: stats.total,      color: '#1d3a5c', Icon: FileText },
+          { key: 'filed',       label: 'AR Filed',        sub: 'annual return filed',     value: stats.filed,      color: '#16a34a', Icon: CheckCircle2 },
+          { key: 'in_progress', label: 'In Progress',     sub: 'some steps done',         value: stats.inProgress, color: '#b45309', Icon: Clock },
+          { key: 'pending',     label: 'Not Started',     sub: 'no steps yet',            value: stats.pending,    color: '#64748b', Icon: Calendar },
+          { key: 'overdue',     label: 'Overdue',         sub: 'past due, not filed',     value: stats.overdue,    color: '#dc2626', Icon: AlertTriangle },
+        ] as const).map(({ key, label, sub, value, color, Icon }) => {
           const active = filter === key;
           return (
-            <button key={key} onClick={() => setFilter(key)}
-              style={{ textAlign: 'left', cursor: 'pointer', background: bg, borderRadius: 10, border: `1.5px solid ${active ? color : bd}`, padding: '12px 14px', boxShadow: active ? `0 0 0 2px ${color}22` : 'none' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}><Icon size={13} style={{ color }} /><span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>{label}</span></div>
-              <div style={{ fontSize: 24, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
-              <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>{sub}</div>
-            </button>
+            <MetricCard
+              key={key}
+              onClick={() => setFilter(key)}
+              active={active}
+              value={value}
+              label={label}
+              sub={sub}
+              icon={<Icon size={16} />}
+              color={color}
+              ariaLabel={`Filter AR records by ${label}`}
+            />
           );
         })}
       </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import MetricCard from '@/components/MetricCard';
 import {
   Building2, UserCheck, MapPin, CalendarClock, AlertTriangle, RefreshCw,
   BarChart3, Users, ArrowRight, ShieldCheck, Layers3, Activity, Clock3,
@@ -110,15 +111,15 @@ function Kpi({ label, value, sub, Icon, tint, href }: {
   label: string; value: number | string; sub: string; Icon: typeof Building2; tint: string; href: string;
 }) {
   return (
-    <Link href={href} className="dashboard-kpi" style={{ display: 'block', background: 'rgba(255,255,255,.96)', borderRadius: 14, border: '1px solid #dfe7ec', boxShadow: '0 6px 22px rgba(28,52,73,.035)', padding: '16px 17px', textDecoration: 'none' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <span style={{ width: 32, height: 32, borderRadius: 9, background: `${tint}12`, color: tint, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={16} /></span>
-        <ArrowRight size={13} style={{ color: '#cbd5e1' }} />
-      </div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: DASHBOARD_COLORS.ink, lineHeight: 1, letterSpacing: '-.035em' }}>{value}</div>
-      <div style={{ fontSize: 11.5, color: '#475569', fontWeight: 700, marginTop: 7 }}>{label}</div>
-      <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 2 }}>{sub}</div>
-    </Link>
+    <MetricCard
+      href={href}
+      className="dashboard-kpi"
+      value={value}
+      label={label}
+      sub={sub}
+      icon={<Icon size={16} />}
+      color={tint}
+    />
   );
 }
 
