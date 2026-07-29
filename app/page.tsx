@@ -238,15 +238,15 @@ function UnknownPicDetails({ items }: { items: AutomationExceptionItem[] }) {
             <span style={{ marginLeft: 'auto', color: '#a6530a', background: '#fff7ed', border: '1px solid #fed7aa', padding: '2px 7px', borderRadius: 999, fontSize: 9 }}>{picItems.length} companies</span>
           </summary>
           <div style={{ overflowX: 'auto', borderTop: '1px solid #edf1f5' }}>
-            <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse', fontSize: 10 }}>
+            <table className="system-list-table system-list-table--compact" style={{ minWidth: 920, fontSize: 10 }}>
               <thead>
                 <tr className="system-list-column-header" style={{ textAlign: 'left' }}>
-                  {['No.', 'Company Name', 'UEN / ROC', 'TeamWork Company ID', 'Status', 'Company Type', 'Email', 'Last Detected'].map(label => <th key={label} style={{ padding: '8px 10px', borderBottom: '1px solid #e8edf2' }}>{label}</th>)}
+                  {['No.', 'Company Name', 'UEN / ROC', 'TeamWork Company ID', 'Status', 'Company Type', 'Email', 'Last Detected'].map(label => <th key={label}>{label}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {picItems.map((item, index) => (
-                  <tr key={item.id} className="system-list-row" style={{ borderBottom: '1px solid #eef2f6' }}>
+                  <tr key={item.id} className="system-list-row">
                     <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{index + 1}</td>
                     <td className="company-name-text" style={{ padding: '8px 10px' }}>{item.company?.name ?? item.name ?? '—'}</td>
                     <td className="company-registration-text" style={{ padding: '8px 10px' }}>{item.company?.uen ?? '—'}</td>
@@ -280,15 +280,15 @@ function DuplicateInvoiceDetails({ items }: { items: AutomationExceptionItem[] }
             <span style={{ marginLeft: 'auto', color: '#9a5a13', fontSize: 9.5, fontWeight: 750 }}>{item.invoices.length} QB records · detected {formatSgtTime(item.lastSeenAt)}</span>
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', minWidth: 850, borderCollapse: 'collapse', fontSize: 10 }}>
+            <table className="system-list-table system-list-table--compact" style={{ minWidth: 850, fontSize: 10 }}>
               <thead>
-                <tr style={{ color: '#64748b', textAlign: 'left' }}>
-                  {['QB Company', 'QB Invoice ID', 'Customer', 'Invoice Date', 'Status', 'Total', 'Balance'].map(label => <th key={label} style={{ padding: '8px 10px', borderBottom: '1px solid #edf1f5', fontWeight: 800 }}>{label}</th>)}
+                <tr className="system-list-column-header" style={{ textAlign: 'left' }}>
+                  {['QB Company', 'QB Invoice ID', 'Customer', 'Invoice Date', 'Status', 'Total', 'Balance'].map(label => <th key={label}>{label}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {item.invoices.map(invoice => (
-                  <tr key={`${invoice.qb_company}-${invoice.qb_invoice_id}`} style={{ borderBottom: '1px solid #f0f3f6', color: '#475569' }}>
+                  <tr key={`${invoice.qb_company}-${invoice.qb_invoice_id}`} className="system-list-row">
                     <td style={{ padding: '8px 10px', fontWeight: 800 }}>{invoice.qb_company}</td>
                     <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{invoice.qb_invoice_id}</td>
                     <td style={{ padding: '8px 10px', color: invoice.customer_name.includes('DO NOT USE') ? '#b45309' : DASHBOARD_COLORS.ink, fontWeight: 700 }}>{invoice.customer_name}</td>
@@ -310,15 +310,15 @@ function DuplicateInvoiceDetails({ items }: { items: AutomationExceptionItem[] }
 function GenericExceptionDetails({ items }: { items: AutomationExceptionItem[] }) {
   return (
     <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #e5eaf0', borderRadius: 10 }}>
-      <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', fontSize: 10 }}>
+      <table className="system-list-table system-list-table--compact" style={{ minWidth: 760, fontSize: 10 }}>
         <thead>
-          <tr style={{ background: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-            {['Entity', 'Key', 'Details', 'First detected', 'Last detected'].map(label => <th key={label} style={{ padding: '8px 10px', borderBottom: '1px solid #e8edf2', fontWeight: 800 }}>{label}</th>)}
+          <tr className="system-list-column-header" style={{ textAlign: 'left' }}>
+            {['Entity', 'Key', 'Details', 'First detected', 'Last detected'].map(label => <th key={label}>{label}</th>)}
           </tr>
         </thead>
         <tbody>
           {items.map(item => (
-            <tr key={item.id} style={{ borderBottom: '1px solid #eef2f6', color: '#475569' }}>
+            <tr key={item.id} className="system-list-row">
               <td style={{ padding: '8px 10px', color: DASHBOARD_COLORS.ink, fontWeight: 750 }}>{item.name ?? '—'}</td>
               <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{item.key}</td>
               <td style={{ padding: '8px 10px', maxWidth: 480, wordBreak: 'break-word' }}>{Object.entries(item.details).map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`).join(' · ') || '—'}</td>
@@ -358,14 +358,14 @@ function AutomationExceptionPanel({ health }: { health: AutomationHealth }) {
         {health.exceptionGroups.length === 0 ? (
           <div style={{ padding: 18, textAlign: 'center', color: '#64748b', background: '#fff', border: '1px solid #e5eaf0', borderRadius: 10, fontSize: 10.5 }}>No open integration exceptions.</div>
         ) : health.exceptionGroups.map(group => (
-          <details key={`${group.source}-${group.type}`} style={{ background: '#fffdf9', border: '1px solid #eddcc5', borderRadius: 11, overflow: 'hidden' }}>
+          <details key={`${group.source}-${group.type}`} style={{ background: '#fff', border: '1px solid #e3eaf1', borderRadius: 11, overflow: 'hidden' }}>
             <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '11px 13px', display: 'flex', alignItems: 'center', gap: 9 }}>
-              <ChevronDown size={14} style={{ color: '#a87335' }} />
-              <span style={{ color: '#8b5e2d', fontSize: 9, fontWeight: 850, textTransform: 'uppercase', letterSpacing: '.6px' }}>{EXCEPTION_SOURCE_LABELS[group.source] ?? group.source}</span>
+              <ChevronDown size={14} style={{ color: '#718096' }} />
+              <span style={{ color: '#526b85', fontSize: 9, fontWeight: 850, textTransform: 'uppercase', letterSpacing: '.6px' }}>{EXCEPTION_SOURCE_LABELS[group.source] ?? group.source}</span>
               <strong style={{ color: DASHBOARD_COLORS.ink, fontSize: 10.5 }}>{exceptionTitle(group)}</strong>
               <span style={{ marginLeft: 'auto', borderRadius: 999, padding: '3px 7px', background: '#fff4e5', border: '1px solid #f4d3a5', color: '#9a5a13', fontSize: 9, fontWeight: 800 }}>{group.count}</span>
             </summary>
-            <div style={{ padding: '10px 11px 11px', borderTop: '1px solid #f2e5d4' }}>
+            <div style={{ padding: '10px 11px 11px', borderTop: '1px solid #e8edf2', background: '#f8fafc' }}>
               {group.type === 'unknown_pic_id'
                 ? <UnknownPicDetails items={group.items} />
                 : group.type.startsWith('duplicate_doc_number_')

@@ -669,7 +669,7 @@ export default function EmailDraftWorkbenchPage() {
 
       {rows.length > 0 && (
         <>
-          <section style={{ background: '#fff', border: '1px solid #dfe7ef', borderRadius: 11, marginBottom: 12, overflow: 'visible' }}>
+          <section className="system-list-shell" style={{ marginBottom: 12, overflow: 'visible' }}>
             <div className="draft-list-toolbar">
               <div className="draft-section-heading draft-section-heading--compact">
                 <span className="draft-step">2</span>
@@ -711,9 +711,9 @@ export default function EmailDraftWorkbenchPage() {
               </div>
             </div>
 
-            <div style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 390px)', overflowY: 'auto' }}>
-              <div style={{ minWidth: 1260 }}>
-                <div className="system-list-column-header" style={{ position: 'sticky', top: 0, zIndex: 10, display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 8, padding: '8px 10px', borderBottom: '1px solid #dfe7ef' }}>
+            <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 390px)' }}>
+              <div style={{ minWidth: 1420 }}>
+                <div className="system-list-column-header" style={{ position: 'sticky', top: 0, zIndex: 10, display: 'grid', gridTemplateColumns: '44px 230px 140px 230px 230px 180px 100px 160px 38px', columnGap: 12, padding: '10px 14px' }}>
                   <div>Draft</div><div>Company Name</div><div>User Name</div><div>To</div><div>CC</div><div>Invoices / Files</div><div style={{ textAlign: 'right' }}>Amount</div><div>Status</div><div />
                 </div>
 
@@ -721,8 +721,8 @@ export default function EmailDraftWorkbenchPage() {
                   const files = rowFiles[rowKey(row)] ?? [];
                   const warnings = getRowWarnings(row, type, files.length);
                   return (
-                    <div key={rowKey(row)} className="system-list-row"
-                      style={{ display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 9, alignItems: 'start', padding: '15px 10px', borderBottom: '1px solid #edf2f7', opacity: row.included ? 1 : 0.72 }}>
+                    <div key={rowKey(row)} className="system-list-row system-list-grid"
+                      style={{ display: 'grid', gridTemplateColumns: '44px 230px 140px 230px 230px 180px 100px 160px 38px', columnGap: 12, alignItems: 'start', padding: '16px 14px', opacity: row.included ? 1 : 0.68 }}>
                       <div style={{ textAlign: 'center', paddingTop: 6 }}>
                         <input type="checkbox" checked={row.included} onChange={() => updateRow(index, { included: !row.included })} title="Y = create an Outlook draft; this does not send the email" />
                       </div>
@@ -785,7 +785,7 @@ export default function EmailDraftWorkbenchPage() {
                         type="button"
                         onClick={() => setRows(current => current.filter((_, i) => i !== index))}
                         title="Remove row from this batch"
-                        style={{ border: '1px solid #fca5a5', background: '#fff', borderRadius: 6, padding: '5px 7px', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        className="system-list-action system-list-action--danger"
                       >
                         <Trash2 size={12} />
                       </button>

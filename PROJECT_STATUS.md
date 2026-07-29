@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (CC now defaults to hoechyi + SEC/ACC/TAX PIC always)
+Last updated: 2026-07-29 (system-wide operational LIST visual redesign)
 
 ## Purpose
 
@@ -23,6 +23,23 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Operational LIST interfaces were redesigned across the system.** Added a
+  shared, restrained list foundation (`system-list-shell`, toolbar, scroll,
+  table/grid rows, headers, secondary text and action controls) while keeping
+  page-specific information hierarchy. Companies, Active Client, Billing
+  Drafts, AR list/table, Late Filing, Nominee Directors, Address Service,
+  Email Drafts, Communication History and Dashboard exception tables now use
+  clearer column widths, roomier rows, consistent company/UEN typography,
+  solid navy headers, neutral row surfaces and light horizontal separators.
+  Removed decorative vertical/dashed column dividers, alternating ND row
+  colours, redundant coloured left-edge status rails and ad-hoc hover styling;
+  business statuses remain visible in compact field-level badges and progress
+  values. Wide operational tables now scroll inside bounded list shells instead
+  of compressing important columns. TypeScript and the full Next.js production
+  build pass. Targeted ESLint still reports existing React hook-rule issues in
+  the large legacy Billing, Late Filing and Master List components; this LIST
+  refactor introduced no production build failure.
 
 - **CC now defaults to real addresses even without a synced TeamWork
   recipient directory, and includes the company's PIC(s).** Vincent's

@@ -348,8 +348,8 @@ export default function DeliveryHistoryPage() {
         </div>
       )}
 
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <div className="system-list-column-header" style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 100px', padding: '8px 14px', borderBottom: '1px solid #e2e8f0' }}>
+      <div className="system-list-shell system-list-scroll">
+        <div className="system-list-column-header" style={{ display: 'grid', gridTemplateColumns: '80px 240px minmax(280px,1fr) 100px 130px 170px 130px 92px', columnGap: 12, padding: '10px 14px', minWidth: 1260 }}>
           <div>Type</div>
           <div>Company Name</div>
           <div>Subject</div>
@@ -359,7 +359,7 @@ export default function DeliveryHistoryPage() {
           <div>By</div>
           <div />
         </div>
-        <div style={{ maxHeight: 'calc(100vh - 370px)', overflowY: 'auto' }}>
+        <div style={{ maxHeight: 'calc(100vh - 370px)', overflowY: 'auto', minWidth: 1260 }}>
           {loading ? (
             <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading…</div>
           ) : rows.length === 0 ? (
@@ -370,7 +370,7 @@ export default function DeliveryHistoryPage() {
               <div
                 key={row.id}
                 className="system-list-row"
-                style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 100px', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid #f1f5f9', borderLeft: `3px solid ${accent}`, fontSize: 12 }}
+                style={{ display: 'grid', gridTemplateColumns: '80px 240px minmax(280px,1fr) 100px 130px 170px 130px 92px', columnGap: 12, alignItems: 'center', minHeight: 60, padding: '11px 14px', fontSize: 12 }}
               >
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#475569' }}>{TYPE_LABEL[row.email_campaigns?.type] ?? row.email_campaigns?.type}</div>
                 <div className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.company_name}</div>
@@ -390,7 +390,8 @@ export default function DeliveryHistoryPage() {
                   <button
                     type="button"
                     onClick={() => openDetails(row)}
-                    style={{ border: '1px solid #cdd9e5', background: '#fff', borderRadius: 6, padding: '5px 8px', color: '#1e3a5f', fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}
+                    className="system-list-action"
+                    style={{ fontSize: 10.5, fontWeight: 800 }}
                   >
                     View
                   </button>
@@ -398,7 +399,7 @@ export default function DeliveryHistoryPage() {
                     type="button"
                     onClick={() => setPendingDelete(row)}
                     title="Remove this record"
-                    style={{ border: '1px solid #fca5a5', background: '#fff', borderRadius: 6, padding: '5px 7px', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                    className="system-list-action system-list-action--danger"
                   >
                     <Trash2 size={12} />
                   </button>

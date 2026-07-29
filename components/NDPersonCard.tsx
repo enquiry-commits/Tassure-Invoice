@@ -37,7 +37,7 @@ function Highlight({ text, q }: { text: string; q: string }) {
   );
 }
 
-export default function NDPersonCard({ person, index = 0, isLast, query = '' }: { person: NDPerson; index?: number; isLast?: boolean; query?: string }) {
+export default function NDPersonCard({ person, query = '' }: { person: NDPerson; index?: number; isLast?: boolean; query?: string }) {
   const [open, setOpen] = useState(false);
   const q = query.trim().toLowerCase();
 
@@ -49,70 +49,39 @@ export default function NDPersonCard({ person, index = 0, isLast, query = '' }: 
   const shown = q ? active.filter(a => a.company_name.toLowerCase().includes(q)) : active;
 
   return (
-    <div className={!isLast ? 'border-b border-slate-100' : ''}>
-      {/* Row — white background, navy on expand */}
+    <div>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center px-5 py-3 text-left gap-4 transition-colors"
-        style={{ backgroundColor: isOpen ? '#1e3a8a' : index % 2 === 0 ? '#ffffff' : '#f8fafc' }}
-        onMouseEnter={e => {
-          if (!isOpen) (e.currentTarget as HTMLElement).style.backgroundColor = '#eef2f7';
-        }}
-        onMouseLeave={e => {
-          if (!isOpen) (e.currentTarget as HTMLElement).style.backgroundColor = index % 2 === 0 ? '#ffffff' : '#f8fafc';
-        }}
+        className={`nd-directory-row system-list-row ${isOpen ? 'system-list-row--selected' : ''} w-full text-left`}
+        style={{ alignItems: 'center', minHeight: 58, padding: '11px 18px', border: 0, cursor: 'pointer' }}
       >
-        {/* Name */}
-        <span
-          className="text-sm font-semibold tracking-wide"
-          style={{ width: '220px', flexShrink: 0, color: isOpen ? '#ffffff' : '#1e3a5f' }}
-        >
+        <span className="company-name-text">
           {person.name}
         </span>
 
-        {/* Active badge */}
         <span
-          className="text-xs font-semibold px-3 py-0.5 rounded-full"
+          className="text-xs font-semibold"
           style={{
-            width: '90px', textAlign: 'center', flexShrink: 0,
-            backgroundColor: isOpen ? 'rgba(34,197,94,0.2)' : '#dcfce7',
-            color: isOpen ? '#86efac' : '#16a34a',
+            display: 'inline-flex', alignItems: 'center', gap: 6, color: active.length ? '#15803d' : '#94a3b8',
           }}
         >
-          {active.length} Active
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: active.length ? '#16a34a' : '#cbd5e1' }} />
+          {active.length} active
         </span>
 
-        {/* Matched count when searching */}
-        {q && (
-          <span
-            className="text-xs font-semibold px-3 py-0.5 rounded-full"
-            style={{ flexShrink: 0, backgroundColor: 'rgba(250,204,21,0.18)', color: '#fbbf24' }}
-          >
-            {shown.length} match{shown.length !== 1 ? 'es' : ''}
-          </span>
-        )}
-
-        {/* ID */}
-        <span
-          className="text-xs"
-          style={{ width: '70px', flexShrink: 0, color: isOpen ? 'rgba(255,255,255,0.35)' : '#cbd5e1' }}
-        >
-          {person.member_id ? `ID: ${person.member_id}` : ''}
-        </span>
-
-        <span className="flex-1" />
+        <span className="company-registration-text">{person.member_id || '—'}</span>
 
         {isOpen
-          ? <ChevronUp size={15} className="flex-shrink-0" style={{ color: 'rgba(255,255,255,0.5)' }} />
+          ? <ChevronUp size={15} className="flex-shrink-0" style={{ color: '#526b85' }} />
           : <ChevronDown size={15} className="flex-shrink-0" style={{ color: '#94a3b8' }} />
         }
       </button>
 
-      {/* Expanded body */}
       {isOpen && (
-        <div className="px-5 py-4 bg-slate-50 border-t border-slate-100">
+        <div className="px-5 py-4 bg-slate-50 border-b border-slate-200">
+          {q && <div className="mb-2 text-[10px] font-bold uppercase tracking-wide text-slate-400">{shown.length} matching appointments</div>}
           {shown.length > 0 ? (
-            <div className="grid grid-cols-3 gap-x-8 gap-y-0">
+            <div className="grid grid-cols-1 gap-x-8 gap-y-0 md:grid-cols-2 xl:grid-cols-3">
               {shown.map((a, i) => (
                 <div key={i} className="flex items-start gap-2 py-2 border-b border-slate-100">
                   <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-green-400" />

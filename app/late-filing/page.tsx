@@ -387,36 +387,45 @@ export default function LateFilingPage() {
           No late filing companies found for this year
         </div>
       ) : (
-        <div style={{ background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', overflow:'auto', maxHeight:'calc(100vh - 260px)' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+        <div className="system-list-shell system-list-scroll" style={{ maxHeight:'calc(100vh - 260px)' }}>
+          <table className="system-list-table" style={{ minWidth: 1320 }}>
+            <colgroup>
+              <col style={{ width: 56 }} />
+              <col style={{ width: 250 }} />
+              <col style={{ width: 120 }} />
+              <col style={{ width: 100 }} />
+              <col style={{ width: 95 }} />
+              <col style={{ width: 130 }} />
+              <col style={{ width: 130 }} />
+              <col style={{ width: 145 }} />
+              <col style={{ width: 170 }} />
+              <col style={{ width: 160 }} />
+              <col style={{ width: 54 }} />
+            </colgroup>
             <thead>
               <tr className="system-list-column-header">
                 {['No.','Company Name','UEN / ROC','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map(h=>(
-                  <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontWeight:700, fontSize:12, whiteSpace:'nowrap',
+                  <th key={h} style={{ textAlign:'left', whiteSpace:'nowrap',
                     position:'sticky', top:0, zIndex:2, background:'#1e3a5f', color:'#fff',
-                    ...(h==='Late FY' ? { minWidth:110 } : {}),
-                    ...(h==='Last AR Date' || h==='Last AGM Date' || h==='Last Accounts Date' ? { minWidth:150 } : {}),
-                    ...(h==='Next AGM Due' ? { minWidth:260 } : {}) }}>{h}</th>
+                  }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {pageItems.map((row, idx) => (
                   <tr key={row.id} className="system-list-row" onClick={() => startEdit(row)}
-                    style={{ borderBottom:'1px solid #f1f5f9', cursor: 'pointer' }}
-                    onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f0f6ff'}
-                    onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='#fff'}>
-                    <td style={{ padding:'10px 12px', color:'#94a3b8', fontWeight:600 }}>{startIndex + idx + 1}</td>
-                    <td className="company-name-text" style={{ padding:'10px 12px', maxWidth:260 }}>
+                    style={{ cursor: 'pointer' }}>
+                    <td className="system-list-number">{startIndex + idx + 1}</td>
+                    <td className="company-name-text">
                       {row.company_name}
                     </td>
-                    <td className="company-registration-text" style={{ padding:'10px 12px' }}>{row.uen||'—'}</td>
-                    <td style={{ padding:'10px 12px' }}>
+                    <td className="company-registration-text">{row.uen||'—'}</td>
+                    <td>
                       {row.financial_year_end
                         ? <span style={{ color:'#475569', fontSize:12, fontWeight:600 }}>{row.financial_year_end}</span>
                         : <span style={{ color:'#94a3b8' }}>—</span>}
                     </td>
-                    <td style={{ padding:'10px 12px' }}>
+                    <td>
                       {(() => {
                         const yr = lateYear(row);
                         return yr
@@ -424,10 +433,10 @@ export default function LateFilingPage() {
                           : '—';
                       })()}
                     </td>
-                    <td style={{ padding:'10px 12px', color:'#475569' }}>{fmtDate(row.last_annual_return_date)}</td>
-                    <td style={{ padding:'10px 12px', color:'#475569' }}>{fmtDate(row.last_agm_date)}</td>
-                    <td style={{ padding:'10px 12px', color:'#475569' }}>{fmtDate(row.last_accounts_date)}</td>
-                    <td style={{ padding:'10px 12px' }}>
+                    <td style={{ color:'#475569' }}>{fmtDate(row.last_annual_return_date)}</td>
+                    <td style={{ color:'#475569' }}>{fmtDate(row.last_agm_date)}</td>
+                    <td style={{ color:'#475569' }}>{fmtDate(row.last_accounts_date)}</td>
+                    <td>
                       {row.next_agm_due_date ? (() => {
                         const isPast = new Date(row.next_agm_due_date) < new Date();
                         return <SemanticStatusPill
@@ -438,17 +447,18 @@ export default function LateFilingPage() {
                         />;
                       })() : <span style={{ color:'#94a3b8' }}>NA</span>}
                     </td>
-                    <td style={{ padding:'10px 12px' }}><RemarksBadge remarks={row.remarks} /></td>
-                    <td style={{ padding:'10px 12px', whiteSpace:'nowrap' }} onClick={e => e.stopPropagation()}>
+                    <td><RemarksBadge remarks={row.remarks} /></td>
+                    <td style={{ whiteSpace:'nowrap' }} onClick={e => e.stopPropagation()}>
                       {catOf.get(row.id) === 'review' ? (
                         <button onClick={()=>resolve(row)}
-                          style={{ padding:'4px 8px', borderRadius:5, border:'1px solid #5eead4', background:'#f0fdfa', color:'#0f766e', cursor:'pointer' }}
+                          className="system-list-action"
                           title="Mark as resolved and retain this record">
                           <Check size={12} />
                         </button>
                       ) : (
                         <button onClick={()=>del(row)}
-                          style={{ padding:'4px 8px', borderRadius:5, border:'1px solid #fca5a5', background:'#fff', color:row.source==='manual'?'#dc2626':'#cbd5e1', cursor:'pointer' }}
+                          className={row.source === 'manual' ? 'system-list-action system-list-action--danger' : 'system-list-action'}
+                          style={{ color: row.source === 'manual' ? undefined : '#cbd5e1' }}
                           title={row.source==='auto'?'Auto-detected — edit remarks instead':'Remove'}>
                           <Trash2 size={12} />
                         </button>

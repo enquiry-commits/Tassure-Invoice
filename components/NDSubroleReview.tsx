@@ -75,22 +75,22 @@ export default function NDSubroleReview({
   const visible = filtered.slice(0, limit);
 
   return (
-    <section className="mb-6 overflow-hidden rounded-2xl border border-amber-200 bg-white shadow-sm">
+    <section className="system-list-shell mb-6">
       <button
         type="button"
         onClick={() => setOpen(value => !value)}
-        className="flex w-full items-center gap-4 bg-gradient-to-r from-amber-50 via-orange-50 to-white px-5 py-4 text-left"
+        className="flex w-full items-center gap-4 bg-white px-5 py-4 text-left"
       >
-        <div className="rounded-xl border border-amber-200 bg-white p-2.5 text-amber-700 shadow-sm">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-amber-700">
           <AlertTriangle size={19} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-sm font-bold text-slate-900">TeamWork subrole review</h2>
-            <span className="rounded-full border border-amber-200 bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-800">
+            <span className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-800">
               {items.length} to confirm
             </span>
-            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-slate-500">
+            <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-500">
               {people.length} ND people
             </span>
           </div>
@@ -102,7 +102,7 @@ export default function NDSubroleReview({
       </button>
 
       {open && (
-        <div className="border-t border-amber-100">
+        <div className="border-t border-slate-200">
           <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-white px-5 py-3">
             <label className="flex min-w-[260px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
               <Search size={15} className="text-slate-400" />
@@ -125,7 +125,7 @@ export default function NDSubroleReview({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] table-fixed">
+            <table className="system-list-table w-full min-w-[900px] table-fixed">
               <thead>
                 <tr className="system-list-column-header">
                   <th className="w-[42%] px-5 py-2.5 text-left">Company Name</th>
@@ -137,11 +137,11 @@ export default function NDSubroleReview({
               </thead>
               <tbody>
                 {visible.map(item => (
-                  <tr key={item.key} className="system-list-row border-t">
-                    <td className="px-5 py-3 company-name-text">{item.companyName}</td>
-                    <td className="px-4 py-3 text-xs font-medium text-slate-700">{item.ndName}</td>
-                    <td className="px-4 py-3 text-center text-xs text-slate-600">{fmtDate(item.appointmentDate)}</td>
-                    <td className="px-4 py-3 text-center">
+                  <tr key={item.key} className="system-list-row">
+                    <td className="company-name-text">{item.companyName}</td>
+                    <td className="text-xs font-medium text-slate-700">{item.ndName}</td>
+                    <td className="text-center text-xs text-slate-600">{fmtDate(item.appointmentDate)}</td>
+                    <td className="text-center">
                       <span className={`inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold ${
                         item.appointmentStatus === 'effective'
                           ? 'text-emerald-700'
@@ -155,7 +155,7 @@ export default function NDSubroleReview({
                         {item.appointmentStatus}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="text-center">
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-rose-700">
                         <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />Missing
                       </span>

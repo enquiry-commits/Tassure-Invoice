@@ -144,7 +144,7 @@ export default function CompaniesPage() {
           })}
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
+      <div className="system-list-toolbar mb-4 rounded-xl border border-slate-200 shadow-sm">
           <input
             type="text"
             placeholder="Search company name or UEN / ROC..."
@@ -163,7 +163,7 @@ export default function CompaniesPage() {
           ) : pageItems.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No companies found</div>
           ) : pageItems.map((c, i) => (
-            <div key={c.registrationNo || i} style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '12px 14px', marginBottom: 8 }}>
+            <div key={c.registrationNo || i} className="system-list-row" style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '14px 15px', marginBottom: 9 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -184,17 +184,28 @@ export default function CompaniesPage() {
           ))}
         </div>
       ) : (
-      <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="system-list-shell">
         <div className="system-list-title-bar px-4 py-3">
           <h2 className="system-list-title">Company List</h2>
         </div>
 
-        <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 260px)' }}>
-          <table className="w-full text-sm">
+        <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 260px)' }}>
+          <table className="system-list-table" style={{ minWidth: 1180 }}>
+            <colgroup>
+              <col style={{ width: 58 }} />
+              <col style={{ width: 250 }} />
+              <col style={{ width: 128 }} />
+              <col style={{ width: 122 }} />
+              <col style={{ width: 190 }} />
+              <col style={{ width: 210 }} />
+              <col style={{ width: 132 }} />
+              <col style={{ width: 180 }} />
+              <col style={{ width: 110 }} />
+            </colgroup>
             <thead>
               <tr className="system-list-column-header">
                 {['No.','Company Name','Internal CSS Status','UEN / ROC','Company Type','Nominee Director','Address Service','Contact','PIC'].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5"
+                  <th key={h}
                     style={{ position: 'sticky', top: 0, zIndex: 2, boxShadow: 'inset 0 -1px 0 #16304f' }}>
                     {h}
                   </th>

@@ -18,37 +18,47 @@ export default function AddressServiceTable({ companies }: { companies: Row[] })
 
   return (
     <>
-      <div className="overflow-x-auto -mx-4">
-        <table className="w-full text-sm">
+      <div className="system-list-scroll">
+        <table className="system-list-table" style={{ minWidth: 980 }}>
+          <colgroup>
+            <col style={{ width: 58 }} />
+            <col style={{ width: 280 }} />
+            <col style={{ width: 130 }} />
+            <col style={{ width: 210 }} />
+            <col style={{ width: 200 }} />
+            <col style={{ width: 110 }} />
+          </colgroup>
           <thead>
             <tr className="system-list-column-header border-b">
-              <th className="text-left px-4 py-2.5 w-8">No.</th>
-              <th className="text-left px-4 py-2.5">Company Name</th>
-              <th className="text-left px-4 py-2.5">UEN / ROC</th>
-              <th className="text-left px-4 py-2.5">Company Type</th>
-              <th className="text-left px-4 py-2.5">Contact</th>
-              <th className="text-left px-4 py-2.5">PIC</th>
+              <th>No.</th>
+              <th>Company Name</th>
+              <th>UEN / ROC</th>
+              <th>Company Type</th>
+              <th>Contact</th>
+              <th>PIC</th>
             </tr>
           </thead>
           <tbody>
             {pageItems.map((c, i) => (
               <tr key={c.registrationNo || i} className="system-list-row border-b">
-                <td className="px-4 py-2.5 text-slate-400 text-xs">{startIndex + i + 1}</td>
-                <td className="px-4 py-2.5 max-w-64">
+                <td className="system-list-number">{startIndex + i + 1}</td>
+                <td>
                   <span className="company-name-text truncate block" title={c.companyName}>{c.companyName}</span>
                 </td>
-                <td className="px-4 py-2.5 company-registration-text">{c.registrationNo}</td>
-                <td className="px-4 py-2.5 text-slate-500 text-xs">{c.companyType || '—'}</td>
-                <td className="px-4 py-2.5 text-xs text-slate-500">
+                <td className="company-registration-text">{c.registrationNo}</td>
+                <td className="text-slate-500 text-xs">{c.companyType || '—'}</td>
+                <td className="text-xs text-slate-500">
                   {c.primaryContact?.contactName || c.bestEmail || '—'}
                 </td>
-                <td className="px-4 py-2.5 text-xs text-slate-500">{c.pic || '—'}</td>
+                <td className="text-xs text-slate-500">{c.pic || '—'}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
+      <div style={{ borderTop: '1px solid var(--list-border)', padding: '6px 14px' }}>
+        <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
+      </div>
     </>
   );
 }

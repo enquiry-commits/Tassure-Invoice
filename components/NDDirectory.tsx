@@ -34,7 +34,7 @@ export default function NDDirectory({ persons }: { persons: NDPerson[] }) {
   return (
     <div>
       {/* Search */}
-      <div className="mb-4 flex items-center gap-2 bg-white rounded-xl px-3 py-2 shadow-sm border border-slate-200">
+      <div className="system-list-toolbar mb-4 rounded-xl border border-slate-200 shadow-sm">
         <Search size={16} className="text-slate-400 flex-shrink-0" />
         <input
           value={q}
@@ -55,7 +55,19 @@ export default function NDDirectory({ persons }: { persons: NDPerson[] }) {
       </div>
 
       {/* List */}
-      <div className="rounded-xl overflow-hidden shadow-sm">
+      <div className="system-list-shell">
+        <div className="system-list-title-bar px-4 py-3">
+          <span className="system-list-title">Nominee Director Directory</span>
+          <span className="system-list-title-hint">{filtered.length} people · select a row to view active company appointments</span>
+        </div>
+        {filtered.length > 0 && (
+          <div className="system-list-column-header hidden md:grid" style={{ gridTemplateColumns: 'minmax(240px,1.4fr) 150px 120px 32px', padding: '10px 18px', gap: 16 }}>
+            <div>ND Name</div>
+            <div>Active Appointments</div>
+            <div>Member ID</div>
+            <div />
+          </div>
+        )}
         {filtered.length === 0 ? (
           <div className="bg-white px-5 py-10 text-center text-sm text-slate-400">
             No nominee director holds an active appointment for “{q}”.

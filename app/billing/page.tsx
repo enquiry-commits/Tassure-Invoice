@@ -2088,6 +2088,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   const { page, setPage, totalPages, pageItems, startIndex, total } =
     usePagination(filtered, `${search}|${filter}|${month}|${year}`);
   const isMobile = useIsMobile();
+  const billingListColumns = '32px minmax(230px,1.55fr) 112px 68px 190px 94px 180px 116px 116px 100px 38px';
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, background: '#fff', outline: 'none', color: '#1e3a5f' };
   // Counts scoped to the selected FYE month.
@@ -2156,21 +2157,20 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       </div>
 
       {/* Table */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+      <div className="system-list-shell">
         <div className="system-list-title-bar" style={{ padding: '8px 16px' }}>
           <span className="system-list-title">Billing Drafts</span>
           <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
-        <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
-          {!isMobile && <div className="system-list-column-header" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: '28px minmax(180px,1fr) 110px 70px 170px 100px 190px 120px 120px 90px 36px', columnGap: 4, padding: '8px 12px', borderLeft: '3px solid transparent', borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
+        <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)' }}>
+          <div style={{ minWidth: isMobile ? undefined : 1320 }}>
+          {!isMobile && <div className="system-list-column-header" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: billingListColumns, columnGap: 10, padding: '10px 14px', borderLeft: '3px solid transparent', alignItems: 'center' }}>
             {['', 'Company Name', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC', ''].map((h, i) => (
               i === 5
-                ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                    ND <span style={{ fontSize: 8, fontWeight: 800, background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 3, padding: '0 3px' }}>TAC</span>
-                  </div>
+                ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>ND (TAC)</div>
                 : (i >= 2 && i <= 8)
-                ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', textAlign: 'center', backgroundImage: i === 4 || i === 7 ? 'linear-gradient(to right, #dbe3ee 0, #dbe3ee 1px, transparent 1px)' : 'none' }}>{h}</div>
-                : <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px' }}>{h}</div>
+                ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>{h}</div>
+                : <div key={i} style={{ padding: '0 6px' }}>{h}</div>
             ))}
           </div>}
           {loading && !data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>}
@@ -2178,7 +2178,6 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           {!loading && arList.length > 0 && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No matching records</div>}
           {pageItems.map((c, i) => {
             const isOpen = expanded === c.companyId;
-            const accent = c.urgency === 'expired' ? '#dc2626' : c.urgency === 'expiring_soon' ? '#f59e0b' : '#16a34a';
             const secR   = c.renewals.find(r => r.service === 'Secretary');
             const addrR  = c.renewals.find(r => r.service === 'Address');
             const ndR    = c.renewals.find(r => r.service === 'ND');
@@ -2186,7 +2185,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             const xbrlA  = c.annuals.find(a => a.service === 'XBRL');
             // Phone: view-only card (no draft modal — that's a desktop task)
             if (isMobile) return (
-              <div key={c.companyId} className="system-list-row" style={{ padding: '10px 12px', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9' }}>
+              <div key={c.companyId} className="system-list-row" style={{ padding: '11px 12px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                   <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -2216,9 +2215,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             return (
               <div key={c.companyId}>
                 <div className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}`} onClick={() => setExpanded(isOpen ? null : c.companyId)}
-                  style={{ display: 'grid', gridTemplateColumns: '28px minmax(180px,1fr) 110px 70px 170px 100px 190px 120px 120px 90px 36px', alignItems: 'center', minHeight: 64, columnGap: 4, padding: '9px 12px', background: isOpen ? '#f0f6ff' : '#fff', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf1f5', cursor: 'pointer', transition: 'background 0.15s' }}
-                  onMouseEnter={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#f0f6ff'; }}
-                  onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#fff'; }}>
+                  style={{ display: 'grid', gridTemplateColumns: billingListColumns, alignItems: 'center', minHeight: 68, columnGap: 10, padding: '11px 14px', background: isOpen ? '#f0f6ff' : '#fff', cursor: 'pointer', transition: 'background 0.15s' }}>
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
                     <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2232,7 +2229,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                       : <BillingStatusPill label="Invoiced" color="#15803d" background="#f0fdf4" border="#bbf7d0" />}
                   </div>
                   <div style={{ width: '100%', padding: '0 6px', fontSize: 11, color: '#64748b', textAlign: 'center', boxSizing: 'border-box' }}>{c.fyeMonth ?? '—'}</div>
-                  <div style={{ width: '100%', padding: '2px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, whiteSpace: 'nowrap', boxSizing: 'border-box', backgroundImage: 'linear-gradient(to right, #dbe3ee 0, #dbe3ee 1px, transparent 1px)' }}>
+                  <div style={{ width: '100%', padding: '2px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
                     {secR  && <ServiceMini label="SEC"  status={secR.status}  applicable={secR.applicable}  />}
                     {addrR && <ServiceMini label="ADDR" status={addrR.status} applicable={addrR.applicable} />}
                   </div>
@@ -2246,7 +2243,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   </div>
                   {/* Latest invoice number for this cycle, per QB company — the
                       authoritative generated_invoices record, not a QB-parsed guess. */}
-                  <div style={{ width: '100%', padding: '2px 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box', backgroundImage: 'linear-gradient(to right, #dbe3ee 0, #dbe3ee 1px, transparent 1px)' }}>
+                  <div style={{ width: '100%', padding: '2px 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
                     <BillingInvoiceReference company="TAB" invoiceNo={latestInvoiceNo(c, 'TAB')} />
                   </div>
                   <div style={{ width: '100%', padding: '0 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
@@ -2322,6 +2319,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
               </div>
             );
           })}
+          </div>
         </div>
       </div>
 
@@ -2749,17 +2747,16 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
       left: stickyLeft !== undefined ? stickyLeft : undefined,
       background: '#1e3a5f', color: '#fff',
       fontSize: 11, fontWeight: 700, letterSpacing: 'normal',
-      padding: '7px 8px', whiteSpace: 'nowrap', minWidth: w, width: w,
+      padding: '10px 9px', whiteSpace: 'nowrap', minWidth: w, width: w,
       textAlign: center ? 'center' : 'left',
-      borderRight: finance ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(255,255,255,0.12)',
       boxShadow: lastSticky ? '3px 0 8px -2px rgba(0,0,0,0.18)' : undefined,
     }}>{children}</th>
   );
 
   const TD = ({ children, style, finance, stickyLeft, lastSticky }: { children: React.ReactNode; style?: React.CSSProperties; finance?: boolean; stickyLeft?: number; lastSticky?: boolean }) => (
     <td style={{
-      padding: '3px 6px', verticalAlign: 'top',
-      borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9',
+      padding: '7px 8px', verticalAlign: 'middle',
+      borderBottom: '1px solid #e3eaf1',
       background: finance ? FIN_CELL : stickyLeft !== undefined ? '#fff' : undefined,
       wordBreak: 'break-word', overflowWrap: 'break-word',
       position: stickyLeft !== undefined ? 'sticky' : undefined,
@@ -2780,8 +2777,8 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
 
   return (
     <>
-    <div ref={outerRef} style={{ overflowX: 'hidden', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
-      <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
+    <div ref={outerRef} className="system-list-scroll" style={{ overflowX: 'hidden', maxHeight: 'calc(100vh - 300px)', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
+      <table className="system-list-table system-list-table--compact" style={{ tableLayout: 'fixed', width: 'max-content' }}>
         <thead>
           <tr>
             <TH w={30} center stickyLeft={0}>No.</TH>
@@ -2811,13 +2808,9 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             <tr><td colSpan={20} style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>No records</td></tr>
           )}
           {records.map((r, i) => {
-            const filed   = r.stages.arFiled;
-            const overdue = !filed && r.daysUntilDue !== null && r.daysUntilDue < 0;
-            const inProg  = !filed && (r.stages.sentToClient || r.stages.docsReceived || r.stages.agmHeld);
-            const accent  = filed ? '#16a34a' : overdue ? '#dc2626' : inProg ? '#f59e0b' : '#e2e8f0';
             return (
               <tr key={r.id} className="system-list-row">
-                <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
+                <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600 }}>{startIndex + i + 1}</TD>
                 <TD stickyLeft={30}>
                   <div className="company-name-text">{r.entity_name}</div>
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
@@ -2839,11 +2832,11 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                 <TD><EditField id={r.id} field="remarks"         value={r.remarks}         onSave={onSave} placeholder="—" /></TD>
                 <TD finance><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
                 <TD finance><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate /></TD>
-                <TD style={{ textAlign: 'center' }}>
-                  <button onClick={() => onDelete(r.id)} title="Remove"
-                    style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', cursor: 'pointer', display: 'inline-flex' }}>
-                    <Trash2 size={11} />
-                  </button>
+                  <TD style={{ textAlign: 'center' }}>
+                    <button onClick={() => onDelete(r.id)} title="Remove"
+                    className="system-list-action system-list-action--danger">
+                      <Trash2 size={11} />
+                    </button>
                 </TD>
               </tr>
             );
@@ -3206,13 +3199,13 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
 
       {/* List view */}
       {(view === 'list' || isMobile) && (
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+        <div className="system-list-shell">
           <div className="system-list-title-bar" style={{ padding: '8px 16px' }}>
             <Calendar size={13} style={{ color: '#fff' }} />
             <span className="system-list-title">FYE {month.toUpperCase()} {year}</span>
             <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Click a company to open full details and edit</span>
           </div>
-          {!isMobile && <div className="system-list-column-header" style={{ display: 'grid', gridTemplateColumns: '28px minmax(300px,1.45fr) 100px minmax(260px,1fr) 100px 120px', padding: '7px 16px', borderBottom: '1px solid #e2e8f0' }}>
+          {!isMobile && <div className="system-list-column-header" style={{ display: 'grid', gridTemplateColumns: '32px minmax(310px,1.45fr) 120px minmax(300px,1fr) 110px 120px', columnGap: 12, padding: '10px 16px' }}>
             {['', 'Company Name', 'UEN / ROC', 'Services', 'Due Date', 'PIC'].map((h, i) => (
               <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
                 {h}
@@ -3228,11 +3221,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
             {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>{records.length > 0 ? 'No matching records' : `No records for FYE ${month} ${year}`}</div>}
             {pageItems.map((r, i) => {
               const filed     = r.stages.arFiled;
-              const accent    = filed ? '#16a34a' : r.stagesDone > 0 ? '#f59e0b' : '#e2e8f0';
               const activeSvc = Object.entries(r.services).filter(([, v]) => v).map(([k]) => k);
               // Phone: view-only card (workflow editing is a desktop task)
               if (isMobile) return (
-                <div key={r.id} className="system-list-row" style={{ padding: '10px 12px', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9' }}>
+                <div key={r.id} className="system-list-row" style={{ padding: '11px 12px' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                     <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -3259,9 +3251,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
               return (
                 <div key={r.id} className="system-list-row"
                   onClick={() => setModalRecord(r)}
-                  style={{ display: 'grid', gridTemplateColumns: '28px minmax(300px,1.45fr) 100px minmax(260px,1fr) 100px 120px', alignItems: 'center', minHeight: 64, padding: '8px 12px', background: '#fff', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf1f5', cursor: 'pointer', transition: 'background 0.15s' }}
-                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fff'}
+                  style={{ display: 'grid', gridTemplateColumns: '32px minmax(310px,1.45fr) 120px minmax(300px,1fr) 110px 120px', columnGap: 12, alignItems: 'center', minHeight: 66, padding: '11px 16px', background: '#fff', cursor: 'pointer', transition: 'background 0.15s' }}
                 >
                   <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></div>
                   <div style={{ padding: '0 6px' }}>
@@ -3272,12 +3262,12 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   {/* Fixed slots in fixed order — every service always in the
                       same position, so rows align and differences pop out.
                       Blue = auto · green = manual on · grey = off. */}
-                  <div style={{ margin: '0 6px', padding: '2px 0 2px 14px', minHeight: 32, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, borderLeft: '1px solid #dbe3ee' }}>
+                  <div style={{ margin: '0 6px', padding: '2px 0', minHeight: 32, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                     {SVC_ORDER.filter(k => r.services[k]).map(k => {
                       const state = svcStateOf(r.services, r.servicesManual, k);
                       return (
                         <span key={k} title={`${SVC[k].label} — ${state === 'auto-on' ? 'auto' : state === 'manual-on' ? 'manually on' : 'not provided / off'}`}
-                          style={{ background: '#fff', color: '#475569', border: '1px solid #dbe3ec', borderRadius: 999, padding: '4px 9px', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.15px', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                          style={{ background: '#fff', color: '#475569', border: '1px solid #dbe3ec', borderRadius: 5, padding: '4px 8px', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                           <span style={{ width: 5, height: 5, borderRadius: '50%', background: SVC_STATE_STYLE[state].color, flexShrink: 0 }} />
                           {SVC_SHORT[k]}
                         </span>
@@ -3291,8 +3281,8 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
               );
             })}
           </div>
-          <div style={{ borderTop: '1px solid #f1f5f9', padding: '6px 16px', background: '#f8fafc' }}>
-            <span style={{ fontSize: 11, color: '#cbd5e1' }}>Left border: green = AR filed · amber = in progress · grey = not started · Click any row to open details</span>
+          <div style={{ borderTop: '1px solid #edf1f5', padding: '8px 16px', background: '#f8fafc' }}>
+            <span style={{ fontSize: 11, color: '#718096' }}>Click any row to open details. Filing status remains visible in the due-date and progress fields.</span>
           </div>
         </div>
       )}
