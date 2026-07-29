@@ -117,7 +117,7 @@ async function fetchAttachments(d: DraftLike): Promise<{ fileName: string; base6
   );
   const systemAttachments = await Promise.all(downloadableRefs.map(async r => {
     const res = await fetch(`/api/quickbooks/invoice-pdf?company=${r.qbCompany}&id=${encodeURIComponent(r.qbInvoiceId!)}`);
-    if (!res.ok) throw new Error(`Unable to download ${r.qbCompany} #${r.invoiceNo}.`);
+    if (!res.ok) throw new Error(`Unable to download ${r.qbCompany} ${r.invoiceNo}.`);
     return {
       fileName: invoicePdfFileName(
         r.qbCompany as 'TAB' | 'TAC',

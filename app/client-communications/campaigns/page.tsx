@@ -120,7 +120,7 @@ function hasEmail(value: string | null) {
 }
 
 function invoiceLabel(ref: InvoiceRef) {
-  return `${ref.qbCompany} #${ref.invoiceNo}`;
+  return `${ref.qbCompany} ${ref.invoiceNo}`;
 }
 
 function getRowWarnings(

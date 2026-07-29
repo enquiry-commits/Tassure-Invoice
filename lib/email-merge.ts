@@ -33,7 +33,7 @@ export type InvoiceRef = { qbCompany: 'TAB' | 'TAC' | 'TAO'; invoiceNo: string; 
 // columns did — one line per invoice, company-prefixed.
 export function formatInvoiceList(refs: InvoiceRef[]): string {
   if (!refs.length) return '(no invoices)';
-  return refs.map(r => `${r.qbCompany} #${r.invoiceNo} - S$${r.amount.toLocaleString()}`).join('\n');
+  return refs.map(r => `${r.qbCompany} ${r.invoiceNo} - S$${r.amount.toLocaleString()}`).join('\n');
 }
 
 export function formatAmount(n: number): string {

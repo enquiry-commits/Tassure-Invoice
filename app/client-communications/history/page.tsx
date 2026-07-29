@@ -508,7 +508,7 @@ export default function DeliveryHistoryPage() {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                   {(selected.invoice_refs ?? []).map((invoice, index) => (
                     <span key={`${invoice.qbCompany}-${invoice.invoiceNo}-${index}`} style={{ padding: '5px 8px', border: '1px solid #bfdbfe', borderRadius: 6, background: '#eff6ff', color: '#1d4ed8', fontSize: 10.5, fontWeight: 800 }}>
-                      {invoice.qbCompany} #{invoice.invoiceNo} · {formatMoney(invoice.amount)}
+                      {invoice.qbCompany} {invoice.invoiceNo} · {formatMoney(invoice.amount)}
                       {(!invoice.qbInvoiceId || invoice.qbCompany === 'TAO') && ' · attach manually'}
                     </span>
                   ))}
