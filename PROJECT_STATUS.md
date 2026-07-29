@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Email Drafts full status details and trash action)
+Last updated: 2026-07-29 (Email Drafts row spacing and full status details)
 
 ## Purpose
 
@@ -28,8 +28,9 @@ one focused Git commit.
   Helper readiness panel.** The workbench uses navy as its single primary
   action/selection colour; green is reserved for ready states and amber for
   items requiring attention. Template choices, invoice chips, amounts and
-  recipient-source badges were visually neutralised and rows have more
-  breathing room. The Status column continues to show every review warning in
+  recipient-source badges were visually neutralised and each company row now
+  has 15px vertical padding for more breathing room without changing any
+  column widths. The Status column continues to show every review warning in
   full so staff do not have to interpret collapsed `+ more` summaries. Its
   row-removal control now uses the same red bordered `Trash2` icon treatment as
   Email Activity / History instead of a faint `X`; it only removes the

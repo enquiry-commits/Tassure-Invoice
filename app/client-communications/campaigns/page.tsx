@@ -720,7 +720,7 @@ export default function EmailDraftWorkbenchPage() {
                   const warnings = getRowWarnings(row, type, files.length);
                   return (
                     <div key={rowKey(row)}
-                      style={{ display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 9, alignItems: 'start', padding: '12px 10px', borderBottom: '1px solid #edf2f7', background: row.included ? '#fff' : '#fbfcfd' }}>
+                      style={{ display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 9, alignItems: 'start', padding: '15px 10px', borderBottom: '1px solid #edf2f7', background: row.included ? '#fff' : '#fbfcfd' }}>
                       <div style={{ textAlign: 'center', paddingTop: 6 }}>
                         <input type="checkbox" checked={row.included} onChange={() => updateRow(index, { included: !row.included })} title="Y = create an Outlook draft; this does not send the email" />
                       </div>
