@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-27 (Email Drafts workbench: pill-style ready/review badges)
+Last updated: 2026-07-29 (Draft Helper v1.2.0: verifies Classic vs New Outlook)
 
 ## Purpose
 
@@ -23,6 +23,32 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Tassure Draft Helper v1.2.0: verifies it's actually targeting Classic
+  Outlook, not New Outlook** (`C:\Users\vincent\tassure-draft-helper\app.py`
+  — separate project, not part of this repo; only the rebuilt exe is
+  committed here). Vincent reported a draft opened, but "in the wrong
+  version" — on a machine with both Classic and New Outlook installed,
+  Windows can resolve the `Outlook.Application` COM ProgID ambiguously.
+  Added `_resolve_outlook_exe_path()` (reads
+  `HKEY_CLASSES_ROOT\Outlook.Application\CLSID` →
+  `HKEY_CLASSES_ROOT\CLSID\{clsid}\LocalServer32`, the exact lookup
+  `Dispatch()` performs internally, so this reports the real answer rather
+  than assuming) and `_is_classic_outlook_path()` (must end in
+  `OUTLOOK.EXE` and not live under `WindowsApps`, where New Outlook's
+  MSIX package would be). `/health` now reports `outlookPath` and
+  `isClassicOutlook`; `/drafts/open` refuses with a clear, actionable
+  error (409 — "turn OFF 'Try the new Outlook'…") instead of silently
+  proceeding when verification fails, rather than opening an ambiguous
+  window with no explanation. Also gave Vincent the immediate manual
+  fix (Outlook's own "Try the new Outlook" toggle, top-right, OFF) as the
+  fastest unblock independent of this code change. Rebuilt exe copied to
+  `public/downloads/TassureDraftHelper.exe`; his previously-running
+  instance (from `C:\Users\vincent\Downloads\TassureDraftHelper.exe`,
+  built Jul 27, found via `Get-Process` — not visible through this
+  session's bash `ps`, a real gap worth remembering) was stopped so he
+  picks up the new version on next download+run. Production build passes;
+  committed locally, pushed.
 
 - **Email Drafts workbench: ready/review badges are now pills**
   (`app/client-communications/campaigns/page.tsx`, the merged workbench —
