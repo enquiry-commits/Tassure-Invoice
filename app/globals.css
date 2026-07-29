@@ -89,6 +89,7 @@ body {
   color: #475569;
   font-size: 11.5px;
   line-height: 1.4;
+  border-top-color: #e8eef5 !important;
   border-bottom-color: #e8eef5 !important;
   transition: background-color .14s ease, box-shadow .14s ease;
 }
