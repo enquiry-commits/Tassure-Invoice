@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Web app now detects an outdated Draft Helper)
+Last updated: 2026-07-29 (Email Activity/History: delete a record)
 
 ## Purpose
 
@@ -23,6 +23,21 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Email Activity (Delivery History) can now delete a record.**
+  (`app/client-communications/history/page.tsx` +
+  `app/api/client-communications/drafts/route.ts`). Vincent's screenshot
+  showed duplicate/stray rows (e.g. the same company prepared twice) with
+  no way to remove them, and asked for the same small trash-bin icon the
+  other List pages use. Added `DELETE /api/client-communications/drafts`
+  (removes one `email_drafts` row by id — local audit record only, no
+  effect on Outlook or QuickBooks) and wired it up with the exact
+  established pattern from `app/late-filing/page.tsx`: a `Trash2` icon
+  button (red border/icon, white background) next to the existing "View"
+  button, gated behind the shared `components/ConfirmDeleteModal.tsx`
+  (same component used everywhere else in the app), not a new one-off
+  confirm dialog. Widened the row grid's last column (64px → 100px) to
+  fit both buttons. Production build passes; committed locally, pushed.
 
 - **Web app now detects an outdated Draft Helper and prompts to update.**
   Vincent flagged that the Helper (used by staff, not by him directly — he

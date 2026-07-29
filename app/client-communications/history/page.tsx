@@ -9,9 +9,11 @@ import {
   Mail,
   Paperclip,
   SkipForward,
+  Trash2,
   X,
 } from 'lucide-react';
 import CommsTabs from '@/components/client-communications/CommsTabs';
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import {
   checkHelperHealth,
   openDraftsInOutlook,
@@ -109,6 +111,7 @@ export default function DeliveryHistoryPage() {
     text: string;
   } | null>(null);
   const [loadError, setLoadError] = useState('');
+  const [pendingDelete, setPendingDelete] = useState<HistoryRow | null>(null);
 
   const params = useMemo(() => {
     const next = new URLSearchParams();
@@ -284,6 +287,25 @@ export default function DeliveryHistoryPage() {
     }
   };
 
+  const confirmDeleteRow = async () => {
+    if (!pendingDelete) return;
+    try {
+      const response = await fetch('/api/client-communications/drafts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: pendingDelete.id }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error ?? 'Unable to remove this record.');
+      if (selected?.id === pendingDelete.id) setSelected(null);
+      setPendingDelete(null);
+      await load();
+    } catch (error: unknown) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to remove this record.');
+      setPendingDelete(null);
+    }
+  };
+
   return (
     <div>
       <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Client Communications</div>
@@ -325,7 +347,7 @@ export default function DeliveryHistoryPage() {
       )}
 
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 64px', padding: '8px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 100px', padding: '8px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
           <div>Type</div>
           <div>Company</div>
           <div>Subject</div>
@@ -345,7 +367,7 @@ export default function DeliveryHistoryPage() {
             return (
               <div
                 key={row.id}
-                style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 64px', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid #f1f5f9', borderLeft: `3px solid ${accent}`, background: index % 2 === 0 ? '#fff' : '#fafbfc', fontSize: 12 }}
+                style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 100px', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid #f1f5f9', borderLeft: `3px solid ${accent}`, background: index % 2 === 0 ? '#fff' : '#fafbfc', fontSize: 12 }}
               >
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8' }}>{TYPE_LABEL[row.email_campaigns?.type] ?? row.email_campaigns?.type}</div>
                 <div style={{ fontWeight: 600, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.company_name}</div>
@@ -358,13 +380,23 @@ export default function DeliveryHistoryPage() {
                   {row.sent_at ? new Date(row.sent_at).toLocaleString() : row.opened_at ? `Opened ${new Date(row.opened_at).toLocaleString()}` : '—'}
                 </div>
                 <div style={{ color: '#94a3b8', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.sent_by_name ?? row.opened_by_name ?? '—'}</div>
-                <button
-                  type="button"
-                  onClick={() => openDetails(row)}
-                  style={{ border: '1px solid #cdd9e5', background: '#fff', borderRadius: 6, padding: '5px 8px', color: '#1e3a5f', fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}
-                >
-                  View
-                </button>
+                <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => openDetails(row)}
+                    style={{ border: '1px solid #cdd9e5', background: '#fff', borderRadius: 6, padding: '5px 8px', color: '#1e3a5f', fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingDelete(row)}
+                    title="Remove this record"
+                    style={{ border: '1px solid #fca5a5', background: '#fff', borderRadius: 6, padding: '5px 7px', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -556,6 +588,14 @@ export default function DeliveryHistoryPage() {
             </div>
           </section>
         </div>
+      )}
+
+      {pendingDelete && (
+        <ConfirmDeleteModal
+          label={`${pendingDelete.company_name} — ${pendingDelete.subject}`}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={confirmDeleteRow}
+        />
       )}
     </div>
   );

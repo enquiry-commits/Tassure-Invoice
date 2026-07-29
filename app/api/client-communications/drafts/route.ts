@@ -62,3 +62,16 @@ export async function PATCH(req: NextRequest) {
   if (!data?.length) return NextResponse.json({ error: 'Someone else already updated this draft. Refresh and try again.' }, { status: 409 });
   return NextResponse.json({ ok: true });
 }
+
+// DELETE: remove a duplicate/stray Email Activity record. This only removes
+// the local audit row -- it has no effect on Outlook (nothing is ever sent
+// from here) or on QuickBooks invoices.
+export async function DELETE(req: NextRequest) {
+  const { id } = await req.json();
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from('email_drafts').delete().eq('id', id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
