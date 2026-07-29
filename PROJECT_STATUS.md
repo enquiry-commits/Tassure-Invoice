@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Email Activity/History: delete a record)
+Last updated: 2026-07-29 (Email Drafts visual hierarchy and Helper readiness)
 
 ## Purpose
 
@@ -23,6 +23,24 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Email Drafts now has a calmer review-first layout and a prominent Outlook
+  Helper readiness panel.** The workbench uses navy as its single primary
+  action/selection colour; green is reserved for ready states and amber for
+  items requiring attention. Template choices, invoice chips, amounts and
+  recipient-source badges were visually neutralised, rows have more breathing
+  room, and multiple row warnings now render as one concise review summary
+  without changing the underlying validation rules. The page is organised as
+  numbered `Batch setup` and `Review companies` stages. A persistent Helper
+  panel now distinguishes checking, not detected, ready and update-available
+  states. When no Helper responds, it deliberately says `Not detected` (the
+  browser cannot reliably distinguish uninstalled from installed-but-closed)
+  and gives staff an explicit Download -> Open -> Recheck sequence. A detected
+  Helper shows its version and Classic Outlook verification where available;
+  the final action also explains when Helper setup is blocking draft creation.
+  Recipient rules, template contents, invoice matching and draft creation
+  behaviour are unchanged. Targeted ESLint, TypeScript, diff checks and the
+  full 50-route production build pass.
 
 - **Email Activity (Delivery History) can now delete a record.**
   (`app/client-communications/history/page.tsx` +

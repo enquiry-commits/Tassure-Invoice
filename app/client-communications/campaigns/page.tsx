@@ -5,9 +5,11 @@ import Link from 'next/link';
 import {
   AlertTriangle,
   Check,
+  Download,
   FilePlus2,
   Loader2,
   Mail,
+  MonitorCheck,
   Paperclip,
   Plus,
   RefreshCw,
@@ -165,6 +167,8 @@ export default function EmailDraftWorkbenchPage() {
   const [creating, setCreating] = useState(false);
   const [helperAvailable, setHelperAvailable] = useState<boolean | null>(null);
   const [helperOutdated, setHelperOutdated] = useState(false);
+  const [helperVersion, setHelperVersion] = useState<string | null>(null);
+  const [helperClassicOutlook, setHelperClassicOutlook] = useState<boolean | null>(null);
   const [me, setMe] = useState<AuthUser | null>(null);
   const [message, setMessage] = useState<{ tone: 'success' | 'warning' | 'error'; text: string } | null>(null);
   const [commonFiles, setCommonFiles] = useState<File[]>([]);
@@ -184,6 +188,8 @@ export default function EmailDraftWorkbenchPage() {
     getHelperHealth().then(health => {
       setHelperAvailable(health !== null);
       setHelperOutdated(isHelperOutdated(health));
+      setHelperVersion(health?.version ?? null);
+      setHelperClassicOutlook(health?.isClassicOutlook ?? null);
     });
   }, []);
 
@@ -514,7 +520,68 @@ export default function EmailDraftWorkbenchPage() {
         </Link>
       </div>
 
-      <section style={{ background: '#fff', border: '1px solid #dfe7ef', borderRadius: 11, padding: 16, marginBottom: 12 }}>
+      <section className={`helper-readiness helper-readiness--${
+        helperAvailable === null ? 'checking' : !helperAvailable ? 'missing' : helperOutdated ? 'outdated' : 'ready'
+      }`}>
+        <div className="helper-readiness__icon">
+          {helperAvailable === null
+            ? <Loader2 size={18} className="spin" />
+            : helperAvailable
+              ? <MonitorCheck size={18} />
+              : <Download size={18} />}
+        </div>
+        <div className="helper-readiness__copy">
+          <div className="helper-readiness__title-row">
+            <strong>Outlook Helper</strong>
+            <span className="helper-readiness__status">
+              {helperAvailable === null
+                ? 'Checking'
+                : !helperAvailable
+                  ? 'Not detected'
+                  : helperOutdated
+                    ? 'Update available'
+                    : 'Ready'}
+            </span>
+          </div>
+          <div className="helper-readiness__description">
+            {helperAvailable === null
+              ? 'Checking whether this computer is ready to create Classic Outlook drafts.'
+              : !helperAvailable
+                ? 'Required before drafts can open in Outlook. Download it once, start the Helper, then recheck.'
+                : helperOutdated
+                  ? `Helper ${helperVersion ? `v${helperVersion} ` : ''}is running, but a newer version is available. You may continue or update now.`
+                  : `This computer is ready${helperVersion ? ` · Helper v${helperVersion}` : ''}${helperClassicOutlook ? ' · Classic Outlook verified' : ''}.`}
+          </div>
+          {helperAvailable === false && (
+            <div className="helper-readiness__steps">
+              <span><b>1</b> Download</span>
+              <span><b>2</b> Open the Helper</span>
+              <span><b>3</b> Recheck</span>
+            </div>
+          )}
+        </div>
+        <div className="helper-readiness__actions">
+          {(helperAvailable === false || helperOutdated) && (
+            <a href="/downloads/TassureDraftHelper.exe" download className="helper-download">
+              <Download size={14} />
+              {helperOutdated ? 'Download update' : 'Download Helper'}
+            </a>
+          )}
+          <button type="button" onClick={() => { setHelperAvailable(null); recheckHelper(); }} disabled={helperAvailable === null} className="helper-recheck">
+            <RefreshCw size={13} className={helperAvailable === null ? 'spin' : ''} />
+            Recheck
+          </button>
+        </div>
+      </section>
+
+      <section className="draft-setup-panel">
+        <div className="draft-section-heading">
+          <span className="draft-step">1</span>
+          <div>
+            <strong>Batch setup</strong>
+            <span>Choose the campaign, template, period and Outlook sender.</span>
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 }}>
           {(Object.keys(TYPE_LABEL) as CampaignType[]).map(value => (
             <button key={value} onClick={() => chooseType(value)}
@@ -531,7 +598,7 @@ export default function EmailDraftWorkbenchPage() {
               {typeTemplates.map(template => (
                 <button key={template.id} onClick={() => setTemplateId(template.id)}
                   title={template.name}
-                  style={{ border: `1px solid ${templateId === template.id ? '#15803d' : '#d9e2ec'}`, borderRadius: 6, padding: '7px 10px', background: templateId === template.id ? '#f0fdf4' : '#fff', color: templateId === template.id ? '#15803d' : '#526b85', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}>
+                  style={{ border: `1px solid ${templateId === template.id ? '#173b63' : '#d9e2ec'}`, borderRadius: 6, padding: '7px 10px', background: templateId === template.id ? '#eef4fa' : '#fff', color: templateId === template.id ? '#173b63' : '#526b85', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}>
                   {templateShortName(template)}
                 </button>
               ))}
@@ -601,7 +668,14 @@ export default function EmailDraftWorkbenchPage() {
       {rows.length > 0 && (
         <>
           <section style={{ background: '#fff', border: '1px solid #dfe7ef', borderRadius: 11, marginBottom: 12, overflow: 'visible' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderBottom: '1px solid #e6edf3', flexWrap: 'wrap' }}>
+            <div className="draft-list-toolbar">
+              <div className="draft-section-heading draft-section-heading--compact">
+                <span className="draft-step">2</span>
+                <div>
+                  <strong>Review companies</strong>
+                  <span>Complete only the rows that need attention, then select the ready rows.</span>
+                </div>
+              </div>
               <div style={{ fontSize: 12, fontWeight: 800, color: '#18324f' }}>{rows.length} companies</div>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#15803d', flexShrink: 0 }} />{readyCount} ready
@@ -646,7 +720,7 @@ export default function EmailDraftWorkbenchPage() {
                   const warnings = getRowWarnings(row, type, files.length);
                   return (
                     <div key={rowKey(row)}
-                      style={{ display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 8, alignItems: 'start', padding: '9px 10px', borderBottom: '1px solid #edf2f7', background: row.included ? '#fff' : '#fbfcfd' }}>
+                      style={{ display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 9, alignItems: 'start', padding: '12px 10px', borderBottom: '1px solid #edf2f7', background: row.included ? '#fff' : '#fbfcfd' }}>
                       <div style={{ textAlign: 'center', paddingTop: 6 }}>
                         <input type="checkbox" checked={row.included} onChange={() => updateRow(index, { included: !row.included })} title="Y = create an Outlook draft; this does not send the email" />
                       </div>
@@ -663,10 +737,10 @@ export default function EmailDraftWorkbenchPage() {
                         </div>
                         {(() => {
                           const src = row.recipientSource === 'teamwork_report'
-                            ? { label: 'TEAMWORK REPORT', bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' }
+                            ? { label: 'TEAMWORK REPORT', bg: '#f2f6f8', color: '#526b85', border: '#dfe7ef' }
                             : row.recipientSource === 'company_fallback'
-                            ? { label: 'FALLBACK — REVIEW', bg: '#fffbeb', color: '#b45309', border: '#fde68a' }
-                            : { label: 'NO RECIPIENT SOURCE', bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' };
+                            ? { label: 'FALLBACK — REVIEW', bg: '#fffaf0', color: '#9a6700', border: '#f2dfaf' }
+                            : { label: 'NO RECIPIENT SOURCE', bg: '#f5f7f9', color: '#66788a', border: '#dfe7ef' };
                           return (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 8px', borderRadius: 999, background: src.bg, color: src.color, border: `1px solid ${src.border}`, fontSize: 9.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
                               <span style={{ width: 4, height: 4, borderRadius: '50%', background: src.color, flexShrink: 0 }} />{src.label}
@@ -689,7 +763,7 @@ export default function EmailDraftWorkbenchPage() {
                           {row.invoiceRefs.map((ref, refIndex) => (
                             <span key={`${ref.qbCompany}-${ref.invoiceNo}-${refIndex}`}
                               title={`S$${ref.amount.toLocaleString()}${ref.qbInvoiceId ? ' — PDF available' : ' — add file manually'}`}
-                              style={{ padding: '2px 5px', borderRadius: 4, background: ref.qbInvoiceId && ref.qbCompany !== 'TAO' ? '#eff6ff' : '#fff7ed', color: ref.qbInvoiceId && ref.qbCompany !== 'TAO' ? '#1d4ed8' : '#b45309', fontSize: 9.5, fontWeight: 800 }}>
+                              style={{ padding: '2px 5px', borderRadius: 4, background: ref.qbInvoiceId && ref.qbCompany !== 'TAO' ? '#f2f6f8' : '#fffaf0', color: ref.qbInvoiceId && ref.qbCompany !== 'TAO' ? '#31506f' : '#9a6700', fontSize: 9.5, fontWeight: 800 }}>
                               {invoiceLabel(ref)}
                             </span>
                           ))}
@@ -700,17 +774,22 @@ export default function EmailDraftWorkbenchPage() {
                           <input type="file" multiple hidden onChange={e => setRowAttachmentFiles(row, e.target.files)} />
                         </label>
                       </div>
-                      <div style={{ textAlign: 'right', paddingTop: 6, color: '#0f766e', fontSize: 11.5, fontWeight: 800 }}>
+                      <div style={{ textAlign: 'right', paddingTop: 6, color: '#18324f', fontSize: 11.5, fontWeight: 800 }}>
                         {row.totalAmount ? `S$${row.totalAmount.toLocaleString()}` : '—'}
                       </div>
                       <div style={{ paddingTop: 3 }}>
                         {warnings.length === 0 ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#15803d', fontSize: 10, fontWeight: 800 }}><Check size={12} /> Ready</span>
-                        ) : warnings.map(warning => (
-                          <div key={warning} style={{ display: 'flex', alignItems: 'flex-start', gap: 3, color: '#b45309', fontSize: 9.5, lineHeight: 1.3, marginBottom: 3 }}>
-                            <AlertTriangle size={10} style={{ marginTop: 1, flexShrink: 0 }} /> {warning}
+                          <span className="row-status row-status--ready"><Check size={12} /> Ready</span>
+                        ) : (
+                          <div title={warnings.join('\n')}>
+                            <span className="row-status row-status--review">
+                              <AlertTriangle size={11} /> {warnings.length} {warnings.length === 1 ? 'item' : 'items'} to review
+                            </span>
+                            <div className="row-status-note">
+                              {warnings[0]}{warnings.length > 1 ? ` · +${warnings.length - 1} more` : ''}
+                            </div>
                           </div>
-                        ))}
+                        )}
                       </div>
                       <button onClick={() => setRows(current => current.filter((_, i) => i !== index))}
                         title="Remove row"
@@ -735,27 +814,20 @@ export default function EmailDraftWorkbenchPage() {
             ))}
 
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-              {helperAvailable === false ? (
-                <>
-                  <a href="/downloads/TassureDraftHelper.exe" download
-                    style={{ color: '#b45309', fontSize: 11, fontWeight: 800 }}>Download Outlook Helper</a>
-                  <button onClick={recheckHelper} style={{ border: '1px solid #d9e2ec', background: '#fff', borderRadius: 6, padding: '7px 10px', color: '#526b85', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Recheck</button>
-                </>
-              ) : helperAvailable && helperOutdated ? (
-                <>
-                  <a href="/downloads/TassureDraftHelper.exe" download
-                    style={{ color: '#b45309', fontSize: 11, fontWeight: 800 }}>Update Outlook Helper (new version available)</a>
-                  <button onClick={recheckHelper} style={{ border: '1px solid #d9e2ec', background: '#fff', borderRadius: 6, padding: '7px 10px', color: '#526b85', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Recheck</button>
-                </>
-              ) : (
-                <span style={{ color: helperAvailable ? '#15803d' : '#718399', fontSize: 10.5, fontWeight: 700 }}>
-                  {helperAvailable ? 'Outlook Helper ready' : 'Checking Outlook Helper…'}
-                </span>
-              )}
+              <span className={`helper-inline-status ${helperAvailable ? 'helper-inline-status--ready' : ''}`}>
+                <span />
+                {helperAvailable ? 'Helper ready' : helperAvailable === null ? 'Checking Helper' : 'Helper required above'}
+              </span>
               <button onClick={createAndOpen} disabled={creating || !includedRows.length || !helperAvailable}
-                style={{ display: 'flex', alignItems: 'center', gap: 7, border: 0, borderRadius: 8, padding: '9px 16px', background: '#0f766e', color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: creating ? 'wait' : 'pointer', opacity: creating || !includedRows.length || !helperAvailable ? 0.55 : 1 }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 7, border: 0, borderRadius: 8, padding: '9px 16px', background: '#173b63', color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: creating ? 'wait' : 'pointer', opacity: creating || !includedRows.length || !helperAvailable ? 0.55 : 1 }}>
                 {creating ? <Loader2 size={14} className="spin" /> : <Mail size={14} />}
-                {creating ? 'Preparing & Opening…' : `Create ${includedRows.length} Outlook Draft${includedRows.length === 1 ? '' : 's'}`}
+                {creating
+                  ? 'Preparing & Opening…'
+                  : helperAvailable === false
+                    ? 'Set up Outlook Helper first'
+                    : helperAvailable === null
+                      ? 'Checking Outlook Helper…'
+                      : `Create ${includedRows.length} Outlook Draft${includedRows.length === 1 ? '' : 's'}`}
               </button>
             </div>
           </section>
@@ -792,7 +864,47 @@ export default function EmailDraftWorkbenchPage() {
         </div>
       )}
 
-      <style>{`.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`
+        .spin{animation:spin 1s linear infinite}
+        @keyframes spin{to{transform:rotate(360deg)}}
+        .draft-setup-panel{background:#fff;border:1px solid #dfe7ef;border-radius:12px;padding:16px;margin-bottom:12px}
+        .draft-section-heading{display:flex;align-items:center;gap:9px;margin-bottom:14px;color:#18324f}
+        .draft-section-heading--compact{margin:0;margin-right:8px}
+        .draft-section-heading strong{display:block;font-size:12px;font-weight:800}
+        .draft-section-heading div>span{display:block;margin-top:2px;color:#8494a6;font-size:10.5px;font-weight:500}
+        .draft-step{width:25px;height:25px;border-radius:8px;background:#eef3f8;color:#173b63;display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:11px;font-weight:800}
+        .draft-list-toolbar{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid #e6edf3;flex-wrap:wrap}
+        .helper-readiness{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:13px 15px;background:#fff;border:1px solid #dfe7ef;border-radius:12px;box-shadow:0 4px 16px rgba(24,50,79,.025)}
+        .helper-readiness__icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;background:#eef3f8;color:#526b85}
+        .helper-readiness__copy{min-width:0;flex:1}
+        .helper-readiness__title-row{display:flex;align-items:center;gap:8px;color:#18324f;font-size:12.5px}
+        .helper-readiness__status{padding:2px 7px;border-radius:999px;background:#f1f5f9;color:#60758c;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.02em}
+        .helper-readiness__description{margin-top:3px;color:#718399;font-size:11px;line-height:1.45}
+        .helper-readiness__steps{display:flex;align-items:center;gap:14px;margin-top:7px;color:#526b85;font-size:10px;font-weight:700}
+        .helper-readiness__steps b{display:inline-flex;width:16px;height:16px;margin-right:3px;align-items:center;justify-content:center;border-radius:50%;background:#eef3f8;color:#173b63;font-size:9px}
+        .helper-readiness__actions{display:flex;align-items:center;gap:7px;flex:none}
+        .helper-download,.helper-recheck{height:34px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 11px;font-size:11px;font-weight:800;text-decoration:none;cursor:pointer}
+        .helper-download{border:0;background:#173b63;color:#fff}
+        .helper-recheck{border:1px solid #d9e2ec;background:#fff;color:#526b85}
+        .helper-recheck:disabled{cursor:wait;opacity:.65}
+        .helper-readiness--ready .helper-readiness__icon{background:#eef8f2;color:#15803d}
+        .helper-readiness--ready .helper-readiness__status{background:#eef8f2;color:#15803d}
+        .helper-readiness--missing .helper-readiness__icon,.helper-readiness--outdated .helper-readiness__icon{background:#fff8e8;color:#9a6700}
+        .helper-readiness--missing .helper-readiness__status,.helper-readiness--outdated .helper-readiness__status{background:#fff8e8;color:#9a6700}
+        .row-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800}
+        .row-status--ready{color:#15803d}
+        .row-status--review{color:#9a6700}
+        .row-status-note{margin-top:4px;color:#8494a6;font-size:9.5px;line-height:1.3}
+        .helper-inline-status{display:inline-flex;align-items:center;gap:5px;color:#8494a6;font-size:10.5px;font-weight:700}
+        .helper-inline-status>span{width:6px;height:6px;border-radius:50%;background:#cbd5e1}
+        .helper-inline-status--ready{color:#15803d}
+        .helper-inline-status--ready>span{background:#22c55e}
+        @media(max-width:900px){
+          .helper-readiness{align-items:flex-start;flex-wrap:wrap}
+          .helper-readiness__actions{width:100%;padding-left:50px}
+          .helper-readiness__steps{flex-wrap:wrap;gap:7px 12px}
+        }
+      `}</style>
     </div>
   );
 }
