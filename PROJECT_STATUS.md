@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Restored Excel-style TABLE views Codex's redesign flattened)
+Last updated: 2026-07-29 (Fixed severe click-to-edit freeze in both TABLE views)
 
 ## Purpose
 
@@ -23,6 +23,32 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed a severe page freeze on clicking any cell in either TABLE view
+  (AR Reminder's Table toggle and Master List's classic table), reported
+  by Vincent immediately after the Excel-style revert below.** Diagnosed
+  by diffing exactly what changed between Codex's LIST version (not
+  laggy) and the reverted version (severely laggy): the one meaningful
+  rendering-affecting difference — everything else was padding/color —
+  was `border-collapse`. The pre-revert (Codex) markup used
+  `className="system-list-table"`, whose CSS sets
+  `border-collapse: separate; border-spacing: 0`. The revert brought
+  back the original inline `borderCollapse: 'collapse'`. Both TABLE
+  views have 2-3 `position: sticky` columns plus a sticky header;
+  `border-collapse: collapse` combined with heavy `position: sticky`
+  usage is a well-known browser layout pathology — because collapsed
+  border geometry depends on every neighboring cell, ANY DOM change
+  inside the table (e.g. a cell's display `<span>` swapping to an
+  editable `<input>` on click) forces the browser to re-layout the
+  *entire* table rather than just that cell. That exactly matches
+  "click any one cell → whole page freezes." Fixed by switching both
+  tables to `borderCollapse: 'separate', borderSpacing: 0` while
+  keeping every existing per-cell `borderRight`/`borderBottom` — since
+  only right/bottom borders are set (never left/top), each column and
+  row boundary still gets exactly one line, so the Excel gridline look
+  is visually unchanged. Confirmed via `grep` that no other file in
+  `app/` or `components/` uses `borderCollapse: 'collapse'`, so this was
+  fully scoped to the two affected tables. Production build passes.
 
 - **Restored the Excel-style visual on the two true "TABLE" views Codex's
   "Redesign operational list layouts" (`7bdbd44`) had flattened to match

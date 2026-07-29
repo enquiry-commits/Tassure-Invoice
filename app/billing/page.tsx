@@ -2779,7 +2779,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
   return (
     <>
     <div ref={outerRef} style={{ overflowX: 'hidden', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
-      <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
+      <table style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
         <thead>
           <tr>
             <TH w={30} center stickyLeft={0}>No.</TH>
