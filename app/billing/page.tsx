@@ -196,6 +196,24 @@ function BillingStatusPill({ label, color, background, border, title, muted = fa
   );
 }
 
+function BillingInvoiceReference({ company, invoiceNo, title, muted = false }: {
+  company: 'TAB' | 'TAC'; invoiceNo?: string | null; title?: string; muted?: boolean;
+}) {
+  if (!invoiceNo) {
+    return <span style={{ color: '#94a3b8', fontSize: 10, whiteSpace: 'nowrap' }}>No system invoice</span>;
+  }
+  return (
+    <span title={title} style={{
+      display: 'inline-flex', alignItems: 'center', width: 'fit-content', maxWidth: '100%',
+      padding: '2px 5px', borderRadius: 4, background: '#f2f6f8', color: '#31506f',
+      fontSize: 9.5, fontWeight: 800, lineHeight: 1.25, whiteSpace: 'nowrap',
+      opacity: muted ? 0.72 : 1,
+    }}>
+      {company} #{displayInvoiceNo(invoiceNo)}
+    </span>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AR TAB — types & components
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2188,8 +2206,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                 </div>
                 {(latestInvoiceNo(c, 'TAB') || latestInvoiceNo(c, 'TAC') || c.pic) && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', marginTop: 7, alignItems: 'center' }}>
-                    {latestInvoiceNo(c, 'TAB') && <BillingStatusPill label={`#${displayInvoiceNo(latestInvoiceNo(c, 'TAB'))}`} color="#1d4ed8" background="#eff6ff" border="#bfdbfe" />}
-                    {latestInvoiceNo(c, 'TAC') && <BillingStatusPill label={`#${displayInvoiceNo(latestInvoiceNo(c, 'TAC'))}`} color="#9a3412" background="#fff7ed" border="#fed7aa" />}
+                    {latestInvoiceNo(c, 'TAB') && <BillingInvoiceReference company="TAB" invoiceNo={latestInvoiceNo(c, 'TAB')} />}
+                    {latestInvoiceNo(c, 'TAC') && <BillingInvoiceReference company="TAC" invoiceNo={latestInvoiceNo(c, 'TAC')} />}
                     {c.pic && <span style={{ fontSize: 10.5, color: '#64748b' }}>PIC: {c.pic}</span>}
                   </div>
                 )}
@@ -2229,9 +2247,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   {/* Latest invoice number for this cycle, per QB company — the
                       authoritative generated_invoices record, not a QB-parsed guess. */}
                   <div style={{ width: '100%', padding: '2px 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box', backgroundImage: 'linear-gradient(to right, #dbe3ee 0, #dbe3ee 1px, transparent 1px)' }}>
-                    {latestInvoiceNo(c, 'TAB')
-                      ? <BillingStatusPill label={`#${displayInvoiceNo(latestInvoiceNo(c, 'TAB'))}`} color="#1d4ed8" background="#eff6ff" border="#bfdbfe" />
-                      : <BillingStatusPill label="Not issued" color="#94a3b8" background="#f8fafc" border="#e2e8f0" />}
+                    <BillingInvoiceReference company="TAB" invoiceNo={latestInvoiceNo(c, 'TAB')} />
                   </div>
                   <div style={{ width: '100%', padding: '0 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
                     {(() => {
@@ -2241,13 +2257,13 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                       // period, not an FYE-cycle marker, so they can't be keyed
                       // to cycles the way the TAB backfill was) — shown muted.
                       const gen = latestInvoiceNo(c, 'TAC');
-                      if (gen) return <BillingStatusPill label={`#${displayInvoiceNo(gen)}`} color="#9a3412" background="#fff7ed" border="#fed7aa" />;
+                      if (gen) return <BillingInvoiceReference company="TAC" invoiceNo={gen} />;
                       const ndHist = c.renewals.find(r => r.service === 'ND' && r.applicable)?.history?.[0];
                       if (ndHist?.invoice_no) return (
-                        <BillingStatusPill label={`#${displayInvoiceNo(ndHist.invoice_no)}`} color="#c2712e" background="#fffbf5" border="#fed7aa"
+                        <BillingInvoiceReference company="TAC" invoiceNo={ndHist.invoice_no}
                           title={`Last ND invoice${ndHist.txn_date ? ` · ${fmtDate(ndHist.txn_date)}` : ''} — historical, not this cycle`} muted />
                       );
-                      return <BillingStatusPill label="Not issued" color="#94a3b8" background="#f8fafc" border="#e2e8f0" />;
+                      return <BillingInvoiceReference company="TAC" />;
                     })()}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ?? '—'}</div>

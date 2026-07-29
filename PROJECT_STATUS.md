@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Outlook drafts re-verify invoice amounts against QuickBooks)
+Last updated: 2026-07-29 (Billing invoice references match Email Drafts)
 
 ## Purpose
 
@@ -23,6 +23,13 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Billing Drafts now uses the same invoice-reference treatment as Email
+  Drafts.** Desktop and mobile TAB/TAC references are displayed as compact
+  rectangular `TAB #...` / `TAC #...` tags instead of coloured status pills.
+  Empty cells now state `No system invoice`; muted historical TAC references
+  keep their existing date tooltip and invoice-selection logic. TypeScript,
+  diff checks and the full production build pass.
 
 - **Outlook drafts now re-verify their invoice amount against QuickBooks
   right before opening.** Vincent's real scenario: he generated an invoice
