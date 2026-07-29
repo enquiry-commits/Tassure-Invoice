@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Email Drafts row spacing and full status details)
+Last updated: 2026-07-29 (header AI assistant and page-aware guidance)
 
 ## Purpose
 
@@ -23,6 +23,24 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **The AI assistant no longer blocks page controls and now understands the
+  current work area.** Its fixed bottom-right launcher was removed and replaced
+  with a compact `AI 助手` action immediately to the right of `Logout` in the
+  desktop header. The conversation panel opens below the header at the
+  top-right, closes with Escape or its close button, and closes before following
+  an in-app navigation link. The assistant now receives the current pathname,
+  identifies Dashboard, Companies, Active Client, ND, Address Service, AR /
+  Billing, Late Filing, Email Drafts and Email Activity, and presents three
+  page-specific quick questions. Its knowledge now covers current Companies
+  classification, ND count differences, service/FYE warnings, billing periods,
+  the manual-send safeguard, Email Draft readiness, recipient rules, prepared
+  email history and Outlook Helper setup. It can also query live automation run
+  health and open integration-exception counts instead of claiming that a
+  scheduled job succeeded without evidence. The documented SGT Cron schedule
+  was corrected to the deployed `vercel.json` sequence (05:00 through 08:00).
+  Targeted ESLint, TypeScript, diff checks and the full 50-route production
+  build pass.
 
 - **Email Drafts now has a calmer review-first layout and a prominent Outlook
   Helper readiness panel.** The workbench uses navy as its single primary

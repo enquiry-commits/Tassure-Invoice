@@ -16,6 +16,7 @@ import { normalize } from '@/lib/company-name';
 export const maxDuration = 60;
 
 type Msg = { role: 'user' | 'assistant'; content: string };
+type AssistantContext = { pathname?: string; page?: string };
 
 // ── System map: single source for both engines ──────────────────────────────
 const PAGES = [
@@ -32,9 +33,35 @@ const PAGES = [
   { label: 'AR Reminder 年报提醒',  href: '/billing?tab=ar',            kw: ['ar reminder', 'ar', '年报', 'annual return', '提醒'] },
   { label: 'Late Filing 迟报监控',  href: '/late-filing',               kw: ['late filing', '迟报', 'late'] },
   { label: 'Billing Drafts 开单草稿', href: '/billing?tab=billing',     kw: ['billing', '开单', '发票', 'invoice', 'draft', '账单'] },
+  { label: 'Email Drafts 邮件草稿', href: '/client-communications/campaigns', kw: ['email drafts', '邮件草稿', 'client communications', 'campaign', 'outlook helper'] },
+  { label: 'Email Activity 邮件记录', href: '/client-communications/history', kw: ['email activity', '邮件记录', 'delivery history', 'history', 'prepared'] },
 ];
 
 const FAQ: { kw: string[]; a: string }[] = [
+  { kw: ['为什么这行还不能ready', '为什么不能ready', '还不能 ready', '不能勾选ready', 'status怎么看', 'item to review'],
+    a: '**Email Drafts 的 Ready 条件**\n· 必须有有效的客户 To 邮箱\n· Fallback / No recipient source 必须由员工人工确认收件人\n· 必须有系统 Invoice 或员工手动加入的附件\n· Template 必填资料及 Outlook Sender 必须完整\n· Status 会逐项列出缺少内容；修正后再选择该行\n\n[打开 Email Drafts](/client-communications/campaigns)' },
+  { kw: ['email drafts怎么用', '邮件草稿怎么用', '怎么准备邮件', '怎么生成邮件', 'outlook草稿流程', '邮件流程'],
+    a: '**Email Drafts 流程**\n· 选择邮件类型、Template、FYE 月份/年份及 Outlook Sender\n· 核对每家公司 User Name、To、CC、Invoice / Files 与 Status\n· 只有资料完整且通过人工复核的行才可勾选为 Ready\n· 先确保 Outlook Helper 显示 Ready，再批量建立 Classic Outlook 草稿\n· 最后仍由员工逐封复核并在 Outlook 手动发送\n\n[打开 Email Drafts](/client-communications/campaigns)' },
+  { kw: ['outlook helper', 'helper怎么用', 'helper没有准备好', 'helper not detected', 'helper未检测', 'helper下载'],
+    a: '**Outlook Helper 使用方法**\n· 在 Email Drafts 顶部 Helper 区下载并打开 Helper\n· 保持 Helper 运行，并确认 Classic Outlook 已安装及可使用\n· 回到页面点 Recheck；状态显示 Ready 后才建立带附件的 Outlook 草稿\n· 显示 Not detected 时，可能是未安装，也可能是已关闭；重新打开后再检查\n\n[打开 Email Drafts](/client-communications/campaigns)' },
+  { kw: ['to和cc', 'to / cc', '收件人规则', 'recipient规则', '邮件发给谁', 'cc规则'],
+    a: '**Email Drafts 收件人规则**\n· 客户外部邮箱放 **To**，Tassure 内部邮箱放 **CC**\n· `cindy@tassure.com` 自动排除\n· `hoechyi@tassure.com` 必须保留在 CC\n· 当 `kahye@tassure.com` 出现时，不再加入 `sengxin@tassure.com`\n· TeamWork Report 是首选来源；Fallback 或缺少有效 To 时必须人工复核\n· 如业务需要，员工仍可在最终复核时追加其他客户 CC' },
+  { kw: ['prepared后', 'prepared 之后', 'prepared去哪里', '已经prepared', '重新打开草稿', '重开outlook', '查看prepared'],
+    a: '**查看已经 Prepared 的邮件**\n· 进入 [Email Activity](/client-communications/history)\n· 找到对应公司并点 View 查看完整内容、收件人及附件记录\n· 如需再次打开 Outlook 草稿，可用页面内的 Reopen 功能；Outlook Helper 必须处于 Ready\n· 删除这里只会删除系统内的活动记录，不会删除 Outlook 中已建立的草稿' },
+  { kw: ['css client和shareholder', 'css client 和 shareholder', 'client类型怎么判断', 'internal css status', 'companies怎么判断'],
+    a: '**Companies 判断标准**\n· 页面只纳入 TeamWork **Internal CSS Status = Active** 的公司\n· Client (CSS Client) 与 Shareholder 再根据 TeamWork Client column 的标记分类\n· 两个类型是额外分类，不会改变 Internal CSS Status 的 Active 入选标准\n· Active ND Companies 统计的是有在任 Nominee Director 的**公司数**，不是 ND 人数\n\n[打开 Companies](/companies)' },
+  { kw: ['系统各页面', '页面有什么用途', '全部功能', '系统功能'],
+    a: '**主要功能入口**\n· [Companies](/companies) — Active 公司、Client 类型与服务概况\n· [Active Client](/master-list/active-clients) — 客户主名单与详细资料\n· [Nominee Directors](/nominee-directors) / [Address Service](/address-service) — 服务名单\n· [AR Reminder](/billing?tab=ar) / [Billing Drafts](/billing?tab=billing) — 批次审核与 QB 开单\n· [Late Filing](/late-filing) — 迟报监控\n· [Email Drafts](/client-communications/campaigns) / [Email Activity](/client-communications/history) — Outlook 草稿准备与记录' },
+  { kw: ['fye mismatch', '服务格子', 'service格子', '服务怎么判断'],
+    a: '**Active Client 提示说明**\n· FYE Mismatch 表示系统名单中的 FYE 与当前 TeamWork 记录不同，需要人工核对来源\n· 服务格子由现有 TeamWork / 服务记录自动判断：绿色勾选代表有有效服务，灰色空格代表当前没有有效记录\n· 点击公司行可打开完整详情再确认，不应只凭列表图标修改外部系统' },
+  { kw: ['nd数量会不同', 'nd数量不同', 'active nd companies是什么', 'active nd companies'],
+    a: '**ND 数量口径**\n· Companies 的 Active ND Companies 是有至少一位在任 ND 的**公司数**\n· Nominee Directors 页面同时涉及 ND 人数与 appointment 记录数\n· 一位 ND 可服务多家公司，一家公司也可能有多段记录，所以不同卡片数字不应直接相等' },
+  { kw: ['地址服务怎么判断', 'address service怎么判断', 'address service数据'],
+    a: '**Address Service 判断**\n· 当前有效名单以 TeamWork 的地址服务资料为主要来源\n· QuickBooks 历史只能证明过去曾经收费，不应单独认定服务现在仍有效\n· 如公司详情与 TeamWork 不一致，应先核对来源记录，再等待下一轮 TeamWork Companies 同步' },
+  { kw: ['开单后为什么不会自动发送', '为什么不会自动发送', 'invoice自动发送', '发票会自动发送吗'],
+    a: '**开单与发送是两个独立步骤**\n· Billing Drafts 只在 QuickBooks 建立 Invoice 草稿并取得号码\n· 系统不会自动寄给客户，这是保留给审核人员的保险机制\n· 发票确认后，再到 [Email Drafts](/client-communications/campaigns) 准备收件人、内容和附件\n· Outlook 草稿建立后仍由员工做最后检查并手动发送' },
+  { kw: ['服务期间怎么更新', 'period怎么更新', 'period没有更新', '照搬去年period', 'service period'],
+    a: '**Service Period 更新**\n· 系统会从上一期可识别的服务期间推算下一周期，不是直接复制去年文字\n· Deferred Revenue 与对应 Secretary 服务按同类服务配对；界面只显示 Secretary 服务行\n· 无法安全解析、期间冲突或特殊描述会标示人工复核，不应静默猜测\n· 开单前仍需核对草稿中的起止日期' },
   { kw: ['怎么开单', '如何开单', '生成发票', 'how to invoice', '怎么生成', '开发票', '怎么开票', '如何开票', '怎么出单', '开单流程', '开票流程'],
     a: '**开单流程**\n· 进入 [Billing Drafts 开单草稿](/billing?tab=billing)\n· 选 FYE 月份 / 年份\n· 点开公司行——系统已按上一年发票预填服务项和真实费用(折扣自动带入并提醒确认)\n· 核对后点 "Generate Invoice in QuickBooks"\n\n发票只会创建为 QB 草稿,**不会自动发给客户**。' },
   { kw: ['ar 流程', 'ar是什么', 'ar reminder是什么', '年报流程', '年报是什么', '什么是ar', '什么是年报', 'ar怎么运作'],
@@ -44,11 +71,11 @@ const FAQ: { kw: string[]; a: string }[] = [
   { kw: ['恢复', '加回', 'add manual', '添加公司', '新增公司', '手动添加'],
     a: '**添加 / 恢复公司**\n· 在 [AR Reminder](/billing?tab=ar) 点 "Add Manual"\n· 如果这家公司之前被删除过(同月份+年份),会自动**恢复原记录**而不是新建重复' },
   { kw: ['late filing是什么', '迟报是什么', '怎么算迟报', '什么是迟报', '迟报标准', '迟报规则'],
-    a: '**Late Filing 判定规则**(每天凌晨 3 点自动检测)\n· 当前周期逾期超过 **90 天**,或\n· 历史平均(完成日 − 到期日)超过 **90 天**\n\n命中的公司进入 [Late Filing 迟报监控](/late-filing)。' },
+    a: '**Late Filing 判定规则**(每天 08:00 SGT 自动检测)\n· 当前周期逾期超过 **90 天**,或\n· 历史平均(完成日 − 到期日)超过 **90 天**\n\n命中的公司进入 [Late Filing 迟报监控](/late-filing)。' },
   { kw: ['nd同步', 'nd更新', '提名董事同步', 'nd多久', 'nd数据'],
-    a: '**ND 提名董事数据**\n· 每天早上 8 点从 TeamWork 自动同步(电脑没开会在开机后补跑)\n· 在任任命以 TeamWork「Company Appointments」为准\n\n查询:[Nominee Directors](/nominee-directors),支持按公司名搜索。' },
+    a: '**ND 提名董事数据**\n· 每天 05:00 SGT 由 Vercel Cron 从 TeamWork 自动同步\n· 在任任命以 TeamWork「Company Appointments」为准\n· Dashboard Automation health 会显示最近成功时间；超过预期窗口应检查运行记录\n\n查询:[Nominee Directors](/nominee-directors),支持按公司名搜索。' },
   { kw: ['qb同步', 'quickbooks同步', '发票数据多久', '数据多久更新', '同步时间', '数据更新时间', '多久同步'],
-    a: '**自动同步时间表**(每天)\n· 01:00 — AR 批次滚动生成(未来 6 个月)\n· 01:30 — QuickBooks 发票全量同步(今年 + 去年)\n· 03:00 — Late Filing 迟报检测\n· 08:00 — ND 提名董事同步(TeamWork)' },
+    a: '**每日自动同步时间表**(新加坡时间)\n· 05:00 — TeamWork ND\n· 05:30 — TeamWork Companies / Campaign recipients\n· 06:00 — AR 批次滚动生成\n· 06:30 — QuickBooks 发票同步\n· 07:00 — AR Workflow\n· 08:00 — Late Filing\n\n实际是否成功应以 Dashboard Automation health 的最近成功时间及异常详情为准。' },
   { kw: ['xbrl是什么', '什么是xbrl', 'xbrl要不要', '要不要xbrl', 'xbrl需要吗', 'xbrl规则'],
     a: '**XBRL 处理规则**\n· 金额历史上 100% 稳定(有就是同一个价)\n· 但**是否需要**每年会变(取决于当年申报要求)\n· 所以草稿里 XBRL 行会标 "⚠ Confirm XBRL required this FY",需人工确认' },
   { kw: ['折扣', 'discount', '优惠'],
@@ -62,6 +89,34 @@ const FAQ: { kw: string[]; a: string }[] = [
   { kw: ['nd费用', 'nd收费', 'nd deposit', 'nd押金', '提名董事费'],
     a: '**ND 收费说明**\n· ND 是否要开单:以 TeamWork 在任记录为准(草稿自动勾选)\n· 金额要人工核对——因为**押金(deposit)和年费是分开开票的**,历史金额可能是押金\n· 草稿里 ND 行标注 "confirm annual fee (excl. deposit)"' },
 ];
+
+function currentPageHelp(pathname = ''): string {
+  if (pathname === '/client-communications/campaigns') {
+    return FAQ[1].a;
+  }
+  if (pathname === '/client-communications/history') {
+    return FAQ[4].a;
+  }
+  if (pathname === '/companies') {
+    return FAQ[5].a;
+  }
+  if (pathname === '/nominee-directors') {
+    return '**Nominee Directors 页面**\n· 查看所有指定 ND 及其在任公司\n· 在任必须同时满足 Nominee Director subrole、已有就任日期、离任日期为空\n· 缺少 subrole 但有就任日期且无离任日期的记录会列为人工复核异常（LI JIANWEI、ZHANG DAN 除外）\n· 每天 05:00 SGT 从 TeamWork 同步\n\n[打开 Nominee Directors](/nominee-directors)';
+  }
+  if (pathname === '/late-filing') {
+    return '**Late Filing 页面**\n· 列出符合迟报规则的公司及原因\n· 每天 08:00 SGT 自动检测\n· 若 Dashboard 显示超时或没有近期成功记录，应查看 Automation health 的详细异常，而不是只看页面数字\n\n[打开 Late Filing](/late-filing)';
+  }
+  if (pathname === '/billing') {
+    return '**AR Reminder / Billing Drafts 页面**\n· AR Reminder：选择 FYE 周期、复核名单与状态\n· Billing Drafts：依据 TeamWork 服务状态和 QB 历史准备开单内容\n· 所有 Invoice 都先建立为 QuickBooks 草稿，仍需人工复核\n· PDF 可下载到本地文件夹；客户邮件在 Email Drafts 另行准备\n\n[AR Reminder](/billing?tab=ar) [Billing Drafts](/billing?tab=billing)';
+  }
+  if (pathname.startsWith('/master-list/active-clients')) {
+    return '**Active Client 页面**\n· 查看 Active 客户主名单、UEN、FYE、PIC、服务标记与 TeamWork 对照\n· 公司行可点击打开完整详情\n· 服务格子是系统依据现有 TeamWork / 服务资料自动判断，灰色空格代表当前没有有效服务记录\n\n[打开 Active Client](/master-list/active-clients)';
+  }
+  if (pathname === '/') {
+    return '**Dashboard 页面**\n· Automation health 显示各自动任务最近成功时间\n· Integration exceptions 可展开查看每个异常的来源和原因\n· 业务卡片可进入客户、ND、地址服务、AR 与 Late Filing 等工作页\n· 自动任务显示绿色不等于永久正常，仍应留意最近成功时间和开放异常';
+  }
+  return FAQ[6].a;
+}
 
 // ── Data tools (shared by both engines) ─────────────────────────────────────
 async function searchCompany(q: string) {
@@ -113,6 +168,52 @@ async function arBatch(month: string, year: number) {
   };
 }
 
+const AUTOMATION_SOURCES = [
+  ['teamwork_nd', 'TeamWork ND'],
+  ['teamwork_companies', 'TeamWork Companies'],
+  ['ar_generate', 'AR Generate'],
+  ['quickbooks', 'QuickBooks'],
+  ['ar_workflow', 'AR Workflow'],
+  ['late_filing', 'Late Filing'],
+] as const;
+
+async function automationHealth() {
+  const sb = createAdminClient();
+  const [{ data: runs }, { count: openExceptions }] = await Promise.all([
+    sb.from('automation_sync_runs')
+      .select('source, status, started_at, finished_at, error')
+      .in('source', AUTOMATION_SOURCES.map(([source]) => source))
+      .order('started_at', { ascending: false })
+      .limit(120),
+    sb.from('automation_exceptions')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'open')
+      .neq('exception_type', 'missing_nominee_subrole'),
+  ]);
+  const now = Date.now();
+  return {
+    checked_at: new Date(now).toISOString(),
+    open_exceptions: openExceptions ?? 0,
+    jobs: AUTOMATION_SOURCES.map(([source, label]) => {
+      const sourceRuns = (runs ?? []).filter(run => run.source === source);
+      const latest = sourceRuns[0] ?? null;
+      const success = sourceRuns.find(run => run.status === 'success') ?? null;
+      const successAt = success?.finished_at ?? success?.started_at ?? null;
+      const ageHours = successAt
+        ? Math.round(((now - new Date(successAt).getTime()) / 3_600_000) * 10) / 10
+        : null;
+      return {
+        source,
+        label,
+        latest_status: latest?.status ?? 'never',
+        success_age_hours: ageHours,
+        needs_attention: ageHours == null || ageHours > 30 || latest?.status === 'failed',
+        error: latest?.status === 'failed' ? latest.error : null,
+      };
+    }),
+  };
+}
+
 async function ndLookup(name: string) {
   const sb = createAdminClient();
   const { data: people } = await sb.from('nominee_directors').select('id, name').ilike('name', `%${name.trim()}%`).limit(3);
@@ -129,39 +230,51 @@ async function ndLookup(name: string) {
 }
 
 // ── Engine A: Claude with tool use ───────────────────────────────────────────
-const SYSTEM_PROMPT = `You are the in-app assistant of the Tassure Corporate Services System (a Singapore corporate-services billing dashboard used by Tassure Asia staff). Answer in the user's language (usually Chinese). Be concise and concrete.
+function systemPrompt(context?: AssistantContext) {
+  return `You are the in-app assistant of the Tassure Corporate Services System (a Singapore corporate-services billing dashboard used by Tassure Asia staff). Answer in the user's language (usually Chinese). Be concise and concrete.
 
 System map (link pages with markdown, e.g. [开单草稿](/billing?tab=billing)):
 ${PAGES.map(p => `- ${p.label}: ${p.href}`).join('\n')}
 
+Current user location:
+- Page: ${context?.page ?? 'unknown'}
+- Path: ${context?.pathname ?? 'unknown'}
+When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location above.
+
 Key workflows:
 - AR pipeline: TeamWork determines each company's FYE cycle → ar_reminder batches auto-generate daily (rolling 6 months) → staff review → Billing Drafts. Deleting an AR row is a soft delete (won't be auto-recreated; Add Manual restores it).
 - Billing Drafts: per company, pre-filled from the prior year's invoice (true annual fee incl. deferred-revenue split; discounts carried forward flagged for confirmation; ND presence trusted from TeamWork; XBRL must be confirmed each FY). "Generate Invoice in QuickBooks" creates a DRAFT in QB — never auto-sent.
-- Data freshness: QB invoices sync daily 01:30 (current+previous year); AR batches generate daily 01:00; Late Filing detects daily 03:00 (overdue>90d or historical avg gap>90d); ND appointments sync daily 08:00 from TeamWork.
+- Client Communications: Email Drafts is a review-first workbench. Staff confirm template fields, recipient rules and invoice attachments; Outlook Helper creates Classic Outlook drafts; employees review and manually send. Prepared records are viewed in Email Activity.
+- Companies inclusion is based on TeamWork Internal CSS Status = Active. CSS Client and Shareholder are additional TeamWork Client-column classifications.
+- Recipient rules: external customer emails go to To; Tassure emails go to CC; cindy@tassure.com is excluded; hoechyi@tassure.com is always CC; when kahye@tassure.com appears, sengxin@tassure.com is omitted.
+- Data freshness (SGT): TeamWork ND 05:00; TeamWork Companies and campaign recipients 05:30; AR generation 06:00; QuickBooks 06:30; AR workflow 07:00; Late Filing 08:00. Never claim a run succeeded without live evidence; direct staff to Dashboard Automation health when needed.
 
-Use tools to answer data questions. If the user should go somewhere, include the markdown link. If you don't know, say so plainly.`;
+Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
+}
 
 const CLAUDE_TOOLS = [
   { name: 'search_company', description: 'Look up companies by (partial) name: status, FYE month, services, PIC, active nominee directors, recent AR reminder rows.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
   { name: 'ar_batch', description: 'AR Reminder batch for a FYE month+year: totals and company names.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'English month name, e.g. April' }, year: { type: 'number' } }, required: ['month', 'year'] } },
   { name: 'nd_lookup', description: 'Look up a nominee director by person name: their active company appointments.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
+  { name: 'automation_health', description: 'Read live automation job health and the open integration-exception count.', input_schema: { type: 'object', properties: {} } },
 ];
 
 async function runTool(name: string, input: Record<string, unknown>) {
   if (name === 'search_company') return searchCompany(String(input.query ?? ''));
   if (name === 'ar_batch') return arBatch(String(input.month ?? ''), Number(input.year ?? 0));
   if (name === 'nd_lookup') return ndLookup(String(input.name ?? ''));
+  if (name === 'automation_health') return automationHealth();
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[]): Promise<string> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, system: SYSTEM_PROMPT, tools: CLAUDE_TOOLS, messages: convo }),
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, system: systemPrompt(context), tools: CLAUDE_TOOLS, messages: convo }),
     });
     if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const data = await res.json();
@@ -216,8 +329,30 @@ function companyCard(c: CompanyCardData): string {
   return lines.join('\n');
 }
 
-async function intentAnswer(text: string): Promise<string> {
+async function intentAnswer(text: string, context?: AssistantContext): Promise<string> {
   const t = text.toLowerCase().trim();
+
+  // Current-page help: the widget sends its location so vague questions do
+  // not fall through to a generic answer.
+  if (/(这个页面|这页|当前页面|这里).*(怎么用|做什么|有什么|如何|说明|帮助)|(怎么用|如何使用).*(这个页面|这页|这里)/.test(t)) {
+    return currentPageHelp(context?.pathname);
+  }
+
+  if (/(自动化|automation|cron|定时任务|同步任务|项目需要处理|今天.*处理|任务.*正常)/.test(t)) {
+    const health = await automationHealth();
+    const attention = health.jobs.filter(job => job.needs_attention);
+    return [
+      '**当前自动化健康状态**',
+      `· 开放 Integration exceptions：**${health.open_exceptions}**`,
+      ...health.jobs.map(job => `· ${job.label}：${job.needs_attention ? '需要注意' : '正常'} · 最近成功 ${job.success_age_hours == null ? '无记录' : `${job.success_age_hours} 小时前`}${job.latest_status === 'failed' ? ' · 最新运行失败' : ''}`),
+      '',
+      attention.length
+        ? `需要优先查看：${attention.map(job => job.label).join('、')}`
+        : '六项每日任务目前都在 30 小时成功窗口内。',
+      '',
+      '[打开 Dashboard 查看异常详情](/)',
+    ].join('\n');
+  }
 
   // 1. AR batch by month — checked BEFORE FAQ so "4月有几家没开单" isn't
   //    hijacked by the 已开单/没开单 FAQ entry.
@@ -327,30 +462,35 @@ async function intentAnswer(text: string): Promise<string> {
     '· **查 AR 批次** — 如 "4月2026有几家AR"',
     '· **查到期** — 如 "30天内有什么到期"',
     '· **查迟报** — 如 "有几家迟报"',
+    '· **Email Drafts** — 如 "为什么这行还不能 Ready"',
+    '· **Outlook Helper** — 如 "Helper 怎么安装和检查"',
     '· **页面导航** — 如 "打开开单草稿"',
-    '· **流程问题** — 如 "怎么开单"、"折扣怎么处理"、"XBRL要不要"',
+    '· **流程问题** — 如 "怎么开单"、"To 和 CC 的规则是什么"、"Prepared 后去哪里看"',
     '',
-    `快捷入口:${PAGES.slice(0, 5).map(p => `[${p.label}](${p.href})`).join(' ')}`,
+    `快捷入口:${PAGES.slice(0, 5).map(p => `[${p.label}](${p.href})`).join(' ')} [Email Drafts](/client-communications/campaigns)`,
   ].join('\n');
 }
 
 // ── Route ────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  const { messages } = (await req.json().catch(() => ({}))) as { messages?: Msg[] };
+  const { messages, context } = (await req.json().catch(() => ({}))) as {
+    messages?: Msg[];
+    context?: AssistantContext;
+  };
   if (!messages?.length) return NextResponse.json({ error: 'messages required' }, { status: 400 });
 
   const last = messages[messages.length - 1];
   try {
     if (process.env.ANTHROPIC_API_KEY) {
-      const reply = await claudeAnswer(messages.slice(-8));
+      const reply = await claudeAnswer(messages.slice(-8), context);
       return NextResponse.json({ reply, engine: 'claude' });
     }
-    const reply = await intentAnswer(last.content);
+    const reply = await intentAnswer(last.content, context);
     return NextResponse.json({ reply, engine: 'intent' });
   } catch (e) {
     // Claude path failed (bad key / network) — degrade to the intent engine.
     try {
-      const reply = await intentAnswer(last.content);
+      const reply = await intentAnswer(last.content, context);
       return NextResponse.json({ reply, engine: 'intent-fallback', note: e instanceof Error ? e.message : 'claude failed' });
     } catch {
       return NextResponse.json({ error: e instanceof Error ? e.message : 'assistant failed' }, { status: 500 });

@@ -41,14 +41,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <span style={{ fontSize: 13, fontWeight: 750, color: '#1e3a5f' }}>{user?.name ?? 'Tassure user'}</span>
             {user?.email && <span style={{ fontSize: 11, color: '#8492a8' }}>{user.email}</span>}
           </div>
-          <button onClick={logout} className="header-logout">Logout</button>
+          <div className="flex items-center" style={{ gap: 8 }}>
+            <button onClick={logout} className="header-logout">Logout</button>
+            <AssistantWidget />
+          </div>
         </div>
       </header>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         <Sidebar />
         <main style={{ flex: 1, overflowY: 'auto', background: '#f1f5f9' }}><div className="p-6">{children}</div></main>
       </div>
-      <AssistantWidget />
     </>
   );
 }

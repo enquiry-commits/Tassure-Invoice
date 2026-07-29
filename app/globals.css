@@ -162,6 +162,9 @@ body {
 .login-spinner { animation: login-spin .8s linear infinite; }
 .header-logout { border: 1px solid #dbe2ea; background: #fff; color: #1e3a5f; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; }
 .header-logout:hover { background: #f7f9fc; }
+.header-assistant { height: 35px; border: 1px solid #cbd9e6; background: #173b61; color: #fff; padding: 0 12px; border-radius: 8px; display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 750; cursor: pointer; box-shadow: 0 2px 7px rgba(24,59,97,.12); }
+.header-assistant:hover { background: #0f766e; border-color: #0f766e; }
+.header-assistant:focus-visible { outline: 3px solid rgba(15,118,110,.22); outline-offset: 2px; }
 @keyframes login-spin { to { transform: rotate(360deg); } }
 @media (max-width: 560px) {
   .login-page-simple { padding: 20px; }
