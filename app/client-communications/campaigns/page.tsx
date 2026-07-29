@@ -15,7 +15,7 @@ import {
   RefreshCw,
   Search,
   Settings,
-  X,
+  Trash2,
 } from 'lucide-react';
 import CommsTabs from '@/components/client-communications/CommsTabs';
 import {
@@ -780,21 +780,19 @@ export default function EmailDraftWorkbenchPage() {
                       <div style={{ paddingTop: 3 }}>
                         {warnings.length === 0 ? (
                           <span className="row-status row-status--ready"><Check size={12} /> Ready</span>
-                        ) : (
-                          <div title={warnings.join('\n')}>
-                            <span className="row-status row-status--review">
-                              <AlertTriangle size={11} /> {warnings.length} {warnings.length === 1 ? 'item' : 'items'} to review
-                            </span>
-                            <div className="row-status-note">
-                              {warnings[0]}{warnings.length > 1 ? ` · +${warnings.length - 1} more` : ''}
-                            </div>
+                        ) : warnings.map(warning => (
+                          <div key={warning} style={{ display: 'flex', alignItems: 'flex-start', gap: 3, color: '#9a6700', fontSize: 9.5, lineHeight: 1.35, marginBottom: 4 }}>
+                            <AlertTriangle size={10} style={{ marginTop: 1, flexShrink: 0 }} /> {warning}
                           </div>
-                        )}
+                        ))}
                       </div>
-                      <button onClick={() => setRows(current => current.filter((_, i) => i !== index))}
-                        title="Remove row"
-                        style={{ border: 0, background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 4 }}>
-                        <X size={14} />
+                      <button
+                        type="button"
+                        onClick={() => setRows(current => current.filter((_, i) => i !== index))}
+                        title="Remove row from this batch"
+                        style={{ border: '1px solid #fca5a5', background: '#fff', borderRadius: 6, padding: '5px 7px', color: '#dc2626', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Trash2 size={12} />
                       </button>
                     </div>
                   );
@@ -893,8 +891,6 @@ export default function EmailDraftWorkbenchPage() {
         .helper-readiness--missing .helper-readiness__status,.helper-readiness--outdated .helper-readiness__status{background:#fff8e8;color:#9a6700}
         .row-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800}
         .row-status--ready{color:#15803d}
-        .row-status--review{color:#9a6700}
-        .row-status-note{margin-top:4px;color:#8494a6;font-size:9.5px;line-height:1.3}
         .helper-inline-status{display:inline-flex;align-items:center;gap:5px;color:#8494a6;font-size:10.5px;font-weight:700}
         .helper-inline-status>span{width:6px;height:6px;border-radius:50%;background:#cbd5e1}
         .helper-inline-status--ready{color:#15803d}
