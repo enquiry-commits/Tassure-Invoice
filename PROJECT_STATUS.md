@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Draft Helper v1.3.0: inline payment-options image)
+Last updated: 2026-07-29 (Restored Excel-style TABLE views Codex's redesign flattened)
 
 ## Purpose
 
@@ -23,6 +23,36 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Restored the Excel-style visual on the two true "TABLE" views Codex's
+  "Redesign operational list layouts" (`7bdbd44`) had flattened to match
+  the softer "LIST" pages.** Vincent draws a hard line between "TABLE"
+  (dense, gridlined, per-row status-colored — literally Excel-like) and
+  "LIST" (card/row style) pages, and Codex's redesign mistakenly applied
+  the LIST treatment to the two actual TABLE views too. Confirmed the
+  exact regressions by diffing `7bdbd44` directly rather than guessing:
+  column-divider gridlines removed (globals.css added
+  `border-left:0 !important; border-right:0 !important` to
+  `.system-list-row > td` and `.system-list-column-header > *` —
+  both rule additions were 100% new in that commit, safe to remove
+  outright since no genuine LIST page ever sets an inline border-left/
+  right for these to suppress), the per-row colored left-border status
+  accent deleted from `ARTableView` entirely (and from
+  `MasterListTable.tsx`'s List view, where it's since caused the
+  `rowColors` undefined-reference bug patched earlier), and row
+  padding/`border-collapse` loosened from the original dense spreadsheet
+  feel. Reverted **only** `ARTableView` (`app/billing/page.tsx`, AR
+  Reminder's "Table" toggle) and `MasterListTable.tsx`'s default/classic
+  table (shared by Active Client, Strike Off, Terminated, MAS, Name
+  Change, Ad Hoc) back to their exact pre-`7bdbd44` inline styles —
+  gridlines, `ARTableView`'s accent-colored left border, tight
+  `3px 6px` padding, `border-collapse: collapse` — confirmed via Vincent
+  before touching anything. Left every genuine LIST page (Billing
+  Drafts, AR's List view, Companies, Late Filing, Email Drafts, History,
+  Address Service, Dashboard) on Codex's new shared styling untouched, and
+  did **not** revert Address Service's table per Vincent's explicit
+  call that it's fine as a LIST page. Production build passes; committed
+  locally, pushed.
 
 - **Tassure Draft Helper v1.3.0: the payment-options image is now embedded
   inline in Outlook drafts, matching the original Word templates.**

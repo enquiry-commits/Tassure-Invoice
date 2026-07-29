@@ -2747,16 +2747,17 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
       left: stickyLeft !== undefined ? stickyLeft : undefined,
       background: '#1e3a5f', color: '#fff',
       fontSize: 11, fontWeight: 700, letterSpacing: 'normal',
-      padding: '10px 9px', whiteSpace: 'nowrap', minWidth: w, width: w,
+      padding: '7px 8px', whiteSpace: 'nowrap', minWidth: w, width: w,
       textAlign: center ? 'center' : 'left',
+      borderRight: finance ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(255,255,255,0.12)',
       boxShadow: lastSticky ? '3px 0 8px -2px rgba(0,0,0,0.18)' : undefined,
     }}>{children}</th>
   );
 
   const TD = ({ children, style, finance, stickyLeft, lastSticky }: { children: React.ReactNode; style?: React.CSSProperties; finance?: boolean; stickyLeft?: number; lastSticky?: boolean }) => (
     <td style={{
-      padding: '7px 8px', verticalAlign: 'middle',
-      borderBottom: '1px solid #e3eaf1',
+      padding: '3px 6px', verticalAlign: 'top',
+      borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9',
       background: finance ? FIN_CELL : stickyLeft !== undefined ? '#fff' : undefined,
       wordBreak: 'break-word', overflowWrap: 'break-word',
       position: stickyLeft !== undefined ? 'sticky' : undefined,
@@ -2777,8 +2778,8 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
 
   return (
     <>
-    <div ref={outerRef} className="system-list-scroll" style={{ overflowX: 'hidden', maxHeight: 'calc(100vh - 300px)', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
-      <table className="system-list-table system-list-table--compact" style={{ tableLayout: 'fixed', width: 'max-content' }}>
+    <div ref={outerRef} style={{ overflowX: 'hidden', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
+      <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
         <thead>
           <tr>
             <TH w={30} center stickyLeft={0}>No.</TH>
@@ -2808,9 +2809,13 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             <tr><td colSpan={20} style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>No records</td></tr>
           )}
           {records.map((r, i) => {
+            const filed   = r.stages.arFiled;
+            const overdue = !filed && r.daysUntilDue !== null && r.daysUntilDue < 0;
+            const inProg  = !filed && (r.stages.sentToClient || r.stages.docsReceived || r.stages.agmHeld);
+            const accent  = filed ? '#16a34a' : overdue ? '#dc2626' : inProg ? '#f59e0b' : '#e2e8f0';
             return (
               <tr key={r.id} className="system-list-row">
-                <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600 }}>{startIndex + i + 1}</TD>
+                <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
                 <TD stickyLeft={30}>
                   <div className="company-name-text">{r.entity_name}</div>
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
@@ -2832,11 +2837,11 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                 <TD><EditField id={r.id} field="remarks"         value={r.remarks}         onSave={onSave} placeholder="—" /></TD>
                 <TD finance><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
                 <TD finance><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate /></TD>
-                  <TD style={{ textAlign: 'center' }}>
-                    <button onClick={() => onDelete(r.id)} title="Remove"
-                    className="system-list-action system-list-action--danger">
-                      <Trash2 size={11} />
-                    </button>
+                <TD style={{ textAlign: 'center' }}>
+                  <button onClick={() => onDelete(r.id)} title="Remove"
+                    style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', cursor: 'pointer', display: 'inline-flex' }}>
+                    <Trash2 size={11} />
+                  </button>
                 </TD>
               </tr>
             );

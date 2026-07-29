@@ -92,8 +92,6 @@ body {
   line-height: 1.25;
   letter-spacing: normal !important;
   text-transform: none !important;
-  border-left: 0 !important;
-  border-right: 0 !important;
 }
 
 .system-list-row {
@@ -112,12 +110,6 @@ body {
 
 .system-list-row:hover > td {
   background-color: var(--list-row-hover) !important;
-}
-
-.system-list-row > td {
-  border-left: 0 !important;
-  border-right: 0 !important;
-  border-bottom: 1px solid var(--list-border) !important;
 }
 
 .system-list-row:focus-visible,

@@ -1350,19 +1350,20 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
 
         {/* Phone: native swipe-scroll (the mirrored scrollbar is desktop-only) */}
         <div ref={outerRef} style={{ overflowX: isMobile ? 'auto' : 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
-          <table className="system-list-table system-list-table--compact" style={{ tableLayout: 'fixed', width: 'max-content' }}>
+          <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
             <thead>
               <tr className="system-list-column-header">
-                <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, padding: '10px 8px', minWidth: 44, width: 44, textAlign: 'center' }}>No.</th>
+                <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, padding: '7px 8px', minWidth: 36, width: 36, textAlign: 'center' }}>No.</th>
                 {columns.map(c => {
                   const sl = stickyLeftOf(c.field);
                   return (
                     <th key={c.field} style={{
-                      position: 'sticky', top: 0, left: sl !== undefined ? sl + 44 : undefined,
+                      position: 'sticky', top: 0, left: sl !== undefined ? sl + 36 : undefined,
                       zIndex: sl !== undefined ? 3 : 2,
                       background: accentColor, color: '#fff',
-                      fontSize: 11, fontWeight: 700,
-                      padding: '10px 10px', whiteSpace: 'nowrap', minWidth: c.w, width: c.w,
+                      fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px',
+                      padding: '7px 8px', whiteSpace: 'nowrap', minWidth: c.w, width: c.w,
+                      borderRight: '1px solid rgba(255,255,255,0.12)',
                       boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.18)' : undefined,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'space-between' }}>
@@ -1372,7 +1373,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                     </th>
                   );
                 })}
-                <th style={{ position: 'sticky', top: 0, zIndex: 2, background: accentColor, color: '#fff', fontSize: 11, fontWeight: 700, padding: '10px 8px', minWidth: 52, width: 52, textAlign: 'center' }}></th>
+                <th style={{ position: 'sticky', top: 0, zIndex: 2, background: accentColor, color: '#fff', fontSize: 9, fontWeight: 700, padding: '7px 8px', minWidth: 50, width: 50, textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -1382,15 +1383,16 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                 <tr><td colSpan={columns.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No data</td></tr>
               ) : pageItems.map((r, i) => (
                 <tr key={r.id} className="system-list-row">
-                  <td className="system-list-number" style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', textAlign: 'center', padding: '8px 7px' }}>{startIndex + i + 1}</td>
+                  <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, padding: '3px 6px', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>{startIndex + i + 1}</td>
                   {columns.map(c => {
                     const sl = stickyLeftOf(c.field);
                     return (
                       <td key={c.field} style={{
-                        padding: '8px 10px', verticalAlign: 'middle',
+                        padding: '3px 6px', verticalAlign: 'top',
+                        borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9',
                         wordBreak: 'break-word', overflowWrap: 'break-word',
                         position: sl !== undefined ? 'sticky' : undefined,
-                        left: sl !== undefined ? sl + 44 : undefined,
+                        left: sl !== undefined ? sl + 36 : undefined,
                         zIndex: sl !== undefined ? 1 : undefined,
                         background: sl !== undefined ? '#fff' : undefined,
                         boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.12)' : undefined,
@@ -1426,7 +1428,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                       </td>
                     );
                   })}
-                  <td style={{ padding: '8px 7px', textAlign: 'center' }}>
+                  <td style={{ padding: '3px 6px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>
                     <RowActionMenu row={r} moveTargets={moveTargets} onMove={moveRow} onDelete={deleteRow} />
                   </td>
                 </tr>
