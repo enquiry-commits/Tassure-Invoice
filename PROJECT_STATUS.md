@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (shared list visual system and terminology)
+Last updated: 2026-07-29 (Outlook drafts re-verify invoice amounts against QuickBooks)
 
 ## Purpose
 
@@ -23,6 +23,39 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Outlook drafts now re-verify their invoice amount against QuickBooks
+  right before opening.** Vincent's real scenario: he generated an invoice
+  through the system, then corrected its amount directly in QuickBooks
+  afterward, bypassing the app. The draft's stored `total_amount` (and the
+  "Total S$X" text already merged into `subject`/`body`) went stale — the
+  email text would have shown the old amount while the attached PDF
+  (always fetched live from QB) showed the corrected one, a bad mismatch
+  to send a real client. Went through `EnterPlanMode` given the money
+  sensitivity and multiple valid approaches. New
+  `POST /api/client-communications/drafts/refresh-amounts` (body `{id}`):
+  loads the draft → its campaign's template/FYE → re-queries QuickBooks
+  (`qbQuery`, `lib/quickbooks.ts`) for each TAB/TAC invoice ref's live
+  `TotalAmt`, and if the total changed, re-merges `subject`/`body` with
+  the same `mergeTemplate`/`formatAmount`/`formatInvoiceList`
+  (`lib/email-merge.ts`) `campaigns/route.ts` already uses, persisting the
+  correction with the same optimistic-lock pattern the existing PATCH
+  handler uses. Folded into the **one** shared choke point all three
+  Outlook-opening flows already go through —
+  `openDraftsInOutlook` (`lib/draft-helper-client.ts`) — instead of
+  editing three pages separately: runs alongside the existing attachment
+  fetch (same bounded-concurrency pass), fails open (any error here just
+  keeps the previously-known amount, never blocks the draft from opening),
+  and adds `amountCorrected`/`previousTotal`/`newTotal` to
+  `DraftOpenResult`. Billing Drafts' quick-draft
+  (`app/billing/page.tsx`'s `quickEmailDraft`) was switched from its own
+  client-merged copy to the server-persisted draft row (now returned by
+  `campaigns/route.ts`'s POST as `drafts[]`, with a real `id`) so the
+  refresh step has something to key off; its popover shows a dedicated
+  correction notice instead of auto-closing so it can't flash and vanish.
+  The Email Drafts workbench and Delivery History's reopen flow surface
+  the same correction in their existing success/warning messages.
+  Production build passes; committed locally, pushed.
 
 - **Primary operational lists now use one calmer, consistent visual system.**
   Companies, Active Client / Master List, Billing Drafts, AR Reminder,

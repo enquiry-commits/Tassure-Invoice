@@ -71,6 +71,9 @@ export interface DraftLike {
 export interface DraftOpenResult {
   ok: boolean;
   error?: string;
+  amountCorrected?: boolean;
+  previousTotal?: number;
+  newTotal?: number;
 }
 
 function normalizeRecipients(raw: string): string {
@@ -129,6 +132,40 @@ async function fetchAttachments(d: DraftLike): Promise<{ fileName: string; base6
   return [...systemAttachments, ...manualAttachments];
 }
 
+// Right before a draft opens in Outlook, re-verify its invoice amount(s)
+// against live QuickBooks data — catches the case where an invoice was
+// corrected directly in QuickBooks after the draft text was prepared here,
+// so the email body never shows a stale total while the attached PDF (always
+// fetched live) shows the corrected one. Fails open: any error here just
+// keeps the draft as originally passed in, never blocks it from opening.
+async function refreshAmount(draft: DraftLike): Promise<{ draft: DraftLike; corrected: boolean; previousTotal?: number; newTotal?: number }> {
+  if (!draft.id) return { draft, corrected: false };
+  try {
+    const res = await fetch('/api/client-communications/drafts/refresh-amounts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: draft.id }),
+    });
+    if (!res.ok) return { draft, corrected: false };
+    const json = await res.json();
+    if (!json.changed || !json.draft) return { draft, corrected: false };
+    return {
+      draft: {
+        ...draft,
+        subject: json.draft.subject,
+        body: json.draft.body,
+        invoice_refs: json.draft.invoice_refs,
+        version: json.draft.version,
+      },
+      corrected: true,
+      previousTotal: json.oldTotal,
+      newTotal: json.newTotal,
+    };
+  } catch {
+    return { draft, corrected: false };
+  }
+}
+
 async function mapWithConcurrency<T, R>(
   values: T[],
   concurrency: number,
@@ -153,10 +190,20 @@ export async function openDraftsInOutlook(
   commonAttachments: File[] = [],
 ): Promise<DraftOpenResult[]> {
   const results: DraftOpenResult[] = new Array(drafts.length);
+  const corrections = new Array<{ corrected: boolean; previousTotal?: number; newTotal?: number }>(drafts.length);
   const common = await Promise.all(commonAttachments.map(fileToAttachment));
   const prepared = await mapWithConcurrency(drafts, 4, async (draft, index) => {
     try {
-      return { index, attachments: await fetchAttachments(draft) };
+      const [refreshed, attachments] = await Promise.all([
+        refreshAmount(draft),
+        fetchAttachments(draft),
+      ]);
+      corrections[index] = {
+        corrected: refreshed.corrected,
+        previousTotal: refreshed.previousTotal,
+        newTotal: refreshed.newTotal,
+      };
+      return { index, draft: refreshed.draft, attachments };
     } catch (e: unknown) {
       results[index] = {
         ok: false,
@@ -178,7 +225,7 @@ export async function openDraftsInOutlook(
 
   for (const item of prepared) {
     if (!item) continue;
-    const draft = drafts[item.index];
+    const draft = item.draft;
     payload.push({
       senderEmail: draft.sender_email ?? '',
       to: draft.to_email ?? '',
@@ -213,6 +260,17 @@ export async function openDraftsInOutlook(
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Unable to reach Tassure Draft Helper.';
       for (const idx of indexChunk) results[idx] = { ok: false, error: message };
+    }
+  }
+
+  for (let idx = 0; idx < results.length; idx++) {
+    if (results[idx]?.ok && corrections[idx]?.corrected) {
+      results[idx] = {
+        ...results[idx],
+        amountCorrected: true,
+        previousTotal: corrections[idx].previousTotal,
+        newTotal: corrections[idx].newTotal,
+      };
     }
   }
 

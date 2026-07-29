@@ -237,8 +237,10 @@ export default function DeliveryHistoryPage() {
         return;
       }
       setMessage({
-        tone: 'success',
-        text: 'The email has been opened again in Outlook. Review it there before sending.',
+        tone: result.amountCorrected ? 'warning' : 'success',
+        text: result.amountCorrected
+          ? `The email has been opened again in Outlook. The amount was corrected from S$${result.previousTotal?.toLocaleString()} to S$${result.newTotal?.toLocaleString()} using the latest QuickBooks total — review it there before sending.`
+          : 'The email has been opened again in Outlook. Review it there before sending.',
       });
     } catch (error: unknown) {
       setMessage({

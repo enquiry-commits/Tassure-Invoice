@@ -18,7 +18,6 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
-import { mergeTemplate, formatInvoiceList, formatAmount } from '@/lib/email-merge';
 import { getHelperHealth, isHelperOutdated, openDraftsInOutlook, buildMailtoLink } from '@/lib/draft-helper-client';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1911,6 +1910,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   const [draftPopoverFor, setDraftPopoverFor] = useState<number | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [draftNotice, setDraftNotice] = useState<string | null>(null);
 
   const quickEmailDraft = async (c: CompanyBilling) => {
     const templateId = selectedTemplateId;
@@ -1928,22 +1928,6 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       };
       if (!row.toEmail) throw new Error('No valid recipient email — resolve this in Campaign Centre first.');
 
-      const template = emailTemplates.find(t => t.id === templateId);
-      if (!template) throw new Error('Selected template not found.');
-      const fields = {
-        companyName: row.companyName,
-        contactName: row.contactName || row.companyName,
-        toEmail: row.toEmail,
-        ccEmail: row.ccEmail ?? '',
-        totalAmount: formatAmount(row.totalAmount),
-        invoiceList: formatInvoiceList(row.invoiceRefs),
-        dueDate: '',
-        fyeMonth: month,
-        fyeYear: String(year),
-      };
-      const subject = mergeTemplate(template.subject_template, fields);
-      const body = mergeTemplate(template.body_template, fields);
-
       const createRes = await fetch('/api/client-communications/campaigns', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1953,11 +1937,28 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       });
       const createJson = await createRes.json();
       if (!createRes.ok || !createJson.ok) throw new Error(createJson.error ?? 'Unable to save this draft.');
+      // Use the server-persisted draft (with a real id) rather than a
+      // client-merged copy — this is what lets openDraftsInOutlook re-verify
+      // the amount against QuickBooks right before opening (see
+      // refreshAmount in lib/draft-helper-client.ts).
+      const createdDraft = createJson.drafts?.[0];
+      if (!createdDraft) throw new Error('Draft was not created.');
 
-      const draftForOutlook = { company_name: row.companyName, to_email: row.toEmail, cc_email: row.ccEmail, subject, body, invoice_refs: row.invoiceRefs };
+      const draftForOutlook = {
+        id: createdDraft.id, version: createdDraft.version,
+        company_name: createdDraft.company_name, to_email: createdDraft.to_email, cc_email: createdDraft.cc_email,
+        subject: createdDraft.subject, body: createdDraft.body, invoice_refs: createdDraft.invoice_refs,
+      };
       if (helperAvailable) {
         const [result] = await openDraftsInOutlook([draftForOutlook]);
         if (!result.ok) throw new Error(result.error ?? 'Helper failed to open the draft.');
+        if (result.amountCorrected) {
+          // Keep the popover open so this doesn't flash and vanish — the
+          // amount genuinely changed from what was reviewed a moment ago,
+          // worth a deliberate look before it's dismissed.
+          setDraftNotice(`Amount corrected from S$${result.previousTotal?.toLocaleString()} to S$${result.newTotal?.toLocaleString()} using the latest QuickBooks total. The Outlook draft already reflects the corrected amount.`);
+          return;
+        }
       } else {
         window.location.href = buildMailtoLink(draftForOutlook);
       }
@@ -2251,7 +2252,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ?? '—'}</div>
                   <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                    <button title="Email Drafts" onClick={e => { e.stopPropagation(); setDraftError(null); setDraftPopoverFor(v => v === c.companyId ? null : c.companyId); }}
+                    <button title="Email Drafts" onClick={e => { e.stopPropagation(); setDraftError(null); setDraftNotice(null); setDraftPopoverFor(v => v === c.companyId ? null : c.companyId); }}
                       style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: draftPopoverFor === c.companyId ? '#1d3a5c' : '#94a3b8' }}>
                       <Mail size={15} />
                     </button>
@@ -2261,29 +2262,43 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                         border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 260, padding: 12,
                       }}>
                         <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>Email Drafts — {c.companyName}</div>
-                        <select value={selectedTemplateId ?? ''} onChange={e => setSelectedTemplateId(Number(e.target.value))}
-                          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
-                          {emailTemplates.length === 0 && <option value="">No AR templates found</option>}
-                          {emailTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                        </select>
-                        {draftError && <div style={{ fontSize: 10.5, color: '#b91c1c', marginBottom: 8 }}>{draftError}</div>}
-                        <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8 }}>
-                          {helperAvailable ? 'Opens directly in Outlook with the invoice attached.' : 'Draft Helper not detected — opens a blank Outlook draft (no attachment) instead.'}
-                        </div>
-                        {helperAvailable && helperOutdated && (
-                          <div style={{ fontSize: 10, color: '#b45309', marginBottom: 8 }}>
-                            A newer Draft Helper is available.{' '}
-                            <a href="/downloads/TassureDraftHelper.exe" download style={{ color: '#b45309', fontWeight: 800 }}>Update it</a>.
-                          </div>
+                        {draftNotice ? (
+                          <>
+                            <div style={{ fontSize: 10.5, color: '#b45309', marginBottom: 10, lineHeight: 1.5 }}>{draftNotice}</div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                              <button onClick={() => { setDraftNotice(null); setDraftPopoverFor(null); }}
+                                style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '6px 12px' }}>
+                                Close
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <select value={selectedTemplateId ?? ''} onChange={e => setSelectedTemplateId(Number(e.target.value))}
+                              style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
+                              {emailTemplates.length === 0 && <option value="">No AR templates found</option>}
+                              {emailTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                            {draftError && <div style={{ fontSize: 10.5, color: '#b91c1c', marginBottom: 8 }}>{draftError}</div>}
+                            <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8 }}>
+                              {helperAvailable ? 'Opens directly in Outlook with the invoice attached.' : 'Draft Helper not detected — opens a blank Outlook draft (no attachment) instead.'}
+                            </div>
+                            {helperAvailable && helperOutdated && (
+                              <div style={{ fontSize: 10, color: '#b45309', marginBottom: 8 }}>
+                                A newer Draft Helper is available.{' '}
+                                <a href="/downloads/TassureDraftHelper.exe" download style={{ color: '#b45309', fontWeight: 800 }}>Update it</a>.
+                              </div>
+                            )}
+                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                              <button onClick={() => setDraftPopoverFor(null)} style={{ fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '5px 8px' }}>Cancel</button>
+                              <button onClick={() => quickEmailDraft(c)} disabled={drafting || !selectedTemplateId}
+                                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: drafting ? 'wait' : 'pointer', padding: '6px 12px', opacity: !selectedTemplateId ? 0.6 : 1 }}>
+                                {drafting ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
+                                {drafting ? 'Drafting…' : 'Draft'}
+                              </button>
+                            </div>
+                          </>
                         )}
-                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                          <button onClick={() => setDraftPopoverFor(null)} style={{ fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '5px 8px' }}>Cancel</button>
-                          <button onClick={() => quickEmailDraft(c)} disabled={drafting || !selectedTemplateId}
-                            style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: drafting ? 'wait' : 'pointer', padding: '6px 12px', opacity: !selectedTemplateId ? 0.6 : 1 }}>
-                            {drafting ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
-                            {drafting ? 'Drafting…' : 'Draft'}
-                          </button>
-                        </div>
                       </div>
                     )}
                   </div>

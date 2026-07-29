@@ -446,11 +446,13 @@ export default function EmailDraftWorkbenchPage() {
       setLastOpenResults(results);
       const opened = results.filter(result => result?.ok).length;
       const failed = results.length - opened;
+      const corrected = results.filter(result => result?.amountCorrected).length;
+      const correctedNote = corrected ? ` ${corrected} amount(s) were corrected against the latest QuickBooks total before opening.` : '';
       setMessage({
         tone: failed ? 'warning' : 'success',
         text: failed
-          ? `${opened} Outlook draft(s) opened. ${failed} need attention below. Nothing was sent automatically.`
-          : `${opened} Outlook draft(s) opened with attachments. Review and send them in Outlook.`,
+          ? `${opened} Outlook draft(s) opened. ${failed} need attention below. Nothing was sent automatically.${correctedNote}`
+          : `${opened} Outlook draft(s) opened with attachments. Review and send them in Outlook.${correctedNote}`,
       });
     } catch (e: unknown) {
       setMessage({ tone: 'error', text: e instanceof Error ? e.message : 'Unable to create drafts.' });
