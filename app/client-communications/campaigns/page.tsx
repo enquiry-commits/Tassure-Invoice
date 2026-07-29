@@ -711,16 +711,16 @@ export default function EmailDraftWorkbenchPage() {
 
             <div style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 390px)', overflowY: 'auto' }}>
               <div style={{ minWidth: 1260 }}>
-                <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 8, padding: '8px 10px', background: '#f5f8fb', borderBottom: '1px solid #dfe7ef', color: '#60758c', fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }}>
-                  <div>Draft</div><div>Company</div><div>User Name</div><div>To</div><div>CC</div><div>Invoices / Files</div><div style={{ textAlign: 'right' }}>Amount</div><div>Status</div><div />
+                <div className="system-list-column-header" style={{ position: 'sticky', top: 0, zIndex: 10, display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 8, padding: '8px 10px', borderBottom: '1px solid #dfe7ef' }}>
+                  <div>Draft</div><div>Company Name</div><div>User Name</div><div>To</div><div>CC</div><div>Invoices / Files</div><div style={{ textAlign: 'right' }}>Amount</div><div>Status</div><div />
                 </div>
 
                 {rows.map((row, index) => {
                   const files = rowFiles[rowKey(row)] ?? [];
                   const warnings = getRowWarnings(row, type, files.length);
                   return (
-                    <div key={rowKey(row)}
-                      style={{ display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 9, alignItems: 'start', padding: '15px 10px', borderBottom: '1px solid #edf2f7', background: row.included ? '#fff' : '#fbfcfd' }}>
+                    <div key={rowKey(row)} className="system-list-row"
+                      style={{ display: 'grid', gridTemplateColumns: '42px minmax(190px,1.3fr) 135px minmax(180px,1.2fr) minmax(180px,1.2fr) minmax(150px,1fr) 90px 150px 32px', gap: 9, alignItems: 'start', padding: '15px 10px', borderBottom: '1px solid #edf2f7', opacity: row.included ? 1 : 0.72 }}>
                       <div style={{ textAlign: 'center', paddingTop: 6 }}>
                         <input type="checkbox" checked={row.included} onChange={() => updateRow(index, { included: !row.included })} title="Y = create an Outlook draft; this does not send the email" />
                       </div>

@@ -21,18 +21,18 @@ export default function AddressServiceTable({ companies }: { companies: Row[] })
       <div className="overflow-x-auto -mx-4">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50">
-              <th className="text-left px-4 py-2.5 font-semibold text-slate-600 w-8">#</th>
-              <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Company Name</th>
-              <th className="text-left px-4 py-2.5 font-semibold text-slate-600">UEN / ROC</th>
-              <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Type</th>
-              <th className="text-left px-4 py-2.5 font-semibold text-slate-600">Contact</th>
-              <th className="text-left px-4 py-2.5 font-semibold text-slate-600">PIC</th>
+            <tr className="system-list-column-header border-b">
+              <th className="text-left px-4 py-2.5 w-8">No.</th>
+              <th className="text-left px-4 py-2.5">Company Name</th>
+              <th className="text-left px-4 py-2.5">UEN / ROC</th>
+              <th className="text-left px-4 py-2.5">Company Type</th>
+              <th className="text-left px-4 py-2.5">Contact</th>
+              <th className="text-left px-4 py-2.5">PIC</th>
             </tr>
           </thead>
           <tbody>
             {pageItems.map((c, i) => (
-              <tr key={c.registrationNo || i} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+              <tr key={c.registrationNo || i} className="system-list-row border-b">
                 <td className="px-4 py-2.5 text-slate-400 text-xs">{startIndex + i + 1}</td>
                 <td className="px-4 py-2.5 max-w-64">
                   <span className="company-name-text truncate block" title={c.companyName}>{c.companyName}</span>

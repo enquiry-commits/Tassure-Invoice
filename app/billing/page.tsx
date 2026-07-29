@@ -187,8 +187,9 @@ function BillingStatusPill({ label, color, background, border, title, muted = fa
 }) {
   return (
     <span title={title} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-      width: 'fit-content', maxWidth: '100%', padding: '4px 8px', borderRadius: 999, background, color,
-      border: `1px solid ${border}`, fontSize: 9.5, fontWeight: 750, lineHeight: 1, whiteSpace: 'nowrap',
+      width: 'fit-content', maxWidth: '100%', padding: '4px 8px', borderRadius: 999,
+      background: background === '#f8fafc' ? '#f8fafc' : '#fff', color,
+      border: `1px solid ${border === '#e2e8f0' ? border : '#dbe3ec'}`, fontSize: 9.5, fontWeight: 750, lineHeight: 1, whiteSpace: 'nowrap',
       opacity: muted ? 0.78 : 1 }}>
       <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0 }} />
       {label}
@@ -2137,13 +2138,13 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
 
       {/* Table */}
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '8px 16px', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>BILLING DRAFTS</span>
-          <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
+        <div className="system-list-title-bar" style={{ padding: '8px 16px' }}>
+          <span className="system-list-title">Billing Drafts</span>
+          <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
         <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto' }}>
-          {!isMobile && <div style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: '28px minmax(180px,1fr) 110px 70px 170px 100px 190px 120px 120px 90px 36px', columnGap: 4, padding: '8px 12px', background: '#f8fafc', borderLeft: '3px solid transparent', borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
-            {['', 'Company', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC', ''].map((h, i) => (
+          {!isMobile && <div className="system-list-column-header" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: '28px minmax(180px,1fr) 110px 70px 170px 100px 190px 120px 120px 90px 36px', columnGap: 4, padding: '8px 12px', borderLeft: '3px solid transparent', borderBottom: '1px solid #e2e8f0', alignItems: 'center' }}>
+            {['', 'Company Name', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC', ''].map((h, i) => (
               i === 5
                 ? <div key={i} style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
                     ND <span style={{ fontSize: 8, fontWeight: 800, background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 3, padding: '0 3px' }}>TAC</span>
@@ -2158,7 +2159,6 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           {!loading && arList.length > 0 && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No matching records</div>}
           {pageItems.map((c, i) => {
             const isOpen = expanded === c.companyId;
-            const rowBg  = i % 2 === 0 ? '#fff' : '#fafbfc';
             const accent = c.urgency === 'expired' ? '#dc2626' : c.urgency === 'expiring_soon' ? '#f59e0b' : '#16a34a';
             const secR   = c.renewals.find(r => r.service === 'Secretary');
             const addrR  = c.renewals.find(r => r.service === 'Address');
@@ -2167,7 +2167,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             const xbrlA  = c.annuals.find(a => a.service === 'XBRL');
             // Phone: view-only card (no draft modal — that's a desktop task)
             if (isMobile) return (
-              <div key={c.companyId} style={{ padding: '10px 12px', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9', background: rowBg }}>
+              <div key={c.companyId} className="system-list-row" style={{ padding: '10px 12px', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                   <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -2196,7 +2196,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             );
             return (
               <div key={c.companyId}>
-                <div onClick={() => setExpanded(isOpen ? null : c.companyId)}
+                <div className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}`} onClick={() => setExpanded(isOpen ? null : c.companyId)}
                   style={{ display: 'grid', gridTemplateColumns: '28px minmax(180px,1fr) 110px 70px 170px 100px 190px 120px 120px 90px 36px', alignItems: 'center', minHeight: 64, columnGap: 4, padding: '9px 12px', background: isOpen ? '#f0f6ff' : '#fff', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf1f5', cursor: 'pointer', transition: 'background 0.15s' }}
                   onMouseEnter={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#f0f6ff'; }}
                   onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#fff'; }}>
@@ -2628,9 +2628,9 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
   onApplyFilter: (field: ARColumnKey, next: Set<string> | null) => void;
   onSave: (id: number, field: string, val: string) => void; onDelete: (id: number) => void; startIndex?: number;
 }) {
-  // Finance columns get a teal header + tinted cell bg
-  const FIN_HDR = '#0f766e';
-  const FIN_CELL = 'rgba(20,184,166,0.06)';
+  // A very light neutral grouping keeps finance columns legible without
+  // introducing another competing accent colour into the list.
+  const FIN_CELL = '#fbfcfe';
 
   const outerRef  = useRef<HTMLDivElement>(null);
   const thumbRef  = useRef<HTMLDivElement>(null);
@@ -2716,8 +2716,8 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
     <th style={{
       position: 'sticky', top: 0, zIndex: stickyLeft !== undefined ? 3 : 2,
       left: stickyLeft !== undefined ? stickyLeft : undefined,
-      background: finance ? FIN_HDR : '#1d3a5c', color: '#fff',
-      fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px',
+      background: '#1e3a5f', color: '#fff',
+      fontSize: 11, fontWeight: 700, letterSpacing: 'normal',
       padding: '7px 8px', whiteSpace: 'nowrap', minWidth: w, width: w,
       textAlign: center ? 'center' : 'left',
       borderRight: finance ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(255,255,255,0.12)',
@@ -2753,7 +2753,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
       <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
         <thead>
           <tr>
-            <TH w={30} center stickyLeft={0}>#</TH>
+            <TH w={30} center stickyLeft={0}>No.</TH>
             <TH w={200} stickyLeft={30}>Company Name</TH>
             <TH w={80} stickyLeft={230} lastSticky>UEN / ROC</TH>
             <TH w={100}>{HF('reminder_note', 'Reminder')}</TH>
@@ -2783,10 +2783,9 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             const filed   = r.stages.arFiled;
             const overdue = !filed && r.daysUntilDue !== null && r.daysUntilDue < 0;
             const inProg  = !filed && (r.stages.sentToClient || r.stages.docsReceived || r.stages.agmHeld);
-            const rowBg   = filed ? '#f0fdf4' : overdue ? '#fff1f2' : inProg ? '#fffbeb' : i % 2 === 0 ? '#fff' : '#fafbfc';
             const accent  = filed ? '#16a34a' : overdue ? '#dc2626' : inProg ? '#f59e0b' : '#e2e8f0';
             return (
-              <tr key={r.id} style={{ background: rowBg }}>
+              <tr key={r.id} className="system-list-row">
                 <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
                 <TD stickyLeft={30}>
                   <div className="company-name-text">{r.entity_name}</div>
@@ -3177,12 +3176,12 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       {/* List view */}
       {(view === 'list' || isMobile) && (
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-          <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Calendar size={13} style={{ color: '#93c5fd' }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>FYE {month.toUpperCase()} {year}</span>
-            <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Click row to open full details & edit</span>
+          <div className="system-list-title-bar" style={{ padding: '8px 16px' }}>
+            <Calendar size={13} style={{ color: '#fff' }} />
+            <span className="system-list-title">FYE {month.toUpperCase()} {year}</span>
+            <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Click a company to open full details and edit</span>
           </div>
-          {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(300px,1.45fr) 100px minmax(260px,1fr) 100px 120px', padding: '7px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+          {!isMobile && <div className="system-list-column-header" style={{ display: 'grid', gridTemplateColumns: '28px minmax(300px,1.45fr) 100px minmax(260px,1fr) 100px 120px', padding: '7px 16px', borderBottom: '1px solid #e2e8f0' }}>
             {['', 'Company Name', 'UEN / ROC', 'Services', 'Due Date', 'PIC'].map((h, i) => (
               <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
                 {h}
@@ -3199,11 +3198,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
             {pageItems.map((r, i) => {
               const filed     = r.stages.arFiled;
               const accent    = filed ? '#16a34a' : r.stagesDone > 0 ? '#f59e0b' : '#e2e8f0';
-              const rowBg     = i % 2 === 0 ? '#ffffff' : '#fafbfc';
               const activeSvc = Object.entries(r.services).filter(([, v]) => v).map(([k]) => k);
               // Phone: view-only card (workflow editing is a desktop task)
               if (isMobile) return (
-                <div key={r.id} style={{ padding: '10px 12px', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9', background: rowBg }}>
+                <div key={r.id} className="system-list-row" style={{ padding: '10px 12px', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #f1f5f9' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                     <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -3215,7 +3213,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 7, alignItems: 'center' }}>
                     {activeSvc.map(k => {
                       const st = SVC_STATE_STYLE[svcStateOf(r.services, r.servicesManual, k)];
-                      return <span key={k} style={{ background: st.bg, color: st.color, border: `1px solid ${st.bd}`, borderRadius: 3, padding: '1px 5px', fontSize: 10, fontWeight: 700 }}>{SVC[k].label}</span>;
+                      return <span key={k} style={{ background: '#f8fafc', color: '#475569', border: '1px solid #dbe3ec', borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: st.color, flexShrink: 0 }} />
+                        {SVC[k].label}
+                      </span>;
                     })}
                   </div>
                   <div style={{ display: 'flex', gap: 10, marginTop: 7, fontSize: 10.5, color: '#64748b' }}>
@@ -3225,7 +3226,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                 </div>
               );
               return (
-                <div key={r.id}
+                <div key={r.id} className="system-list-row"
                   onClick={() => setModalRecord(r)}
                   style={{ display: 'grid', gridTemplateColumns: '28px minmax(300px,1.45fr) 100px minmax(260px,1fr) 100px 120px', alignItems: 'center', minHeight: 64, padding: '8px 12px', background: '#fff', borderLeft: `3px solid ${accent}`, borderBottom: '1px solid #edf1f5', cursor: 'pointer', transition: 'background 0.15s' }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
@@ -3243,11 +3244,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div style={{ margin: '0 6px', padding: '2px 0 2px 14px', minHeight: 32, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, borderLeft: '1px solid #dbe3ee' }}>
                     {SVC_ORDER.filter(k => r.services[k]).map(k => {
                       const state = svcStateOf(r.services, r.servicesManual, k);
-                      const svc = SVC[k];
                       return (
                         <span key={k} title={`${SVC[k].label} — ${state === 'auto-on' ? 'auto' : state === 'manual-on' ? 'manually on' : 'not provided / off'}`}
-                          style={{ background: svc.bg, color: svc.color, border: `1px solid ${svc.color}20`, borderRadius: 999, padding: '4px 9px', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.15px', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                          {state === 'manual-on' && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16a34a', flexShrink: 0 }} />}
+                          style={{ background: '#fff', color: '#475569', border: '1px solid #dbe3ec', borderRadius: 999, padding: '4px 9px', fontSize: 10.5, fontWeight: 700, letterSpacing: '0.15px', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: SVC_STATE_STYLE[state].color, flexShrink: 0 }} />
                           {SVC_SHORT[k]}
                         </span>
                       );
@@ -3269,10 +3269,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       {/* Table view — desktop only */}
       {view === 'table' && !isMobile && (
         <>
-          <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderRadius: '10px 10px 0 0', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Calendar size={13} style={{ color: '#93c5fd' }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>FYE {month.toUpperCase()} {year}</span>
-            <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Click any cell to edit · Data syncs with List view in real time</span>
+          <div className="system-list-title-bar" style={{ borderRadius: '10px 10px 0 0', padding: '8px 16px' }}>
+            <Calendar size={13} style={{ color: '#fff' }} />
+            <span className="system-list-title">FYE {month.toUpperCase()} {year}</span>
+            <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Click any cell to edit · Data syncs with List view in real time</span>
           </div>
           {loading && records.length === 0
             ? <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>

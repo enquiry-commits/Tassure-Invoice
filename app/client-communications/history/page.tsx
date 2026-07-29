@@ -347,9 +347,9 @@ export default function DeliveryHistoryPage() {
       )}
 
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 100px', padding: '8px 14px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+        <div className="system-list-column-header" style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 100px', padding: '8px 14px', borderBottom: '1px solid #e2e8f0' }}>
           <div>Type</div>
-          <div>Company</div>
+          <div>Company Name</div>
           <div>Subject</div>
           <div style={{ textAlign: 'right' }}>Amount</div>
           <div style={{ textAlign: 'center' }}>Status</div>
@@ -362,19 +362,23 @@ export default function DeliveryHistoryPage() {
             <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading…</div>
           ) : rows.length === 0 ? (
             <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>No records match.</div>
-          ) : rows.map((row, index) => {
+          ) : rows.map(row => {
             const accent = statusAccent(row.status);
             return (
               <div
                 key={row.id}
-                style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 100px', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid #f1f5f9', borderLeft: `3px solid ${accent}`, background: index % 2 === 0 ? '#fff' : '#fafbfc', fontSize: 12 }}
+                className="system-list-row"
+                style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 100px', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid #f1f5f9', borderLeft: `3px solid ${accent}`, fontSize: 12 }}
               >
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8' }}>{TYPE_LABEL[row.email_campaigns?.type] ?? row.email_campaigns?.type}</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#475569' }}>{TYPE_LABEL[row.email_campaigns?.type] ?? row.email_campaigns?.type}</div>
                 <div className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.company_name}</div>
                 <div style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.subject}</div>
-                <div style={{ textAlign: 'right', fontWeight: 700, color: '#0f766e' }}>{formatMoney(row.total_amount)}</div>
+                <div style={{ textAlign: 'right', fontWeight: 700, color: '#1e3a5f' }}>{formatMoney(row.total_amount)}</div>
                 <div style={{ textAlign: 'center' }}>
-                  <span style={{ fontSize: 9.5, fontWeight: 700, color: accent, background: `${accent}14`, borderRadius: 4, padding: '2px 7px', textTransform: 'uppercase' }}>{STATUS_LABEL[row.status] ?? row.status}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 700, color: accent, background: '#fff', border: '1px solid #dbe3ec', borderRadius: 4, padding: '2px 7px' }}>
+                    <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: accent }} />
+                    {STATUS_LABEL[row.status] ?? row.status}
+                  </span>
                 </div>
                 <div style={{ color: '#94a3b8', fontSize: 11 }}>
                   {row.sent_at ? new Date(row.sent_at).toLocaleString() : row.opened_at ? `Opened ${new Date(row.opened_at).toLocaleString()}` : '—'}

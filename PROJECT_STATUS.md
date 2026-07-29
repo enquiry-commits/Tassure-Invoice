@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (header AI assistant and page-aware guidance)
+Last updated: 2026-07-29 (shared list visual system and terminology)
 
 ## Purpose
 
@@ -23,6 +23,23 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Primary operational lists now use one calmer, consistent visual system.**
+  Companies, Active Client / Master List, Billing Drafts, AR Reminder,
+  Late Filing, Address Service, Nominee Director review, Email Drafts, Email
+  Activity and Dashboard exception details now share a navy column header with
+  white 11px/700 labels, white content rows, light neutral separators and one
+  consistent blue-grey hover / selected treatment. Alternating row fills,
+  finance-header teal, large tinted status pills and multi-colour service chips
+  were neutralised; semantic colour is now limited to a small dot, status text
+  or the existing thin left status rail. Right-side workflow actions and icons
+  were deliberately preserved. User-facing vocabulary is now consistent:
+  `No.`, `Company Name`, `UEN / ROC`, `Company Type` and `Address Service`.
+  Company identity typography, column widths, data sources, filters, editing
+  and all business logic remain unchanged. Targeted ESLint passes on the clean
+  list pages; the large Billing, Late Filing and Master List components still
+  report only their pre-existing React effect / declaration-order findings.
+  TypeScript, diff checks and the full 50-route production build pass.
 
 - **Company identity typography is now consistent across the application.**
   Added shared `company-name-text` and `company-registration-text` styles based

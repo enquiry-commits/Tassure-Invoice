@@ -128,23 +128,13 @@ function RemarksBadge({ remarks }: { remarks: string | null }) {
   const isResolved = /^Resolved:/i.test(remarks);
   const isObjn   = remarks.includes('CLIENT LODGED');
   const isStrike = remarks.includes('STRIKE OFF');
-  const bg     = isResolved ? '#f0fdfa' : isObjn ? '#fef3c7' : isStrike ? '#fee2e2' : '#f1f5f9';
   const col    = isResolved ? '#0f766e' : isObjn ? '#92400e'  : isStrike ? '#991b1b'  : '#475569';
-  const border = isResolved ? '#99f6e4' : isObjn ? '#fcd34d'  : isStrike ? '#fca5a5'  : '#cbd5e1';
   return (
     <span style={{ display:'inline-block', fontSize:11, fontWeight:700,
-      padding:'2px 7px', borderRadius:4, background:bg, color:col, border:`1px solid ${border}` }}>
+      padding:'2px 7px', borderRadius:4, background:'#fff', color:col, border:'1px solid #dbe3ec' }}>
       {remarks}
     </span>
   );
-}
-
-function rowBg(remarks: string | null) {
-  if (!remarks) return '#fff';
-  if (/^Resolved:/i.test(remarks))      return '#f0fdfa';
-  if (remarks.includes('CLIENT LODGED')) return '#fffbeb';
-  if (remarks.includes('STRIKE OFF'))    return '#fff5f5';
-  return '#fff';
 }
 
 type EditState = { uen?: string; company_name?: string; remarks?: string | null;
@@ -400,7 +390,7 @@ export default function LateFilingPage() {
         <div style={{ background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', overflow:'auto', maxHeight:'calc(100vh - 260px)' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
             <thead>
-              <tr>
+              <tr className="system-list-column-header">
                 {['No.','Company Name','UEN / ROC','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map(h=>(
                   <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontWeight:700, fontSize:12, whiteSpace:'nowrap',
                     position:'sticky', top:0, zIndex:2, background:'#1e3a5f', color:'#fff',
@@ -412,10 +402,10 @@ export default function LateFilingPage() {
             </thead>
             <tbody>
               {pageItems.map((row, idx) => (
-                  <tr key={row.id} onClick={() => startEdit(row)}
-                    style={{ background:rowBg(row.remarks), borderBottom:'1px solid #f1f5f9', cursor: 'pointer' }}
+                  <tr key={row.id} className="system-list-row" onClick={() => startEdit(row)}
+                    style={{ borderBottom:'1px solid #f1f5f9', cursor: 'pointer' }}
                     onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f0f6ff'}
-                    onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=rowBg(row.remarks)}>
+                    onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background='#fff'}>
                     <td style={{ padding:'10px 12px', color:'#94a3b8', fontWeight:600 }}>{startIndex + idx + 1}</td>
                     <td className="company-name-text" style={{ padding:'10px 12px', maxWidth:260 }}>
                       {row.company_name}

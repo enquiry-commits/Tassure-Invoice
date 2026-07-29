@@ -240,13 +240,13 @@ function UnknownPicDetails({ items }: { items: AutomationExceptionItem[] }) {
           <div style={{ overflowX: 'auto', borderTop: '1px solid #edf1f5' }}>
             <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse', fontSize: 10 }}>
               <thead>
-                <tr style={{ background: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-                  {['#', 'Company', 'UEN / ROC', 'TeamWork Company ID', 'Status', 'Company Type', 'Email', 'Last detected'].map(label => <th key={label} style={{ padding: '8px 10px', fontWeight: 800, borderBottom: '1px solid #e8edf2' }}>{label}</th>)}
+                <tr className="system-list-column-header" style={{ textAlign: 'left' }}>
+                  {['No.', 'Company Name', 'UEN / ROC', 'TeamWork Company ID', 'Status', 'Company Type', 'Email', 'Last Detected'].map(label => <th key={label} style={{ padding: '8px 10px', borderBottom: '1px solid #e8edf2' }}>{label}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {picItems.map((item, index) => (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #eef2f6', color: '#475569' }}>
+                  <tr key={item.id} className="system-list-row" style={{ borderBottom: '1px solid #eef2f6' }}>
                     <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{index + 1}</td>
                     <td className="company-name-text" style={{ padding: '8px 10px' }}>{item.company?.name ?? item.name ?? '—'}</td>
                     <td className="company-registration-text" style={{ padding: '8px 10px' }}>{item.company?.uen ?? '—'}</td>

@@ -516,7 +516,10 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
     return (
       <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', gap: 4 }}>
         {display
-          ? <span style={{ background: colors?.bg, color: colors?.color, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{display}</span>
+          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#fff', color: colors?.color, border: '1px solid #dbe3ec', borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>
+              <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: colors?.color ?? '#94a3b8' }} />
+              {display}
+            </span>
           : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
         {statusDot}
       </div>
@@ -1247,12 +1250,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
 
       {enableListView && view === 'list' ? (
         <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-          <div className="px-4 py-3" style={{ backgroundColor: accentColor, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <h2 className="text-white font-semibold text-sm">{title}</h2>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>Click a company to open full details & edit</span>
+          <div className="system-list-title-bar px-4 py-3">
+            <h2 className="system-list-title">{title}</h2>
+            <span className="system-list-title-hint">Click a company to open full details and edit</span>
           </div>
           {!isMobile && (
-            <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(220px,1.6fr) 110px 90px minmax(200px,1.2fr) 100px', padding: '7px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+            <div className="system-list-column-header" style={{ display: 'grid', gridTemplateColumns: '28px minmax(220px,1.6fr) 110px 90px minmax(200px,1.2fr) 100px', padding: '7px 16px', borderBottom: '1px solid #e2e8f0' }}>
               {['', 'Company Name', 'UEN / ROC', 'Status', 'Services', 'FYE'].map((h, i) => (
                 <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{h}</div>
               ))}
@@ -1270,6 +1273,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
               return (
                 <div
                   key={r.id}
+                  className="system-list-row"
                   role="button"
                   tabIndex={0}
                   aria-label={`Open full details for ${r.company_name}`}
@@ -1322,7 +1326,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                   {!isMobile && (
                     <div>
                       {r.status
-                        ? <span style={{ fontSize: 10, fontWeight: 700, background: rowColors?.bg ?? '#f1f5f9', color: rowColors?.color ?? '#64748b', border: `1px solid ${rowColors?.color ?? '#64748b'}40`, borderRadius: 999, padding: '3px 9px', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                        ? <span style={{ fontSize: 10, fontWeight: 700, background: '#fff', color: rowColors?.color ?? '#64748b', border: '1px solid #dbe3ec', borderRadius: 999, padding: '3px 9px', display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                             <span style={{ width: 5, height: 5, borderRadius: '50%', background: rowColors?.color ?? '#64748b', flexShrink: 0 }} />
                             {r.status}
                           </span>
@@ -1351,16 +1355,16 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         </div>
       ) : (
       <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <div className="px-4 py-3" style={{ backgroundColor: accentColor }}>
-          <h2 className="text-white font-semibold text-sm">{title}</h2>
+        <div className="system-list-title-bar px-4 py-3">
+          <h2 className="system-list-title">{title}</h2>
         </div>
 
         {/* Phone: native swipe-scroll (the mirrored scrollbar is desktop-only) */}
         <div ref={outerRef} style={{ overflowX: isMobile ? 'auto' : 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
             <thead>
-              <tr>
-                <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, background: accentColor, color: '#fff', fontSize: 9, fontWeight: 700, padding: '7px 8px', minWidth: 36, width: 36, textAlign: 'center' }}>#</th>
+              <tr className="system-list-column-header">
+                <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, padding: '7px 8px', minWidth: 36, width: 36, textAlign: 'center' }}>No.</th>
                 {columns.map(c => {
                   const sl = stickyLeftOf(c.field);
                   return (
@@ -1389,8 +1393,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
               ) : visibleRows.length === 0 ? (
                 <tr><td colSpan={columns.length + 2} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No data</td></tr>
               ) : pageItems.map((r, i) => (
-                <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                  <td style={{ position: 'sticky', left: 0, zIndex: 1, background: i % 2 === 0 ? '#fff' : '#f8fafc', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, padding: '3px 6px', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>{startIndex + i + 1}</td>
+                <tr key={r.id} className="system-list-row">
+                  <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, padding: '3px 6px', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>{startIndex + i + 1}</td>
                   {columns.map(c => {
                     const sl = stickyLeftOf(c.field);
                     return (
@@ -1401,7 +1405,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         position: sl !== undefined ? 'sticky' : undefined,
                         left: sl !== undefined ? sl + 36 : undefined,
                         zIndex: sl !== undefined ? 1 : undefined,
-                        background: sl !== undefined ? (i % 2 === 0 ? '#fff' : '#f8fafc') : undefined,
+                        background: sl !== undefined ? '#fff' : undefined,
                         boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.12)' : undefined,
                       }}>
                         {c.field === 'acc_pic' ? (

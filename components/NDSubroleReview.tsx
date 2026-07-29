@@ -127,8 +127,8 @@ export default function NDSubroleReview({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] table-fixed">
               <thead>
-                <tr className="bg-slate-50 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-500">
-                  <th className="w-[42%] px-5 py-2.5 text-left">Company</th>
+                <tr className="system-list-column-header">
+                  <th className="w-[42%] px-5 py-2.5 text-left">Company Name</th>
                   <th className="w-[22%] px-4 py-2.5 text-left">Suspected ND</th>
                   <th className="w-[15%] px-4 py-2.5 text-center">Appointment</th>
                   <th className="w-[11%] px-4 py-2.5 text-center">TW status</th>
@@ -136,24 +136,29 @@ export default function NDSubroleReview({
                 </tr>
               </thead>
               <tbody>
-                {visible.map((item, index) => (
-                  <tr key={item.key} className={`border-t border-slate-100 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}`}>
+                {visible.map(item => (
+                  <tr key={item.key} className="system-list-row border-t">
                     <td className="px-5 py-3 company-name-text">{item.companyName}</td>
                     <td className="px-4 py-3 text-xs font-medium text-slate-700">{item.ndName}</td>
                     <td className="px-4 py-3 text-center text-xs text-slate-600">{fmtDate(item.appointmentDate)}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                      <span className={`inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold ${
                         item.appointmentStatus === 'effective'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          ? 'text-emerald-700'
                           : item.appointmentStatus === 'proposed'
-                            ? 'border-blue-200 bg-blue-50 text-blue-700'
-                            : 'border-slate-200 bg-slate-50 text-slate-500'
+                            ? 'text-blue-700'
+                            : 'text-slate-500'
                       }`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${
+                          item.appointmentStatus === 'effective' ? 'bg-emerald-600' : item.appointmentStatus === 'proposed' ? 'bg-blue-600' : 'bg-slate-400'
+                        }`} />
                         {item.appointmentStatus}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className="inline-flex rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[10px] font-bold text-rose-700">Missing</span>
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-rose-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />Missing
+                      </span>
                     </td>
                   </tr>
                 ))}

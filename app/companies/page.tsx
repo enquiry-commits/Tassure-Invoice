@@ -46,7 +46,7 @@ function StatusBadge({ status }: { status: string | null }) {
         : { color: '#64748b', background: '#f8fafc', border: '#e2e8f0' };
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '4px 9px',
-      borderRadius: 999, background: palette.background, color: palette.color, border: `1px solid ${palette.border}`,
+      borderRadius: 999, background: '#fff', color: palette.color, border: '1px solid #dbe3ec',
       fontSize: 10.5, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>
       <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: palette.color, flexShrink: 0 }} />
       {status || 'Pending Sync'}
@@ -60,7 +60,7 @@ function CompanyServicePill({ label, tone = 'off' }: { label: string; tone?: 'nd
     : { color: '#15803d', background: '#f0fdf4', border: '#bbf7d0' };
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', padding: '4px 9px', borderRadius: 999,
-      background: palette.background, color: palette.color, border: `1px solid ${palette.border}`, fontSize: 10.5, fontWeight: 700,
+      background: tone === 'off' ? '#f8fafc' : '#fff', color: palette.color, border: '1px solid #dbe3ec', fontSize: 10.5, fontWeight: 700,
       lineHeight: 1, whiteSpace: 'nowrap' }} title={label}>
       <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: palette.color, flexShrink: 0 }} />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
@@ -185,17 +185,17 @@ export default function CompaniesPage() {
         </div>
       ) : (
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3" style={{ backgroundColor: '#1d3a5c' }}>
-          <h2 className="text-white font-semibold text-sm">Company List</h2>
+        <div className="system-list-title-bar px-4 py-3">
+          <h2 className="system-list-title">Company List</h2>
         </div>
 
         <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 260px)' }}>
           <table className="w-full text-sm">
             <thead>
-              <tr>
-                {['#','Company Name','Internal CSS Status','UEN / ROC','Type','Nominee Director','Address Svc','Contact','PIC'].map(h => (
-                  <th key={h} className="text-left px-4 py-2.5 font-semibold text-slate-600"
-                    style={{ position: 'sticky', top: 0, zIndex: 2, background: '#f8fafc', boxShadow: 'inset 0 -1px 0 #f1f5f9' }}>
+              <tr className="system-list-column-header">
+                {['No.','Company Name','Internal CSS Status','UEN / ROC','Company Type','Nominee Director','Address Service','Contact','PIC'].map(h => (
+                  <th key={h} className="text-left px-4 py-2.5"
+                    style={{ position: 'sticky', top: 0, zIndex: 2, boxShadow: 'inset 0 -1px 0 #16304f' }}>
                     {h}
                   </th>
                 ))}
@@ -207,7 +207,7 @@ export default function CompaniesPage() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={9} className="text-center py-12 text-slate-400">No companies found</td></tr>
               ) : pageItems.map((c, i) => (
-                <tr key={c.registrationNo || i} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                <tr key={c.registrationNo || i} className="system-list-row border-b">
                   <td className="px-4 py-2.5 text-slate-400 text-xs">{startIndex + i + 1}</td>
                   <td className="px-4 py-2.5">
                     <div className="company-name-text max-w-56 truncate" title={c.companyName}>
