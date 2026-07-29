@@ -1,7 +1,8 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import type { InvoiceRef } from '@/lib/email-merge';
-import { applyCampaignRecipientRules, parseEmailList, recipientLines } from '@/lib/campaign-recipients';
+import { applyCampaignRecipientRules, buildDefaultCcList, parseEmailList, recipientLines } from '@/lib/campaign-recipients';
+import { findStaffEmails } from '@/lib/staff-directory';
 
 /**
  * Shared company/invoice resolution for Client Communications, used by both
@@ -19,6 +20,7 @@ export interface CompanyRow {
   primary_contact: { email?: string; contactName?: string } | null;
   tw_to_emails: string[] | null; tw_cc_emails: string[] | null;
   tw_recipient_source: string | null; tw_recipient_synced_at: string | null;
+  pic: string | null;
 }
 
 export interface ResolvedRow {
@@ -31,8 +33,14 @@ export interface ResolvedRow {
   recipientReviewRequired: boolean;
 }
 
-export function pickContact(company: CompanyRow | null) {
+// extraPicValues: raw PIC-field values beyond the company's own SEC PIC
+// (company.pic) — e.g. an AR cycle's acc_pic/tax_pic — each resolved
+// against the staff directory and CC'd alongside the always-CC default.
+// A name that doesn't resolve to a known staff member (a client's own
+// accountant, "dormant", "Waiver", ...) is silently dropped, not guessed.
+export function pickContact(company: CompanyRow | null, extraPicValues: (string | null | undefined)[] = []) {
   const primary = company?.primary_contact as { email?: string; contactName?: string } | null;
+  const picEmails = [company?.pic, ...extraPicValues].flatMap(findStaffEmails);
   const hasTeamworkDirectory = company?.tw_recipient_source === 'teamwork_report';
   if (hasTeamworkDirectory) {
     const { toEmails, ccEmails } = applyCampaignRecipientRules([
@@ -41,7 +49,7 @@ export function pickContact(company: CompanyRow | null) {
     ]);
     return {
       email: recipientLines(toEmails),
-      ccEmail: recipientLines(ccEmails),
+      ccEmail: recipientLines(buildDefaultCcList([...ccEmails, ...picEmails])),
       contactName: primary?.contactName ?? company?.company_name ?? '',
       source: 'teamwork_report' as const,
       syncedAt: company?.tw_recipient_synced_at ?? null,
@@ -52,7 +60,7 @@ export function pickContact(company: CompanyRow | null) {
   const fallback = parseEmailList(company?.best_email ?? primary?.email ?? '');
   return {
     email: recipientLines(fallback),
-    ccEmail: null,
+    ccEmail: recipientLines(buildDefaultCcList(picEmails)),
     contactName: primary?.contactName ?? company?.company_name ?? '',
     source: fallback.length ? 'company_fallback' as const : 'missing' as const,
     syncedAt: null,
@@ -63,9 +71,23 @@ export function pickContact(company: CompanyRow | null) {
 export async function loadCompanies(supabase: SupabaseClient): Promise<CompanyRow[]> {
   const { data } = await supabase
     .from('companies')
-    .select('id, company_name, best_email, primary_contact, tw_to_emails, tw_cc_emails, tw_recipient_source, tw_recipient_synced_at')
+    .select('id, company_name, best_email, primary_contact, tw_to_emails, tw_cc_emails, tw_recipient_source, tw_recipient_synced_at, pic')
     .eq('is_active', true);
   return (data ?? []) as CompanyRow[];
+}
+
+/** ACC/TAX PIC are AR-cycle-specific (staff can reassign them per FYE year),
+ * unlike the company's own SEC PIC — only meaningful for type 'ar'. */
+export async function loadArPicByCompany(
+  supabase: SupabaseClient, fyeMonth?: string, fyeYear?: number,
+): Promise<Map<string, { acc_pic: string | null; tax_pic: string | null }>> {
+  const map = new Map<string, { acc_pic: string | null; tax_pic: string | null }>();
+  if (!fyeMonth || !fyeYear) return map;
+  const { data } = await supabase.from('ar_reminder')
+    .select('entity_name, acc_pic, tax_pic')
+    .eq('fye_month', fyeMonth).eq('fye_year', fyeYear);
+  for (const r of data ?? []) map.set(normalize(r.entity_name), { acc_pic: r.acc_pic, tax_pic: r.tax_pic });
+  return map;
 }
 
 export function makeCompanyFinder(companyList: CompanyRow[]) {
@@ -174,10 +196,12 @@ export function buildRow(
   invoicesByCompany: Map<string, InvoiceRef[]>,
   alreadySent: Set<string>,
   type: 'letter' | 'ar' | 'soa',
+  arPicByCompany?: Map<string, { acc_pic: string | null; tax_pic: string | null }>,
 ): ResolvedRow {
   const key = normalize(rawName);
   const company = findCompany(rawName);
-  const contact = pickContact(company);
+  const arPic = arPicByCompany?.get(key);
+  const contact = pickContact(company, [arPic?.acc_pic, arPic?.tax_pic]);
   const refs = invoicesByCompany.get(key) ?? [];
   const totalAmount = refs.reduce((s, r) => s + r.amount, 0);
 

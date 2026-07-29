@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Billing invoice references match Email Drafts)
+Last updated: 2026-07-29 (CC now defaults to hoechyi + SEC/ACC/TAX PIC always)
 
 ## Purpose
 
@@ -23,6 +23,42 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **CC now defaults to real addresses even without a synced TeamWork
+  recipient directory, and includes the company's PIC(s).** Vincent's
+  screenshot showed CC textareas displaying only the placeholder example
+  text ("hoechyi@tassure.com" / "other@email.com") for "FALLBACK — REVIEW"
+  and "NO RECIPIENT SOURCE" rows — `pickContact`'s fallback branch
+  (`lib/client-comms-resolve.ts`) hardcoded `ccEmail: null`, so even the
+  already-established "always CC hoechyi@tassure.com" rule
+  (`lib/campaign-recipients.ts`) never actually ran outside the
+  TeamWork-synced path. Fixed via a new shared `buildDefaultCcList()`
+  (`lib/campaign-recipients.ts`) used by *both* branches now. Also wired
+  in the company's assigned PIC(s) per Vincent's explicit confirmation:
+  SEC PIC (`companies.pic`) always, plus ACC/TAX PIC
+  (`ar_reminder.acc_pic`/`.tax_pic` — AR-cycle-specific, loaded via new
+  `loadArPicByCompany` and threaded through `buildRow`) for AR campaigns.
+  New `lib/staff-directory.ts` resolves a stored PIC value into a real
+  email — checked the *actual* distribution of values in
+  `ar_reminder.pic`/`acc_pic`/`tax_pic` (not just the 9-person
+  `lib/teamwork-pic.ts` map, which only covers Corporate Secretarial/some
+  Internal/Malaysia staff) before writing the matcher, since real values
+  are inconsistent: full names in either word order, given-name-only
+  ("Shemin", "Vernice"), ad hoc initials staff type themselves ("YH", "JF",
+  "QT", "VY", "CS" — confirmed against the real per-value counts, not
+  derived from a formula, since none fit every case), occasional
+  unresolved raw TeamWork numeric ids ("9,11"), and non-person values
+  ("Client", "dormant", "Waiver", "PAC", "NA") that are deliberately left
+  unmatched so no CC is added rather than guessing. Every distinct real
+  value queried from the live table resolves correctly (or correctly
+  resolves to nothing) against the new matcher. Production build passes;
+  committed only the intentional files for this change — a large,
+  unrelated in-progress visual-unification edit from another session
+  (Codex) is sitting uncommitted across several files including
+  `components/MasterListTable.tsx` (which had one clearly broken reference,
+  `rowColors`, undeclared — patched minimally to the same plain grey it
+  used before, left **uncommitted** on purpose so as not to attribute or
+  interfere with that in-progress work).
 
 - **Billing Drafts now uses the same invoice-reference treatment as Email
   Drafts.** Desktop and mobile TAB/TAC references are displayed as compact

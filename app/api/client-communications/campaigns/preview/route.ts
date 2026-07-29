@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
 import {
-  loadCompanies, loadInvoicesByCompany, loadAutoTargetNames, loadAlreadySent, buildRow, makeCompanyFinder,
+  loadCompanies, loadInvoicesByCompany, loadAutoTargetNames, loadAlreadySent, loadArPicByCompany, buildRow, makeCompanyFinder,
 } from '@/lib/client-comms-resolve';
 
 // Preview-before-generate: resolves the same candidate set Campaign Centre
@@ -25,10 +25,11 @@ export async function POST(req: NextRequest) {
   const supabase = createAdminClient();
   const companyList = await loadCompanies(supabase);
   const findCompany = makeCompanyFinder(companyList);
-  const [invoicesByCompany, targetNames, alreadySent] = await Promise.all([
+  const [invoicesByCompany, targetNames, alreadySent, arPicByCompany] = await Promise.all([
     loadInvoicesByCompany(supabase, type, fyeMonth, fyeYear),
     loadAutoTargetNames(supabase, type, fyeMonth, fyeYear, companyNames),
     onlyUnsent ? loadAlreadySent(supabase, type, fyeMonth, fyeYear) : Promise.resolve(new Set<string>()),
+    type === 'ar' ? loadArPicByCompany(supabase, fyeMonth, fyeYear) : Promise.resolve(new Map<string, { acc_pic: string | null; tax_pic: string | null }>()),
   ]);
 
   const seen = new Set<string>();
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
     const key = normalize(rawName);
     if (seen.has(key)) continue;
     seen.add(key);
-    rows.push(buildRow(rawName, findCompany, invoicesByCompany, alreadySent, type));
+    rows.push(buildRow(rawName, findCompany, invoicesByCompany, alreadySent, type, arPicByCompany));
   }
   rows.sort((a, b) => a.companyName.localeCompare(b.companyName));
 
@@ -60,10 +61,11 @@ export async function GET(req: NextRequest) {
   const company = findCompany(lookup);
   if (!company) return NextResponse.json({ error: `No matching company found for "${lookup}".` }, { status: 404 });
 
-  const [invoicesByCompany, alreadySent] = await Promise.all([
+  const [invoicesByCompany, alreadySent, arPicByCompany] = await Promise.all([
     loadInvoicesByCompany(supabase, type, fyeMonth, fyeYear),
     loadAlreadySent(supabase, type, fyeMonth, fyeYear),
+    type === 'ar' ? loadArPicByCompany(supabase, fyeMonth, fyeYear) : Promise.resolve(new Map<string, { acc_pic: string | null; tax_pic: string | null }>()),
   ]);
-  const row = buildRow(company.company_name, findCompany, invoicesByCompany, alreadySent, type);
+  const row = buildRow(company.company_name, findCompany, invoicesByCompany, alreadySent, type, arPicByCompany);
   return NextResponse.json({ row });
 }

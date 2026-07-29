@@ -75,6 +75,20 @@ export function applyCampaignRecipientRules(rawEmails: Iterable<string>) {
   };
 }
 
+/**
+ * The "always CC" set shared by every recipient-resolution path (TeamWork-
+ * synced or not) — hoechyi@tassure.com always CC'd, plus whatever extra
+ * addresses (e.g. a company's resolved SEC/ACC/TAX PIC emails) are passed
+ * in, with the same kahye/sengxin exclusion re-applied since a PIC email
+ * could itself be sengxin's.
+ */
+export function buildDefaultCcList(extra: string[] = []): string[] {
+  const set = new Set(extra.map(e => e.trim().toLowerCase()).filter(Boolean));
+  set.add(ALWAYS_CC_EMAIL);
+  if (set.has(KAHYE_EMAIL)) set.delete(SENGXIN_EMAIL);
+  return [...set].sort();
+}
+
 export function recipientLines(emails: readonly string[] | null | undefined): string | null {
   return emails?.length ? emails.join('\n') : null;
 }
