@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (system-wide operational LIST visual redesign)
+Last updated: 2026-07-29 (Draft Helper v1.3.0: inline payment-options image)
 
 ## Purpose
 
@@ -23,6 +23,35 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Tassure Draft Helper v1.3.0: the payment-options image is now embedded
+  inline in Outlook drafts, matching the original Word templates.**
+  Vincent pointed out the real AR1 template (`AR-AUTO EMAIL.docx`) had the
+  "PAYMENT OPTIONS" graphic (cheque/bank-transfer/PayNow QR, all one static
+  company-wide image, extracted and confirmed via `python-docx` reading
+  `word/media/image1.png` inside the docx) embedded right after the
+  "PAYMENT METHOD付款方式:" line — my earlier AR1/AR2/AR3 template rewrite
+  had only carried over the text, not the image. Rather than moving the
+  database templates to HTML (bigger change to the Templates & Senders
+  plain-textarea editing UI, for content that's identical on every email),
+  scoped this to the one place that actually builds the Outlook item:
+  `tassure-draft-helper/app.py`'s `_set_body` now checks the merged body
+  for the `PAYMENT METHOD` marker text — if present, switches that one
+  draft to an HTML body and embeds the bundled `assets/payment_options.png`
+  inline via Outlook's CID-attachment technique (`PR_ATTACH_CONTENT_ID`);
+  otherwise behaves exactly as before (plain `.Body`), so a template with
+  no payment section (e.g. a document-reminder letter) is unaffected.
+  Verified the text-processing logic directly (marker detection, HTML
+  escaping, bundled-asset path resolution all correct); could not verify
+  the actual rendered Outlook draft in this environment since its Outlook
+  install has no configured mail account (a fresh launch just opens the
+  "Add Account" wizard) — this needs a quick visual check on Vincent's own
+  already-running Outlook. Rebuilt exe copied to
+  `public/downloads/TassureDraftHelper.exe`. Still only have the payment
+  image from the AR1 docx (`AR2-auto email.docx`/`AR3.docx` are no longer
+  on the Desktop) — reused the same image for every template for now;
+  flagged to confirm whether AR2/AR3/SOA use an identical image or a
+  different one. Production build passes; committed locally, pushed.
 
 - **Operational LIST interfaces were redesigned across the system.** Added a
   shared, restrained list foundation (`system-list-shell`, toolbar, scroll,
