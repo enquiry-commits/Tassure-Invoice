@@ -98,7 +98,7 @@ type ColumnField = Exclude<keyof MasterListRow,
 // EXTRA_COLUMNS below instead, and must be opted into via `fields`.
 const COLUMNS: { field: ColumnField; label: string; w: number }[] = [
   { field: 'company_name',               label: 'Company Name',    w: 240 },
-  { field: 'roc_no',                     label: 'ROC No.',         w: 110 },
+  { field: 'roc_no',                     label: 'UEN / ROC',       w: 110 },
   { field: 'status',                     label: 'Active',          w: 220 },
   { field: 'internal_code',              label: 'Code',            w: 70  },
   { field: 'update_date',                label: 'Update Date',     w: 100 },
@@ -549,7 +549,12 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
     <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
-      {shown ? <span style={{ fontSize: 11, color: '#374151' }}>{shown}</span> : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
+      {shown
+        ? <span
+            className={field === 'company_name' ? 'company-name-text' : field === 'roc_no' ? 'company-registration-text' : undefined}
+            style={field === 'company_name' || field === 'roc_no' ? undefined : { fontSize: 11, color: '#374151' }}
+          >{shown}</span>
+        : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
       {statusDot}
     </div>
   );
@@ -1153,8 +1158,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             <div style={{ maxHeight: 220, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: '2px 16px' }}>
               {missingCssClients.map(c => (
                 <div key={c.registration_no ?? c.company_name} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '4px 0', borderBottom: '1px solid #fef3ee', fontSize: 11.5 }}>
-                  <span style={{ color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.company_name}</span>
-                  <span style={{ color: '#94a3b8', fontFamily: 'monospace', flexShrink: 0 }}>{c.registration_no ?? '—'}</span>
+                  <span className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.company_name}</span>
+                  <span className="company-registration-text" style={{ flexShrink: 0 }}>{c.registration_no ?? '—'}</span>
                 </div>
               ))}
             </div>
@@ -1165,7 +1170,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       <div className="bg-white rounded-xl shadow-sm p-4 mb-4 flex flex-wrap items-center gap-3">
         <input
           type="text"
-          placeholder="Search company name or ROC No..."
+          placeholder="Search company name or UEN / ROC..."
           value={search}
           onChange={e => setSearch(e.target.value)}
           className="flex-1 min-w-48 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-400"
@@ -1205,7 +1210,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 {([
                   { key: 'company_name', label: 'Company Name *', normalize: (v: string) => v.toUpperCase() },
-                  { key: 'roc_no',       label: 'ROC No.',        normalize: (v: string) => v.toUpperCase() },
+                  { key: 'roc_no',       label: 'UEN / ROC',      normalize: (v: string) => v.toUpperCase() },
                   { key: 'status',       label: 'Active / Status', normalize: (v: string) => v.toUpperCase() },
                   { key: 'fye',          label: 'FYE Month',      normalize: undefined },
                 ] as const).map(f => (
@@ -1248,7 +1253,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           </div>
           {!isMobile && (
             <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(220px,1.6fr) 110px 90px minmax(200px,1.2fr) 100px', padding: '7px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-              {['', 'Company Name', 'ROC No.', 'Status', 'Services', 'FYE'].map((h, i) => (
+              {['', 'Company Name', 'UEN / ROC', 'Status', 'Services', 'FYE'].map((h, i) => (
                 <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{h}</div>
               ))}
             </div>
@@ -1307,13 +1312,13 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                     </div>
                   )}
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <span style={{ color: '#cbd5e1', marginRight: 6, fontSize: 11 }}>{startIndex + i + 1}</span>
                       {r.company_name}
                     </div>
-                    {r.roc_no && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>{r.roc_no}</div>}
+                    {r.roc_no && <div className="company-registration-text" style={{ marginTop: 1 }}>{r.roc_no}</div>}
                   </div>
-                  {!isMobile && <div style={{ fontSize: 13, color: '#64748b' }}>{r.roc_no ?? '—'}</div>}
+                  {!isMobile && <div className="company-registration-text">{r.roc_no ?? '—'}</div>}
                   {!isMobile && (
                     <div>
                       {r.status

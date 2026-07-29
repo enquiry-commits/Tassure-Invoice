@@ -138,7 +138,7 @@ export default function NDSubroleReview({
               <tbody>
                 {visible.map((item, index) => (
                   <tr key={item.key} className={`border-t border-slate-100 ${index % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'}`}>
-                    <td className="px-5 py-3 text-xs font-semibold text-slate-800">{item.companyName}</td>
+                    <td className="px-5 py-3 company-name-text">{item.companyName}</td>
                     <td className="px-4 py-3 text-xs font-medium text-slate-700">{item.ndName}</td>
                     <td className="px-4 py-3 text-center text-xs text-slate-600">{fmtDate(item.appointmentDate)}</td>
                     <td className="px-4 py-3 text-center">

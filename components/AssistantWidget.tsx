@@ -31,8 +31,8 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     test: pathname => pathname === '/companies',
     guide: {
       label: 'Companies',
-      summary: '可查询公司、UEN、Internal CSS Status、Client 类型及现有服务。',
-      suggestions: ['CSS Client 和 Shareholder 怎么判断？', 'Active ND Companies 是什么？', '输入公司名或 UEN 查询'],
+      summary: '可查询公司、UEN / ROC、Internal CSS Status、Client 类型及现有服务。',
+      suggestions: ['CSS Client 和 Shareholder 怎么判断？', 'Active ND Companies 是什么？', '输入公司名或 UEN / ROC 查询'],
     },
   },
   {
@@ -102,7 +102,7 @@ function welcomeMessage(guide: PageGuide) {
 当前页面：**${guide.label}**
 ${guide.summary}
 
-你也可以直接输入公司名、UEN、ND 名字，或询问 AR、开单、迟报及 Email Drafts 流程。`;
+你也可以直接输入公司名、UEN / ROC、ND 名字，或询问 AR、开单、迟报及 Email Drafts 流程。`;
 }
 
 // Inline pieces: **bold** and [label](href) buttons.
@@ -414,7 +414,7 @@ export default function AssistantWidget() {
               onKeyDown={event => {
                 if (event.key === 'Enter' && !event.nativeEvent.isComposing) void send();
               }}
-              placeholder="输入公司名、UEN 或操作问题…"
+              placeholder="输入公司名、UEN / ROC 或操作问题…"
               aria-label="向系统助手提问"
               style={{ flex: 1, border: '1px solid #dbe3ec', borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none' }}
             />

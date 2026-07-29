@@ -2129,7 +2129,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       {/* Filter */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="text" placeholder="Search company name or UEN… (any FYE month)" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
+          <input type="text" placeholder="Search company name or UEN / ROC… (any FYE month)" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
           <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{filtered.length} companies</span>
         </div>
         {crossMonthNotice && <div style={{ fontSize: 11, color: '#2563eb', marginTop: 6 }}>{crossMonthNotice}</div>}
@@ -2171,8 +2171,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                   <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{c.companyName}</div>
-                    {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen} · FYE {c.fyeMonth ?? '—'}</div>}
+                    <div className="company-name-text">{c.companyName}</div>
+                    {c.uen && <div className="company-registration-text">{c.uen} · FYE {c.fyeMonth ?? '—'}</div>}
                   </div>
                   {notInvoicedYet(c)
                     ? <span style={{ fontSize: 10, fontWeight: 700, background: '#fff7ed', color: '#c2410c', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>To invoice</span>
@@ -2202,10 +2202,10 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   onMouseLeave={e => { if (!isOpen) (e.currentTarget as HTMLElement).style.background = '#fff'; }}>
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#1e3a5f', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName}
                     </div>
-                    {c.uen && <div style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'monospace' }}>{c.uen}</div>}
+                    {c.uen && <div className="company-registration-text">{c.uen}</div>}
                   </div>
                   <div style={{ width: '100%', padding: '0 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
                     {notInvoicedYet(c)
@@ -2755,7 +2755,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
           <tr>
             <TH w={30} center stickyLeft={0}>#</TH>
             <TH w={200} stickyLeft={30}>Company Name</TH>
-            <TH w={80} stickyLeft={230} lastSticky>UEN</TH>
+            <TH w={80} stickyLeft={230} lastSticky>UEN / ROC</TH>
             <TH w={100}>{HF('reminder_note', 'Reminder')}</TH>
             <TH w={100}>{HF('prepared_date', 'Report Ready')}</TH>
             <TH w={100}>{HF('date_of_agm', 'AGM')}</TH>
@@ -2789,10 +2789,10 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
               <tr key={r.id} style={{ background: rowBg }}>
                 <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
                 <TD stickyLeft={30}>
-                  <div style={{ fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{r.entity_name}</div>
+                  <div className="company-name-text">{r.entity_name}</div>
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                 </TD>
-                <TD stickyLeft={230} lastSticky><span style={{ fontSize: 10, color: '#64748b' }}>{r.uen || '—'}</span></TD>
+                <TD stickyLeft={230} lastSticky><span className="company-registration-text">{r.uen || '—'}</span></TD>
                 <TD><EditField id={r.id} field="reminder_note"   value={r.reminder_note}   onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="prepared_date"   value={r.prepared_date}   onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="date_of_agm"     value={r.date_of_agm}     onSave={onSave} placeholder="—" isDate /></TD>
@@ -3100,7 +3100,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 {([
                   { label: 'Company Name *', value: newEntity, set: setNewEntity, type: 'text', normalize: (v: string) => v.toUpperCase() },
-                  { label: 'UEN',            value: newUen,    set: setNewUen,    type: 'text', normalize: (v: string) => v.toUpperCase() },
+                  { label: 'UEN / ROC',      value: newUen,    set: setNewUen,    type: 'text', normalize: (v: string) => v.toUpperCase() },
                   { label: 'PIC',            value: newPic,    set: setNewPic,    type: 'text' },
                 ] as const).map(f => (
                   <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
@@ -3157,7 +3157,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       {/* Search + view toggle */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input type="text" placeholder="Search company name or UEN… (any FYE month)" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
+        <input type="text" placeholder="Search company name or UEN / ROC… (any FYE month)" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
         {filter !== 'all' && (
           <button onClick={() => setFilter('all')} style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', cursor: 'pointer', whiteSpace: 'nowrap' }}>Clear filter ✕</button>
         )}
@@ -3183,7 +3183,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
             <span style={{ fontSize: 10, color: '#93c5fd', marginLeft: 8 }}>Click row to open full details & edit</span>
           </div>
           {!isMobile && <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(300px,1.45fr) 100px minmax(260px,1fr) 100px 120px', padding: '7px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-            {['', 'Company Name', 'UEN', 'Services', 'Due Date', 'PIC'].map((h, i) => (
+            {['', 'Company Name', 'UEN / ROC', 'Services', 'Due Date', 'PIC'].map((h, i) => (
               <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
                 {h}
                 {h === 'Due Date' && (
@@ -3207,8 +3207,8 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                     <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{r.entity_name}</div>
-                      <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${fmtDate(r.fye_date)}` : ''}</div>
+                      <div className="company-name-text">{r.entity_name}</div>
+                      <div className="company-registration-text" style={{ marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${fmtDate(r.fye_date)}` : ''}</div>
                     </div>
                     <DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} />
                   </div>
@@ -3233,10 +3233,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                 >
                   <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></div>
                   <div style={{ padding: '0 6px' }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
+                    <div className="company-name-text"><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
                     {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                   </div>
-                  <div style={{ padding: '0 6px', fontSize: 13, color: '#64748b' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
+                  <div className="company-registration-text" style={{ padding: '0 6px' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
                   {/* Fixed slots in fixed order — every service always in the
                       same position, so rows align and differences pop out.
                       Blue = auto · green = manual on · grey = off. */}

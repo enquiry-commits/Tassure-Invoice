@@ -11,6 +11,8 @@
   --accent-red: #ef4444;
   --accent-blue: #1d4ed8;
   --card-header-bg: #1e3a8a;
+  --company-name-color: #1e3a5f;
+  --company-registration-color: #94a3b8;
 }
 
 * {
@@ -21,6 +23,26 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: #f1f5f9;
+}
+
+.company-name-text {
+  color: var(--company-name-color);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: normal;
+}
+
+.company-registration-text {
+  color: var(--company-registration-color);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: .01em;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
 }
 
 .metric-card {

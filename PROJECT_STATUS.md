@@ -24,6 +24,22 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Company identity typography is now consistent across the application.**
+  Added shared `company-name-text` and `company-registration-text` styles based
+  on the Billing Drafts visual hierarchy: company names are 12px/700 deep navy,
+  while registration identifiers are 10px/500 muted monospace text. Applied
+  the shared styles to Companies, Active Client/Master List, Billing Drafts,
+  AR, Late Filing, Nominee Directors, Address Service, Email Drafts, Email
+  Activity and Dashboard exception details. User-facing column labels, form
+  labels and search prompts now use `UEN / ROC`, making clear that both names
+  refer to the same company registration identifier. Database columns and API
+  contracts remain unchanged (`uen`, `roc_no`, and `registrationNo` continue
+  to be used internally), and no table structure, width, sorting or data logic
+  was changed. TypeScript, diff checks and the full 50-route production build
+  pass. Targeted ESLint still reports only the pre-existing React effect and
+  declaration-order findings in the large Billing, Late Filing and Master List
+  components.
+
 - **The AI assistant no longer blocks page controls and now understands the
   current work area.** Its fixed bottom-right launcher was removed and replaced
   with a compact `AI 助手` action immediately to the right of `Logout` in the

@@ -338,7 +338,7 @@ export default function LateFilingPage() {
                     style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
-                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>UEN</span>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>UEN / ROC</span>
                   <input value={editForm.uen ?? ''} onChange={e => setEditForm(f => ({ ...f, uen: e.target.value.toUpperCase() }))} placeholder="—"
                     style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                 </div>
@@ -401,7 +401,7 @@ export default function LateFilingPage() {
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
             <thead>
               <tr>
-                {['No.','Company Name','UEN','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map(h=>(
+                {['No.','Company Name','UEN / ROC','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map(h=>(
                   <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontWeight:700, fontSize:12, whiteSpace:'nowrap',
                     position:'sticky', top:0, zIndex:2, background:'#1e3a5f', color:'#fff',
                     ...(h==='Late FY' ? { minWidth:110 } : {}),
@@ -417,10 +417,10 @@ export default function LateFilingPage() {
                     onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='#f0f6ff'}
                     onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=rowBg(row.remarks)}>
                     <td style={{ padding:'10px 12px', color:'#94a3b8', fontWeight:600 }}>{startIndex + idx + 1}</td>
-                    <td style={{ padding:'10px 12px', fontWeight:600, color:'#1e3a5f', maxWidth:260 }}>
+                    <td className="company-name-text" style={{ padding:'10px 12px', maxWidth:260 }}>
                       {row.company_name}
                     </td>
-                    <td style={{ padding:'10px 12px', color:'#475569', fontSize:12 }}>{row.uen||'—'}</td>
+                    <td className="company-registration-text" style={{ padding:'10px 12px' }}>{row.uen||'—'}</td>
                     <td style={{ padding:'10px 12px' }}>
                       {row.financial_year_end
                         ? <span style={{ color:'#475569', fontSize:12, fontWeight:600 }}>{row.financial_year_end}</span>

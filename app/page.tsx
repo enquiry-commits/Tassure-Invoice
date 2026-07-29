@@ -241,15 +241,15 @@ function UnknownPicDetails({ items }: { items: AutomationExceptionItem[] }) {
             <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse', fontSize: 10 }}>
               <thead>
                 <tr style={{ background: '#f8fafc', color: '#64748b', textAlign: 'left' }}>
-                  {['#', 'Company', 'UEN', 'TeamWork Company ID', 'Status', 'Company Type', 'Email', 'Last detected'].map(label => <th key={label} style={{ padding: '8px 10px', fontWeight: 800, borderBottom: '1px solid #e8edf2' }}>{label}</th>)}
+                  {['#', 'Company', 'UEN / ROC', 'TeamWork Company ID', 'Status', 'Company Type', 'Email', 'Last detected'].map(label => <th key={label} style={{ padding: '8px 10px', fontWeight: 800, borderBottom: '1px solid #e8edf2' }}>{label}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {picItems.map((item, index) => (
                   <tr key={item.id} style={{ borderBottom: '1px solid #eef2f6', color: '#475569' }}>
                     <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{index + 1}</td>
-                    <td style={{ padding: '8px 10px', color: DASHBOARD_COLORS.ink, fontWeight: 750 }}>{item.company?.name ?? item.name ?? '—'}</td>
-                    <td style={{ padding: '8px 10px' }}>{item.company?.uen ?? '—'}</td>
+                    <td className="company-name-text" style={{ padding: '8px 10px' }}>{item.company?.name ?? item.name ?? '—'}</td>
+                    <td className="company-registration-text" style={{ padding: '8px 10px' }}>{item.company?.uen ?? '—'}</td>
                     <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{item.company?.internalId ?? item.key}</td>
                     <td style={{ padding: '8px 10px' }}><ExceptionStatus value={item.company?.teamworkStatus ?? (item.company?.active ? 'Active' : 'Inactive')} /></td>
                     <td style={{ padding: '8px 10px' }}>{item.company?.companyType ?? '—'}</td>

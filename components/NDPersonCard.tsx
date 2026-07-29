@@ -117,7 +117,7 @@ export default function NDPersonCard({ person, index = 0, isLast, query = '' }: 
                 <div key={i} className="flex items-start gap-2 py-2 border-b border-slate-100">
                   <span className="mt-1.5 flex-shrink-0 w-1.5 h-1.5 rounded-full bg-green-400" />
                   <div className="min-w-0">
-                    <div className="text-xs font-medium text-slate-700 leading-snug"><Highlight text={a.company_name} q={q} /></div>
+                    <div className="company-name-text"><Highlight text={a.company_name} q={q} /></div>
                     <div className="text-xs text-slate-400 mt-0.5">Since {formatDate(a.appointment_date)}</div>
                   </div>
                 </div>

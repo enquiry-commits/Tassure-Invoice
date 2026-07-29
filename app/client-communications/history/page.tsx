@@ -370,7 +370,7 @@ export default function DeliveryHistoryPage() {
                 style={{ display: 'grid', gridTemplateColumns: '60px 1.35fr 1fr 100px 110px 130px 120px 100px', alignItems: 'center', padding: '9px 14px', borderBottom: '1px solid #f1f5f9', borderLeft: `3px solid ${accent}`, background: index % 2 === 0 ? '#fff' : '#fafbfc', fontSize: 12 }}
               >
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8' }}>{TYPE_LABEL[row.email_campaigns?.type] ?? row.email_campaigns?.type}</div>
-                <div style={{ fontWeight: 600, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.company_name}</div>
+                <div className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.company_name}</div>
                 <div style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.subject}</div>
                 <div style={{ textAlign: 'right', fontWeight: 700, color: '#0f766e' }}>{formatMoney(row.total_amount)}</div>
                 <div style={{ textAlign: 'center' }}>

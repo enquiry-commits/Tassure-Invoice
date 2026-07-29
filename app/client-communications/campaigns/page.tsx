@@ -701,7 +701,7 @@ export default function EmailDraftWorkbenchPage() {
                       <button key={company.companyName} onClick={() => addCompany(company.companyName)}
                         disabled={adding}
                         style={{ display: 'block', width: '100%', border: 0, borderBottom: '1px solid #edf2f7', background: '#fff', textAlign: 'left', padding: '8px 10px', color: '#18324f', fontSize: 11, cursor: 'pointer' }}>
-                        {company.companyName}
+                        <span className="company-name-text">{company.companyName}</span>
                       </button>
                     ))}
                   </div>
@@ -725,14 +725,7 @@ export default function EmailDraftWorkbenchPage() {
                         <input type="checkbox" checked={row.included} onChange={() => updateRow(index, { included: !row.included })} title="Y = create an Outlook draft; this does not send the email" />
                       </div>
                       <div>
-                        <div style={{
-                          color: '#1e3a5f',
-                          fontSize: 14,
-                          fontWeight: 700,
-                          lineHeight: 1.3,
-                          fontFamily: 'inherit',
-                          letterSpacing: 'normal',
-                        }}>
+                        <div className="company-name-text">
                           {row.companyName}
                         </div>
                         {(() => {

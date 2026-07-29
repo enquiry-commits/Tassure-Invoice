@@ -147,7 +147,7 @@ export default function CompaniesPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
           <input
             type="text"
-            placeholder="Search company name or UEN..."
+            placeholder="Search company name or UEN / ROC..."
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="min-w-48 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-colors focus:border-blue-400"
@@ -167,8 +167,8 @@ export default function CompaniesPage() {
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 700, color: '#1e3a5f', lineHeight: 1.3 }}>{c.companyName}</div>
-                  <div style={{ fontSize: 11, fontFamily: 'monospace', color: '#94a3b8', marginTop: 2 }}>{c.registrationNo}</div>
+                  <div className="company-name-text">{c.companyName}</div>
+                  <div className="company-registration-text" style={{ marginTop: 2 }}>{c.registrationNo}</div>
                 </div>
                 <StatusBadge status={c.clientStatus} />
               </div>
@@ -193,7 +193,7 @@ export default function CompaniesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr>
-                {['#','Company Name','Internal CSS Status','UEN','Type','Nominee Director','Address Svc','Contact','PIC'].map(h => (
+                {['#','Company Name','Internal CSS Status','UEN / ROC','Type','Nominee Director','Address Svc','Contact','PIC'].map(h => (
                   <th key={h} className="text-left px-4 py-2.5 font-semibold text-slate-600"
                     style={{ position: 'sticky', top: 0, zIndex: 2, background: '#f8fafc', boxShadow: 'inset 0 -1px 0 #f1f5f9' }}>
                     {h}
@@ -210,12 +210,12 @@ export default function CompaniesPage() {
                 <tr key={c.registrationNo || i} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                   <td className="px-4 py-2.5 text-slate-400 text-xs">{startIndex + i + 1}</td>
                   <td className="px-4 py-2.5">
-                    <div className="font-medium text-slate-800 max-w-56 truncate" title={c.companyName}>
+                    <div className="company-name-text max-w-56 truncate" title={c.companyName}>
                       {c.companyName}
                     </div>
                   </td>
                   <td className="px-4 py-2.5"><StatusBadge status={c.clientStatus} /></td>
-                  <td className="px-4 py-2.5 text-slate-500 text-xs font-mono">{c.registrationNo}</td>
+                  <td className="px-4 py-2.5 company-registration-text">{c.registrationNo}</td>
                   <td className="px-4 py-2.5 text-slate-500 text-xs">{c.companyType || '—'}</td>
                   <td className="px-4 py-2.5">
                     {c.hasActiveND && c.activeNDs?.length > 0 ? (
