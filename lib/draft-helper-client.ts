@@ -4,6 +4,50 @@ import { invoicePdfFileName } from './invoice-filename';
 
 export const DRAFT_HELPER_URL = 'http://127.0.0.1:51820';
 
+// Bump alongside tassure-draft-helper/app.py's own VERSION whenever a new
+// exe is built and copied to public/downloads/TassureDraftHelper.exe — this
+// is what lets the web app tell staff their locally-installed Helper is
+// stale instead of silently running old behaviour with no signal at all.
+export const LATEST_HELPER_VERSION = '1.2.0';
+
+export interface HelperHealth {
+  ok: boolean;
+  version: string;
+  outlookPath?: string | null;
+  isClassicOutlook?: boolean;
+}
+
+function versionIsOlder(current: string, latest: string): boolean {
+  const a = current.split('.').map(Number);
+  const b = latest.split('.').map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] ?? 0, y = b[i] ?? 0;
+    if (x !== y) return x < y;
+  }
+  return false;
+}
+
+// null = unreachable (not running / network error), distinct from "running
+// but outdated" — callers that only care about "is it usable right now"
+// should keep using checkHelperHealth(); this is for surfacing version drift.
+export async function getHelperHealth(timeoutMs = 800): Promise<HelperHealth | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(`${DRAFT_HELPER_URL}/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+export function isHelperOutdated(health: HelperHealth | null): boolean {
+  if (!health?.version) return false;
+  return versionIsOlder(health.version, LATEST_HELPER_VERSION);
+}
+
 interface DraftInvoiceRef {
   qbCompany: string;
   invoiceNo: string;
@@ -47,15 +91,7 @@ export function buildMailtoLink(d: Pick<DraftLike, 'to_email' | 'cc_email' | 'su
 }
 
 export async function checkHelperHealth(timeoutMs = 800): Promise<boolean> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(`${DRAFT_HELPER_URL}/health`, { signal: controller.signal });
-    clearTimeout(timer);
-    return res.ok;
-  } catch {
-    return false;
-  }
+  return (await getHelperHealth(timeoutMs)) !== null;
 }
 
 function arrayBufferToBase64(buf: ArrayBuffer): string {

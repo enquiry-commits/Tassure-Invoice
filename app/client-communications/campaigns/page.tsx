@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import CommsTabs from '@/components/client-communications/CommsTabs';
 import {
-  checkHelperHealth,
+  getHelperHealth,
+  isHelperOutdated,
   openDraftsInOutlook,
   type DraftLike,
   type DraftOpenResult,
@@ -163,6 +164,7 @@ export default function EmailDraftWorkbenchPage() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [helperAvailable, setHelperAvailable] = useState<boolean | null>(null);
+  const [helperOutdated, setHelperOutdated] = useState(false);
   const [me, setMe] = useState<AuthUser | null>(null);
   const [message, setMessage] = useState<{ tone: 'success' | 'warning' | 'error'; text: string } | null>(null);
   const [commonFiles, setCommonFiles] = useState<File[]>([]);
@@ -179,7 +181,10 @@ export default function EmailDraftWorkbenchPage() {
   const typeTemplates = templates.filter(t => t.type === type);
 
   const recheckHelper = useCallback(() => {
-    checkHelperHealth().then(setHelperAvailable);
+    getHelperHealth().then(health => {
+      setHelperAvailable(health !== null);
+      setHelperOutdated(isHelperOutdated(health));
+    });
   }, []);
 
   useEffect(() => {
@@ -734,6 +739,12 @@ export default function EmailDraftWorkbenchPage() {
                 <>
                   <a href="/downloads/TassureDraftHelper.exe" download
                     style={{ color: '#b45309', fontSize: 11, fontWeight: 800 }}>Download Outlook Helper</a>
+                  <button onClick={recheckHelper} style={{ border: '1px solid #d9e2ec', background: '#fff', borderRadius: 6, padding: '7px 10px', color: '#526b85', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Recheck</button>
+                </>
+              ) : helperAvailable && helperOutdated ? (
+                <>
+                  <a href="/downloads/TassureDraftHelper.exe" download
+                    style={{ color: '#b45309', fontSize: 11, fontWeight: 800 }}>Update Outlook Helper (new version available)</a>
                   <button onClick={recheckHelper} style={{ border: '1px solid #d9e2ec', background: '#fff', borderRadius: 6, padding: '7px 10px', color: '#526b85', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Recheck</button>
                 </>
               ) : (

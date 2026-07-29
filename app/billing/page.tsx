@@ -19,7 +19,7 @@ import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
 import { mergeTemplate, formatInvoiceList, formatAmount } from '@/lib/email-merge';
-import { checkHelperHealth, openDraftsInOutlook, buildMailtoLink } from '@/lib/draft-helper-client';
+import { getHelperHealth, isHelperOutdated, openDraftsInOutlook, buildMailtoLink } from '@/lib/draft-helper-client';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
@@ -1891,7 +1891,13 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     fetch('/api/auth/me').then(r => r.ok ? r.json() : { user: null }).then(j => setMe(j.user ?? null)).catch(() => setMe(null));
   }, []);
   const [helperAvailable, setHelperAvailable] = useState<boolean | null>(null);
-  useEffect(() => { checkHelperHealth().then(setHelperAvailable); }, []);
+  const [helperOutdated, setHelperOutdated] = useState(false);
+  useEffect(() => {
+    getHelperHealth().then(health => {
+      setHelperAvailable(health !== null);
+      setHelperOutdated(isHelperOutdated(health));
+    });
+  }, []);
   const [emailTemplates, setEmailTemplates] = useState<{ id: number; name: string; subject_template: string; body_template: string; is_default: boolean }[]>([]);
   useEffect(() => {
     fetch('/api/client-communications/templates?type=ar').then(r => r.json()).then(j => {
@@ -2264,6 +2270,12 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                         <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8 }}>
                           {helperAvailable ? 'Opens directly in Outlook with the invoice attached.' : 'Draft Helper not detected — opens a blank Outlook draft (no attachment) instead.'}
                         </div>
+                        {helperAvailable && helperOutdated && (
+                          <div style={{ fontSize: 10, color: '#b45309', marginBottom: 8 }}>
+                            A newer Draft Helper is available.{' '}
+                            <a href="/downloads/TassureDraftHelper.exe" download style={{ color: '#b45309', fontWeight: 800 }}>Update it</a>.
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                           <button onClick={() => setDraftPopoverFor(null)} style={{ fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '5px 8px' }}>Cancel</button>
                           <button onClick={() => quickEmailDraft(c)} disabled={drafting || !selectedTemplateId}

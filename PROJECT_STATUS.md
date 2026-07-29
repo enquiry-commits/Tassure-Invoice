@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Draft Helper v1.2.0: verifies Classic vs New Outlook)
+Last updated: 2026-07-29 (Web app now detects an outdated Draft Helper)
 
 ## Purpose
 
@@ -23,6 +23,29 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Web app now detects an outdated Draft Helper and prompts to update.**
+  Vincent flagged that the Helper (used by staff, not by him directly — he
+  can't personally test/reproduce issues on it) had no update mechanism at
+  all: every code change meant staff needed to know to manually
+  re-download and relaunch, with nothing telling them they were behind.
+  Confirmed via a direct question that a lightweight fix — the web app
+  detects version drift and prompts a download, rather than a fully
+  self-updating exe (more complex, more risk: an exe replacing itself can
+  trip antivirus, fail silently, etc.) — was the right scope for now.
+  `lib/draft-helper-client.ts` gained `LATEST_HELPER_VERSION` (bump this
+  alongside `tassure-draft-helper/app.py`'s own `VERSION` on every rebuild),
+  `getHelperHealth()` (the full `/health` payload, not just a boolean) and
+  `isHelperOutdated()`; `checkHelperHealth()` now reuses `getHelperHealth`
+  internally so its existing boolean contract is unchanged for the callers
+  that only care whether it's running (`history/page.tsx`'s reopen-draft
+  preflight). Both persistent Helper-status surfaces — the Email Drafts
+  workbench (`campaigns/page.tsx`) and Billing Drafts' quick-draft popover
+  (`billing/page.tsx`) — now show an amber "Update Outlook Helper" prompt
+  with a download link when the running Helper reports an older version,
+  distinct from the existing "not running at all" state; an outdated
+  Helper still works (button stays enabled), it's a nudge, not a block.
+  Production build passes; committed locally, pushed.
 
 - **Tassure Draft Helper v1.2.0: verifies it's actually targeting Classic
   Outlook, not New Outlook** (`C:\Users\vincent\tassure-draft-helper\app.py`
