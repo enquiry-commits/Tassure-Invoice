@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
-import type { InvoiceRef } from '@/lib/email-merge';
+import { formatContactName, type InvoiceRef } from '@/lib/email-merge';
 import { applyCampaignRecipientRules, buildDefaultCcList, parseEmailList, recipientLines } from '@/lib/campaign-recipients';
 import { findStaffEmails } from '@/lib/staff-directory';
 
@@ -217,7 +217,7 @@ export function buildRow(
     companyId: company?.id ?? null,
     toEmail: contact.email ?? null,
     ccEmail: contact.ccEmail,
-    contactName: contact.contactName || rawName,
+    contactName: formatContactName(contact.contactName || rawName),
     invoiceRefs: refs,
     totalAmount,
     included,

@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Fixed severe click-to-edit freeze in both TABLE views)
+Last updated: 2026-07-29 (Enforced "Dear {{contactName}}" casing rule)
 
 ## Purpose
 
@@ -23,6 +23,25 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Enforced a fixed casing rule for the "Dear {{contactName}}" greeting in
+  Outlook drafts.** Vincent's rule: a Chinese name is copied through
+  untouched (no such thing as case in Chinese), an English/romanized name
+  gets proper title case regardless of how it was entered — e.g. raw
+  "TAN QUINI" or "seow jin sheng" both become "Tan Quini" / "Seow Jin
+  Sheng". Added `formatContactName()` in `lib/email-merge.ts` (detects any
+  CJK codepoint via Unicode range test, leaves Chinese names alone,
+  otherwise capitalizes the first letter of each whitespace-separated word
+  and lowercases the rest). Applied it at the one true choke point every
+  draft-creation path funnels through — `app/api/client-communications/
+  campaigns/route.ts`'s POST handler, where `contactName` is finalized
+  into both the merged `subject`/`body` and the persisted `contact_name`
+  column — so it's guaranteed regardless of whether the name came from
+  TeamWork sync, the company-record fallback, or a reviewer's manual edit
+  in Campaign Centre's contact-name text box. Also applied it in
+  `lib/client-comms-resolve.ts`'s `buildRow()` (the shared preview
+  resolver) so the reviewer sees the same correctly-cased name they'll
+  actually send, not a mismatched raw value. Production build passes.
 
 - **Fixed a severe page freeze on clicking any cell in either TABLE view
   (AR Reminder's Table toggle and Master List's classic table), reported

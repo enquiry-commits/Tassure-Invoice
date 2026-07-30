@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { mergeTemplate, formatInvoiceList, formatAmount, type InvoiceRef } from '@/lib/email-merge';
+import { mergeTemplate, formatInvoiceList, formatAmount, formatContactName, type InvoiceRef } from '@/lib/email-merge';
 import { normalizeRecipientLines } from '@/lib/campaign-recipients';
 
 // Client Communications: generates draft emails from real system data,
@@ -77,9 +77,10 @@ export async function POST(req: NextRequest) {
 
     const refs = c.invoiceRefs ?? [];
     const totalAmount = c.totalAmount ?? refs.reduce((s, r) => s + r.amount, 0);
+    const contactName = formatContactName(c.contactName || c.companyName);
     const fields = {
       companyName: c.companyName,
-      contactName: c.contactName || c.companyName,
+      contactName,
       toEmail,
       ccEmail,
       totalAmount: formatAmount(totalAmount),
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
       campaign_id: campaign.id,
       company_id: c.companyId ?? null,
       company_name: c.companyName,
-      contact_name: c.contactName || c.companyName,
+      contact_name: contactName,
       to_email: toEmail,
       cc_email: ccEmail || null,
       subject: mergeTemplate(template.subject_template, fields),
