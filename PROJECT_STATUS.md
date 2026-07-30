@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Strike Off's classic-table header now actually renders red)
+Last updated: 2026-07-30 (Master List column-header row is now light-gray/black text)
 
 ## Purpose
 
@@ -23,6 +23,29 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Master List's classic table now has two visually distinct header
+  rows: row 1 (title bar) keeps each page's `accentColor` (red for
+  Strike Off, navy for the other five), row 2 (the column-label row —
+  No./Company Name/UEN.../...) is now a fixed light-gray background with
+  dark text on ALL six Master List pages, including Strike Off.**
+  Vincent's precise spec after a few rounds of clarification: row 1 stays
+  colored per page, row 2 becomes uniform light-gray/black everywhere,
+  Strike Off included (only its row 1 differs, staying red). Implemented
+  as a dedicated `.master-list-column-header` CSS class (new
+  `--list-column-header-bg`/`--list-column-header-text`/
+  `--list-column-header-border` variables — light gray `#f1f5f9`, dark
+  slate text `#1e293b`), kept deliberately separate from the shared
+  `.system-list-column-header` class so genuine LIST pages (Dashboard,
+  Companies, Late Filing, Billing Drafts, Client Communications) are
+  untouched — this change is scoped to the Master List family only,
+  since every screenshot in this conversation was a Master List column
+  header. Removed the `background: accentColor` inline overrides just
+  added to the classic table's `<th>` cells (no longer needed — the new
+  class handles row 2 uniformly), and re-tinted the column-header cell
+  divider (`borderRight`) and `ColumnFilterMenu`'s filter icon (previously
+  white/yellow, assuming a dark header) for legibility against the new
+  light background. Production build passes.
 
 - **Found and fixed the real bug behind the Strike Off header color
   confusion: the classic Master List table's title bar and column-header

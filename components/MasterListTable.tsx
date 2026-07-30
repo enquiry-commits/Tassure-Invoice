@@ -294,7 +294,7 @@ function ColumnFilterMenu({ field, label, rows, selected, onApply }: {
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
       <button onClick={e => { e.stopPropagation(); setOpen(v => !v); }} title={`Filter ${label}`}
-        style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', color: active ? '#fde047' : 'rgba(255,255,255,0.6)' }}>
+        style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', color: active ? '#b45309' : 'rgba(30,41,59,0.4)' }}>
         <Filter size={11} fill={active ? 'currentColor' : 'none'} />
       </button>
       {open && (
@@ -1352,19 +1352,18 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         <div ref={outerRef} style={{ overflowX: isMobile ? 'auto' : 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
             <thead>
-              <tr className="system-list-column-header">
-                <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, padding: '7px 8px', minWidth: 36, width: 36, textAlign: 'center', background: accentColor, color: '#fff' }}>No.</th>
+              <tr className="master-list-column-header">
+                <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, padding: '7px 8px', minWidth: 36, width: 36, textAlign: 'center' }}>No.</th>
                 {columns.map(c => {
                   const sl = stickyLeftOf(c.field);
                   return (
                     <th key={c.field} style={{
                       position: 'sticky', top: 0, left: sl !== undefined ? sl + 36 : undefined,
                       zIndex: sl !== undefined ? 3 : 2,
-                      background: accentColor, color: '#fff',
                       fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px',
                       padding: '7px 8px', whiteSpace: 'nowrap', minWidth: c.w, width: c.w,
-                      borderRight: '1px solid rgba(255,255,255,0.12)',
-                      boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.18)' : undefined,
+                      borderRight: '1px solid rgba(15,23,42,0.08)',
+                      boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.1)' : undefined,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'space-between' }}>
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.label}</span>
@@ -1373,7 +1372,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                     </th>
                   );
                 })}
-                <th style={{ position: 'sticky', top: 0, zIndex: 2, background: accentColor, color: '#fff', fontSize: 9, fontWeight: 700, padding: '7px 8px', minWidth: 50, width: 50, textAlign: 'center' }}></th>
+                <th style={{ position: 'sticky', top: 0, zIndex: 2, fontSize: 9, fontWeight: 700, padding: '7px 8px', minWidth: 50, width: 50, textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
