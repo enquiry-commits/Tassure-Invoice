@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Late Filing: gray header, dropped the separate No. column)
+Last updated: 2026-07-30 (Late Filing: added the left-side chevron column)
 
 ## Purpose
 
@@ -23,6 +23,20 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Late Filing rows now have the left-side chevron (`>`) indicator too
+  — Vincent's follow-up after the No.-column change: "可是左边的那个三角你没有还原"
+  (the reference screenshot's chevron column wasn't reproduced).** Late
+  Filing never actually had a chevron before (confirmed via the prior
+  commit's diff — the removed "No." cell was plain text, no icon), so
+  this was a genuine gap against the Active Client List view reference,
+  not a regression. Added a narrow 32px `<col>`/`<th>`/`<td>` column
+  before Company Name with a Lucide `ChevronRight` icon (`#94a3b8`,
+  matching Active Client's List view chevron exactly), and switched the
+  header label array's map key from the label text to its index (now
+  that both the new leading chevron column and the trailing actions
+  column are empty strings, using the text as a key would collide).
+  Production build passes.
 
 - **Late Filing's table header is now gray/dark-text, and the separate
   "No." column is gone — row numbers are now inlined into the Company

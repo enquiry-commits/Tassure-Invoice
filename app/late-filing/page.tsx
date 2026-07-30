@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { AlertTriangle, Plus, Trash2, Check, X, RefreshCw, Zap, Calendar, Building2, Clock } from 'lucide-react';
+import { AlertTriangle, Plus, Trash2, Check, X, RefreshCw, Zap, Calendar, Building2, Clock, ChevronRight } from 'lucide-react';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
@@ -390,6 +390,7 @@ export default function LateFilingPage() {
         <div className="system-list-shell system-list-scroll" style={{ maxHeight:'calc(100vh - 260px)' }}>
           <table className="system-list-table" style={{ minWidth: 1320 }}>
             <colgroup>
+              <col style={{ width: 32 }} />
               <col style={{ width: 300 }} />
               <col style={{ width: 120 }} />
               <col style={{ width: 100 }} />
@@ -403,8 +404,8 @@ export default function LateFilingPage() {
             </colgroup>
             <thead>
               <tr className="list-column-header-gray">
-                {['Company Name','UEN / ROC','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map(h=>(
-                  <th key={h} style={{ textAlign:'left', whiteSpace:'nowrap',
+                {['','Company Name','UEN / ROC','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map((h,i)=>(
+                  <th key={i} style={{ textAlign:'left', whiteSpace:'nowrap',
                     position:'sticky', top:0, zIndex:2,
                   }}>{h}</th>
                 ))}
@@ -414,6 +415,9 @@ export default function LateFilingPage() {
               {pageItems.map((row, idx) => (
                   <tr key={row.id} className="system-list-row" onClick={() => startEdit(row)}
                     style={{ cursor: 'pointer' }}>
+                    <td style={{ color: '#94a3b8' }}>
+                      <ChevronRight size={14} />
+                    </td>
                     <td className="company-name-text">
                       <span style={{ color: '#cbd5e1', marginRight: 6, fontSize: 11 }}>{startIndex + idx + 1}</span>
                       {row.company_name}
