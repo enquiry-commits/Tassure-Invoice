@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (AR Table + Active Client List headers gray; 11px everywhere)
+Last updated: 2026-07-30 (Late Filing: gray header, dropped the separate No. column)
 
 ## Purpose
 
@@ -23,6 +23,24 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Late Filing's table header is now gray/dark-text, and the separate
+  "No." column is gone — row numbers are now inlined into the Company
+  Name cell instead, matching Active Client's List view exactly (the
+  screenshot Vincent pointed at as the reference).** Verbatim: "late
+  filing 页面那边要做和截图一样的处理，不需要 No. 列". In
+  `app/late-filing/page.tsx`: dropped the first `<col>` (56px, the "No."
+  column width) and widened Company Name's `<col>` from 250px to 300px
+  to absorb the space; removed `'No.'` from the header label array and
+  switched the header `<tr>` from `.system-list-column-header` to
+  `.list-column-header-gray` (also dropped its now-redundant hardcoded
+  inline `background:'#1e3a5f', color:'#fff'`, letting the CSS class
+  handle it, same as every other page in this rollout); removed the
+  separate `<td className="system-list-number">` cell and instead
+  prefixed the Company Name `<td>` with `<span style={{color:'#cbd5e1',
+  marginRight:6, fontSize:11}}>{row number}</span>` — the exact same
+  inline-number styling `MasterListTable.tsx`'s Active Client List view
+  already uses. Production build passes.
 
 - **Two follow-ups from Vincent after seeing the collapsible Active
   column live: (1) inconsistent font sizes on collapse-toggle labels,

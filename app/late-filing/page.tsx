@@ -390,8 +390,7 @@ export default function LateFilingPage() {
         <div className="system-list-shell system-list-scroll" style={{ maxHeight:'calc(100vh - 260px)' }}>
           <table className="system-list-table" style={{ minWidth: 1320 }}>
             <colgroup>
-              <col style={{ width: 56 }} />
-              <col style={{ width: 250 }} />
+              <col style={{ width: 300 }} />
               <col style={{ width: 120 }} />
               <col style={{ width: 100 }} />
               <col style={{ width: 95 }} />
@@ -403,10 +402,10 @@ export default function LateFilingPage() {
               <col style={{ width: 54 }} />
             </colgroup>
             <thead>
-              <tr className="system-list-column-header">
-                {['No.','Company Name','UEN / ROC','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map(h=>(
+              <tr className="list-column-header-gray">
+                {['Company Name','UEN / ROC','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map(h=>(
                   <th key={h} style={{ textAlign:'left', whiteSpace:'nowrap',
-                    position:'sticky', top:0, zIndex:2, background:'#1e3a5f', color:'#fff',
+                    position:'sticky', top:0, zIndex:2,
                   }}>{h}</th>
                 ))}
               </tr>
@@ -415,8 +414,8 @@ export default function LateFilingPage() {
               {pageItems.map((row, idx) => (
                   <tr key={row.id} className="system-list-row" onClick={() => startEdit(row)}
                     style={{ cursor: 'pointer' }}>
-                    <td className="system-list-number">{startIndex + idx + 1}</td>
                     <td className="company-name-text">
+                      <span style={{ color: '#cbd5e1', marginRight: 6, fontSize: 11 }}>{startIndex + idx + 1}</span>
                       {row.company_name}
                     </td>
                     <td className="company-registration-text">{row.uen||'—'}</td>
