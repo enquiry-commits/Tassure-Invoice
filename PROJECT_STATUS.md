@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Master List's Active column is now collapsible)
+Last updated: 2026-07-30 (AR Table + Active Client List headers gray; 11px everywhere)
 
 ## Purpose
 
@@ -23,6 +23,35 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Two follow-ups from Vincent after seeing the collapsible Active
+  column live: (1) inconsistent font sizes on collapse-toggle labels,
+  (2) two more headers missed by the gray-row-2 rollout.** Verbatim:
+  "字为什么不是 11px, 包括 PIC 的字大小也是要 11PX，然后为什么 ACTIVE CLIENT LIST 和
+  AR TABLE 页面的第二行没有灰色背景黑字处理".
+  (1) The new "Active" collapse-button label in
+  `components/MasterListTable.tsx` was `fontSize: 9`, and AR Reminder's
+  PIC collapse-toggle buttons in `app/billing/page.tsx`'s `picHeader()`
+  were `fontSize: 9`/`8` — both copied from the pre-existing pattern
+  without matching the rest of the header row's 11px. All three now
+  `fontSize: 11`.
+  (2) Two header rows were missed because they don't go through the
+  `columns.map` code path already converted: Active Client's **List**
+  view (`MasterListTable.tsx`'s `enableListView && view === 'list'`
+  branch, a `<div>` grid header, not the classic `<table>`) was still on
+  the navy `.system-list-column-header` — switched to
+  `.list-column-header-gray`. AR Reminder's **Table** view
+  (`ARTableView`'s own `TH` component in `app/billing/page.tsx`) doesn't
+  use CSS classes at all — it's a fully self-contained component with
+  `background: '#1e3a5f'` hardcoded inline — switched to the same
+  `#e4e9ef`/`#1e293b` gray/dark-text pair used everywhere else, updated
+  its `borderRight` divider and box-shadow for the lighter background,
+  and re-tinted `ARColumnFilterMenu`'s filter icon (previously white/
+  yellow, assuming a dark header) the same way `ColumnFilterMenu` was
+  fixed earlier. AR Reminder's own row-1 title bar ("FYE JUL 2026" etc.,
+  rendered by the parent `ARTab`, not `ARTableView`) is untouched — stays
+  navy, matching the row-1/row-2 split established for Master List.
+  Production build passes.
 
 - **Master List's classic table "Active" (status) column can now be
   collapsed/expanded, same interaction as AR Reminder's PIC columns.**

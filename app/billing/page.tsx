@@ -2615,7 +2615,7 @@ function ARColumnFilterMenu({ field, label, records, selected, onApply }: {
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
       <button onClick={e => { e.stopPropagation(); setOpen(v => !v); }} title={`Filter ${label}`}
-        style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', color: active ? '#fde047' : 'rgba(255,255,255,0.6)' }}>
+        style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', color: active ? '#b45309' : 'rgba(30,41,59,0.4)' }}>
         <Filter size={11} fill={active ? 'currentColor' : 'none'} />
       </button>
       {open && (
@@ -2677,7 +2677,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, width: '100%' }}>
             <button type="button" onClick={() => setPicOpen(current => ({ ...current, [key]: !current[key] }))}
               title={`Collapse ${label} to the left`}
-              style={{ padding: 0, border: 0, background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700 }}>
+              style={{ padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700 }}>
               <ChevronLeft size={11} /><span>{label}</span>
             </button>
             <ARColumnFilterMenu field={field} label={label} records={allRecords} selected={columnFilters[field] ?? null} onApply={next => onApplyFilter(field, next)} />
@@ -2685,7 +2685,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
         ) : (
           <button type="button" onClick={() => setPicOpen(current => ({ ...current, [key]: !current[key] }))}
             title={`Expand ${label}`}
-            style={{ width: '100%', padding: 0, border: 0, background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, fontSize: 8, fontWeight: 700 }}>
+            style={{ width: '100%', padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, fontSize: 11, fontWeight: 700 }}>
             <ChevronRight size={10} /><span>{label.replace(' PIC', '')}</span>
           </button>
         )}
@@ -2745,12 +2745,12 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
     <th style={{
       position: 'sticky', top: 0, zIndex: stickyLeft !== undefined ? 3 : 2,
       left: stickyLeft !== undefined ? stickyLeft : undefined,
-      background: '#1e3a5f', color: '#fff',
+      background: '#e4e9ef', color: '#1e293b',
       fontSize: 11, fontWeight: 700, letterSpacing: 'normal',
       padding: '7px 8px', whiteSpace: 'nowrap', minWidth: w, width: w,
       textAlign: center ? 'center' : 'left',
-      borderRight: finance ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(255,255,255,0.12)',
-      boxShadow: lastSticky ? '3px 0 8px -2px rgba(0,0,0,0.18)' : undefined,
+      borderRight: finance ? '1px solid rgba(15,23,42,0.14)' : '1px solid rgba(15,23,42,0.08)',
+      boxShadow: lastSticky ? '3px 0 8px -2px rgba(0,0,0,0.1)' : undefined,
     }}>{children}</th>
   );
 

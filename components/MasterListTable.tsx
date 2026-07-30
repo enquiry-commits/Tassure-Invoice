@@ -1260,9 +1260,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             <span className="system-list-title-hint">Click a company to open full details and edit</span>
           </div>
           {!isMobile && (
-            <div className="system-list-column-header" style={{ display: 'grid', gridTemplateColumns: '32px minmax(260px,1.6fr) 120px 110px minmax(260px,1.25fr) 90px', padding: '10px 16px', columnGap: 12 }}>
+            <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: '32px minmax(260px,1.6fr) 120px 110px minmax(260px,1.25fr) 90px', padding: '10px 16px', columnGap: 12 }}>
               {['', 'Company Name', 'UEN / ROC', 'Status', 'Services', 'FYE'].map((h, i) => (
-                <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{h}</div>
+                <div key={i} style={{ fontWeight: 700 }}>{h}</div>
               ))}
             </div>
           )}
@@ -1381,7 +1381,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
                             <button type="button" onClick={() => setStatusOpen(false)} title={`Collapse ${c.label} to the left`}
-                              style={{ padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700 }}>
+                              style={{ padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700 }}>
                               <ChevronLeft size={11} /><span>{c.label}</span>
                             </button>
                             <ColumnFilterMenu field={c.field} label={c.label} rows={rows} selected={columnFilters[c.field] ?? null} onApply={next => applyColumnFilter(c.field, next)} />
