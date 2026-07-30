@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 (Enforced "Dear {{contactName}}" casing rule)
+Last updated: 2026-07-30 (Reverted the "Add Manual" color change — red was correct)
 
 ## Purpose
 
@@ -23,6 +23,19 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Reverted the previous "Add Manual" button color change — Vincent
+  clarified he actually wants both the toolbar button and the table
+  header red on the Strike Off page, scoped to that page only.** A
+  screenshot led Claude to read Vincent's earlier "the header should be
+  red" as "…but not the button," and changed both the toolbar button and
+  the modal's Save button off `accentColor` to a fixed teal. Vincent
+  corrected this: the intent was that the button and header **both**
+  being red is correct and specific to Strike Off (other list pages
+  naturally get their own non-red `accentColor` already, so nothing else
+  needed changing). `git revert`'d that commit outright rather than
+  hand-editing back, since the prior commit was the exact inverse of the
+  desired state. Production build passes.
 
 - **Enforced a fixed casing rule for the "Dear {{contactName}}" greeting in
   Outlook drafts.** Vincent's rule: a Chinese name is copied through
