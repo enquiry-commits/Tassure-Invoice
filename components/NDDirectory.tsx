@@ -61,7 +61,7 @@ export default function NDDirectory({ persons }: { persons: NDPerson[] }) {
           <span className="system-list-title-hint">{filtered.length} people · select a row to view active company appointments</span>
         </div>
         {filtered.length > 0 && (
-          <div className="system-list-column-header hidden md:grid" style={{ gridTemplateColumns: 'minmax(240px,1.4fr) 150px 120px 32px', padding: '10px 18px', gap: 16 }}>
+          <div className="list-column-header-gray hidden md:grid" style={{ gridTemplateColumns: 'minmax(240px,1.4fr) 150px 120px 32px', padding: '10px 18px', gap: 16 }}>
             <div>ND Name</div>
             <div>Active Appointments</div>
             <div>Member ID</div>

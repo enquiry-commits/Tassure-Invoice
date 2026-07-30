@@ -2164,7 +2164,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         </div>
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)' }}>
           <div style={{ minWidth: isMobile ? undefined : 1320 }}>
-          {!isMobile && <div className="system-list-column-header" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: billingListColumns, columnGap: 10, padding: '10px 14px', borderLeft: '3px solid transparent', alignItems: 'center' }}>
+          {!isMobile && <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: billingListColumns, columnGap: 10, padding: '10px 14px', borderLeft: '3px solid transparent', alignItems: 'center' }}>
             {['', 'Company Name', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC', ''].map((h, i) => (
               i === 5
                 ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>ND (TAC)</div>
@@ -3210,9 +3210,9 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
             <span className="system-list-title">FYE {month.toUpperCase()} {year}</span>
             <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Click a company to open full details and edit</span>
           </div>
-          {!isMobile && <div className="system-list-column-header" style={{ display: 'grid', gridTemplateColumns: '32px minmax(310px,1.45fr) 120px minmax(300px,1fr) 110px 120px', columnGap: 12, padding: '10px 16px' }}>
+          {!isMobile && <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: '32px minmax(310px,1.45fr) 120px minmax(300px,1fr) 110px 120px', columnGap: 12, padding: '10px 16px' }}>
             {['', 'Company Name', 'UEN / ROC', 'Services', 'Due Date', 'PIC'].map((h, i) => (
-              <div key={i} style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div key={i} style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', padding: '0 6px', display: 'flex', alignItems: 'center', gap: 4 }}>
                 {h}
                 {h === 'Due Date' && (
                   <span title={'Filed = the Annual Return for this FYE cycle has already been filed with ACRA.\n"Xd left" = X days remain until the AR filing deadline.\n"Xd overdue" = the deadline has passed by X days and it is not yet filed.'}

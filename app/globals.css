@@ -97,18 +97,21 @@ body {
   text-transform: none !important;
 }
 
-/* Master List's classic (Excel-style) table only — a light-gray/dark-text
-   column-header row, independent of each page's accentColor (which stays
-   on the title bar above it). Kept separate from .system-list-column-header
-   since that shared class also drives every genuine LIST page's header. */
-.master-list-column-header {
+/* The operational data-grid pages (Master List's six categories, AR
+   Reminder, Billing Drafts, Address Service, ND) — a light-gray/dark-text
+   column-header row, independent of any page's accentColor (which, where
+   one exists, stays on the title bar above it). Kept separate from
+   .system-list-column-header since that shared class still drives the
+   plainer LIST pages (Dashboard, Companies, Late Filing, Client
+   Communications), which keep the navy header. */
+.list-column-header-gray {
   min-height: 38px;
   background: var(--list-column-header-bg);
   color: var(--list-column-header-text);
   border-bottom: 1px solid var(--list-column-header-border) !important;
 }
 
-.master-list-column-header > * {
+.list-column-header-gray > * {
   background-color: var(--list-column-header-bg);
   color: var(--list-column-header-text) !important;
   font-size: 11px !important;
@@ -180,7 +183,8 @@ body {
   font-size: 11.5px;
 }
 
-.system-list-table .system-list-column-header > th {
+.system-list-table .system-list-column-header > th,
+.system-list-table .list-column-header-gray > th {
   padding: 10px 14px !important;
   text-align: left;
   vertical-align: middle;

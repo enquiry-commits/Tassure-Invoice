@@ -29,7 +29,7 @@ export default function AddressServiceTable({ companies }: { companies: Row[] })
             <col style={{ width: 110 }} />
           </colgroup>
           <thead>
-            <tr className="system-list-column-header border-b">
+            <tr className="list-column-header-gray border-b">
               <th>No.</th>
               <th>Company Name</th>
               <th>UEN / ROC</th>

@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Master List header row: darker gray, restored original font size)
+Last updated: 2026-07-30 (Extended the gray column-header row to Address/AR/Billing/ND)
 
 ## Purpose
 
@@ -23,6 +23,29 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Extended the light-gray/dark-text column-header row (row 2) from
+  Master List to Address Service, AR Reminder's List view, Billing
+  Drafts, and ND (Nominee Director Directory).** Vincent's explicit list:
+  "ADDRESS / AR / BILLING/ND 页面的表头第2行也是要做灰色背景和黑色字". Renamed
+  the CSS class from `.master-list-column-header` to the more accurate
+  `.list-column-header-gray` (same properties, same
+  `--list-column-header-*` variables) since it's no longer Master-List
+  specific, and switched these four components off the shared
+  `.system-list-column-header` class onto it:
+  `components/AddressServiceTable.tsx` (row 2, `<tr>`),
+  `components/NDDirectory.tsx` (row 2, grid header `<div>`),
+  `app/billing/page.tsx`'s Billing Drafts list header and AR Reminder's
+  List-view header (both separate `<div>` instances in the same file).
+  Added a matching `.system-list-table .list-column-header-gray > th`
+  padding rule alongside the existing `.system-list-column-header`
+  variant, since Address Service's `<table>` still carries the shared
+  `.system-list-table` class for its cell padding/border rules. Left
+  Dashboard, Companies, Late Filing, and Client Communications on the
+  original navy `.system-list-column-header` — not named in this
+  request, and AR/Billing's Table-view toggle (`ARTableView`, the
+  Excel-style view) is untouched too, since it uses its own inline
+  styling entirely, not this shared class. Production build passes.
 
 - **Tweaked the new Master List column-header row: darker gray, and
   restored the original 11px font size.** Two follow-ups to the previous

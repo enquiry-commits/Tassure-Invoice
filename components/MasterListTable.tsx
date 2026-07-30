@@ -1352,7 +1352,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         <div ref={outerRef} style={{ overflowX: isMobile ? 'auto' : 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
             <thead>
-              <tr className="master-list-column-header">
+              <tr className="list-column-header-gray">
                 <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, padding: '7px 8px', minWidth: 36, width: 36, textAlign: 'center' }}>No.</th>
                 {columns.map(c => {
                   const sl = stickyLeftOf(c.field);
