@@ -16,9 +16,9 @@
   --list-surface: #ffffff;
   --list-header: #203d5f;
   --list-header-border: #183451;
-  --list-column-header-bg: #f1f5f9;
+  --list-column-header-bg: #e4e9ef;
   --list-column-header-text: #1e293b;
-  --list-column-header-border: #dde6ef;
+  --list-column-header-border: #d3dbe4;
   --list-border: #e3eaf1;
   --list-row-hover: #f6f9fc;
   --list-row-selected: #edf4fa;
@@ -111,11 +111,11 @@ body {
 .master-list-column-header > * {
   background-color: var(--list-column-header-bg);
   color: var(--list-column-header-text) !important;
-  font-size: 9px !important;
+  font-size: 11px !important;
   font-weight: 700 !important;
   line-height: 1.25;
-  letter-spacing: 0.4px !important;
-  text-transform: uppercase !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
 }
 
 .system-list-row {

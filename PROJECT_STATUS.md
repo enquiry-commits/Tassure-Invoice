@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Master List column-header row is now light-gray/black text)
+Last updated: 2026-07-30 (Master List header row: darker gray, restored original font size)
 
 ## Purpose
 
@@ -23,6 +23,25 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Tweaked the new Master List column-header row: darker gray, and
+  restored the original 11px font size.** Two follow-ups to the previous
+  entry below. (1) Gray was too light — darkened
+  `--list-column-header-bg` from `#f1f5f9` to `#e4e9ef` and its border
+  from `#dde6ef` to `#d3dbe4` to match. (2) Font looked smaller than
+  before — root cause: the classic table's `<th>` cells had an inline
+  `fontSize: 9` that, it turns out, was NEVER actually rendering — the
+  OLD shared `.system-list-column-header > *` CSS rule forced
+  `font-size: 11px !important` this whole time, silently overriding that
+  inline value (the same "`!important` masks a stale inline style"
+  pattern as the earlier background-color and TABLE/LIST border bugs
+  this session). When the new `.master-list-column-header` class was
+  written, it copied the inline 9px value, not realizing that value had
+  never actually been visible — an unintentional shrink. Corrected to
+  `font-size: 11px !important` (matching what was actually on screen
+  before any of today's changes), and reverted `text-transform`/
+  `letter-spacing` to `none`/`normal` for the same reason. Production
+  build passes.
 
 - **Master List's classic table now has two visually distinct header
   rows: row 1 (title bar) keeps each page's `accentColor` (red for
