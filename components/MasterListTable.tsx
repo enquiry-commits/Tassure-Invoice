@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronRight, Calendar, Building2, Users, UserCheck, Landmark, CloudOff } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, Calendar, Building2, Users, UserCheck, Landmark, CloudOff } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import MetricCard from './MetricCard';
 import { usePagination, PaginationBar } from './Pagination';
@@ -956,6 +956,11 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       .then(() => load());
   }, [load]);
 
+  // Collapsible "Active" column — same collapse/expand pattern as AR
+  // Reminder's PIC columns (app/billing/page.tsx's ARTableView), since the
+  // status badge (e.g. "STRUCK OFF") can take up a lot of width per row.
+  const [statusOpen, setStatusOpen] = useState(true);
+
   // ── Add Manual ──────────────────────────────────────────────────────────
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving]           = useState(false);
@@ -1356,19 +1361,38 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                 <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, padding: '7px 8px', minWidth: 36, width: 36, textAlign: 'center' }}>No.</th>
                 {columns.map(c => {
                   const sl = stickyLeftOf(c.field);
+                  const isStatus = c.field === 'status';
+                  const collapsed = isStatus && !statusOpen;
                   return (
                     <th key={c.field} style={{
                       position: 'sticky', top: 0, left: sl !== undefined ? sl + 36 : undefined,
                       zIndex: sl !== undefined ? 3 : 2,
                       fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px',
-                      padding: '7px 8px', whiteSpace: 'nowrap', minWidth: c.w, width: c.w,
+                      padding: '7px 8px', whiteSpace: 'nowrap', minWidth: collapsed ? 34 : c.w, width: collapsed ? 34 : c.w,
                       borderRight: '1px solid rgba(15,23,42,0.08)',
-                      boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.1)' : undefined,
+                      boxShadow: isStatus ? '3px 0 8px -2px rgba(0,0,0,0.1)' : undefined,
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'space-between' }}>
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.label}</span>
-                        <ColumnFilterMenu field={c.field} label={c.label} rows={rows} selected={columnFilters[c.field] ?? null} onApply={next => applyColumnFilter(c.field, next)} />
-                      </div>
+                      {isStatus ? (
+                        collapsed ? (
+                          <button type="button" onClick={() => setStatusOpen(true)} title={`Expand ${c.label}`}
+                            style={{ width: '100%', padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <ChevronRight size={11} />
+                          </button>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                            <button type="button" onClick={() => setStatusOpen(false)} title={`Collapse ${c.label} to the left`}
+                              style={{ padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700 }}>
+                              <ChevronLeft size={11} /><span>{c.label}</span>
+                            </button>
+                            <ColumnFilterMenu field={c.field} label={c.label} rows={rows} selected={columnFilters[c.field] ?? null} onApply={next => applyColumnFilter(c.field, next)} />
+                          </div>
+                        )
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, justifyContent: 'space-between' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.label}</span>
+                          <ColumnFilterMenu field={c.field} label={c.label} rows={rows} selected={columnFilters[c.field] ?? null} onApply={next => applyColumnFilter(c.field, next)} />
+                        </div>
+                      )}
                     </th>
                   );
                 })}
@@ -1385,9 +1409,10 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                   <td style={{ position: 'sticky', left: 0, zIndex: 1, background: '#fff', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, padding: '3px 6px', borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>{startIndex + i + 1}</td>
                   {columns.map(c => {
                     const sl = stickyLeftOf(c.field);
+                    const statusCollapsed = c.field === 'status' && !statusOpen;
                     return (
                       <td key={c.field} style={{
-                        padding: '3px 6px', verticalAlign: 'top',
+                        padding: statusCollapsed ? 0 : '3px 6px', verticalAlign: 'top',
                         borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9',
                         wordBreak: 'break-word', overflowWrap: 'break-word',
                         position: sl !== undefined ? 'sticky' : undefined,
@@ -1396,7 +1421,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         background: sl !== undefined ? '#fff' : undefined,
                         boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.12)' : undefined,
                       }}>
-                        {c.field === 'acc_pic' ? (
+                        {statusCollapsed ? null : c.field === 'acc_pic' ? (
                           <PicCell name={r.acc_pic} active={!!r.acc_active} onToggleActive={() => toggleActive(r.id, 'acc_active', r.acc_active)} onSaveName={val => saveOverride(r.id, 'acc_pic_override', val)} />
                         ) : c.field === 'tax_pic' ? (
                           <PicCell name={r.tax_pic} active={!!r.tax_active} onToggleActive={() => toggleActive(r.id, 'tax_active', r.tax_active)} onSaveName={val => saveOverride(r.id, 'tax_pic_override', val)} />

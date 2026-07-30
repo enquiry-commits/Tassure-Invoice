@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Extended the gray column-header row to Address/AR/Billing/ND)
+Last updated: 2026-07-30 (Master List's Active column is now collapsible)
 
 ## Purpose
 
@@ -23,6 +23,26 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Master List's classic table "Active" (status) column can now be
+  collapsed/expanded, same interaction as AR Reminder's PIC columns.**
+  Vincent's ask, prompted by Strike Off's full-width "• STRUCK OFF" pill
+  badges eating a lot of horizontal space per row: "MASTER LIST TABLE 的
+  ACTIVE 列要做和ACTIVE CLIENT 的table 中的 PIC列那样可以收起来". The referenced
+  collapse pattern actually lives in `app/billing/page.tsx`'s
+  `ARTableView` (`picOpen` state + `picHeader()`, for AR Reminder's
+  SEC/ACC/TAX PIC columns) — no equivalent existed yet in
+  `components/MasterListTable.tsx`. Added the same pattern there: a new
+  `statusOpen` boolean state (defaults to expanded), a header `<th>` that
+  swaps between a `ChevronLeft`+label "collapse" button (full width) and
+  a bare `ChevronRight` "expand" button (34px wide) for the `status`
+  column specifically, and the body `<td>` renders nothing with
+  `padding: 0` when collapsed — mirroring `ARTableView`'s `<TD
+  style={!picOpen.x ? {padding:0} : undefined}>{picOpen.x && ...}</TD>`
+  exactly. Applies to all six Master List pages (the column is shared
+  across `columns`), not just Strike Off. Production build passes (one
+  earlier build attempt hit a transient Turbopack timeout processing
+  globals.css — unrelated to this change, a clean retry succeeded).
 
 - **Extended the light-gray/dark-text column-header row (row 2) from
   Master List to Address Service, AR Reminder's List view, Billing
