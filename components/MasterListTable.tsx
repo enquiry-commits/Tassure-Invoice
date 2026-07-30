@@ -1344,7 +1344,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         </div>
       ) : (
       <div className="system-list-shell">
-        <div className="system-list-title-bar px-4 py-3">
+        <div className="system-list-title-bar px-4 py-3" style={{ background: accentColor }}>
           <h2 className="system-list-title">{title}</h2>
         </div>
 
@@ -1353,7 +1353,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
             <thead>
               <tr className="system-list-column-header">
-                <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, padding: '7px 8px', minWidth: 36, width: 36, textAlign: 'center' }}>No.</th>
+                <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, padding: '7px 8px', minWidth: 36, width: 36, textAlign: 'center', background: accentColor, color: '#fff' }}>No.</th>
                 {columns.map(c => {
                   const sl = stickyLeftOf(c.field);
                   return (

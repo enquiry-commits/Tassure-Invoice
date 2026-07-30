@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Reverted the "Add Manual" color change — red was correct)
+Last updated: 2026-07-30 (Strike Off's classic-table header now actually renders red)
 
 ## Purpose
 
@@ -23,6 +23,31 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Found and fixed the real bug behind the Strike Off header color
+  confusion: the classic Master List table's title bar and column-header
+  row have never actually rendered `accentColor` since Codex's redesign
+  (`7bdbd44`), for ANY list page — a CSS regression, not a request.**
+  After reverting the "Add Manual" button back to red (previous entry
+  below), Vincent sent the same screenshot again pointing at the
+  Strike-Off table's header row, which is navy, not red — even though
+  the JSX at `components/MasterListTable.tsx` already sets
+  `background: accentColor` inline on those `<th>` cells. Root cause:
+  `app/globals.css`'s `.system-list-title-bar`, `.system-list-column-header`,
+  and `.system-list-column-header > *` rules all force
+  `background(-color): var(--list-header) !important` — added by
+  Codex's redesign for genuine LIST pages (none of which ever set an
+  inline background, confirmed by grepping every `system-list-title-bar`/
+  `system-list-column-header` usage across the app, so dropping
+  `!important` changes nothing for them) but which also silently
+  overrode Master List's classic-table header wherever it tried to use
+  its own `accentColor`. This means Strike Off's classic-table header
+  has quietly been navy instead of red since that redesign landed —
+  Vincent just hadn't flagged it until now. Fixed by removing
+  `!important` from those three background declarations, and adding the
+  previously-missing inline `background: accentColor` to the title-bar
+  div and the sticky "No." header cell (the other header cells already
+  had it, just blocked). Production build passes.
 
 - **Reverted the previous "Add Manual" button color change — Vincent
   clarified he actually wants both the toolbar button and the table

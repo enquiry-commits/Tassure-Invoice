@@ -58,7 +58,7 @@ body {
   align-items: center;
   gap: 8px;
   min-height: 42px;
-  background: var(--list-header) !important;
+  background: var(--list-header);
   color: #fff;
 }
 
@@ -79,13 +79,13 @@ body {
 
 .system-list-column-header {
   min-height: 38px;
-  background: var(--list-header) !important;
+  background: var(--list-header);
   color: #fff;
   border-bottom: 1px solid var(--list-header-border) !important;
 }
 
 .system-list-column-header > * {
-  background-color: var(--list-header) !important;
+  background-color: var(--list-header);
   color: #fff !important;
   font-size: 11px !important;
   font-weight: 700 !important;
