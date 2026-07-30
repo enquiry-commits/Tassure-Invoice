@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-29 ("Add Manual" no longer inherits Strike Off's red accent)
+Last updated: 2026-07-29 (Enforced "Dear {{contactName}}" casing rule)
 
 ## Purpose
 
@@ -23,20 +23,6 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
-
-- **"Add Manual" (Master List toolbar button + its modal's "Save" button)
-  no longer turns red on the Strike Off page.** Vincent spotted it looked
-  like a danger/delete action. Root cause was long-standing (confirmed
-  via `git show 7bdbd44^` — present before Codex's redesign too, not a
-  recent regression): both buttons used `background: accentColor`, and
-  Strike Off is the one page whose `accentColor` prop is red (`#b91c1c`,
-  intentionally — Vincent confirmed the page header should stay red).
-  Vincent's call: keep the header/table-header red, but "add" actions
-  shouldn't share that red. Changed both buttons to the fixed teal
-  `#397f78` already used for the same Save button on every other list
-  type, instead of following `accentColor` — Strike Off's header, table
-  header, and filter-chip highlight are untouched. Production build
-  passes.
 
 - **Enforced a fixed casing rule for the "Dear {{contactName}}" greeting in
   Outlook drafts.** Vincent's rule: a Chinese name is copied through
