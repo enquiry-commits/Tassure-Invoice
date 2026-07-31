@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Fixed Late Filing's mirrored scrollbar being oversized/unresponsive)
+Last updated: 2026-07-30 (AR Reminder's service pills replaced with Active Client-style squares)
 
 ## Purpose
 
@@ -23,6 +23,36 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **AR Reminder's Services displays (the List-view row, its mobile card,
+  and the detail modal's "Service configuration" panel) now use the same
+  small colored checkbox-square + label language as Active Client's
+  Services column, replacing pill/capsule badges everywhere.** Vincent's
+  spec, verbatim: "ACTIVE CLIENT LIST 页面的 services 列的那个格子形式的显示不错
+  ... Locked 的胶囊（现在改成是前面的格子是灰色打勾...) Auto On...(亮蓝色打勾)
+  Auto Off...(亮蓝色打叉) Manual On...(绿色打勾) Manual Off...(绿色打叉)".
+  Added `ServiceSquare` (`app/billing/page.tsx`) — a 14x14 rounded tile
+  matching `components/MasterListTable.tsx`'s `CheckSquare` exactly in
+  size/shape, taking an `on` boolean (check vs. cross icon) and a `tone`
+  (`locked` = grey `#94a3b8`, `auto` = bright blue `#2563eb`, `manual` =
+  green `#16a34a` — color encodes *who* controls the service, the icon
+  encodes *current state*, independently, so e.g. "Auto Off" is still
+  blue, just with a cross instead of a check). Rewired all three
+  consumers: the read-only per-row Services cell (was a white pill + tiny
+  colored dot), the mobile card's equivalent, and the modal's two
+  sections — "SYSTEM MANAGED" locked services (was a colored pill with a
+  tiny "LOCKED" sub-badge) and `OverrideChip` for the four
+  click-to-cycle overridable services (was a colored pill with a state
+  sub-badge; the click-to-cycle behavior itself is unchanged, only the
+  visual). Removed `SVC_STATE_STYLE`, which became entirely unused once
+  every consumer switched to `ServiceSquare`'s tone-based coloring.
+  Production build passes. Also cleaned up 6 more stray orphaned `node`
+  processes left over from more session interruptions during this
+  change (same as the previous entry) — worth a permanent note: this
+  machine has been dropping the Claude Code session mid-background-task
+  repeatedly today, each time abandoning that task's `npm run build`
+  process running to completion in the background with nothing left to
+  consume its output.
 
 - **Fixed why Late Filing's mirrored scrollbar (added in the previous
   entry below) looked/behaved differently from Master List's: the thumb

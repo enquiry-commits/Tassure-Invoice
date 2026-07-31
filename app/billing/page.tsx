@@ -315,11 +315,6 @@ const SVC_SHORT: Record<string, string> = {
   address: 'ADDR', xbrl: 'XBRL', accounts: 'ACC', tax: 'TAX',
 };
 type SvcState = 'auto-on' | 'manual-on' | 'off';
-const SVC_STATE_STYLE: Record<SvcState, { bg: string; color: string; bd: string }> = {
-  'auto-on':   { bg: '#dbeafe', color: '#1d4ed8', bd: '#93c5fd' },
-  'manual-on': { bg: '#dcfce7', color: '#15803d', bd: '#86efac' },
-  'off':       { bg: '#f1f5f9', color: '#94a3b8', bd: '#e2e8f0' },
-};
 function svcStateOf(services: Services, manual: Partial<Record<string, boolean>> | undefined, key: string): SvcState {
   if (manual?.[key] === true) return 'manual-on';
   if ((services as unknown as Record<string, boolean>)[key]) return 'auto-on';
@@ -333,33 +328,42 @@ const STAGE_LABELS = ['Accounts\nReady','Sent to\nClient','Docs\nReceived','AGM\
 // deliberately excluded — they follow TeamWork (appointments / reg. address).
 const OVERRIDABLE_SVC = ['secretary', 'accounts', 'tax', 'xbrl'] as const;
 
-// Clickable service chip: AUTO by default; one click flips the effective
-// state (manual, ✎ marker), clicking again restores AUTO. Automation never
-// touches manual values. Colors encode provenance: blue = auto-detected,
-// green = manually on, grey = off / not provided.
+// Small colored checkbox-style tile, same square-tile language as Active
+// Client's Services column (components/MasterListTable.tsx's CheckSquare) —
+// color encodes WHO controls the service (grey = locked/system, blue =
+// auto-detected, green = manually set), the icon encodes current state
+// (check = on, cross = off), independent of each other.
+const SVC_SQUARE_COLOR = { locked: '#94a3b8', auto: '#2563eb', manual: '#16a34a' } as const;
+function ServiceSquare({ on, tone }: { on: boolean; tone: keyof typeof SVC_SQUARE_COLOR }) {
+  return (
+    <span aria-hidden="true" style={{
+      width: 14, height: 14, minWidth: 14, borderRadius: 4, flexShrink: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: SVC_SQUARE_COLOR[tone],
+    }}>
+      {on ? <Check size={10} color="#fff" strokeWidth={3} /> : <X size={10} color="#fff" strokeWidth={3} />}
+    </span>
+  );
+}
+
+// Clickable service tile: AUTO by default; one click flips the effective
+// state (manual), clicking again restores AUTO. Automation never touches
+// manual values.
 function OverrideChip({ svc, effective, manual, disabled, onCycle }:
   { svc: string; effective: boolean; manual: boolean | undefined; disabled: boolean; onCycle: () => void }) {
   const c = SVC[svc];
   const isManual = manual !== undefined;
-  const stateLabel = isManual ? (manual ? 'MANUAL ON' : 'MANUAL OFF') : (effective ? 'AUTO ON' : 'AUTO OFF');
-  const isOn = effective;
-  const chipColor = isOn ? c.color : '#94a3b8';
-  const chipBg = isOn ? c.bg : '#f8fafc';
-  const chipBorder = isManual ? (manual ? '#86efac' : '#cbd5e1') : (isOn ? `${c.color}40` : '#e2e8f0');
+  const on = isManual ? !!manual : effective;
   return (
     <button onClick={onCycle} disabled={disabled}
       title={disabled ? 'No company-master match — cannot override' : isManual ? `${c.label}: manual ${manual ? 'ON' : 'OFF'} · click to restore auto` : `${c.label}: auto (${effective ? 'on' : 'off'}) · click to force ${effective ? 'OFF' : 'ON'}`}
       style={{
-        background: chipBg, color: chipColor,
-        border: `1px solid ${chipBorder}`,
-        borderRadius: 999, padding: '8px 12px', fontSize: 10.5, fontWeight: 700,
+        background: 'transparent', border: 'none', padding: 0,
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
-        display: 'inline-flex', alignItems: 'center', gap: 8,
-        boxShadow: isManual && manual ? '0 0 0 2px rgba(22,163,74,0.07)' : 'none',
+        display: 'inline-flex', alignItems: 'center', gap: 6,
       }}>
-      {isManual && <span style={{ width: 5, height: 5, borderRadius: '50%', background: manual ? '#16a34a' : '#94a3b8', flexShrink: 0 }} />}
-      <span style={{ textDecoration: isManual && !effective ? 'line-through' : 'none' }}>{c.label}</span>
-      <span style={{ padding: '1px 4px', borderRadius: 999, background: 'rgba(255,255,255,0.62)', fontSize: 7.5, fontWeight: 800, letterSpacing: '0.35px', opacity: 0.78 }}>{stateLabel}</span>
+      <ServiceSquare on={on} tone={isManual ? 'manual' : 'auto'} />
+      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#475569' }}>{c.label}</span>
     </button>
   );
 }
@@ -2492,7 +2496,13 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {activeSvc.filter(k => !(OVERRIDABLE_SVC as readonly string[]).includes(k)).map(k => {
                     const svc = SVC[k];
-                    return <span key={k} title={`${svc.label}: automatic${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`} style={{ background: svc.bg, color: svc.color, border: `1px solid ${svc.color}30`, borderRadius: 999, padding: '8px 12px', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 7 }}><span>{svc.label}</span><span style={{ fontSize: 7, opacity: 0.65, letterSpacing: '0.35px' }}>LOCKED</span></span>;
+                    return (
+                      <span key={k} title={`${svc.label}: locked${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <ServiceSquare on tone="locked" />
+                        <span style={{ fontSize: 10.5, fontWeight: 700, color: '#475569' }}>{svc.label}</span>
+                      </span>
+                    );
                   })}
                 </div>
               </div>
@@ -3240,9 +3250,9 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 7, alignItems: 'center' }}>
                     {activeSvc.map(k => {
-                      const st = SVC_STATE_STYLE[svcStateOf(r.services, r.servicesManual, k)];
-                      return <span key={k} style={{ background: '#f8fafc', color: '#475569', border: '1px solid #dbe3ec', borderRadius: 4, padding: '2px 6px', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: st.color, flexShrink: 0 }} />
+                      const state = svcStateOf(r.services, r.servicesManual, k);
+                      return <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: '#475569' }}>
+                        <ServiceSquare on tone={state === 'manual-on' ? 'manual' : 'auto'} />
                         {SVC[k].label}
                       </span>;
                     })}
@@ -3272,8 +3282,8 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                       const state = svcStateOf(r.services, r.servicesManual, k);
                       return (
                         <span key={k} title={`${SVC[k].label} — ${state === 'auto-on' ? 'auto' : state === 'manual-on' ? 'manually on' : 'not provided / off'}`}
-                          style={{ background: '#fff', color: '#475569', border: '1px solid #dbe3ec', borderRadius: 5, padding: '4px 8px', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
-                          <span style={{ width: 5, height: 5, borderRadius: '50%', background: SVC_STATE_STYLE[state].color, flexShrink: 0 }} />
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
+                          <ServiceSquare on tone={state === 'manual-on' ? 'manual' : 'auto'} />
                           {SVC_SHORT[k]}
                         </span>
                       );
