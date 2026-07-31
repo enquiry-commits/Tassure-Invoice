@@ -300,13 +300,6 @@ export default function Sidebar() {
         </Suspense>
       </nav>
 
-      {/* Footer */}
-      {!collapsed && (
-        <div className="px-4 py-3 text-xs" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', color: '#93c5fd', flexShrink: 0 }}>
-          <div className="font-medium text-white">VS Vincent</div>
-          <div>Tassure Asia</div>
-        </div>
-      )}
     </aside>
   );
 }

@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (AR Reminder List's PIC column font lightened)
+Last updated: 2026-07-31 (Removed the "VS Vincent / Tassure Asia" sidebar footer)
 
 ## Purpose
 
@@ -23,6 +23,15 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Removed the "VS Vincent / Tassure Asia" text block from the bottom
+  of both the desktop sidebar and mobile nav.** Vincent flagged it via
+  screenshot: "这部分的文字不需要了". Deleted the whole footer `<div>` in
+  `components/Sidebar.tsx` (the `{!collapsed && (...)}` block with the
+  border-top divider) and the matching one in `components/MobileNav.tsx`
+  — both were static hardcoded text, not derived from session/user data,
+  so removing them is a clean, self-contained deletion with nothing else
+  depending on it. Production build passes.
 
 - **AR Reminder's List-view PIC column font changed to match a
   `text-xs text-slate-600` reference Vincent screenshotted (a `<td>`

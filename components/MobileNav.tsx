@@ -101,10 +101,6 @@ export default function MobileNav() {
                   })}
                 </div>
               ))}
-              <div style={{ padding: '16px 10px 0', fontSize: 11, color: '#93c5fd' }}>
-                <div style={{ fontWeight: 600, color: '#fff' }}>VS Vincent</div>
-                <div>Tassure Asia</div>
-              </div>
             </nav>
           </div>
         </div>
