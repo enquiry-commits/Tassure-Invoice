@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Fixed PDF filename amount staying stale even after QB re-check)
+Last updated: 2026-07-31 (Billing Drafts quick-draft now always sends from finance@tassure.com)
 
 ## Purpose
 
@@ -23,6 +23,23 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Billing Drafts' quick-draft mail icon now always sends from
+  `finance@tassure.com`.** Vincent: "并且我要固定这个邮箱是：OUTLOOK SENDER：
+  finance@tassure.com". `app/billing/page.tsx`'s `quickEmailDraft` built
+  its `draftForOutlook` payload with no `sender_email` at all, so the
+  Draft Helper's `_assign_sender()` never ran and every quick draft used
+  whatever Outlook's own default account happened to be — unlike
+  Campaign Centre's full workflow, which has its own sender picker.
+  Added `sender_email: 'finance@tassure.com'` to that payload — fixed,
+  not user-selectable, matching that this is specifically Billing
+  Drafts' one-click flow, not the full campaign builder. Vincent also
+  reported the mail icon being unresponsive when he tested — investigated
+  the click handler and popover structure and found nothing that would
+  explain it in the code as it stands (confirmed the Helper was up and
+  responding at the time); flagged as needing more detail from him if it
+  recurs, since nothing pointed to a clear root cause without seeing it
+  live. Production build passes.
 
 - **Fixed the attached invoice PDF's filename embedding a stale amount
   even though the PDF's own content and the email body text were

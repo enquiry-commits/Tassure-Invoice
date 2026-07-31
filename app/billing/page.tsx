@@ -1991,6 +1991,10 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         id: createdDraft.id, version: createdDraft.version,
         company_name: createdDraft.company_name, to_email: createdDraft.to_email, cc_email: createdDraft.cc_email,
         subject: createdDraft.subject, body: createdDraft.body, invoice_refs: createdDraft.invoice_refs,
+        // Billing Drafts' quick-draft always sends from this fixed account,
+        // per Vincent's request — unlike Campaign Centre's full workflow,
+        // there's no sender picker here.
+        sender_email: 'finance@tassure.com',
       };
       if (helperAvailable) {
         const [result] = await openDraftsInOutlook([draftForOutlook]);
