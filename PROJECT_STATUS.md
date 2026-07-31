@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Data fix: 3 companies' best_email had a corrupted embedded space)
+Last updated: 2026-07-31 (Draft Helper v1.4.0: Bank Details PDF now attaches to every draft)
 
 ## Purpose
 
@@ -23,6 +23,27 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Draft Helper v1.4.0: "Bank Details 2026 - Tassure Group.pdf" is now
+  attached to every email draft, automatically.** Vincent: "帮我把一个文件
+  作为每次 email drafts 都要附带的attactment, 文件在桌面（Bank Details 2026 -
+  Tassure Group）". Same architecture as v1.3.0's payment-options image —
+  a company-wide, never-per-client static asset, so it's bundled directly
+  into the Helper rather than sent over the wire by the web app on every
+  request. Copied the PDF from Desktop into
+  `tassure-draft-helper/assets/`; added a `STANDING_ATTACHMENTS` list in
+  `app.py` and a loop in `_open_one_draft` that adds each one via
+  `mail.Attachments.Add()` after the per-draft attachments (invoice
+  PDFs) — so every draft now gets both. Bumped `VERSION` to `"1.4.0"`,
+  rebuilt the exe (`build.ps1`), copied it to
+  `public/downloads/TassureDraftHelper.exe`, and — learning from the
+  v1.3.0 gap found earlier this session — bumped
+  `lib/draft-helper-client.ts`'s `LATEST_HELPER_VERSION` to match in the
+  *same* piece of work this time, not a separate one discovered later.
+  Also killed and relaunched Vincent's own running Helper process with
+  the new build immediately (confirmed via `/health`: now reports
+  `1.4.0`) so he can test right away without a separate restart step.
+  Production build passes.
 
 - **Data fix (no code change): 3 companies' `best_email` had a stray
   whitespace character injected mid-address**, e.g.
