@@ -1326,7 +1326,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                       <span style={{ color: '#cbd5e1', marginRight: 6, fontSize: 11 }}>{startIndex + i + 1}</span>
                       {r.company_name}
                     </div>
-                    {r.roc_no && <div className="company-registration-text" style={{ marginTop: 1 }}>{r.roc_no}</div>}
+                    {isMobile && r.roc_no && <div className="company-registration-text" style={{ marginTop: 1 }}>{r.roc_no}</div>}
                   </div>
                   {!isMobile && <div className="company-registration-text">{r.roc_no ?? '—'}</div>}
                   {!isMobile && (

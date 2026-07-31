@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (AR Reminder List: Services chip gap 6px → 8px)
+Last updated: 2026-07-31 (Active Client List: removed the redundant desktop UEN line)
 
 ## Purpose
 
@@ -23,6 +23,18 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Active Client List: removed the UEN line that was duplicated under
+  the company name on desktop.** Vincent screenshotted the exact
+  element (`<div class="company-registration-text" style="margin-top:
+  1px;">202010914N</div>`). `components/MasterListTable.tsx`'s List
+  view rendered the UEN twice — once nested under the company name
+  (unconditionally, any screen size) and once in its own dedicated
+  "UEN / ROC" column (desktop only, since mobile hides that column).
+  The nested one only actually needs to exist on mobile, where there's
+  no separate column to show it in — added an `isMobile &&` guard so it
+  now only renders there, removing the desktop duplicate without
+  affecting mobile. Production build passes.
 
 - **AR Reminder List's Services cell chip spacing widened from 6px to
   8px**, per a DevTools screenshot Vincent sent pointing at the exact
