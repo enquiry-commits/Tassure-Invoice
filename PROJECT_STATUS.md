@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Reverted CheckSquare's cross mark — plain gray again)
+Last updated: 2026-07-31 (AR Reminder + Billing Drafts: gray squares are now empty, no cross)
 
 ## Purpose
 
@@ -23,6 +23,28 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Extended the just-reverted "no cross on gray" convention to AR
+  Reminder's modal and Billing Drafts, and lightened the gray itself.**
+  Vincent, after the `CheckSquare` revert above: "把刚才那个去掉打叉的处理方式也
+  用在 AR REMINDER 弹窗内容的灰色打叉（我要改成没有打叉的）；BILLING draft 页面也是。
+  灰色的颜色也是要改一下". Two changes to `app/billing/page.tsx`:
+  (1) `ServiceSquare` gained a `grey?: boolean` prop — when set, it
+  renders the plain empty tile (no icon at all) using the same
+  `#e5e7eb` fill / `#cbd5e1` border as `CheckSquare`'s unchecked state,
+  instead of a colored fill with a check/cross icon. `SVC_SQUARE_COLOR.off`
+  itself changed from the darker `#94a3b8` to `#e5e7eb` to match — this
+  is the "灰色的颜色也是要改一下" part.
+  (2) Wired `grey` in at the two places Vincent named: `OverrideChip`
+  (AR Reminder's modal — Auto Off / Manual Off, always the neutral off
+  color, so `grey={!on}` unconditionally) and `ServiceMini` (Billing
+  Drafts — only its "not applicable" gray state, `grey={color ===
+  '#94a3b8'}`; the red "expired/pending" and orange "expiring soon"
+  crosses are untouched, since Vincent's ask was specifically about
+  the *grey* cross, not every non-green state). Also added a border to
+  the modal's small "Off" legend swatch, since the lighter fill needed
+  one to stay visible against the panel background. Production build
+  passes.
 
 - **Reverted `CheckSquare`'s unchecked-state cross mark (added a few
   entries below) back to a plain empty grey square.** After seeing it

@@ -187,7 +187,7 @@ function ServiceMini({ label, status, applicable }: { label: string; status: str
   return (
     <span title={`${label}: ${!applicable ? 'not applicable' : status.replace(/_/g, ' ')}`}
       style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 750, color: '#475569', whiteSpace: 'nowrap' }}>
-      <ServiceSquare on={on} color={color} />
+      <ServiceSquare on={on} color={color} grey={color === '#94a3b8'} />
       {label}
     </span>
   );
@@ -343,12 +343,18 @@ const OVERRIDABLE_SVC = ['secretary', 'accounts', 'tax', 'xbrl'] as const;
 // Small colored checkbox-style tile, same square-tile language as Active
 // Client's Services column (components/MasterListTable.tsx's CheckSquare).
 // `color` carries whatever the caller's own status/provenance scheme means
-// (e.g. AR Reminder's modal: grey = off (auto or manual), light blue =
-// on via locked/auto, green = on via manual; Billing Drafts: red =
-// expired, orange = expiring soon, green = active/billed, grey = n/a) —
-// `ServiceSquare` itself only renders check-vs-cross for `on`.
-const SVC_SQUARE_COLOR = { off: '#94a3b8', auto: '#60a5fa', manual: '#16a34a' } as const;
-function ServiceSquare({ on, color }: { on: boolean; color: string }) {
+// (e.g. AR Reminder's modal: light blue = on via locked/auto, green = on
+// via manual; Billing Drafts: red = expired, orange = expiring soon,
+// green = active/billed) — `ServiceSquare` itself only renders
+// check-vs-cross for `on`. `grey` renders the plain empty tile instead
+// (same #e5e7eb fill / #cbd5e1 border as CheckSquare's unchecked state,
+// no icon) — used for "off" / "not applicable", where Vincent didn't
+// want a cross mark once he saw it rendered.
+const SVC_SQUARE_COLOR = { off: '#e5e7eb', auto: '#60a5fa', manual: '#16a34a' } as const;
+function ServiceSquare({ on, color, grey }: { on: boolean; color: string; grey?: boolean }) {
+  if (grey) {
+    return <span aria-hidden="true" style={{ width: 14, height: 14, minWidth: 14, borderRadius: 4, flexShrink: 0, background: '#e5e7eb', border: '1px solid #cbd5e1' }} />;
+  }
   return (
     <span aria-hidden="true" style={{
       width: 14, height: 14, minWidth: 14, borderRadius: 4, flexShrink: 0,
@@ -368,7 +374,7 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
   const c = SVC[svc];
   const isManual = manual !== undefined;
   const on = isManual ? !!manual : effective;
-  const color = !on ? SVC_SQUARE_COLOR.off : isManual ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto;
+  const color = isManual ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto;
   return (
     <button onClick={onCycle} disabled={disabled}
       title={disabled ? 'No company-master match — cannot override' : isManual ? `${c.label}: manual ${manual ? 'ON' : 'OFF'} · click to restore auto` : `${c.label}: auto (${effective ? 'on' : 'off'}) · click to force ${effective ? 'OFF' : 'ON'}`}
@@ -377,7 +383,7 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
         display: 'inline-flex', alignItems: 'center', gap: 6,
       }}>
-      <ServiceSquare on={on} color={color} />
+      <ServiceSquare on={on} color={color} grey={!on} />
       <span style={{ fontSize: 10.5, fontWeight: 700, color: '#475569' }}>{c.label}</span>
     </button>
   );
@@ -2507,7 +2513,7 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
                   <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, background: SVC_SQUARE_COLOR.manual, flexShrink: 0 }} />Manual On
                 </span>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#475569' }}>
-                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, background: SVC_SQUARE_COLOR.off, flexShrink: 0 }} />Off
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, background: SVC_SQUARE_COLOR.off, border: '1px solid #cbd5e1', flexShrink: 0 }} />Off
                 </span>
               </div>
             </div>
