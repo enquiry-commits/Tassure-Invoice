@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (New TeamWork Contact Person report fills the "no email" gap)
+Last updated: 2026-07-31 (Data fix: 3 companies' best_email had a corrupted embedded space)
 
 ## Purpose
 
@@ -23,6 +23,38 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Data fix (no code change): 3 companies' `best_email` had a stray
+  whitespace character injected mid-address**, e.g.
+  `christiezhong@proplusme dia.com` instead of
+  `christiezhong@proplusmedia.com` — which `lib/campaign-recipients.ts`'s
+  `parseEmailList()` splits ON whitespace, so the corrupted value
+  silently parsed into zero valid recipients, looking exactly like "no
+  email on file" even though a value was present. Vincent caught this
+  by screenshotting TeamWork's own Contact Person report for LING LONG
+  E-COMMERCE PTE. LTD., which clearly has an email, right after the
+  fill-in below shipped — timing that looked like the new sync was
+  still broken, but this was pre-existing corrupted data, unrelated to
+  it (confirmed: the new sync's gap-detection correctly skipped this
+  company already, since `primary_contact.email` — a *different*, older
+  field populated by the original legacy CSS-scraper import script,
+  `scripts/import-to-supabase.js` — already had a clean, uncorrupted
+  copy of the same address). Scanned all 934 companies for the same
+  pattern: found exactly 3 affected (`LING LONG E-COMMERCE`,
+  `INOFINITY PTE. LTD.`, `ZEROX GLOBAL PTE. LTD.`) — a handful of other
+  `best_email` values contain whitespace too, but those are genuinely
+  valid comma-separated multi-recipient lists (e.g. "a@x.io , b@x.io"),
+  not corruption, and `parseEmailList` already handles those correctly.
+  Repaired all 3 directly via Supabase REST, using each company's own
+  `primary_contact.email` (or, for one whose two contact emails
+  genuinely differ, just stripping the embedded space from `best_email`
+  itself) — a one-off data correction, not a recurring sync issue, so
+  no code changed. Also checked the dormant `contact_persons` array
+  column (populated by that same legacy import, never read by any live
+  code) against the ~128 companies still missing an email after the
+  fill-in below: zero overlap, so it offers no further quick win — every
+  company with `contact_persons` data already had `primary_contact`
+  too, from the same import.
 
 - **Added a second TeamWork data source for recipient emails —
   TeamWork's "Company Contact Person" report — as a fill-in for
