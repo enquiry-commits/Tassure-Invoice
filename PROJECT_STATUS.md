@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Removed the "VS Vincent / Tassure Asia" sidebar footer)
+Last updated: 2026-07-31 (AR Reminder List: normalized row height for a consistent divider)
 
 ## Purpose
 
@@ -23,6 +23,26 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Diagnosed and fixed why AR Reminder List's row divider looked
+  inconsistent — present on some rows, seemingly missing on others.**
+  Vincent's screenshot showed rows 24/25 with uneven spacing around
+  the divider line; he asked "为什么只有有些row 有虚线...我要全部的 ROW 之间都有这个
+  虚线参数隔开，虚线格式要保持一致". Confirmed via code that the divider itself
+  (`.system-list-row`'s `border-bottom: 1px solid var(--list-border)
+  !important`, `app/globals.css`) is applied unconditionally to every
+  row — it was never actually missing. The real cause: each row's
+  height wasn't fixed, and `{r.fye_date && <div>FYE ...</div>}` in
+  `app/billing/page.tsx` only rendered a second line under the company
+  name when `fye_date` existed, so rows without one were shorter —
+  making the divider's vertical position (and the gap around it) look
+  inconsistent row-to-row even though the line was always there.
+  Changed that conditional render to always render the line, showing a
+  single space instead of nothing when there's no FYE date, so every
+  row reserves the same height. Production build passes. (Row-to-row
+  height could still vary slightly for companies with enough active
+  services to wrap the Services cell to 2 lines — flagged as a possible
+  follow-up if Vincent still sees unevenness after this deploys.)
 
 - **Removed the "VS Vincent / Tassure Asia" text block from the bottom
   of both the desktop sidebar and mobile nav.** Vincent flagged it via
