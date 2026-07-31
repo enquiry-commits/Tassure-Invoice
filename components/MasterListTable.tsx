@@ -1177,29 +1177,40 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             label="Missing from Active Client"
             sub="TW CSS Client, no row here yet"
             icon={<AlertTriangle size={16} />}
-            color="#c2410c"
+            color="#b45309"
             ariaLabel="Show TeamWork CSS clients missing from Active Client"
           />
         )}
       </div>
 
       {showMissingPanel && listType === 'active_client' && (
-        <div style={{ background: '#fff', border: '1px solid #fed7aa', borderRadius: 10, padding: '10px 14px', marginBottom: 16 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#9a3412', marginBottom: 8 }}>
-            {missingCssClients.length} TeamWork CSS Client{missingCssClients.length === 1 ? '' : 's'} not yet in Active Client
+        <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: 14, marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px' }}>
+            <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', flexShrink: 0, background: '#fef3c7', color: '#b45309' }}>
+              <AlertTriangle size={16} />
+            </span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#1e293b' }}>Missing from Active Client</span>
+                <span style={{ borderRadius: 999, background: '#fff', border: '1px solid #fde68a', color: '#92400e', padding: '3px 9px', fontSize: 10.5, fontWeight: 800 }}>
+                  {missingCssClients.length} TeamWork CSS Client{missingCssClients.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: '#78716c', marginTop: 3 }}>Confirmed as a TeamWork CSS Client, but no row exists here yet.</div>
+            </div>
           </div>
           {missingCssClients.length === 0 ? (
-            <div style={{ fontSize: 11.5, color: '#94a3b8' }}>None — every TeamWork CSS Client has a row here.</div>
+            <div style={{ background: '#fff', borderTop: '1px solid #fde68a', padding: '14px 16px', fontSize: 11.5, color: '#94a3b8' }}>None — every TeamWork CSS Client has a row here.</div>
           ) : (
-            <div style={{ maxHeight: 220, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '2px 16px' }}>
+            <div style={{ background: '#fff', borderTop: '1px solid #fde68a', maxHeight: 220, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
               {missingCssClients.map(c => (
-                <div key={c.registration_no ?? c.company_name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '4px 0', borderBottom: '1px solid #fef3ee', fontSize: 11.5 }}>
+                <div key={c.registration_no ?? c.company_name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 16px', borderBottom: '1px solid #fef3c7', fontSize: 11.5 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <span className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{c.company_name}</span>
                     <span className="company-registration-text">{c.registration_no ?? '—'}</span>
                   </div>
                   <button onClick={() => startAddFrom(c)} title="Add to Master List — pre-fills Company Name, UEN/ROC and Code"
-                    style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, padding: '3px 8px', borderRadius: 6, border: '1px solid #fdba74', background: '#fff', color: '#c2410c', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '5px 10px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#b45309', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                     <Plus size={11} />Add to Master List
                   </button>
                 </div>

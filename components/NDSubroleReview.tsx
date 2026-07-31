@@ -44,9 +44,9 @@ export default function NDSubroleReview({
 
   if (!scanCompleted) {
     return (
-      <section className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
+      <section className="mb-6 rounded-[14px] border border-amber-200 bg-amber-50 px-5 py-4">
         <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
+          <div className="grid h-[34px] w-[34px] flex-shrink-0 place-items-center rounded-[10px] bg-amber-100 text-amber-700"><AlertTriangle size={16} /></div>
           <div>
             <h2 className="text-sm font-bold text-slate-800">TeamWork subrole review is awaiting its first scan</h2>
             <p className="mt-1 text-xs leading-5 text-slate-600">
@@ -60,9 +60,9 @@ export default function NDSubroleReview({
 
   if (items.length === 0) {
     return (
-      <section className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
+      <section className="mb-6 rounded-[14px] border border-emerald-200 bg-emerald-50 px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="rounded-xl bg-emerald-100 p-2 text-emerald-700"><UserRoundCheck size={18} /></div>
+          <div className="grid h-[34px] w-[34px] flex-shrink-0 place-items-center rounded-[10px] bg-emerald-100 text-emerald-700"><UserRoundCheck size={16} /></div>
           <div>
             <h2 className="text-sm font-bold text-slate-800">TeamWork subrole review is clear</h2>
             <p className="mt-0.5 text-xs text-slate-600">No configured ND has an active appointment with a missing Nominee Director subrole.</p>
@@ -75,26 +75,26 @@ export default function NDSubroleReview({
   const visible = filtered.slice(0, limit);
 
   return (
-    <section className="system-list-shell mb-6">
+    <section className="mb-6 overflow-hidden rounded-[14px] border border-amber-200 bg-amber-50">
       <button
         type="button"
         onClick={() => setOpen(value => !value)}
-        className="flex w-full items-center gap-4 bg-white px-5 py-4 text-left"
+        className="flex w-full items-center gap-3 px-4 py-[13px] text-left"
       >
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-amber-700">
-          <AlertTriangle size={19} />
+        <div className="grid h-[34px] w-[34px] flex-shrink-0 place-items-center rounded-[10px] bg-amber-100 text-amber-700">
+          <AlertTriangle size={16} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-bold text-slate-900">TeamWork subrole review</h2>
-            <span className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-bold text-amber-800">
+            <h2 className="text-[13px] font-extrabold text-slate-800">TeamWork subrole review</h2>
+            <span className="rounded-full border border-amber-200 bg-white px-2.5 py-0.5 text-[10.5px] font-bold text-amber-800">
               {items.length} to confirm
             </span>
-            <span className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-500">
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[10.5px] font-semibold text-slate-500">
               {people.length} ND people
             </span>
           </div>
-          <p className="mt-1 text-xs leading-5 text-slate-600">
+          <p className="mt-[3px] text-[11px] leading-5 text-[#78716c]">
             All three conditions are required: the Nominee Director subrole is blank, an Effective appointment date exists, and the cessation field is blank. Confirm the appointment and repair it in TeamWork before treating it as an active ND record.
           </p>
         </div>
@@ -102,7 +102,7 @@ export default function NDSubroleReview({
       </button>
 
       {open && (
-        <div className="border-t border-slate-200">
+        <div className="border-t border-amber-200 bg-white">
           <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-white px-5 py-3">
             <label className="flex min-w-[260px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
               <Search size={15} className="text-slate-400" />

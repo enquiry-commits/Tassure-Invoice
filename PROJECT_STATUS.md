@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Fixed the row divider never rendering on real-<table> pages)
+Last updated: 2026-07-31 (Unified the three "needs attention" reminder panels)
 
 ## Purpose
 
@@ -23,6 +23,46 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Unified the three "needs attention" reminder panels (Dashboard's
+  Automation Health, Active Client's "Missing from Active Client", ND
+  page's "TeamWork Subrole Review") into one shared amber visual
+  language.** Vincent: these three are "all the same TYPE of thing"
+  (a self-contained callout flagging records needing human review), and
+  asked for a consistent — not necessarily identical — style. Published
+  a before/after preview artifact first and got explicit sign-off on
+  the direction before touching code. Shared tokens: container
+  `border:#fde68a` / `background:#fffbeb` / `border-radius:14px`; icon
+  badge 34×34 `border-radius:10px`, `background:#fef3c7`,
+  `color:#b45309`; count pill `border-radius:999px` (full pill),
+  `background:#fff`, `border:#fde68a`, `color:#92400e`; row divider
+  `#fef3c7`.
+  - `app/page.tsx`'s `AutomationHealthBar` + `AutomationExceptionPanel`:
+    replaced the ad hoc oranges (`#f2d6b0`/`#fffaf3`/`#ffedd5`/`#9a5a13`/
+    `#fff4e5`/`#f4d3a5`/`#f0dcc0`) with the shared tokens; bumped the
+    icon badge from 31×31/9px to 34×34/10px. The "all healthy" green
+    state and the red "job failed" alert boxes are untouched — different
+    semantics, not part of this unification.
+  - `components/MasterListTable.tsx`'s "Missing from Active Client"
+    panel: rebuilt with the same icon-badge + title + count-pill header
+    row (previously just a plain orange-bordered box with a text line),
+    white body with row dividers, and the "Add to Master List" button
+    switched to the shared button style. Also updated the triggering
+    `MetricCard`'s accent from `#c2410c` to `#b45309` to match.
+  - `components/NDSubroleReview.tsx`: already used real Tailwind
+    `amber-*` classes, which turn out to be an exact match for the
+    shared hex tokens (`amber-50`=`#fffbeb`, `amber-100`=`#fef3c7`,
+    `amber-200`=`#fde68a`, `amber-700`=`#b45309`, `amber-800`=`#92400e`)
+    — so no color changes needed there, just shape: swapped the neutral
+    `.system-list-shell` container for an amber-bordered/amber-filled
+    one (the header previously sat on plain white, which is why this
+    panel read as less "alert-like" than the other two despite using
+    the same color family), fixed the icon badge to 34×34/10px, and
+    changed the count pills from `rounded-md` to full pills. Also
+    aligned the corner radius and icon-badge size on this component's
+    two edge-case states ("awaiting first scan" amber, "clear" emerald)
+    for shape consistency, without changing their (correctly distinct)
+    colors. Production build passes.
 
 - **Found and fixed why Address Service and Late Filing never showed a
   row divider, even though `.system-list-row`'s CSS looked correct.**

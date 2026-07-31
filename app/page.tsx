@@ -335,13 +335,13 @@ function GenericExceptionDetails({ items }: { items: AutomationExceptionItem[] }
 function AutomationExceptionPanel({ health }: { health: AutomationHealth }) {
   const failedJobs = health.jobs.filter(job => job.status === 'attention');
   return (
-    <div style={{ borderTop: '1px solid #f0dcc0', padding: '14px 2px 14px' }}>
+    <div style={{ borderTop: '1px solid #fde68a', padding: '14px 2px 14px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 12, fontWeight: 800, color: DASHBOARD_COLORS.ink }}>Integration exception register</div>
           <div style={{ fontSize: 10, color: '#718096', marginTop: 3 }}>Every open case is listed below with its source record and the information needed for review.</div>
         </div>
-        <span style={{ borderRadius: 999, padding: '5px 9px', background: '#fff4e5', border: '1px solid #f4d3a5', color: '#9a5a13', fontSize: 9.5, fontWeight: 800 }}>{health.anomalies.openIntegrationExceptions} open cases</span>
+        <span style={{ borderRadius: 999, padding: '5px 9px', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 9.5, fontWeight: 800 }}>{health.anomalies.openIntegrationExceptions} open cases</span>
       </div>
 
       {failedJobs.length > 0 && (
@@ -363,7 +363,7 @@ function AutomationExceptionPanel({ health }: { health: AutomationHealth }) {
               <ChevronDown size={14} style={{ color: '#718096' }} />
               <span style={{ color: '#526b85', fontSize: 9, fontWeight: 850, textTransform: 'uppercase', letterSpacing: '.6px' }}>{EXCEPTION_SOURCE_LABELS[group.source] ?? group.source}</span>
               <strong style={{ color: DASHBOARD_COLORS.ink, fontSize: 10.5 }}>{exceptionTitle(group)}</strong>
-              <span style={{ marginLeft: 'auto', borderRadius: 999, padding: '3px 7px', background: '#fff4e5', border: '1px solid #f4d3a5', color: '#9a5a13', fontSize: 9, fontWeight: 800 }}>{group.count}</span>
+              <span style={{ marginLeft: 'auto', borderRadius: 999, padding: '3px 7px', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 9, fontWeight: 800 }}>{group.count}</span>
             </summary>
             <div style={{ padding: '10px 11px 11px', borderTop: '1px solid #e8edf2', background: '#f8fafc' }}>
               {group.type === 'unknown_pic_id'
@@ -383,22 +383,22 @@ function AutomationHealthBar({ health }: { health: AutomationHealth }) {
   const [expanded, setExpanded] = useState(false);
   const attention = !health.ok;
   return (
-    <section style={{ marginBottom: 18, border: `1px solid ${attention ? '#f2d6b0' : '#cde8df'}`, background: attention ? '#fffaf3' : '#f4fbf8', borderRadius: 13, padding: '0 14px', overflow: 'hidden' }}>
-      <button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded} style={{ width: '100%', border: 0, background: 'transparent', padding: '12px 0', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', cursor: 'pointer', textAlign: 'left' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 190 }}>
-          <span style={{ width: 31, height: 31, borderRadius: 9, display: 'grid', placeItems: 'center', color: attention ? '#b45309' : '#0f766e', background: attention ? '#ffedd5' : '#dff5ec' }}>
+    <section style={{ marginBottom: 18, border: `1px solid ${attention ? '#fde68a' : '#cde8df'}`, background: attention ? '#fffbeb' : '#f4fbf8', borderRadius: 14, padding: '0 14px', overflow: 'hidden' }}>
+      <button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded} style={{ width: '100%', border: 0, background: 'transparent', padding: '13px 0', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', cursor: 'pointer', textAlign: 'left' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 190 }}>
+          <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', color: attention ? '#b45309' : '#0f766e', background: attention ? '#fef3c7' : '#dff5ec' }}>
             {attention ? <AlertTriangle size={15} /> : <ShieldCheck size={15} />}
           </span>
           <span>
-            <strong style={{ display: 'block', fontSize: 11.5, color: DASHBOARD_COLORS.ink }}>Automation health</strong>
-            <span style={{ display: 'block', fontSize: 9.5, color: '#718096', marginTop: 1 }}>{attention ? `${health.attentionCount} item(s) need attention` : 'All scheduled data flows are healthy'}</span>
+            <strong style={{ display: 'block', fontSize: 13, fontWeight: 800, color: DASHBOARD_COLORS.ink }}>Automation health</strong>
+            <span style={{ display: 'block', fontSize: 11, color: '#78716c', marginTop: 1 }}>{attention ? `${health.attentionCount} item(s) need attention` : 'All scheduled data flows are healthy'}</span>
           </span>
         </div>
         <div style={{ display: 'flex', gap: 7, flex: 1, flexWrap: 'wrap' }}>
           {health.jobs.map(job => {
             const ok = job.status !== 'attention';
             return (
-              <span key={job.source} title={job.error ?? undefined} style={{ padding: '5px 8px', borderRadius: 999, border: `1px solid ${ok ? '#cde8df' : '#f2d6b0'}`, background: '#fff', color: ok ? '#176b5b' : '#a6530a', fontSize: 9.5, fontWeight: 750 }}>
+              <span key={job.source} title={job.error ?? undefined} style={{ padding: '5px 8px', borderRadius: 999, border: `1px solid ${ok ? '#cde8df' : '#fde68a'}`, background: '#fff', color: ok ? '#176b5b' : '#92400e', fontSize: 9.5, fontWeight: 750 }}>
                 <span style={{ marginRight: 5 }}>{ok ? '●' : '!'}</span>{AUTOMATION_LABELS[job.source] ?? job.source}
                 <span style={{ color: '#94a3b8', fontWeight: 600, marginLeft: 5 }}>{job.successAgeHours == null ? 'never' : `${job.successAgeHours}h`}</span>
               </span>
@@ -406,7 +406,7 @@ function AutomationHealthBar({ health }: { health: AutomationHealth }) {
           })}
         </div>
         {(health.anomalies.numericPics > 0 || health.anomalies.invoiceRequestsNeedingReconciliation > 0 || health.anomalies.openIntegrationExceptions > 0) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 9.5, color: '#9a5a13', fontWeight: 750 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 9.5, color: '#92400e', fontWeight: 750 }}>
             {health.anomalies.numericPics > 0 && `${health.anomalies.numericPics} numeric PIC`}
             {health.anomalies.invoiceRequestsNeedingReconciliation > 0 && `${health.anomalies.invoiceRequestsNeedingReconciliation} invoice reconciliation`}
             {health.anomalies.openIntegrationExceptions > 0 && `${health.anomalies.openIntegrationExceptions} integration exceptions`}
