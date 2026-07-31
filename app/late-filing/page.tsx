@@ -440,14 +440,11 @@ export default function LateFilingPage() {
         </div>
       )}
 
-      {/* Table */}
-      {loading ? (
-        <div style={{ textAlign:'center', padding:60, color:'#94a3b8' }}>Detecting late filers…</div>
-      ) : displayRows.length === 0 ? (
-        <div style={{ textAlign:'center', padding:60, color:'#16a34a', fontWeight:600 }}>
-          No late filing companies found for this year
-        </div>
-      ) : (
+      {/* Table — the scroll container and <table> are always mounted (not
+          gated behind loading/empty state) so the mirrored-scrollbar
+          effect below binds to a real, stable DOM node on first render,
+          same as components/MasterListTable.tsx. Loading/empty states
+          render as a single spanning row inside <tbody> instead. */}
         <div ref={outerRef} className="system-list-shell" style={{ maxHeight:'calc(100vh - 260px)', overflowX:'hidden', overflowY:'auto' }}>
           <table className="system-list-table" style={{ minWidth: 1320 }}>
             <colgroup>
@@ -477,7 +474,11 @@ export default function LateFilingPage() {
               </tr>
             </thead>
             <tbody>
-              {pageItems.map((row, idx) => (
+              {loading ? (
+                <tr><td colSpan={11} style={{ textAlign:'center', padding:60, color:'#94a3b8' }}>Detecting late filers…</td></tr>
+              ) : displayRows.length === 0 ? (
+                <tr><td colSpan={11} style={{ textAlign:'center', padding:60, color:'#16a34a', fontWeight:600 }}>No late filing companies found for this year</td></tr>
+              ) : pageItems.map((row, idx) => (
                   <tr key={row.id} className="system-list-row" onClick={() => startEdit(row)}
                     style={{ cursor: 'pointer' }}>
                     <td style={{ color: '#94a3b8', position:'sticky', left:0, zIndex:1, background:'#fff' }}>
@@ -538,7 +539,6 @@ export default function LateFilingPage() {
             </tbody>
           </table>
         </div>
-      )}
 
       {/* Mirrored scrollbar — stays reachable at the bottom of the viewport */}
       {!loading && displayRows.length > 0 && <div

@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Late Filing: sticky columns + mirrored scrollbar, like Master List)
+Last updated: 2026-07-30 (Fixed Late Filing's mirrored scrollbar being oversized/unresponsive)
 
 ## Purpose
 
@@ -23,6 +23,32 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed why Late Filing's mirrored scrollbar (added in the previous
+  entry below) looked/behaved differently from Master List's: the thumb
+  was oversized and dragging it did nothing.** Vincent: "late filing 页面的
+  滚动条为什么和 Active Client TABLE 页面的 滚动条不同，late filing 页面的滚动条
+  过长，并且不丝滑". Root cause: unlike `MasterListTable.tsx` (where the
+  scroll container `<div ref={outerRef}>` is *always* mounted — only the
+  rows inside `<tbody>` are conditional on loading/empty state), Late
+  Filing had the *entire* `<div ref={outerRef}>...<table>` wrapped in a
+  `loading ? ... : displayRows.length === 0 ? ... : (...)` ternary, so on
+  first render (`loading` still `true`) the div didn't exist yet. The
+  `useEffect` that attaches the scroll/resize/drag listeners to
+  `outerRef.current` ran once on that first render, saw `el` was `null`,
+  and returned early — since its dependency array never changes again,
+  those listeners were never attached once the table actually mounted.
+  That left the thumb sized from a single stale `updateSb()` call (via
+  the separate `[rows,page]`-triggered effect) and made dragging inert
+  (the `document`-level `mousemove`/`mouseup` handlers were inside the
+  same dead effect). Restructured to match `MasterListTable.tsx` exactly:
+  the scroll container and `<table>`/`<thead>` now always render;
+  loading/"no results" states are a single `colSpan={11}` row inside
+  `<tbody>` instead of replacing the whole table. Also found and closed
+  6 stray orphaned `node` processes left over from background builds
+  across several session interruptions earlier — flagged by Vincent as
+  making the machine sluggish. Production build passes (clean, no
+  leftover processes afterward).
 
 - **Late Filing's horizontal scrolling now matches Master List's classic
   table exactly — sticky leading columns + a draggable mirrored
