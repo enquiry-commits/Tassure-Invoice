@@ -130,9 +130,9 @@ export default function NDSubroleReview({
                 <tr className="system-list-column-header">
                   <th className="w-[42%] px-5 py-2.5 text-left">Company Name</th>
                   <th className="w-[22%] px-4 py-2.5 text-left">Suspected ND</th>
-                  <th className="w-[15%] px-4 py-2.5 text-center">Appointment</th>
-                  <th className="w-[11%] px-4 py-2.5 text-center">TW status</th>
-                  <th className="w-[10%] px-4 py-2.5 text-center">Subrole</th>
+                  <th className="w-[15%] px-4 py-2.5" style={{ textAlign: 'center' }}>Appointment</th>
+                  <th className="w-[11%] px-4 py-2.5" style={{ textAlign: 'center' }}>TW status</th>
+                  <th className="w-[10%] px-4 py-2.5" style={{ textAlign: 'center' }}>Subrole</th>
                 </tr>
               </thead>
               <tbody>

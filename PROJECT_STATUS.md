@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Unified the three "needs attention" reminder panels)
+Last updated: 2026-07-31 (Fixed ND Subrole Review's header/body column misalignment)
 
 ## Purpose
 
@@ -23,6 +23,25 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed why TeamWork Subrole Review's "Appointment"/"TW status"/
+  "Subrole" column headers looked misaligned with their body content.**
+  Vincent screenshotted it after the reminder-panel unification above.
+  Root cause: `app/globals.css`'s `.system-list-table
+  .system-list-column-header > th` rule sets `text-align: left`
+  (without `!important`) — and at 2 class-selectors + an element
+  selector, that rule's specificity (0,2,1) beats a plain Tailwind
+  utility class like `text-center` (0,1,0) regardless of source order.
+  So those 3 `<th>` labels were silently forced left-aligned the whole
+  time, while their `<td>` cells (Tailwind's `text-center`, with no
+  competing rule on `.system-list-row > td` for text-align) were
+  genuinely centered — headers left, bodies centered, hence the visual
+  mismatch. Not something the reminder-panel change caused; it just
+  hadn't been looked at closely before. Fixed by setting
+  `style={{ textAlign: 'center' }}` inline on those 3 `<th>` elements in
+  `components/NDSubroleReview.tsx` — inline style beats any class-based
+  rule short of `!important`, which this CSS rule doesn't use for
+  text-align. Production build passes.
 
 - **Unified the three "needs attention" reminder panels (Dashboard's
   Automation Health, Active Client's "Missing from Active Client", ND
