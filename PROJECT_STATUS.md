@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Fixed ND Subrole Review's header/body column misalignment)
+Last updated: 2026-07-31 (Diagnosed why the payment-image never showed: stale local Helper)
 
 ## Purpose
 
@@ -23,6 +23,34 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Found and fixed why the payment-options image (Draft Helper v1.3.0)
+  never showed up in Outlook drafts on Vincent's machine, plus a
+  version-tracking bug that meant the web app would never have warned
+  him.** Vincent: "为什么EMAIL DRAFT的问题还是没有解决, 我刚才打开 OUTLOOK 依然没有
+  那个截图图片". Checked the running Helper's `/health` endpoint directly
+  — it reported `version: "1.2.0"`, even though `tassure-draft-helper/
+  app.py`'s source (and the built exe) is at `1.3.0`. Traced the actual
+  process (PID via `netstat`) to `C:\Users\vincent\Downloads\
+  TassureDraftHelper (2).exe` — a stale copy sitting in Downloads,
+  registered into the Windows Run key (`main.py`'s self-registration
+  writes whatever path it was launched from, not a fixed install
+  location) and running continuously since before the image feature
+  existed. Separately, `lib/draft-helper-client.ts`'s
+  `LATEST_HELPER_VERSION` was still `'1.2.0'` — never bumped alongside
+  `app.py`'s `VERSION` when 1.3.0 was built — so the web app's own
+  "your Helper is outdated" banner would never have fired either, even
+  though the code for it exists. Fixed both: killed the stale process,
+  launched the current `tassure-draft-helper/dist/TassureDraftHelper.exe`
+  in its place (confirmed via `/health` it now reports `1.3.0`, and the
+  Run-key registry entry now correctly points at that exe), and bumped
+  `LATEST_HELPER_VERSION` to `'1.3.0'` in the web app so this specific
+  silent-staleness gap won't recur for future version bumps. Confirmed
+  `public/downloads/TassureDraftHelper.exe` (what the web app itself
+  would serve to any OTHER staff member downloading it fresh) was
+  already the correct up-to-date 1.3.0 build — this was purely a
+  stale-local-copy problem on Vincent's own machine. Production build
+  passes.
 
 - **Fixed why TeamWork Subrole Review's "Appointment"/"TW status"/
   "Subrole" column headers looked misaligned with their body content.**
