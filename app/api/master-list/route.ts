@@ -35,7 +35,14 @@ export async function GET(req: NextRequest) {
     q = q.or(`company_name.ilike.%${search}%,roc_no.ilike.%${search}%`);
   }
 
-  const { data, error } = await q.order('row_order');
+  // Sorted by the staff-assigned Code (e.g. CA001, CA003, ... CB003, CB010),
+  // not insertion order — row_order was only ever "append to the end", which
+  // is why newly-added companies used to fall out of Code order even though
+  // the original imported rows (row_order seeded in Code order) looked
+  // correctly sorted. Rows without a Code yet sort after ones that have it.
+  const { data, error } = await q
+    .order('internal_code', { ascending: true, nullsFirst: false })
+    .order('company_name', { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Cross-check against the TeamWork-synced companies table, by UEN only:
@@ -43,7 +50,7 @@ export async function GET(req: NextRequest) {
   //  - in_teamwork: this row's UEN exists in TeamWork. The master list is
   //    maintained by hand and normally has MORE companies than TeamWork —
   //    in_teamwork=false marks the ones TeamWork has no record of.
-  const { data: companies } = await supabase.from('companies').select('company_name, registration_no, fye_month, client_type');
+  const { data: companies } = await supabase.from('companies').select('company_name, registration_no, fye_month, client_type, internal_code');
   const twFyeByUen = new Map<string, string>();
   const twUens = new Set<string>();
   const cssClientByUen = new Map<string, boolean>();
@@ -91,7 +98,7 @@ export async function GET(req: NextRequest) {
   // (same field the Companies page's "Client (CSS Client)" card uses) that
   // have no row at all in Active Client's own list — independent of the
   // `search` box, since this checks against the full roster either way.
-  let missingCssClients: { company_name: string; registration_no: string | null }[] = [];
+  let missingCssClients: { company_name: string; registration_no: string | null; internal_code: string | null }[] = [];
   if (type === 'active_client') {
     const { data: allActiveClientRows } = await supabase.from('master_list').select('roc_no').eq('list_type', 'active_client');
     const activeClientUens = new Set(
@@ -103,7 +110,7 @@ export async function GET(req: NextRequest) {
         const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
         return !uen || !activeClientUens.has(uen);
       })
-      .map(c => ({ company_name: c.company_name, registration_no: c.registration_no }))
+      .map(c => ({ company_name: c.company_name, registration_no: c.registration_no, internal_code: c.internal_code ?? null }))
       .sort((a, b) => a.company_name.localeCompare(b.company_name));
   }
 

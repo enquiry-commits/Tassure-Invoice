@@ -7,6 +7,7 @@ import MetricCard from './MetricCard';
 import { usePagination, PaginationBar } from './Pagination';
 import { toDisplayDate, fmtDate } from '@/lib/date';
 import { useIsMobile } from '@/lib/use-is-mobile';
+import { normalize } from '@/lib/company-name';
 
 export interface MasterListRow {
   id: number;
@@ -918,7 +919,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // Active Client only: TeamWork CSS Clients with no row here at all — can't
   // be shown by filtering the table (there's nothing to filter to), so it's
   // its own small panel instead of a catFilter card.
-  const [missingCssClients, setMissingCssClients] = useState<{ company_name: string; registration_no: string | null }[]>([]);
+  const [missingCssClients, setMissingCssClients] = useState<{ company_name: string; registration_no: string | null; internal_code: string | null }[]>([]);
   const [showMissingPanel, setShowMissingPanel] = useState(false);
 
   const load = useCallback(async () => {
@@ -969,11 +970,32 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const startAdd  = () => { setNewRow({}); setShowAddForm(true); };
   const cancelAdd = () => { setShowAddForm(false); setNewRow({}); };
   // Pre-fills the same Add Manual form from a "Missing from Active Client"
-  // entry, so staff don't have to retype the name/UEN TeamWork already gave us.
-  const startAddFrom = (c: { company_name: string; registration_no: string | null }) => {
-    setNewRow({ company_name: c.company_name.toUpperCase(), roc_no: c.registration_no?.toUpperCase() ?? '' });
+  // entry, so staff don't have to retype the name/UEN/Code TeamWork already gave us.
+  const startAddFrom = (c: { company_name: string; registration_no: string | null; internal_code: string | null }) => {
+    setNewRow({ company_name: c.company_name.toUpperCase(), roc_no: c.registration_no?.toUpperCase() ?? '', internal_code: c.internal_code?.toUpperCase() ?? '' });
     setShowAddForm(true);
   };
+  // Typing a company name that's already TeamWork-synced (companies table)
+  // auto-fills its Code on blur, so staff typing a brand-new row from
+  // scratch don't have to look it up and retype it by hand. Best-effort —
+  // silently does nothing if the lookup fails or finds no exact match, and
+  // never overwrites a Code the user already typed themselves.
+  const lookupTwCode = useCallback(async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    try {
+      const res = await fetch(`/api/companies?search=${encodeURIComponent(trimmed)}&limit=10`);
+      const json = await res.json();
+      const candidates: { companyName: string; internalCode: string | null }[] = json.data ?? [];
+      const target = normalize(trimmed);
+      const match = candidates.find(c => normalize(c.companyName) === target);
+      if (match?.internalCode) {
+        setNewRow(v => (v.internal_code?.trim() ? v : { ...v, internal_code: match.internalCode!.toUpperCase() }));
+      }
+    } catch {
+      // Best-effort only — never block manual entry on a failed lookup.
+    }
+  }, []);
 
   const saveNew = async () => {
     if (!newRow.company_name?.trim()) return;
@@ -1176,7 +1198,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                     <span className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{c.company_name}</span>
                     <span className="company-registration-text">{c.registration_no ?? '—'}</span>
                   </div>
-                  <button onClick={() => startAddFrom(c)} title="Add to Master List — pre-fills Company Name and UEN/ROC"
+                  <button onClick={() => startAddFrom(c)} title="Add to Master List — pre-fills Company Name, UEN/ROC and Code"
                     style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, padding: '3px 8px', borderRadius: 6, border: '1px solid #fdba74', background: '#fff', color: '#c2410c', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                     <Plus size={11} />Add to Master List
                   </button>
@@ -1230,6 +1252,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
                 {([
                   { key: 'company_name', label: 'Company Name *', normalize: (v: string) => v.toUpperCase() },
+                  { key: 'internal_code', label: 'Code',          normalize: (v: string) => v.toUpperCase() },
                   { key: 'roc_no',       label: 'UEN / ROC',      normalize: (v: string) => v.toUpperCase() },
                   { key: 'status',       label: 'Active / Status', normalize: (v: string) => v.toUpperCase() },
                   { key: 'fye',          label: 'FYE Month',      normalize: undefined },
@@ -1244,6 +1267,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                       </select>
                     ) : (
                       <input value={newRow[f.key] ?? ''} onChange={e => setNewRow(v => ({ ...v, [f.key]: f.normalize ? f.normalize(e.target.value) : e.target.value }))}
+                        onBlur={f.key === 'company_name' ? e => void lookupTwCode(e.target.value) : undefined}
                         placeholder="—"
                         style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                     )}

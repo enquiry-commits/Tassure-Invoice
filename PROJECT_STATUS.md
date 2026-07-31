@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Fixed a stray &nbsp; line under AR Reminder List company names)
+Last updated: 2026-07-31 (Master List now sorts by Code; TW sync reads it; Add Manual auto-fills it)
 
 ## Purpose
 
@@ -23,6 +23,52 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Master List now sorts by the staff-assigned Code (CA001, CA003, ...
+  CB003, CB010, ...) instead of insertion order; TeamWork sync now
+  reads and stores that Code; and Master List's "Add Manual" form has a
+  new Code field that auto-fills from TeamWork data when the company
+  already exists there.** Vincent: "MASTER LIST 内有一个我们自己员工会给每个客户
+  记录的CODE...我要你在TW也读取每个公司的这个CODE，并且 MASTER LIST 的排列顺序，要按照
+  这个 CODE来排...那个Master List 按钮（+Add Manual）的弹窗内，也要加多一个Code的填写框，
+  但是新公司如果已经有数据在TW，要自动匹配好". Ran `client_id` (a live TeamWork API
+  field, distinct from `company_id` which is TeamWork's internal
+  numeric ID used for `internal_id` matching) through a direct test
+  call and confirmed it matches Vincent's Code format exactly, e.g.
+  "A PLUS MANPOWER SERVICES PTE. LTD." → "CA001".
+  - `app/api/master-list/route.ts`'s GET now orders by
+    `internal_code` (nulls last) then `company_name`, instead of
+    `row_order` — `row_order` was only ever "append to the end" on
+    insert/move (confirmed via `app/api/master-list/move/route.ts` —
+    no drag-to-reorder feature exists), which is why originally-imported
+    rows (seeded in Code order) looked correctly sorted while newly
+    added ones didn't.
+  - `app/api/teamwork/sync/route.ts`: added `client_id` to the
+    `TwCompany` interface, extracted as `clientCode`, patched into
+    matched rows' `internal_code` and set on new inserts. Added
+    `internal_code` to the initial `companies` select.
+  - New migration `scripts/add-companies-internal-code.sql` (`ALTER
+    TABLE companies ADD COLUMN internal_code TEXT` + an index) — Vincent
+    ran this in Supabase's SQL Editor; verified live via a direct query
+    that the column now exists (all `null` until the next TeamWork sync
+    populates it).
+  - `app/api/companies/route.ts`'s GET now exposes `internalCode` in
+    its response, and `master-list/route.ts`'s `missingCssClients`
+    payload now includes each company's `internal_code` too.
+  - `components/MasterListTable.tsx`: added a "Code" field to the Add
+    Manual form (next to Company Name); `startAddFrom` (the "Add to
+    Master List" button from the Missing-from-Active-Client panel) now
+    also pre-fills Code from that deterministic match; and a new
+    `lookupTwCode()` fires on blur of the Company Name field in the
+    general "+Add Manual" flow — searches `/api/companies`, finds an
+    exact normalized-name match via `lib/company-name.ts`'s
+    `normalize()`, and fills Code from it if found, without overwriting
+    a Code the user already typed themselves. Best-effort — fails
+    silently on no match or a network error, never blocks manual entry.
+  - Production build passes. Held this commit until Vincent confirmed
+    the migration had been run, since the TeamWork sync route's
+    explicit column list would otherwise 500 on every sync attempt
+    (that route runs on a daily cron) until the column existed.
 
 - **Fixed a visible blank line under company names in AR Reminder List
   — the "reserve the FYE line's height for a consistent divider" fix

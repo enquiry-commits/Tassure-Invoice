@@ -39,6 +39,8 @@ const ENV_KEYS = ['TEAMWORK_BASIC_USER', 'TEAMWORK_BASIC_PASS', 'TEAMWORK_API_KE
 
 interface TwCompany {
   company_id: string;
+  client_id: string | null;           // Staff-assigned client code, e.g. "CA001" — NOT the same as
+                                       // company_id (TeamWork's internal numeric ID, used for internal_id matching).
   company_name: string | null;
   company_registration_Num: string | null;
   type: string | null;
@@ -123,7 +125,7 @@ async function syncTeamworkCompanies() {
   const supabase = createAdminClient();
   const { data: rows, error } = await supabase
     .from('companies')
-    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, fye_day, best_email, uses_address, has_nd, pic, sec_pic, client_type, is_non_client');
+    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, fye_day, best_email, uses_address, has_nd, pic, sec_pic, client_type, is_non_client, internal_code');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const byInternal = new Map((rows ?? []).filter(r => r.internal_id).map(r => [r.internal_id as string, r]));
@@ -158,6 +160,7 @@ async function syncTeamworkCompanies() {
     }
 
     const regNo   = (tw.company_registration_Num ?? '').trim() || null;
+    const clientCode = (tw.client_id ?? '').trim() || null;
     const type    = (tw.type ?? '').trim() || null;
     const status  = (tw.status ?? '').trim() || null;
     const internalCssActive = (status ?? '').toLowerCase() === 'active';
@@ -179,6 +182,7 @@ async function syncTeamworkCompanies() {
       const patch: Record<string, unknown> = {};
       if (!row.internal_id)                                          patch.internal_id = tw.company_id;
       if (regNo  && regNo  !== (row.registration_no ?? '').trim())   patch.registration_no = regNo;
+      if (clientCode && clientCode !== row.internal_code)            patch.internal_code = clientCode;
       if (type   && type   !== row.company_type)                     patch.company_type = type;
       if (status !== row.tw_status)                                  patch.tw_status = status;
       if (internalCssActive !== (row.is_active === true))             patch.is_active = internalCssActive;
@@ -200,6 +204,7 @@ async function syncTeamworkCompanies() {
       inserts.push({
         company_name: twName,
         internal_id: tw.company_id,
+        internal_code: clientCode,
         registration_no: regNo,
         company_type: type,
         fye_month: fyeMon,

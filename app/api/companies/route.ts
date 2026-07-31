@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
     return {
       companyName:        c.company_name,
       registrationNo:     c.registration_no,
+      internalCode:       c.internal_code,
       companyType:        c.company_type,
       fyeMonth:           c.fye_month,
       pic:                c.pic,
