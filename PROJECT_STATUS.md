@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Companies page: gray column-header row)
+Last updated: 2026-07-31 (Reverted CheckSquare's cross mark — plain gray again)
 
 ## Purpose
 
@@ -23,6 +23,15 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Reverted `CheckSquare`'s unchecked-state cross mark (added a few
+  entries below) back to a plain empty grey square.** After seeing it
+  clearly depicted in a design-reference artifact generated for him,
+  Vincent decided against it: "这个里面的灰色打叉不要，保留灰色就好" (don't want
+  the grey cross, just keep it grey). `components/MasterListTable.tsx`'s
+  `CheckSquare` unchecked branch is back to rendering nothing
+  (`{checked && <Check .../>}`), same as before that earlier change.
+  Production build passes.
 
 - **Companies page ("Company List") row-2 column header switched to the
   gray/dark-text style too.** Vincent had previously been told this page

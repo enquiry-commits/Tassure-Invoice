@@ -181,7 +181,7 @@ function CheckSquare({ checked, onToggle }: { checked: boolean; onToggle?: () =>
         border: `1px solid ${checked ? '#15803d' : '#cbd5e1'}`,
         cursor: onToggle ? 'pointer' : undefined,
       }}>
-      {checked ? <Check size={10} color="#fff" strokeWidth={3} /> : <X size={10} color="#94a3b8" strokeWidth={3} />}
+      {checked && <Check size={10} color="#fff" strokeWidth={3} />}
     </span>
   );
 }
