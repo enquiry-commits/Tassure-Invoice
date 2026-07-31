@@ -5,6 +5,7 @@ import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { todaySGT } from '@/lib/date';
 import { syncTeamworkCampaignRecipients } from '@/lib/teamwork-recipients';
+import { syncTeamworkContactPersons } from '@/lib/teamwork-contact-report';
 
 // Daily TeamWork -> companies sync (see vercel.json cron, 00:30 UTC — before
 // the 01:00 ar-reminder generator so new clients enter that day's AR window).
@@ -322,8 +323,19 @@ async function syncTeamworkCompanies() {
     recipientSyncError = error instanceof Error ? error.message : String(error);
   }
 
+  // Fill-in only — covers companies the "upcoming events" report above
+  // structurally can't reach (it only lists companies with a scheduled
+  // reminder). Runs after, so it never overwrites what that sync just set.
+  let contactPersonFillIn: Awaited<ReturnType<typeof syncTeamworkContactPersons>> | null = null;
+  let contactPersonFillInError: string | null = null;
+  try {
+    contactPersonFillIn = await syncTeamworkContactPersons(supabase);
+  } catch (error) {
+    contactPersonFillInError = error instanceof Error ? error.message : String(error);
+  }
+
   return NextResponse.json({
-    ok: !insertError && !updateErrors.length && !recipientSyncError,
+    ok: !insertError && !updateErrors.length && !recipientSyncError && !contactPersonFillInError,
     tw_total: twList.length,
     matched,
     internal_id_backfilled: backfilled,
@@ -335,6 +347,8 @@ async function syncTeamworkCompanies() {
     skipped_ambiguous_names: skippedAmbiguous,
     rows_missing_from_teamwork: missingFromTw,
     campaign_recipients: recipientSync,
+    contact_person_fill_in: contactPersonFillIn,
+    ...(contactPersonFillInError ? { contact_person_fill_in_error: contactPersonFillInError } : {}),
     ...(recipientSyncError ? { campaign_recipient_error: recipientSyncError } : {}),
     ...(insertError ? { insert_error: insertError } : {}),
     ...(updateErrors.length ? { update_errors: updateErrors.slice(0, 5) } : {}),

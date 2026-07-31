@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Diagnosed why the payment-image never showed: stale local Helper)
+Last updated: 2026-07-31 (New TeamWork Contact Person report fills the "no email" gap)
 
 ## Purpose
 
@@ -23,6 +23,36 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Added a second TeamWork data source for recipient emails —
+  TeamWork's "Company Contact Person" report — as a fill-in for
+  companies our existing sync structurally can never reach.** Vincent
+  noticed lots of "To email not found" cases and screenshotted a
+  TeamWork report page showing a company (CAI LONG SPORTS CULTURE PTE.
+  LTD.) that clearly HAS a contact person + email in TeamWork, even
+  though our system had nothing for it. Root cause: our only recipient
+  source, `lib/teamwork-recipients.ts`'s `syncTeamworkCampaignRecipients`,
+  reads TeamWork's `remainder_upcoming_event_report` — a report scoped
+  to companies with a *scheduled reminder*, not a general company
+  directory. Confirmed live: 174 of 922 active companies (~19%) had NO
+  email source at all (`tw_to_emails`, `best_email`, AND
+  `primary_contact` all empty) — CAI LONG among them.
+  Reverse-engineered TeamWork's actual "Company Contact Person" report
+  AJAX call (`Report_module/comp_contact_default_report`, ~1438 rows,
+  one row per contact person — company name+UEN, contact name,
+  designation, individual email, individual phone, company email) using
+  a real Playwright login + network capture, matching the exact request
+  shape from the live report page.
+  New `lib/teamwork-contact-report.ts`: `syncTeamworkContactPersons()`
+  paginates that report, groups by company (first row with a usable
+  email wins), and — for companies with NO existing email source in any
+  of the three fields — fills in `primary_contact: {contactName, email,
+  phone}` and `best_email`. Deliberately a fill-in only: companies that
+  already have data from anything else are left untouched, so this can
+  never override a value another sync or manual edit set. Wired into
+  `app/api/teamwork/sync/route.ts` to run after the existing recipient
+  sync, on the same daily cron. Production build passes; will verify
+  live via a manual trigger before considering this done.
 
 - **Found and fixed why the payment-options image (Draft Helper v1.3.0)
   never showed up in Outlook drafts on Vincent's machine, plus a
