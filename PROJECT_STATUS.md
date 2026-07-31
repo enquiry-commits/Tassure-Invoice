@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Billing Drafts' service pills replaced with squares too)
+Last updated: 2026-07-30 (Active Client's unchecked service squares now show a cross)
 
 ## Purpose
 
@@ -23,6 +23,23 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Active Client's Services column squares (`CheckSquare` in
+  `components/MasterListTable.tsx`) now show a cross mark when off,
+  instead of sitting empty.** Vincent: "Active Client 页面的 services 列也是
+  如果没有就做成灰色格子打叉(之前只是灰色格子)" — the one square style everywhere
+  else in this rollout (AR Reminder, Billing Drafts) already always shows
+  check-or-cross; this was the one place still left blank for "off",
+  since `CheckSquare` predates all of that work. Kept the exact same
+  grey fill (`#e5e7eb`, unchanged — Vincent only asked for the cross, not
+  a color change) and added an `X` icon in `#94a3b8` for the unchecked
+  state (plain white would have had poor contrast against that light
+  grey). `CheckSquare` is shared by the ND/Secretary/ACC/TAX toggles in
+  both the classic table and the List view, so this covers both. Build
+  passes cleanly (after clearing another batch of stray `node.exe`
+  processes via `taskkill` — a PowerShell `Stop-Process` attempt hit a
+  ".NET CLR failed to start" error mid-session, likely itself a symptom
+  of how loaded the machine was; `taskkill` from Bash worked around it).
 
 - **Billing Drafts' Renewal Services / ND (TAC) / Annual Obligations
   columns now use the same square-tile language too, not just AR
