@@ -31,6 +31,17 @@ type CompanyRow = {
   primary_contact: { contactName?: string; email?: string; phone?: string } | null;
 };
 
+function dedupeEmails(rows: ContactReportRow[]): string[] {
+  const seen = new Set<string>();
+  const emails: string[] = [];
+  for (const row of rows) {
+    if (!row.email || seen.has(row.email)) continue;
+    seen.add(row.email);
+    emails.push(row.email);
+  }
+  return emails;
+}
+
 function stripHtml(value: unknown): string {
   return String(value ?? '')
     .replace(/<br\s*\/?\s*>/gi, ' ')
@@ -133,13 +144,17 @@ async function fetchAllContactRows(cookie: string): Promise<ContactReportRow[]> 
 export async function syncTeamworkContactPersons(supabase: SupabaseClient) {
   const rows = await fetchAllContactRows(await getSessionCookie());
 
-  // One usable contact per company — first row with a real email wins.
-  const byCompany = new Map<string, ContactReportRow>();
+  // Every contact row with an email, grouped per company — a company can
+  // legitimately have more than one contact person (e.g. two directors),
+  // and every one of them should land in the To field, not just the first.
+  const byCompany = new Map<string, ContactReportRow[]>();
   for (const row of rows) {
     if (!row.email) continue;
     const key = normalize(row.companyName);
-    if (!byCompany.has(key)) byCompany.set(key, row);
+    if (!byCompany.has(key)) byCompany.set(key, []);
+    byCompany.get(key)!.push(row);
   }
+  const companyNamesForFuzzyMatch = [...byCompany.keys()].map(key => ({ key, companyName: byCompany.get(key)![0].companyName }));
 
   const { data, error } = await supabase
     .from('companies')
@@ -147,34 +162,32 @@ export async function syncTeamworkContactPersons(supabase: SupabaseClient) {
   if (error) throw new Error(`Contact-person fill-in is not ready: ${error.message}`);
   const companies = (data ?? []) as CompanyRow[];
 
-  // Only companies with NO email source at all from anything else —
-  // this is a fill-in, never an override of a value another sync set.
-  const gaps = companies.filter(c =>
-    !(Array.isArray(c.tw_to_emails) && c.tw_to_emails.length) &&
-    !(c.best_email && c.best_email.trim()) &&
-    !(c.primary_contact?.email && c.primary_contact.email.trim()),
-  );
-
-  const exactByName = new Map<string, CompanyRow | null>();
-  for (const company of companies) {
-    const key = normalize(company.company_name);
-    exactByName.set(key, exactByName.has(key) ? null : company);
-  }
+  // tw_to_emails is what recipient resolution actually sends to (see
+  // pickContact() in client-comms-resolve.ts) — a company can have a
+  // best_email/primary_contact on file yet still have an empty
+  // tw_to_emails (e.g. the upcoming-events report found only a staff CC
+  // for it), which silently drops that email at send time. Any company
+  // with an empty tw_to_emails is a real gap, whether or not a fallback
+  // field happens to be populated — never overrides a non-empty
+  // tw_to_emails another sync already populated.
+  const gaps = companies.filter(c => !(Array.isArray(c.tw_to_emails) && c.tw_to_emails.length));
 
   const now = new Date().toISOString();
   let filled = 0;
   const errors: string[] = [];
-  const updates: { id: number; contactName: string; email: string; phone: string | null }[] = [];
+  const updates: { id: number; contactName: string; email: string; phone: string | null; allEmails: string[] }[] = [];
 
   for (const gap of gaps) {
     const key = normalize(gap.company_name);
-    let match = byCompany.get(key);
-    if (!match) {
-      const fuzzy = findUniqueBestMatch(gap.company_name, [...byCompany.values()], item => item.companyName, 90);
-      match = fuzzy.value ?? undefined;
+    let matchRows = byCompany.get(key);
+    if (!matchRows) {
+      const fuzzy = findUniqueBestMatch(gap.company_name, companyNamesForFuzzyMatch, item => item.companyName, 90);
+      matchRows = fuzzy.value ? byCompany.get(fuzzy.value.key) : undefined;
     }
-    if (!match?.email) continue;
-    updates.push({ id: gap.id, contactName: match.contactName, email: match.email, phone: match.phone });
+    const allEmails = matchRows ? dedupeEmails(matchRows) : [];
+    if (!allEmails.length) continue;
+    const first = matchRows![0];
+    updates.push({ id: gap.id, contactName: first.contactName, email: first.email!, phone: first.phone, allEmails });
   }
 
   for (let i = 0; i < updates.length; i += 10) {
@@ -182,6 +195,9 @@ export async function syncTeamworkContactPersons(supabase: SupabaseClient) {
       const { error: updateError } = await supabase.from('companies').update({
         primary_contact: { contactName: u.contactName, email: u.email, phone: u.phone },
         best_email: u.email,
+        tw_to_emails: u.allEmails,
+        tw_recipient_source: 'contact_person_report',
+        tw_recipient_synced_at: now,
         synced_at: now,
       }).eq('id', u.id);
       return updateError?.message ?? null;

@@ -41,7 +41,13 @@ export interface ResolvedRow {
 export function pickContact(company: CompanyRow | null, extraPicValues: (string | null | undefined)[] = []) {
   const primary = company?.primary_contact as { email?: string; contactName?: string } | null;
   const picEmails = [company?.pic, ...extraPicValues].flatMap(findStaffEmails);
-  const hasTeamworkDirectory = company?.tw_recipient_source === 'teamwork_report';
+  // A company can be tagged with a recipient source yet still have zero
+  // to-emails (e.g. the upcoming-events report only found a staff CC for
+  // it) — trusting the source label alone then silently drops best_email/
+  // primary_contact, which the Contact Person report fill-in may have since
+  // populated. Only treat the directory as usable when it actually has a
+  // to-email; otherwise fall through to the single-contact fallback below.
+  const hasTeamworkDirectory = !!company?.tw_recipient_source && Array.isArray(company?.tw_to_emails) && company.tw_to_emails.length > 0;
   if (hasTeamworkDirectory) {
     const { toEmails, ccEmails } = applyCampaignRecipientRules([
       ...(company?.tw_to_emails ?? []),

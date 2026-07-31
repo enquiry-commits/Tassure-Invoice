@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Draft Helper download no longer blocked by login on a new computer)
+Last updated: 2026-07-31 (Fixed recipient resolution silently dropping known emails; Contact Person fill-in now keeps every contact, not just the first)
 
 ## Purpose
 
@@ -23,6 +23,34 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed recipient resolution silently dropping a known email even after
+  the Contact Person fill-in had correctly populated it; extended that
+  fill-in to keep every contact person, not just the first.** Vincent
+  showed HUAKO KIDS PTE. LTD. and YWL ELECTRICAL ENGINEERING PTE. LTD. —
+  both clearly had emails in TeamWork's Contact Person report, but the
+  system still showed "no email". Checked Supabase directly: both
+  companies already had `best_email`/`primary_contact` correctly filled
+  in by the new sync, but `tw_recipient_source` was `'teamwork_report'`
+  (set by the *other*, upcoming-events recipient sync) with `tw_to_emails:
+  []` — that sync had found a staff CC for them but zero To-emails, and
+  `pickContact()` in `lib/client-comms-resolve.ts` trusted the source
+  label alone, never checking whether `tw_to_emails` actually had
+  anything, so it returned empty and never fell through to the
+  fallback. Fixed by requiring `tw_to_emails.length > 0` before taking
+  that branch. Separately, YWL has two contact persons (LEI CHI, XU
+  WEIMING) in TeamWork — Vincent: "就算有两个，to 就放两个啊" — but
+  `syncTeamworkContactPersons()` only ever kept "first email wins".
+  Rewrote it to group all contacts per company and write every unique
+  email into `tw_to_emails` (the field recipient resolution actually
+  sends to), tagging the source as `'contact_person_report'`; also
+  broadened its gap detection to key off `tw_to_emails` being empty
+  (the field that matters for sending) rather than requiring
+  `best_email`/`primary_contact` to also be empty, since a company can
+  have one populated without the other. Re-ran the corrected sync once
+  by hand against production Supabase: 349 companies filled/corrected,
+  confirmed both flagged companies now resolve correctly (YWL shows
+  both emails in `tw_to_emails`). Production build passes.
 
 - **Fixed `TassureDraftHelper.exe` failing to download on a computer with
   no existing Tassure session.** Vincent: "我刚才在别人的电脑下载那个HELPER 但是
