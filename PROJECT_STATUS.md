@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Master List now sorts by Code; TW sync reads it; Add Manual auto-fills it)
+Last updated: 2026-07-31 (Fixed the row divider never rendering on real-<table> pages)
 
 ## Purpose
 
@@ -23,6 +23,27 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Found and fixed why Address Service and Late Filing never showed a
+  row divider, even though `.system-list-row`'s CSS looked correct.**
+  Vincent: "ADDRESS SERVICE / LATE FILING页面的 row 间隔还是没有看到那个虚线".
+  Root cause: `.system-list-row`'s `border-bottom` (`app/globals.css`)
+  is set on the row element itself, which works fine for the div-based
+  List views (AR Reminder, Active Client) but is a no-op for real
+  `<table>`-based pages — browsers don't render a border set on `<tr>`
+  under `border-collapse: separate`, which `.system-list-table`
+  intentionally uses (the sticky-column performance fix from earlier
+  this session). Address Service and Late Filing are both real
+  `<table>`s with `.system-list-table`, so their divider was silently
+  never rendering, while the div-based pages (never subject to this
+  table-specific browser rule) worked the whole time — which is why
+  this looked page-specific rather than like a shared-CSS bug. Fixed by
+  adding `border-bottom: 1px solid var(--list-border)` to
+  `.system-list-table .system-list-row > td` instead (the cell level,
+  where table borders DO render), leaving the div-based pages'
+  `.system-list-row` divider untouched. Confirmed no inline
+  `borderBottom` on any `<td>` in either file that would conflict.
+  Production build passes.
 
 - **Master List now sorts by the staff-assigned Code (CA001, CA003, ...
   CB003, CB010, ...) instead of insertion order; TeamWork sync now

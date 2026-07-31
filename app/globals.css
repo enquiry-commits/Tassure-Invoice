@@ -191,10 +191,18 @@ body {
   white-space: nowrap;
 }
 
+/* Browsers don't render border-bottom set on <tr> under
+   border-collapse:separate (which .system-list-table intentionally
+   uses — see the sticky-column performance fix elsewhere in this
+   session), so .system-list-row's own border-bottom silently never
+   showed for any real <table>-based page (Address Service, Late
+   Filing) — only the div-based List views (AR Reminder, Active Client)
+   ever actually rendered it. Set it on the cells instead. */
 .system-list-table .system-list-row > td {
   height: 54px;
   padding: 10px 14px !important;
   vertical-align: middle;
+  border-bottom: 1px solid var(--list-border);
 }
 
 .system-list-table--compact .system-list-row > td {
