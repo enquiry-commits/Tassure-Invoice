@@ -3311,7 +3311,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                       same position, so rows align and differences pop out.
                       Every active service shown here is a green check —
                       this list only ever shows services that ARE on. */}
-                  <div style={{ margin: '0 6px', padding: '2px 0', minHeight: 32, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
+                  <div style={{ margin: '0 6px', padding: '2px 0', minHeight: 32, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                     {SVC_ORDER.filter(k => r.services[k]).map(k => {
                       const state = svcStateOf(r.services, r.servicesManual, k);
                       return (

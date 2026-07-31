@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (AR Reminder List: normalized row height for a consistent divider)
+Last updated: 2026-07-31 (AR Reminder List: Services chip gap 6px → 8px)
 
 ## Purpose
 
@@ -23,6 +23,11 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **AR Reminder List's Services cell chip spacing widened from 6px to
+  8px**, per a DevTools screenshot Vincent sent pointing at the exact
+  container. `app/billing/page.tsx`, the row's Services `<div>` — `gap:
+  6` → `gap: 8`. Production build passes.
 
 - **Diagnosed and fixed why AR Reminder List's row divider looked
   inconsistent — present on some rows, seemingly missing on others.**
