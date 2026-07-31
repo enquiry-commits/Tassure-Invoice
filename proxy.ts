@@ -17,6 +17,10 @@ const CRON_PATHS = new Set([
 
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
+  // Staff installing the Helper on a new/different computer have no Tassure
+  // session yet on that machine — the installer itself must be reachable
+  // before login is even possible, same reasoning as the QuickBooks webhook.
+  if (path.startsWith('/downloads/')) return NextResponse.next();
   const isPublic = PUBLIC_PATHS.has(path);
   const isApi = path.startsWith('/api/');
   const cronSecret = process.env.CRON_SECRET;

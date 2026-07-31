@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Billing Drafts quick-draft now always sends from finance@tassure.com)
+Last updated: 2026-07-31 (Draft Helper download no longer blocked by login on a new computer)
 
 ## Purpose
 
@@ -23,6 +23,20 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed `TassureDraftHelper.exe` failing to download on a computer with
+  no existing Tassure session.** Vincent: "我刚才在别人的电脑下载那个HELPER 但是
+  都没有反应，我已经确定按了run, 但是一直刷新都没有下载好". `curl -sI` on the
+  download URL showed `HTTP/1.1 307` redirecting to `/login` — `proxy.ts`'s
+  middleware gates every non-public, non-API path behind an authenticated
+  Supabase session, and `/downloads/TassureDraftHelper.exe` was never
+  exempted. On a machine that has never logged into the web app, the
+  "download" was silently just the `/login` page's HTML, so nothing
+  Vincent did with "Run" ever had a real exe to execute. Fixed by
+  exempting the whole `/downloads/` prefix from the auth check in
+  `proxy.ts` (same reasoning as the existing QuickBooks webhook
+  exemption — the installer must be reachable before a session can even
+  exist on that machine). Production build passes.
 
 - **Billing Drafts' quick-draft mail icon now always sends from
   `finance@tassure.com`.** Vincent: "并且我要固定这个邮箱是：OUTLOOK SENDER：
