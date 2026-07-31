@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Refined AR Reminder's service-square color scheme)
+Last updated: 2026-07-30 (Added "Add to Master List" from the Missing-from-Active-Client panel)
 
 ## Purpose
 
@@ -23,6 +23,21 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Active Client's "Missing from Active Client" panel (companies
+  TeamWork has as a CSS Client but with no row here yet) now has an
+  "Add to Master List" button per company, pre-filling the existing Add
+  Manual form instead of making staff retype the name/UEN.** Vincent:
+  "我想要做便利性优化，就是在这些公司的右边设置一个按钮（Add to Master List），系统自动匹配（原本+
+  add manual）的功能，自动填好公司名字和 UEN". Added `startAddFrom(c)` in
+  `components/MasterListTable.tsx` — sets `newRow` from the missing
+  client's `company_name`/`registration_no` (uppercased, matching the
+  Add Manual form's own `normalize` step for those two fields) and opens
+  the same `showAddForm` modal `startAdd`/the toolbar's "+ Add Manual"
+  button already use, so every downstream save/reload path is identical,
+  just pre-populated. Restructured each missing-client row (name + UEN
+  stacked on the left, new button on the right) and widened the panel's
+  grid columns from 220px to 300px to fit it. Production build passes.
 
 - **Refined AR Reminder's service-square colors: List-view row now
   always green, and the modal's scheme changed from provenance-only to

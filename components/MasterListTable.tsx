@@ -968,6 +968,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
 
   const startAdd  = () => { setNewRow({}); setShowAddForm(true); };
   const cancelAdd = () => { setShowAddForm(false); setNewRow({}); };
+  // Pre-fills the same Add Manual form from a "Missing from Active Client"
+  // entry, so staff don't have to retype the name/UEN TeamWork already gave us.
+  const startAddFrom = (c: { company_name: string; registration_no: string | null }) => {
+    setNewRow({ company_name: c.company_name.toUpperCase(), roc_no: c.registration_no?.toUpperCase() ?? '' });
+    setShowAddForm(true);
+  };
 
   const saveNew = async () => {
     if (!newRow.company_name?.trim()) return;
@@ -1163,11 +1169,17 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           {missingCssClients.length === 0 ? (
             <div style={{ fontSize: 11.5, color: '#94a3b8' }}>None — every TeamWork CSS Client has a row here.</div>
           ) : (
-            <div style={{ maxHeight: 220, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: '2px 16px' }}>
+            <div style={{ maxHeight: 220, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: '2px 16px' }}>
               {missingCssClients.map(c => (
-                <div key={c.registration_no ?? c.company_name} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, padding: '4px 0', borderBottom: '1px solid #fef3ee', fontSize: 11.5 }}>
-                  <span className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.company_name}</span>
-                  <span className="company-registration-text" style={{ flexShrink: 0 }}>{c.registration_no ?? '—'}</span>
+                <div key={c.registration_no ?? c.company_name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '4px 0', borderBottom: '1px solid #fef3ee', fontSize: 11.5 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <span className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{c.company_name}</span>
+                    <span className="company-registration-text">{c.registration_no ?? '—'}</span>
+                  </div>
+                  <button onClick={() => startAddFrom(c)} title="Add to Master List — pre-fills Company Name and UEN/ROC"
+                    style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, padding: '3px 8px', borderRadius: 6, border: '1px solid #fdba74', background: '#fff', color: '#c2410c', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    <Plus size={11} />Add to Master List
+                  </button>
                 </div>
               ))}
             </div>
