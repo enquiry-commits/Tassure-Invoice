@@ -318,9 +318,9 @@ const SVC: Record<string, { label: string; bg: string; color: string }> = {
 
 // Services rendered as FIXED slots in a FIXED order so each service always
 // sits in the same position row-to-row — much easier to scan than a
-// variable-length list. Color encodes PROVENANCE, not service type:
-//   blue = automatically detected · green = manually switched on ·
-//   grey = not provided / switched off.
+// variable-length list. Only active services are shown here, so every
+// square is a green check (see the modal for the fuller auto/manual/off
+// color scheme).
 const SVC_ORDER = ['ar', 'agm', 'secretary', 'nd', 'address', 'xbrl', 'accounts', 'tax'] as const;
 const SVC_SHORT: Record<string, string> = {
   ar: 'AR', agm: 'AGM', secretary: 'SEC', nd: 'ND',
@@ -343,10 +343,11 @@ const OVERRIDABLE_SVC = ['secretary', 'accounts', 'tax', 'xbrl'] as const;
 // Small colored checkbox-style tile, same square-tile language as Active
 // Client's Services column (components/MasterListTable.tsx's CheckSquare).
 // `color` carries whatever the caller's own status/provenance scheme means
-// (e.g. AR Reminder: grey = locked, blue = auto, green = manual; Billing
-// Drafts: red = expired, orange = expiring soon, green = active/billed,
-// grey = n/a) — `ServiceSquare` itself only renders check-vs-cross for `on`.
-const SVC_SQUARE_COLOR = { locked: '#94a3b8', auto: '#2563eb', manual: '#16a34a' } as const;
+// (e.g. AR Reminder's modal: grey = off (auto or manual), light blue =
+// on via locked/auto, green = on via manual; Billing Drafts: red =
+// expired, orange = expiring soon, green = active/billed, grey = n/a) —
+// `ServiceSquare` itself only renders check-vs-cross for `on`.
+const SVC_SQUARE_COLOR = { off: '#94a3b8', auto: '#60a5fa', manual: '#16a34a' } as const;
 function ServiceSquare({ on, color }: { on: boolean; color: string }) {
   return (
     <span aria-hidden="true" style={{
@@ -367,6 +368,7 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
   const c = SVC[svc];
   const isManual = manual !== undefined;
   const on = isManual ? !!manual : effective;
+  const color = !on ? SVC_SQUARE_COLOR.off : isManual ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto;
   return (
     <button onClick={onCycle} disabled={disabled}
       title={disabled ? 'No company-master match — cannot override' : isManual ? `${c.label}: manual ${manual ? 'ON' : 'OFF'} · click to restore auto` : `${c.label}: auto (${effective ? 'on' : 'off'}) · click to force ${effective ? 'OFF' : 'ON'}`}
@@ -375,7 +377,7 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
         display: 'inline-flex', alignItems: 'center', gap: 6,
       }}>
-      <ServiceSquare on={on} color={isManual ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto} />
+      <ServiceSquare on={on} color={color} />
       <span style={{ fontSize: 10.5, fontWeight: 700, color: '#475569' }}>{c.label}</span>
     </button>
   );
@@ -2485,7 +2487,8 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
           </div>
           {/* Row 3: service chips — Secretary/Accounts/Tax/XBRL are clickable
               (auto → manual on → manual off); ND/Address follow TeamWork.
-              Blue = auto-detected · green = manually on · grey = off. */}
+              Light blue = on via locked/auto · green = manually on ·
+              grey = off (auto or manual). */}
           <div style={{ background: '#fff', border: '1px solid #dbe3ee', borderRadius: 12, padding: '14px 16px 16px', boxShadow: '0 3px 12px rgba(15,23,42,0.12)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, marginBottom: 14 }}>
               <div>
@@ -2496,10 +2499,16 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
                 </div>
                 <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 5, lineHeight: 1.5 }}>Click an adjustable service to override the system result. Click again to restore automatic detection.</div>
               </div>
-              <div style={{ display: 'flex', gap: 13, flexShrink: 0, fontSize: 8, fontWeight: 700 }}>
-                <span style={{ color: '#64748b' }}>AUTO · System</span>
-                <span style={{ color: '#15803d' }}>● Manual</span>
-                <span style={{ color: '#94a3b8' }}>Grey · Off</span>
+              <div style={{ display: 'flex', gap: 13, flexShrink: 0, fontSize: 8, fontWeight: 700, alignItems: 'center' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#475569' }}>
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, background: SVC_SQUARE_COLOR.auto, flexShrink: 0 }} />Locked / Auto
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#475569' }}>
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, background: SVC_SQUARE_COLOR.manual, flexShrink: 0 }} />Manual On
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#475569' }}>
+                  <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, background: SVC_SQUARE_COLOR.off, flexShrink: 0 }} />Off
+                </span>
               </div>
             </div>
 
@@ -2512,7 +2521,7 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
                     return (
                       <span key={k} title={`${svc.label}: locked${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <ServiceSquare on color={SVC_SQUARE_COLOR.locked} />
+                        <ServiceSquare on color={SVC_SQUARE_COLOR.auto} />
                         <span style={{ fontSize: 10.5, fontWeight: 700, color: '#475569' }}>{svc.label}</span>
                       </span>
                     );
@@ -3262,13 +3271,12 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     <DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} />
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 7, alignItems: 'center' }}>
-                    {activeSvc.map(k => {
-                      const state = svcStateOf(r.services, r.servicesManual, k);
-                      return <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: '#475569' }}>
-                        <ServiceSquare on color={state === 'manual-on' ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto} />
+                    {activeSvc.map(k => (
+                      <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: '#475569' }}>
+                        <ServiceSquare on color={SVC_SQUARE_COLOR.manual} />
                         {SVC[k].label}
-                      </span>;
-                    })}
+                      </span>
+                    ))}
                   </div>
                   <div style={{ display: 'flex', gap: 10, marginTop: 7, fontSize: 10.5, color: '#64748b' }}>
                     <span>Progress: <span style={{ fontWeight: 700, color: filed ? '#16a34a' : r.stagesDone > 0 ? '#b45309' : '#94a3b8' }}>{r.stagesDone}/5{filed ? ' · Filed' : ''}</span></span>
@@ -3289,14 +3297,15 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div className="company-registration-text" style={{ padding: '0 6px' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
                   {/* Fixed slots in fixed order — every service always in the
                       same position, so rows align and differences pop out.
-                      Blue = auto · green = manual on · grey = off. */}
+                      Every active service shown here is a green check —
+                      this list only ever shows services that ARE on. */}
                   <div style={{ margin: '0 6px', padding: '2px 0', minHeight: 32, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                     {SVC_ORDER.filter(k => r.services[k]).map(k => {
                       const state = svcStateOf(r.services, r.servicesManual, k);
                       return (
                         <span key={k} title={`${SVC[k].label} — ${state === 'auto-on' ? 'auto' : state === 'manual-on' ? 'manually on' : 'not provided / off'}`}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
-                          <ServiceSquare on color={state === 'manual-on' ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto} />
+                          <ServiceSquare on color={SVC_SQUARE_COLOR.manual} />
                           {SVC_SHORT[k]}
                         </span>
                       );

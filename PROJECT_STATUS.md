@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Active Client's unchecked service squares now show a cross)
+Last updated: 2026-07-30 (Refined AR Reminder's service-square color scheme)
 
 ## Purpose
 
@@ -23,6 +23,33 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Refined AR Reminder's service-square colors: List-view row now
+  always green, and the modal's scheme changed from provenance-only to
+  state+provenance.** Vincent's spec, verbatim: "AR REMINDER List 页面的
+  services 列的格子要做成 绿色的打勾" and "AR REMINDER List 页面的弹窗中的 services
+  Locked 和 Auto On 是浅蓝色打勾, Auto Off 和 Manual Off 是灰色打叉, Manual On 是
+  绿色打勾". Two changes to `app/billing/page.tsx`:
+  (1) The List-view row's Services cell and its mobile-card equivalent
+  only ever display services that ARE active (`SVC_ORDER.filter(k =>
+  r.services[k])` / `activeSvc`), so per Vincent's new spec every square
+  there is now simply green — dropped the per-service auto-vs-manual
+  color branching that used to color some of them blue.
+  (2) The modal's scheme changed from "color = provenance always" to
+  "color = off (grey) unless on, then color = provenance": redefined
+  `SVC_SQUARE_COLOR` from `{locked, auto, manual}` (grey/blue/green) to
+  `{off, auto, manual}` (grey/light-blue `#60a5fa`/green) — `off` is new,
+  `auto` is now a lighter blue than before. `OverrideChip` now computes
+  `!on ? off : isManual ? manual : auto` instead of always branching on
+  `isManual` alone, so Auto Off and Manual Off both render grey/cross
+  where before Manual Off was green/cross. The "Locked" system-managed
+  section switched from grey to the same light blue as Auto On (both are
+  always-on states). Updated the modal's own color-key legend (previously
+  plain colored text, now small colored swatches: Locked/Auto ·
+  Manual On · Off) and two stale code comments describing the old
+  scheme. Production build passes (after clearing 10 more stray
+  `node.exe` processes via `taskkill` from another session interruption
+  mid-build).
 
 - **Active Client's Services column squares (`CheckSquare` in
   `components/MasterListTable.tsx`) now show a cross mark when off,
