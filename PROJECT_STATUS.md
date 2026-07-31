@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Late Filing: added the left-side chevron column)
+Last updated: 2026-07-30 (Late Filing: sticky columns + mirrored scrollbar, like Master List)
 
 ## Purpose
 
@@ -23,6 +23,29 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Late Filing's horizontal scrolling now matches Master List's classic
+  table exactly — sticky leading columns + a draggable mirrored
+  scrollbar pinned to the bottom of the viewport.** Verbatim: "late
+  filing 由于现在的列太多了，导致要左右移动，麻烦把那个左右滚动的设置，做成和 master list table的
+  一样". Late Filing has 11 columns (chevron, Company Name, UEN/ROC, FYE,
+  Late FY, 3 date columns, Next AGM Due, Remarks, actions) and no
+  existing horizontal-scroll affordance beyond the browser's native
+  scrollbar at the very bottom of a potentially tall table. Ported the
+  exact mechanism from `components/MasterListTable.tsx` (itself the
+  "same pattern as AR Reminder" per its own comment) into
+  `app/late-filing/page.tsx`: `outerRef`/`sbRef`/`thumbRef` refs,
+  `updateSb()` (recomputes the mirrored thumb's size/position off the
+  real scroll container, called on scroll/resize/data-change), a
+  drag-to-scroll mouse handler, and a `STICKY_WIDTHS = [32, 300, 120]`
+  (chevron, Company Name, UEN/ROC) sticky-offset scheme — the same 3
+  columns Master List pins (No./Company Name/UEN-ROC), adapted to Late
+  Filing's own column widths. Rendered the identical bottom-fixed
+  draggable scrollbar JSX. Late Filing has no existing mobile-specific
+  layout (unlike Master List/AR/Billing, which branch on `isMobile`), so
+  native horizontal scroll is hidden unconditionally here, matching
+  desktop behavior; flagged as a possible follow-up if mobile use turns
+  out to need it. Production build passes.
 
 - **Late Filing rows now have the left-side chevron (`>`) indicator too
   — Vincent's follow-up after the No.-column change: "可是左边的那个三角你没有还原"

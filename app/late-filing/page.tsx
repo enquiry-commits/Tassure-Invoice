@@ -153,6 +153,65 @@ export default function LateFilingPage() {
   const [pendingDelete, setPendingDelete] = useState<LateRow | null>(null);
   const [customRemarks, setCustomRemarks] = useState(false);
 
+  // ── Custom mirrored horizontal scrollbar + sticky leading columns ──────
+  // Same pattern as Master List's classic table (components/MasterListTable.tsx)
+  // and AR Reminder's Table view — too many columns to fit on screen, so the
+  // chevron/Company Name/UEN columns stay pinned while scrolling right, and
+  // a draggable scrollbar stays reachable at the bottom of the viewport
+  // instead of requiring a scroll down to the table's own native one.
+  const outerRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
+  const sbRef    = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const dragRef  = useRef({ startX: 0, startScroll: 0 });
+  const metaRef  = useRef({ tw: 0, sbW: 0 });
+  const STICKY_WIDTHS = [32, 300, 120]; // chevron, company_name, uen
+
+  const updateSb = useCallback(() => {
+    const el = outerRef.current, thumb = thumbRef.current, sb = sbRef.current;
+    if (!el || !thumb || !sb) return;
+    const rect = el.getBoundingClientRect();
+    sb.style.left = `${rect.left}px`;
+    sb.style.width = `${rect.width}px`;
+    if (el.scrollWidth <= el.clientWidth) { sb.style.display = 'none'; return; }
+    sb.style.display = 'block';
+    const tw = Math.max(rect.width * (el.clientWidth / el.scrollWidth), 40);
+    metaRef.current = { tw, sbW: rect.width };
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    const tl = maxScroll > 0 ? (el.scrollLeft / maxScroll) * (rect.width - tw) : 0;
+    thumb.style.width = `${tw}px`;
+    thumb.style.left = `${tl}px`;
+  }, []);
+
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', updateSb, { passive: true });
+    window.addEventListener('resize', updateSb, { passive: true });
+    const ro = new ResizeObserver(updateSb);
+    ro.observe(el);
+    updateSb();
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current || !el) return;
+      const { tw, sbW } = metaRef.current;
+      const dx = e.clientX - dragRef.current.startX;
+      const scrollable = el.scrollWidth - el.clientWidth;
+      const thumbRange = sbW - tw;
+      if (thumbRange <= 0) return;
+      el.scrollLeft = Math.max(0, Math.min(dragRef.current.startScroll + dx * (scrollable / thumbRange), scrollable));
+    };
+    const onUp = () => { dragging.current = false; };
+    document.addEventListener('mousemove', onMove, { passive: true });
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      el.removeEventListener('scroll', updateSb);
+      window.removeEventListener('resize', updateSb);
+      ro.disconnect();
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, [updateSb]);
+
   const load = useCallback(async () => {
     setLoading(true);
     const r = await fetch(`/api/late-filing?fye=${fye}`);
@@ -246,6 +305,8 @@ export default function LateFilingPage() {
   // Paginate AFTER the year/category filters — only rendering is capped.
   const { page, setPage, totalPages, pageItems, startIndex, total } =
     usePagination(displayRows, `${yearFilter}|${catFilter}`);
+
+  useEffect(() => { updateSb(); }, [rows, page, updateSb]);
 
   return (
     <div style={{ paddingTop:12 }}>
@@ -387,7 +448,7 @@ export default function LateFilingPage() {
           No late filing companies found for this year
         </div>
       ) : (
-        <div className="system-list-shell system-list-scroll" style={{ maxHeight:'calc(100vh - 260px)' }}>
+        <div ref={outerRef} className="system-list-shell" style={{ maxHeight:'calc(100vh - 260px)', overflowX:'hidden', overflowY:'auto' }}>
           <table className="system-list-table" style={{ minWidth: 1320 }}>
             <colgroup>
               <col style={{ width: 32 }} />
@@ -404,25 +465,29 @@ export default function LateFilingPage() {
             </colgroup>
             <thead>
               <tr className="list-column-header-gray">
-                {['','Company Name','UEN / ROC','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map((h,i)=>(
-                  <th key={i} style={{ textAlign:'left', whiteSpace:'nowrap',
-                    position:'sticky', top:0, zIndex:2,
-                  }}>{h}</th>
-                ))}
+                {['','Company Name','UEN / ROC','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map((h,i)=>{
+                  const sl = i === 0 ? 0 : i === 1 ? STICKY_WIDTHS[0] : i === 2 ? STICKY_WIDTHS[0] + STICKY_WIDTHS[1] : undefined;
+                  return (
+                    <th key={i} style={{ textAlign:'left', whiteSpace:'nowrap',
+                      position:'sticky', top:0, left: sl, zIndex: sl !== undefined ? 3 : 2,
+                      boxShadow: i === 2 ? '3px 0 8px -2px rgba(0,0,0,0.1)' : undefined,
+                    }}>{h}</th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {pageItems.map((row, idx) => (
                   <tr key={row.id} className="system-list-row" onClick={() => startEdit(row)}
                     style={{ cursor: 'pointer' }}>
-                    <td style={{ color: '#94a3b8' }}>
+                    <td style={{ color: '#94a3b8', position:'sticky', left:0, zIndex:1, background:'#fff' }}>
                       <ChevronRight size={14} />
                     </td>
-                    <td className="company-name-text">
+                    <td className="company-name-text" style={{ position:'sticky', left: STICKY_WIDTHS[0], zIndex:1, background:'#fff' }}>
                       <span style={{ color: '#cbd5e1', marginRight: 6, fontSize: 11 }}>{startIndex + idx + 1}</span>
                       {row.company_name}
                     </td>
-                    <td className="company-registration-text">{row.uen||'—'}</td>
+                    <td className="company-registration-text" style={{ position:'sticky', left: STICKY_WIDTHS[0] + STICKY_WIDTHS[1], zIndex:1, background:'#fff', boxShadow:'3px 0 8px -2px rgba(0,0,0,0.12)' }}>{row.uen||'—'}</td>
                     <td>
                       {row.financial_year_end
                         ? <span style={{ color:'#475569', fontSize:12, fontWeight:600 }}>{row.financial_year_end}</span>
@@ -474,6 +539,31 @@ export default function LateFilingPage() {
           </table>
         </div>
       )}
+
+      {/* Mirrored scrollbar — stays reachable at the bottom of the viewport */}
+      {!loading && displayRows.length > 0 && <div
+        ref={sbRef}
+        style={{ position: 'fixed', bottom: 0, display: 'none', height: 23, zIndex: 50, cursor: 'pointer' }}
+        onClick={e => {
+          const el = outerRef.current;
+          if (!el) return;
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          el.scrollLeft = ((e.clientX - rect.left) / metaRef.current.sbW) * (el.scrollWidth - el.clientWidth);
+        }}
+      >
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 8, background: '#e1e7ef' }} />
+        <div
+          ref={thumbRef}
+          style={{ position: 'absolute', top: 0, left: 0, width: 0, height: 15, background: '#94a3b8', borderRadius: 8, userSelect: 'none', cursor: 'grab' }}
+          onMouseDown={e => {
+            dragging.current = true;
+            dragRef.current = { startX: e.clientX, startScroll: outerRef.current?.scrollLeft ?? 0 };
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={e => e.stopPropagation()}
+        />
+      </div>}
 
       <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
 
