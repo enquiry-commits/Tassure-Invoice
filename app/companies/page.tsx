@@ -203,10 +203,10 @@ export default function CompaniesPage() {
               <col style={{ width: 110 }} />
             </colgroup>
             <thead>
-              <tr className="system-list-column-header">
+              <tr className="list-column-header-gray">
                 {['No.','Company Name','Internal CSS Status','UEN / ROC','Company Type','Nominee Director','Address Service','Contact','PIC'].map(h => (
                   <th key={h}
-                    style={{ position: 'sticky', top: 0, zIndex: 2, boxShadow: 'inset 0 -1px 0 #16304f' }}>
+                    style={{ position: 'sticky', top: 0, zIndex: 2, boxShadow: 'inset 0 -1px 0 rgba(15,23,42,0.08)' }}>
                     {h}
                   </th>
                 ))}

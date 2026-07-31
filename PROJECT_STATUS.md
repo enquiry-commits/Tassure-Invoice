@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (Added "Add to Master List" from the Missing-from-Active-Client panel)
+Last updated: 2026-07-30 (Companies page: gray column-header row)
 
 ## Purpose
 
@@ -23,6 +23,20 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Companies page ("Company List") row-2 column header switched to the
+  gray/dark-text style too.** Vincent had previously been told this page
+  was intentionally left on the navy `.system-list-column-header` (it
+  wasn't named in the original Address/AR/Billing/ND request), but a
+  screenshot showed he wants it converted as well. Switched
+  `app/companies/page.tsx`'s header `<tr>` to `.list-column-header-gray`
+  and re-tinted its per-`<th>` inset divider shadow from dark navy
+  (`#16304f`) to a light `rgba(15,23,42,0.08)` to match the new
+  background. Dashboard (`app/page.tsx`, 3 tables) and Client
+  Communications (campaigns/history) still use the navy
+  `.system-list-column-header` and haven't been asked about yet — worth
+  checking with Vincent if he wants those converted too, rather than
+  waiting for another screenshot per page. Production build passes.
 
 - **Active Client's "Missing from Active Client" panel (companies
   TeamWork has as a CSS Client but with no row here yet) now has an
