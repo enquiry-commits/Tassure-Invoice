@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (AR Reminder + Billing Drafts: gray squares are now empty, no cross)
+Last updated: 2026-07-31 (AR Reminder List's PIC column font lightened)
 
 ## Purpose
 
@@ -23,6 +23,20 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **AR Reminder's List-view PIC column font changed to match a
+  `text-xs text-slate-600` reference Vincent screenshotted (a `<td>`
+  showing comma-separated PIC names, e.g. "Hoe Chyi Lim, Seng Xin Hoo").**
+  In `app/billing/page.tsx`, the desktop row's PIC cell was
+  `fontSize: 14, color: '#374151', fontWeight: 500` — changed to
+  `fontSize: 12, color: '#475569'` (Tailwind's `text-xs` is 12px,
+  `slate-600` is `#475569`), dropping the medium weight to match the
+  plainer reference. Scoped to this one cell only — the mobile card's
+  separate `PIC: {r.pic}` text and the Table view's PIC column (a
+  shared `EditField` instance also used by several other fields) were
+  left untouched, since changing `EditField`'s display style would
+  affect every field that uses it, not just PIC. Production build
+  passes.
 
 - **Extended the just-reverted "no cross on gray" convention to AR
   Reminder's modal and Billing Drafts, and lightened the gray itself.**

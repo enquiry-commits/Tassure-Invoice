@@ -3319,7 +3319,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     {SVC_ORDER.every(k => !r.services[k]) && <span style={{ fontSize: 11, color: '#94a3b8' }}>No active services</span>}
                   </div>
                   <div style={{ padding: '0 6px' }}><DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} /></div>
-                  <div style={{ padding: '0 6px', fontSize: 14, color: '#374151', fontWeight: 500 }}>{r.pic || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
+                  <div style={{ padding: '0 6px', fontSize: 12, color: '#475569' }}>{r.pic || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
                 </div>
               );
             })}
