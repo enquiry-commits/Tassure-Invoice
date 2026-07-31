@@ -173,12 +173,24 @@ function AnnualCard({ a }: { a: AnnualStatus }) {
   );
 }
 
+// Same square-tile language as ServiceSquare (below)/Active Client's
+// Services column — color keeps this page's own renewal-status meaning
+// (red = expired/pending, orange = expiring soon, green = active/billed,
+// grey = not applicable), check = "active/billed", cross = anything else.
 function ServiceMini({ label, status, applicable }: { label: string; status: string; applicable: boolean }) {
-  if (!applicable) return <BillingStatusPill label={label} color="#94a3b8" background="#f8fafc" border="#e2e8f0" />;
-  const color = status === 'expired' || status === 'pending' ? '#dc2626' : status === 'expiring_soon' ? '#ea580c' : status === 'active' || status === 'billed' ? '#16a34a' : '#94a3b8';
-  const bg    = status === 'expired' || status === 'pending' ? '#fef2f2' : status === 'expiring_soon' ? '#fff7ed' : status === 'active' || status === 'billed' ? '#f0fdf4' : '#f8fafc';
-  const border = status === 'expired' || status === 'pending' ? '#fecaca' : status === 'expiring_soon' ? '#fed7aa' : status === 'active' || status === 'billed' ? '#bbf7d0' : '#e2e8f0';
-  return <BillingStatusPill label={label} color={color} background={bg} border={border} />;
+  const color = !applicable ? '#94a3b8'
+    : status === 'expired' || status === 'pending' ? '#dc2626'
+    : status === 'expiring_soon' ? '#ea580c'
+    : status === 'active' || status === 'billed' ? '#16a34a'
+    : '#94a3b8';
+  const on = applicable && (status === 'active' || status === 'billed');
+  return (
+    <span title={`${label}: ${!applicable ? 'not applicable' : status.replace(/_/g, ' ')}`}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 750, color: '#475569', whiteSpace: 'nowrap' }}>
+      <ServiceSquare on={on} color={color} />
+      {label}
+    </span>
+  );
 }
 
 function BillingStatusPill({ label, color, background, border, title, muted = false }: {
@@ -329,17 +341,18 @@ const STAGE_LABELS = ['Accounts\nReady','Sent to\nClient','Docs\nReceived','AGM\
 const OVERRIDABLE_SVC = ['secretary', 'accounts', 'tax', 'xbrl'] as const;
 
 // Small colored checkbox-style tile, same square-tile language as Active
-// Client's Services column (components/MasterListTable.tsx's CheckSquare) —
-// color encodes WHO controls the service (grey = locked/system, blue =
-// auto-detected, green = manually set), the icon encodes current state
-// (check = on, cross = off), independent of each other.
+// Client's Services column (components/MasterListTable.tsx's CheckSquare).
+// `color` carries whatever the caller's own status/provenance scheme means
+// (e.g. AR Reminder: grey = locked, blue = auto, green = manual; Billing
+// Drafts: red = expired, orange = expiring soon, green = active/billed,
+// grey = n/a) — `ServiceSquare` itself only renders check-vs-cross for `on`.
 const SVC_SQUARE_COLOR = { locked: '#94a3b8', auto: '#2563eb', manual: '#16a34a' } as const;
-function ServiceSquare({ on, tone }: { on: boolean; tone: keyof typeof SVC_SQUARE_COLOR }) {
+function ServiceSquare({ on, color }: { on: boolean; color: string }) {
   return (
     <span aria-hidden="true" style={{
       width: 14, height: 14, minWidth: 14, borderRadius: 4, flexShrink: 0,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: SVC_SQUARE_COLOR[tone],
+      background: color,
     }}>
       {on ? <Check size={10} color="#fff" strokeWidth={3} /> : <X size={10} color="#fff" strokeWidth={3} />}
     </span>
@@ -362,7 +375,7 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
         cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1,
         display: 'inline-flex', alignItems: 'center', gap: 6,
       }}>
-      <ServiceSquare on={on} tone={isManual ? 'manual' : 'auto'} />
+      <ServiceSquare on={on} color={isManual ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto} />
       <span style={{ fontSize: 10.5, fontWeight: 700, color: '#475569' }}>{c.label}</span>
     </button>
   );
@@ -2499,7 +2512,7 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
                     return (
                       <span key={k} title={`${svc.label}: locked${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <ServiceSquare on tone="locked" />
+                        <ServiceSquare on color={SVC_SQUARE_COLOR.locked} />
                         <span style={{ fontSize: 10.5, fontWeight: 700, color: '#475569' }}>{svc.label}</span>
                       </span>
                     );
@@ -3252,7 +3265,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     {activeSvc.map(k => {
                       const state = svcStateOf(r.services, r.servicesManual, k);
                       return <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: '#475569' }}>
-                        <ServiceSquare on tone={state === 'manual-on' ? 'manual' : 'auto'} />
+                        <ServiceSquare on color={state === 'manual-on' ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto} />
                         {SVC[k].label}
                       </span>;
                     })}
@@ -3283,7 +3296,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                       return (
                         <span key={k} title={`${SVC[k].label} — ${state === 'auto-on' ? 'auto' : state === 'manual-on' ? 'manually on' : 'not provided / off'}`}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
-                          <ServiceSquare on tone={state === 'manual-on' ? 'manual' : 'auto'} />
+                          <ServiceSquare on color={state === 'manual-on' ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto} />
                           {SVC_SHORT[k]}
                         </span>
                       );

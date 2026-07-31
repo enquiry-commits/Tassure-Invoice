@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-30 (AR Reminder's service pills replaced with Active Client-style squares)
+Last updated: 2026-07-30 (Billing Drafts' service pills replaced with squares too)
 
 ## Purpose
 
@@ -23,6 +23,25 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Billing Drafts' Renewal Services / ND (TAC) / Annual Obligations
+  columns now use the same square-tile language too, not just AR
+  Reminder.** Vincent's follow-up: "我想把这张格子形式的services 列的UI 设计 也搬到
+  Billing Drafts 页面的 Renewal services / ND(TAC)/Annual Obligations 列（现在是一个
+  四方形的胶囊）". These columns render via `ServiceMini`
+  (`app/billing/page.tsx`), which previously called the shared
+  `BillingStatusPill` (colored dot + pill) — left untouched, since it's
+  also used by the unrelated "To invoice"/"Invoiced" badge. Billing's
+  service status isn't a simple binary like AR Reminder's (it has 4
+  distinct states: red = expired/pending, orange = expiring soon, green
+  = active/billed, grey = not applicable), so generalized `ServiceSquare`
+  first — swapped its `tone: 'locked'|'auto'|'manual'` prop for a plain
+  `color: string`, updating all 4 existing AR Reminder call sites to
+  pass `SVC_SQUARE_COLOR.locked/auto/manual` explicitly — then rewrote
+  `ServiceMini` to render `ServiceSquare` with its own 4-color scale
+  (check icon only for the "good" active/billed state, cross for
+  everything else, color still carries the specific status). Production
+  build passes.
 
 - **AR Reminder's Services displays (the List-view row, its mobile card,
   and the detail modal's "Service configuration" panel) now use the same
