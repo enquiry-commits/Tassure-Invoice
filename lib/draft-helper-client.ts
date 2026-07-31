@@ -194,10 +194,13 @@ export async function openDraftsInOutlook(
   const common = await Promise.all(commonAttachments.map(fileToAttachment));
   const prepared = await mapWithConcurrency(drafts, 4, async (draft, index) => {
     try {
-      const [refreshed, attachments] = await Promise.all([
-        refreshAmount(draft),
-        fetchAttachments(draft),
-      ]);
+      // Sequential, not Promise.all: fetchAttachments builds the PDF's
+      // filename from invoice_refs[].amount, so it must run AFTER
+      // refreshAmount, using its corrected invoice_refs — otherwise the
+      // filename embeds the stale amount even though the PDF's own
+      // content (always fetched live from QB) is already correct.
+      const refreshed = await refreshAmount(draft);
+      const attachments = await fetchAttachments(refreshed.draft);
       corrections[index] = {
         corrected: refreshed.corrected,
         previousTotal: refreshed.previousTotal,

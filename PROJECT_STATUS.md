@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Draft Helper v1.4.0: Bank Details PDF now attaches to every draft)
+Last updated: 2026-07-31 (Fixed PDF filename amount staying stale even after QB re-check)
 
 ## Purpose
 
@@ -23,6 +23,29 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed the attached invoice PDF's filename embedding a stale amount
+  even though the PDF's own content and the email body text were
+  already correct.** Vincent: "email drafts 那边是要读取最终的QB PDF的 total
+  amounts, 但是我发现 PDF的文件名后面的金额不会同步更新最新金额到文件名", with an
+  example filename `INV02610834-ALTSTAKE PTE. LTD.-S$1760`. Root cause
+  in `lib/draft-helper-client.ts`'s `openDraftsInOutlook()`: `Promise.
+  all([refreshAmount(draft), fetchAttachments(draft)])` runs both
+  against the *same original* `draft` object, in parallel — but
+  `fetchAttachments` builds the filename from `draft.invoice_refs[].
+  amount`, and `refreshAmount`'s corrected amount only exists in the
+  object it *returns*, which `fetchAttachments` (already mid-flight by
+  then) never sees. The PDF's actual bytes were always fine (fetched
+  live from QB independently, per the original amount-refresh feature
+  earlier this session) — only the filename's embedded amount could
+  lag. Fixed by sequencing them: `refreshAmount` now runs first, and
+  `fetchAttachments` uses its returned `refreshed.draft` (with corrected
+  `invoice_refs`) instead of the original. Also checked
+  `app/billing/page.tsx`'s separate, locally-defined
+  `invoicePdfFileName` (used only for "save PDF right after generating
+  it" — not the Outlook-draft flow) — not affected, since that total is
+  always fresh at generation time, not a re-opened older draft.
+  Production build passes.
 
 - **Draft Helper v1.4.0: "Bank Details 2026 - Tassure Group.pdf" is now
   attached to every email draft, automatically.** Vincent: "帮我把一个文件
