@@ -3298,13 +3298,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></div>
                   <div style={{ padding: '0 6px' }}>
                     <div className="company-name-text"><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
-                    {/* Always reserve this line's height (even with no FYE
-                        date) so every row is the same height — otherwise
-                        rows without a date are shorter, and the shared
-                        border-bottom divider (.system-list-row, always
-                        applied) ends up at an inconsistent vertical
-                        rhythm row-to-row even though it's never missing. */}
-                    <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>{r.fye_date ? `FYE ${fmtDate(r.fye_date)}` : ' '}</div>
+                    {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                   </div>
                   <div className="company-registration-text" style={{ padding: '0 6px' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
                   {/* Fixed slots in fixed order — every service always in the

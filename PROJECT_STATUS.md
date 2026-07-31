@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Active Client List: removed the redundant desktop UEN line)
+Last updated: 2026-07-31 (Fixed a stray &nbsp; line under AR Reminder List company names)
 
 ## Purpose
 
@@ -23,6 +23,31 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed a visible blank line under company names in AR Reminder List
+  — the "reserve the FYE line's height for a consistent divider" fix
+  from earlier actually rendered a real non-breaking space, not an
+  invisible spacer.** Vincent screenshotted the DOM: `<div
+  style="...">&nbsp;</div>`. Root cause, found via a direct byte-level
+  scan of `app/billing/page.tsx`: the `' '` (intended as a plain space)
+  in that earlier edit had been silently corrupted into a literal
+  U+00A0 non-breaking space somewhere in the edit pipeline — and the
+  code comment right above it had ALSO picked up a corrupted
+  replacement-character byte (an em dash mangled into U+FFFD), the same
+  failure mode as the CJK-character encoding issue hit earlier this
+  session, just not caught at the time since the build doesn't validate
+  comment text. On reflection, that "reserve height" fix was likely
+  solving the wrong problem to begin with — the row's own `minHeight:
+  66` already dominates over the ~2-line company-name-cell's actual
+  content height in the vast majority of cases, so the FYE line was
+  probably never the real cause of the original "inconsistent divider"
+  complaint (more likely candidate: Services chips wrapping to 2 lines
+  for companies with many active services — a separate, not-yet-fixed
+  issue if it resurfaces). Reverted to the original conditional render
+  (`{r.fye_date && <div>...}`) — no line shows at all when there's no
+  FYE date. Scanned the rest of `app/billing/page.tsx` and the other
+  files touched this session for the same corruption pattern — none
+  found elsewhere. Production build passes.
 
 - **Active Client List: removed the UEN line that was duplicated under
   the company name on desktop.** Vincent screenshotted the exact
