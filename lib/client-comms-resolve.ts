@@ -56,7 +56,11 @@ export function pickContact(company: CompanyRow | null, extraPicValues: (string 
     return {
       email: recipientLines(toEmails),
       ccEmail: recipientLines(buildDefaultCcList([...ccEmails, ...picEmails])),
-      contactName: primary?.contactName ?? company?.company_name ?? '',
+      // Addressing "Dear LEI CHI" when the same email also goes to XU
+      // WEIMING reads like the message was written for someone else — once
+      // there's more than one To recipient, greet the group instead of
+      // naming just whichever contact happened to be listed first.
+      contactName: toEmails.length > 1 ? 'All' : (primary?.contactName ?? company?.company_name ?? ''),
       source: 'teamwork_report' as const,
       syncedAt: company?.tw_recipient_synced_at ?? null,
       reviewRequired: false,
@@ -67,7 +71,7 @@ export function pickContact(company: CompanyRow | null, extraPicValues: (string 
   return {
     email: recipientLines(fallback),
     ccEmail: recipientLines(buildDefaultCcList(picEmails)),
-    contactName: primary?.contactName ?? company?.company_name ?? '',
+    contactName: fallback.length > 1 ? 'All' : (primary?.contactName ?? company?.company_name ?? ''),
     source: fallback.length ? 'company_fallback' as const : 'missing' as const,
     syncedAt: null,
     reviewRequired: true,

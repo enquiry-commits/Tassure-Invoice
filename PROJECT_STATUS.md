@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-07-31 (Fixed recipient resolution silently dropping known emails; Contact Person fill-in now keeps every contact, not just the first)
+Last updated: 2026-08-01 (Greeting says "Dear All" when a draft goes to more than one contact)
 
 ## Purpose
 
@@ -23,6 +23,19 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Greeting name now says "All" when a draft's To field has more than one
+  recipient.** Vincent: "然后当超过一个联系人的稍后 user name 就变成 All" —
+  after the previous fix let a company like YWL send to both of its
+  contacts, the merged "Dear {{contactName}}" line still used whichever
+  contact happened to be first (`primary_contact.contactName`), reading
+  like the email was addressed to just one of the two recipients.
+  `pickContact()` in `lib/client-comms-resolve.ts` now checks the actual
+  To-recipient count in both branches (`toEmails.length` for the
+  TeamWork-directory branch, `fallback.length` for the single-contact
+  fallback) and uses `'All'` as the contact name whenever more than one
+  address is going out; unchanged for the normal single-contact case.
+  Production build passes.
 
 - **Fixed recipient resolution silently dropping a known email even after
   the Contact Person fill-in had correctly populated it; extended that
