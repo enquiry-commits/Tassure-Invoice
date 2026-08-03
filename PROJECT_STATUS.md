@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Master List's Edit History now matches AR Reminder's header-button "Change history" style)
+Last updated: 2026-08-03 (TeamWork subrole review panel collapsed by default)
 
 ## Purpose
 
@@ -23,6 +23,11 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Nominee Directors page's "TeamWork subrole review" panel now starts
+  collapsed instead of expanded.** `components/NDSubroleReview.tsx`'s
+  `open` state defaulted to `true`; changed to `false`. Production build
+  passes.
 
 - **Master List's Edit History moved from a small collapsed text link at
   the bottom of the modal to a "History" toggle button in the header,

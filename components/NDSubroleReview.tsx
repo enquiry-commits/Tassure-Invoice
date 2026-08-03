@@ -21,7 +21,7 @@ export default function NDSubroleReview({
   items: NDSubroleReviewItem[];
   scanCompleted: boolean;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedNd, setSelectedNd] = useState('all');
   const [limit, setLimit] = useState(PAGE_SIZE);
