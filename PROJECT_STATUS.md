@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Sidebar group expand state now resets to collapsed on logout)
+Last updated: 2026-08-03 (Proposal Generator sidebar icon replaced with a custom asset, matching the other nav icons' style)
 
 ## Purpose
 
@@ -23,6 +23,23 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Replaced the Proposal Generator sidebar entry's placeholder lucide
+  icon with a custom asset, matching the other nav icons' style.**
+  Vincent supplied a ChatGPT-generated image from his Desktop (a glowing
+  white "T"-in-a-frame + calculator design, 1024x1024, soft blur/glow on
+  a dark background). The existing `/public/nav/*.png` icons are all
+  crisp white line-art on transparent, 128x128 — a straight
+  luminance-to-alpha conversion of the source kept too much of the glow
+  and just produced a blurry white blob, so the conversion instead used
+  a tight levels threshold (235–253) to isolate just the crisp bright
+  core lines the glow was built around, discarding the soft halo
+  entirely — cropped to content, resized with the same ~12% padding as
+  the other icons, saved as `public/nav/proposal-generator.png`.
+  `components/Sidebar.tsx`'s entry now uses `img` instead of the
+  `icon: FileText` fallback added earlier (that fallback machinery
+  stays in place for any future icon-less entry, just unused for this
+  one now). Production build passes; `npx tsc --noEmit` clean.
 
 - **Sidebar groups now actually start collapsed on a fresh login, not
   just in theory.** Earlier this session the default was flipped to

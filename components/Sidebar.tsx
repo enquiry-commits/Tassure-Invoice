@@ -57,7 +57,7 @@ const tree: Node[] = [
   // this goes through an SSO handoff route instead of the raw URL: it signs
   // a short-lived token for whoever's already logged in here, so Proposal
   // Generator can log them in itself without a second Google screen.
-  { label: 'Proposal Generator', href: '/sso/proposal-generator', icon: FileText, external: true },
+  { label: 'Proposal Generator', href: '/sso/proposal-generator', img: '/nav/proposal-generator.png', external: true },
 ];
 
 const groupIds = (nodes: Node[]): string[] =>
