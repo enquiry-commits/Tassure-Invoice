@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Two-way ACC/TAX PIC sync between AR Reminder and Active Client — last edit wins)
+Last updated: 2026-08-03 (Corrected AR Reminder Edit History: Table view now opens the existing List-view modal instead of a redundant new popover)
 
 ## Purpose
 
@@ -23,6 +23,28 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Corrected AR Reminder's Edit History: Table view now opens the same
+  detail modal List view already used, instead of a separate, less
+  capable popover.** Vincent: "为什么只出现在 TABLE, 没有出现在list?...你要做到
+  好像 ACTIVE CLIENT 页面的弹窗一样的". Investigating revealed List view's
+  `ARDetailModal` already had a full "History" feature (top-right
+  toggle button, "Change history" panel) — reading from
+  `ar_reminder_audit` via the pre-existing `app/api/ar-reminder/history`
+  route, **with restore** (conflict-protected against newer edits) —
+  which last session's Table-view addition duplicated with a strictly
+  worse, read-only popover. Rather than layer a third system on top:
+  - Gave `ARTableView` a new `onOpenDetail` prop wired to the same
+    `setModalRecord` List view already uses, so a row in Table view now
+    opens the exact same `ARDetailModal` — full History + Restore +
+    service editing, not a copy.
+  - Removed the redundant `EditHistoryButton` (component deleted
+    entirely — zero remaining callers after this) and the `ar_reminder`
+    branch in `/api/audit-log`, which nothing reads anymore now that
+    Table view uses the real modal instead. `/api/audit-log` is back to
+    `master_list`-only, which is the only table that actually needs it
+    (no DB-trigger audit trail of its own).
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **ACC/TAX PIC is now two-way synced between AR Reminder and Active
   Client — whichever page it was most recently edited on wins and

@@ -12,7 +12,6 @@ import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } fr
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
-import { EditHistoryButton } from '@/components/EditHistoryPanel';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { fmtDate, fmtMonth, toDisplayDate, toIsoDateValue, todaySGT } from '@/lib/date';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
@@ -2700,11 +2699,12 @@ function ARColumnFilterMenu({ field, label, records, selected, onApply }: {
   );
 }
 
-function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave, onDelete, startIndex = 0 }: {
+function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave, onDelete, onOpenDetail, startIndex = 0 }: {
   records: ARRecord[]; allRecords: ARRecord[];
   columnFilters: Partial<Record<ARColumnKey, Set<string>>>;
   onApplyFilter: (field: ARColumnKey, next: Set<string> | null) => void;
-  onSave: (id: number, field: string, val: string) => void; onDelete: (id: number) => void; startIndex?: number;
+  onSave: (id: number, field: string, val: string) => void; onDelete: (id: number) => void;
+  onOpenDetail: (r: ARRecord) => void; startIndex?: number;
 }) {
   // A very light neutral grouping keeps finance columns legible without
   // introducing another competing accent colour into the list.
@@ -2887,7 +2887,10 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                 <TD finance><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
                 <TD finance><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate /></TD>
                 <TD style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
-                  <EditHistoryButton table="ar_reminder" rowId={r.id} />
+                  <button onClick={() => onOpenDetail(r)} title="Open full details & edit history"
+                    style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: 'pointer', display: 'inline-flex' }}>
+                    <History size={11} />
+                  </button>
                   <button onClick={() => onDelete(r.id)} title="Remove"
                     style={{ marginLeft: 4, padding: '3px 6px', borderRadius: 5, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', cursor: 'pointer', display: 'inline-flex' }}>
                     <Trash2 size={11} />
@@ -3352,7 +3355,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           </div>
           {loading && records.length === 0
             ? <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>
-            : <ARTableView records={pageItems} allRecords={records} columnFilters={columnFilters} onApplyFilter={applyColumnFilter} onSave={handleSave} onDelete={handleDelete} startIndex={startIndex} />
+            : <ARTableView records={pageItems} allRecords={records} columnFilters={columnFilters} onApplyFilter={applyColumnFilter} onSave={handleSave} onDelete={handleDelete} onOpenDetail={setModalRecord} startIndex={startIndex} />
           }
         </>
       )}

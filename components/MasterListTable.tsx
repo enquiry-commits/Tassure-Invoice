@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, Users, UserCheck, Landmark, CloudOff, History } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, Calendar, Building2, Users, UserCheck, Landmark, CloudOff, History } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import MetricCard from './MetricCard';
 import { usePagination, PaginationBar } from './Pagination';
@@ -9,6 +9,7 @@ import { toDisplayDate, fmtDate } from '@/lib/date';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { normalize } from '@/lib/company-name';
 import { formatStaffName } from '@/lib/staff-directory';
+import { EditHistorySection } from './EditHistoryPanel';
 import { titleCase } from '@/lib/text-case';
 
 export interface MasterListRow {
@@ -751,63 +752,6 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
   );
 });
 
-type AuditEntry = { id: number; field: string; old_value: string | null; new_value: string | null; changed_by: string; changed_at: string };
-
-// Collapsed by default, fetched on first expand — most rows are opened to
-// check current values, not history, so this shouldn't cost a query every
-// time the modal opens.
-function EditHistorySection({ rowId }: { rowId: number }) {
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [entries, setEntries] = useState<AuditEntry[] | null>(null);
-
-  const toggle = async () => {
-    const next = !open;
-    setOpen(next);
-    if (next && entries === null) {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/audit-log?table=master_list&id=${rowId}`);
-        const json = await res.json();
-        setEntries(json.data ?? []);
-      } catch {
-        setEntries([]);
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  return (
-    <div style={{ marginTop: 16, borderTop: '1px solid #e2e8f0', paddingTop: 14 }}>
-      <button onClick={toggle} style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}Edit History
-      </button>
-      {open && (
-        <div style={{ marginTop: 10 }}>
-          {loading ? (
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>Loading…</div>
-          ) : !entries?.length ? (
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>No recorded edits yet.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
-              {entries.map(e => (
-                <div key={e.id} style={{ fontSize: 11.5, color: '#374151', background: '#f8fafc', border: '1px solid #f1f5f9', borderRadius: 6, padding: '6px 10px' }}>
-                  <span style={{ fontWeight: 700 }}>{e.field}</span>
-                  {': '}
-                  <span style={{ color: '#94a3b8' }}>{e.old_value ?? '—'}</span>
-                  {' → '}
-                  <span style={{ color: '#1e293b' }}>{e.new_value ?? '—'}</span>
-                  <div style={{ marginTop: 2, fontSize: 10, color: '#94a3b8' }}>{e.changed_by} · {new Date(e.changed_at).toLocaleString()}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive, onSaveOverride, moveTargets, onMove, onDelete }: {
   row: MasterListRow;
@@ -1000,7 +944,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
             </div>
           )}
 
-          <EditHistorySection rowId={row.id} />
+          <EditHistorySection table="master_list" rowId={row.id} />
         </div>
       </div>
     </div>
