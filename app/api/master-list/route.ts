@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
+import { loadRenameMap } from '@/lib/company-rename';
 
 const EDITABLE_FIELDS = new Set([
   'update_date', 'internal_code', 'company_name', 'roc_no', 'status',
@@ -12,6 +13,9 @@ const EDITABLE_FIELDS = new Set([
   'last_agm_date', 'last_accounts_date', 'next_agm_due_date', 'months_from_last_accounts', 'remark',
   'referral', 'risk_level', 'incorp_with_us', 'acra_update',
   'mas', 'grade',
+  // Change Co Name only: the new legal name after the rename — see
+  // lib/company-rename.ts for how other pages surface this by UEN.
+  'new_company_name',
   // Active Client Services section — the ND/Secretary/ACC/TAX checkboxes are
   // manually toggleable, independent of whether a name is on file; ACC/TAX's
   // name is a manual override that takes precedence over AR Reminder's
@@ -82,8 +86,15 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Change Co Name's own rows are the source of truth for a rename — every
+  // OTHER list type gets a "formerly known as" hint by matching UEN against
+  // them, instead of a note that would need to be copied onto each row by
+  // hand and can drift out of date.
+  const renameByUen = type === 'name_change' ? new Map<string, { oldName: string; newName: string }>() : await loadRenameMap(supabase);
+
   const enriched = (data ?? []).map(r => {
     const uen = r.roc_no ? String(r.roc_no).trim().toUpperCase() : null;
+    const rename = uen ? renameByUen.get(uen) : undefined;
     return {
       ...r,
       tw_fye: uen ? (twFyeByUen.get(uen) ?? null) : null,
@@ -91,6 +102,8 @@ export async function GET(req: NextRequest) {
       is_css_client: uen ? (cssClientByUen.get(uen) ?? null) : null,
       acc_pic: r.acc_pic_override?.trim() || (uen ? (accByUen.get(uen) ?? null) : null),
       tax_pic: r.tax_pic_override?.trim() || (uen ? (taxByUen.get(uen) ?? null) : null),
+      renamed_from: rename?.oldName ?? null,
+      renamed_to: rename?.newName ?? null,
     };
   });
 

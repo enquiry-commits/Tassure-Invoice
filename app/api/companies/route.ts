@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
+import { loadRenameMap } from '@/lib/company-rename';
 
 const today = todaySGT;
 
@@ -63,8 +64,14 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Change Co Name (Master List) is the source of truth for a rename — shown
+  // here as a "formerly known as" hint by matching UEN, see lib/company-rename.ts.
+  const renameByUen = await loadRenameMap(supabase);
+
   const enriched = (allRows ?? []).map(c => {
     const ndIds = activeNDMap.get(c.company_name) ?? [];
+    const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
+    const rename = uen ? renameByUen.get(uen) : undefined;
     return {
       companyName:        c.company_name,
       registrationNo:     c.registration_no,
@@ -81,6 +88,7 @@ export async function GET(req: NextRequest) {
       clientStatus:       c.tw_status ?? null,
       isCssClient:        c.client_type === 'CSS Client',
       isShareholder:      c.is_non_client === true,
+      renamedFrom:        rename?.oldName ?? null,
     };
   });
 

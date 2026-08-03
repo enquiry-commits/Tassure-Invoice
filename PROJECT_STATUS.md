@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-01 (Master List wide-field labels match the Notes section label color)
+Last updated: 2026-08-01 (Change Co Name: UEN-first Add Manual flow + cross-page "renamed" hint — NEEDS SQL MIGRATION RUN)
 
 ## Purpose
 
@@ -23,6 +23,44 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **⚠️ ACTION NEEDED: run `scripts/add-master-list-new-company-name.sql` in
+  the Supabase SQL Editor** — adds `master_list.new_company_name`. Until
+  this runs, Change Co Name's Add Manual form will fail to save (missing
+  column); every other page degrades safely (rename hints just won't
+  show yet, no errors).
+
+- **Change Co Name page: special Add Manual flow + a "renamed" hint on
+  every other page/list sharing the same UEN.** Vincent: previously the
+  only way to note a rename was typing free text into Remark, which he
+  called "设置操作上比较模糊" (vague to operate). New flow, Change Co Name's
+  Add Manual modal only: UEN is the first field, and on blur
+  (`lookupByUen` in `components/MasterListTable.tsx`) looks up the
+  company already on file under that UEN via `/api/companies` (same
+  endpoint `lookupTwCode` already used for Code auto-fill elsewhere) and
+  fills in its current name + Code — unlike the existing lookup, this one
+  always overwrites, since a changed UEN should always re-resolve.
+  Added a new "New Name *" field (`new_company_name` — new
+  `master_list` column, migration above) that the user types by hand.
+  Both Company Name and New Name are required to save (`missingAddRequired`).
+  - `lib/company-rename.ts` (new): `loadRenameMap()` reads every
+    `name_change` row with both a UEN and a New Name into a UEN-keyed
+    map — the single source of truth for "who got renamed", read live
+    rather than copied as a note onto every matching row (which would
+    drift out of sync). `app/api/master-list/route.ts`'s GET (for every
+    list type except name_change itself) and `app/api/companies/route.ts`'s
+    GET both join against it by UEN and attach `renamed_from`/`renamed_to`
+    (`renamedFrom` on Companies).
+  - Shown as a small violet "↺ Formerly {old name}" hint (hover for the
+    full old→new text) in: Master List's List view row, Table view's
+    company name cell, the detail modal's header badge row, and the
+    Companies page (both the mobile card list and desktop table).
+  - `app/master-list/name-change/page.tsx` now passes an explicit
+    `fields` list (previously used the shared default `COLUMNS`) so
+    `new_company_name` only ever appears on this one page — the shared
+    default is otherwise off-limits per the warning already documented
+    next to `COLUMNS`.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Master List detail modal's wide-field labels (Remark, Invoice/Reg
   Add, Mailing Address, Mailing List, Referral, Shareholders, Directors)

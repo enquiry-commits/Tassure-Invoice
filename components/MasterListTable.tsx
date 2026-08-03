@@ -14,6 +14,7 @@ export interface MasterListRow {
   update_date: string | null;
   internal_code: string | null;
   company_name: string | null;
+  new_company_name: string | null; // list_type=name_change only — see lib/company-rename.ts
   roc_no: string | null;
   status: string | null;
   join_date: string | null;
@@ -56,6 +57,11 @@ export interface MasterListRow {
   tw_fye?: string | null;      // authoritative FYE month from TeamWork (for cross-check)
   in_teamwork?: boolean;       // whether this row exists in TeamWork at all
   is_css_client?: boolean | null; // TeamWork client_type === 'CSS Client' (null when not matched to a TeamWork company at all)
+  // Set when this row's UEN matches a Change Co Name (name_change) record —
+  // a "formerly known as" hint, computed server-side, never on name_change
+  // rows themselves (see lib/company-rename.ts).
+  renamed_from?: string | null;
+  renamed_to?: string | null;
   acc_pic?: string | null;    // acc_pic_override if set, else ar_reminder.acc_pic joined by UEN — Active Client only
   tax_pic?: string | null;    // tax_pic_override if set, else ar_reminder.tax_pic joined by UEN — Active Client only
   acc_pic_override?: string | null;
@@ -84,7 +90,7 @@ function fyeMonthNum(s: string | null | undefined): number | null {
 // tax_pic/nominee_director/secretary columns, not columns of their own —
 // excluded here so they can never be added to a `fields` list by mistake.
 type ColumnField = Exclude<keyof MasterListRow,
-  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active'>;
+  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to'>;
 
 // Full column set — the default for every Master List page that passes no
 // `fields` prop (Strike Off, Terminated, Change Co Name). A page can pass
@@ -149,6 +155,7 @@ const COLUMNS: { field: ColumnField; label: string; w: number }[] = [
 const EXTRA_COLUMNS: { field: ColumnField; label: string; w: number }[] = [
   { field: 'acc_pic', label: 'ACC', w: 120 },
   { field: 'tax_pic', label: 'TAX', w: 120 },
+  { field: 'new_company_name', label: 'New Name', w: 220 },
 ];
 
 const STICKY_WIDTHS = [240, 110, 110]; // company_name, roc_no, status
@@ -574,6 +581,7 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
 const FIELD_SECTIONS: Record<string, string> = {
   internal_code: 'Company Info', join_date: 'Company Info', inc_date: 'Company Info',
   fye: 'Company Info', annual_return: 'Company Info', update_date: 'Company Info',
+  new_company_name: 'Company Info',
   add_here: 'Contact & Address', invoice_address: 'Contact & Address', mailing_address: 'Contact & Address',
   contact_window: 'Contact & Address', mailing_list: 'Contact & Address', email: 'Contact & Address', tel: 'Contact & Address',
   nominee_director: 'Services', secretary: 'Services', acc_pic: 'Services', tax_pic: 'Services',
@@ -820,6 +828,12 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                 {row.status}
               </span>
             )}
+            {row.renamed_from && (
+              <span title={row.renamed_to ? `Renamed from "${row.renamed_from}" to "${row.renamed_to}"` : undefined}
+                style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 999, padding: '5px 10px', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                <RotateCcw size={10} />Formerly &quot;{row.renamed_from}&quot;
+              </span>
+            )}
           </div>
           {referralField && (
             <div style={{ marginTop: 10 }}>
@@ -963,10 +977,15 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [statusOpen, setStatusOpen] = useState(true);
 
   // ── Add Manual ──────────────────────────────────────────────────────────
+  // Change Co Name gets its own Add Manual flow: UEN first (auto-fills the
+  // current name/Code from whatever's on file under that UEN), then a
+  // dedicated New Name field — see lookupByUen below.
+  const isNameChange = listType === 'name_change';
   const [showAddForm, setShowAddForm] = useState(false);
   const [saving, setSaving]           = useState(false);
   const [newRow, setNewRow]           = useState<Partial<MasterListRow>>({});
 
+  const missingAddRequired = !newRow.company_name?.trim() || (isNameChange && !newRow.new_company_name?.trim());
   const startAdd  = () => { setNewRow({}); setShowAddForm(true); };
   const cancelAdd = () => { setShowAddForm(false); setNewRow({}); };
   // Pre-fills the same Add Manual form from a "Missing from Active Client"
@@ -997,8 +1016,34 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     }
   }, []);
 
+  // Change Co Name only: UEN is filled in FIRST, and drives everything else —
+  // looks up the company already on file under that UEN and fills in its
+  // current name + Code, so staff never retype what TeamWork already knows.
+  // Unlike lookupTwCode above, this always overwrites (a changed UEN should
+  // always re-resolve to whichever company that UEN now points to).
+  const lookupByUen = useCallback(async (uen: string) => {
+    const trimmed = uen.trim();
+    if (!trimmed) return;
+    try {
+      const res = await fetch(`/api/companies?search=${encodeURIComponent(trimmed)}&limit=10`);
+      const json = await res.json();
+      const candidates: { companyName: string; registrationNo: string | null; internalCode: string | null }[] = json.data ?? [];
+      const target = trimmed.toUpperCase();
+      const match = candidates.find(c => (c.registrationNo ?? '').trim().toUpperCase() === target);
+      if (match) {
+        setNewRow(v => ({
+          ...v,
+          company_name: match.companyName.toUpperCase(),
+          internal_code: match.internalCode ? match.internalCode.toUpperCase() : v.internal_code,
+        }));
+      }
+    } catch {
+      // Best-effort only — never block manual entry on a failed lookup.
+    }
+  }, []);
+
   const saveNew = async () => {
-    if (!newRow.company_name?.trim()) return;
+    if (missingAddRequired) return;
     setSaving(true);
     try {
       await fetch('/api/master-list', {
@@ -1260,8 +1305,20 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
               <button onClick={cancelAdd} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
+              {isNameChange && (
+                <div style={{ fontSize: 11.5, color: '#64748b', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 7, padding: '7px 10px', marginBottom: 10 }}>
+                  Enter the UEN first — the company&apos;s current name and Code fill in automatically. Then type the new name it&apos;s changing to.
+                </div>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                {([
+                {(isNameChange ? [
+                  { key: 'roc_no',            label: 'UEN / ROC *',    normalize: (v: string) => v.toUpperCase() },
+                  { key: 'company_name',      label: 'Current Name',   normalize: (v: string) => v.toUpperCase() },
+                  { key: 'new_company_name',  label: 'New Name *',     normalize: (v: string) => v.toUpperCase() },
+                  { key: 'internal_code',     label: 'Code',           normalize: (v: string) => v.toUpperCase() },
+                  { key: 'status',            label: 'Active / Status', normalize: (v: string) => v.toUpperCase() },
+                  { key: 'fye',               label: 'FYE Month',      normalize: undefined },
+                ] as const : [
                   { key: 'company_name', label: 'Company Name *', normalize: (v: string) => v.toUpperCase() },
                   { key: 'internal_code', label: 'Code',          normalize: (v: string) => v.toUpperCase() },
                   { key: 'roc_no',       label: 'UEN / ROC',      normalize: (v: string) => v.toUpperCase() },
@@ -1278,7 +1335,11 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                       </select>
                     ) : (
                       <input value={newRow[f.key] ?? ''} onChange={e => setNewRow(v => ({ ...v, [f.key]: f.normalize ? f.normalize(e.target.value) : e.target.value }))}
-                        onBlur={f.key === 'company_name' ? e => void lookupTwCode(e.target.value) : undefined}
+                        onBlur={
+                          isNameChange
+                            ? (f.key === 'roc_no' ? e => void lookupByUen(e.target.value) : undefined)
+                            : (f.key === 'company_name' ? e => void lookupTwCode(e.target.value) : undefined)
+                        }
                         placeholder="—"
                         style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
                     )}
@@ -1286,8 +1347,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                 ))}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={saveNew} disabled={saving || !newRow.company_name?.trim()}
-                  style={{ padding: '7px 16px', borderRadius: 9, border: listType === 'strike_off' ? 'none' : '1px solid rgba(21,94,89,.2)', background: listType === 'strike_off' ? accentColor : '#397f78', color: '#fff', fontWeight: 750, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: listType === 'strike_off' ? 'none' : '0 5px 14px rgba(57,127,120,.14)', opacity: saving || !newRow.company_name?.trim() ? 0.6 : 1 }}>
+                <button onClick={saveNew} disabled={saving || missingAddRequired}
+                  style={{ padding: '7px 16px', borderRadius: 9, border: listType === 'strike_off' ? 'none' : '1px solid rgba(21,94,89,.2)', background: listType === 'strike_off' ? accentColor : '#397f78', color: '#fff', fontWeight: 750, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: listType === 'strike_off' ? 'none' : '0 5px 14px rgba(57,127,120,.14)', opacity: saving || missingAddRequired ? 0.6 : 1 }}>
                   <Check size={14} />{saving ? 'Saving…' : 'Save'}
                 </button>
                 <button onClick={cancelAdd}
@@ -1361,6 +1422,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                       <span style={{ color: '#cbd5e1', marginRight: 6, fontSize: 11 }}>{startIndex + i + 1}</span>
                       {r.company_name}
                     </div>
+                    {r.renamed_from && (
+                      <div title={`Renamed from "${r.renamed_from}"${r.renamed_to ? ` to "${r.renamed_to}"` : ''}`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 2, fontSize: 10, fontWeight: 700, color: '#7c3aed' }}>
+                        <RotateCcw size={9} />Formerly {r.renamed_from}
+                      </div>
+                    )}
                     {isMobile && r.roc_no && <div className="company-registration-text" style={{ marginTop: 1 }}>{r.roc_no}</div>}
                   </div>
                   {!isMobile && <div className="company-registration-text">{r.roc_no ?? '—'}</div>}
@@ -1481,6 +1548,15 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <CheckSquare checked={!!r.secretary_active} onToggle={() => toggleActive(r.id, 'secretary_active', r.secretary_active)} />
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                          </div>
+                        ) : c.field === 'company_name' && r.renamed_from ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                            <span
+                              title={`Renamed from "${r.renamed_from}"${r.renamed_to ? ` to "${r.renamed_to}"` : ''}`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
+                              <RotateCcw size={9} />Renamed
+                            </span>
                           </div>
                         ) : c.field === 'fye' && r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye) ? (
                           (c.w ?? 180) <= 80

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Building2, BriefcaseBusiness, MapPin, UserCheck, Users, UserX } from 'lucide-react';
+import { Building2, BriefcaseBusiness, MapPin, UserCheck, Users, UserX, RotateCcw } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
@@ -20,6 +20,15 @@ interface Company {
   clientStatus: string | null;
   isCssClient: boolean;
   isShareholder: boolean;
+  renamedFrom: string | null;
+}
+
+function RenamedBadge({ from }: { from: string }) {
+  return (
+    <span title={`Formerly known as "${from}"`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 2, fontSize: 10, fontWeight: 700, color: '#7c3aed', whiteSpace: 'nowrap' }}>
+      <RotateCcw size={9} />Formerly {from}
+    </span>
+  );
 }
 
 type CompanyCat = 'all' | 'css_client' | 'shareholder' | 'nd' | 'address' | 'nd_ceased';
@@ -168,6 +177,7 @@ export default function CompaniesPage() {
                 <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="company-name-text">{c.companyName}</div>
+                  {c.renamedFrom && <RenamedBadge from={c.renamedFrom} />}
                   <div className="company-registration-text" style={{ marginTop: 2 }}>{c.registrationNo}</div>
                 </div>
                 <StatusBadge status={c.clientStatus} />
@@ -224,6 +234,7 @@ export default function CompaniesPage() {
                     <div className="company-name-text max-w-56 truncate" title={c.companyName}>
                       {c.companyName}
                     </div>
+                    {c.renamedFrom && <RenamedBadge from={c.renamedFrom} />}
                   </td>
                   <td className="px-4 py-2.5"><StatusBadge status={c.clientStatus} /></td>
                   <td className="px-4 py-2.5 company-registration-text">{c.registrationNo}</td>
