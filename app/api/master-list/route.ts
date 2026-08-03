@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { loadRenameMap } from '@/lib/company-rename';
+import { getCurrentUser } from '@/lib/current-user';
+import { logFieldChange } from '@/lib/audit-log';
 
 const EDITABLE_FIELDS = new Set([
   'update_date', 'internal_code', 'company_name', 'roc_no', 'status',
@@ -175,11 +177,24 @@ export async function PATCH(req: NextRequest) {
 
   const supabase = createAdminClient();
   const stored = BOOLEAN_FIELDS.has(field) ? !!value : (value || null);
+
+  // Read the pre-update value so the audit entry below can record an actual
+  // old -> new diff, not just "it changed to X".
+  const { data: before } = await supabase.from('master_list').select('*').eq('id', id).maybeSingle();
+  const oldValue = before ? (before as Record<string, unknown>)[field] : null;
+
   const { error } = await supabase
     .from('master_list')
     .update({ [field]: stored, updated_at: new Date().toISOString() })
     .eq('id', id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const user = await getCurrentUser();
+  await logFieldChange(supabase, {
+    tableName: 'master_list', rowId: id, field,
+    oldValue, newValue: stored, changedBy: user?.email ?? 'unknown',
+  });
+
   return NextResponse.json({ ok: true });
 }

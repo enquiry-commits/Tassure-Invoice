@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-01 (Change Co Name: UEN-first Add Manual flow + cross-page "renamed" hint — NEEDS SQL MIGRATION RUN)
+Last updated: 2026-08-03 (Master List field-edit audit log — NEEDS SQL MIGRATION RUN)
 
 ## Purpose
 
@@ -23,6 +23,45 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **⚠️ ACTION NEEDED: run `scripts/create-audit-log-table.sql` in the
+  Supabase SQL Editor** — creates the `audit_log` table. Until this runs,
+  Master List field edits still save fine (logging fails open) but
+  nothing gets recorded, and Edit History will always show empty.
+
+- **Master List: every field edit now writes a "who changed what" audit
+  entry, viewable per-company.** Follow-up to the earlier "为什么没有到
+  100%" discussion — Vincent flagged that there's no audit trail for
+  Master List edits, then confirmed: Master List only for now (Companies/
+  QuickBooks later), log every single field change (not just "important"
+  ones), and that `vincent@tassure.com` is the primary admin/operator so
+  who-triggered-a-sync tracking isn't a priority right now.
+  - `scripts/create-audit-log-table.sql` (new): generic `audit_log`
+    table — `table_name`/`row_id`/`field`/`old_value`/`new_value`/
+    `changed_by`/`changed_at` — reusable for other tables later, not
+    Master-List-specific schema.
+  - `lib/current-user.ts` (new): `getCurrentUser()` derives the caller's
+    identity from their Supabase session cookie server-side — the same
+    lookup `proxy.ts` already does — so `changed_by` can never be spoofed
+    by a client-supplied name.
+  - `lib/audit-log.ts` (new): `logFieldChange()` — fails open (a logging
+    error never blocks the save that already succeeded), and skips
+    writing when old === new (a blur with no real change shouldn't
+    create a log row).
+  - `app/api/master-list/route.ts`'s PATCH — the single choke point
+    every Master List edit already goes through (regular field edits,
+    ND/Secretary/ACC/TAX active-toggles, ACC/TAX PIC overrides all call
+    this same endpoint) — now reads the pre-update value, applies the
+    update as before, then logs the diff. One change covers all 6
+    Master List pages and every edit surface (table inline edit, modal
+    fields, checkboxes).
+  - `app/api/master-list/audit-log/route.ts` (new): `GET ?id=<row id>`
+    returns that row's history, newest first.
+  - `components/MasterListTable.tsx`: new collapsed-by-default "Edit
+    History" section at the bottom of the detail modal, fetched on
+    first expand (not on every modal open) — shows field, old → new
+    value, who, and when.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **⚠️ ACTION NEEDED: run `scripts/add-master-list-new-company-name.sql` in
   the Supabase SQL Editor** — adds `master_list.new_company_name`. Until
