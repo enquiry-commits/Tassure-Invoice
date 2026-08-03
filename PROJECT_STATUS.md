@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (AR Reminder Table view gets Edit History too — audit log generalized to a shared /api/audit-log route)
+Last updated: 2026-08-03 (Two-way ACC/TAX PIC sync between AR Reminder and Active Client — last edit wins)
 
 ## Purpose
 
@@ -23,6 +23,44 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **ACC/TAX PIC is now two-way synced between AR Reminder and Active
+  Client — whichever page it was most recently edited on wins and
+  mirrors onto the other.** Vincent, after asking whether the two
+  already stayed in sync (they didn't — Active Client's override only
+  ever shadowed AR Reminder one-directionally, never wrote back):
+  "默认按照 ACTIVE CLIENT 的PIC值，但是当我最新手动更新，不管是 AR REMINDER 页面
+  还是ACTIVE CLIENT页面，都是最高优先级...保存PIC的统一".
+  - `lib/pic-sync.ts` (new): `syncPicToActiveClient()` (AR Reminder edit
+    -> mirrors onto the matching Active Client row's
+    `acc_pic_override`/`tax_pic_override`, joined by UEN, logged via the
+    shared `audit_log`) and `syncPicToArReminder()` (Active Client edit
+    -> mirrors onto every `ar_reminder` row for that UEN, across all FYE
+    cycles — there's no per-cycle PIC concept on the Active Client side
+    to disambiguate one).
+  - Wired into both PATCH handlers
+    (`app/api/ar-reminder/route.ts`, `app/api/master-list/route.ts`)
+    right after each successful `acc_pic`/`tax_pic`(`_override`) update.
+  - **Found while wiring this up**: `ar_reminder` already has its own
+    DB-trigger-based audit trail (`ar_reminder_audit` +
+    `set_ar_reminder_change_metadata`/`audit_ar_reminder_changes`
+    triggers, `scripts/add-ar-collaboration.sql`) that fires on *every*
+    update to the row regardless of which code path wrote it — more
+    complete than last session's new `audit_log`-based Edit History for
+    AR Reminder, since it would've missed this exact sync writeback
+    (written directly, not through the app's own PATCH). Removed the
+    now-redundant `logFieldChange` call from AR Reminder's PATCH and
+    pointed `/api/audit-log?table=ar_reminder` at `ar_reminder_audit`
+    instead (column names mapped to the same shape the frontend already
+    expects). Master List has no equivalent DB trigger, so it keeps
+    using the app-level `audit_log` table as before.
+  - Ran a one-off backfill to establish "Active Client wins by default"
+    for any pre-existing override — found 0 Active Client rows
+    currently have `acc_pic_override`/`tax_pic_override` set at all, so
+    there was nothing to migrate; the sync starts from a clean slate
+    where AR Reminder's synced value is still what both pages show
+    until someone edits either side.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **AR Reminder's Table view now has Edit History too, and the audit-log
   read endpoint is generalized instead of being Master-List-only.**

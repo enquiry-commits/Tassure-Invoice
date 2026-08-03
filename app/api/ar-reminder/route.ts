@@ -5,7 +5,7 @@ import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { getRequestAccount } from '@/lib/request-account';
-import { logFieldChange } from '@/lib/audit-log';
+import { syncPicToActiveClient, type PicField } from '@/lib/pic-sync';
 
 const EDITABLE_FIELDS = new Set([
   'reminder_note', 'prepared_date', 'date_of_agm', 'agm_held_date',
@@ -411,13 +411,15 @@ export async function PATCH(req: NextRequest) {
     }, { status: 409 });
   }
 
-  // previousValue/nextValue are already verified equal to what was actually
-  // in the row at write time (the compare-and-swap filter above only
-  // matches when they do) — no extra read needed for an accurate diff.
-  await logFieldChange(supabase, {
-    tableName: 'ar_reminder', rowId: id, field,
-    oldValue: previousValue, newValue: nextValue, changedBy: account.email,
-  });
+  // ar_reminder's own BEFORE/AFTER UPDATE triggers already write this edit
+  // to ar_reminder_audit (see scripts/add-ar-collaboration.sql) — no manual
+  // audit-log call needed here.
+
+  // ACC/TAX PIC is two-way synced with Active Client's override — whichever
+  // page it was most recently edited on wins and mirrors onto the other.
+  if (field === 'acc_pic' || field === 'tax_pic') {
+    await syncPicToActiveClient(supabase, data.uen ?? null, field as PicField, nextValue, account.email);
+  }
 
   return NextResponse.json({
     ok: true,

@@ -4,6 +4,7 @@ import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { loadRenameMap } from '@/lib/company-rename';
 import { getRequestAccount } from '@/lib/request-account';
 import { logFieldChange } from '@/lib/audit-log';
+import { syncPicToArReminder, type PicField } from '@/lib/pic-sync';
 
 const EDITABLE_FIELDS = new Set([
   'update_date', 'internal_code', 'company_name', 'roc_no', 'status',
@@ -195,6 +196,14 @@ export async function PATCH(req: NextRequest) {
     tableName: 'master_list', rowId: id, field,
     oldValue, newValue: stored, changedBy: account?.email ?? 'unknown',
   });
+
+  // ACC/TAX PIC is two-way synced with AR Reminder — whichever page it was
+  // most recently edited on wins and mirrors onto the other.
+  if ((field === 'acc_pic_override' || field === 'tax_pic_override') && account) {
+    const picField: PicField = field === 'acc_pic_override' ? 'acc_pic' : 'tax_pic';
+    const roc = before ? (before as Record<string, unknown>).roc_no as string | null : null;
+    await syncPicToArReminder(supabase, roc, picField, stored as string | null, account.email, account.name);
+  }
 
   return NextResponse.json({ ok: true });
 }
