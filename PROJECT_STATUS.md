@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Fixed SSO token format to match tassure-proposal-generator's actual parser)
+Last updated: 2026-08-03 (Sidebar group expand state now resets to collapsed on logout)
 
 ## Purpose
 
@@ -23,6 +23,18 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Sidebar groups now actually start collapsed on a fresh login, not
+  just in theory.** Earlier this session the default was flipped to
+  collapsed, but that only governs the very first read — every group
+  toggle is persisted to `localStorage` (`sidebar-group-*-expanded`),
+  which outlives the auth session entirely. Vincent: after logging out
+  and back in, Master List/Billing System and their sub-groups were
+  still expanded from before, because localStorage doesn't get touched
+  by login/logout. `components/AppShell.tsx`'s `logout()` now clears
+  every `sidebar-group-*` key before signing out, so the next login
+  (anyone's, on that browser) starts from the true collapsed default
+  again. Production build passes; `npx tsc --noEmit` clean.
 
 - **Fixed the SSO handoff to Proposal Generator: token format didn't
   match what that app's `/api/sso` actually parses.** Diagnosed by

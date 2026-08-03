@@ -22,6 +22,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [isAuthPage]);
 
   async function logout() {
+    // Sidebar group expand/collapse choices live in localStorage, which
+    // outlives the auth session — without clearing it here, whoever logs in
+    // next (even the same person) inherits whatever was left expanded from
+    // the previous session instead of the collapsed-by-default state.
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('sidebar-group-')) localStorage.removeItem(key);
+    }
     await fetch('/api/auth/logout', { method: 'POST' });
     router.replace('/login');
     router.refresh();
