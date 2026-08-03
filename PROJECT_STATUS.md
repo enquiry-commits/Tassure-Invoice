@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Sidebar link to Proposal Generator + SSO token handoff — NEEDS SSO_SHARED_SECRET SET + RECEIVING-SIDE ROUTE BUILT)
+Last updated: 2026-08-03 (Fixed SSO token format to match tassure-proposal-generator's actual parser)
 
 ## Purpose
 
@@ -24,16 +24,23 @@ one focused Git commit.
 
 ## Latest completed work
 
-- **⚠️ ACTION NEEDED (two-sided, other side is outside this repo):**
-  1. Generate a random secret and set it as `SSO_SHARED_SECRET` in both
-     this app's env (`.env.local` + Vercel) AND the Proposal Generator
-     app's env — same value in both, never committed.
-  2. Build the receiving endpoint on the Proposal Generator side
-     (`https://tassure-proposal-generator.vercel.app/api/sso`) — see the
-     spec in the commit message / chat, since I have no local access to
-     that codebase to build it myself.
-  Until both are done, the new Sidebar link will redirect to Proposal
-  Generator's `/api/sso` with a token that nothing there validates yet.
+- **Fixed the SSO handoff to Proposal Generator: token format didn't
+  match what that app's `/api/sso` actually parses.** Diagnosed by
+  curling the endpoint directly rather than guessing — first found
+  `/api/sso` 404ing outright (receiving route hadn't deployed yet on
+  their side), then after Vincent's other Claude Code session fixed
+  that, curling again showed the route live but returning
+  `{"error":"Invalid token format"}` for any token, which lined up
+  exactly with the other session's independent finding: this app's
+  `lib/sso-token.ts` was producing a `base64url(JSON).base64url(sig)`
+  token of its own invention, but the receiving side expects plain
+  `email:exp:signature` with a hex-encoded HMAC-SHA256. Rewrote
+  `signSsoToken()` to produce that exact format instead — same 60s TTL,
+  same `SSO_SHARED_SECRET`, just restructured to match. Production
+  build passes; `npx tsc --noEmit` clean. Not yet end-to-end tested
+  (need a real click-through with both sides deployed and the same
+  secret set — I don't have a logged-in session to test the full
+  handoff myself).
 
 - **Added a Sidebar link to Proposal Generator (a separate Vercel app,
   different domain) with an SSO handoff so a user already logged in
