@@ -2,6 +2,7 @@
 // Templates use {{fieldName}} placeholders; unresolved fields are left as-is
 // (visible in the draft preview) rather than silently blanked, so a missing
 // merge field is obvious to the reviewer before anything is sent.
+import { titleCase } from './text-case';
 
 export type MergeFields = {
   companyName: string;
@@ -40,17 +41,5 @@ export function formatAmount(n: number): string {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-// Greeting-name casing rule for "Dear {{contactName}}": a Chinese name is
-// copied through untouched (Chinese has no case), an English/romanized name
-// is title-cased per word regardless of how it was entered — e.g. raw
-// "TAN QUINI" or "seow jin sheng" both become "Tan Quini" / "Seow Jin Sheng".
-const CJK_PATTERN = /[一-鿿㐀-䶿豈-﫿]/;
-
-export function formatContactName(name: string): string {
-  const trimmed = name.trim();
-  if (!trimmed || CJK_PATTERN.test(trimmed)) return trimmed;
-  return trimmed
-    .split(/\s+/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
-}
+// Greeting-name casing rule for "Dear {{contactName}}" -- see lib/text-case.ts.
+export const formatContactName = titleCase;

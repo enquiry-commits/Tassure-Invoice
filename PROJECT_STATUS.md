@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Remark/Invoice-Reg-Add labels now match Notes' full type treatment, not just color)
+Last updated: 2026-08-03 (Unified PIC-style column text — full staff names, consistent casing, in Master List + AR Reminder)
 
 ## Purpose
 
@@ -23,6 +23,54 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Unified the text formatting of PIC-style columns (ND, Secretary, ACC
+  PIC, TAX PIC, Contact Window, Add @) across Master List and AR
+  Reminder — Chinese names untouched, everything else Title Cased and
+  expanded from abbreviation to full staff name, for both display AND
+  column filtering.** Vincent's rules: (1) Chinese text stays exactly
+  as-is, (2) these columns need first-letter-capital/rest-lowercase
+  formatting everywhere, whether typed by hand or synced, (3) staff
+  abbreviations ("JF", "Kah Ye") should always show the full name he'd
+  already given the staff directory, specifically so a column's filter
+  dropdown doesn't splinter one person into a dozen variants.
+  Interpreted "ADDRESS" in his list as `add_here` ("Add @") — the only
+  Master List field that fits a PIC-style short-name pattern; the
+  physical address fields (Invoice/Reg Add, Mailing Add) were left
+  alone since re-casing a real address isn't the same problem.
+  - `lib/text-case.ts` (new): `titleCase()` — the CJK-safe casing rule,
+    extracted from `lib/email-merge.ts`'s `formatContactName` (now just
+    `export const formatContactName = titleCase`) so it's a neutral
+    shared utility instead of living inside an email-specific module.
+  - `lib/staff-directory.ts`: `resolveOne()` now returns the full
+    `StaffEntry` (not just email), and a new `formatStaffName()` splits
+    a raw PIC value on `,`/`/`/`&`, resolves each segment against the
+    staff directory to its canonical full name, falls back to
+    `titleCase` for anything unmatched (an external contact, a company
+    name — never dropped, just not directory-linked), and rejoins with
+    a consistent ", " separator.
+  - `components/MasterListTable.tsx`: new `PIC_STYLE_FIELDS` set +
+    `displayFieldValue()` helper, applied everywhere a value is shown
+    OR compared — `EditCell`'s display span, `ModalField`'s compact
+    display, and critically `ColumnFilterMenu`'s option list AND the
+    actual `columnMatch` filter logic, so raw variants of the same
+    person collapse into one filter entry, not just one visual style.
+    `PicCell`/`ServiceChip` (ACC/TAX PIC and ND/Secretary's
+    always-editable input boxes) now init from the formatted name, with
+    the blur-save comparison baseline updated to match — so simply
+    clicking into the box and out never silently rewrites a raw "JF" to
+    "Lee Jing Fei" in the database; only an actual edit saves anything.
+    Editing (Table view's click-to-edit, and the two input boxes) still
+    shows/edits the raw stored text — formatting is display/filter-only,
+    never a silent rewrite of what's stored.
+  - `app/billing/page.tsx` (AR Reminder tab only — Billing Drafts/
+    renewals' own PIC displays were left untouched, out of Vincent's
+    stated scope): `arColumnValue()` (the single function AR Reminder's
+    column filter already routes both its options and its match logic
+    through) now formats `pic`/`acc_pic`/`tax_pic`; `EditField`'s
+    display span does the same; plus the three remaining plain-text PIC
+    spots in AR Reminder's List view (mobile card, desktop row).
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Master List wide-field labels (Remark, Invoice/Reg Add, etc.) now
   match the "NOTES" section header's full type treatment, not just its

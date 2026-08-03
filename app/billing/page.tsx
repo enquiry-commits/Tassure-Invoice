@@ -16,6 +16,7 @@ import { useIsMobile } from '@/lib/use-is-mobile';
 import { fmtDate, fmtMonth, toDisplayDate, toIsoDateValue, todaySGT } from '@/lib/date';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
+import { formatStaffName } from '@/lib/staff-directory';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
 import { getHelperHealth, isHelperOutdated, openDraftsInOutlook, buildMailtoLink } from '@/lib/draft-helper-client';
@@ -523,7 +524,9 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     </div>
   );
 
-  const display = (value ?? '').trim();
+  const rawDisplay = (value ?? '').trim();
+  const isPicField = field === 'pic' || field === 'acc_pic' || field === 'tax_pic';
+  const display = isPicField ? formatStaffName(rawDisplay) : rawDisplay;
   const statusDot = status === 'saving'
     ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
     : status === 'saved' ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
@@ -2610,8 +2613,11 @@ type ARColumnKey = 'reminder_note' | 'prepared_date' | 'date_of_agm' | 'sent_dat
   | 'remarks' | 'ar_status' | 'accounts_status';
 const AR_DATE_COLUMNS = new Set<ARColumnKey>(['reminder_note', 'prepared_date', 'date_of_agm', 'sent_date', 'received_date', 'filling_date', 'software_update', 'accounts_status']);
 
+const AR_PIC_COLUMNS = new Set<ARColumnKey>(['pic', 'acc_pic', 'tax_pic']);
+
 function arColumnValue(r: ARRecord, field: ARColumnKey): string {
   const raw = (r as unknown as Record<string, string | null>)[field] ?? '';
+  if (AR_PIC_COLUMNS.has(field)) return formatStaffName(raw);
   return AR_DATE_COLUMNS.has(field) ? (toDisplayDate(raw) ?? raw) : raw;
 }
 
@@ -3290,7 +3296,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   </div>
                   <div style={{ display: 'flex', gap: 10, marginTop: 7, fontSize: 10.5, color: '#64748b' }}>
                     <span>Progress: <span style={{ fontWeight: 700, color: filed ? '#16a34a' : r.stagesDone > 0 ? '#b45309' : '#94a3b8' }}>{r.stagesDone}/5{filed ? ' · Filed' : ''}</span></span>
-                    {r.pic && <span>PIC: {r.pic}</span>}
+                    {r.pic && <span>PIC: {formatStaffName(r.pic)}</span>}
                   </div>
                 </div>
               );
@@ -3323,7 +3329,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     {SVC_ORDER.every(k => !r.services[k]) && <span style={{ fontSize: 11, color: '#94a3b8' }}>No active services</span>}
                   </div>
                   <div style={{ padding: '0 6px' }}><DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} /></div>
-                  <div style={{ padding: '0 6px', fontSize: 12, color: '#475569' }}>{r.pic || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
+                  <div style={{ padding: '0 6px', fontSize: 12, color: '#475569' }}>{r.pic ? formatStaffName(r.pic) : <span style={{ color: '#e2e8f0' }}>—</span>}</div>
                 </div>
               );
             })}

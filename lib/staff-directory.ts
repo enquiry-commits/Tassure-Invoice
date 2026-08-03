@@ -1,6 +1,9 @@
 // Tassure staff directory (name -> email), provided directly by Vincent, for
 // resolving a PIC value stored on a company/AR record into a real email
-// address to CC on client communications.
+// address to CC on client communications, and also into a canonical display
+// name (see formatStaffName) so the same person always renders identically
+// across Master List / AR Reminder regardless of which abbreviation was
+// typed in.
 //
 // Real-world PIC values are messy — checked the actual distribution in
 // ar_reminder.pic/acc_pic/tax_pic before writing this:
@@ -18,6 +21,7 @@
 //     "Superadmin Tassure Asia") — deliberately left unmatched so no CC is
 //     added, rather than guessing.
 import { resolveTeamworkPic } from './teamwork-pic';
+import { titleCase } from './text-case';
 
 interface StaffEntry {
   name: string;
@@ -79,20 +83,20 @@ function tokenKey(name: string): string {
 
 // Direct alias/full-name lookup (exact, case/space-insensitive — initials
 // like "QT" must match literally, not as a token set).
-const BY_EXACT_NAME = new Map<string, string>();
+const BY_EXACT_NAME = new Map<string, StaffEntry>();
 // Full-name lookup where word order doesn't matter (handles "Kah Ye Chin"
 // vs "Chin Kah Ye").
-const BY_TOKEN_SET = new Map<string, string>();
+const BY_TOKEN_SET = new Map<string, StaffEntry>();
 
 for (const staff of STAFF_DIRECTORY) {
-  BY_EXACT_NAME.set(normalizeName(staff.name), staff.email);
-  BY_TOKEN_SET.set(tokenKey(staff.name), staff.email);
+  BY_EXACT_NAME.set(normalizeName(staff.name), staff);
+  BY_TOKEN_SET.set(tokenKey(staff.name), staff);
   for (const alias of staff.aliases ?? []) {
-    BY_EXACT_NAME.set(normalizeName(alias), staff.email);
+    BY_EXACT_NAME.set(normalizeName(alias), staff);
   }
 }
 
-function resolveOne(raw: string): string | null {
+function resolveOne(raw: string): StaffEntry | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
   // A stray un-resolved TeamWork numeric id (e.g. "9,11" reaching this
@@ -113,8 +117,29 @@ export function findStaffEmails(rawValue: string | null | undefined): string[] {
   if (!rawValue) return [];
   const emails: string[] = [];
   for (const part of rawValue.split(/[,/&]/)) {
-    const email = resolveOne(part);
-    if (email && !emails.includes(email)) emails.push(email);
+    const staff = resolveOne(part);
+    if (staff && !emails.includes(staff.email)) emails.push(staff.email);
   }
   return emails;
+}
+
+/**
+ * Resolves a stored PIC-style value into a display-ready name — for Master
+ * List / AR Reminder columns (ND, Secretary, ACC/TAX PIC, Contact Window,
+ * Add @), so an abbreviation like "JF" or "Kah Ye" always renders the same
+ * way everywhere. That consistency is also what keeps a column's filter
+ * dropdown from splintering into a dozen casing/abbreviation variants of the
+ * same person. A segment not found in the directory (an external contact,
+ * a company name, "dormant", ...) falls back to title-casing the original
+ * text rather than being dropped — this is for display, not CC resolution,
+ * so an unrecognised name must still show up.
+ */
+export function formatStaffName(rawValue: string | null | undefined): string {
+  if (!rawValue) return '';
+  const names = rawValue
+    .split(/[,/&]/)
+    .map(part => part.trim())
+    .filter(Boolean)
+    .map(part => resolveOne(part)?.name ?? titleCase(part));
+  return names.join(', ');
 }

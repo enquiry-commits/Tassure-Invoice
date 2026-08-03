@@ -8,6 +8,7 @@ import { usePagination, PaginationBar } from './Pagination';
 import { toDisplayDate, fmtDate } from '@/lib/date';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { normalize } from '@/lib/company-name';
+import { formatStaffName } from '@/lib/staff-directory';
 
 export interface MasterListRow {
   id: number;
@@ -202,13 +203,17 @@ function CheckSquare({ checked, onToggle }: { checked: boolean; onToggle?: () =>
 function PicCell({ name, active, onToggleActive, onSaveName }: {
   name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void;
 }) {
-  const [val, setVal] = useState(name ?? '');
-  useEffect(() => { setVal(name ?? ''); }, [name]);
+  // Displays the canonical full name (see formatStaffName) rather than
+  // whatever abbreviation is actually stored — the blur comparison baseline
+  // is the SAME formatted value, so simply clicking in and out never
+  // silently rewrites a raw "JF" to "Lee Jing Fei"; only a real edit saves.
+  const [val, setVal] = useState(formatStaffName(name));
+  useEffect(() => { setVal(formatStaffName(name)); }, [name]);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, minHeight: 22 }}>
       <CheckSquare checked={active} onToggle={onToggleActive} />
       <input value={val} onChange={e => setVal(e.target.value)}
-        onBlur={() => { const next = val.trim(); if (next !== (name ?? '').trim()) onSaveName(next); }}
+        onBlur={() => { const next = val.trim(); if (next !== formatStaffName(name).trim()) onSaveName(next); }}
         onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
         onClick={e => e.stopPropagation()}
         placeholder="—" style={{ flex: 1, minWidth: 0, border: '1px solid transparent', borderRadius: 4, padding: '1px 3px', fontSize: 11, outline: 'none', background: 'transparent', color: '#374151' }}
@@ -229,8 +234,9 @@ const SERVICE_CHIP_ACTIVE = { bg: '#f0fdf4', color: '#16a34a' };
 function ServiceChip({ name, active, onToggleActive, onSaveName }: {
   name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void;
 }) {
-  const [val, setVal] = useState(name ?? '');
-  useEffect(() => { setVal(name ?? ''); }, [name]);
+  // Same canonical-baseline approach as PicCell above.
+  const [val, setVal] = useState(formatStaffName(name));
+  useEffect(() => { setVal(formatStaffName(name)); }, [name]);
   const chipColor = active ? SERVICE_CHIP_ACTIVE.color : '#94a3b8';
   const chipBg = active ? SERVICE_CHIP_ACTIVE.bg : '#f8fafc';
   const chipBorder = active ? '#bbf7d0' : '#e2e8f0';
@@ -247,7 +253,7 @@ function ServiceChip({ name, active, onToggleActive, onSaveName }: {
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <input value={val} onChange={e => setVal(e.target.value)}
-          onBlur={() => { const next = val.trim(); if (next !== (name ?? '').trim()) onSaveName(next); }}
+          onBlur={() => { const next = val.trim(); if (next !== formatStaffName(name).trim()) onSaveName(next); }}
           onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
           placeholder="Not assigned"
           style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', padding: 0, fontSize: 13, fontWeight: 650, color: val ? '#1e293b' : '#94a3b8', boxSizing: 'border-box' }} />
@@ -283,8 +289,8 @@ function ColumnFilterMenu({ field, label, rows, selected, onApply }: {
   const options = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of rows) {
-      const raw = String((r as unknown as Record<string, string | null>)[field] ?? '').trim();
-      const key = raw === '' ? '(Blank)' : raw;
+      const raw = (r as unknown as Record<string, string | null>)[field];
+      const key = displayFieldValue(field, raw) || '(Blank)';
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
@@ -554,8 +560,9 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
 
   // Normalize any cell whose value is a recognizable date to the unified
   // "DD MMM YYYY" format; non-dates (YES/NO, codes, counts) parse to null and
-  // are shown as-is. Universal so no date column can be missed.
-  const shown = display ? (toDisplayDate(display) ?? display) : display;
+  // are shown as-is. Universal so no date column can be missed. PIC-style
+  // columns (never dates) instead go through the staff-name formatter.
+  const shown = PIC_STYLE_FIELDS.has(field) ? displayFieldValue(field, display) : (display ? (toDisplayDate(display) ?? display) : display);
   return (
     <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
@@ -598,6 +605,21 @@ const SECTION_ORDER = ['Company Info', 'Contact & Address', 'Services', 'Complia
 // left short neighbours (Email, Contact Window, …) sitting in a mostly-empty
 // cell. These fields get a wider flex basis instead of a cramped narrow one.
 const WIDE_MODAL_FIELDS = new Set(['invoice_address', 'mailing_address', 'mailing_list', 'remark', 'referral', 'shareholders', 'directors']);
+
+// Person-name-shaped columns — same casing/full-name treatment as email
+// greetings (lib/text-case.ts), routed through the staff directory so an
+// abbreviation like "JF" or "Kah Ye" always renders as the one canonical
+// name everywhere. Applied at DISPLAY time only (never rewrites the stored
+// value) but consistently everywhere a value is shown OR compared — the
+// column filter's option list and match logic use the exact same formatted
+// value, otherwise raw variants of the same person would still splinter the
+// filter dropdown even though the cell text looks unified.
+const PIC_STYLE_FIELDS = new Set(['nominee_director', 'secretary', 'acc_pic', 'tax_pic', 'contact_window', 'add_here']);
+
+function displayFieldValue(field: string, raw: string | null | undefined): string {
+  const value = (raw ?? '').trim();
+  return PIC_STYLE_FIELDS.has(field) ? formatStaffName(value) : value;
+}
 
 // Always-visible input + on-blur save, for the modal (unlike EditCell's
 // click-to-reveal, which exists to keep table cells compact — the modal has
@@ -682,7 +704,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
       </div>
     );
 
-    const display = val.trim();
+    const display = PIC_STYLE_FIELDS.has(field) ? displayFieldValue(field, val) : val.trim();
     return (
       <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
         onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = dark ? 'rgba(255,255,255,0.1)' : '#f0f6ff'}
@@ -1224,8 +1246,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const catCount = (cat: typeof catFilter) => rows.filter(r => catMatch(r, cat)).length;
   const columnMatch = (r: MasterListRow) => {
     for (const [field, allowed] of Object.entries(columnFilters) as [ColumnField, Set<string>][]) {
-      const raw = String((r as unknown as Record<string, string | null>)[field] ?? '').trim();
-      if (!allowed.has(raw === '' ? '(Blank)' : raw)) return false;
+      const raw = (r as unknown as Record<string, string | null>)[field];
+      const value = displayFieldValue(field, raw) || '(Blank)';
+      if (!allowed.has(value)) return false;
     }
     return true;
   };
