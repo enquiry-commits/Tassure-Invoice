@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Fixed: multi-ID PIC values like "9,11" never resolved to staff names)
+Last updated: 2026-08-03 (AR Reminder Table view gets Edit History too — audit log generalized to a shared /api/audit-log route)
 
 ## Purpose
 
@@ -23,6 +23,36 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **AR Reminder's Table view now has Edit History too, and the audit-log
+  read endpoint is generalized instead of being Master-List-only.**
+  Vincent: "AR REMINDER 页面的 TABLE,我也要有一个 edit history". Reused the
+  same `audit_log` table (already generic by design — `table_name`/
+  `row_id` keyed) rather than building a second one:
+  - `app/api/ar-reminder/route.ts`'s PATCH now writes an audit entry on
+    every successful field edit. It already does optimistic-concurrency
+    compare-and-swap (`previousValue`/`nextValue`, verified equal to
+    the actual row at write time via the update's own `WHERE` filter),
+    so the old/new diff needs no extra read — cheaper than Master
+    List's version, which has to `SELECT` the row first.
+  - `app/api/master-list/audit-log/route.ts` (table-specific) replaced
+    by a generic `app/api/audit-log/route.ts` — `GET ?table=X&id=Y`,
+    table name whitelisted (`master_list`, `ar_reminder`) since it
+    becomes a query filter. `MasterListTable.tsx`'s existing Edit
+    History section now points at the generic route instead.
+  - While wiring the "who made this edit" identity for AR Reminder,
+    noticed `app/api/ar-reminder/route.ts` already had its own
+    `lib/request-account.ts` (`getRequestAccount(req)`) doing exactly
+    what the Master List feature's `lib/current-user.ts` did —
+    deleted the duplicate, `app/api/master-list/route.ts` now uses the
+    pre-existing shared helper too.
+  - `components/EditHistoryPanel.tsx` (new): `EditHistoryButton` — a
+    small popover version of Master List's in-modal section, for pages
+    with no per-row detail modal to hang a full section off of. AR
+    Reminder's Table view has a history-icon button next to the
+    existing delete button on every row (widened that trailing column
+    from 44px to 68px to fit both).
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Fixed root cause: `companies.pic` values like "9,11" (a company
   co-assigned to two staff) never resolved to names — showed as raw

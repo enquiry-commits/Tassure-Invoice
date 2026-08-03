@@ -12,6 +12,7 @@ import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } fr
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
+import { EditHistoryButton } from '@/components/EditHistoryPanel';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { fmtDate, fmtMonth, toDisplayDate, toIsoDateValue, todaySGT } from '@/lib/date';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
@@ -2849,7 +2850,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             <TH w={180}>{HF('remarks', 'Remarks')}</TH>
             <TH w={150} finance>{HF('ar_status', 'Invoice')}</TH>
             <TH w={150} finance>{HF('accounts_status', 'Email Sent')}</TH>
-            <TH w={44} center>{''}</TH>
+            <TH w={68} center>{''}</TH>
           </tr>
         </thead>
         <tbody>
@@ -2885,9 +2886,10 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                 <TD><EditField id={r.id} field="remarks"         value={r.remarks}         onSave={onSave} placeholder="—" /></TD>
                 <TD finance><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
                 <TD finance><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate /></TD>
-                <TD style={{ textAlign: 'center' }}>
+                <TD style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                  <EditHistoryButton table="ar_reminder" rowId={r.id} />
                   <button onClick={() => onDelete(r.id)} title="Remove"
-                    style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', cursor: 'pointer', display: 'inline-flex' }}>
+                    style={{ marginLeft: 4, padding: '3px 6px', borderRadius: 5, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', cursor: 'pointer', display: 'inline-flex' }}>
                     <Trash2 size={11} />
                   </button>
                 </TD>

@@ -5,6 +5,7 @@ import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { getRequestAccount } from '@/lib/request-account';
+import { logFieldChange } from '@/lib/audit-log';
 
 const EDITABLE_FIELDS = new Set([
   'reminder_note', 'prepared_date', 'date_of_agm', 'agm_held_date',
@@ -409,6 +410,14 @@ export async function PATCH(req: NextRequest) {
       version: current.version ?? null,
     }, { status: 409 });
   }
+
+  // previousValue/nextValue are already verified equal to what was actually
+  // in the row at write time (the compare-and-swap filter above only
+  // matches when they do) — no extra read needed for an accurate diff.
+  await logFieldChange(supabase, {
+    tableName: 'ar_reminder', rowId: id, field,
+    oldValue: previousValue, newValue: nextValue, changedBy: account.email,
+  });
 
   return NextResponse.json({
     ok: true,

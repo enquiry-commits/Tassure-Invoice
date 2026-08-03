@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { loadRenameMap } from '@/lib/company-rename';
-import { getCurrentUser } from '@/lib/current-user';
+import { getRequestAccount } from '@/lib/request-account';
 import { logFieldChange } from '@/lib/audit-log';
 
 const EDITABLE_FIELDS = new Set([
@@ -190,10 +190,10 @@ export async function PATCH(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const user = await getCurrentUser();
+  const account = await getRequestAccount(req);
   await logFieldChange(supabase, {
     tableName: 'master_list', rowId: id, field,
-    oldValue, newValue: stored, changedBy: user?.email ?? 'unknown',
+    oldValue, newValue: stored, changedBy: account?.email ?? 'unknown',
   });
 
   return NextResponse.json({ ok: true });

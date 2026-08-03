@@ -767,7 +767,7 @@ function EditHistorySection({ rowId }: { rowId: number }) {
     if (next && entries === null) {
       setLoading(true);
       try {
-        const res = await fetch(`/api/master-list/audit-log?id=${rowId}`);
+        const res = await fetch(`/api/audit-log?table=master_list&id=${rowId}`);
         const json = await res.json();
         setEntries(json.data ?? []);
       } catch {
