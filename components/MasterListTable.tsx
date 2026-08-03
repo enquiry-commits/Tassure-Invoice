@@ -9,6 +9,7 @@ import { toDisplayDate, fmtDate } from '@/lib/date';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { normalize } from '@/lib/company-name';
 import { formatStaffName } from '@/lib/staff-directory';
+import { titleCase } from '@/lib/text-case';
 
 export interface MasterListRow {
   id: number;
@@ -560,9 +561,9 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
 
   // Normalize any cell whose value is a recognizable date to the unified
   // "DD MMM YYYY" format; non-dates (YES/NO, codes, counts) parse to null and
-  // are shown as-is. Universal so no date column can be missed. PIC-style
-  // columns (never dates) instead go through the staff-name formatter.
-  const shown = PIC_STYLE_FIELDS.has(field) ? displayFieldValue(field, display) : (display ? (toDisplayDate(display) ?? display) : display);
+  // are shown as-is. Universal so no date column can be missed. PIC-style/
+  // title-case columns (never dates) instead go through their formatter.
+  const shown = FORMATTED_TEXT_FIELDS.has(field) ? displayFieldValue(field, display) : (display ? (toDisplayDate(display) ?? display) : display);
   return (
     <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
@@ -614,11 +615,18 @@ const WIDE_MODAL_FIELDS = new Set(['invoice_address', 'mailing_address', 'mailin
 // column filter's option list and match logic use the exact same formatted
 // value, otherwise raw variants of the same person would still splinter the
 // filter dropdown even though the cell text looks unified.
-const PIC_STYLE_FIELDS = new Set(['nominee_director', 'secretary', 'acc_pic', 'tax_pic', 'contact_window', 'add_here']);
+const PIC_STYLE_FIELDS = new Set(['nominee_director', 'secretary', 'acc_pic', 'tax_pic', 'contact_window']);
+// Not a name list (no staff-directory lookup, no comma/slash splitting —
+// that would mangle a real address like "Blk 5 & 6" or a floor "12/F") —
+// just the same title-case rule on its own.
+const TITLE_CASE_FIELDS = new Set(['invoice_address']);
+const FORMATTED_TEXT_FIELDS = new Set([...PIC_STYLE_FIELDS, ...TITLE_CASE_FIELDS]);
 
 function displayFieldValue(field: string, raw: string | null | undefined): string {
   const value = (raw ?? '').trim();
-  return PIC_STYLE_FIELDS.has(field) ? formatStaffName(value) : value;
+  if (PIC_STYLE_FIELDS.has(field)) return formatStaffName(value);
+  if (TITLE_CASE_FIELDS.has(field)) return titleCase(value);
+  return value;
 }
 
 // Always-visible input + on-blur save, for the modal (unlike EditCell's
@@ -635,7 +643,16 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
   id: number; field: string; label: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compact?: boolean; dark?: boolean;
 }) {
   const isDateField = DATE_FIELDS.has(field as ColumnField);
-  const inputValue = useCallback((raw: string | null) => isDateField ? (toDisplayDate(raw) ?? raw ?? '') : (raw ?? ''), [isDateField]);
+  // invoice_address is always used in wide (non-compact) mode — baking its
+  // title-casing into inputValue itself means the textarea's own baseline
+  // (used for the no-op-edit check below) is the SAME formatted value, so
+  // clicking in and out without changing anything never silently rewrites
+  // the stored address.
+  const inputValue = useCallback((raw: string | null) => {
+    if (isDateField) return toDisplayDate(raw) ?? raw ?? '';
+    if (TITLE_CASE_FIELDS.has(field)) return titleCase(raw ?? '');
+    return raw ?? '';
+  }, [isDateField, field]);
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(inputValue(value));
   const [status, setStatus] = useState<SaveStatus>('idle');

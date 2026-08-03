@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Unified PIC-style column text — full staff names, consistent casing, in Master List + AR Reminder)
+Last updated: 2026-08-03 (Corrected "ADDRESS" to mean Invoice/Reg Add, not Add @)
 
 ## Purpose
 
@@ -23,6 +23,23 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Corrected which field "ADDRESS" meant in the PIC-style formatting
+  task above.** Vincent: "ADDRESS 对应的就是在说 Invoice/Reg Add" — not
+  `add_here` ("Add @") as guessed. Swapped `add_here` out of
+  `PIC_STYLE_FIELDS`. `invoice_address` is a real street address, not a
+  name list, so it does NOT go through `formatStaffName` (which splits
+  on `,`/`/`/`&` — would mangle something like "Blk 5 & 6" or a floor
+  "12/F"); added a separate `TITLE_CASE_FIELDS` set that applies plain
+  `titleCase()` only, no staff-directory lookup, no delimiter-splitting.
+  Threaded through the same three spots as before: `EditCell`'s Table
+  view display, `ColumnFilterMenu`/`columnMatch` (already generic via
+  `displayFieldValue`, no change needed there), and `ModalField`'s wide
+  (non-compact) branch — baked into `inputValue()` itself so the
+  textarea's no-op-edit baseline is the same formatted value, same
+  never-silently-rewrite guarantee as the PIC fields. AR Reminder has no
+  address-type column at all, so no change needed there. Production
+  build passes; `npx tsc --noEmit` clean.
 
 - **Unified the text formatting of PIC-style columns (ND, Secretary, ACC
   PIC, TAX PIC, Contact Window, Add @) across Master List and AR
