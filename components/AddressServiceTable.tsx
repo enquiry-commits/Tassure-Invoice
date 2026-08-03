@@ -1,6 +1,7 @@
 'use client';
 
 import { usePagination, PaginationBar } from './Pagination';
+import { formatStaffName } from '@/lib/staff-directory';
 
 interface Row {
   companyName: string;
@@ -50,7 +51,7 @@ export default function AddressServiceTable({ companies }: { companies: Row[] })
                 <td className="text-xs text-slate-500">
                   {c.primaryContact?.contactName || c.bestEmail || '—'}
                 </td>
-                <td className="text-xs text-slate-500">{c.pic || '—'}</td>
+                <td className="text-xs text-slate-500">{c.pic ? formatStaffName(c.pic) : '—'}</td>
               </tr>
             ))}
           </tbody>

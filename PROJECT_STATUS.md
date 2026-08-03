@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Late Filing Edit modal: Remarks moved to last, Custom Remarks now a full auto-growing textarea)
+Last updated: 2026-08-03 (Fixed: multi-ID PIC values like "9,11" never resolved to staff names)
 
 ## Purpose
 
@@ -23,6 +23,39 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed root cause: `companies.pic` values like "9,11" (a company
+  co-assigned to two staff) never resolved to names — showed as raw
+  TeamWork ids forever, on Address Service and anywhere else `pic` is
+  read.** Vincent: "ADDRESS SERVICE页面 内的PIC 为什么还是有号码，找不到对应的PIC人名？"
+  Traced to `lib/teamwork-pic.ts`'s `resolveTeamworkPic()`: it only ever
+  matched a SINGLE numeric id against `TEAMWORK_PIC_NAMES` — a combined
+  string like "9,11" isn't in the map and isn't purely `/^\d+$/`, so it
+  fell through and returned the raw string unchanged. Compounded by
+  `app/api/teamwork/sync/route.ts`'s overwrite guard (`/^\d+$/.test(
+  currentPic)`), which only re-resolves a stored value that's a single
+  bare number — "9,11" never qualified, so even future daily syncs would
+  never have fixed it.
+  - `resolveTeamworkPic()` now splits on `,`, resolves each id
+    separately, and rejoins with ", " — "9,11" -> "Kah Ye Chin, Shi Ming
+    Ang". A single id still works exactly as before.
+  - Sync's guard regex broadened to `/^\d+(,\d+)*$/` so comma-separated
+    raw ids are recognised as stale and get overwritten going forward.
+  - Ran a one-off fix against production Supabase (reusing the corrected
+    `resolveTeamworkPic`) for the 16 companies currently stuck on a raw
+    id string — all 16 resolved cleanly, 0 left blank.
+  - `components/AddressServiceTable.tsx`'s PIC cell now also runs
+    through `formatStaffName()` as a display-time safety net (it does
+    its own comma-splitting before delegating to `resolveTeamworkPic`
+    per segment, so it already handled multi-id correctly even before
+    today's fix) — belt-and-suspenders with the sync-level fix, not a
+    replacement for it.
+  - Note for Vincent: Companies page (`app/companies/page.tsx`) reads
+    the same `companies.pic` column and displays it raw too — today's
+    sync-level fix corrects it there as well, but I did not add the
+    same defensive `formatStaffName()` wrapper there since only Address
+    Service was reported; flag if you want it applied there too.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Late Filing's Edit Company modal: Remarks/Custom Remarks moved to
   the last row, and Custom Remarks is now a full-width auto-growing

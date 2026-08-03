@@ -190,8 +190,12 @@ async function syncTeamworkCompanies() {
       if (fyeMon && fyeMon !== row.fye_month)                        patch.fye_month = fyeMon;
       if (fyeDay && fyeDay !== row.fye_day)                          patch.fye_day = fyeDay;
       if (email  && email.toLowerCase() !== (row.best_email ?? '').toLowerCase()) patch.best_email = email;
+      // Matches "9" and "9,11" alike — a stored value that's still raw
+      // TeamWork id(s), single or comma-separated, gets replaced by the
+      // resolved name(s) once resolveTeamworkPic can resolve them. Already-
+      // resolved names (containing letters) are never touched here.
       const currentPic = String(row.sec_pic ?? row.pic ?? '').trim();
-      if (/^\d+$/.test(currentPic)) patch.pic = resolvedPic || null;
+      if (/^\d+(,\d+)*$/.test(currentPic)) patch.pic = resolvedPic || null;
       // Address service follows the CURRENT TeamWork registered address (both
       // directions — cancelled service flips off, new service flips on). Only
       // when TeamWork actually has an address on file.
