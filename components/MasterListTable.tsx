@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, Users, UserCheck, Landmark, CloudOff } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, ChevronDown, Calendar, Building2, Users, UserCheck, Landmark, CloudOff, History } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import MetricCard from './MetricCard';
 import { usePagination, PaginationBar } from './Pagination';
@@ -1635,7 +1635,11 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                       </td>
                     );
                   })}
-                  <td style={{ padding: '3px 6px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '3px 6px', textAlign: 'center', borderBottom: '1px solid #f1f5f9', whiteSpace: 'nowrap' }}>
+                    <button onClick={() => setSelectedRowId(r.id)} title="View details & edit history"
+                      style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: 'pointer', display: 'inline-flex', marginRight: 4 }}>
+                      <History size={11} />
+                    </button>
                     <RowActionMenu row={r} moveTargets={moveTargets} onMove={moveRow} onDelete={deleteRow} />
                   </td>
                 </tr>

@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Master List field-edit audit log — NEEDS SQL MIGRATION RUN)
+Last updated: 2026-08-03 (Fixed: Edit History / detail modal was unreachable outside Active Client's List view)
 
 ## Purpose
 
@@ -23,6 +23,21 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed: the detail modal (and therefore the just-added Edit History)
+  was completely unreachable from 5 of 6 Master List pages.** Vincent:
+  "Edit History 在哪里 我没有看见". `setSelectedRowId` — the only thing
+  that opens `CompanyDetailModal` — was only ever called from the List
+  view's row click handler, and List view is opt-in (`enableListView`)
+  for Active Client only; every other page (Ad-Hoc, MAS, Strike Off,
+  Terminated, Change Co Name), and even Active Client's own Table view,
+  had no way to open the modal at all. Added a small history-icon
+  button next to each Table-view row's existing action menu that calls
+  `setSelectedRowId(r.id)` directly — same modal, same Edit History
+  section, now reachable everywhere. (The audit_log table itself is
+  confirmed created — Vincent ran the migration; the "already exists"
+  policy error on a second attempt just meant it had already succeeded.)
+  Production build passes.
 
 - **⚠️ ACTION NEEDED: run `scripts/create-audit-log-table.sql` in the
   Supabase SQL Editor** — creates the `audit_log` table. Until this runs,
