@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-01 (Sidebar groups collapsed by default)
+Last updated: 2026-08-01 (Master List wide-field labels match the Notes section label color)
 
 ## Purpose
 
@@ -23,6 +23,19 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Master List detail modal's wide-field labels (Remark, Invoice/Reg
+  Add, Mailing Address, Mailing List, Referral, Shareholders, Directors)
+  now use the same muted color as the "NOTES" section header.** Vincent
+  flagged Remark first, then Invoice/Reg Add in the same modal — both go
+  through `ModalField`'s shared non-compact label style in
+  `components/MasterListTable.tsx`, which was `#64748b` (a noticeably
+  darker/greener slate than the section headers' `#94a3b8`). Changed
+  the one shared color, which fixes it for every field in
+  `WIDE_MODAL_FIELDS`, not just the two Vincent happened to screenshot.
+  Only the color changed — kept sentence-case labels ("Remark") rather
+  than adopting the section header's uppercase/letter-spacing treatment,
+  since Vincent only asked about color. Production build passes.
 
 - **Sidebar's Master List / Billing System groups (and their nested
   sub-groups) now collapse by default instead of starting expanded.**

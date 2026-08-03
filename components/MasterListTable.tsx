@@ -692,7 +692,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
 
   return (
     <div>
-      <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
         {label}
         {statusDot}
         {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
