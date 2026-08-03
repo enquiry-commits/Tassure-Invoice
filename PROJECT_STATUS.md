@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Fixed: Edit History / detail modal was unreachable outside Active Client's List view)
+Last updated: 2026-08-03 (Remark/Invoice-Reg-Add labels now match Notes' full type treatment, not just color)
 
 ## Purpose
 
@@ -23,6 +23,18 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Master List wide-field labels (Remark, Invoice/Reg Add, etc.) now
+  match the "NOTES" section header's full type treatment, not just its
+  color.** Earlier fix (96fdf2a) only changed the label color to
+  `#94a3b8`; Vincent's follow-up: "不是颜色，是字体大小和字型" (not the
+  color, the font size and style). `ModalField`'s shared wide-field
+  label in `components/MasterListTable.tsx` was `fontSize: 10` with no
+  weight/case/spacing, visibly smaller and plainer than `sectionLabel`'s
+  `fontSize: 11, fontWeight: 700, textTransform: uppercase,
+  letterSpacing: 0.5px`. Brought the wide-field label up to the same
+  size/weight/case/spacing (color was already correct). Production
+  build passes.
 
 - **Fixed: the detail modal (and therefore the just-added Edit History)
   was completely unreachable from 5 of 6 Master List pages.** Vincent:
