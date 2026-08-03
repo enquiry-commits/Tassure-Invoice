@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Corrected AR Reminder Edit History: Table view now opens the existing List-view modal instead of a redundant new popover)
+Last updated: 2026-08-03 (Master List's Edit History now matches AR Reminder's header-button "Change history" style)
 
 ## Purpose
 
@@ -23,6 +23,29 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Master List's Edit History moved from a small collapsed text link at
+  the bottom of the modal to a "History" toggle button in the header,
+  matching AR Reminder's "Change history" panel exactly.** Vincent, after
+  seeing AR Reminder's header button: "那能不能在 MASTER LIST 也做这个
+  HISTORY的视觉按钮呢，感觉比较直观". `components/MasterListTable.tsx`'s
+  `CompanyDetailModal` now has the same header button as AR Reminder's
+  `ARDetailModal` (icon + "History" label, background highlights when
+  open) positioned before the row-actions menu; clicking it shows a
+  "Change history" card at the top of the scrollable body — same
+  layout, same title/description copy, same refresh button — listing
+  field/old→new/who/when, fetched from the existing `master_list`
+  branch of `/api/audit-log`. (No restore button: that's specific to
+  `ar_reminder`'s own dedicated history route, which master_list's
+  simpler `audit_log` table doesn't support — not something Vincent
+  asked for here, flagged in case he wants it later.)
+  - Deleted the old bottom-of-modal `EditHistorySection` component
+    entirely (`components/EditHistoryPanel.tsx` removed — its `open`
+    state couldn't be driven by an external header button without a
+    rework, and once reworked there was nothing else left in that file
+    to share, so the fetch logic and `AuditEntry` type moved directly
+    into `MasterListTable.tsx`, the only remaining consumer).
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Corrected AR Reminder's Edit History: Table view now opens the same
   detail modal List view already used, instead of a separate, less

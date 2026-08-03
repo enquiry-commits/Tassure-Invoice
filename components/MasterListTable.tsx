@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, Calendar, Building2, Users, UserCheck, Landmark, CloudOff, History } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, Calendar, Building2, Users, UserCheck, Landmark, CloudOff, History, RefreshCw } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import MetricCard from './MetricCard';
 import { usePagination, PaginationBar } from './Pagination';
@@ -9,8 +9,9 @@ import { toDisplayDate, fmtDate } from '@/lib/date';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { normalize } from '@/lib/company-name';
 import { formatStaffName } from '@/lib/staff-directory';
-import { EditHistorySection } from './EditHistoryPanel';
 import { titleCase } from '@/lib/text-case';
+
+type AuditEntry = { id: number; field: string; old_value: string | null; new_value: string | null; changed_by: string; changed_at: string };
 
 export interface MasterListRow {
   id: number;
@@ -793,6 +794,25 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
 
   const colors = statusColor(row.status);
 
+  // Change history — same header-toggle-button pattern as AR Reminder's
+  // ARDetailModal ("History" button next to delete/close), rather than the
+  // small collapsed text link this used to be at the bottom of the modal.
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<AuditEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch(`/api/audit-log?table=master_list&id=${row.id}`);
+      const json = await res.json();
+      setHistoryEntries(json.data ?? []);
+    } catch {
+      setHistoryEntries([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [row.id]);
+
   const sectionLabel = (text: string) => (
     <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>{text}</div>
   );
@@ -855,6 +875,10 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
             <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{row.company_name}</div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
+              <button onClick={() => { const next = !showHistory; setShowHistory(next); if (next) void loadHistory(); }} title="Change history"
+                style={{ background: showHistory ? 'rgba(59,130,246,0.34)' : 'rgba(255,255,255,0.12)', border: 'none', color: '#dbeafe', borderRadius: 8, height: 32, padding: '0 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700 }}>
+                <History size={14} /> History
+              </button>
               <div style={{ background: 'rgba(255,255,255,0.12)', borderRadius: 8, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <RowActionMenu row={row} moveTargets={moveTargets} onMove={onMove} onDelete={onDelete} dark />
               </div>
@@ -887,6 +911,39 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
         </div>
 
         <div style={{ overflowY: 'auto', flex: 1, padding: '16px 20px', background: '#f8fafc' }}>
+          {showHistory && (
+            <div style={{ marginBottom: 16, border: '1px solid #dbe3ee', borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
+              <div style={{ padding: '10px 13px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f' }}>Change history</div>
+                  <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>Every saved change records who changed it.</div>
+                </div>
+                <button onClick={() => void loadHistory()} disabled={historyLoading} style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 6, padding: '4px 7px', cursor: 'pointer', display: 'flex' }}><RefreshCw size={11} /></button>
+              </div>
+              {historyLoading && historyEntries.length === 0 ? (
+                <div style={{ padding: '18px 18px 28px', textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>Loading history…</div>
+              ) : historyEntries.length === 0 ? (
+                <div style={{ padding: '18px 18px 28px', textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>No saved changes yet.</div>
+              ) : (
+                <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+                  {historyEntries.map((entry, index) => (
+                    <div key={entry.id} style={{ padding: '9px 13px', borderBottom: index < historyEntries.length - 1 ? '1px solid #f1f5f9' : 'none', display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) 150px', gap: 10, alignItems: 'center' }}>
+                      <div style={{ fontSize: 9, fontWeight: 800, color: '#475569' }}>{entry.field}</div>
+                      <div style={{ minWidth: 0, fontSize: 10, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.old_value ?? 'Empty'}</span>
+                        <span style={{ color: '#cbd5e1' }}>→</span>
+                        <span style={{ color: '#1e3a5f', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.new_value ?? 'Empty'}</span>
+                      </div>
+                      <div style={{ fontSize: 9, color: '#64748b' }}>
+                        <div style={{ fontWeight: 700 }}>{entry.changed_by}</div>
+                        <div>{new Date(entry.changed_at).toLocaleString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {/* Left: Company Info + Compliance, sequential — no card outline. */}
             <div>
@@ -943,8 +1000,6 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
               {renderWideField(remarkField, 0)}
             </div>
           )}
-
-          <EditHistorySection table="master_list" rowId={row.id} />
         </div>
       </div>
     </div>
