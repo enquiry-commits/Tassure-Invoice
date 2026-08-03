@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (TeamWork subrole review panel collapsed by default)
+Last updated: 2026-08-03 (Sidebar link to Proposal Generator + SSO token handoff — NEEDS SSO_SHARED_SECRET SET + RECEIVING-SIDE ROUTE BUILT)
 
 ## Purpose
 
@@ -23,6 +23,38 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **⚠️ ACTION NEEDED (two-sided, other side is outside this repo):**
+  1. Generate a random secret and set it as `SSO_SHARED_SECRET` in both
+     this app's env (`.env.local` + Vercel) AND the Proposal Generator
+     app's env — same value in both, never committed.
+  2. Build the receiving endpoint on the Proposal Generator side
+     (`https://tassure-proposal-generator.vercel.app/api/sso`) — see the
+     spec in the commit message / chat, since I have no local access to
+     that codebase to build it myself.
+  Until both are done, the new Sidebar link will redirect to Proposal
+  Generator's `/api/sso` with a token that nothing there validates yet.
+
+- **Added a Sidebar link to Proposal Generator (a separate Vercel app,
+  different domain) with an SSO handoff so a user already logged in
+  here doesn't see a second Google login screen.** Vincent: wants a
+  Proposal Generator icon in the sidebar, but the two apps use separate
+  Supabase projects on unrelated `*.vercel.app` domains, so no session
+  cookie can be shared directly.
+  - `lib/sso-token.ts` (new): `signSsoToken(email)` — a short-lived
+    (60s) HMAC-SHA256-signed token (`base64url(payload).base64url(sig)`),
+    keyed by a new `SSO_SHARED_SECRET` env var known to both apps.
+  - `app/sso/proposal-generator/route.ts` (new): reads the current
+    session via the existing `getRequestAccount`, signs a token for
+    that email, redirects to Proposal Generator's `/api/sso?token=...`.
+    Deliberately outside `/api/` so an expired session gets the normal
+    `/login` redirect (via `proxy.ts`) rather than a bare 401 JSON.
+  - `components/Sidebar.tsx`: `Node` type gained optional `icon`
+    (lucide component, fallback for entries with no custom 3D PNG
+    asset yet) and `external` (opens in a new tab, `target="_blank"`).
+    New entry links to the `/sso/...` route above, not the raw
+    Proposal Generator URL directly.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Nominee Directors page's "TeamWork subrole review" panel now starts
   collapsed instead of expanded.** `components/NDSubroleReview.tsx`'s

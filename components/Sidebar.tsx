@@ -3,9 +3,12 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText } from 'lucide-react';
 
-type Node = { label: string; href?: string; img?: string; id?: string; children?: Node[] };
+// `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
+// yet (see NavImg below) — currently just Proposal Generator, a link out to
+// a separate Vercel app rather than an internal route, hence `external`.
+type Node = { label: string; href?: string; img?: string; icon?: typeof FileText; external?: boolean; id?: string; children?: Node[] };
 
 // One tree. Level 1 nodes carry a 3D image icon; everything nested is icon-free
 // and indented with curved connector rails (see reference design).
@@ -50,6 +53,11 @@ const tree: Node[] = [
       },
     ],
   },
+  // Separate Vercel app (different domain — no shared session cookie), so
+  // this goes through an SSO handoff route instead of the raw URL: it signs
+  // a short-lived token for whoever's already logged in here, so Proposal
+  // Generator can log them in itself without a second Google screen.
+  { label: 'Proposal Generator', href: '/sso/proposal-generator', icon: FileText, external: true },
 ];
 
 const groupIds = (nodes: Node[]): string[] =>
@@ -93,16 +101,18 @@ function Level1({ node, active, expanded, onToggle }:
     (e.currentTarget as HTMLElement).style.background = on ? 'rgba(255,255,255,0.07)' : 'transparent';
     (e.currentTarget as HTMLElement).style.color = on ? '#fff' : 'rgba(255,255,255,0.92)';
   };
+  const Icon = node.icon;
   const inner = (
     <>
-      <NavImg src={node.img!} size={23} />
+      {node.img ? <NavImg src={node.img} size={23} /> : Icon ? <Icon size={20} style={{ flexShrink: 0 }} /> : null}
       <span style={{ flex: 1 }}>{node.label}</span>
       {onToggle && (expanded ? <ChevronDown size={15} style={{ opacity: 0.7 }} /> : <ChevronRight size={15} style={{ opacity: 0.7 }} />)}
     </>
   );
   return onToggle
     ? <button style={rowStyle} onClick={onToggle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{inner}</button>
-    : <Link href={node.href!} style={rowStyle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{inner}</Link>;
+    : <Link href={node.href!} target={node.external ? '_blank' : undefined} rel={node.external ? 'noopener noreferrer' : undefined}
+        style={rowStyle} onMouseEnter={hover(true)} onMouseLeave={hover(false)}>{inner}</Link>;
 }
 
 // ── Nested rows (level ≥ 2): no icon, just the pill. Connector rails are
@@ -215,18 +225,21 @@ function NavTree({ collapsed }: { collapsed: boolean }) {
       <>
         {level1.map(n => {
           const active = n.href ? act(n.href) : false;
+          const Icon = n.icon;
           return (
             <Link key={n.id ?? n.href} href={firstLeaf(n)} title={n.label}
+              target={n.external ? '_blank' : undefined} rel={n.external ? 'noopener noreferrer' : undefined}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 padding: '9px 0', margin: '0 6px 2px', borderRadius: 9,
                 border: `1px solid ${active ? ACTIVE_BORDER : 'transparent'}`,
                 background: active ? ACTIVE_BG : 'transparent', boxShadow: active ? ACTIVE_SHADOW : 'none',
+                color: '#fff',
               }}
               onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)'; }}
               onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
             >
-              <NavImg src={n.img!} size={24} />
+              {n.img ? <NavImg src={n.img} size={24} /> : Icon ? <Icon size={21} /> : null}
             </Link>
           );
         })}
@@ -295,7 +308,7 @@ export default function Sidebar() {
         <Suspense fallback={
           level1.map(n => (
             <div key={n.id ?? n.href} style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: 11, padding: collapsed ? '9px 0' : '8px 12px', margin: collapsed ? '0 6px' : '0 8px', color: '#fff' }}>
-              <NavImg src={n.img!} size={collapsed ? 24 : 22} />
+              {n.img ? <NavImg src={n.img} size={collapsed ? 24 : 22} /> : n.icon ? <n.icon size={collapsed ? 21 : 20} /> : null}
               {!collapsed && <span className="font-semibold text-sm">{n.label}</span>}
             </div>
           ))
