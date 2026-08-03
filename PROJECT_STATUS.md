@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Corrected "ADDRESS" to mean Invoice/Reg Add, not Add @)
+Last updated: 2026-08-03 (Late Filing Edit modal: Remarks moved to last, Custom Remarks now a full auto-growing textarea)
 
 ## Purpose
 
@@ -23,6 +23,23 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Late Filing's Edit Company modal: Remarks/Custom Remarks moved to
+  the last row, and Custom Remarks is now a full-width auto-growing
+  textarea instead of a single-line input that could clip long text.**
+  Vincent: "late filing 弹窗内的 remark 要放在最下一行，并且要完整展示全部内容"
+  (the Remarks section should be the last row, and it needs to fully
+  show all its content). `app/late-filing/page.tsx`'s edit modal
+  previously had Remarks/Custom Remarks between FYE Month and the four
+  date fields; moved both below `next_agm_due_date`, right before the
+  Save/Cancel buttons. Custom Remarks (e.g. "AUTO: Overdue 1829 days",
+  which can run long) switched from the same inline single-line-input
+  pattern every other field here uses to a label-on-top auto-resizing
+  textarea (same technique as Master List's wide fields), with a
+  `useEffect` that sizes it to fit existing content the moment it's
+  shown — not just after the next keystroke — so a long note is fully
+  visible on open, not clipped until edited. Production build passes;
+  `npx tsc --noEmit` clean.
 
 - **Corrected which field "ADDRESS" meant in the PIC-style formatting
   task above.** Vincent: "ADDRESS 对应的就是在说 Invoice/Reg Add" — not

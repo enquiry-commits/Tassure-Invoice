@@ -152,6 +152,16 @@ export default function LateFilingPage() {
   const [saving, setSaving]     = useState(false);
   const [pendingDelete, setPendingDelete] = useState<LateRow | null>(null);
   const [customRemarks, setCustomRemarks] = useState(false);
+  const remarksTaRef = useRef<HTMLTextAreaElement>(null);
+  // Auto-grow to fit whatever's already in the field (e.g. a long
+  // "AUTO: Overdue N days" note) as soon as it's shown, not just after the
+  // next keystroke — matches Master List's wide-field textareas.
+  useEffect(() => {
+    const el = remarksTaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [customRemarks, editForm.remarks]);
 
   // ── Custom mirrored horizontal scrollbar + sticky leading columns ──────
   // Same pattern as Master List's classic table (components/MasterListTable.tsx)
@@ -401,6 +411,10 @@ export default function LateFilingPage() {
                     {FYE_MONTHS.filter(m => m !== 'ALL').map(m => <option key={m}>{m}</option>)}
                   </select>
                 </div>
+                {dateField('last_annual_return_date', 'Last AR Date')}
+                {dateField('last_agm_date', 'Last AGM Date')}
+                {dateField('last_accounts_date', 'Last Accounts Date')}
+                {dateField('next_agm_due_date', 'Next AGM Due')}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
                   <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>Remarks</span>
                   <select value={customRemarks ? 'Other' : (editForm.remarks ?? '')}
@@ -414,16 +428,14 @@ export default function LateFilingPage() {
                   </select>
                 </div>
                 {customRemarks && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '3px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
-                    <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, flexShrink: 0 }}>Custom Remarks</span>
-                    <input value={editForm.remarks ?? ''} onChange={e => setEditForm(f => ({ ...f, remarks: e.target.value }))} placeholder="Type your own remarks — "
-                      style={{ flex: '1 1 200px', minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
+                  <div style={{ padding: '8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+                    <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 4 }}>Custom Remarks</div>
+                    <textarea ref={remarksTaRef} value={editForm.remarks ?? ''} onChange={e => setEditForm(f => ({ ...f, remarks: e.target.value }))} placeholder="Type your own remarks — "
+                      rows={1}
+                      onInput={e => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }}
+                      style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', fontSize: 13, fontWeight: 500, color: '#1e293b', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
                   </div>
                 )}
-                {dateField('last_annual_return_date', 'Last AR Date')}
-                {dateField('last_agm_date', 'Last AGM Date')}
-                {dateField('last_accounts_date', 'Last Accounts Date')}
-                {dateField('next_agm_due_date', 'Next AGM Due')}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={save} disabled={saving || !editForm.company_name}
