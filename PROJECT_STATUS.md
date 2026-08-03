@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-01 (Greeting says "Dear All" when a draft goes to more than one contact)
+Last updated: 2026-08-01 (Sidebar groups collapsed by default)
 
 ## Purpose
 
@@ -23,6 +23,19 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Sidebar's Master List / Billing System groups (and their nested
+  sub-groups) now collapse by default instead of starting expanded.**
+  Vincent: "这边设置默认是收起的，需要才自行打开". `components/Sidebar.tsx`'s
+  `NavTree` previously initialized every group's `expanded` state to
+  `true`, with a `useEffect` that only ever downgraded a group to
+  collapsed if localStorage explicitly said `'false'` — so a first-time
+  visitor (or anyone whose localStorage was cleared) always saw the
+  whole tree expanded. Flipped the default to `false` and made the
+  `useEffect` respect localStorage in both directions (`'true'` re-opens
+  a group the user previously chose to leave open, `'false'` keeps it
+  shut), so returning users who'd deliberately expanded something aren't
+  reset. Production build passes.
 
 - **Greeting name now says "All" when a draft's To field has more than one
   recipient.** Vincent: "然后当超过一个联系人的稍后 user name 就变成 All" —

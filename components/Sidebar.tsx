@@ -186,14 +186,18 @@ function NavTree({ collapsed }: { collapsed: boolean }) {
   const tab = useSearchParams().get('tab') ?? '';
   const act = (href?: string) => (href ? isActive(href, pathname, tab) : false);
 
+  // Collapsed by default — groups only open when a user actually clicks into
+  // them (or previously chose to leave one open, remembered per-key below).
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(groupIds(tree).map(id => [id, true])));
+    Object.fromEntries(groupIds(tree).map(id => [id, false])));
 
   useEffect(() => {
     setExpanded(prev => {
       const next = { ...prev };
       for (const key of Object.keys(next)) {
-        if (localStorage.getItem(`sidebar-group-${key}-expanded`) === 'false') next[key] = false;
+        const stored = localStorage.getItem(`sidebar-group-${key}-expanded`);
+        if (stored === 'true') next[key] = true;
+        else if (stored === 'false') next[key] = false;
       }
       return next;
     });
