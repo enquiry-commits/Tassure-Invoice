@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-05 (Measured real-time delivery latency empirically — 370-712ms — and applied Supabase's documented RLS perf fix (wrap auth.jwt() in a SELECT) to both realtime policies — **requires running scripts/optimize-realtime-rls-policies.sql in Supabase**; Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,31 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Measured the real-time delivery latency Vincent asked about ("是可以快速更新了？少过1秒吗？"/"这个延迟有没有网上资料可以降到更低") instead of guessing, and applied the one concrete, low-risk fix the research turned up.**
+  - Ran a live measurement (DB `UPDATE` → time until the Realtime event is
+    received): **369ms, 389ms, 521ms, 712ms** across four runs — consistently
+    under a second, no code involved beyond Supabase's own delivery
+    pipeline. Reported this, not a guess.
+  - Researched Supabase's current (2026) Realtime docs/guidance: `postgres_changes`
+    is WAL-based and typically 50-200ms baseline, single-threaded per change
+    (doesn't scale past ~3,000 concurrent subscribers — we have ~12 staff,
+    nowhere near that, so no reason to consider migrating to Broadcast, the
+    higher-scale/lower-latency alternative Supabase recommends for high-volume
+    cases). One documented, applicable perf issue: every change triggers one
+    RLS authorization check per subscriber, and Supabase's own RLS-performance
+    guidance is to wrap `auth.jwt()` in `(SELECT ...)` so Postgres evaluates
+    it once per statement (an "InitPlan") instead of re-evaluating per row —
+    both `ar_reminder`'s and `master_list`'s Realtime policies used the bare,
+    slower form. **New `scripts/optimize-realtime-rls-policies.sql`**
+    recreates both with the wrapped form; same allowlist, same access, purely
+    a cheaper evaluation. Not expected to be dramatic (our per-change
+    subscriber count is tiny) but it's the one real, documented lever that
+    applies to our actual setup rather than a bigger architecture change
+    that wouldn't move the needle at this scale.
+  Sources: [Postgres Changes | Supabase Docs](https://supabase.com/docs/guides/realtime/postgres-changes),
+  [Realtime Postgres RLS](https://supabase.com/blog/realtime-row-level-security-in-postgresql),
+  [RLS Performance and Best Practices](https://supabase.com/docs/guides/troubleshooting/rls-performance-and-best-practices-Z5Jjwv).
 
 - **Master List now live-syncs across users, closing the gap flagged in the
   previous entry** (Vincent: "尽全力去做这个实时推送，不能卡顿，要快" — do the
