@@ -75,10 +75,21 @@ export async function GET(req: NextRequest) {
   // `acc_pic_override`/`tax_pic_override` (a master_list column staff can
   // edit directly) wins when set — AR Reminder's value is only the default
   // shown until someone overrides it here.
+  //
+  // Also pulls AR Reminder's date_of_agm/filling_date (its most recent FYE
+  // cycle per company) purely to cross-check against Active Client's own
+  // last_agm_date/last_ar_date (auto-filled by ar_workflow — see that
+  // route) — a mismatch means TeamWork's latest event and whatever's on the
+  // AR Reminder row (which staff can freely type over) have drifted apart.
+  // Same "flag it, don't resolve it" treatment as the existing FYE mismatch.
   const accByUen = new Map<string, string>();
   const taxByUen = new Map<string, string>();
+  const arAgmByUen = new Map<string, string>();
+  const arFilingByUen = new Map<string, string>();
   if (type === 'active_client') {
-    const { data: arRows } = await supabase.from('ar_reminder').select('uen, acc_pic, tax_pic');
+    const { data: arRows } = await supabase.from('ar_reminder')
+      .select('uen, acc_pic, tax_pic, date_of_agm, filling_date, fye_year');
+    const latestCycleYearByUen = new Map<string, number>();
     for (const a of arRows ?? []) {
       const uen = a.uen ? String(a.uen).trim().toUpperCase() : null;
       if (!uen) continue;
@@ -86,6 +97,13 @@ export async function GET(req: NextRequest) {
       const tax = resolveTeamworkPic(a.tax_pic);
       if (acc) accByUen.set(uen, acc);
       if (tax) taxByUen.set(uen, tax);
+
+      const year = a.fye_year ?? 0;
+      if (!latestCycleYearByUen.has(uen) || year >= latestCycleYearByUen.get(uen)!) {
+        latestCycleYearByUen.set(uen, year);
+        if (a.date_of_agm) arAgmByUen.set(uen, a.date_of_agm); else arAgmByUen.delete(uen);
+        if (a.filling_date) arFilingByUen.set(uen, a.filling_date); else arFilingByUen.delete(uen);
+      }
     }
   }
 
@@ -105,6 +123,8 @@ export async function GET(req: NextRequest) {
       is_css_client: uen ? (cssClientByUen.get(uen) ?? null) : null,
       acc_pic: r.acc_pic_override?.trim() || (uen ? (accByUen.get(uen) ?? null) : null),
       tax_pic: r.tax_pic_override?.trim() || (uen ? (taxByUen.get(uen) ?? null) : null),
+      ar_date_of_agm: uen ? (arAgmByUen.get(uen) ?? null) : null,
+      ar_filling_date: uen ? (arFilingByUen.get(uen) ?? null) : null,
       renamed_from: rename?.oldName ?? null,
       renamed_to: rename?.newName ?? null,
     };

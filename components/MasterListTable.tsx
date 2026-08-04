@@ -70,6 +70,11 @@ export interface MasterListRow {
   tax_pic?: string | null;    // tax_pic_override if set, else ar_reminder.tax_pic joined by UEN — Active Client only
   acc_pic_override?: string | null;
   tax_pic_override?: string | null;
+  // AR Reminder's own date_of_agm/filling_date (latest FYE cycle, joined by
+  // UEN) — cross-check only, for the mismatch badge on last_agm_date/
+  // last_ar_date below. Active Client only.
+  ar_date_of_agm?: string | null;
+  ar_filling_date?: string | null;
   // Manually toggleable, independent of whether a name is on file — Active Client only.
   nd_active?: boolean | null;
   secretary_active?: boolean | null;
@@ -90,11 +95,19 @@ function fyeMonthNum(s: string | null | undefined): number | null {
   return MONTH3[a] ?? null;
 }
 
+// Last AGM/AR Date (auto, from TeamWork via ar_workflow) vs AR Reminder's
+// own date_of_agm/filling_date (staff-editable) — both are plain ISO date
+// strings when present, so a straight compare on the date portion is enough.
+function dateMismatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  return String(a).slice(0, 10) !== String(b).slice(0, 10);
+}
+
 // acc_pic_override/tax_pic_override/*_active are facets of the acc_pic/
 // tax_pic/nominee_director/secretary columns, not columns of their own —
 // excluded here so they can never be added to a `fields` list by mistake.
 type ColumnField = Exclude<keyof MasterListRow,
-  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to'>;
+  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to' | 'ar_date_of_agm' | 'ar_filling_date'>;
 
 // Full column set — the default for every Master List page that passes no
 // `fields` prop (Strike Off, Terminated, Change Co Name). A page can pass
@@ -1668,6 +1681,24 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                                   <AlertTriangle size={10} />TW:{String(r.tw_fye).slice(0, 3).toUpperCase()}
                                 </span>
                               </div>
+                        ) : c.field === 'last_agm_date' && dateMismatch(r.last_agm_date, r.ar_date_of_agm) ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                            <span
+                              title={`⚠ AGM date mismatch — TeamWork's latest Held Date is "${r.last_agm_date}", AR Reminder's AGM column shows "${r.ar_date_of_agm}". Please verify which is correct.`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
+                              <AlertTriangle size={10} />AR:{String(r.ar_date_of_agm).slice(0, 10)}
+                            </span>
+                          </div>
+                        ) : c.field === 'last_ar_date' && dateMismatch(r.last_ar_date, r.ar_filling_date) ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                            <span
+                              title={`⚠ AR filing date mismatch — TeamWork's latest Filing Date is "${r.last_ar_date}", AR Reminder's AR column shows "${r.ar_filling_date}". Please verify which is correct.`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
+                              <AlertTriangle size={10} />AR:{String(r.ar_filling_date).slice(0, 10)}
+                            </span>
+                          </div>
                         ) : (
                           <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
                         )}

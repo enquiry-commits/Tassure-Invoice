@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (Proposal Generator icon swapped for the high-res company logo)
+Last updated: 2026-08-04 (Active Client's Last AGM/AR Date columns now auto-fill from TeamWork + mismatch badge vs AR Reminder)
 
 ## Purpose
 
@@ -23,6 +23,41 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Active Client's "Last AGM Date"/"Last AR Date" columns are now fully
+  automated from TeamWork, and show a mismatch badge against AR
+  Reminder's (staff-editable) AGM/AR columns — functionally splitting
+  what used to be "the same data shown two places" into two distinct
+  roles.** Vincent, confirmed via a clarifying question first (AR
+  Reminder's own `date_of_agm`/`filling_date` columns keep their
+  existing automated-but-overridable behavior unchanged — only Active
+  Client's side changes):
+  - `app/api/ar-reminder/sync-workflow/route.ts`: while processing each
+    company's TeamWork AGM/AR event history (already fetched once per
+    company for the existing `ar_reminder` per-cycle patch — no second
+    scrape), now also computes the LATEST AGM "Held Date" and LATEST AR
+    "Filing Date" across the company's *whole* history (not scoped to
+    one FYE cycle, since Active Client has no cycle dimension) and
+    writes them to the matching `master_list` Active Client row
+    (`last_agm_date`/`last_ar_date`, matched by UEN), always
+    overwriting — this column is meant to be the fully-automated one.
+    Logged via the shared `audit_log` (master_list has no DB-trigger
+    audit trail of its own, unlike `ar_reminder`).
+  - `app/api/master-list/route.ts`'s GET (Active Client only) now also
+    joins `ar_reminder`'s `date_of_agm`/`filling_date` from each
+    company's latest FYE cycle, purely for cross-checking — attached as
+    `ar_date_of_agm`/`ar_filling_date`.
+  - `components/MasterListTable.tsx`: new `dateMismatch()` helper +
+    two new Table-view branches for `last_agm_date`/`last_ar_date`,
+    mirroring the existing FYE-mismatch red "TW:" chip pattern exactly
+    (same colors/icon/layout) — shows AR Reminder's value when it
+    disagrees with TeamWork's. Not added to the List view or detail
+    modal, matching where the FYE mismatch treatment itself does (and
+    doesn't) appear.
+  Production build passes; `npx tsc --noEmit` clean. Not yet backfilled
+  against production — next step is triggering `ar_workflow` once via
+  its cron-secret endpoint so existing Active Client rows get their
+  first `last_agm_date`/`last_ar_date` values.
 
 - **Swapped the Proposal Generator sidebar icon for Vincent's high-res
   "Company logo" file (same T-frame + calculator design as before, just

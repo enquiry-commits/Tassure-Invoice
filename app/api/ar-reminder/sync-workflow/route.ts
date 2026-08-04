@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { parseDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { withAutomationRun } from '@/lib/automation-sync';
+import { logFieldChange } from '@/lib/audit-log';
 
 /**
  * Daily AR-workflow sync: fill ar_reminder rows' AGM/filing dates from
@@ -23,6 +24,18 @@ import { withAutomationRun } from '@/lib/automation-sync';
  *     value overwrites; an empty TeamWork value never blanks a manual entry.
  *   - prepared/sent/received dates are NOT in this feed and stay manual.
  *   - Already-filed rows are skipped (filing is terminal).
+ *
+ * Also fills Master List's Active Client "Last AGM Date"/"Last AR Date"
+ * columns (master_list.last_agm_date/last_ar_date) — a DIFFERENT, always-
+ * automated pair from ar_reminder's date_of_agm/filling_date above, which
+ * stay staff-editable (Vincent: Active Client's columns should be the fully
+ * automated source of truth; AR Reminder's stay manual, and any drift
+ * between the two shows as a mismatch badge — see app/api/master-list's
+ * GET). Reuses the same per-company TeamWork event fetch already done for
+ * the ar_reminder pass above rather than a second scrape: for each company,
+ * the LATEST AGM "Held Date" and LATEST AR "Filing Date" across its whole
+ * history (not scoped to one FYE cycle, since Active Client has no cycle
+ * dimension) is written to the matching Active Client row, keyed by UEN.
  *
  * Cron: 02:00 UTC daily (after the 01:00 generator so new rows sync same-day).
  * Manual: GET /api/ar-reminder/sync-workflow?month=April&year=2026 (one cycle).
@@ -56,13 +69,32 @@ async function syncArWorkflow(req: NextRequest) {
 
   const { data: companies } = await supabase
     .from('companies')
-    .select('id, company_name, internal_id')
+    .select('id, company_name, internal_id, registration_no')
     .not('internal_id', 'is', null);
 
   // entity_name → TeamWork company_id. Fuzzy matching is allowed only when
   // there is one unique best candidate; ties are sent to the exception count.
   const companyCandidates = companies ?? [];
   const internalByCompanyId = new Map(companyCandidates.map(company => [company.id, company.internal_id as string]));
+
+  // TeamWork company_id -> UEN, so the per-company event fetch below can also
+  // patch the matching Active Client row (master_list keys its own rows by
+  // UEN, not TeamWork's internal_id).
+  const uenByInternalId = new Map<string, string>();
+  for (const company of companyCandidates) {
+    if (company.internal_id && company.registration_no) {
+      uenByInternalId.set(company.internal_id as string, String(company.registration_no).trim().toUpperCase());
+    }
+  }
+  const { data: activeClientRows } = await supabase
+    .from('master_list')
+    .select('id, roc_no, last_agm_date, last_ar_date')
+    .eq('list_type', 'active_client');
+  const activeClientByUen = new Map<string, { id: number; last_agm_date: string | null; last_ar_date: string | null }>();
+  for (const row of activeClientRows ?? []) {
+    if (!row.roc_no) continue;
+    activeClientByUen.set(String(row.roc_no).trim().toUpperCase(), row);
+  }
   const idOf = (companyId: number | null, name: string): { id: string | null; ambiguous: boolean } => {
     if (companyId && internalByCompanyId.has(companyId)) return { id: internalByCompanyId.get(companyId)!, ambiguous: false };
     const direct = companyCandidates.filter(company => normalize(company.company_name) === normalize(name));
@@ -90,6 +122,7 @@ async function syncArWorkflow(req: NextRequest) {
   const cookie = await getSessionCookie();
 
   let updated = 0, checked = 0, fetchErrors = 0, updateErrors = 0, conflicts = 0;
+  let activeClientUpdated = 0, activeClientErrors = 0;
   const changes: { entity: string; patch: Record<string, string> }[] = [];
 
   for (const [companyId, companyRows] of byCompany) {
@@ -111,6 +144,49 @@ async function syncArWorkflow(req: NextRequest) {
     } catch {
       fetchErrors++;
       continue;
+    }
+
+    // Active Client's Last AGM/AR Date — the latest event of each type across
+    // this company's WHOLE history (not scoped to one ar_reminder row's FYE
+    // cycle, unlike the per-row patch below), always overwritten with
+    // whatever TeamWork currently shows since this column is meant to be
+    // fully automated, not staff-editable.
+    const uen = uenByInternalId.get(companyId);
+    if (uen) {
+      const acRow = activeClientByUen.get(uen);
+      if (acRow) {
+        let latestAgmHeld: string | null = null;
+        let latestArFiled: string | null = null;
+        for (const ev of result.data ?? []) {
+          const [event, , , , , heldRaw, filingRaw] = ev;
+          if (event === 'AGM') {
+            const held = toIsoDate(parseDmy(heldRaw));
+            if (held && (!latestAgmHeld || held > latestAgmHeld)) latestAgmHeld = held;
+          } else if (event === 'AR') {
+            const filing = toIsoDate(parseDmy(filingRaw));
+            if (filing && (!latestArFiled || filing > latestArFiled)) latestArFiled = filing;
+          }
+        }
+        const acPatch: Record<string, string> = {};
+        if (latestAgmHeld && latestAgmHeld !== acRow.last_agm_date) acPatch.last_agm_date = latestAgmHeld;
+        if (latestArFiled && latestArFiled !== acRow.last_ar_date) acPatch.last_ar_date = latestArFiled;
+        if (Object.keys(acPatch).length) {
+          const { error: acErr } = await supabase.from('master_list')
+            .update({ ...acPatch, updated_at: new Date().toISOString() })
+            .eq('id', acRow.id);
+          if (acErr) activeClientErrors++;
+          else {
+            activeClientUpdated++;
+            for (const [field, value] of Object.entries(acPatch)) {
+              await logFieldChange(supabase, {
+                tableName: 'master_list', rowId: acRow.id, field,
+                oldValue: field === 'last_agm_date' ? acRow.last_agm_date : acRow.last_ar_date,
+                newValue: value, changedBy: 'system:teamwork',
+              });
+            }
+          }
+        }
+      }
     }
 
     for (const r of companyRows) {
@@ -156,7 +232,7 @@ async function syncArWorkflow(req: NextRequest) {
   }
 
   const result = {
-    ok: fetchErrors === 0 && updateErrors === 0,
+    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0,
     rows: rows.length,
     companies_checked: checked,
     unmatched_names: unmatched,
@@ -165,6 +241,8 @@ async function syncArWorkflow(req: NextRequest) {
     update_errors: updateErrors,
     version_conflicts: conflicts,
     updated,
+    active_client_last_dates_updated: activeClientUpdated,
+    active_client_errors: activeClientErrors,
     changes: changes.slice(0, 30),
   };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
