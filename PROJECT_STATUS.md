@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (Active Client's Last AGM/AR Date columns now auto-fill from TeamWork + mismatch badge vs AR Reminder)
+Last updated: 2026-08-04 (Active Client's Last AGM/AR Date columns now auto-fill from TeamWork + mismatch badge vs AR Reminder; production backfill completed)
 
 ## Purpose
 
@@ -54,10 +54,19 @@ one focused Git commit.
     disagrees with TeamWork's. Not added to the List view or detail
     modal, matching where the FYE mismatch treatment itself does (and
     doesn't) appear.
-  Production build passes; `npx tsc --noEmit` clean. Not yet backfilled
-  against production — next step is triggering `ar_workflow` once via
-  its cron-secret endpoint so existing Active Client rows get their
-  first `last_agm_date`/`last_ar_date` values.
+  Production build passes; `npx tsc --noEmit` clean. Backfilled against
+  production: the first hosted `ar_workflow` run needed to write nearly
+  every company's date for the first time and got hard-killed by
+  Vercel's `maxDuration=300`, leaving an `automation_sync_runs` row
+  stuck at `status:"running"` (self-heals on the next scheduled/manual
+  trigger — `lib/automation-sync.ts` only clears an expired lease as a
+  side effect of the *next* `begin()` call, no background timer). Ran a
+  one-time local script instead (same logic, no Vercel time limit,
+  not committed — deleted after use) to complete the backfill without
+  needing to touch the route's timeout/batching: 780 Active Client rows
+  checked, 381 updated, 0 fetch errors, 133 had no matching Active
+  Client row. Feature is fully live; future daily runs only touch
+  what's changed, so this slowness was one-time only.
 
 - **Swapped the Proposal Generator sidebar icon for Vincent's high-res
   "Company logo" file (same T-frame + calculator design as before, just
