@@ -43,7 +43,9 @@ import { logFieldChange } from '@/lib/audit-log';
  * history (not scoped to one FYE cycle, since Active Client has no cycle
  * dimension) is written to the matching Active Client row, keyed by UEN.
  *
- * Cron: 02:00 UTC daily (after the 01:00 generator so new rows sync same-day).
+ * Cron: 20:00 UTC / SGT 04:00 daily (after the 19:00 UTC generator so new
+ * rows sync same-day; the whole nightly chain targets finishing by SGT
+ * 05:00, before business hours — see vercel.json).
  * Manual: GET /api/ar-reminder/sync-workflow?month=April&year=2026 (one cycle).
  */
 export const maxDuration = 300;

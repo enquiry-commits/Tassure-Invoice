@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron**)
+Last updated: 2026-08-04 (Nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,26 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Nightly automation chain shifted 3 hours earlier so it finishes before
+  business hours (SGT 05:00), not after (was finishing ~SGT 08:00).**
+  Vincent: the automated sync needs to be done by SGT 5:00. Root cause of
+  the gap: the chain's actual `vercel.json` schedule (21:00–00:00 UTC) had
+  already drifted 3 hours earlier than what two routes' doc comments
+  claimed (`teamwork/sync` said 00:30 UTC, `ar-reminder/sync-workflow`
+  said 02:00 UTC) — evidence a prior 3-hour shift happened without the
+  comments being updated, and even that wasn't early enough. New schedule,
+  same relative order/spacing, all times UTC (SGT = UTC+8, next day):
+  - `teamwork/sync-nd`: 21:00 → **18:00** (SGT 02:00)
+  - `teamwork/sync`: 21:30 → **18:30** (SGT 02:30)
+  - `ar-reminder/generate`: 22:00 → **19:00** (SGT 03:00)
+  - `quickbooks/sync`: 22:30 → **19:30** (SGT 03:30)
+  - `ar-reminder/sync-workflow`: 23:00 → **20:00** (SGT 04:00)
+  - `late-filing/sync`: 00:00 → **21:00** (SGT 05:00) — last job, so this
+    is the one that determines whether the SGT 05:00 target is met.
+  Updated the two stale doc comments (`teamwork/sync/route.ts`,
+  `ar-reminder/sync-workflow/route.ts`) to match. Pure config + comment
+  change — no application logic touched, `npx tsc --noEmit` clean.
 
 - **AR Reminder's "AGM"/"AR" columns (`date_of_agm`/`filling_date`) now give
   manual edits top priority over the TeamWork sync, and the Table view marks

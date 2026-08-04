@@ -7,8 +7,10 @@ import { todaySGT } from '@/lib/date';
 import { syncTeamworkCampaignRecipients } from '@/lib/teamwork-recipients';
 import { syncTeamworkContactPersons } from '@/lib/teamwork-contact-report';
 
-// Daily TeamWork -> companies sync (see vercel.json cron, 00:30 UTC — before
-// the 01:00 ar-reminder generator so new clients enter that day's AR window).
+// Daily TeamWork -> companies sync (see vercel.json cron, 18:30 UTC / SGT
+// 02:30 — before the 19:00 UTC ar-reminder generator so new clients enter
+// that day's AR window; the whole nightly chain targets finishing by SGT
+// 05:00, before business hours).
 //
 // TeamWork is the source of truth for the company roster. Before this route
 // existed the table was only refreshed by hand-run scripts (last: 2026-06-26),
