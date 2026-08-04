@@ -8,6 +8,12 @@ export async function getRequestAccount(req: NextRequest): Promise<ApprovedAccou
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { cookies: { getAll: () => req.cookies.getAll(), setAll: () => undefined } },
   );
-  const { data } = await auth.auth.getUser();
-  return getApprovedAccount(data.user?.email);
+  // getSession() reads the JWT straight off the cookie (no network round
+  // trip) instead of getUser()'s live re-check against Supabase's Auth
+  // server — safe here because proxy.ts's middleware already ran a real
+  // getUser() check on this exact request before it reached this route
+  // (its matcher covers every path except static assets), so a second,
+  // slower re-verification here was pure duplicate latency on every save.
+  const { data } = await auth.auth.getSession();
+  return getApprovedAccount(data.session?.user.email);
 }

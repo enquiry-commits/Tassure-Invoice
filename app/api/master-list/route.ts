@@ -192,17 +192,29 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, field, value } = await req.json();
+  const { id, field, value, previousValue } = await req.json();
   if (!id || !field) return NextResponse.json({ error: 'id and field required' }, { status: 400 });
   if (!EDITABLE_FIELDS.has(field)) return NextResponse.json({ error: 'Field not editable' }, { status: 400 });
 
   const supabase = createAdminClient();
   const stored = BOOLEAN_FIELDS.has(field) ? !!value : (value || null);
+  const needsRoc = field === 'acc_pic_override' || field === 'tax_pic_override';
 
-  // Read the pre-update value so the audit entry below can record an actual
-  // old -> new diff, not just "it changed to X".
-  const { data: before } = await supabase.from('master_list').select('*').eq('id', id).maybeSingle();
-  const oldValue = before ? (before as Record<string, unknown>)[field] : null;
+  // Old value for the audit entry below: trust the client-supplied
+  // previousValue when present (the cell already had it on screen — see
+  // EditCell in components/MasterListTable.tsx) instead of spending an
+  // extra round trip re-reading it before every single save. ACC/TAX PIC's
+  // two-way sync to AR Reminder still needs roc_no regardless, so that one
+  // column is fetched either way for those two fields (never select('*')).
+  let oldValue: unknown = previousValue !== undefined ? (previousValue || null) : null;
+  let roc: string | null = null;
+  if (previousValue === undefined || needsRoc) {
+    const cols = field === 'roc_no' ? 'roc_no' : `roc_no,${field}`;
+    const { data: before } = await supabase.from('master_list').select(cols).eq('id', id).maybeSingle();
+    const beforeRow = before as unknown as Record<string, unknown> | null;
+    if (previousValue === undefined) oldValue = beforeRow ? beforeRow[field] ?? null : null;
+    roc = beforeRow ? (beforeRow.roc_no as string | null) : null;
+  }
 
   const { error } = await supabase
     .from('master_list')
@@ -219,9 +231,8 @@ export async function PATCH(req: NextRequest) {
 
   // ACC/TAX PIC is two-way synced with AR Reminder — whichever page it was
   // most recently edited on wins and mirrors onto the other.
-  if ((field === 'acc_pic_override' || field === 'tax_pic_override') && account) {
+  if (needsRoc && account) {
     const picField: PicField = field === 'acc_pic_override' ? 'acc_pic' : 'tax_pic';
-    const roc = before ? (before as Record<string, unknown>).roc_no as string | null : null;
     await syncPicToArReminder(supabase, roc, picField, stored as string | null, account.email, account.name);
   }
 

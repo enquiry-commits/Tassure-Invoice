@@ -469,7 +469,10 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
     pendingRef.current = { next, prev };
     setStatus('saving');
     try {
-      const res = await fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null }) });
+      // previousValue lets the PATCH handler skip its own SELECT-before-
+      // UPDATE round trip (the cell already knows the value it's
+      // replacing) — was doubling every save's latency.
+      const res = await fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null, previousValue: prev || null }) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStatus('saved');
       setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);

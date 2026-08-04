@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-04 (Cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,45 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Cut Master List's per-field save latency (Vincent: felt like 1-2s per
+  cell, wanted something closer to Google Sheets).** The UI was already
+  optimistic (a cell shows the new value and returns to display mode the
+  instant you commit, before the network request even starts — same as
+  Sheets), so the 1-2s was entirely the save request itself taking that
+  long, visible as a lingering "saving" dot. Two redundant round trips
+  removed, both applicable to every write across the app, not just
+  Master List:
+  - **`lib/request-account.ts`**: `getRequestAccount()` (used by every
+    PATCH handler that needs to attribute a change) called
+    `supabase.auth.getUser()` — a live network round trip to Supabase's
+    Auth server to re-verify the session. But `proxy.ts`'s middleware
+    already does exactly that (also via `getUser()`) for every request
+    before it ever reaches a route handler (its matcher covers all paths
+    except static assets) — a second identical check downstream was pure
+    duplicate latency. Switched to `getSession()`, which reads the
+    already-verified JWT off the cookie with no network call. Safe
+    specifically because the middleware's real check already ran on this
+    exact request.
+  - **`app/api/master-list/route.ts`'s PATCH**: did a `SELECT *` before
+    every `UPDATE` purely to capture the pre-edit value for the audit log
+    — but the cell being edited already had that value on screen a moment
+    ago. `components/MasterListTable.tsx`'s `EditCell` now sends it as
+    `previousValue` (mirroring the pattern AR Reminder's PATCH already
+    used for optimistic-concurrency checks), and the route trusts it
+    instead of re-reading — except for `acc_pic_override`/`tax_pic_override`,
+    which still need a narrow `roc_no` fetch for the two-way AR Reminder
+    sync regardless (now `select('roc_no,<field>')`, never `select('*')`).
+  Not done: real-time/CRDT-style sync (how Sheets actually achieves
+  sub-100ms multi-user feel) would be a much larger rewrite (WebSocket
+  transport, conflict-free merge) — out of scope here; these two changes
+  just remove work this app was doing twice. Also flagged separately:
+  Vincent reported an edit that seemed to silently not save while another
+  staff member (hoechyi) was editing the same row around the same time —
+  likely a lost-update race (no optimistic-concurrency guard on Master
+  List, unlike AR Reminder's `version` column) rather than a latency
+  symptom; not fixed in this pass, worth a dedicated look if it recurs.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Fixed AR Reminder's search so companies mirrored in from Late Filing
   are actually findable, and widened the year dropdown so their (often
