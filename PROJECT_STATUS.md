@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-03 (Proposal Generator sidebar icon replaced with a custom asset, matching the other nav icons' style)
+Last updated: 2026-08-04 (Proposal Generator icon: use the real original artwork, not a re-derived flat version)
 
 ## Purpose
 
@@ -23,6 +23,20 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Corrected the Proposal Generator icon to use the real source image,
+  not a re-derived flat version.** Vincent: "我就是要原图的" — pushed back on
+  the previous attempt, which had flattened the artwork's shading into
+  crisp white line-art via a levels threshold. Root cause of that
+  overcorrection: I'd built the alpha channel from a `.convert('L')`
+  grayscale view, which PIL flattens onto black by default, discarding
+  the source PNG's real alpha — but the original file already had
+  proper per-pixel transparency baked in (confirmed: alpha ranged
+  0–255, mean ~24, i.e. mostly transparent already). Redid it as a
+  straight resize of the actual RGBA data (crop to content bbox, scale
+  to fit 128×128, no thresholding, no re-deriving alpha) — this keeps
+  the source's real shading/glow intact instead of substituting my own
+  interpretation of it. Production build passes.
 
 - **Replaced the Proposal Generator sidebar entry's placeholder lucide
   icon with a custom asset, matching the other nav icons' style.**
