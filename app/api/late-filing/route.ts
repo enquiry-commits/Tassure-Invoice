@@ -92,6 +92,11 @@ export async function GET(req: NextRequest) {
     remarks: string | null;
     late_fy: number;         // the year that is outstanding
     source: 'auto' | 'manual';
+    // Only set for rows that already have a real late_filing_companies row
+    // (source: 'manual') — used as an optimistic-concurrency token by
+    // PATCH below. A pure 'auto' row doesn't exist there yet, so editing
+    // it is a first-time insert with nothing to conflict against.
+    updated_at: string | null;
   };
 
   const detected: LateRow[] = [];
@@ -136,6 +141,7 @@ export async function GET(req: NextRequest) {
       remarks:                 manual?.remarks                  ?? null,
       late_fy:                 lateFy.year,
       source:                  manual ? 'manual' : 'auto',
+      updated_at:              manual?.updated_at ?? null,
     });
   }
 
@@ -157,6 +163,7 @@ export async function GET(req: NextRequest) {
         remarks:                 m.remarks,
         late_fy:                 0,
         source:                  'manual',
+        updated_at:              m.updated_at ?? null,
       });
     }
   }
@@ -191,37 +198,55 @@ export async function POST(req: NextRequest) {
 
 // ── PATCH — update manual override (remarks, dates, etc.) ────────────────────
 export async function PATCH(req: NextRequest) {
-  const { uen, company_name, ...fields } = await req.json();
+  const { uen, company_name, previousUpdatedAt, ...fields } = await req.json();
   if (!uen && !company_name) return NextResponse.json({ error: 'uen or company_name required' }, { status: 400 });
 
   const sb = createAdminClient();
 
   const updated_at = new Date().toISOString();
   let error;
+  let conflict = false;
 
+  // previousUpdatedAt is optional (an 'auto'-source row being edited for the
+  // first time has no late_filing_companies row yet, so there's nothing to
+  // conflict against — see LateRow's own comment in the GET handler above).
+  // When present, it's used as a row-level optimistic-concurrency token —
+  // simpler than tracking every individual field's previous value, since
+  // this page always saves the whole edit form as one unit, not per-cell
+  // (Vincent: prevent two staff editing the same Late Filing row at once
+  // from silently overwriting each other, same as AR Reminder/Master List).
   if (uen) {
-    ({ error } = await sb
-      .from('late_filing_companies')
-      .upsert({ uen, company_name, ...fields, updated_at }, { onConflict: 'uen' }));
+    const { data: existingByUen } = await sb.from('late_filing_companies').select('id, updated_at').eq('uen', uen).maybeSingle();
+    if (!existingByUen) {
+      ({ error } = await sb.from('late_filing_companies').insert({ uen, company_name, ...fields, updated_at }));
+    } else if (previousUpdatedAt && existingByUen.updated_at !== previousUpdatedAt) {
+      conflict = true;
+    } else {
+      ({ error } = await sb.from('late_filing_companies').update({ company_name, ...fields, updated_at }).eq('id', existingByUen.id));
+    }
   } else {
     const { data: existing, error: lookupError } = await sb
       .from('late_filing_companies')
-      .select('id')
+      .select('id, updated_at')
       .ilike('company_name', company_name)
       .limit(1)
       .maybeSingle();
     if (lookupError) return NextResponse.json({ error: lookupError.message }, { status: 500 });
 
-    if (existing) {
-      ({ error } = await sb
-        .from('late_filing_companies')
-        .update({ company_name, ...fields, updated_at })
-        .eq('id', existing.id));
+    if (!existing) {
+      ({ error } = await sb.from('late_filing_companies').insert({ company_name, ...fields, updated_at }));
+    } else if (previousUpdatedAt && existing.updated_at !== previousUpdatedAt) {
+      conflict = true;
     } else {
-      ({ error } = await sb
-        .from('late_filing_companies')
-        .insert({ company_name, ...fields, updated_at }));
+      ({ error } = await sb.from('late_filing_companies').update({ company_name, ...fields, updated_at }).eq('id', existing.id));
     }
+  }
+
+  if (conflict) {
+    const { data: current } = uen
+      ? await sb.from('late_filing_companies').select('*').eq('uen', uen).maybeSingle()
+      : await sb.from('late_filing_companies').select('*').ilike('company_name', company_name).limit(1).maybeSingle();
+    return NextResponse.json({ error: 'conflict', current: current ?? null }, { status: 409 });
   }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

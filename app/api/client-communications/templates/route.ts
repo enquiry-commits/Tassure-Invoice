@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, field, value } = await req.json();
+  const { id, field, value, previousValue } = await req.json();
   if (!id || !field) return NextResponse.json({ error: 'id and field required' }, { status: 400 });
   if (!EDITABLE_FIELDS.has(field)) return NextResponse.json({ error: 'field not editable' }, { status: 400 });
 
@@ -39,8 +39,20 @@ export async function PATCH(req: NextRequest) {
     const { data: row } = await supabase.from('email_templates').select('type').eq('id', id).single();
     if (row) await supabase.from('email_templates').update({ is_default: false }).eq('type', row.type).neq('id', id);
   }
-  const { error } = await supabase.from('email_templates').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
+
+  // Optimistic-concurrency check (Vincent: two staff editing the same
+  // template field around the same time could otherwise silently overwrite
+  // each other) — optional so is_default's own toggle-clear above and any
+  // caller that doesn't track a previous value keep working unconditionally.
+  let updateQuery = supabase.from('email_templates').update({ [field]: value, updated_at: new Date().toISOString() }).eq('id', id);
+  if (previousValue !== undefined) {
+    updateQuery = previousValue === null ? updateQuery.is(field, null) : updateQuery.filter(field, 'eq', previousValue);
+  }
+  const { data, error } = await updateQuery.select('id');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (previousValue !== undefined && !data?.length) {
+    return NextResponse.json({ error: 'conflict' }, { status: 409 });
+  }
   return NextResponse.json({ ok: true });
 }
 

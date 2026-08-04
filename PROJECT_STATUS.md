@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (Master List now has optimistic-concurrency conflict detection like AR Reminder, so two staff editing the same cell can no longer silently overwrite each other; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-04 (App-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,65 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **App-wide audit of every PATCH endpoint for multi-user overwrite risk
+  (Vincent: "think hard about where else this could happen, and what other
+  pages exist"), plus a visual overhaul of Master List's save feedback to
+  a persistent Google-Sheets-style trace instead of a fading checkmark.**
+  Every `export async function PATCH` in `app/api/` checked:
+  - **Already protected**: AR Reminder (pre-existing field-CAS), Master
+    List (fixed earlier today), Client Communications Drafts
+    (pre-existing real `version` counter).
+  - **`companies.services_manual`
+    (`app/api/companies/service-override/route.ts`) — the worst pattern
+    found, fixed.** Not just a same-field overwrite risk: the route did
+    SELECT the JSON → merge one key in JS → UPDATE the whole object back.
+    Two staff toggling two *different* services on the same company around
+    the same time could have the second write silently revert the
+    first's — it read the object before the first write committed, then
+    overwrote the entire thing. **New `scripts/add-service-override-merge-function.sql`**
+    adds a `set_service_override()` Postgres function that merges the one
+    key inside a single `UPDATE`, removing the read step (and the race)
+    entirely rather than just detecting it. The route now calls it via
+    `.rpc()` instead of SELECT+merge+UPDATE.
+  - **Late Filing (`app/api/late-filing/route.ts`) — had no protection at
+    all, fixed.** This page saves a whole edit form at once, not per-cell,
+    so field-level CAS didn't fit; used the row's own `updated_at` as a
+    row-level optimistic-concurrency token instead (optional — an
+    'auto'-source row being edited for the first time has no
+    `late_filing_companies` row yet, nothing to conflict against). 409 on
+    conflict reloads and asks the user to redo their edit.
+  - **Email Templates (`app/api/client-communications/templates/route.ts`)
+    — had no protection, fixed** with the same field-CAS pattern as Master
+    List (client already holds each field's last-loaded value in the
+    `templates` array, sent as `previousValue`).
+  - **Email Senders — left as-is.** A handful of rarely-touched
+    configuration rows (sender identity/default flag); the engineering
+    cost wasn't worth it for something nobody collides on in practice.
+  - **Other pages carry no risk**: Nominee Directors, Address Service,
+    Companies listing, Dashboard are all read-only/TeamWork-derived, no
+    PATCH endpoints exist for them.
+  - **Master List's save feedback redesigned** (Vincent: the checkmark
+    that fades after 1.4s "looks low, looks old" — wants something closer
+    to Sheets' own edit-history feel). **New
+    `scripts/add-master-list-updated-by.sql`** adds
+    `updated_by_email`/`updated_by_name` (mirrors AR Reminder's existing
+    columns), populated by the PATCH handler in the same round trip as
+    the conflict-safe UPDATE added earlier today. New `LastTouchedTag` —
+    a small persistent "🕐 Name · 3m ago" caption (real timestamp on
+    hover) — added under the company name in both Table and List views,
+    and in the Company Detail Modal's header. `handleSave`/`toggleActive`
+    stamp it optimistically from the logged-in user's own name (fetched
+    once via `/api/auth/me`) at the same instant as the field value, so it
+    updates immediately rather than waiting for a reload — same optimism
+    level the rest of the save flow already uses. The checkmark itself
+    stays as the instant "saved" flash (useful on its own); the trace tag
+    is what persists afterward, which is the part that was actually
+    missing. Not done: this doesn't push live to OTHER users' open tabs
+    (no realtime subscription on Master List, unlike AR Reminder) — a
+    second user only sees a fresh trace after their own next reload; real
+    live push would be a larger addition, flagged but out of scope here.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Master List now detects edit conflicts, matching AR Reminder — two
   staff editing the same cell around the same time can no longer silently

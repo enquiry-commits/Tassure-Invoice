@@ -29,6 +29,7 @@ type LateRow = {
   remarks: string | null;
   late_fy: number;
   source: 'auto' | 'manual';
+  updated_at: string | null;
 };
 
 const REMARKS_OPTIONS = [
@@ -139,7 +140,13 @@ function RemarksBadge({ remarks }: { remarks: string | null }) {
 
 type EditState = { uen?: string; company_name?: string; remarks?: string | null;
   last_annual_return_date?: string | null; last_agm_date?: string | null;
-  last_accounts_date?: string | null; next_agm_due_date?: string | null; };
+  last_accounts_date?: string | null; next_agm_due_date?: string | null;
+  // Captured when the edit form opens; sent back so the server can detect
+  // someone else having saved this row in the meantime (see PATCH's
+  // conflict handling in app/api/late-filing/route.ts). Pulled out
+  // server-side before the rest of the body is written, so it never lands
+  // in the database itself.
+  previousUpdatedAt?: string | null; };
 
 export default function LateFilingPage() {
   const [rows, setRows]         = useState<LateRow[]>([]);
@@ -242,6 +249,7 @@ export default function LateFilingPage() {
       last_agm_date: row.last_agm_date,
       last_accounts_date: row.last_accounts_date,
       next_agm_due_date: row.next_agm_due_date,
+      previousUpdatedAt: row.updated_at,
     });
     setCustomRemarks(!!row.remarks && !REMARKS_OPTIONS.includes(row.remarks));
   }
@@ -250,14 +258,19 @@ export default function LateFilingPage() {
 
   async function save() {
     setSaving(true);
-    if (editId === 'new') {
-      await fetch('/api/late-filing', { method:'POST',
-        headers:{'Content-Type':'application/json'}, body: JSON.stringify(editForm) });
-    } else {
-      await fetch('/api/late-filing', { method:'PATCH',
-        headers:{'Content-Type':'application/json'}, body: JSON.stringify(editForm) });
-    }
-    setSaving(false); cancelEdit(); load();
+    try {
+      const res = editId === 'new'
+        ? await fetch('/api/late-filing', { method:'POST',
+            headers:{'Content-Type':'application/json'}, body: JSON.stringify(editForm) })
+        : await fetch('/api/late-filing', { method:'PATCH',
+            headers:{'Content-Type':'application/json'}, body: JSON.stringify(editForm) });
+      if (res.status === 409) {
+        alert('Someone else already updated this record while you were editing it. Reloading the latest version — please redo your changes.');
+        cancelEdit(); await load();
+        return;
+      }
+      cancelEdit(); load();
+    } finally { setSaving(false); }
   }
 
   function del(row: LateRow) {

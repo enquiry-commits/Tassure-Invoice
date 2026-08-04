@@ -201,10 +201,12 @@ export async function PATCH(req: NextRequest) {
   }
 
   const supabase = createAdminClient();
+  const account = await getRequestAccount(req);
   const stored = BOOLEAN_FIELDS.has(field) ? !!value : (value || null);
   const prevStored = BOOLEAN_FIELDS.has(field) ? !!body.previousValue : (body.previousValue || null);
   const needsRoc = field === 'acc_pic_override' || field === 'tax_pic_override';
   const cols = field === 'roc_no' ? 'id,roc_no' : `id,roc_no,${field}`;
+  const updatedAt = new Date().toISOString();
 
   // Compare-and-swap on the field's own previous value — same technique
   // ar_reminder's PATCH already uses (see app/api/ar-reminder/route.ts),
@@ -216,10 +218,15 @@ export async function PATCH(req: NextRequest) {
   // .maybeSingle() returns null — that's the conflict signal. Also folds
   // what used to be a separate SELECT-before-UPDATE (roc_no for the PIC
   // sync below) into UPDATE...RETURNING, so this stays a single round trip
-  // on the common (non-conflicting) path.
+  // on the common (non-conflicting) path. updated_by_email/name (Vincent:
+  // wants a persistent "last edited by" trace, not a checkmark that just
+  // vanishes) are written here too — same round trip, no extra cost.
   let updateQuery = supabase
     .from('master_list')
-    .update({ [field]: stored, updated_at: new Date().toISOString() })
+    .update({
+      [field]: stored, updated_at: updatedAt,
+      updated_by_email: account?.email ?? null, updated_by_name: account?.name ?? null,
+    })
     .eq('id', id);
   updateQuery = prevStored === null
     ? updateQuery.is(field, null)
@@ -246,7 +253,6 @@ export async function PATCH(req: NextRequest) {
   }
 
   const row = data as unknown as Record<string, unknown>;
-  const account = await getRequestAccount(req);
   await logFieldChange(supabase, {
     tableName: 'master_list', rowId: id, field,
     oldValue: prevStored, newValue: stored, changedBy: account?.email ?? 'unknown',
@@ -260,5 +266,5 @@ export async function PATCH(req: NextRequest) {
     await syncPicToArReminder(supabase, roc, picField, stored as string | null, account.email, account.name);
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, updatedAt, updatedByName: account?.name ?? null });
 }

@@ -30,8 +30,9 @@ export default function TemplatesSendersPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const patchTemplate = async (id: number, field: string, value: unknown) => {
-    await fetch('/api/client-communications/templates', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value }) });
+  const patchTemplate = async (id: number, field: string, value: unknown, previousValue: unknown) => {
+    const res = await fetch('/api/client-communications/templates', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value, previousValue }) });
+    if (res.status === 409) alert('Someone else already changed this template field. Reloading the latest version — please redo your edit if still needed.');
     load();
   };
   const deleteTemplate = async (id: number) => {
@@ -88,9 +89,9 @@ export default function TemplatesSendersPage() {
               <div key={t.id} style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <input value={e.name} onChange={ev => setEditing(p => ({ ...p, [t.id]: { ...e, name: ev.target.value } }))}
-                    onBlur={() => patchTemplate(t.id, 'name', e.name)}
+                    onBlur={() => patchTemplate(t.id, 'name', e.name, t.name)}
                     style={{ ...S, fontWeight: 700, width: 260 }} />
-                  <button onClick={() => patchTemplate(t.id, 'is_default', true)} title="Set as default"
+                  <button onClick={() => patchTemplate(t.id, 'is_default', true, t.is_default)} title="Set as default"
                     style={{ display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: t.is_default ? '#eab308' : '#cbd5e1', fontSize: 11 }}>
                     <Star size={13} fill={t.is_default ? '#eab308' : 'none'} />{t.is_default ? 'Default' : 'Set default'}
                   </button>
@@ -100,11 +101,11 @@ export default function TemplatesSendersPage() {
                 </div>
                 <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 3 }}>Subject</div>
                 <input value={e.subject_template} onChange={ev => setEditing(p => ({ ...p, [t.id]: { ...e, subject_template: ev.target.value } }))}
-                  onBlur={() => patchTemplate(t.id, 'subject_template', e.subject_template)}
+                  onBlur={() => patchTemplate(t.id, 'subject_template', e.subject_template, t.subject_template)}
                   style={{ ...S, marginBottom: 8 }} />
                 <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 3 }}>Body</div>
                 <textarea value={e.body_template} onChange={ev => setEditing(p => ({ ...p, [t.id]: { ...e, body_template: ev.target.value } }))}
-                  onBlur={() => patchTemplate(t.id, 'body_template', e.body_template)}
+                  onBlur={() => patchTemplate(t.id, 'body_template', e.body_template, t.body_template)}
                   rows={bodyRows(e.body_template)} style={{ ...S, fontFamily: 'inherit', resize: 'vertical' }} />
               </div>
             );

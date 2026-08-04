@@ -80,6 +80,13 @@ export interface MasterListRow {
   secretary_active?: boolean | null;
   acc_active?: boolean | null;
   tax_active?: boolean | null;
+  // Row-level "last touched" trace (Vincent: wants a persistent record of
+  // who changed this row and when, not a checkmark that just vanishes —
+  // see scripts/add-master-list-updated-by.sql). Set by the server on
+  // every PATCH; kept fresh locally after this client's own edits via
+  // markTouched, without waiting for a reload.
+  updated_at?: string | null;
+  updated_by_name?: string | null;
 }
 
 // Normalize any FYE value (month name/abbr, or dd/mm/yyyy date) to a month
@@ -107,7 +114,7 @@ function dateMismatch(a: string | null | undefined, b: string | null | undefined
 // tax_pic/nominee_director/secretary columns, not columns of their own —
 // excluded here so they can never be added to a `fields` list by mistake.
 type ColumnField = Exclude<keyof MasterListRow,
-  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to' | 'ar_date_of_agm' | 'ar_filling_date'>;
+  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to' | 'ar_date_of_agm' | 'ar_filling_date' | 'updated_at' | 'updated_by_name'>;
 
 // Full column set — the default for every Master List page that passes no
 // `fields` prop (Strike Off, Terminated, Change Co Name). A page can pass
@@ -433,6 +440,36 @@ function RowActionMenu({ row, moveTargets, onMove, onDelete, dark = false }: {
         </div>
       )}
     </div>
+  );
+}
+
+// "3m ago" etc. Doesn't tick live — refreshes on the row's next render
+// (any edit, or a reload), which is close enough for a trust indicator.
+function relativeTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (ms < 60_000) return 'just now';
+  const min = Math.floor(ms / 60_000);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d ago`;
+  return fmtDate(iso);
+}
+
+// Persistent "last edited by X · Ymin ago" trace (Vincent: the checkmark
+// that fades after a save felt cheap/dated — he wants something closer to
+// Google Sheets' edit history, a record that stays visible, not a tick that
+// vanishes). Row-level, not per-field — same granularity AR Reminder
+// already uses for its own updated_by/updated_at.
+function LastTouchedTag({ at, by }: { at: string | null | undefined; by: string | null | undefined }) {
+  if (!at) return null;
+  return (
+    <span title={`Last edited${by ? ` by ${by}` : ''} · ${fmtDate(at)}`}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, color: '#94a3b8', whiteSpace: 'nowrap', cursor: 'help' }}>
+      <History size={9} />{by ? `${by} · ` : ''}{relativeTime(at)}
+    </span>
   );
 }
 
@@ -937,7 +974,15 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 880, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{row.company_name}</div>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{row.company_name}</div>
+              {row.updated_at && (
+                <div title={`Last edited${row.updated_by_name ? ` by ${row.updated_by_name}` : ''} · ${fmtDate(row.updated_at)}`}
+                  style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, cursor: 'help' }}>
+                  <History size={9} />{row.updated_by_name ? `${row.updated_by_name} · ` : ''}{relativeTime(row.updated_at)}
+                </div>
+              )}
+            </div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
               <button onClick={() => { const next = !showHistory; setShowHistory(next); if (next) void loadHistory(); }} title="Change history"
                 style={{ background: showHistory ? 'rgba(59,130,246,0.34)' : 'rgba(255,255,255,0.12)', border: 'none', color: '#dbeafe', borderRadius: 8, height: 32, padding: '0 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700 }}>
@@ -1097,6 +1142,11 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // its own small panel instead of a catFilter card.
   const [missingCssClients, setMissingCssClients] = useState<{ company_name: string; registration_no: string | null; internal_code: string | null }[]>([]);
   const [showMissingPanel, setShowMissingPanel] = useState(false);
+  // Only for stamping the "last edited by" trace optimistically on this
+  // client's own saves (see handleSave/toggleActive below) — not an auth
+  // check, the server already enforces that.
+  const [me, setMe] = useState<{ email: string; name: string } | null>(null);
+  useEffect(() => { fetch('/api/auth/me').then(r => r.json()).then(j => setMe(j.user ?? null)).catch(() => {}); }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1112,8 +1162,15 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   useEffect(() => { load(); }, [load]);
 
   const handleSave = useCallback((id: number, field: string, val: string) => {
-    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: val || null } : r));
-  }, []);
+    // Same optimism as the field value itself (see EditCell/ModalField —
+    // both call onSave before the request even resolves): stamps the
+    // trace immediately rather than waiting for a reload. A failed save
+    // still shows its own error/conflict state on the cell, so this
+    // staying slightly ahead of the server is harmless.
+    setRows(prev => prev.map(r => r.id === id
+      ? { ...r, [field]: val || null, updated_at: new Date().toISOString(), updated_by_name: me?.name ?? r.updated_by_name }
+      : r));
+  }, [me]);
 
   // Nominee Dir./Secretary/ACC/TAX checkboxes — freely toggleable, independent
   // of whether a name is on file. Optimistic; a checkbox flip is low-risk
@@ -1123,14 +1180,16 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // whatever it actually is now, instead of silently clobbering their change.
   const toggleActive = useCallback((id: number, field: 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active', current: boolean | null | undefined) => {
     const next = !current;
-    setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: next } : r));
+    setRows(prev => prev.map(r => r.id === id
+      ? { ...r, [field]: next, updated_at: new Date().toISOString(), updated_by_name: me?.name ?? r.updated_by_name }
+      : r));
     fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next, previousValue: !!current }) })
       .then(async res => {
         if (res.status !== 409) return;
         const json = await res.json().catch(() => ({}));
         setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: !!json.currentValue } : r));
       });
-  }, []);
+  }, [me]);
 
   // ACC/TAX name edits write to the *_override column, which only takes
   // effect ahead of AR Reminder's synced value once set server-side — reload
@@ -1600,6 +1659,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                       </div>
                     )}
                     {isMobile && r.roc_no && <div className="company-registration-text" style={{ marginTop: 1 }}>{r.roc_no}</div>}
+                    <div style={{ marginTop: 2 }}><LastTouchedTag at={r.updated_at} by={r.updated_by_name} /></div>
                   </div>
                   {!isMobile && <div className="company-registration-text">{r.roc_no ?? '—'}</div>}
                   {!isMobile && (
@@ -1720,14 +1780,19 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                             <CheckSquare checked={!!r.secretary_active} onToggle={() => toggleActive(r.id, 'secretary_active', r.secretary_active)} />
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
                           </div>
-                        ) : c.field === 'company_name' && r.renamed_from ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
-                            <span
-                              title={`Renamed from "${r.renamed_from}"${r.renamed_to ? ` to "${r.renamed_to}"` : ''}`}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
-                              <RotateCcw size={9} />Renamed
-                            </span>
+                        ) : c.field === 'company_name' ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                              <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                              {r.renamed_from && (
+                                <span
+                                  title={`Renamed from "${r.renamed_from}"${r.renamed_to ? ` to "${r.renamed_to}"` : ''}`}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
+                                  <RotateCcw size={9} />Renamed
+                                </span>
+                              )}
+                            </div>
+                            <LastTouchedTag at={r.updated_at} by={r.updated_by_name} />
                           </div>
                         ) : c.field === 'fye' && r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye) ? (
                           (c.w ?? 180) <= 80
