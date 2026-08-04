@@ -379,13 +379,20 @@ export async function PATCH(req: NextRequest) {
   }
 
   const supabase = createAdminClient();
+  const updatePayload: Record<string, unknown> = {
+    [field]: nextValue,
+    updated_by_email: account.email,
+    updated_by_name: account.name,
+  };
+  // date_of_agm/filling_date are otherwise auto-synced from TeamWork
+  // (see sync-workflow/route.ts) — a manual edit here must win from now on,
+  // and clearing the cell hands control back to automation.
+  if (field === 'date_of_agm' || field === 'filling_date') {
+    updatePayload[`${field}_manual`] = nextValue !== null;
+  }
   let updateQuery = supabase
     .from('ar_reminder')
-    .update({
-      [field]: nextValue,
-      updated_by_email: account.email,
-      updated_by_name: account.name,
-    })
+    .update(updatePayload)
     .eq('id', id);
   updateQuery = previousValue === null
     ? updateQuery.is(field, null)

@@ -241,6 +241,7 @@ interface ARRecord {
   pic: string | null; acc_pic: string | null; tax_pic: string | null;
   prepared_date: string | null; sent_date: string | null; received_date: string | null;
   date_of_agm: string | null; agm_held_date: string | null; filling_date: string | null;
+  date_of_agm_manual?: boolean | null; filling_date_manual?: boolean | null;
   ar_status: string | null; xbrl: string | null; software_update: string | null;
   dpo: string | null; ond_ron: string | null; dormant: string | null;
   accounts_status: string | null; fin_stmt_status: string | null;
@@ -753,6 +754,14 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
     </div>
   );
 });
+
+// Marks a date as filled by the TeamWork sync rather than typed in by a
+// staff member — only shown in the AR Table view (Vincent: distinguish
+// automated vs. manual so it's obvious which cells automation still owns).
+function AutoFillDot({ show }: { show: boolean }) {
+  if (!show) return null;
+  return <span title="Auto-filled from TeamWork — clear the cell to hand this back to automation, or type a date to override it." style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }} />;
+}
 
 function WorkflowBar({ stages, compact = false }: { stages: Stages; compact?: boolean }) {
   const vals = [stages.accountsReady, stages.sentToClient, stages.docsReceived, stages.agmHeld, stages.arFiled];
@@ -2872,10 +2881,20 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                 <TD stickyLeft={230} lastSticky><span className="company-registration-text">{r.uen || '—'}</span></TD>
                 <TD><EditField id={r.id} field="reminder_note"   value={r.reminder_note}   onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="prepared_date"   value={r.prepared_date}   onSave={onSave} placeholder="—" isDate /></TD>
-                <TD><EditField id={r.id} field="date_of_agm"     value={r.date_of_agm}     onSave={onSave} placeholder="—" isDate /></TD>
+                <TD>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <AutoFillDot show={!!r.date_of_agm && !r.date_of_agm_manual} />
+                    <EditField id={r.id} field="date_of_agm" value={r.date_of_agm} onSave={onSave} placeholder="—" isDate />
+                  </div>
+                </TD>
                 <TD><EditField id={r.id} field="sent_date"       value={r.sent_date}       onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><EditField id={r.id} field="received_date"   value={r.received_date}   onSave={onSave} placeholder="—" isDate /></TD>
-                <TD><EditField id={r.id} field="filling_date"    value={r.filling_date}    onSave={onSave} placeholder="—" isDate /></TD>
+                <TD>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <AutoFillDot show={!!r.filling_date && !r.filling_date_manual} />
+                    <EditField id={r.id} field="filling_date" value={r.filling_date} onSave={onSave} placeholder="—" isDate />
+                  </div>
+                </TD>
                 <TD><SelectField id={r.id} field="xbrl"          value={r.xbrl}            onSave={onSave} options={XBRL_OPTIONS} /></TD>
                 <TD><EditField id={r.id} field="software_update" value={r.software_update} onSave={onSave} placeholder="—" isDate /></TD>
                 <TD><SelectField id={r.id} field="dpo"           value={r.dpo}             onSave={onSave} options={DPO_OPTIONS} /></TD>
@@ -3065,9 +3084,13 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   }, [load, month, year]);
 
   const handleSave = useCallback((id: number, field: string, value: string) => {
-    const updated = (r: ARRecord) => r.id === id ? recomputeArRecord({ ...r, [field]: value || null }) : r;
+    // date_of_agm/filling_date flip their own "manual" flag alongside the
+    // value — matches the PATCH handler's server-side behaviour so the blue
+    // auto-fill dot updates immediately, without waiting for a refetch.
+    const extra = (field === 'date_of_agm' || field === 'filling_date') ? { [`${field}_manual`]: !!value } : {};
+    const updated = (r: ARRecord) => r.id === id ? recomputeArRecord({ ...r, [field]: value || null, ...extra }) : r;
     setRecords(prev => prev.map(updated));
-    setModalRecord(prev => prev && prev.id === id ? recomputeArRecord({ ...prev, [field]: value || null }) : prev);
+    setModalRecord(prev => prev && prev.id === id ? recomputeArRecord({ ...prev, [field]: value || null, ...extra }) : prev);
   }, []);
 
   // Optimistic local sync after a service-override cycle in the modal.

@@ -20,8 +20,14 @@ import { logFieldChange } from '@/lib/audit-log';
  *   AGM event → agm_held_date (Held Date), date_of_agm (Held Date, if empty)
  *
  * Write rules (consistent with the other syncs):
- *   - TeamWork is the source of truth for these dates: a NON-EMPTY TeamWork
- *     value overwrites; an empty TeamWork value never blanks a manual entry.
+ *   - TeamWork is the source of truth for date_of_agm/filling_date UNTIL a
+ *     human edits that cell directly (tracked via date_of_agm_manual/
+ *     filling_date_manual, set by the PATCH handler in ../route.ts) — a
+ *     manual value is never overwritten by this sync. Clearing the cell
+ *     (PATCH with an empty value) unsets the manual flag, handing control
+ *     back to automation on the next run.
+ *   - agm_held_date (the internal "AGM was held" progress signal, distinct
+ *     from the user-facing date_of_agm column) always mirrors TeamWork.
  *   - prepared/sent/received dates are NOT in this feed and stay manual.
  *   - Already-filed rows are skipped (filing is terminal).
  *
@@ -48,6 +54,7 @@ interface ArRow {
   id: number; company_id: number | null; entity_name: string; fye_month: string; fye_year: number;
   fye_date: string | null; due_date: string | null;
   date_of_agm: string | null; agm_held_date: string | null; filling_date: string | null;
+  date_of_agm_manual: boolean; filling_date_manual: boolean;
   status: string | null; version: number;
 }
 
@@ -59,7 +66,7 @@ async function syncArWorkflow(req: NextRequest) {
 
   let q = supabase
     .from('ar_reminder')
-    .select('id, company_id, entity_name, fye_month, fye_year, fye_date, due_date, date_of_agm, agm_held_date, filling_date, status, version')
+    .select('id, company_id, entity_name, fye_month, fye_year, fye_date, due_date, date_of_agm, agm_held_date, filling_date, date_of_agm_manual, filling_date_manual, status, version')
     .or('status.is.null,status.neq.Excluded');
   if (onlyMonth) q = q.eq('fye_month', onlyMonth);
   if (onlyYear)  q = q.eq('fye_year', parseInt(onlyYear, 10));
@@ -207,13 +214,13 @@ async function syncArWorkflow(req: NextRequest) {
         if (event === 'AR') {
           const filing = toIsoDate(parseDmy(filingRaw));
           const due = toIsoDate(parseDmy(dueRaw));
-          if (filing && filing !== r.filling_date) patch.filling_date = filing;
+          if (filing && !r.filling_date_manual && filing !== r.filling_date) patch.filling_date = filing;
           if (due && due !== (r.due_date ? String(r.due_date).slice(0, 10) : null)) patch.due_date = due;
         } else { // AGM
           const held = toIsoDate(parseDmy(heldRaw));
           if (held) {
             if (held !== (r.agm_held_date ? String(r.agm_held_date).slice(0, 10) : null)) patch.agm_held_date = held;
-            if (!r.date_of_agm) patch.date_of_agm = held;
+            if (!r.date_of_agm_manual && held !== r.date_of_agm) patch.date_of_agm = held;
           }
         }
       }

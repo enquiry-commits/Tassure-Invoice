@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (Active Client's Last AGM/AR Date columns now auto-fill from TeamWork + mismatch badge vs AR Reminder; production backfill completed)
+Last updated: 2026-08-04 (AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron**)
 
 ## Purpose
 
@@ -23,6 +23,38 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **AR Reminder's "AGM"/"AR" columns (`date_of_agm`/`filling_date`) now give
+  manual edits top priority over the TeamWork sync, and the Table view marks
+  which cells are still automation-owned.** Vincent: distinguish automated
+  vs. manual dates — a manual edit must never be overwritten by automation,
+  clearing a cell should hand it back to automation, and automated cells
+  need a visible marker (a blue dot) in the Table view; manual ones display
+  plainly.
+  - **`scripts/add-ar-manual-date-flags.sql` (NEW — must be run in Supabase
+    SQL Editor before the next `ar_workflow` cron, currently scheduled
+    02:00 UTC daily; not yet run as of this commit):** adds
+    `ar_reminder.date_of_agm_manual`/`filling_date_manual` (boolean,
+    default false). Until this runs, `sync-workflow`'s `SELECT` will fail
+    on the missing columns.
+  - `app/api/ar-reminder/route.ts`'s PATCH: writing `date_of_agm` or
+    `filling_date` now also sets the matching `_manual` flag — `true` when
+    a value is saved, `false` when the cell is cleared (empty value).
+  - `app/api/ar-reminder/sync-workflow/route.ts`: the per-cycle AGM/AR
+    patch now skips a field entirely when its `_manual` flag is set,
+    instead of only filling `date_of_agm` once while `filling_date` always
+    overwrote (the actual source of Vincent's complaint — filed dates kept
+    getting silently reverted to TeamWork's value even after being
+    corrected by hand). `agm_held_date` (the internal, always-automated
+    "AGM was held" progress signal — distinct from the user-facing
+    `date_of_agm` column) is unaffected and keeps mirroring TeamWork.
+  - `app/billing/page.tsx`: new `AutoFillDot` — a small blue dot rendered
+    to the left of the AGM/AR `EditField`s in `ARTableView` only (not the
+    List view or detail modal, matching where this was asked for) when a
+    date exists and its `_manual` flag is false. `handleSave` flips the
+    local `_manual` flag optimistically alongside the value so the dot
+    updates immediately, mirroring the PATCH handler's server-side rule.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Active Client's "Last AGM Date"/"Last AR Date" columns are now fully
   automated from TeamWork, and show a mismatch badge against AR
