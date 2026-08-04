@@ -149,7 +149,7 @@ async function syncLateFiling(run: AutomationRun) {
 
     const { data: existingManual, error: existingError } = await supabase
       .from('late_filing_companies')
-      .select('id, uen, company_name, remarks');
+      .select('id, uen, company_name, remarks, financial_year_end, next_agm_due_date');
     if (existingError) throw new Error(`Unable to load Late Filing records: ${existingError.message}`);
 
     const byUen = new Map((existingManual ?? [])
@@ -347,6 +347,62 @@ async function syncLateFiling(run: AutomationRun) {
       else {
         inserted++;
         insertedNames.push(c.company_name);
+      }
+    }
+
+    // Manual/legacy Late Filing entries with no row in `companies` at all
+    // (e.g. already struck off and removed from the TeamWork roster, or
+    // hand-added by staff) never appear in `targets` above, so the loop
+    // never touches them — mirror them here from late_filing_companies'
+    // own stored fields instead. evaluatedIds excludes exactly this set:
+    // every row the main loop DID manage to match to an active company,
+    // regardless of whether it's still late this run.
+    for (const m of existingManual ?? []) {
+      if (controller.signal.aborted) throw abortError(controller.signal);
+      if (evaluatedIds.has(m.id)) continue;
+      if (!m.financial_year_end) continue;
+      const fyeMonthIdx0 = MONTH_ABBR.indexOf(m.financial_year_end.toUpperCase());
+      if (fyeMonthIdx0 < 0) continue;
+      // Only signal available for "is this actually overdue" without a
+      // TeamWork event history to check — same bar as the main loop.
+      const dueDate = m.next_agm_due_date ? new Date(`${m.next_agm_due_date}T00:00:00`) : null;
+      if (!dueDate || Number.isNaN(dueDate.getTime()) || dueDate >= today) continue;
+
+      const dueYear = dueDate.getFullYear();
+      const dueMonthIdx0 = dueDate.getMonth();
+      const fyeYear = dueYear - (fyeMonthIdx0 > dueMonthIdx0 ? 1 : 0);
+      const fyeMonthFull = FULL_MONTH_NAMES[fyeMonthIdx0];
+      const fyeDateIso = new Date(fyeYear, fyeMonthIdx0 + 1, 0).toISOString().slice(0, 10);
+      const lateNote = `${LATE_FILING_MARKER} ${m.remarks?.trim() || 'Flagged on the Late Filing page'}`;
+
+      const cycleKey = `${fyeMonthFull}|${fyeYear}`;
+      const uenKey = m.uen ? String(m.uen).trim().toUpperCase() : null;
+      const arMatch = (uenKey ? arByKey.get(`uen:${uenKey}|${cycleKey}`) : null)
+        ?? arByKey.get(`name:${normalize(m.company_name)}|${cycleKey}`);
+
+      if (arMatch) {
+        if (!arMatch.remarks?.includes(LATE_FILING_MARKER)) {
+          const nextRemarks = arMatch.remarks ? `${lateNote}\n${arMatch.remarks}` : lateNote;
+          const { error: noteError } = await supabase.from('ar_reminder').update({
+            remarks: nextRemarks,
+            updated_by_email: 'system:late-filing',
+            updated_by_name: 'Late Filing Sync',
+          }).eq('id', arMatch.id);
+          if (noteError) errors++; else arNoted++;
+        }
+      } else {
+        const { error: insertError } = await supabase.from('ar_reminder').insert({
+          entity_name: m.company_name,
+          uen: m.uen,
+          fye_month: fyeMonthFull,
+          fye_year: fyeYear,
+          fye_date: fyeDateIso,
+          due_date: m.next_agm_due_date,
+          remarks: lateNote,
+          updated_by_email: 'system:late-filing',
+          updated_by_name: 'Late Filing Sync',
+        });
+        if (insertError) errors++; else arInserted++;
       }
     }
 
