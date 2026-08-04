@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (Proposal Generator icon: use the real original artwork, not a re-derived flat version)
+Last updated: 2026-08-04 (Proposal Generator icon swapped for the high-res company logo)
 
 ## Purpose
 
@@ -23,6 +23,13 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Swapped the Proposal Generator sidebar icon for Vincent's high-res
+  "Company logo" file (same T-frame + calculator design as before, just
+  a sharper 5000x5000 source with real detail like the "SGD" text on
+  the calculator display).** Same processing as last time — straight
+  resize of the real RGBA data (crop to content bbox, fit 128×128), no
+  re-derived thresholding. Production build passes.
 
 - **Corrected the Proposal Generator icon to use the real source image,
   not a re-derived flat version.** Vincent: "我就是要原图的" — pushed back on
