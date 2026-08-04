@@ -1900,26 +1900,33 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
 // numbers shown are computed against that specific cycle) — so searching
 // for a company outside the current batch previously just showed "no
 // matching records" with no explanation. When the local (name-or-UEN)
-// search comes up empty, this escalates to a company-wide lookup
-// (`/api/companies?search=`, which already matches both company_name and
-// registration_no/UEN) and, if found, jumps the month selector to that
-// company's real FYE month so the numbers stay accurate (year is left
-// as-is). `onSwitch` lets each tab clear its own status/column filters so
-// the newly-loaded company can't end up hidden by an unrelated filter.
+// search comes up empty, this escalates to a cross-cycle lookup via
+// `fetchMatch` (source differs per tab — see call sites) and, if found,
+// jumps the month/year selectors to that company's real FYE cycle so the
+// numbers stay accurate. `onSwitch` lets each tab clear its own
+// status/column filters so the newly-loaded company can't end up hidden by
+// an unrelated filter.
 function useCrossCycleSearch(
   items: { companyName: string; uen: string | null }[],
   month: string,
+  year: string,
   setMonth: (v: string) => void,
+  setYear: (v: string) => void,
   search: string,
   onSwitch: () => void,
+  fetchMatch: (term: string) => Promise<{ companyName: string; fyeMonth: string | null; fyeYear: number | null } | null>,
 ): string | null {
   const [notice, setNotice] = useState<string | null>(null);
   const itemsRef = useRef(items);
   useEffect(() => { itemsRef.current = items; }, [items]);
   const monthRef = useRef(month);
   useEffect(() => { monthRef.current = month; }, [month]);
+  const yearRef = useRef(year);
+  useEffect(() => { yearRef.current = year; }, [year]);
   const onSwitchRef = useRef(onSwitch);
   useEffect(() => { onSwitchRef.current = onSwitch; }, [onSwitch]);
+  const fetchMatchRef = useRef(fetchMatch);
+  useEffect(() => { fetchMatchRef.current = fetchMatch; }, [fetchMatch]);
 
   useEffect(() => {
     const term = search.trim();
@@ -1929,15 +1936,15 @@ function useCrossCycleSearch(
       const localMatch = itemsRef.current.some(c => c.companyName.toLowerCase().includes(q) || (c.uen ?? '').toLowerCase().includes(q));
       if (localMatch) { setNotice(null); return; }
       try {
-        const res = await fetch(`/api/companies?search=${encodeURIComponent(term)}&limit=5`);
-        const json = await res.json();
-        const matches: { companyName: string; fyeMonth: string | null }[] = json.data ?? [];
-        if (matches.length === 0) { setNotice(`No company found matching "${term}".`); return; }
-        const match = matches[0];
+        const match = await fetchMatchRef.current(term);
+        if (!match) { setNotice(`No company found matching "${term}".`); return; }
         if (!match.fyeMonth) { setNotice(`${match.companyName} has no FYE month on file — can't switch automatically.`); return; }
-        if (match.fyeMonth !== monthRef.current) {
-          setNotice(`Switched to ${match.fyeMonth} — ${match.companyName}'s FYE month.`);
+        const monthChanged = match.fyeMonth !== monthRef.current;
+        const yearChanged  = match.fyeYear != null && String(match.fyeYear) !== yearRef.current;
+        if (monthChanged || yearChanged) {
+          setNotice(`Switched to ${match.fyeMonth}${yearChanged ? ` ${match.fyeYear}` : ''} — ${match.companyName}'s FYE cycle.`);
           setMonth(match.fyeMonth);
+          if (yearChanged && match.fyeYear != null) setYear(String(match.fyeYear));
           onSwitchRef.current();
         } else {
           setNotice(null);
@@ -1945,10 +1952,17 @@ function useCrossCycleSearch(
       } catch { setNotice(null); }
     }, 400);
     return () => clearTimeout(timer);
-  }, [search, setMonth]);
+  }, [search, setMonth, setYear]);
 
   return notice;
 }
+
+// Wide enough to cover long-struck-off companies mirrored in from Late
+// Filing (their FYE cycle can be many years old — e.g. 2022) while still
+// being a reasonable dropdown length. Was hardcoded to 2024-2027, which
+// made those older cycles unreachable in the UI even once a row existed.
+const CURRENT_YEAR_FOR_OPTIONS = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 14 }, (_, i) => String(CURRENT_YEAR_FOR_OPTIONS - 12 + i));
 
 function BillingTab({ month, year, setMonth, setYear }: { month: string; year: string; setMonth: (v: string) => void; setYear: (v: string) => void }) {
   const [data,       setData]       = useState<{ summary: BillingSummary; companies: CompanyBilling[] } | null>(null);
@@ -2120,7 +2134,13 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     return arList.map(ar => arToBillingRow(ar, findMatch(ar.entity_name), month));
   }, [arList, renewalByName, month]);
 
-  const crossMonthNotice = useCrossCycleSearch(monthCompanies, month, setMonth, search, useCallback(() => { setFilter('all'); }, []));
+  const fetchBillingMatch = useCallback(async (term: string) => {
+    const res = await fetch(`/api/companies?search=${encodeURIComponent(term)}&limit=5`);
+    const json = await res.json();
+    const matches: { companyName: string; fyeMonth: string | null }[] = json.data ?? [];
+    return matches[0] ? { companyName: matches[0].companyName, fyeMonth: matches[0].fyeMonth, fyeYear: null } : null;
+  }, []);
+  const crossMonthNotice = useCrossCycleSearch(monthCompanies, month, year, setMonth, setYear, search, useCallback(() => { setFilter('all'); }, []), fetchBillingMatch);
 
   // "Needs billing" for month-driven invoicing = this FYE cycle hasn't been
   // invoiced yet. Prefer our own generated_invoices record (exact — we made
@@ -2169,7 +2189,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           {FYE_MONTHS.map(m => <option key={m}>{m}</option>)}
         </select>
         <select value={year} onChange={e => setYear(e.target.value)} style={S}>
-          {['2024','2025','2026','2027'].map(y => <option key={y}>{y}</option>)}
+          {YEAR_OPTIONS.map(y => <option key={y}>{y}</option>)}
         </select>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <select value={withinDays} onChange={e => setWithinDays(+e.target.value)} style={S}>
@@ -3177,9 +3197,18 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   }), [records, search, filter, columnFilters]);
 
   // See useCrossCycleSearch's own comment (defined above BillingTab) — same
-  // cross-cycle escalation, adapted to AR Reminder's own field names/state.
+  // cross-cycle escalation, but searching ar_reminder itself (not the
+  // TeamWork roster) so it can find rows that only exist here, such as
+  // Late Filing's mirror of struck-off/orphaned companies (see
+  // app/api/ar-reminder/search/route.ts).
   const arRecordsForSearch = useMemo(() => records.map(r => ({ companyName: r.entity_name, uen: r.uen })), [records]);
-  const crossMonthNotice = useCrossCycleSearch(arRecordsForSearch, month, setMonth, search, useCallback(() => { setFilter('all'); setColumnFilters({}); }, []));
+  const fetchArMatch = useCallback(async (term: string) => {
+    const res = await fetch(`/api/ar-reminder/search?q=${encodeURIComponent(term)}`);
+    const json = await res.json();
+    const matches: { entity_name: string; fye_month: string | null; fye_year: number | null }[] = json.data ?? [];
+    return matches[0] ? { companyName: matches[0].entity_name, fyeMonth: matches[0].fye_month, fyeYear: matches[0].fye_year } : null;
+  }, []);
+  const crossMonthNotice = useCrossCycleSearch(arRecordsForSearch, month, year, setMonth, setYear, search, useCallback(() => { setFilter('all'); setColumnFilters({}); }, []), fetchArMatch);
 
   const stats = useMemo(() => ({
     total:      records.length,
@@ -3209,7 +3238,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           {FYE_MONTHS.map(m => <option key={m}>{m}</option>)}
         </select>
         <select value={year} onChange={e => setYear(e.target.value)} style={S}>
-          {['2024','2025','2026','2027'].map(y => <option key={y}>{y}</option>)}
+          {YEAR_OPTIONS.map(y => <option key={y}>{y}</option>)}
         </select>
         <button onClick={load} disabled={loading} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: '#1d3a5c', color: '#fff', border: 'none', fontWeight: 600 }}>
           <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />

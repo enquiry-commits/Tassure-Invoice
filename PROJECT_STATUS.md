@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (Late Filing companies now mirrored into AR Reminder under their own FYE cycle, badged in List/Table, noted in Remarks; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-04 (Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,33 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed AR Reminder's search so companies mirrored in from Late Filing
+  are actually findable, and widened the year dropdown so their (often
+  years-old) FYE cycle is reachable at all.** Found live: the Late Filing
+  mirror feature above correctly created a row for a struck-off company
+  (`ADVANCE BRIGHT GLOBAL PTE. LTD.`, FYE March 2022) but Vincent still
+  couldn't find it — two separate, compounding gaps:
+  - AR Reminder's cross-cycle search escalation (`useCrossCycleSearch`,
+    used when a search term isn't in the currently-loaded month) queried
+    `/api/companies` — the TeamWork roster — not `ar_reminder` itself. A
+    company mirrored in from Late Filing specifically because it has NO
+    `companies` row (struck off, removed from TeamWork) could never be
+    found this way, no matter how the ar_reminder row was tagged.
+    New **`app/api/ar-reminder/search/route.ts`** searches `ar_reminder`
+    directly by name/UEN across every FYE month/year. `useCrossCycleSearch`
+    is now generic (takes a `fetchMatch` function per caller instead of a
+    hardcoded endpoint) — Billing Drafts keeps searching `/api/companies`
+    (its numbers come from the TeamWork/QB side), AR Reminder now searches
+    itself. Also switches `year`, not just `month`, when the match's cycle
+    differs (previously only `month` — fine when everything was within
+    "the current year," not for a cycle several years back).
+  - Even with search fixed, the year `<select>` was hardcoded to
+    `2024-2027` — 2022 wasn't a selectable option, so the row would still
+    have been unreachable by manually picking a cycle. New shared
+    `YEAR_OPTIONS` (current year ± a wide margin, 14 years) replaces both
+    hardcoded lists (Billing Drafts and AR Reminder).
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Late Filing's companies now also appear in AR Reminder, under their own
   FYE cycle, visibly marked apart from ordinary rows, with the reason
