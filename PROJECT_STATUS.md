@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (Cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-04 (Master List now has optimistic-concurrency conflict detection like AR Reminder, so two staff editing the same cell can no longer silently overwrite each other; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,44 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Master List now detects edit conflicts, matching AR Reminder — two
+  staff editing the same cell around the same time can no longer silently
+  overwrite each other.** Vincent flagged this as a follow-up to a real
+  incident earlier today (his own FYE edits and a colleague's, on the same
+  rows, within minutes of each other — traced via `audit_log`, no data was
+  actually lost that time, but nothing would have caught it if it had
+  landed differently).
+  - **`app/api/master-list/route.ts`'s PATCH** now requires `previousValue`
+    (428 if missing) and uses it as a compare-and-swap condition on the
+    `UPDATE` itself — same technique `ar_reminder`'s PATCH already used
+    (`.eq(field, previousValue)` / `.is(field, null)`), just without a
+    dedicated `version` column: the field's own current value IS the
+    version check. If 0 rows match (someone already changed that exact
+    field since this client last saw it), the client gets `409` with the
+    real current value — looked up via the latest matching `audit_log`
+    entry for who changed it. This also folds the old SELECT-before-UPDATE
+    (added earlier today for latency) into the UPDATE's own `RETURNING`,
+    so the conflict-safe path costs no extra round trip over the
+    already-optimized one.
+  - **`components/MasterListTable.tsx`**: `EditCell` and `ModalField` both
+    gained a `'conflict'` status — on 409, the cell adopts the real
+    current value (via `onSave`), shows it with a distinct amber
+    "changed elsewhere" indicator (tooltip names who), and stops there —
+    no accept/overwrite choice like AR Reminder's richer UI, since Master
+    List's fields don't carry AR Reminder's version-conflict stakes; the
+    point is just that an edit can never vanish unexplained again.
+    `toggleActive` (checkboxes) reverts to the real value silently on
+    conflict (already borderline-instant, no visible state to explain).
+    `saveOverride` (ACC/TAX PIC) already reloads the whole row after every
+    save, which self-corrects on conflict without extra code. The one
+    remaining gap: the Company Detail Modal's Nominee Director/Secretary
+    name field (via `ServiceChip`'s inline PATCH) now sends
+    `previousValue` too, so a stale write is safely rejected server-side,
+    but that one specific path doesn't yet surface the rejection in the
+    UI — lowest-traffic of the five edit paths, worth a follow-up if it
+    ever bites in practice.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Cut Master List's per-field save latency (Vincent: felt like 1-2s per
   cell, wanted something closer to Google Sheets).** The UI was already

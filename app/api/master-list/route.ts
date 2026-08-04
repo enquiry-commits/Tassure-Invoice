@@ -192,47 +192,71 @@ export async function DELETE(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const { id, field, value, previousValue } = await req.json();
+  const body = await req.json();
+  const { id, field, value } = body;
   if (!id || !field) return NextResponse.json({ error: 'id and field required' }, { status: 400 });
   if (!EDITABLE_FIELDS.has(field)) return NextResponse.json({ error: 'Field not editable' }, { status: 400 });
+  if (!Object.prototype.hasOwnProperty.call(body, 'previousValue')) {
+    return NextResponse.json({ error: 'previousValue is required for conflict-safe updates' }, { status: 428 });
+  }
 
   const supabase = createAdminClient();
   const stored = BOOLEAN_FIELDS.has(field) ? !!value : (value || null);
+  const prevStored = BOOLEAN_FIELDS.has(field) ? !!body.previousValue : (body.previousValue || null);
   const needsRoc = field === 'acc_pic_override' || field === 'tax_pic_override';
+  const cols = field === 'roc_no' ? 'id,roc_no' : `id,roc_no,${field}`;
 
-  // Old value for the audit entry below: trust the client-supplied
-  // previousValue when present (the cell already had it on screen — see
-  // EditCell in components/MasterListTable.tsx) instead of spending an
-  // extra round trip re-reading it before every single save. ACC/TAX PIC's
-  // two-way sync to AR Reminder still needs roc_no regardless, so that one
-  // column is fetched either way for those two fields (never select('*')).
-  let oldValue: unknown = previousValue !== undefined ? (previousValue || null) : null;
-  let roc: string | null = null;
-  if (previousValue === undefined || needsRoc) {
-    const cols = field === 'roc_no' ? 'roc_no' : `roc_no,${field}`;
-    const { data: before } = await supabase.from('master_list').select(cols).eq('id', id).maybeSingle();
-    const beforeRow = before as unknown as Record<string, unknown> | null;
-    if (previousValue === undefined) oldValue = beforeRow ? beforeRow[field] ?? null : null;
-    roc = beforeRow ? (beforeRow.roc_no as string | null) : null;
-  }
-
-  const { error } = await supabase
+  // Compare-and-swap on the field's own previous value — same technique
+  // ar_reminder's PATCH already uses (see app/api/ar-reminder/route.ts),
+  // now mirrored here (Vincent: Master List had no equivalent of AR
+  // Reminder's version-conflict detection, so two staff editing the same
+  // cell around the same time could silently overwrite each other). The
+  // UPDATE only matches a row if `field` still holds exactly what the
+  // client last saw; if someone else already changed it, 0 rows match and
+  // .maybeSingle() returns null — that's the conflict signal. Also folds
+  // what used to be a separate SELECT-before-UPDATE (roc_no for the PIC
+  // sync below) into UPDATE...RETURNING, so this stays a single round trip
+  // on the common (non-conflicting) path.
+  let updateQuery = supabase
     .from('master_list')
     .update({ [field]: stored, updated_at: new Date().toISOString() })
     .eq('id', id);
+  updateQuery = prevStored === null
+    ? updateQuery.is(field, null)
+    : updateQuery.filter(field, 'eq', prevStored as string | boolean);
 
+  const { data, error } = await updateQuery.select(cols).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  if (!data) {
+    const { data: current, error: currentError } = await supabase.from('master_list').select('*').eq('id', id).maybeSingle();
+    if (currentError) return NextResponse.json({ error: currentError.message }, { status: 500 });
+    if (!current) return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+    const { data: lastChange } = await supabase
+      .from('audit_log')
+      .select('changed_by, changed_at')
+      .eq('table_name', 'master_list').eq('row_id', id).eq('field', field)
+      .order('changed_at', { ascending: false }).limit(1).maybeSingle();
+    return NextResponse.json({
+      error: 'conflict',
+      currentValue: (current as Record<string, unknown>)[field] ?? null,
+      changedBy: lastChange?.changed_by ?? null,
+      changedAt: lastChange?.changed_at ?? null,
+    }, { status: 409 });
+  }
+
+  const row = data as unknown as Record<string, unknown>;
   const account = await getRequestAccount(req);
   await logFieldChange(supabase, {
     tableName: 'master_list', rowId: id, field,
-    oldValue, newValue: stored, changedBy: account?.email ?? 'unknown',
+    oldValue: prevStored, newValue: stored, changedBy: account?.email ?? 'unknown',
   });
 
   // ACC/TAX PIC is two-way synced with AR Reminder — whichever page it was
   // most recently edited on wins and mirrors onto the other.
   if (needsRoc && account) {
     const picField: PicField = field === 'acc_pic_override' ? 'acc_pic' : 'tax_pic';
+    const roc = row.roc_no as string | null;
     await syncPicToArReminder(supabase, roc, picField, stored as string | null, account.email, account.name);
   }
 

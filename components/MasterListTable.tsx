@@ -436,13 +436,14 @@ function RowActionMenu({ row, moveTargets, onMove, onDelete, dark = false }: {
   );
 }
 
-type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
 
 const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMismatch }: { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compactFyeMismatch?: string | null }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value ?? '');
   const [status, setStatus] = useState<SaveStatus>('idle');
   const pendingRef = useRef<{ next: string; prev: string }>({ next: '', prev: '' });
+  const conflictRef = useRef<{ currentValue: string; changedBy: string | null }>({ currentValue: '', changedBy: null });
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const dateRef  = useRef<HTMLInputElement>(null);
   const isDateField = DATE_FIELDS.has(field as ColumnField);
@@ -469,17 +470,28 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
     pendingRef.current = { next, prev };
     setStatus('saving');
     try {
-      // previousValue lets the PATCH handler skip its own SELECT-before-
-      // UPDATE round trip (the cell already knows the value it's
-      // replacing) — was doubling every save's latency.
+      // previousValue both lets the PATCH handler skip its own SELECT-
+      // before-UPDATE round trip AND doubles as an optimistic-concurrency
+      // check (mirrors ar_reminder's PATCH) — if someone else already
+      // changed this exact field since this cell last saw it, the server
+      // returns 409 instead of silently letting one edit clobber the other.
       const res = await fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null, previousValue: prev || null }) });
+      if (res.status === 409) {
+        const json = await res.json().catch(() => ({}));
+        const current = String(json.currentValue ?? '');
+        conflictRef.current = { currentValue: current, changedBy: json.changedBy ?? null };
+        onSave(id, field, current);
+        setVal(current);
+        setStatus('conflict');
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStatus('saved');
       setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
     } catch {
       setStatus('error');
     }
-  }, [id, field]);
+  }, [id, field, onSave]);
 
   const commit = useCallback(() => {
     setEditing(false);
@@ -534,6 +546,19 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
       <span style={{ fontSize: 11, color: '#b91c1c', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title="Save failed">{val || '—'}</span>
       <button onClick={retry}  title="Retry save"  style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}><RotateCcw size={11} /></button>
       <button onClick={revert} title="Revert change" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={11} /></button>
+    </div>
+  );
+
+  // Someone else already changed this exact field before this save landed —
+  // the value shown here is already the real, current one (adopted in
+  // persist() above), so there's nothing to retry; just make it visible
+  // that this wasn't the value just typed.
+  if (status === 'conflict') return (
+    <div title={`Changed by ${conflictRef.current.changedBy ?? 'another user'} just before your edit — showing their value now.`}
+      style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 4, padding: '1px 4px', cursor: 'help' }}>
+      <span style={{ fontSize: 11, color: '#374151', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{conflictRef.current.currentValue || '—'}</span>
+      <RotateCcw size={10} style={{ color: '#c2410c', flexShrink: 0 }} />
+      <button onClick={() => setStatus('idle')} title="Dismiss" style={{ border: 'none', background: 'transparent', color: '#c2410c', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={11} /></button>
     </div>
   );
 
@@ -674,6 +699,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(inputValue(value));
   const [status, setStatus] = useState<SaveStatus>('idle');
+  const conflictRef = useRef<{ currentValue: string; changedBy: string | null }>({ currentValue: '', changedBy: null });
   const inputRef = useRef<HTMLInputElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
@@ -687,7 +713,21 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
     onSave(id, field, next);
     setStatus('saving');
     try {
-      const res = await fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null }) });
+      // previousValue must be the RAW stored value (this component's `value`
+      // prop), not `prev` above — that's reformatted for display (dates,
+      // title case) and would never match the DB's actual text, making
+      // every save look like a conflict. Doubles as the optimistic-
+      // concurrency check (see app/api/master-list/route.ts's PATCH).
+      const res = await fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next || null, previousValue: value || null }) });
+      if (res.status === 409) {
+        const json = await res.json().catch(() => ({}));
+        const current = String(json.currentValue ?? '');
+        conflictRef.current = { currentValue: current, changedBy: json.changedBy ?? null };
+        onSave(id, field, current);
+        setVal(inputValue(current));
+        setStatus('conflict');
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStatus('saved');
       setTimeout(() => setStatus(s => (s === 'saved' ? 'idle' : s)), 1400);
@@ -751,6 +791,10 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
             : <span style={{ color: dark ? 'rgba(255,255,255,0.4)' : '#d1d5db', fontSize: 11 }}>—</span>}
         {statusDot}
         {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
+        {status === 'conflict' && (
+          <span title={`Changed by ${conflictRef.current.changedBy ?? 'another user'} just before your edit — showing their value now.`}
+            style={{ color: '#c2410c', fontSize: 9, cursor: 'help' }}>changed elsewhere, refreshed</span>
+        )}
       </div>
     );
   }
@@ -761,6 +805,10 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
         {label}
         {statusDot}
         {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
+        {status === 'conflict' && (
+          <span title={`Changed by ${conflictRef.current.changedBy ?? 'another user'} just before your edit — showing their value now.`}
+            style={{ color: '#c2410c', fontSize: 9, cursor: 'help' }}>changed elsewhere, refreshed</span>
+        )}
       </div>
       <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)} onBlur={commit}
         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
@@ -776,7 +824,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
   onClose: () => void;
   onSave: (id: number, field: string, val: string) => void;
   onToggleActive: (id: number, field: 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active', current: boolean | null | undefined) => void;
-  onSaveOverride: (id: number, field: 'acc_pic_override' | 'tax_pic_override', val: string) => void;
+  onSaveOverride: (id: number, field: 'acc_pic_override' | 'tax_pic_override', val: string, previousValue: string | null) => void;
   moveTargets?: MoveTarget[];
   onMove: (row: MasterListRow, target: MoveTarget) => void;
   onDelete: (row: MasterListRow) => void;
@@ -838,7 +886,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
       <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
         <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>ACC</span>
         <div style={{ flex: 1 }}>
-          <ServiceChip name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val)} />
+          <ServiceChip name={row.acc_pic} active={!!row.acc_active} onToggleActive={() => onToggleActive(row.id, 'acc_active', row.acc_active)} onSaveName={val => onSaveOverride(row.id, 'acc_pic_override', val, row.acc_pic_override ?? null)} />
         </div>
       </div>
     );
@@ -846,7 +894,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
       <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
         <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>TAX</span>
         <div style={{ flex: 1 }}>
-          <ServiceChip name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val)} />
+          <ServiceChip name={row.tax_pic} active={!!row.tax_active} onToggleActive={() => onToggleActive(row.id, 'tax_active', row.tax_active)} onSaveName={val => onSaveOverride(row.id, 'tax_pic_override', val, row.tax_pic_override ?? null)} />
         </div>
       </div>
     );
@@ -862,7 +910,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
               onToggleActive={() => onToggleActive(row.id, activeField, active)}
               onSaveName={val => {
                 onSave(row.id, c.field, val);
-                fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: val || null }) });
+                fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: val || null, previousValue: value || null }) });
               }} />
           </div>
         </div>
@@ -1069,19 +1117,27 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
 
   // Nominee Dir./Secretary/ACC/TAX checkboxes — freely toggleable, independent
   // of whether a name is on file. Optimistic; a checkbox flip is low-risk
-  // enough not to need retry/error UI.
+  // enough not to need retry/error UI — but still conflict-safe: if someone
+  // else already flipped it since this click's `current` was rendered, the
+  // server rejects the stale write (409) and the checkbox snaps back to
+  // whatever it actually is now, instead of silently clobbering their change.
   const toggleActive = useCallback((id: number, field: 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active', current: boolean | null | undefined) => {
     const next = !current;
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: next } : r));
-    fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next }) });
+    fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: next, previousValue: !!current }) })
+      .then(async res => {
+        if (res.status !== 409) return;
+        const json = await res.json().catch(() => ({}));
+        setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: !!json.currentValue } : r));
+      });
   }, []);
 
   // ACC/TAX name edits write to the *_override column, which only takes
   // effect ahead of AR Reminder's synced value once set server-side — reload
   // afterwards instead of hand-rolling the override-vs-AR-Reminder
   // resolution locally, so the displayed value always matches real DB state.
-  const saveOverride = useCallback((id: number, field: 'acc_pic_override' | 'tax_pic_override', val: string) => {
-    fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: val || null }) })
+  const saveOverride = useCallback((id: number, field: 'acc_pic_override' | 'tax_pic_override', val: string, previousValue: string | null) => {
+    fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, value: val || null, previousValue: previousValue || null }) })
       .then(() => load());
   }, [load]);
 
@@ -1651,9 +1707,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         boxShadow: c.field === 'status' ? '3px 0 8px -2px rgba(0,0,0,0.12)' : undefined,
                       }}>
                         {statusCollapsed ? null : c.field === 'acc_pic' ? (
-                          <PicCell name={r.acc_pic} active={!!r.acc_active} onToggleActive={() => toggleActive(r.id, 'acc_active', r.acc_active)} onSaveName={val => saveOverride(r.id, 'acc_pic_override', val)} />
+                          <PicCell name={r.acc_pic} active={!!r.acc_active} onToggleActive={() => toggleActive(r.id, 'acc_active', r.acc_active)} onSaveName={val => saveOverride(r.id, 'acc_pic_override', val, r.acc_pic_override ?? null)} />
                         ) : c.field === 'tax_pic' ? (
-                          <PicCell name={r.tax_pic} active={!!r.tax_active} onToggleActive={() => toggleActive(r.id, 'tax_active', r.tax_active)} onSaveName={val => saveOverride(r.id, 'tax_pic_override', val)} />
+                          <PicCell name={r.tax_pic} active={!!r.tax_active} onToggleActive={() => toggleActive(r.id, 'tax_active', r.tax_active)} onSaveName={val => saveOverride(r.id, 'tax_pic_override', val, r.tax_pic_override ?? null)} />
                         ) : listType === 'active_client' && c.field === 'nominee_director' ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <CheckSquare checked={!!r.nd_active} onToggle={() => toggleActive(r.id, 'nd_active', r.nd_active)} />
