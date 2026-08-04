@@ -280,7 +280,16 @@ async function syncLateFiling(run: AutomationRun) {
         const fyeYear = dueYear - (fyeMonthIdx0 > dueMonthIdx0 ? 1 : 0);
         const fyeMonthFull = FULL_MONTH_NAMES[fyeMonthIdx0];
         const fyeDateIso = new Date(fyeYear, fyeMonthIdx0 + 1, 0).toISOString().slice(0, 10);
-        const lateNote = `${LATE_FILING_MARKER} ${reasons.join('; ')}`;
+        // Describe THIS cycle's actual overdue days, not `reasons` — that
+        // array only lists whichever conditions crossed the 90-day bar
+        // that flags the company on the Late Filing page, so a company
+        // flagged solely on historical average (avgGap) but with a milder
+        // (e.g. 35-day) real overdue cycle would otherwise get a note
+        // that never mentions the cycle it's actually attached to.
+        const mirrorOverdueDays = Math.round((today.getTime() - outstandingDue.getTime()) / 86_400_000);
+        const mirrorReasons = [`Overdue ${mirrorOverdueDays} days`];
+        if (avgGap > HISTORICAL_AVG_THRESHOLD_DAYS) mirrorReasons.push(`Avg ${avgGap} days late over ${gaps.length} cycles`);
+        const lateNote = `${LATE_FILING_MARKER} ${mirrorReasons.join('; ')}`;
 
         const cycleKey = `${fyeMonthFull}|${fyeYear}`;
         const uenKey = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
