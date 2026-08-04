@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (App-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-04 (Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,45 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Master List now live-syncs across users, closing the gap flagged in the
+  previous entry** (Vincent: "尽全力去做这个实时推送，不能卡顿，要快" — do the
+  real-time push properly, it must not lag, has to be fast — after being
+  told the "last edited by" trace only updated on refresh). Mirrors AR
+  Reminder's own proven `postgres_changes` subscription
+  (`app/billing/page.tsx`'s `ARTab`) exactly, rather than inventing a new
+  pattern:
+  - `components/MasterListTable.tsx` opens a Supabase Realtime channel per
+    page (`master-list-<listType>`), filtered server-side to
+    `list_type=eq.<listType>` so a page never receives another list's
+    events. **UPDATE events patch the one changed row directly from the
+    payload — no refetch, no round trip, instant** — the actual "not
+    laggy" requirement. `acc_pic_override`/`tax_pic_override` are the one
+    exception: their *displayed* value is a cross-table join
+    (`ar_reminder`, by UEN) the raw payload can't recompute client-side,
+    so those (and INSERT, which needs the same enrichment for a brand-new
+    row) fall back to a 700ms-debounced reload — same tradeoff AR
+    Reminder's own subscription already makes for its equivalent cases.
+    DELETE removes the row locally and closes the detail modal if it was
+    open for that row. A small "Live update from X" toast (bottom-right,
+    auto-clears) confirms when something arrived — same visual AR
+    Reminder already uses.
+  - The Company Detail Modal was already deriving its displayed row via
+    `rows.find(r => r.id === selectedRowId)` rather than a frozen copy, so
+    it picks up live updates automatically — confirmed, not something
+    that needed changing.
+  - **New `scripts/enable-master-list-realtime.sql`** — two things
+    without which the subscription connects but silently receives
+    nothing: (1) adds `master_list` to the `supabase_realtime`
+    publication (parallel to `ar_reminder`'s own `add-ar-collaboration.sql`
+    entry); (2) Realtime is filtered through RLS for the *subscribing*
+    role, which is `authenticated` (the browser's session) — not
+    `service_role` (the server's admin client) — and `master_list` only
+    ever had a `service_role`-only policy from its original table
+    creation script, so a `SELECT ... TO authenticated` policy was
+    missing entirely. Added with the same staff-email allowlist
+    `ar_reminder`'s equivalent policy already uses.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **App-wide audit of every PATCH endpoint for multi-user overwrite risk
   (Vincent: "think hard about where else this could happen, and what other

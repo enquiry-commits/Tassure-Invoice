@@ -10,6 +10,7 @@ import { useIsMobile } from '@/lib/use-is-mobile';
 import { normalize } from '@/lib/company-name';
 import { formatStaffName } from '@/lib/staff-directory';
 import { titleCase } from '@/lib/text-case';
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 
 type AuditEntry = { id: number; field: string; old_value: string | null; new_value: string | null; changed_by: string; changed_at: string };
 
@@ -1147,6 +1148,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // check, the server already enforces that.
   const [me, setMe] = useState<{ email: string; name: string } | null>(null);
   useEffect(() => { fetch('/api/auth/me').then(r => r.json()).then(j => setMe(j.user ?? null)).catch(() => {}); }, []);
+  const [liveNotice, setLiveNotice] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1160,6 +1162,66 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   }, [listType, search]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Live sync — same pattern as AR Reminder's own realtime subscription
+  // (app/billing/page.tsx's ARTab), so another staff member's edit shows up
+  // here without a manual refresh (Vincent: wants this "Sheets-fast", not
+  // laggy). Scoped to this page's own list_type so an edit on a different
+  // Master List page never reaches here. UPDATE events patch just the one
+  // changed row directly from the payload — no refetch, no round trip — EXCEPT
+  // acc_pic_override/tax_pic_override, whose *displayed* value (acc_pic/
+  // tax_pic) is a cross-table join the raw payload can't recompute
+  // client-side, so those fall back to a debounced reload like INSERT does
+  // (a brand-new row also needs that same join enrichment before it can be
+  // shown at all).
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+    let reloadTimer: ReturnType<typeof setTimeout> | null = null;
+    const showNotice = (name: string | null | undefined) => {
+      setLiveNotice(name ? `Live update from ${name}` : 'Live update received');
+      if (noticeTimer) clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => setLiveNotice(''), 2600);
+    };
+    const scheduleReload = () => {
+      if (reloadTimer) clearTimeout(reloadTimer);
+      reloadTimer = setTimeout(() => void load(), 700);
+    };
+
+    const channel = supabase
+      .channel(`master-list-${listType}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'master_list', filter: `list_type=eq.${listType}` }, payload => {
+        const next = payload.new as Partial<MasterListRow> & { id?: number; updated_by_name?: string | null };
+        const previous = payload.old as Partial<MasterListRow> & { id?: number };
+        const id = next.id ?? previous.id;
+        if (!id) return;
+
+        if (payload.eventType === 'DELETE') {
+          setRows(current => current.filter(r => r.id !== id));
+          setSelectedRowId(current => current === id ? null : current);
+          showNotice(next.updated_by_name);
+          return;
+        }
+
+        const needsJoinRefresh = Object.prototype.hasOwnProperty.call(next, 'acc_pic_override')
+          || Object.prototype.hasOwnProperty.call(next, 'tax_pic_override');
+        if (payload.eventType === 'UPDATE' && !needsJoinRefresh) {
+          setRows(current => current.map(r => r.id === id ? { ...r, ...next } : r));
+          showNotice(next.updated_by_name);
+          return;
+        }
+
+        showNotice(next.updated_by_name);
+        scheduleReload();
+      })
+      .subscribe();
+
+    return () => {
+      if (noticeTimer) clearTimeout(noticeTimer);
+      if (reloadTimer) clearTimeout(reloadTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [listType, load]);
 
   const handleSave = useCallback((id: number, field: string, val: string) => {
     // Same optimism as the field value itself (see EditCell/ModalField —
@@ -1424,6 +1486,11 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
 
   return (
     <div>
+      {liveNotice && (
+        <div style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 1500, background: '#0f766e', color: '#fff', borderRadius: 9, padding: '8px 12px', fontSize: 10.5, fontWeight: 700, boxShadow: '0 8px 24px rgba(15,118,110,0.25)', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#5eead4' }} />{liveNotice}
+        </div>
+      )}
       <div className="mb-4 text-sm text-slate-500">Dashboard › Master List › {title}</div>
 
       {/* Category cards — click to filter */}
