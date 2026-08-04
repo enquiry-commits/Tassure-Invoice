@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-05 (Measured real-time delivery latency empirically — 370-712ms — and applied Supabase's documented RLS perf fix (wrap auth.jwt() in a SELECT) to both realtime policies — **requires running scripts/optimize-realtime-rls-policies.sql in Supabase**; Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-05 (SSO to Proposal Generator: fixed the redirect target — was landing directly on the receiving app's API endpoint as raw JSON with no browser JS to act on it, now goes to its /sso/callback page per its redesigned no-OTP flow; measured real-time delivery latency empirically — 370-712ms — and applied Supabase's documented RLS perf fix (wrap auth.jwt() in a SELECT) to both realtime policies — **requires running scripts/optimize-realtime-rls-policies.sql in Supabase**; Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,26 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **SSO to Proposal Generator: fixed `app/sso/proposal-generator/route.ts`'s
+  redirect target** — the ongoing multi-session saga's root cause finally
+  identified. Was redirecting straight to
+  `tassure-proposal-generator.vercel.app/api/sso?token=...` (an API route);
+  every earlier "raw `{"error":...}` shown in the browser" failure across
+  this whole saga was because a top-level browser navigation to a JSON API
+  endpoint has no page/JS context to act on the response — nothing could
+  ever have stored a session or redirected onward from there, regardless of
+  what the API itself returned. The other app's 2026-08-05 redesign
+  (abandoned OTP/magiclink verification entirely — now creates the
+  user+session directly via the Supabase Admin API, no email round-trip)
+  confirmed the intended entry point is `/sso/callback` — a real page that
+  itself calls `/api/sso` client-side, stores the session, then redirects
+  to `/proposal/generator`. Redirect target updated to match. Shared
+  `SSO_SHARED_SECRET` value handed to the other session for its Vercel env
+  config (HMAC verification requires both sides to hold the identical
+  secret). Production build passes; `npx tsc --noEmit` clean. **Not yet
+  confirmed working end-to-end** — next step is Vincent clicking the
+  sidebar link once the other app's Vercel env vars are set.
 
 - **Measured the real-time delivery latency Vincent asked about ("是可以快速更新了？少过1秒吗？"/"这个延迟有没有网上资料可以降到更低") instead of guessing, and applied the one concrete, low-risk fix the research turned up.**
   - Ran a live measurement (DB `UPDATE` → time until the Realtime event is
