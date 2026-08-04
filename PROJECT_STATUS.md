@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-04 (Nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-04 (Late Filing companies now mirrored into AR Reminder under their own FYE cycle, badged in List/Table, noted in Remarks; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,54 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Late Filing's companies now also appear in AR Reminder, under their own
+  FYE cycle, visibly marked apart from ordinary rows, with the reason
+  written into Remarks.** Vincent: Late Filing page companies need to be
+  added into AR Reminder by FYE, distinguished in both List and Table
+  views, with a late note in Remarks/Notes (same field — Table labels it
+  "Remarks", the List/detail view's "Notes" section is the identical
+  `remarks` column, just a different heading).
+  - **`app/api/late-filing/sync/route.ts`** (the daily cron that detects
+    late filers straight from TeamWork's AGM/AR history — a separate,
+    stricter 90-day-overdue-or-90-day-historical-average heuristic than
+    the Late Filing *page*'s own live derive-from-`ar_reminder` scan, so
+    a flagged company doesn't always already have an `ar_reminder` row):
+    for each flagged company with an actual outstanding unfiled cycle
+    (skipped when the flag is purely from historical average with nothing
+    currently due), derives that cycle's FYE month/year from the
+    TeamWork-reported FYE month plus the AGM due date (AGM due = FYE + 9
+    months, SG private-company rule — comparing month *numbers* rather
+    than doing calendar-date subtraction avoids month-arithmetic overflow
+    edge cases entirely), then either:
+    - finds a matching `ar_reminder` row (by UEN, falling back to
+      normalized name, scoped to that exact FYE month/year) and, only if
+      its `remarks` doesn't already contain the marker, prepends the late
+      note — never rewritten again afterward even if the reason text goes
+      stale, so a staff edit to Remarks always sticks (same "manual wins"
+      rule just added for the AGM/AR date columns); or
+    - inserts a brand-new `ar_reminder` row for that cycle when none
+      exists yet (this is the actual gap being closed — a company stuck
+      90+ days late sometimes predates AR Generate's rolling window and
+      so was invisible in AR Reminder even though 90-day-late is a much
+      stricter bar than the page's own definition of "late").
+    New response fields `ar_reminder_rows_inserted`/`ar_reminder_rows_noted`
+    for observability. Individual insert/update failures are counted, not
+    fatal — matches this route's existing per-company resilience.
+  - **`app/billing/page.tsx`**: `LATE_FILING_MARKER` (`'⚠ LATE FILING:'`,
+    must stay byte-for-byte identical to the route's copy) + `LateFilingBadge`
+    — a small red "LATE" chip, tooltip showing the full reason — rendered
+    purely by checking whether `remarks` starts with the marker, no new
+    column or API field needed since the note doubles as its own flag.
+    Added next to the company name in `ARTableView`, the desktop List row,
+    and the mobile card (all three fall under "List" at the `view==='list'`
+    branch) — not the detail modal, since its existing Notes section
+    already shows the raw remarks text including the marker line.
+  Production build passes; `npx tsc --noEmit` clean. Takes effect on the
+  next `late_filing` cron run (20:00 UTC / SGT 04:00 after today's
+  reschedule below) — not backfilled by hand, since unlike the Active
+  Client date backfill this one only touches companies actually flagged
+  late, a small, self-bounded set.
 
 - **Nightly automation chain shifted 3 hours earlier so it finishes before
   business hours (SGT 05:00), not after (was finishing ~SGT 08:00).**

@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { parseDmy, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
 import { AutomationRun, withAutomationRun } from '@/lib/automation-sync';
+import { normalize } from '@/lib/company-name';
 
 /**
  * Detects late filers from TeamWork's per-company AGM/AR history.
@@ -11,6 +12,15 @@ import { AutomationRun, withAutomationRun } from '@/lib/automation-sync';
  * than 90 days overdue, or its historical average completion delay is more
  * than 90 days. TeamWork is read with bounded concurrency because processing
  * every company sequentially can exceed Vercel's five-minute function limit.
+ *
+ * Also mirrors each flagged company's outstanding cycle into AR Reminder
+ * (Vincent: Late Filing companies must be visible in AR Reminder too, under
+ * their own FYE cycle, marked so staff can tell them apart, with the reason
+ * noted in Remarks) — see syncIntoArReminder below. AR Reminder's own daily
+ * sync only ever fills empty date fields for cycles that already have a
+ * row; a company stuck 90+ days late sometimes has no ar_reminder row at
+ * all for its outstanding cycle (e.g. it predates AR Generate's rolling
+ * window), so this route creates one when missing.
  */
 
 export const maxDuration = 300;
@@ -20,14 +30,24 @@ export const preferredRegion = 'sin1';
 const OVERDUE_THRESHOLD_DAYS = 90;
 const HISTORICAL_AVG_THRESHOLD_DAYS = 90;
 const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const FULL_MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 const DEFAULT_CONCURRENCY = 12;
 const MAX_CONCURRENCY = 20;
+
+// Prefixes the Remarks line this route writes so app/billing/page.tsx can
+// render a "LATE" badge purely by checking the field's text — no extra
+// column needed. Keep this string in sync with LATE_FILING_MARKER there.
+const LATE_FILING_MARKER = '⚠ LATE FILING:';
 
 // Stop our own work before Vercel's 300-second hard limit so the run can be
 // marked failed and its lock can always be released.
 const WORK_DEADLINE_MS = 230_000;
 
 type CompanyTarget = {
+  id: number;
   company_name: string;
   internal_id: string;
   registration_no: string | null;
@@ -113,13 +133,14 @@ async function syncLateFiling(run: AutomationRun) {
 
     const { data: companies, error: companiesError } = await supabase
       .from('companies')
-      .select('company_name, internal_id, registration_no')
+      .select('id, company_name, internal_id, registration_no')
       .eq('is_active', true)
       .not('tw_status', 'in', '("Striking Off","Terminated")')
       .not('internal_id', 'is', null);
     if (companiesError) throw new Error(`Unable to load active companies: ${companiesError.message}`);
 
     const targets: CompanyTarget[] = (companies ?? []).map(company => ({
+      id: company.id,
       company_name: company.company_name,
       internal_id: String(company.internal_id),
       registration_no: company.registration_no ?? null,
@@ -136,6 +157,25 @@ async function syncLateFiling(run: AutomationRun) {
       .map(row => [row.uen as string, row]));
     const byName = new Map((existingManual ?? [])
       .map(row => [row.company_name.toLowerCase(), row]));
+
+    // Preload AR Reminder rows once so each company's outstanding cycle can
+    // be looked up by UEN (preferred) or normalized name, keyed by its own
+    // FYE cycle — same exact-match approach used across the rest of the app.
+    const { data: arRows, error: arRowsError } = await supabase
+      .from('ar_reminder')
+      .select('id, entity_name, uen, fye_month, fye_year, remarks')
+      .or('status.is.null,status.neq.Excluded');
+    if (arRowsError) throw new Error(`Unable to load AR Reminder rows: ${arRowsError.message}`);
+    const arByKey = new Map<string, { id: number; remarks: string | null }>();
+    for (const row of arRows ?? []) {
+      const entry = { id: row.id, remarks: row.remarks };
+      const cycleKey = `${row.fye_month}|${row.fye_year}`;
+      const uenKey = row.uen ? String(row.uen).trim().toUpperCase() : null;
+      if (uenKey) arByKey.set(`uen:${uenKey}|${cycleKey}`, entry);
+      arByKey.set(`name:${normalize(row.entity_name)}|${cycleKey}`, entry);
+    }
+    let arInserted = 0;
+    let arNoted = 0;
 
     const today = new Date();
     let flagged = 0;
@@ -218,6 +258,61 @@ async function syncLateFiling(run: AutomationRun) {
         reasons.push(`Avg ${avgGap} days late over ${gaps.length} cycles`);
       }
 
+      // Mirror the outstanding cycle into AR Reminder. Only possible when
+      // there's an actual unfiled past cycle (earliestOutstandingDue) —
+      // a company flagged purely on historical average (avgGap) with
+      // nothing currently outstanding has no cycle to attach a row to.
+      const outstandingDue = earliestOutstandingDue ?? newestAgmDue;
+      if (outstandingDue && latestFyeMonth) {
+        const fyeMonthIdx0 = MONTH_ABBR.indexOf(latestFyeMonth);
+        const dueYear = outstandingDue.getFullYear();
+        const dueMonthIdx0 = outstandingDue.getMonth();
+        // AGM due = FYE + 9 months (SG private co. rule — same relationship
+        // /api/late-filing/route.ts's nextAgmDue() encodes going forward).
+        // Going backward, if the FYE month number is greater than the due
+        // month number, the FYE fell in the calendar year before the due
+        // date's year; otherwise same year. Exact for any ~9-month gap, and
+        // avoids Date month-arithmetic overflow edge cases entirely.
+        const fyeYear = dueYear - (fyeMonthIdx0 > dueMonthIdx0 ? 1 : 0);
+        const fyeMonthFull = FULL_MONTH_NAMES[fyeMonthIdx0];
+        const fyeDateIso = new Date(fyeYear, fyeMonthIdx0 + 1, 0).toISOString().slice(0, 10);
+        const lateNote = `${LATE_FILING_MARKER} ${reasons.join('; ')}`;
+
+        const cycleKey = `${fyeMonthFull}|${fyeYear}`;
+        const uenKey = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
+        const arMatch = (uenKey ? arByKey.get(`uen:${uenKey}|${cycleKey}`) : null)
+          ?? arByKey.get(`name:${normalize(c.company_name)}|${cycleKey}`);
+
+        if (arMatch) {
+          // Write the note once; if staff has since edited it away, that's
+          // a manual decision this sync must not fight (same "manual wins"
+          // rule as the AGM/AR date columns).
+          if (!arMatch.remarks?.includes(LATE_FILING_MARKER)) {
+            const nextRemarks = arMatch.remarks ? `${lateNote}\n${arMatch.remarks}` : lateNote;
+            const { error: noteError } = await supabase.from('ar_reminder').update({
+              remarks: nextRemarks,
+              updated_by_email: 'system:late-filing',
+              updated_by_name: 'Late Filing Sync',
+            }).eq('id', arMatch.id);
+            if (noteError) errors++; else arNoted++;
+          }
+        } else {
+          const { error: insertError } = await supabase.from('ar_reminder').insert({
+            entity_name: c.company_name,
+            company_id: c.id,
+            uen: c.registration_no,
+            fye_month: fyeMonthFull,
+            fye_year: fyeYear,
+            fye_date: fyeDateIso,
+            due_date: outstandingDue.toISOString().slice(0, 10),
+            remarks: lateNote,
+            updated_by_email: 'system:late-filing',
+            updated_by_name: 'Late Filing Sync',
+          });
+          if (insertError) errors++; else arInserted++;
+        }
+      }
+
       const toIso = (date: Date | null) => date?.toISOString().slice(0, 10) ?? null;
       const values = {
         company_name: c.company_name,
@@ -281,6 +376,8 @@ async function syncLateFiling(run: AutomationRun) {
       refreshed,
       movedToReview,
       insertedNames,
+      ar_reminder_rows_inserted: arInserted,
+      ar_reminder_rows_noted: arNoted,
       errors,
       fetchErrors,
     };

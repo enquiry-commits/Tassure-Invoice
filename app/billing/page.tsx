@@ -786,6 +786,31 @@ function WorkflowBar({ stages, compact = false }: { stages: Stages; compact?: bo
   );
 }
 
+// Marks Remarks text written by /api/late-filing/sync's Late Filing ->
+// AR Reminder mirror (Vincent: distinguish those companies in both List and
+// Table views). Kept as a plain text prefix, not a stored column, so the
+// same field doubles as the human-readable note and the machine-readable
+// flag — must match LATE_FILING_MARKER in that route exactly.
+const LATE_FILING_MARKER = '⚠ LATE FILING:';
+function lateFilingReason(remarks: string | null | undefined): string | null {
+  if (!remarks) return null;
+  const line = remarks.split('\n')[0];
+  return line.startsWith(LATE_FILING_MARKER) ? line.slice(LATE_FILING_MARKER.length).trim() : null;
+}
+function LateFilingBadge({ remarks }: { remarks: string | null | undefined }) {
+  const reason = lateFilingReason(remarks);
+  if (!reason) return null;
+  return (
+    <span title={`Flagged on the Late Filing page: ${reason}`} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3, background: '#fef2f2', color: '#dc2626',
+      border: '1px solid #fecaca', borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700,
+      whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0,
+    }}>
+      <AlertTriangle size={9} />LATE
+    </span>
+  );
+}
+
 function DueBadge({ days, filed }: { days: number | null; filed: boolean }) {
   if (filed) return <span title="The Annual Return for this FYE cycle has already been filed with ACRA — no due date to track." style={{ background: '#dcfce7', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 999, padding: '5px 10px', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', cursor: 'help' }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16a34a' }} />Filed</span>;
   if (days === null) return <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>;
@@ -2875,7 +2900,10 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
               <tr key={r.id} className="system-list-row">
                 <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
                 <TD stickyLeft={30}>
-                  <div className="company-name-text">{r.entity_name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <div className="company-name-text">{r.entity_name}</div>
+                    <LateFilingBadge remarks={r.remarks} />
+                  </div>
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                 </TD>
                 <TD stickyLeft={230} lastSticky><span className="company-registration-text">{r.uen || '—'}</span></TD>
@@ -3309,7 +3337,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                     <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="company-name-text">{r.entity_name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                        <div className="company-name-text">{r.entity_name}</div>
+                        <LateFilingBadge remarks={r.remarks} />
+                      </div>
                       <div className="company-registration-text" style={{ marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${fmtDate(r.fye_date)}` : ''}</div>
                     </div>
                     <DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} />
@@ -3335,7 +3366,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                 >
                   <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></div>
                   <div style={{ padding: '0 6px' }}>
-                    <div className="company-name-text"><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div className="company-name-text"><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
+                      <LateFilingBadge remarks={r.remarks} />
+                    </div>
                     {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                   </div>
                   <div className="company-registration-text" style={{ padding: '0 6px' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
