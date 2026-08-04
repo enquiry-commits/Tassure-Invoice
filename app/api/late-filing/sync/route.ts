@@ -212,6 +212,7 @@ async function syncLateFiling(run: AutomationRun) {
       let lastAgmHeld: Date | null = null;
       let lastArFiled: Date | null = null;
       let earliestOutstandingDue: Date | null = null;
+      let earliestOverdueDue: Date | null = null;
       let newestAgmDue: Date | null = null;
 
       for (const row of rows) {
@@ -240,6 +241,7 @@ async function syncLateFiling(run: AutomationRun) {
           if (dueDate < today) {
             const overdueDays = Math.round((today.getTime() - dueDate.getTime()) / 86_400_000);
             if (overdueDays > currentOverdueDays) currentOverdueDays = overdueDays;
+            if (!earliestOverdueDue || dueDate < earliestOverdueDue) earliestOverdueDue = dueDate;
           }
         }
       }
@@ -258,11 +260,13 @@ async function syncLateFiling(run: AutomationRun) {
         reasons.push(`Avg ${avgGap} days late over ${gaps.length} cycles`);
       }
 
-      // Mirror the outstanding cycle into AR Reminder. Only possible when
-      // there's an actual unfiled past cycle (earliestOutstandingDue) —
-      // a company flagged purely on historical average (avgGap) with
-      // nothing currently outstanding has no cycle to attach a row to.
-      const outstandingDue = earliestOutstandingDue ?? newestAgmDue;
+      // Mirror the outstanding cycle into AR Reminder — only when there's an
+      // actual cycle that's overdue RIGHT NOW (earliestOverdueDue). A company
+      // flagged purely on historical average (avgGap), with every cycle
+      // either filed or not yet due, has no genuinely late cycle to attach a
+      // row to — earliestOutstandingDue/newestAgmDue could still be a FUTURE
+      // due date, which would misleadingly badge a not-yet-due cycle "late".
+      const outstandingDue = earliestOverdueDue;
       if (outstandingDue && latestFyeMonth) {
         const fyeMonthIdx0 = MONTH_ABBR.indexOf(latestFyeMonth);
         const dueYear = outstandingDue.getFullYear();
