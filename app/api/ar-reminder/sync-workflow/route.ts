@@ -31,6 +31,20 @@ import { logFieldChange } from '@/lib/audit-log';
  *   - prepared/sent/received dates are NOT in this feed and stay manual.
  *   - Already-filed rows are skipped (filing is terminal).
  *
+ * Also corrects companies.fye_month when it's stale. Root cause found
+ * 2026-08-05: companies.fye_month is synced from TeamWork's getCompanies
+ * API field `fye_date` (app/api/teamwork/sync/route.ts) — but that field
+ * doesn't reliably update when a company's FYE changes; verified live
+ * against TeamWork's API that it can sit stale for years after the actual
+ * AGM/AR cycles (and TeamWork's own "List of Companies" UI) have already
+ * moved on. The real current FYE is the FYE month of this company's most
+ * recent AGM/AR cycle in its own event history — the exact same per-
+ * company fetch already done below for the Active Client dates, so no
+ * extra TeamWork call. Takes the event with the latest FYE date across
+ * the whole history (never the first one in the list — a company that
+ * changed FYE has OLDER cycles under its old month still sitting earlier
+ * in the history).
+ *
  * Also fills Master List's Active Client "Last AGM Date"/"Last AR Date"
  * columns (master_list.last_agm_date/last_ar_date) — a DIFFERENT, always-
  * automated pair from ar_reminder's date_of_agm/filling_date above, which
@@ -51,6 +65,11 @@ import { logFieldChange } from '@/lib/audit-log';
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
 interface ArRow {
   id: number; company_id: number | null; entity_name: string; fye_month: string; fye_year: number;
@@ -78,7 +97,7 @@ async function syncArWorkflow(req: NextRequest) {
 
   const { data: companies } = await supabase
     .from('companies')
-    .select('id, company_name, internal_id, registration_no')
+    .select('id, company_name, internal_id, registration_no, fye_month')
     .not('internal_id', 'is', null);
 
   // entity_name → TeamWork company_id. Fuzzy matching is allowed only when
@@ -90,9 +109,16 @@ async function syncArWorkflow(req: NextRequest) {
   // patch the matching Active Client row (master_list keys its own rows by
   // UEN, not TeamWork's internal_id).
   const uenByInternalId = new Map<string, string>();
+  // TeamWork company_id -> {companies.id, fye_month}, so the per-company
+  // event fetch below can also correct companies.fye_month — see the FYE
+  // Mismatch fix further down.
+  const companyByInternalId = new Map<string, { id: number; fye_month: string | null }>();
   for (const company of companyCandidates) {
     if (company.internal_id && company.registration_no) {
       uenByInternalId.set(company.internal_id as string, String(company.registration_no).trim().toUpperCase());
+    }
+    if (company.internal_id) {
+      companyByInternalId.set(company.internal_id as string, { id: company.id, fye_month: company.fye_month });
     }
   }
   const { data: activeClientRows } = await supabase
@@ -132,6 +158,7 @@ async function syncArWorkflow(req: NextRequest) {
 
   let updated = 0, checked = 0, fetchErrors = 0, updateErrors = 0, conflicts = 0;
   let activeClientUpdated = 0, activeClientErrors = 0;
+  let fyeMonthCorrected = 0, fyeMonthErrors = 0;
   const changes: { entity: string; patch: Record<string, string> }[] = [];
 
   for (const [companyId, companyRows] of byCompany) {
@@ -198,6 +225,42 @@ async function syncArWorkflow(req: NextRequest) {
       }
     }
 
+    // FYE Month correction — see docstring above. Takes the FYE date of the
+    // most recent cycle (highest date, any event type) in this company's
+    // whole event history, never the first one — a company that changed
+    // FYE partway through has older cycles under its old month sitting
+    // earlier in the history, exactly what was silently trusted before.
+    const companyInfo = companyByInternalId.get(companyId);
+    if (companyInfo) {
+      let latestFyeIso: string | null = null;
+      let latestFyeMonthIdx: number | null = null;
+      for (const ev of result.data ?? []) {
+        const evFyeDate = parseDmy(ev[2]);
+        const evFyeIso = evFyeDate ? toIsoDate(evFyeDate) : null;
+        if (!evFyeDate || !evFyeIso) continue;
+        if (!latestFyeIso || evFyeIso > latestFyeIso) {
+          latestFyeIso = evFyeIso;
+          latestFyeMonthIdx = evFyeDate.getMonth();
+        }
+      }
+      if (latestFyeMonthIdx !== null) {
+        const correctMonth = MONTH_NAMES[latestFyeMonthIdx];
+        if (correctMonth !== companyInfo.fye_month) {
+          const { error: fyeErr } = await supabase.from('companies')
+            .update({ fye_month: correctMonth })
+            .eq('id', companyInfo.id);
+          if (fyeErr) fyeMonthErrors++;
+          else {
+            fyeMonthCorrected++;
+            await logFieldChange(supabase, {
+              tableName: 'companies', rowId: companyInfo.id, field: 'fye_month',
+              oldValue: companyInfo.fye_month, newValue: correctMonth, changedBy: 'system:teamwork-agm-history',
+            });
+          }
+        }
+      }
+    }
+
     for (const r of companyRows) {
       // The row's cycle key: exact FYE date if present, else month+year.
       const rowFyeIso = r.fye_date ? String(r.fye_date).slice(0, 10) : null;
@@ -241,7 +304,7 @@ async function syncArWorkflow(req: NextRequest) {
   }
 
   const result = {
-    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0,
+    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0,
     rows: rows.length,
     companies_checked: checked,
     unmatched_names: unmatched,
@@ -252,6 +315,8 @@ async function syncArWorkflow(req: NextRequest) {
     updated,
     active_client_last_dates_updated: activeClientUpdated,
     active_client_errors: activeClientErrors,
+    fye_month_corrected: fyeMonthCorrected,
+    fye_month_errors: fyeMonthErrors,
     changes: changes.slice(0, 30),
   };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });

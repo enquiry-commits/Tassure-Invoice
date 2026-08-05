@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-05 (Master List's realtime sync no longer ever reloads the table for an UPDATE, full stop — the previous same-day fix narrowed when it reloaded, this removes the reload path entirely and also skips re-applying a client's own edits back to itself; also removed the "last edited by" trace display Vincent had asked for earlier the same day, after deciding he didn't want it visible after all; Master List's realtime sync was reloading the whole page after every single edit, not just ACC/TAX PIC ones — **requires running scripts/fix-master-list-realtime-full-reload.sql in Supabase**; also removed the "Live update" toast and the saving/saved status dot from both Master List and AR Reminder per Vincent's request; SSO to Proposal Generator: fixed the redirect target — was landing directly on the receiving app's API endpoint as raw JSON with no browser JS to act on it, now goes to its /sso/callback page per its redesigned no-OTP flow; measured real-time delivery latency empirically — 370-712ms — and applied Supabase's documented RLS perf fix (wrap auth.jwt() in a SELECT) to both realtime policies — **requires running scripts/optimize-realtime-rls-policies.sql in Supabase**; Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-05 (Root-caused the FYE Mismatch badges — verified live against TeamWork's own API that companies.fye_month's source field (getCompanies' fye_date) can sit stale for years after a company's real AGM/AR cycles moved to a new FYE month, confirmed by directly querying TeamWork for BYTESFORCE (API says February, actual cycles have been December since FYE2023); ar-reminder/sync-workflow now self-corrects fye_month from the latest actual AGM/AR cycle instead of trusting that stale field, reusing the same per-company TeamWork fetch already done there, no extra API calls; Master List's realtime sync no longer ever reloads the table for an UPDATE, full stop — the previous same-day fix narrowed when it reloaded, this removes the reload path entirely and also skips re-applying a client's own edits back to itself; also removed the "last edited by" trace display Vincent had asked for earlier the same day, after deciding he didn't want it visible after all; Master List's realtime sync was reloading the whole page after every single edit, not just ACC/TAX PIC ones — **requires running scripts/fix-master-list-realtime-full-reload.sql in Supabase**; also removed the "Live update" toast and the saving/saved status dot from both Master List and AR Reminder per Vincent's request; SSO to Proposal Generator: fixed the redirect target — was landing directly on the receiving app's API endpoint as raw JSON with no browser JS to act on it, now goes to its /sso/callback page per its redesigned no-OTP flow; measured real-time delivery latency empirically — 370-712ms — and applied Supabase's documented RLS perf fix (wrap auth.jwt() in a SELECT) to both realtime policies — **requires running scripts/optimize-realtime-rls-policies.sql in Supabase**; Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,39 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Root-caused and fixed the FYE Mismatch badges on Active Client
+  (16 companies flagged).** Vincent's own hypothesis was that "the system
+  only reads the topmost/first FYE entry, not the latest" — investigated
+  by directly querying TeamWork's live `getCompanies` API for one flagged
+  company (BYTESFORCE INTERNATIONAL, UEN 202010024R) rather than guessing:
+  it returned `fye_date: "28/02"`, while the company's own AGM/AR cycle
+  history (which Vincent screenshotted) shows FYE moved to December
+  starting cycle 2023-12-31, and TeamWork's own "List of Companies" UI
+  page *already* shows "December" for the same company. So the mechanism
+  Vincent suspected is real, just not in this codebase — it's TeamWork's
+  own backend where the bulk `getCompanies` list endpoint and the
+  per-company UI disagree, and the bulk endpoint (the only one
+  `app/api/teamwork/sync/route.ts` used for `companies.fye_month`) is the
+  stale one.
+  - **`app/api/ar-reminder/sync-workflow/route.ts`** now self-corrects
+    `companies.fye_month`: for each company, scans its already-fetched
+    AGM/AR event history (same per-company fetch already done there for
+    the Active Client date-filling below — no extra TeamWork call) and
+    takes the FYE month of the event with the **latest** FYE date, never
+    the first one encountered — a company that changed FYE has older
+    cycles under the old month sitting earlier in its history, which is
+    exactly the failure mode being fixed. Updates `companies.fye_month`
+    when it differs, logs the change (`system:teamwork-agm-history`). New
+    response fields `fye_month_corrected`/`fye_month_errors`.
+  - Once this runs (tonight's cron, or triggered manually), the FYE
+    Mismatch badge should clear for any company whose *only* problem was
+    this stale field — no changes needed to the mismatch-detection logic
+    itself in `components/MasterListTable.tsx`, it was already correctly
+    comparing `master_list.fye` against `companies.fye_month`; the bug was
+    that the latter's own upstream source data was wrong, not the
+    comparison.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Master List's realtime sync no longer has ANY reload path for an
   UPDATE, and no longer re-applies a client's own edits to itself either
