@@ -1,7 +1,6 @@
 import type { Browser, BrowserContext, Page } from 'playwright-core';
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
-const SUBROLE_REVIEW_EXCLUDED_PEOPLE = new Set(['LI JIANWEI', 'ZHANG DAN']);
 
 export type TeamworkNdPerson = { id: number; name: string; member_id: string };
 export type TeamworkNdAppointment = {
@@ -92,14 +91,26 @@ async function scrapeMember(
     throw new Error('TeamWork appointment history returned an unexpected response.');
   }
 
+  // The response embeds multiple appointment-history sections back to back
+  // (Director, Shareholder, Secretary, Contact Person, ...), each its own
+  // <table>. The Secretary History table happens to share Director History's
+  // exact 5-column shape with a permanently blank Role column, so scanning
+  // the whole response for <tr> would misread every secretary appointment as
+  // an ND appointment missing its subrole. Scope extraction to the table
+  // that immediately follows the "DIRECTOR HISTORY" heading.
   const rows = await parserPage.evaluate((html: string) => {
     const document = new DOMParser().parseFromString(`<table><tbody>${html}</tbody></table>`, 'text/html');
-    return Array.from(document.querySelectorAll('tr')).flatMap(row => {
+    const directorHeader = Array.from(document.querySelectorAll('th'))
+      .find(th => (th.textContent ?? '').trim().toUpperCase().includes('DIRECTOR HISTORY'));
+    const sectionTable = directorHeader?.closest('table') ?? null;
+    if (!sectionTable) return null;
+    return Array.from(sectionTable.querySelectorAll('tr')).flatMap(row => {
       const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent ?? '').trim());
       if (cells.length !== 5 || !cells[0] || cells[0] === 'Company Name') return [];
       return [{ company: cells[0], role: cells[1], appointment: cells[2], cessation: cells[3] }];
     });
   }, payload.res);
+  if (rows === null) throw new Error('TeamWork appointment history: could not locate the Director History table.');
 
   const appointments = rows
     .filter(row => row.role === 'Nominee Director')
@@ -110,15 +121,10 @@ async function scrapeMember(
       cessation_date: parseDmy(row.cessation),
     }));
 
-  // Only inspect the people explicitly configured as Nominee Directors. A
-  // blank role with an appointment date and no cessation date is not promoted
-  // into the active ND portfolio automatically: it is recorded for a person
-  // to confirm and repair in TeamWork first.
+  // A blank role with an appointment date and no cessation date is not
+  // promoted into the active ND portfolio automatically: it is recorded for
+  // a person to confirm and repair in TeamWork first.
   const missingSubroles = rows.flatMap(row => {
-    // These two designated ND people are intentionally exempt from subrole
-    // cleanup reminders. Their valid Nominee Director appointments continue
-    // to sync normally above; only the manual-review queue is suppressed.
-    if (SUBROLE_REVIEW_EXCLUDED_PEOPLE.has(person.name.trim().toUpperCase())) return [];
     const appointmentDate = parseDmy(row.appointment);
     const subroleIsBlank = row.role.trim() === '';
     const hasEffectiveAppointment = /\(effective\)/i.test(row.appointment) && !!appointmentDate;
