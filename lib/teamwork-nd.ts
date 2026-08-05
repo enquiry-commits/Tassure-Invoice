@@ -91,45 +91,19 @@ async function scrapeMember(
     throw new Error('TeamWork appointment history returned an unexpected response.');
   }
 
-  // The response embeds multiple appointment-history sections back to back
-  // (Director, Shareholder, Secretary, Controller, Contact Person, ...), each
-  // its own <table>. The Secretary History table happens to share Director
-  // History's exact 5-column shape with a permanently blank Role column, so
-  // scanning the whole response for <tr> would misread every secretary
-  // appointment as an ND appointment missing its subrole. Scope extraction to
-  // the table that immediately follows the "DIRECTOR HISTORY" heading, and
-  // separately collect Controller History company names: a blank-subrole
-  // Director History row for a company where this person is already
-  // registered as Controller is that company's real appointment, not an ND
-  // placement pending a subrole fix, and must not be flagged either.
-  const parsed = await parserPage.evaluate((html: string) => {
-    const document = new DOMParser().parseFromString(`<table><tbody>${html}</tbody></table>`, 'text/html');
-    const headers = Array.from(document.querySelectorAll('th'));
-
-    const directorHeader = headers.find(th => (th.textContent ?? '').trim().toUpperCase().includes('DIRECTOR HISTORY'));
-    const directorTable = directorHeader?.closest('table') ?? null;
+  const rows = await parserPage.evaluate((html: string) => {
+    const doc = new DOMParser().parseFromString(`<table><tbody>${html}</tbody></table>`, 'text/html');
+    const headerEl = Array.from(doc.querySelectorAll('th, strong, b'))
+      .find(el => (el.textContent ?? '').trim().toUpperCase() === 'DIRECTOR HISTORY');
+    const directorTable = headerEl ? headerEl.closest('table') : null;
     if (!directorTable) return null;
-    const directorRows = Array.from(directorTable.querySelectorAll('tr')).flatMap(row => {
+    return Array.from(directorTable.querySelectorAll('tr')).flatMap(row => {
       const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent ?? '').trim());
       if (cells.length !== 5 || !cells[0] || cells[0] === 'Company Name') return [];
       return [{ company: cells[0], role: cells[1], appointment: cells[2], cessation: cells[3] }];
     });
-
-    const controllerHeader = headers.find(th => (th.textContent ?? '').trim().toUpperCase().includes('CONTROLLER HISTORY'));
-    const controllerTable = controllerHeader?.closest('table') ?? null;
-    const controllerCompanies = controllerTable
-      ? Array.from(controllerTable.querySelectorAll('tr')).flatMap(row => {
-          const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent ?? '').trim());
-          if (!cells[0] || cells[0] === 'Company Name') return [];
-          return [cells[0]];
-        })
-      : [];
-
-    return { directorRows, controllerCompanies };
   }, payload.res);
-  if (parsed === null) throw new Error('TeamWork appointment history: could not locate the Director History table.');
-  const { directorRows: rows, controllerCompanies } = parsed;
-  const controllerCompanySet = new Set(controllerCompanies.map(name => name.trim().toUpperCase()));
+  if (rows === null) throw new Error('TeamWork appointment history: could not locate the Director History table.');
 
   const appointments = rows
     .filter(row => row.role === 'Nominee Director')
@@ -143,8 +117,7 @@ async function scrapeMember(
   // A blank role with an appointment date and no cessation date is not
   // promoted into the active ND portfolio automatically: it is recorded for
   // a person to confirm and repair in TeamWork first.
-  const missingSubroles = rows.flatMap(row => {
-    if (controllerCompanySet.has(row.company.trim().toUpperCase())) return [];
+  const candidates = rows.flatMap(row => {
     const appointmentDate = parseDmy(row.appointment);
     const subroleIsBlank = row.role.trim() === '';
     const hasEffectiveAppointment = /\(effective\)/i.test(row.appointment) && !!appointmentDate;
@@ -159,7 +132,58 @@ async function scrapeMember(
     } satisfies TeamworkNdSubroleReview];
   });
 
-  return { appointments, missingSubroles };
+  // The AJAX status-selector endpoint's Role value can be stale: it reports
+  // blank for appointments whose real Subrole (visible on the member's own
+  // profile page) is "Controller", not "Nominee Director" and not empty.
+  // Re-verify only the small candidate set against the profile page — the
+  // field TeamWork's staff actually read from — rather than trusting the
+  // AJAX blank, and rather than paying the full-page-load cost for every ND.
+  if (candidates.length === 0) return { appointments, missingSubroles: [] };
+
+  // A profile-page verification failure must not lose the appointments
+  // already fetched above for this person. Fall back to the unverified
+  // candidates (the previous, pre-Controller-check behaviour) rather than
+  // failing the whole person and retrying the (already-succeeded) AJAX call.
+  try {
+    // A plain GET for the profile HTML, like the AJAX POST above, avoids a
+    // full browser page render (CSS/JS/images) that made this step slow and
+    // occasionally time out when done via page.goto.
+    const profileResponse = await context.request.get(`${BASE}/view_member/${person.member_id}/?v`, {
+      timeout: 45_000,
+      failOnStatusCode: false,
+    });
+    if (!profileResponse.ok()) throw new Error(`TeamWork member profile HTTP ${profileResponse.status()}.`);
+    const profileHtml = await profileResponse.text();
+
+    const profileRows = await parserPage.evaluate((html: string) => {
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const headerEl = Array.from(doc.querySelectorAll('th, strong, b'))
+        .find(el => (el.textContent ?? '').trim().toUpperCase() === 'DIRECTOR HISTORY');
+      const directorTable = headerEl ? headerEl.closest('table') : null;
+      if (!directorTable) return null;
+      const directRows = Array.from(directorTable.children).flatMap(child =>
+        child.tagName === 'TBODY' ? Array.from(child.children) : [child]
+      ).filter(el => el.tagName === 'TR');
+      return directRows.flatMap(row => {
+        const cells = Array.from(row.querySelectorAll(':scope > td')).map(cell => (cell.textContent ?? '').trim());
+        if (cells.length < 4 || cells.length > 6 || !cells[0] || cells[0] === 'Company Name') return [];
+        return [{ company: cells[0], role: cells[1] }];
+      });
+    }, profileHtml);
+    if (profileRows === null) throw new Error('TeamWork member profile: could not locate the Director History table.');
+    const realSubroleByCompany = new Map(
+      profileRows.map(row => [row.company.trim().toUpperCase(), row.role.trim()]),
+    );
+
+    const missingSubroles = candidates.filter(item => {
+      const realSubrole = realSubroleByCompany.get(item.company_name.trim().toUpperCase());
+      return realSubrole === undefined || realSubrole === '';
+    });
+
+    return { appointments, missingSubroles };
+  } catch {
+    return { appointments, missingSubroles: candidates };
+  }
 }
 
 export async function scrapeTeamworkNdAppointments(people: TeamworkNdPerson[]) {
@@ -168,8 +192,11 @@ export async function scrapeTeamworkNdAppointments(people: TeamworkNdPerson[]) {
   const missingSubroles: TeamworkNdSubroleReview[] = [];
   const errors: Array<{ person: string; error: string }> = [];
   const durations: Array<{ person: string; duration_ms: number }> = [];
+  // Concurrency 4+ made things slower and less reliable in testing — TeamWork
+  // appears to throttle concurrent requests from the same session, not just
+  // rate-limit per request.
   const concurrency = Math.min(3, Math.max(1, people.length));
-  const overallTimeoutMs = 275_000;
+  const overallTimeoutMs = 290_000;
 
   try {
     browser = await launchBrowser();
