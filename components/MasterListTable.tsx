@@ -444,35 +444,6 @@ function RowActionMenu({ row, moveTargets, onMove, onDelete, dark = false }: {
   );
 }
 
-// "3m ago" etc. Doesn't tick live — refreshes on the row's next render
-// (any edit, or a reload), which is close enough for a trust indicator.
-function relativeTime(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const ms = Date.now() - new Date(iso).getTime();
-  if (ms < 60_000) return 'just now';
-  const min = Math.floor(ms / 60_000);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 30) return `${day}d ago`;
-  return fmtDate(iso);
-}
-
-// Persistent "last edited by X · Ymin ago" trace (Vincent: the checkmark
-// that fades after a save felt cheap/dated — he wants something closer to
-// Google Sheets' edit history, a record that stays visible, not a tick that
-// vanishes). Row-level, not per-field — same granularity AR Reminder
-// already uses for its own updated_by/updated_at.
-function LastTouchedTag({ at, by }: { at: string | null | undefined; by: string | null | undefined }) {
-  if (!at) return null;
-  return (
-    <span title={`Last edited${by ? ` by ${by}` : ''} · ${fmtDate(at)}`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, color: '#94a3b8', whiteSpace: 'nowrap', cursor: 'help' }}>
-      <History size={9} />{by ? `${by} · ` : ''}{relativeTime(at)}
-    </span>
-  );
-}
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
 
@@ -977,12 +948,6 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
             <div>
               <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{row.company_name}</div>
-              {row.updated_at && (
-                <div title={`Last edited${row.updated_by_name ? ` by ${row.updated_by_name}` : ''} · ${fmtDate(row.updated_at)}`}
-                  style={{ fontSize: 10, color: 'rgba(255,255,255,0.6)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4, cursor: 'help' }}>
-                  <History size={9} />{row.updated_by_name ? `${row.updated_by_name} · ` : ''}{relativeTime(row.updated_at)}
-                </div>
-              )}
             </div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
               <button onClick={() => { const next = !showHistory; setShowHistory(next); if (next) void loadHistory(); }} title="Change history"
@@ -1167,18 +1132,23 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // here without a manual refresh (Vincent: wants this "Sheets-fast", not
   // laggy). Scoped to this page's own list_type so an edit on a different
   // Master List page never reaches here. UPDATE events patch just the one
-  // changed row directly from the payload — no refetch, no round trip — EXCEPT
-  // acc_pic_override/tax_pic_override, whose *displayed* value (acc_pic/
-  // tax_pic) is a cross-table join the raw payload can't recompute
-  // client-side, so those fall back to a debounced reload like INSERT does
-  // (a brand-new row also needs that same join enrichment before it can be
-  // shown at all).
+  // changed row directly from the payload — no refetch, no round trip, no
+  // visible re-render of anything else on the page, ever, for an UPDATE.
+  // Vincent was explicit twice that any full-table refresh from background
+  // sync is unwanted, even briefly, even debounced — so unlike the first
+  // version of this handler, there is now NO reload path for UPDATE at all,
+  // full stop, not even for acc_pic_override/tax_pic_override (their
+  // *displayed* value, a cross-table join the raw payload can't recompute
+  // client-side, can go briefly stale until the next real page load — a
+  // rare, minor, self-correcting cosmetic gap, accepted deliberately in
+  // exchange for the table never visibly reloading while someone's editing
+  // it). INSERT (a genuinely new row, needing the same join enrichment
+  // before it can be shown at all — no local row exists yet to patch) is
+  // the only remaining case that still reloads, debounced so a burst of
+  // several new rows coalesces into one fetch instead of one per row.
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
     let reloadTimer: ReturnType<typeof setTimeout> | null = null;
-    // No visible notice for this (Vincent: doesn't want a toast on every
-    // sync event) — the sync itself still runs silently in the background,
-    // this just stops announcing it.
     const scheduleReload = () => {
       if (reloadTimer) clearTimeout(reloadTimer);
       reloadTimer = setTimeout(() => void load(), 700);
@@ -1187,7 +1157,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     const channel = supabase
       .channel(`master-list-${listType}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'master_list', filter: `list_type=eq.${listType}` }, payload => {
-        const next = payload.new as Partial<MasterListRow> & { id?: number; updated_by_name?: string | null };
+        const next = payload.new as Partial<MasterListRow> & { id?: number; updated_by_name?: string | null; updated_by_email?: string | null };
         const previous = payload.old as Partial<MasterListRow> & { id?: number };
         const id = next.id ?? previous.id;
         if (!id) return;
@@ -1198,19 +1168,16 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           return;
         }
 
-        // payload.new is always the FULL new row (every column, not just the
-        // changed ones) — checking whether a key merely EXISTS on it would be
-        // true for every single UPDATE regardless of what actually changed,
-        // triggering the reload-fallback path (and its "loading" flash) on
-        // every edit anywhere in the table, not just ACC/TAX PIC ones. Must
-        // compare against the OLD value instead — only possible because
-        // master_list has REPLICA IDENTITY FULL (see
-        // scripts/fix-master-list-realtime-full-reload.sql), which is what
-        // makes payload.old contain the full previous row rather than just
-        // the primary key.
-        const needsJoinRefresh = previous.acc_pic_override !== next.acc_pic_override
-          || previous.tax_pic_override !== next.tax_pic_override;
-        if (payload.eventType === 'UPDATE' && !needsJoinRefresh) {
+        // Skip re-applying this client's OWN change — it's already reflected
+        // locally (handleSave/toggleActive stamp it optimistically, ahead of
+        // this event even arriving), so patching it in again is a pure
+        // no-op re-render with nothing new to show. Only DELETE is exempt
+        // from this (someone else deleting a row this client happens to
+        // have open still needs to be reflected even if it were somehow
+        // this client's own action).
+        if (next.updated_by_email && next.updated_by_email === me?.email) return;
+
+        if (payload.eventType === 'UPDATE') {
           setRows(current => current.map(r => r.id === id ? { ...r, ...next } : r));
           return;
         }
@@ -1223,7 +1190,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       if (reloadTimer) clearTimeout(reloadTimer);
       void supabase.removeChannel(channel);
     };
-  }, [listType, load]);
+  }, [listType, load, me?.email]);
 
   const handleSave = useCallback((id: number, field: string, val: string) => {
     // Same optimism as the field value itself (see EditCell/ModalField —
@@ -1723,7 +1690,6 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                       </div>
                     )}
                     {isMobile && r.roc_no && <div className="company-registration-text" style={{ marginTop: 1 }}>{r.roc_no}</div>}
-                    <div style={{ marginTop: 2 }}><LastTouchedTag at={r.updated_at} by={r.updated_by_name} /></div>
                   </div>
                   {!isMobile && <div className="company-registration-text">{r.roc_no ?? '—'}</div>}
                   {!isMobile && (
@@ -1844,19 +1810,14 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                             <CheckSquare checked={!!r.secretary_active} onToggle={() => toggleActive(r.id, 'secretary_active', r.secretary_active)} />
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
                           </div>
-                        ) : c.field === 'company_name' ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                              <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
-                              {r.renamed_from && (
-                                <span
-                                  title={`Renamed from "${r.renamed_from}"${r.renamed_to ? ` to "${r.renamed_to}"` : ''}`}
-                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
-                                  <RotateCcw size={9} />Renamed
-                                </span>
-                              )}
-                            </div>
-                            <LastTouchedTag at={r.updated_at} by={r.updated_by_name} />
+                        ) : c.field === 'company_name' && r.renamed_from ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                            <span
+                              title={`Renamed from "${r.renamed_from}"${r.renamed_to ? ` to "${r.renamed_to}"` : ''}`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
+                              <RotateCcw size={9} />Renamed
+                            </span>
                           </div>
                         ) : c.field === 'fye' && r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye) ? (
                           (c.w ?? 180) <= 80

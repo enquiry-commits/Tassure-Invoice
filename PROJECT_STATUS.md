@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-05 (Fixed a real bug: Master List's realtime sync was reloading the whole page after every single edit, not just ACC/TAX PIC ones — **requires running scripts/fix-master-list-realtime-full-reload.sql in Supabase**; also removed the "Live update" toast and the saving/saved status dot from both Master List and AR Reminder per Vincent's request; SSO to Proposal Generator: fixed the redirect target — was landing directly on the receiving app's API endpoint as raw JSON with no browser JS to act on it, now goes to its /sso/callback page per its redesigned no-OTP flow; measured real-time delivery latency empirically — 370-712ms — and applied Supabase's documented RLS perf fix (wrap auth.jwt() in a SELECT) to both realtime policies — **requires running scripts/optimize-realtime-rls-policies.sql in Supabase**; Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-05 (Master List's realtime sync no longer ever reloads the table for an UPDATE, full stop — the previous same-day fix narrowed when it reloaded, this removes the reload path entirely and also skips re-applying a client's own edits back to itself; also removed the "last edited by" trace display Vincent had asked for earlier the same day, after deciding he didn't want it visible after all; Master List's realtime sync was reloading the whole page after every single edit, not just ACC/TAX PIC ones — **requires running scripts/fix-master-list-realtime-full-reload.sql in Supabase**; also removed the "Live update" toast and the saving/saved status dot from both Master List and AR Reminder per Vincent's request; SSO to Proposal Generator: fixed the redirect target — was landing directly on the receiving app's API endpoint as raw JSON with no browser JS to act on it, now goes to its /sso/callback page per its redesigned no-OTP flow; measured real-time delivery latency empirically — 370-712ms — and applied Supabase's documented RLS perf fix (wrap auth.jwt() in a SELECT) to both realtime policies — **requires running scripts/optimize-realtime-rls-policies.sql in Supabase**; Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,43 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Master List's realtime sync no longer has ANY reload path for an
+  UPDATE, and no longer re-applies a client's own edits to itself either
+  — the previous same-day fix (below) narrowed *when* it reloaded, this
+  removes that path completely.** Vincent hit the table going blank then
+  refreshing again shortly after that first fix shipped — even the
+  narrowed condition (comparing old vs new ACC/TAX PIC values) could
+  still be wrong or still visibly flicker under a burst of background
+  writes, and he was explicit twice in a row that he never wants to see
+  the table visibly react to background sync at all, so rather than
+  debug that narrower condition further the whole reload-on-UPDATE path
+  was removed outright:
+  - `components/MasterListTable.tsx`'s realtime handler: `UPDATE` events
+    now ALWAYS patch the row directly from the payload, no exceptions —
+    including `acc_pic_override`/`tax_pic_override`, whose *displayed*
+    value (`acc_pic`/`tax_pic`, a cross-table join) can now go briefly
+    stale until the next real page load. Accepted deliberately — a rare,
+    minor, self-correcting cosmetic gap versus a table that visibly
+    reloads while someone's mid-edit. Only genuine `INSERT` (a brand-new
+    row with no local counterpart to patch) still triggers the debounced
+    reload.
+  - Also skips re-applying an event entirely when
+    `next.updated_by_email === me?.email` (the logged-in user's own
+    email, fetched via `/api/auth/me`) — a client's own edit is already
+    reflected locally the instant it's made (`handleSave`/`toggleActive`
+    stamp it optimistically), so the realtime echo of that same edit
+    arriving ~400-700ms later was a pure no-op re-render with nothing new
+    to show, and cheap to just skip.
+  - **Removed the "last edited by X · time ago" trace display added
+    earlier the same day** (`LastTouchedTag` and its three call sites,
+    plus the modal header's inline version) — Vincent had explicitly
+    asked for this Sheets-style trace that morning, then asked for it
+    gone in this same message ("不需要显示这些出来"). The underlying
+    `updated_at`/`updated_by_name` columns and the stamping logic that
+    populates them are untouched (still real, still useful for the audit
+    trail) — only the standalone visual tag was removed.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **Fixed a real bug in Master List's realtime sync (from the "wire up
   live sync" work above): it was reloading the whole page after EVERY
