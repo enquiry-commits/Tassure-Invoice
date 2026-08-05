@@ -92,25 +92,44 @@ async function scrapeMember(
   }
 
   // The response embeds multiple appointment-history sections back to back
-  // (Director, Shareholder, Secretary, Contact Person, ...), each its own
-  // <table>. The Secretary History table happens to share Director History's
-  // exact 5-column shape with a permanently blank Role column, so scanning
-  // the whole response for <tr> would misread every secretary appointment as
-  // an ND appointment missing its subrole. Scope extraction to the table
-  // that immediately follows the "DIRECTOR HISTORY" heading.
-  const rows = await parserPage.evaluate((html: string) => {
+  // (Director, Shareholder, Secretary, Controller, Contact Person, ...), each
+  // its own <table>. The Secretary History table happens to share Director
+  // History's exact 5-column shape with a permanently blank Role column, so
+  // scanning the whole response for <tr> would misread every secretary
+  // appointment as an ND appointment missing its subrole. Scope extraction to
+  // the table that immediately follows the "DIRECTOR HISTORY" heading, and
+  // separately collect Controller History company names: a blank-subrole
+  // Director History row for a company where this person is already
+  // registered as Controller is that company's real appointment, not an ND
+  // placement pending a subrole fix, and must not be flagged either.
+  const parsed = await parserPage.evaluate((html: string) => {
     const document = new DOMParser().parseFromString(`<table><tbody>${html}</tbody></table>`, 'text/html');
-    const directorHeader = Array.from(document.querySelectorAll('th'))
-      .find(th => (th.textContent ?? '').trim().toUpperCase().includes('DIRECTOR HISTORY'));
-    const sectionTable = directorHeader?.closest('table') ?? null;
-    if (!sectionTable) return null;
-    return Array.from(sectionTable.querySelectorAll('tr')).flatMap(row => {
+    const headers = Array.from(document.querySelectorAll('th'));
+
+    const directorHeader = headers.find(th => (th.textContent ?? '').trim().toUpperCase().includes('DIRECTOR HISTORY'));
+    const directorTable = directorHeader?.closest('table') ?? null;
+    if (!directorTable) return null;
+    const directorRows = Array.from(directorTable.querySelectorAll('tr')).flatMap(row => {
       const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent ?? '').trim());
       if (cells.length !== 5 || !cells[0] || cells[0] === 'Company Name') return [];
       return [{ company: cells[0], role: cells[1], appointment: cells[2], cessation: cells[3] }];
     });
+
+    const controllerHeader = headers.find(th => (th.textContent ?? '').trim().toUpperCase().includes('CONTROLLER HISTORY'));
+    const controllerTable = controllerHeader?.closest('table') ?? null;
+    const controllerCompanies = controllerTable
+      ? Array.from(controllerTable.querySelectorAll('tr')).flatMap(row => {
+          const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent ?? '').trim());
+          if (!cells[0] || cells[0] === 'Company Name') return [];
+          return [cells[0]];
+        })
+      : [];
+
+    return { directorRows, controllerCompanies };
   }, payload.res);
-  if (rows === null) throw new Error('TeamWork appointment history: could not locate the Director History table.');
+  if (parsed === null) throw new Error('TeamWork appointment history: could not locate the Director History table.');
+  const { directorRows: rows, controllerCompanies } = parsed;
+  const controllerCompanySet = new Set(controllerCompanies.map(name => name.trim().toUpperCase()));
 
   const appointments = rows
     .filter(row => row.role === 'Nominee Director')
@@ -125,6 +144,7 @@ async function scrapeMember(
   // promoted into the active ND portfolio automatically: it is recorded for
   // a person to confirm and repair in TeamWork first.
   const missingSubroles = rows.flatMap(row => {
+    if (controllerCompanySet.has(row.company.trim().toUpperCase())) return [];
     const appointmentDate = parseDmy(row.appointment);
     const subroleIsBlank = row.role.trim() === '';
     const hasEffectiveAppointment = /\(effective\)/i.test(row.appointment) && !!appointmentDate;
