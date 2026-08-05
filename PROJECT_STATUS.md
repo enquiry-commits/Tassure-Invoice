@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-05 (SSO to Proposal Generator: fixed the redirect target — was landing directly on the receiving app's API endpoint as raw JSON with no browser JS to act on it, now goes to its /sso/callback page per its redesigned no-OTP flow; measured real-time delivery latency empirically — 370-712ms — and applied Supabase's documented RLS perf fix (wrap auth.jwt() in a SELECT) to both realtime policies — **requires running scripts/optimize-realtime-rls-policies.sql in Supabase**; Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
+Last updated: 2026-08-05 (Fixed a real bug: Master List's realtime sync was reloading the whole page after every single edit, not just ACC/TAX PIC ones — **requires running scripts/fix-master-list-realtime-full-reload.sql in Supabase**; also removed the "Live update" toast and the saving/saved status dot from both Master List and AR Reminder per Vincent's request; SSO to Proposal Generator: fixed the redirect target — was landing directly on the receiving app's API endpoint as raw JSON with no browser JS to act on it, now goes to its /sso/callback page per its redesigned no-OTP flow; measured real-time delivery latency empirically — 370-712ms — and applied Supabase's documented RLS perf fix (wrap auth.jwt() in a SELECT) to both realtime policies — **requires running scripts/optimize-realtime-rls-policies.sql in Supabase**; Master List now live-syncs across users in real time, matching AR Reminder — **requires running scripts/enable-master-list-realtime.sql in Supabase**; app-wide multi-user overwrite audit: fixed a real JSONB lost-update bug in Companies' service overrides, added conflict detection to Late Filing and Email Templates, added a persistent "last edited by X · time ago" trace to Master List replacing the fading checkmark — **requires running scripts/add-service-override-merge-function.sql and scripts/add-master-list-updated-by.sql in Supabase**; Master List now has optimistic-concurrency conflict detection like AR Reminder; cut Master List field-save latency by removing two redundant round trips per write; Late Filing companies mirrored into AR Reminder; fixed AR Reminder's cross-cycle search so mirrored/orphaned rows are actually findable, and widened the year dropdown past 2024-2027; nightly cron chain shifted 3h earlier to finish by SGT 05:00; AR Reminder's AGM/AR date columns: manual edits now win over automation, with a blue auto-fill dot in the Table view — **requires running scripts/add-ar-manual-date-flags.sql in Supabase before the next `ar_workflow` cron, now 20:00 UTC / SGT 04:00**)
 
 ## Purpose
 
@@ -23,6 +23,39 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Fixed a real bug in Master List's realtime sync (from the "wire up
+  live sync" work above): it was reloading the whole page after EVERY
+  single edit, not just ACC/TAX PIC changes.** Vincent noticed directly:
+  "每次我更改一个东西，系统就会LOADING整个页面一轮" — every edit triggered a
+  full-page loading flash. Also removed two pieces of routine UI he said
+  he didn't want: the "Live update from X" toast, and the per-cell
+  yellow-dot→green-check save indicator (both Master List and AR
+  Reminder) — kept the error/conflict states, which still need attention.
+  - **Root cause**: `components/MasterListTable.tsx`'s realtime handler
+    decided whether to fall back to a full reload (needed only for
+    `acc_pic_override`/`tax_pic_override`, since their *displayed* value
+    is a cross-table join the raw payload can't recompute) by checking
+    `Object.prototype.hasOwnProperty.call(next, 'acc_pic_override')` —
+    but Postgres always sends the FULL new row in a `postgres_changes`
+    UPDATE payload (every column, not just the changed ones), so that
+    key always exists, on every single edit. The check needed to compare
+    the OLD value against the NEW one instead — only possible once
+    `payload.old` actually contains the full previous row, which requires
+    **`REPLICA IDENTITY FULL`** (the default only puts the primary key in
+    `payload.old`). **New `scripts/fix-master-list-realtime-full-reload.sql`**
+    sets that; the comparison logic in the same file was corrected to match.
+  - **`app/billing/page.tsx`'s AR Reminder subscription didn't have this
+    bug** (its UPDATE branch always took the direct-merge path already,
+    no reload-on-every-edit) — confirmed by re-reading it, not assumed.
+  - Toast + status-dot removal: deleted `liveNotice` state and its fixed
+    bottom-right toast in both `MasterListTable.tsx` and `app/billing/page.tsx`'s
+    `ARTab`; `EditCell`/`ModalField` (Master List) and `EditField`/`SelectField`
+    (AR Reminder) all had their `statusDot` simplified to always `null` for
+    the saving/saved states — the underlying save and its audit-log entry
+    are unaffected, this only removes what was shown to the user for a
+    routine, already-succeeding save.
+  Production build passes; `npx tsc --noEmit` clean.
 
 - **SSO to Proposal Generator: fixed `app/sso/proposal-generator/route.ts`'s
   redirect target** — the ongoing multi-session saga's root cause finally

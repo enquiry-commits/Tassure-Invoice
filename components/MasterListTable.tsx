@@ -601,11 +601,10 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
   );
 
   const display = (value ?? '').trim();
-  const statusDot = status === 'saving'
-    ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
-    : status === 'saved'
-      ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} />
-      : null;
+  // No visible saving/saved indicator (Vincent: doesn't need every keystroke
+  // shown — it's already recorded in the audit log). error/conflict states
+  // above still render their own explicit UI since those need attention.
+  const statusDot = null;
 
   if (field === 'status') {
     const colors = statusColor(value);
@@ -779,9 +778,10 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const statusDot = status === 'saving'
-    ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
-    : status === 'saved' ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
+  // No visible saving/saved indicator (Vincent: doesn't need every keystroke
+  // shown — it's already recorded in the audit log). error/conflict states
+  // below still render their own explicit UI since those need attention.
+  const statusDot = null;
 
   // `compact` never changes for a given field once mounted, but hooks still
   // need to run unconditionally every render (not skipped by an early
@@ -1148,7 +1148,6 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // check, the server already enforces that.
   const [me, setMe] = useState<{ email: string; name: string } | null>(null);
   useEffect(() => { fetch('/api/auth/me').then(r => r.json()).then(j => setMe(j.user ?? null)).catch(() => {}); }, []);
-  const [liveNotice, setLiveNotice] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1176,13 +1175,10 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // shown at all).
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
-    let noticeTimer: ReturnType<typeof setTimeout> | null = null;
     let reloadTimer: ReturnType<typeof setTimeout> | null = null;
-    const showNotice = (name: string | null | undefined) => {
-      setLiveNotice(name ? `Live update from ${name}` : 'Live update received');
-      if (noticeTimer) clearTimeout(noticeTimer);
-      noticeTimer = setTimeout(() => setLiveNotice(''), 2600);
-    };
+    // No visible notice for this (Vincent: doesn't want a toast on every
+    // sync event) — the sync itself still runs silently in the background,
+    // this just stops announcing it.
     const scheduleReload = () => {
       if (reloadTimer) clearTimeout(reloadTimer);
       reloadTimer = setTimeout(() => void load(), 700);
@@ -1199,25 +1195,31 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         if (payload.eventType === 'DELETE') {
           setRows(current => current.filter(r => r.id !== id));
           setSelectedRowId(current => current === id ? null : current);
-          showNotice(next.updated_by_name);
           return;
         }
 
-        const needsJoinRefresh = Object.prototype.hasOwnProperty.call(next, 'acc_pic_override')
-          || Object.prototype.hasOwnProperty.call(next, 'tax_pic_override');
+        // payload.new is always the FULL new row (every column, not just the
+        // changed ones) — checking whether a key merely EXISTS on it would be
+        // true for every single UPDATE regardless of what actually changed,
+        // triggering the reload-fallback path (and its "loading" flash) on
+        // every edit anywhere in the table, not just ACC/TAX PIC ones. Must
+        // compare against the OLD value instead — only possible because
+        // master_list has REPLICA IDENTITY FULL (see
+        // scripts/fix-master-list-realtime-full-reload.sql), which is what
+        // makes payload.old contain the full previous row rather than just
+        // the primary key.
+        const needsJoinRefresh = previous.acc_pic_override !== next.acc_pic_override
+          || previous.tax_pic_override !== next.tax_pic_override;
         if (payload.eventType === 'UPDATE' && !needsJoinRefresh) {
           setRows(current => current.map(r => r.id === id ? { ...r, ...next } : r));
-          showNotice(next.updated_by_name);
           return;
         }
 
-        showNotice(next.updated_by_name);
         scheduleReload();
       })
       .subscribe();
 
     return () => {
-      if (noticeTimer) clearTimeout(noticeTimer);
       if (reloadTimer) clearTimeout(reloadTimer);
       void supabase.removeChannel(channel);
     };
@@ -1486,11 +1488,6 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
 
   return (
     <div>
-      {liveNotice && (
-        <div style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 1500, background: '#0f766e', color: '#fff', borderRadius: 9, padding: '8px 12px', fontSize: 10.5, fontWeight: 700, boxShadow: '0 8px 24px rgba(15,118,110,0.25)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#5eead4' }} />{liveNotice}
-        </div>
-      )}
       <div className="mb-4 text-sm text-slate-500">Dashboard › Master List › {title}</div>
 
       {/* Category cards — click to filter */}

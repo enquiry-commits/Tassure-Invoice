@@ -528,9 +528,10 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
   const rawDisplay = (value ?? '').trim();
   const isPicField = field === 'pic' || field === 'acc_pic' || field === 'tax_pic';
   const display = isPicField ? formatStaffName(rawDisplay) : rawDisplay;
-  const statusDot = status === 'saving'
-    ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
-    : status === 'saved' ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
+  // No visible saving/saved indicator (Vincent: doesn't need every keystroke
+  // shown — it's already recorded in the audit trail). error/conflict states
+  // above still render their own explicit UI since those need attention.
+  const statusDot = null;
   return (
     <div onClick={() => { editBaselineRef.current = value ?? ''; setVal(inputValue(value)); setEditing(true); }} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
@@ -666,9 +667,10 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
   const display = (value ?? '').trim();
   const chip = display ? options.find(o => o.label === display && !o.type) : null;
   const isDateValue = !!toDisplayDate(display);
-  const statusDot = status === 'saving'
-    ? <span title="Saving…" style={{ width: 5, height: 5, borderRadius: '50%', background: '#f59e0b', flexShrink: 0 }} />
-    : status === 'saved' ? <Check size={11} style={{ color: '#16a34a', flexShrink: 0 }} /> : null;
+  // No visible saving/saved indicator (Vincent: doesn't need every keystroke
+  // shown — it's already recorded in the audit trail). error/conflict states
+  // below still render their own explicit UI since those need attention.
+  const statusDot = null;
 
   if (status === 'conflict') return (
     <div title={`Updated by ${conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}`} style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 5, padding: '3px 5px', minHeight: 28 }}>
@@ -3052,7 +3054,6 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   }), []);
   const columnFilterKey = Object.entries(columnFilters).map(([f, s]) => `${f}=${[...s].sort().join(',')}`).sort().join('&');
   const [view,        setView]        = useState<'list' | 'table'>('list');
-  const [liveNotice,  setLiveNotice]  = useState('');
 
   const load = useCallback(async () => {
     if (!month || !year) return;
@@ -3074,13 +3075,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   useEffect(() => {
     if (!month || !year) return;
     const supabase = getSupabaseBrowserClient();
-    let noticeTimer: ReturnType<typeof setTimeout> | null = null;
     let reloadTimer: ReturnType<typeof setTimeout> | null = null;
-    const showNotice = (name: string | null | undefined) => {
-      setLiveNotice(name ? `Live update from ${name}` : 'Live update received');
-      if (noticeTimer) clearTimeout(noticeTimer);
-      noticeTimer = setTimeout(() => setLiveNotice(''), 2600);
-    };
+    // No visible notice for this (Vincent: doesn't want a toast on every
+    // sync event) — the sync itself still runs silently in the background,
+    // this just stops announcing it.
     const scheduleReload = () => {
       if (reloadTimer) clearTimeout(reloadTimer);
       reloadTimer = setTimeout(() => void load(), 700);
@@ -3098,7 +3096,6 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
         if (payload.eventType === 'DELETE' || next.status === 'Excluded') {
           setRecords(current => current.filter(record => record.id !== id));
           setModalRecord(current => current?.id === id ? null : current);
-          showNotice(next.updated_by_name);
           return;
         }
 
@@ -3113,19 +3110,16 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           };
           setRecords(current => current.map(merge));
           setModalRecord(current => current?.id === id ? merge(current) : current);
-          showNotice(next.updated_by_name);
           return;
         }
 
         // New rows need normal service/QB enrichment, so coalesce bursts of
         // generator inserts into one normal reload.
-        showNotice(next.updated_by_name);
         scheduleReload();
       })
       .subscribe();
 
     return () => {
-      if (noticeTimer) clearTimeout(noticeTimer);
       if (reloadTimer) clearTimeout(reloadTimer);
       void supabase.removeChannel(channel);
     };
@@ -3227,11 +3221,6 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
 
   return (
     <div>
-      {liveNotice && (
-        <div style={{ position: 'fixed', right: 22, bottom: 22, zIndex: 1500, background: '#0f766e', color: '#fff', borderRadius: 9, padding: '8px 12px', fontSize: 10.5, fontWeight: 700, boxShadow: '0 8px 24px rgba(15,118,110,0.25)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#5eead4' }} />{liveNotice}
-        </div>
-      )}
       {/* Controls */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 14, flexWrap: isMobile ? 'wrap' : undefined }}>
         <select value={month} onChange={e => setMonth(e.target.value)} style={S}>
