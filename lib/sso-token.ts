@@ -12,7 +12,16 @@ import { createHmac } from 'crypto';
 // Format is `email:exp:signature` (plain colon-joined fields, hex HMAC) to
 // match what tassure-proposal-generator's /api/sso already parses — not a
 // base64url/JSON scheme of this app's own invention.
-const TOKEN_TTL_SECONDS = 60;
+//
+// 180s, not the original 60s: while this handoff was being debugged
+// cross-repo, a real click-through (redirect chain + serverless cold
+// starts + a human reading a screenshot in between) sometimes outlasted
+// 60s, surfacing as an "expired" failure indistinguishable from whatever
+// the actual bug of the moment was. A generous TTL costs nothing here —
+// the token is single-purpose (just an email + expiry, HMAC-signed) and
+// the receiving app is expected to re-verify the email against its own
+// approved-accounts list regardless of how fresh the token is.
+const TOKEN_TTL_SECONDS = 180;
 
 export function signSsoToken(email: string): string {
   const secret = process.env.SSO_SHARED_SECRET;
