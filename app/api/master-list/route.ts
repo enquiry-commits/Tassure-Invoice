@@ -228,9 +228,21 @@ export async function PATCH(req: NextRequest) {
       updated_by_email: account?.email ?? null, updated_by_name: account?.name ?? null,
     })
     .eq('id', id);
-  updateQuery = prevStored === null
-    ? updateQuery.is(field, null)
-    : updateQuery.filter(field, 'eq', prevStored as string | boolean);
+  if (BOOLEAN_FIELDS.has(field) && prevStored === false) {
+    // A checkbox that's never been touched stores NULL, not false, in
+    // Postgres — but reads back as unchecked either way (`!!null` and
+    // `!!false` are both false), so the CAS check must accept BOTH as "the
+    // client saw this unchecked": matching only `= false` made every
+    // first-ever click on a still-NULL row look like a conflict (`NULL =
+    // false` is never true in SQL), reverting the checkbox right back to
+    // unchecked despite nothing else having touched it. `= true` stays an
+    // exact match — no such ambiguity once a value has actually been set.
+    updateQuery = updateQuery.or(`${field}.is.null,${field}.eq.false`);
+  } else {
+    updateQuery = prevStored === null
+      ? updateQuery.is(field, null)
+      : updateQuery.filter(field, 'eq', prevStored as string | boolean);
+  }
 
   const { data, error } = await updateQuery.select(cols).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
