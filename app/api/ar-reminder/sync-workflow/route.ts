@@ -75,6 +75,24 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+// Stop our own work before Vercel's 300-second hard limit so the run can be
+// marked failed and its lock can always be released — same pattern as
+// late-filing/sync's WORK_DEADLINE_MS. Added 2026-08-06 after this route got
+// stuck at "running" for 2+ days straight (Vercel's hard kill never lets a
+// function reach its own cleanup code, so the lease sat until it naturally
+// expired, and every scheduled run after that hit "Another run already owns
+// the automation lease" or "Previous run lease expired" — meanwhile
+// teamwork/sync's fye_month write (unprotected, always-overwrite) kept
+// running every night with nothing to correct it back, quietly reopening
+// the FYE Mismatch bug this route exists to fix).
+const WORK_DEADLINE_MS = 230_000;
+
+function abortError(signal: AbortSignal) {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new Error('AR workflow sync was cancelled.');
+}
+
 interface ArRow {
   id: number; company_id: number | null; entity_name: string; fye_month: string; fye_year: number;
   fye_date: string | null; due_date: string | null;
@@ -164,19 +182,29 @@ async function syncArWorkflow(req: NextRequest) {
 
   const cookie = await getSessionCookie();
 
+  const controller = new AbortController();
+  const deadline = setTimeout(() => {
+    controller.abort(new Error(
+      'AR workflow sync stopped safely before the Vercel timeout because TeamWork did not finish within 230 seconds.',
+    ));
+  }, WORK_DEADLINE_MS);
+
+  try {
   let updated = 0, checked = 0, fetchErrors = 0, updateErrors = 0, conflicts = 0;
   let activeClientUpdated = 0, activeClientErrors = 0;
   let fyeMonthCorrected = 0, fyeMonthErrors = 0;
   const changes: { entity: string; patch: Record<string, string> }[] = [];
 
   for (const [companyId, companyRows] of byCompany) {
+    if (controller.signal.aborted) throw abortError(controller.signal);
     checked++;
     let result: { data: string[][] } = { data: [] };
     try {
       let lastError: unknown;
       for (let attempt = 1; attempt <= 3; attempt++) {
+        if (controller.signal.aborted) throw abortError(controller.signal);
         try {
-          result = await fetchAgmList(cookie, companyId);
+          result = await fetchAgmList(cookie, companyId, controller.signal);
           lastError = null;
           break;
         } catch (error) {
@@ -186,6 +214,7 @@ async function syncArWorkflow(req: NextRequest) {
       }
       if (lastError) throw lastError;
     } catch {
+      if (controller.signal.aborted) throw abortError(controller.signal);
       fetchErrors++;
       continue;
     }
@@ -351,6 +380,9 @@ async function syncArWorkflow(req: NextRequest) {
     changes: changes.slice(0, 30),
   };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
+  } finally {
+    clearTimeout(deadline);
+  }
 }
 
 export async function GET(req: NextRequest) {
