@@ -12,7 +12,7 @@ async function getData() {
     supabase.from('nominee_directors').select('id, name, member_id').order('name'),
     supabase.from('nd_appointments').select('nd_id, company_name, sub_role, appointment_date, cessation_date'),
     supabase.from('automation_exceptions')
-      .select('entity_key, entity_name, details')
+      .select('entity_key, entity_name, details, remark')
       .eq('source', 'teamwork_nd')
       .eq('exception_type', 'missing_nominee_subrole')
       .eq('status', 'open')
@@ -61,6 +61,7 @@ async function getData() {
       ndName,
       appointmentDate,
       appointmentStatus,
+      remark: typeof row.remark === 'string' ? row.remark : null,
     } satisfies NDSubroleReviewItem];
   }).sort((left, right) =>
     right.appointmentDate.localeCompare(left.appointmentDate)

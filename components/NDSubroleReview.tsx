@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Search, UserRoundCheck } from 'lucide-react';
 import { fmtDate } from '@/lib/date';
 
@@ -10,9 +10,35 @@ export type NDSubroleReviewItem = {
   ndName: string;
   appointmentDate: string;
   appointmentStatus: 'effective' | 'proposed' | 'unknown';
+  remark: string | null;
 };
 
 const PAGE_SIZE = 50;
+
+function RemarkCell({ itemKey, initialRemark }: { itemKey: string; initialRemark: string | null }) {
+  const [value, setValue] = useState(initialRemark ?? '');
+  const savedValue = useRef(initialRemark ?? '');
+
+  const save = () => {
+    if (value === savedValue.current) return;
+    savedValue.current = value;
+    fetch('/api/nominee-directors/subrole-remark', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: itemKey, remark: value }),
+    }).catch(() => undefined);
+  };
+
+  return (
+    <input
+      value={value}
+      onChange={event => setValue(event.target.value)}
+      onBlur={save}
+      placeholder="Add remark…"
+      className="w-full rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs text-slate-700 outline-none placeholder:text-slate-400 hover:border-slate-200 hover:bg-slate-50 focus:border-slate-300 focus:bg-white"
+    />
+  );
+}
 
 export default function NDSubroleReview({
   items,
@@ -125,14 +151,15 @@ export default function NDSubroleReview({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="system-list-table w-full min-w-[900px] table-fixed">
+            <table className="system-list-table w-full min-w-[1100px] table-fixed">
               <thead>
                 <tr className="system-list-column-header">
-                  <th className="w-[42%] px-5 py-2.5 text-left">Company Name</th>
-                  <th className="w-[22%] px-4 py-2.5 text-left">Suspected ND</th>
-                  <th className="w-[15%] px-4 py-2.5" style={{ textAlign: 'center' }}>Appointment</th>
-                  <th className="w-[11%] px-4 py-2.5" style={{ textAlign: 'center' }}>TW status</th>
-                  <th className="w-[10%] px-4 py-2.5" style={{ textAlign: 'center' }}>Subrole</th>
+                  <th className="w-[26%] px-5 py-2.5 text-left">Company Name</th>
+                  <th className="w-[15%] px-4 py-2.5 text-left">Suspected ND</th>
+                  <th className="w-[11%] px-4 py-2.5" style={{ textAlign: 'center' }}>Appointment</th>
+                  <th className="w-[9%] px-4 py-2.5" style={{ textAlign: 'center' }}>TW status</th>
+                  <th className="w-[8%] px-4 py-2.5" style={{ textAlign: 'center' }}>Subrole</th>
+                  <th className="w-[31%] px-4 py-2.5 text-left">Remark</th>
                 </tr>
               </thead>
               <tbody>
@@ -159,6 +186,9 @@ export default function NDSubroleReview({
                       <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-rose-700">
                         <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />Missing
                       </span>
+                    </td>
+                    <td>
+                      <RemarkCell itemKey={item.key} initialRemark={item.remark} />
                     </td>
                   </tr>
                 ))}
