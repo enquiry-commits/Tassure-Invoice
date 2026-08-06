@@ -149,7 +149,7 @@ async function syncLateFiling(run: AutomationRun) {
 
     const { data: existingManual, error: existingError } = await supabase
       .from('late_filing_companies')
-      .select('id, uen, company_name, remarks, financial_year_end, next_agm_due_date');
+      .select('id, uen, company_name, remarks, financial_year_end, next_agm_due_date, manual_fields');
     if (existingError) throw new Error(`Unable to load Late Filing records: ${existingError.message}`);
 
     const byUen = new Map((existingManual ?? [])
@@ -340,10 +340,21 @@ async function syncLateFiling(run: AutomationRun) {
 
       if (existing) {
         stillFlaggedIds.add(existing.id);
-        if (/^AUTO:/i.test(existing.remarks ?? '')) {
+        // Per-field manual protection (see scripts/add-late-filing-manual-
+        // fields.sql) replaces the old row-level "does remarks start with
+        // AUTO:" gate — company_name/uen are never staff-protected (see
+        // PROTECTED_FIELDS in app/api/late-filing/route.ts), so they always
+        // stay in the patch.
+        const manual = (existing as { manual_fields?: Record<string, boolean> | null }).manual_fields ?? {};
+        const PROTECTED_KEYS = ['financial_year_end', 'last_agm_date', 'last_annual_return_date', 'next_agm_due_date', 'remarks'];
+        const anyFieldUnprotected = PROTECTED_KEYS.some(key => !manual[key]);
+        if (anyFieldUnprotected) {
+          const patch = Object.fromEntries(
+            Object.entries(values).filter(([key]) => !PROTECTED_KEYS.includes(key) || !manual[key]),
+          );
           const { error } = await supabase
             .from('late_filing_companies')
-            .update(values)
+            .update(patch)
             .eq('id', existing.id);
           if (error) errors++;
           else refreshed++;
@@ -424,9 +435,10 @@ async function syncLateFiling(run: AutomationRun) {
 
     for (const row of existingManual ?? []) {
       if (controller.signal.aborted) throw abortError(controller.signal);
+      const manual = (row as { manual_fields?: Record<string, boolean> | null }).manual_fields ?? {};
       if (!evaluatedIds.has(row.id)
         || stillFlaggedIds.has(row.id)
-        || !/^AUTO:/i.test(row.remarks ?? '')) continue;
+        || manual.remarks) continue;
       const { error } = await supabase.from('late_filing_companies').update({
         remarks: `Review: Auto condition cleared on ${reviewDate} — verify before resolving. Previous: ${row.remarks}`,
         updated_at: new Date().toISOString(),

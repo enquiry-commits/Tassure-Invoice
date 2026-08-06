@@ -19,6 +19,35 @@ function nextAgmDue(fyeDate: string): string {
   return d.toISOString().slice(0,10);
 }
 
+// Fields late-filing/sync also writes — a manual edit here must win from
+// now on (see scripts/add-late-filing-manual-fields.sql). company_name/uen
+// are excluded: they're used as this PATCH's own lookup key, not really an
+// "auto vs manual value" field in the same sense.
+const PROTECTED_FIELDS = ['financial_year_end', 'last_agm_date', 'last_annual_return_date', 'next_agm_due_date', 'remarks'] as const;
+
+// Compares each protected field the client actually sent against what's
+// currently stored, and only flips manual_fields for ones that genuinely
+// changed — re-saving a field's existing value (because the edit form
+// always round-trips the whole row) shouldn't by itself mark it manual.
+function nextManualFields(
+  currentManualFields: Record<string, boolean> | null | undefined,
+  currentRow: Record<string, unknown> | null,
+  fields: Record<string, unknown>,
+): Record<string, boolean> | null {
+  const next = { ...(currentManualFields ?? {}) };
+  let changed = false;
+  for (const key of PROTECTED_FIELDS) {
+    if (!(key in fields)) continue;
+    const newVal = fields[key] ?? null;
+    const oldVal = currentRow ? (currentRow[key] ?? null) : null;
+    if (newVal === oldVal) continue;
+    changed = true;
+    if (newVal !== null && newVal !== '') next[key] = true;
+    else delete next[key];
+  }
+  return changed ? next : null;
+}
+
 // ── GET — auto-detect late filers from ar_reminder + merge manual overrides ──
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -97,6 +126,11 @@ export async function GET(req: NextRequest) {
     // PATCH below. A pure 'auto' row doesn't exist there yet, so editing
     // it is a first-time insert with nothing to conflict against.
     updated_at: string | null;
+    // Which fields a human has overridden, for the blue "auto-filled" dot —
+    // see scripts/add-late-filing-manual-fields.sql. Only ever set on rows
+    // with a real late_filing_companies row; a pure ar_reminder-derived
+    // 'auto' row (no manual row at all) is never manual for any field.
+    manual_fields: Record<string, boolean> | null;
   };
 
   const detected: LateRow[] = [];
@@ -142,6 +176,7 @@ export async function GET(req: NextRequest) {
       late_fy:                 lateFy.year,
       source:                  manual ? 'manual' : 'auto',
       updated_at:              manual?.updated_at ?? null,
+      manual_fields:           manual?.manual_fields ?? null,
     });
   }
 
@@ -164,6 +199,7 @@ export async function GET(req: NextRequest) {
         late_fy:                 0,
         source:                  'manual',
         updated_at:              m.updated_at ?? null,
+        manual_fields:           m.manual_fields ?? null,
       });
     }
   }
@@ -216,29 +252,37 @@ export async function PATCH(req: NextRequest) {
   // (Vincent: prevent two staff editing the same Late Filing row at once
   // from silently overwriting each other, same as AR Reminder/Master List).
   if (uen) {
-    const { data: existingByUen } = await sb.from('late_filing_companies').select('id, updated_at').eq('uen', uen).maybeSingle();
+    const { data: existingByUen } = await sb.from('late_filing_companies')
+      .select('id, updated_at, financial_year_end, last_agm_date, last_annual_return_date, next_agm_due_date, remarks, manual_fields')
+      .eq('uen', uen).maybeSingle();
     if (!existingByUen) {
-      ({ error } = await sb.from('late_filing_companies').insert({ uen, company_name, ...fields, updated_at }));
+      ({ error } = await sb.from('late_filing_companies').insert({ uen, company_name, ...fields, updated_at, manual_fields: nextManualFields(null, null, fields) ?? {} }));
     } else if (previousUpdatedAt && existingByUen.updated_at !== previousUpdatedAt) {
       conflict = true;
     } else {
-      ({ error } = await sb.from('late_filing_companies').update({ company_name, ...fields, updated_at }).eq('id', existingByUen.id));
+      const manualFields = nextManualFields(existingByUen.manual_fields, existingByUen, fields);
+      ({ error } = await sb.from('late_filing_companies').update({
+        company_name, ...fields, updated_at, ...(manualFields ? { manual_fields: manualFields } : {}),
+      }).eq('id', existingByUen.id));
     }
   } else {
     const { data: existing, error: lookupError } = await sb
       .from('late_filing_companies')
-      .select('id, updated_at')
+      .select('id, updated_at, financial_year_end, last_agm_date, last_annual_return_date, next_agm_due_date, remarks, manual_fields')
       .ilike('company_name', company_name)
       .limit(1)
       .maybeSingle();
     if (lookupError) return NextResponse.json({ error: lookupError.message }, { status: 500 });
 
     if (!existing) {
-      ({ error } = await sb.from('late_filing_companies').insert({ company_name, ...fields, updated_at }));
+      ({ error } = await sb.from('late_filing_companies').insert({ company_name, ...fields, updated_at, manual_fields: nextManualFields(null, null, fields) ?? {} }));
     } else if (previousUpdatedAt && existing.updated_at !== previousUpdatedAt) {
       conflict = true;
     } else {
-      ({ error } = await sb.from('late_filing_companies').update({ company_name, ...fields, updated_at }).eq('id', existing.id));
+      const manualFields = nextManualFields(existing.manual_fields, existing, fields);
+      ({ error } = await sb.from('late_filing_companies').update({
+        company_name, ...fields, updated_at, ...(manualFields ? { manual_fields: manualFields } : {}),
+      }).eq('id', existing.id));
     }
   }
 

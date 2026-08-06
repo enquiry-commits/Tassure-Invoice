@@ -30,6 +30,7 @@ type LateRow = {
   late_fy: number;
   source: 'auto' | 'manual';
   updated_at: string | null;
+  manual_fields: Record<string, boolean> | null;
 };
 
 const REMARKS_OPTIONS = [
@@ -122,6 +123,17 @@ function SemanticStatusPill({ label, background, color, border }: { label: strin
       {label}
     </span>
   );
+}
+
+// Fields late-filing/sync also writes (see PROTECTED_FIELDS in
+// app/api/late-filing/route.ts) — shown with a small blue dot when the
+// current value came from automation, not a staff edit.
+const AUTO_SYNCED_FIELDS = new Set(['financial_year_end', 'last_agm_date', 'last_annual_return_date', 'next_agm_due_date', 'remarks']);
+function isAutoFilled(row: LateRow, field: string, value: unknown) {
+  return AUTO_SYNCED_FIELDS.has(field) && value != null && value !== '' && !row.manual_fields?.[field];
+}
+function AutoFillDot() {
+  return <span title="Auto-filled from TeamWork — clear the field to hand this back to automation, or type a value to override it." style={{ width: 6, height: 6, minWidth: 6, borderRadius: '50%', background: '#3b82f6', flexShrink: 0, display: 'inline-block' }} />;
 }
 
 function RemarksBadge({ remarks }: { remarks: string | null }) {
@@ -516,7 +528,10 @@ export default function LateFilingPage() {
                     <td className="company-registration-text" style={{ position:'sticky', left: STICKY_WIDTHS[0] + STICKY_WIDTHS[1], zIndex:1, background:'#fff', boxShadow:'3px 0 8px -2px rgba(0,0,0,0.12)' }}>{row.uen||'—'}</td>
                     <td>
                       {row.financial_year_end
-                        ? <span style={{ color:'#475569', fontSize:12, fontWeight:600 }}>{row.financial_year_end}</span>
+                        ? <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
+                            {isAutoFilled(row, 'financial_year_end', row.financial_year_end) && <AutoFillDot />}
+                            <span style={{ color:'#475569', fontSize:12, fontWeight:600 }}>{row.financial_year_end}</span>
+                          </span>
                         : <span style={{ color:'#94a3b8' }}>—</span>}
                     </td>
                     <td>
@@ -527,21 +542,39 @@ export default function LateFilingPage() {
                           : '—';
                       })()}
                     </td>
-                    <td style={{ color:'#475569' }}>{fmtDate(row.last_annual_return_date)}</td>
-                    <td style={{ color:'#475569' }}>{fmtDate(row.last_agm_date)}</td>
+                    <td style={{ color:'#475569' }}>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
+                        {isAutoFilled(row, 'last_annual_return_date', row.last_annual_return_date) && <AutoFillDot />}
+                        {fmtDate(row.last_annual_return_date)}
+                      </span>
+                    </td>
+                    <td style={{ color:'#475569' }}>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
+                        {isAutoFilled(row, 'last_agm_date', row.last_agm_date) && <AutoFillDot />}
+                        {fmtDate(row.last_agm_date)}
+                      </span>
+                    </td>
                     <td style={{ color:'#475569' }}>{fmtDate(row.last_accounts_date)}</td>
                     <td>
-                      {row.next_agm_due_date ? (() => {
-                        const isPast = new Date(row.next_agm_due_date) < new Date();
-                        return <SemanticStatusPill
-                          label={`${fmtDateStr(row.next_agm_due_date)}${isPast ? ' · OVERDUE' : ''}`}
-                          background={isPast ? '#fef2f2' : '#f0fdf4'}
-                          color={isPast ? '#dc2626' : '#16a34a'}
-                          border={isPast ? '#fecaca' : '#bbf7d0'}
-                        />;
-                      })() : <span style={{ color:'#94a3b8' }}>NA</span>}
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
+                        {isAutoFilled(row, 'next_agm_due_date', row.next_agm_due_date) && <AutoFillDot />}
+                        {row.next_agm_due_date ? (() => {
+                          const isPast = new Date(row.next_agm_due_date) < new Date();
+                          return <SemanticStatusPill
+                            label={`${fmtDateStr(row.next_agm_due_date)}${isPast ? ' · OVERDUE' : ''}`}
+                            background={isPast ? '#fef2f2' : '#f0fdf4'}
+                            color={isPast ? '#dc2626' : '#16a34a'}
+                            border={isPast ? '#fecaca' : '#bbf7d0'}
+                          />;
+                        })() : <span style={{ color:'#94a3b8' }}>NA</span>}
+                      </span>
                     </td>
-                    <td><RemarksBadge remarks={row.remarks} /></td>
+                    <td>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
+                        {isAutoFilled(row, 'remarks', row.remarks) && <AutoFillDot />}
+                        <RemarksBadge remarks={row.remarks} />
+                      </span>
+                    </td>
                     <td style={{ whiteSpace:'nowrap' }} onClick={e => e.stopPropagation()}>
                       {catOf.get(row.id) === 'review' ? (
                         <button onClick={()=>resolve(row)}
