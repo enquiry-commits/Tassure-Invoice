@@ -85,7 +85,12 @@ const MONTH_NAMES = [
 // teamwork/sync's fye_month write (unprotected, always-overwrite) kept
 // running every night with nothing to correct it back, quietly reopening
 // the FYE Mismatch bug this route exists to fix).
-const WORK_DEADLINE_MS = 230_000;
+// 270s, not late-filing/sync's 230s: this route runs one company at a time
+// (no worker-pool concurrency), and its last known-good run (2026-08-04)
+// took 244s — already past 230s. 270s leaves 30s margin to Vercel's 300s
+// hard cap while actually fitting the real workload; confirmed by re-
+// running after this change (see PROJECT_STATUS.md).
+const WORK_DEADLINE_MS = 270_000;
 
 function abortError(signal: AbortSignal) {
   return signal.reason instanceof Error
