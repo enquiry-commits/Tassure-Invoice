@@ -185,6 +185,27 @@ async function syncArWorkflow(req: NextRequest) {
     byCompany.get(id)!.push(r);
   }
 
+  // The Active Client date sync and FYE Month correction below both key off
+  // `companyId`/`companyByInternalId`, independent of whether there's any
+  // ar_reminder row at all — but until now they only ever ran for companies
+  // that DID have one, because that's the only way a company entered this
+  // loop. A company with zero ar_reminder rows (e.g. newly onboarded, or
+  // never generated a cycle) silently never got its fye_month re-checked,
+  // no matter how many times this sync ran successfully (caught 2026-08-06:
+  // BYTESFORCE INTERNATIONAL PTE. LTD. sat wrong for days because it has no
+  // ar_reminder rows at all). Add every remaining company with a TeamWork
+  // internal_id with an empty row list — the ar_reminder-specific patch
+  // loop at the bottom is already a no-op for an empty array, so this only
+  // extends the Active Client/FYE coverage, changing nothing else.
+  let extraCompaniesAdded = 0;
+  for (const company of companyCandidates) {
+    if (!company.internal_id) continue;
+    const id = company.internal_id as string;
+    if (byCompany.has(id)) continue;
+    byCompany.set(id, []);
+    extraCompaniesAdded++;
+  }
+
   const cookie = await getSessionCookie();
 
   const controller = new AbortController();
@@ -200,13 +221,16 @@ async function syncArWorkflow(req: NextRequest) {
   let fyeMonthCorrected = 0, fyeMonthErrors = 0;
   const changes: { entity: string; patch: Record<string, string> }[] = [];
 
-  // Concurrency 10 — same proven range as late-filing/sync's worker pool
-  // (DEFAULT_CONCURRENCY 12) for the exact same fetchAgmList call. This
+  // Concurrency 15 — same proven range as late-filing/sync's worker pool
+  // (up to MAX_CONCURRENCY 20) for the exact same fetchAgmList call. This
   // route used to process one company at a time; that took 244s+ even
   // before today's added Active Client/FYE work, leaving no real margin
-  // under Vercel's 300s cap (see WORK_DEADLINE_MS above).
+  // under Vercel's 300s cap (see WORK_DEADLINE_MS above). Raised from the
+  // first pass's 10 after extending coverage to every company with a
+  // TeamWork internal_id (926) instead of just ones with ar_reminder rows
+  // (743) — extra headroom for the larger workload.
   const companyEntries = [...byCompany.entries()];
-  const CONCURRENCY = Math.min(10, Math.max(1, companyEntries.length));
+  const CONCURRENCY = Math.min(15, Math.max(1, companyEntries.length));
   let nextIndex = 0;
   const worker = async () => {
   while (nextIndex < companyEntries.length) {
@@ -384,6 +408,7 @@ async function syncArWorkflow(req: NextRequest) {
     ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0,
     rows: rows.length,
     companies_checked: checked,
+    extra_companies_added: extraCompaniesAdded,
     unmatched_names: unmatched,
     ambiguous_names: ambiguous,
     fetch_errors: fetchErrors,
