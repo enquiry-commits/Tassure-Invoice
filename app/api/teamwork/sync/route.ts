@@ -248,7 +248,8 @@ async function syncTeamworkCompanies() {
     return true;
   });
 
-  // ── has_nd / master_list.nd_active follow the ND appointments register ────
+  // ── has_nd / master_list.nd_active / master_list.nominee_director follow
+  // the ND appointments register ────────────────────────────────────────
   // Same principle as uses_address: QB history only proves a PAST bill; the
   // Nominee Directors page's own data is the truth. "Active" here uses the
   // exact same rule as that page (app/api/nominee-directors/route.ts):
@@ -256,21 +257,34 @@ async function syncTeamworkCompanies() {
   // this used a stricter "cessation_date IS NULL" check, and Master List's
   // "Has Nominee Dir" card read a free-text field that staff don't keep in
   // sync with actual resignations — both are now tied to this one set so
-  // every page agrees with the ND page's number.
+  // every page agrees with the ND page's number. nominee_director (the
+  // NAME, not just the on/off flag) now also mirrors this same register
+  // (Vincent, 2026-08-06: "ACTIVE CLIENT 页面的 ND 也是要同步，同步的数据
+  // 可以和ND页面同步") instead of needing to be typed in by hand even
+  // though the system already knows who it is.
   let ndFlagUpdates = 0;
   let ndActiveUpdates = 0;
   {
     const t = todaySGT();
     const { data: appts } = await supabase
       .from('nd_appointments')
-      .select('company_name, cessation_date')
+      .select('nd_id, company_name, cessation_date')
       .eq('sub_role', 'Nominee Director')
       .not('appointment_date', 'is', null);
-    const ndSet = new Set(
-      (appts ?? [])
-        .filter(a => !a.cessation_date || a.cessation_date > t)
-        .map(a => normalize(a.company_name)),
-    );
+    const activeAppts = (appts ?? []).filter(a => !a.cessation_date || a.cessation_date > t);
+    const ndSet = new Set(activeAppts.map(a => normalize(a.company_name)));
+
+    const { data: ndPeople } = await supabase.from('nominee_directors').select('id, name');
+    const ndNameById = new Map((ndPeople ?? []).map(p => [p.id, p.name as string]));
+    const ndNamesByCompany = new Map<string, string[]>();
+    for (const a of activeAppts) {
+      const name = ndNameById.get(a.nd_id);
+      if (!name) continue;
+      const key = normalize(a.company_name);
+      const list = ndNamesByCompany.get(key) ?? [];
+      if (!list.includes(name)) list.push(name);
+      ndNamesByCompany.set(key, list);
+    }
     const ndPatches = (rows ?? [])
       .filter(r => ndSet.has(normalize(r.company_name)) !== (r.has_nd === true))
       .map(r => ({ id: r.id, has_nd: ndSet.has(normalize(r.company_name)) }));
@@ -283,22 +297,29 @@ async function syncTeamworkCompanies() {
 
     // master_list has more rows than PostgREST's default page size (1000), so
     // an unpaginated select silently truncates — page through it explicitly.
-    const mlRows: { id: number; company_name: string; nd_active: boolean | null; manual_fields: Record<string, boolean> | null }[] = [];
+    const mlRows: { id: number; company_name: string; nd_active: boolean | null; nominee_director: string | null; manual_fields: Record<string, boolean> | null }[] = [];
     for (let start = 0; ; start += 1000) {
-      const { data: page } = await supabase.from('master_list').select('id, company_name, nd_active, manual_fields').range(start, start + 999);
+      const { data: page } = await supabase.from('master_list').select('id, company_name, nd_active, nominee_director, manual_fields').range(start, start + 999);
       mlRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }
     // A row whose nd_active was manually toggled (see app/api/master-list's
     // PATCH) is skipped here — a click always marks it manual since there's
-    // no "empty" checkbox state; staff resume automation explicitly.
-    const mlPatches = mlRows
-      .filter(r => !r.manual_fields?.nd_active)
-      .filter(r => ndSet.has(normalize(r.company_name)) !== (r.nd_active === true))
-      .map(r => ({ id: r.id, nd_active: ndSet.has(normalize(r.company_name)) }));
+    // no "empty" checkbox state; staff resume automation explicitly. Same
+    // manual_fields gate for nominee_director (the name), independently —
+    // a row can have one protected and not the other.
+    const mlPatches = mlRows.flatMap(r => {
+      const key = normalize(r.company_name);
+      const patch: Record<string, unknown> = {};
+      const nextActive = ndSet.has(key);
+      if (!r.manual_fields?.nd_active && nextActive !== (r.nd_active === true)) patch.nd_active = nextActive;
+      const nextName = ndNamesByCompany.get(key)?.join(', ') ?? null;
+      if (!r.manual_fields?.nominee_director && nextName && nextName !== r.nominee_director) patch.nominee_director = nextName;
+      return Object.keys(patch).length ? [{ id: r.id, patch }] : [];
+    });
     for (let i = 0; i < mlPatches.length; i += 10) {
       const results = await Promise.all(mlPatches.slice(i, i + 10).map(p =>
-        supabase.from('master_list').update({ nd_active: p.nd_active }).eq('id', p.id).then(r => r.error?.message ?? null)
+        supabase.from('master_list').update(p.patch).eq('id', p.id).then(r => r.error?.message ?? null)
       ));
       ndActiveUpdates += results.filter(e => !e).length;
     }

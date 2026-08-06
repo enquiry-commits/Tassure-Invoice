@@ -34,7 +34,7 @@ const BOOLEAN_FIELDS = new Set(['nd_active', 'secretary_active', 'acc_active', '
 // ar-reminder/sync-workflow, teamwork/sync, teamwork/sync-secretary) — a
 // manual edit here must win from now on, tracked in master_list.manual_fields
 // (a JSONB map, not one column per field — see
-// scripts/add-master-list-manual-fields.sql). For the 6 text/date fields,
+// scripts/add-master-list-manual-fields.sql). For the 7 text/date fields,
 // clearing the cell empty hands control back to automation, same as AR
 // Reminder's date_of_agm/filling_date `_manual` columns. nd_active has no
 // "empty" state (it's a checkbox), so any click always marks it manual —
@@ -42,7 +42,7 @@ const BOOLEAN_FIELDS = new Set(['nd_active', 'secretary_active', 'acc_active', '
 // below.
 const AUTO_SYNCED_FIELDS = new Set([
   'last_agm_date', 'last_ar_date', 'last_accounts_date', 'next_agm_due_date',
-  'invoice_address', 'secretary', 'nd_active',
+  'invoice_address', 'secretary', 'nominee_director', 'nd_active',
 ]);
 
 export async function GET(req: NextRequest) {
