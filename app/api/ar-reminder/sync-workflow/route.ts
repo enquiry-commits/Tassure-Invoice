@@ -190,7 +190,7 @@ async function syncArWorkflow(req: NextRequest) {
   const controller = new AbortController();
   const deadline = setTimeout(() => {
     controller.abort(new Error(
-      'AR workflow sync stopped safely before the Vercel timeout because TeamWork did not finish within 230 seconds.',
+      `AR workflow sync stopped safely before the Vercel timeout because TeamWork did not finish within ${WORK_DEADLINE_MS / 1000} seconds.`,
     ));
   }, WORK_DEADLINE_MS);
 
@@ -200,8 +200,18 @@ async function syncArWorkflow(req: NextRequest) {
   let fyeMonthCorrected = 0, fyeMonthErrors = 0;
   const changes: { entity: string; patch: Record<string, string> }[] = [];
 
-  for (const [companyId, companyRows] of byCompany) {
+  // Concurrency 10 — same proven range as late-filing/sync's worker pool
+  // (DEFAULT_CONCURRENCY 12) for the exact same fetchAgmList call. This
+  // route used to process one company at a time; that took 244s+ even
+  // before today's added Active Client/FYE work, leaving no real margin
+  // under Vercel's 300s cap (see WORK_DEADLINE_MS above).
+  const companyEntries = [...byCompany.entries()];
+  const CONCURRENCY = Math.min(10, Math.max(1, companyEntries.length));
+  let nextIndex = 0;
+  const worker = async () => {
+  while (nextIndex < companyEntries.length) {
     if (controller.signal.aborted) throw abortError(controller.signal);
+    const [companyId, companyRows] = companyEntries[nextIndex++];
     checked++;
     let result: { data: string[][] } = { data: [] };
     try {
@@ -367,6 +377,8 @@ async function syncArWorkflow(req: NextRequest) {
       }
     }
   }
+  };
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
   const result = {
     ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0,
