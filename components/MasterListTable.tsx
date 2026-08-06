@@ -846,14 +846,13 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
 });
 
 
-function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive, onSaveOverride, onResumeAutomation, moveTargets, onMove, onDelete }: {
+function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive, onSaveOverride, moveTargets, onMove, onDelete }: {
   row: MasterListRow;
   fieldColumns: { field: ColumnField; label: string }[];
   onClose: () => void;
   onSave: (id: number, field: string, val: string) => void;
-  onToggleActive: (id: number, field: 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active', current: boolean | null | undefined) => void;
+  onToggleActive: (id: number, field: 'acc_active' | 'tax_active', current: boolean | null | undefined) => void;
   onSaveOverride: (id: number, field: 'acc_pic_override' | 'tax_pic_override', val: string, previousValue: string | null) => void;
-  onResumeAutomation: (id: number, field: string) => void;
   moveTargets?: MoveTarget[];
   onMove: (row: MasterListRow, target: MoveTarget) => void;
   onDelete: (row: MasterListRow) => void;
@@ -929,24 +928,19 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
     );
     if (c.field === 'nominee_director' || c.field === 'secretary') {
       const value = c.field === 'nominee_director' ? row.nominee_director : row.secretary;
-      const activeField = c.field === 'nominee_director' ? 'nd_active' : 'secretary_active';
       const active = c.field === 'nominee_director' ? row.nd_active : row.secretary_active;
       return (
         <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
           <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, display: 'flex', alignItems: 'center', gap: 5 }}>
             {c.label}
             {AUTO_SYNCED_FIELDS_UI.has(c.field) && !!value && !row.manual_fields?.[c.field] && <AutoFillDot />}
-            {c.field === 'nominee_director' && row.manual_fields?.nd_active && (
-              <button onClick={() => onResumeAutomation(row.id, 'nd_active')}
-                title="Manually set — click to resume automatic ND sync"
-                style={{ border: 'none', background: 'transparent', color: '#3b82f6', cursor: 'pointer', padding: 0, display: 'flex' }}>
-                <RotateCcw size={10} />
-              </button>
-            )}
           </span>
           <div style={{ flex: 1 }}>
+            {/* Nominee Dir. and Secretary checkboxes are both pure "has a
+                name on file" indicators now (Vincent: "ND的打勾也做一样的
+                处理"), always derived from the name itself — never
+                independently clickable. */}
             <ServiceChip name={value} active={!!active}
-              onToggleActive={c.field === 'secretary' ? undefined : () => onToggleActive(row.id, activeField, active)}
               onSaveName={val => {
                 onSave(row.id, c.field, val);
                 fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: val || null, previousValue: value || null }) });
@@ -1231,23 +1225,27 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     setRows(prev => prev.map(r => r.id === id
       ? {
           ...r, [field]: val || null, updated_at: new Date().toISOString(), updated_by_name: me?.name ?? r.updated_by_name,
-          // The server derives secretary_active from the same write (see
-          // app/api/master-list/route.ts's PATCH) — mirrored here so the
-          // checkbox updates immediately instead of only catching up on
-          // the next reload (Vincent: "打勾还在，我刷新页面后，打勾才不
-          // 见...重新填写内容后，打勾又没有实现打勾回去，意思就是不同步").
+          // The server derives secretary_active/nd_active from the same
+          // write (see app/api/master-list/route.ts's PATCH) — mirrored
+          // here so the checkbox updates immediately instead of only
+          // catching up on the next reload (Vincent: "打勾还在，我刷新页
+          // 面后，打勾才不见...重新填写内容后，打勾又没有实现打勾回去，
+          // 意思就是不同步"; ND given the same treatment per "ND的打勾也
+          // 做一样的处理").
           ...(field === 'secretary' ? { secretary_active: !!val } : {}),
+          ...(field === 'nominee_director' ? { nd_active: !!val } : {}),
         }
       : r));
   }, [me]);
 
-  // Nominee Dir./Secretary/ACC/TAX checkboxes — freely toggleable, independent
-  // of whether a name is on file. Optimistic; a checkbox flip is low-risk
+  // ACC/TAX checkboxes — freely toggleable, independent of whether a name
+  // is on file (Nominee Dir./Secretary are no longer independently
+  // toggleable, see above). Optimistic; a checkbox flip is low-risk
   // enough not to need retry/error UI — but still conflict-safe: if someone
   // else already flipped it since this click's `current` was rendered, the
   // server rejects the stale write (409) and the checkbox snaps back to
   // whatever it actually is now, instead of silently clobbering their change.
-  const toggleActive = useCallback((id: number, field: 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active', current: boolean | null | undefined) => {
+  const toggleActive = useCallback((id: number, field: 'acc_active' | 'tax_active', current: boolean | null | undefined) => {
     const next = !current;
     setRows(prev => prev.map(r => r.id === id
       ? { ...r, [field]: next, updated_at: new Date().toISOString(), updated_by_name: me?.name ?? r.updated_by_name }
@@ -1259,17 +1257,6 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: !!json.currentValue } : r));
       });
   }, [me]);
-
-  // Hands nd_active back to tonight's TeamWork sync — a click on the
-  // checkbox always marks it manual (there's no "empty" state to clear it
-  // back to, unlike a text field), so this is the only way to undo that.
-  // Only touches manual_fields, never the checkbox's own value.
-  const resumeAutomation = useCallback((id: number, field: string) => {
-    setRows(prev => prev.map(r => r.id === id
-      ? { ...r, manual_fields: { ...r.manual_fields, [field]: false } }
-      : r));
-    fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, resumeAutomation: true }) });
-  }, []);
 
   // ACC/TAX name edits write to the *_override column, which only takes
   // effect ahead of AR Reminder's synced value once set server-side — reload
@@ -1849,14 +1836,13 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                           <PicCell name={r.tax_pic} active={!!r.tax_active} onToggleActive={() => toggleActive(r.id, 'tax_active', r.tax_active)} onSaveName={val => saveOverride(r.id, 'tax_pic_override', val, r.tax_pic_override ?? null)} />
                         ) : listType === 'active_client' && c.field === 'nominee_director' ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <CheckSquare checked={!!r.nd_active} onToggle={() => toggleActive(r.id, 'nd_active', r.nd_active)} />
-                            {r.manual_fields?.nd_active && (
-                              <button onClick={e => { e.stopPropagation(); resumeAutomation(r.id, 'nd_active'); }}
-                                title="Manually set — click to resume automatic ND sync"
-                                style={{ border: 'none', background: 'transparent', color: '#3b82f6', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
-                                <RotateCcw size={10} />
-                              </button>
-                            )}
+                            {/* Same treatment as Secretary (Vincent: "ND的打勾也做一样的处理") —
+                                the checkbox is purely a "has a name on file" indicator, always
+                                derived from nominee_director itself, not independently clickable.
+                                Clearing the name (like any other auto-synced text field) is what
+                                hands the row back to automation, so the old nd_active-specific
+                                resumeAutomation button is no longer needed here. */}
+                            <CheckSquare checked={!!r.nd_active} />
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                           </div>
                         ) : listType === 'active_client' && c.field === 'secretary' ? (
@@ -1966,7 +1952,6 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           onSave={handleSave}
           onToggleActive={toggleActive}
           onSaveOverride={saveOverride}
-          onResumeAutomation={resumeAutomation}
           moveTargets={moveTargets}
           onMove={moveRow}
           onDelete={deleteRow}

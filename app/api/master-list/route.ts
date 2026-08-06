@@ -34,12 +34,12 @@ const BOOLEAN_FIELDS = new Set(['nd_active', 'secretary_active', 'acc_active', '
 // ar-reminder/sync-workflow, teamwork/sync, teamwork/sync-secretary) — a
 // manual edit here must win from now on, tracked in master_list.manual_fields
 // (a JSONB map, not one column per field — see
-// scripts/add-master-list-manual-fields.sql). For the 7 text/date fields,
-// clearing the cell empty hands control back to automation, same as AR
-// Reminder's date_of_agm/filling_date `_manual` columns. nd_active has no
-// "empty" state (it's a checkbox), so any click always marks it manual —
-// the only way back to automation is the explicit `resumeAutomation` action
-// below.
+// scripts/add-master-list-manual-fields.sql). Clearing a cell empty hands
+// control back to automation, same as AR Reminder's date_of_agm/filling_date
+// `_manual` columns. nd_active is included here for the resumeAutomation
+// action's field validation only (see below) — it's no longer independently
+// PATCHable from the UI, always derived from nominee_director's own write
+// (see the secretary_active/nd_active derivation a few lines below).
 const AUTO_SYNCED_FIELDS = new Set([
   'last_agm_date', 'last_ar_date', 'last_accounts_date', 'next_agm_due_date',
   'invoice_address', 'secretary', 'nominee_director', 'nd_active',
@@ -255,12 +255,15 @@ export async function PATCH(req: NextRequest) {
     .update({
       [field]: stored, updated_at: updatedAt,
       updated_by_email: account?.email ?? null, updated_by_name: account?.name ?? null,
-      // The Secretary checkbox is purely a "does this cell have content"
-      // indicator for staff (Vincent: "有内容就需要打勾...那个打勾只是为了
-      // 让我方便辨认那些是有内容的"), unlike nd_active/acc_active/tax_active
-      // which are genuine independent service-status flags — so a manual
-      // edit to the name must always keep it in sync, not leave it to drift.
+      // The Nominee Dir. and Secretary checkboxes are purely "does this
+      // cell have content" indicators for staff (Vincent: "有内容就需要打
+      // 勾...那个打勾只是为了让我方便辨认那些是有内容的"; ND given the same
+      // treatment per "ND的打勾也做一样的处理") — unlike acc_active/
+      // tax_active, which remain genuine independent service-status flags —
+      // so a manual edit to either name must always keep its checkbox in
+      // sync, not leave it to drift.
       ...(field === 'secretary' ? { secretary_active: stored !== null } : {}),
+      ...(field === 'nominee_director' ? { nd_active: stored !== null } : {}),
     })
     .eq('id', id);
   if (BOOLEAN_FIELDS.has(field) && prevStored === false) {
@@ -313,10 +316,10 @@ export async function PATCH(req: NextRequest) {
     await syncPicToArReminder(supabase, roc, picField, stored as string | null, account.email, account.name);
   }
 
-  // Mark this field manual so tonight's TeamWork sync skips it — for the
-  // text/date fields, an edit back to empty hands control back to
-  // automation automatically; nd_active has no empty state, so any click
-  // marks it manual (see AUTO_SYNCED_FIELDS comment above).
+  // Mark this field manual so tonight's TeamWork sync skips it — an edit
+  // back to empty hands control back to automation automatically. (nd_active
+  // itself is never patched directly anymore, only nominee_director — see
+  // AUTO_SYNCED_FIELDS comment above — but this stays correct if it ever is.)
   if (AUTO_SYNCED_FIELDS.has(field)) {
     const isManual = BOOLEAN_FIELDS.has(field) ? true : stored !== null;
     await supabase.rpc('set_master_list_manual_field', { p_row_id: id, p_field: field, p_manual: isManual });

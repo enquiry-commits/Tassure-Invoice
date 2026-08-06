@@ -316,18 +316,26 @@ async function syncTeamworkCompanies() {
       mlRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }
-    // A row whose nd_active was manually toggled (see app/api/master-list's
-    // PATCH) is skipped here — a click always marks it manual since there's
-    // no "empty" checkbox state; staff resume automation explicitly. Same
-    // manual_fields gate for nominee_director (the name), independently —
-    // a row can have one protected and not the other.
+    // nd_active is purely a "does nominee_director have a name in it"
+    // indicator now (Vincent: "ND的打勾也做一样的处理", matching the same
+    // fix applied to Secretary) — no longer independently patched, always
+    // derived from whatever nominee_director's EFFECTIVE value ends up
+    // being here (either freshly synced, or left as-is when protected by
+    // manual_fields.nominee_director). This also closes a latent edge case
+    // the old independent derivation had: ndSet (any active appointment)
+    // and ndNamesByCompany (only appointments whose nd_id resolves to a
+    // real name) were built from slightly different filters, so they could
+    // in principle disagree — deriving nd_active from the final name value
+    // instead makes that impossible by construction.
     const mlPatches = mlRows.flatMap(r => {
       const key = normalize(r.company_name);
       const patch: Record<string, unknown> = {};
-      const nextActive = ndSet.has(key);
-      if (!r.manual_fields?.nd_active && nextActive !== (r.nd_active === true)) patch.nd_active = nextActive;
       const nextName = ndNamesByCompany.get(key)?.join(', ') ?? null;
-      if (!r.manual_fields?.nominee_director && nextName && nextName !== r.nominee_director) patch.nominee_director = nextName;
+      const nameProtected = !!r.manual_fields?.nominee_director;
+      if (!nameProtected && nextName && nextName !== r.nominee_director) patch.nominee_director = nextName;
+      const effectiveName = 'nominee_director' in patch ? (patch.nominee_director as string) : r.nominee_director;
+      const nextActive = !!effectiveName;
+      if (nextActive !== (r.nd_active === true)) patch.nd_active = nextActive;
       return Object.keys(patch).length ? [{ id: r.id, patch }] : [];
     });
     for (let i = 0; i < mlPatches.length; i += 10) {
