@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { parseDmy, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
+import { parseDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
 import { AutomationRun, withAutomationRun } from '@/lib/automation-sync';
 import { normalize } from '@/lib/company-name';
 
@@ -208,7 +208,17 @@ async function syncLateFiling(run: AutomationRun) {
 
       const gaps: number[] = [];
       let currentOverdueDays = 0;
+      // Named "latest" but until 2026-08-06 this only ever kept the FIRST
+      // fyeDate seen in the loop (`!latestFyeMonth` is only true before the
+      // first assignment) — a company that changed FYE partway through has
+      // older cycles under its old month sitting earlier in TeamWork's own
+      // history, exactly the bug already found and fixed in ar-reminder/
+      // sync-workflow's companies.fye_month correction (Vincent caught the
+      // inconsistency directly: "这个FYE的逻辑是否有按照之前设置ACTIVE
+      // CLIENT的逻辑一致"). Now genuinely compares ISO dates and keeps the
+      // highest one, same as that route.
       let latestFyeMonth: string | null = null;
+      let latestFyeIso: string | null = null;
       let lastAgmHeld: Date | null = null;
       let lastArFiled: Date | null = null;
       let earliestOutstandingDue: Date | null = null;
@@ -224,7 +234,11 @@ async function syncLateFiling(run: AutomationRun) {
         const filingDate = parseDmy(filingDateRaw);
         const completionDate = filingDate || heldDate;
         const fyeDate = parseDmy(fyeDateRaw);
-        if (fyeDate && !latestFyeMonth) latestFyeMonth = MONTH_ABBR[fyeDate.getMonth()];
+        const fyeIso = fyeDate ? toIsoDate(fyeDate) : null;
+        if (fyeDate && fyeIso && (!latestFyeIso || fyeIso > latestFyeIso)) {
+          latestFyeIso = fyeIso;
+          latestFyeMonth = MONTH_ABBR[fyeDate.getMonth()];
+        }
 
         if (event === 'AGM') {
           if (heldDate && (!lastAgmHeld || heldDate > lastAgmHeld)) lastAgmHeld = heldDate;
