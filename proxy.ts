@@ -9,6 +9,7 @@ const PUBLIC_PATHS = new Set(['/login', '/auth/callback', '/api/quickbooks/webho
 const CRON_PATHS = new Set([
   '/api/teamwork/sync-nd',
   '/api/teamwork/sync',
+  '/api/teamwork/sync-secretary',
   '/api/ar-reminder/generate',
   '/api/quickbooks/sync',
   '/api/ar-reminder/sync-workflow',
