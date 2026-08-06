@@ -198,7 +198,20 @@ async function syncTeamworkCompanies() {
       if (type   && type   !== row.company_type)                     patch.company_type = type;
       if (status !== row.tw_status)                                  patch.tw_status = status;
       if (internalCssActive !== (row.is_active === true))             patch.is_active = internalCssActive;
-      if (fyeMon && fyeMon !== row.fye_month)                        patch.fye_month = fyeMon;
+      // TeamWork's bulk fye_date field is known-stale (it can sit unchanged
+      // for years after a company's real AGM/AR cycles moved to a new FYE
+      // month — see ar-reminder/sync-workflow's self-correction, which
+      // derives the true latest FYE from actual event history instead).
+      // Unconditionally overwriting from this field every run meant
+      // whichever route ran LAST won — a manual/ad-hoc trigger of this sync
+      // could silently re-introduce a stale month the self-correction had
+      // already fixed (confirmed live 2026-08-06: BYTESFORCE/YINDA/FUN
+      // FLARE all reverted from December back to their old stale months
+      // immediately after this route ran). Now only fills fye_month on
+      // FIRST population (still empty) — every later correction is left
+      // entirely to the self-correction logic, which is proven more
+      // accurate and is the only place that should ever change it again.
+      if (fyeMon && !row.fye_month)                                  patch.fye_month = fyeMon;
       if (fyeDay && fyeDay !== row.fye_day)                          patch.fye_day = fyeDay;
       if (email  && email.toLowerCase() !== (row.best_email ?? '').toLowerCase()) patch.best_email = email;
       // Matches "9" and "9,11" alike — a stored value that's still raw
