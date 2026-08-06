@@ -314,18 +314,28 @@ async function syncTeamworkCompanies() {
       acRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }
-    for (const acRow of acRows) {
-      if (!acRow.roc_no) continue;
+    const addrPatches = acRows.flatMap(acRow => {
+      if (!acRow.roc_no) return [];
       const regAddr = regAddrByRegNo.get(String(acRow.roc_no).trim().toUpperCase());
-      if (!regAddr || regAddr === acRow.invoice_address) continue;
-      const { error: addrErr } = await supabase.from('master_list')
-        .update({ invoice_address: regAddr, updated_at: now }).eq('id', acRow.id);
-      if (addrErr) { activeClientAddressErrors++; continue; }
-      activeClientAddressUpdated++;
-      await logFieldChange(supabase, {
-        tableName: 'master_list', rowId: acRow.id, field: 'invoice_address',
-        oldValue: acRow.invoice_address, newValue: regAddr, changedBy: 'system:teamwork',
-      });
+      if (!regAddr || regAddr === acRow.invoice_address) return [];
+      return [{ id: acRow.id, oldValue: acRow.invoice_address, newValue: regAddr }];
+    });
+    // Batched like updates/ndPatches/mlPatches above — a sequential per-row
+    // await here (one update + one audit-log call each) was slow enough
+    // across ~900 Active Client rows to blow past Vercel's 300s cap and
+    // leave the whole sync stuck mid-run (caught in production 2026-08-06).
+    for (let i = 0; i < addrPatches.length; i += 10) {
+      const results = await Promise.all(addrPatches.slice(i, i + 10).map(async p => {
+        const { error: addrErr } = await supabase.from('master_list')
+          .update({ invoice_address: p.newValue, updated_at: now }).eq('id', p.id);
+        if (addrErr) return addrErr.message;
+        await logFieldChange(supabase, {
+          tableName: 'master_list', rowId: p.id, field: 'invoice_address',
+          oldValue: p.oldValue, newValue: p.newValue, changedBy: 'system:teamwork',
+        });
+        return null;
+      }));
+      for (const err of results) err ? activeClientAddressErrors++ : activeClientAddressUpdated++;
     }
   }
 
