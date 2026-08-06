@@ -255,6 +255,12 @@ export async function PATCH(req: NextRequest) {
     .update({
       [field]: stored, updated_at: updatedAt,
       updated_by_email: account?.email ?? null, updated_by_name: account?.name ?? null,
+      // The Secretary checkbox is purely a "does this cell have content"
+      // indicator for staff (Vincent: "有内容就需要打勾...那个打勾只是为了
+      // 让我方便辨认那些是有内容的"), unlike nd_active/acc_active/tax_active
+      // which are genuine independent service-status flags — so a manual
+      // edit to the name must always keep it in sync, not leave it to drift.
+      ...(field === 'secretary' ? { secretary_active: stored !== null } : {}),
     })
     .eq('id', id);
   if (BOOLEAN_FIELDS.has(field) && prevStored === false) {

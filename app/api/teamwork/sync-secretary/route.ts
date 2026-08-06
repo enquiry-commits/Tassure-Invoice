@@ -76,13 +76,23 @@ async function syncSecretaries(req: NextRequest) {
       const acRow = acRowByInternalId.get(profile.companyId);
       if (!acRow) return 'skip' as const;
       const newSecretary = profile.secretaries.length ? profile.secretaries.join(', ') : null;
-      const patch: Record<string, string | null> = { secretary_synced_at: now };
+      const patch: Record<string, string | boolean | null> = { secretary_synced_at: now };
       // secretary_synced_at still advances even when manual — otherwise this
       // row would permanently sort first and get re-fetched (for nothing)
       // every single night instead of the rest of the roster taking a turn.
       const isManual = !!(acRow.manual_fields as Record<string, boolean> | null)?.secretary;
       const changed = !isManual && newSecretary !== null && newSecretary !== acRow.secretary;
-      if (changed) patch.secretary = newSecretary;
+      if (changed) {
+        patch.secretary = newSecretary;
+        // The checkbox next to Secretary is purely a "does this cell have
+        // content" indicator for staff to scan the table (Vincent: "有内容
+        // 就需要打勾...那个打勾只是为了让我方便辨认那些是有内容的") — it has
+        // no automation of its own, so it must be driven here every time
+        // this route actually writes a real name, or it silently drifts out
+        // of sync with the text the moment automation (not a staff click)
+        // is what puts a name in the cell.
+        patch.secretary_active = true;
+      }
       const { error: updErr } = await supabase.from('master_list').update(patch).eq('id', acRow.id);
       if (updErr) return 'error' as const;
       if (changed) {

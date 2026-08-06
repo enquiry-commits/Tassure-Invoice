@@ -261,7 +261,7 @@ function PicCell({ name, active, onToggleActive, onSaveName }: {
 const SERVICE_CHIP_ACTIVE = { bg: '#f0fdf4', color: '#16a34a' };
 
 function ServiceChip({ name, active, onToggleActive, onSaveName }: {
-  name: string | null | undefined; active: boolean; onToggleActive: () => void; onSaveName: (val: string) => void;
+  name: string | null | undefined; active: boolean; onToggleActive?: () => void; onSaveName: (val: string) => void;
 }) {
   // Same canonical-baseline approach as PicCell above.
   const [val, setVal] = useState(formatStaffName(name));
@@ -274,8 +274,10 @@ function ServiceChip({ name, active, onToggleActive, onSaveName }: {
       display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, boxSizing: 'border-box', width: '100%',
       background: chipBg, border: `1px solid ${chipBorder}`,
     }}>
-      <span onClick={onToggleActive} title={active ? 'Click to turn off' : 'Click to turn on'} style={{
-        width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      <span onClick={onToggleActive}
+        title={onToggleActive ? (active ? 'Click to turn off' : 'Click to turn on') : 'Shows whether this cell has a name on file — kept in sync automatically'}
+        style={{
+        width: 20, height: 20, borderRadius: 6, flexShrink: 0, cursor: onToggleActive ? 'pointer' : undefined, display: 'flex', alignItems: 'center', justifyContent: 'center',
         background: active ? chipColor : '#e5e9f0', color: '#fff',
       }}>
         {active && <Check size={12} strokeWidth={3} />}
@@ -944,7 +946,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
           </span>
           <div style={{ flex: 1 }}>
             <ServiceChip name={value} active={!!active}
-              onToggleActive={() => onToggleActive(row.id, activeField, active)}
+              onToggleActive={c.field === 'secretary' ? undefined : () => onToggleActive(row.id, activeField, active)}
               onSaveName={val => {
                 onSave(row.id, c.field, val);
                 fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, field: c.field, value: val || null, previousValue: value || null }) });
@@ -1851,7 +1853,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                           </div>
                         ) : listType === 'active_client' && c.field === 'secretary' ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <CheckSquare checked={!!r.secretary_active} onToggle={() => toggleActive(r.id, 'secretary_active', r.secretary_active)} />
+                            <CheckSquare checked={!!r.secretary_active} />
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                           </div>
                         ) : c.field === 'company_name' && r.renamed_from ? (
