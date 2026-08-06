@@ -1229,7 +1229,15 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     // still shows its own error/conflict state on the cell, so this
     // staying slightly ahead of the server is harmless.
     setRows(prev => prev.map(r => r.id === id
-      ? { ...r, [field]: val || null, updated_at: new Date().toISOString(), updated_by_name: me?.name ?? r.updated_by_name }
+      ? {
+          ...r, [field]: val || null, updated_at: new Date().toISOString(), updated_by_name: me?.name ?? r.updated_by_name,
+          // The server derives secretary_active from the same write (see
+          // app/api/master-list/route.ts's PATCH) — mirrored here so the
+          // checkbox updates immediately instead of only catching up on
+          // the next reload (Vincent: "打勾还在，我刷新页面后，打勾才不
+          // 见...重新填写内容后，打勾又没有实现打勾回去，意思就是不同步").
+          ...(field === 'secretary' ? { secretary_active: !!val } : {}),
+        }
       : r));
   }, [me]);
 
