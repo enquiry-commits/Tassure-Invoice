@@ -91,19 +91,42 @@ async function scrapeMember(
     throw new Error('TeamWork appointment history returned an unexpected response.');
   }
 
-  const rows = await parserPage.evaluate((html: string) => {
+  // The Controller History table is a separate registration (Singapore
+  // beneficial-ownership/significant-control status) from a Director History
+  // subrole. It's already present in this same response at no extra fetch
+  // cost, and a company appearing there means this person's role at that
+  // company is accounted for even when the Director History row's own
+  // Subrole text was never filled in — Chen De's Beltroad appointment has a
+  // blank Subrole on his profile page but a standing Controller History
+  // entry, confirmed against TeamWork's live data.
+  const parsed = await parserPage.evaluate((html: string) => {
     const doc = new DOMParser().parseFromString(`<table><tbody>${html}</tbody></table>`, 'text/html');
-    const headerEl = Array.from(doc.querySelectorAll('th, strong, b'))
-      .find(el => (el.textContent ?? '').trim().toUpperCase() === 'DIRECTOR HISTORY');
-    const directorTable = headerEl ? headerEl.closest('table') : null;
+    const headers = Array.from(doc.querySelectorAll('th, strong, b'));
+
+    const directorHeader = headers.find(el => (el.textContent ?? '').trim().toUpperCase() === 'DIRECTOR HISTORY');
+    const directorTable = directorHeader ? directorHeader.closest('table') : null;
     if (!directorTable) return null;
-    return Array.from(directorTable.querySelectorAll('tr')).flatMap(row => {
+    const directorRows = Array.from(directorTable.querySelectorAll('tr')).flatMap(row => {
       const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent ?? '').trim());
       if (cells.length !== 5 || !cells[0] || cells[0] === 'Company Name') return [];
       return [{ company: cells[0], role: cells[1], appointment: cells[2], cessation: cells[3] }];
     });
+
+    const controllerHeader = headers.find(el => (el.textContent ?? '').trim().toUpperCase() === 'CONTROLLER HISTORY');
+    const controllerTable = controllerHeader ? controllerHeader.closest('table') : null;
+    const controllerCompanies = controllerTable
+      ? Array.from(controllerTable.querySelectorAll('tr')).flatMap(row => {
+          const cells = Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent ?? '').trim());
+          if (!cells[0] || cells[0] === 'Company Name') return [];
+          return [cells[0]];
+        })
+      : [];
+
+    return { directorRows, controllerCompanies };
   }, payload.res);
-  if (rows === null) throw new Error('TeamWork appointment history: could not locate the Director History table.');
+  if (parsed === null) throw new Error('TeamWork appointment history: could not locate the Director History table.');
+  const { directorRows: rows, controllerCompanies } = parsed;
+  const controllerCompanySet = new Set(controllerCompanies.map(name => name.trim().toUpperCase()));
 
   const appointments = rows
     .filter(row => row.role === 'Nominee Director')
@@ -116,8 +139,10 @@ async function scrapeMember(
 
   // A blank role with an appointment date and no cessation date is not
   // promoted into the active ND portfolio automatically: it is recorded for
-  // a person to confirm and repair in TeamWork first.
+  // a person to confirm and repair in TeamWork first — unless this person is
+  // already that company's registered Controller.
   const candidates = rows.flatMap(row => {
+    if (controllerCompanySet.has(row.company.trim().toUpperCase())) return [];
     const appointmentDate = parseDmy(row.appointment);
     const subroleIsBlank = row.role.trim() === '';
     const hasEffectiveAppointment = /\(effective\)/i.test(row.appointment) && !!appointmentDate;
