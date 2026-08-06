@@ -1706,8 +1706,6 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <span title="Nominee Director" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.nd_active} />ND</span>
                       <span title="Secretary" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.secretary_active} />SEC</span>
-                      <span title="ACC PIC" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.acc_active} />ACC</span>
-                      <span title="TAX PIC" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.tax_active} />TAX</span>
                     </div>
                   )}
                   {!isMobile && <div style={{ fontSize: 11, color: '#64748b' }}>{r.fye ?? '—'}</div>}

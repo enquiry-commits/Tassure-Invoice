@@ -7,21 +7,23 @@ import MasterListTable from '@/components/MasterListTable';
 // Other Master List pages (Ad-Hoc/MAS/Strike Off/Terminated/Name Change)
 // still use the full column set via MasterListTable's default.
 //
-// nominee_director/secretary/acc_pic/tax_pic are grouped right after status
-// as a "who's assigned" cluster — MasterListTable renders these four with a
-// green/grey checkbox next to the name (Active Client only; every other
-// Master List page still shows nominee_director/secretary as plain text,
-// and acc_pic/tax_pic don't exist for them at all since they're in
-// EXTRA_COLUMNS, opt-in only).
+// Further trimmed per Vincent's follow-up request: ACC/TAX, Incorp w/ Us,
+// MAS, Add @, Contact Window, and >13M Accts are also dropped from this
+// view (still available on the other Master List pages that use the full
+// column set, and still stored in the DB — just not shown here).
+//
+// nominee_director/secretary are grouped right after status as a "who's
+// assigned" cluster — MasterListTable renders these with a green/grey
+// checkbox next to the name (Active Client only; every other Master List
+// page still shows nominee_director/secretary as plain text).
 const ACTIVE_CLIENT_FIELDS = [
   'company_name', 'roc_no', 'status',
-  'nominee_director', 'secretary', 'acc_pic', 'tax_pic',
+  'nominee_director', 'secretary',
   'internal_code', 'join_date',
-  'add_here', 'invoice_address', 'contact_window', 'email', 'tel',
+  'invoice_address', 'email', 'tel',
   'annual_return', 'fye',
   'last_ar_date', 'last_agm_date', 'last_accounts_date', 'next_agm_due_date',
-  'months_from_last_accounts', 'remark', 'referral', 'risk_level',
-  'incorp_with_us', 'mas', 'grade',
+  'remark', 'referral', 'risk_level', 'grade',
 ] as const;
 
 export default function ActiveClientsPage() {
