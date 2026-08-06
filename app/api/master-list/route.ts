@@ -30,6 +30,21 @@ const EDITABLE_FIELDS = new Set([
 // field) would turn `false` into `null`, so they need their own coercion.
 const BOOLEAN_FIELDS = new Set(['nd_active', 'secretary_active', 'acc_active', 'tax_active']);
 
+// Active Client only: fields a nightly TeamWork sync also writes (see
+// ar-reminder/sync-workflow, teamwork/sync, teamwork/sync-secretary) — a
+// manual edit here must win from now on, tracked in master_list.manual_fields
+// (a JSONB map, not one column per field — see
+// scripts/add-master-list-manual-fields.sql). For the 6 text/date fields,
+// clearing the cell empty hands control back to automation, same as AR
+// Reminder's date_of_agm/filling_date `_manual` columns. nd_active has no
+// "empty" state (it's a checkbox), so any click always marks it manual —
+// the only way back to automation is the explicit `resumeAutomation` action
+// below.
+const AUTO_SYNCED_FIELDS = new Set([
+  'last_agm_date', 'last_ar_date', 'last_accounts_date', 'next_agm_due_date',
+  'invoice_address', 'secretary', 'nd_active',
+]);
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const type   = searchParams.get('type') ?? 'strike_off';
@@ -193,9 +208,23 @@ export async function DELETE(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
-  const { id, field, value } = body;
+  const { id, field } = body;
   if (!id || !field) return NextResponse.json({ error: 'id and field required' }, { status: 400 });
   if (!EDITABLE_FIELDS.has(field)) return NextResponse.json({ error: 'Field not editable' }, { status: 400 });
+
+  // A distinct, lightweight action: only clears the manual_fields flag,
+  // never touches the field's own stored value — lets staff hand a
+  // checkbox like nd_active back to automation without needing to "clear"
+  // it (there's no empty state for a checkbox, unlike the text/date fields).
+  if (body.resumeAutomation === true) {
+    if (!AUTO_SYNCED_FIELDS.has(field)) return NextResponse.json({ error: 'Field is not auto-synced' }, { status: 400 });
+    const supabase = createAdminClient();
+    const { error } = await supabase.rpc('set_master_list_manual_field', { p_row_id: id, p_field: field, p_manual: null });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  const { value } = body;
   if (!Object.prototype.hasOwnProperty.call(body, 'previousValue')) {
     return NextResponse.json({ error: 'previousValue is required for conflict-safe updates' }, { status: 428 });
   }
@@ -276,6 +305,15 @@ export async function PATCH(req: NextRequest) {
     const picField: PicField = field === 'acc_pic_override' ? 'acc_pic' : 'tax_pic';
     const roc = row.roc_no as string | null;
     await syncPicToArReminder(supabase, roc, picField, stored as string | null, account.email, account.name);
+  }
+
+  // Mark this field manual so tonight's TeamWork sync skips it — for the
+  // text/date fields, an edit back to empty hands control back to
+  // automation automatically; nd_active has no empty state, so any click
+  // marks it manual (see AUTO_SYNCED_FIELDS comment above).
+  if (AUTO_SYNCED_FIELDS.has(field)) {
+    const isManual = BOOLEAN_FIELDS.has(field) ? true : stored !== null;
+    await supabase.rpc('set_master_list_manual_field', { p_row_id: id, p_field: field, p_manual: isManual });
   }
 
   return NextResponse.json({ ok: true, updatedAt, updatedByName: account?.name ?? null });

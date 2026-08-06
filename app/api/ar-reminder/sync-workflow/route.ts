@@ -127,11 +127,12 @@ async function syncArWorkflow(req: NextRequest) {
   }
   const { data: activeClientRows } = await supabase
     .from('master_list')
-    .select('id, roc_no, last_agm_date, last_ar_date, last_accounts_date, next_agm_due_date')
+    .select('id, roc_no, last_agm_date, last_ar_date, last_accounts_date, next_agm_due_date, manual_fields')
     .eq('list_type', 'active_client');
   const activeClientByUen = new Map<string, {
     id: number; last_agm_date: string | null; last_ar_date: string | null;
     last_accounts_date: string | null; next_agm_due_date: string | null;
+    manual_fields: Record<string, boolean> | null;
   }>();
   for (const row of activeClientRows ?? []) {
     if (!row.roc_no) continue;
@@ -226,11 +227,16 @@ async function syncArWorkflow(req: NextRequest) {
             }
           }
         }
+        // A field flagged manual in master_list.manual_fields was edited by
+        // staff directly on this row — skip it here so this sync never
+        // fights that edit; clearing the cell back to empty removes the
+        // flag (see app/api/master-list's PATCH) and lets it resume here.
+        const manual = acRow.manual_fields ?? {};
         const acPatch: Record<string, string> = {};
-        if (latestAgmHeld && latestAgmHeld !== acRow.last_agm_date) acPatch.last_agm_date = latestAgmHeld;
-        if (latestArFiled && latestArFiled !== acRow.last_ar_date) acPatch.last_ar_date = latestArFiled;
-        if (latestArFiledFye && latestArFiledFye !== acRow.last_accounts_date) acPatch.last_accounts_date = latestArFiledFye;
-        if (nextAgmDue && nextAgmDue !== acRow.next_agm_due_date) acPatch.next_agm_due_date = nextAgmDue;
+        if (latestAgmHeld && latestAgmHeld !== acRow.last_agm_date && !manual.last_agm_date) acPatch.last_agm_date = latestAgmHeld;
+        if (latestArFiled && latestArFiled !== acRow.last_ar_date && !manual.last_ar_date) acPatch.last_ar_date = latestArFiled;
+        if (latestArFiledFye && latestArFiledFye !== acRow.last_accounts_date && !manual.last_accounts_date) acPatch.last_accounts_date = latestArFiledFye;
+        if (nextAgmDue && nextAgmDue !== acRow.next_agm_due_date && !manual.next_agm_due_date) acPatch.next_agm_due_date = nextAgmDue;
         if (Object.keys(acPatch).length) {
           const { error: acErr } = await supabase.from('master_list')
             .update({ ...acPatch, updated_at: new Date().toISOString() })

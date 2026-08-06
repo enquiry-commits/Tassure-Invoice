@@ -283,13 +283,17 @@ async function syncTeamworkCompanies() {
 
     // master_list has more rows than PostgREST's default page size (1000), so
     // an unpaginated select silently truncates — page through it explicitly.
-    const mlRows: { id: number; company_name: string; nd_active: boolean | null }[] = [];
+    const mlRows: { id: number; company_name: string; nd_active: boolean | null; manual_fields: Record<string, boolean> | null }[] = [];
     for (let start = 0; ; start += 1000) {
-      const { data: page } = await supabase.from('master_list').select('id, company_name, nd_active').range(start, start + 999);
+      const { data: page } = await supabase.from('master_list').select('id, company_name, nd_active, manual_fields').range(start, start + 999);
       mlRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }
+    // A row whose nd_active was manually toggled (see app/api/master-list's
+    // PATCH) is skipped here — a click always marks it manual since there's
+    // no "empty" checkbox state; staff resume automation explicitly.
     const mlPatches = mlRows
+      .filter(r => !r.manual_fields?.nd_active)
       .filter(r => ndSet.has(normalize(r.company_name)) !== (r.nd_active === true))
       .map(r => ({ id: r.id, nd_active: ndSet.has(normalize(r.company_name)) }));
     for (let i = 0; i < mlPatches.length; i += 10) {
@@ -307,15 +311,15 @@ async function syncTeamworkCompanies() {
   // than a second TeamWork call.
   let activeClientAddressUpdated = 0, activeClientAddressErrors = 0;
   {
-    const acRows: { id: number; roc_no: string | null; invoice_address: string | null }[] = [];
+    const acRows: { id: number; roc_no: string | null; invoice_address: string | null; manual_fields: Record<string, boolean> | null }[] = [];
     for (let start = 0; ; start += 1000) {
       const { data: page } = await supabase.from('master_list')
-        .select('id, roc_no, invoice_address').eq('list_type', 'active_client').range(start, start + 999);
+        .select('id, roc_no, invoice_address, manual_fields').eq('list_type', 'active_client').range(start, start + 999);
       acRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }
     const addrPatches = acRows.flatMap(acRow => {
-      if (!acRow.roc_no) return [];
+      if (!acRow.roc_no || acRow.manual_fields?.invoice_address) return [];
       const regAddr = regAddrByRegNo.get(String(acRow.roc_no).trim().toUpperCase());
       if (!regAddr || regAddr === acRow.invoice_address) return [];
       return [{ id: acRow.id, oldValue: acRow.invoice_address, newValue: regAddr }];

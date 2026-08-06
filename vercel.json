@@ -13,6 +13,10 @@
       "schedule": "30 18 * * *"
     },
     {
+      "path": "/api/teamwork/sync-secretary",
+      "schedule": "45 18 * * *"
+    },
+    {
       "path": "/api/ar-reminder/generate",
       "schedule": "0 19 * * *"
     },

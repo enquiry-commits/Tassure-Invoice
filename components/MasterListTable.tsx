@@ -88,6 +88,11 @@ export interface MasterListRow {
   // markTouched, without waiting for a reload.
   updated_at?: string | null;
   updated_by_name?: string | null;
+  // Which auto-synced fields a human has overridden (see
+  // scripts/add-master-list-manual-fields.sql) — last_agm_date, last_ar_date,
+  // last_accounts_date, next_agm_due_date, invoice_address, secretary,
+  // nd_active. A flagged field is skipped by tonight's TeamWork sync.
+  manual_fields?: Record<string, boolean> | null;
 }
 
 // Normalize any FYE value (month name/abbr, or dd/mm/yyyy date) to a month
@@ -115,7 +120,7 @@ function dateMismatch(a: string | null | undefined, b: string | null | undefined
 // tax_pic/nominee_director/secretary columns, not columns of their own —
 // excluded here so they can never be added to a `fields` list by mistake.
 type ColumnField = Exclude<keyof MasterListRow,
-  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to' | 'ar_date_of_agm' | 'ar_filling_date' | 'updated_at' | 'updated_by_name'>;
+  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to' | 'ar_date_of_agm' | 'ar_filling_date' | 'updated_at' | 'updated_by_name' | 'manual_fields'>;
 
 // Full column set — the default for every Master List page that passes no
 // `fields` prop (Strike Off, Terminated, Change Co Name). A page can pass
@@ -447,7 +452,16 @@ function RowActionMenu({ row, moveTargets, onMove, onDelete, dark = false }: {
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
 
-const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMismatch }: { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compactFyeMismatch?: string | null }) {
+// Fields a nightly TeamWork sync also writes (see AUTO_SYNCED_FIELDS in
+// app/api/master-list/route.ts — kept in sync with that set by hand, since
+// this is a client component and can't import a server route's constant).
+const AUTO_SYNCED_FIELDS_UI = new Set(['last_agm_date', 'last_ar_date', 'last_accounts_date', 'next_agm_due_date', 'invoice_address', 'secretary']);
+
+function AutoFillDot() {
+  return <span title="Auto-filled from TeamWork — clear the cell to hand this back to automation, or type a value to override it." style={{ width: 6, height: 6, minWidth: 6, borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }} />;
+}
+
+const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMismatch, isManual }: { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compactFyeMismatch?: string | null; isManual?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(value ?? '');
   const [status, setStatus] = useState<SaveStatus>('idle');
@@ -619,6 +633,7 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
     <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
+      {AUTO_SYNCED_FIELDS_UI.has(field) && !!shown && !isManual && <AutoFillDot />}
       {shown
         ? <span
             className={field === 'company_name' ? 'company-name-text' : field === 'roc_no' ? 'company-registration-text' : undefined}
@@ -690,8 +705,8 @@ function displayFieldValue(field: string, raw: string | null | undefined): strin
 // Long free-text fields (addresses, remarks, …) skip this — they stay an
 // always-visible auto-resizing textarea since a single-line click-to-edit
 // input would clip wrapped content.
-const ModalField = memo(function ModalField({ id, field, label, value, onSave, compact = false, dark = false }: {
-  id: number; field: string; label: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compact?: boolean; dark?: boolean;
+const ModalField = memo(function ModalField({ id, field, label, value, onSave, compact = false, dark = false, isManual = false }: {
+  id: number; field: string; label: string; value: string | null; onSave: (id: number, field: string, val: string) => void; compact?: boolean; dark?: boolean; isManual?: boolean;
 }) {
   const isDateField = DATE_FIELDS.has(field as ColumnField);
   // invoice_address is always used in wide (non-compact) mode — baking its
@@ -793,6 +808,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
       <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
         onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = dark ? 'rgba(255,255,255,0.1)' : '#f0f6ff'}
         onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
+        {AUTO_SYNCED_FIELDS_UI.has(field) && !!display && !isManual && <AutoFillDot />}
         {display
           ? <span style={{ fontSize: 12, color: dark ? '#fff' : '#374151' }}>{display}</span>
           : isDateField
@@ -812,6 +828,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
     <div>
       <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
         {label}
+        {AUTO_SYNCED_FIELDS_UI.has(field) && !!val.trim() && !isManual && <AutoFillDot />}
         {statusDot}
         {status === 'error' && <span style={{ color: '#dc2626', fontSize: 9 }}>save failed</span>}
         {status === 'conflict' && (
@@ -827,13 +844,14 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
 });
 
 
-function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive, onSaveOverride, moveTargets, onMove, onDelete }: {
+function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive, onSaveOverride, onResumeAutomation, moveTargets, onMove, onDelete }: {
   row: MasterListRow;
   fieldColumns: { field: ColumnField; label: string }[];
   onClose: () => void;
   onSave: (id: number, field: string, val: string) => void;
   onToggleActive: (id: number, field: 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active', current: boolean | null | undefined) => void;
   onSaveOverride: (id: number, field: 'acc_pic_override' | 'tax_pic_override', val: string, previousValue: string | null) => void;
+  onResumeAutomation: (id: number, field: string) => void;
   moveTargets?: MoveTarget[];
   onMove: (row: MasterListRow, target: MoveTarget) => void;
   onDelete: (row: MasterListRow) => void;
@@ -913,7 +931,17 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
       const active = c.field === 'nominee_director' ? row.nd_active : row.secretary_active;
       return (
         <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
-          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{c.label}</span>
+          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110, display: 'flex', alignItems: 'center', gap: 5 }}>
+            {c.label}
+            {AUTO_SYNCED_FIELDS_UI.has(c.field) && !!value && !row.manual_fields?.[c.field] && <AutoFillDot />}
+            {c.field === 'nominee_director' && row.manual_fields?.nd_active && (
+              <button onClick={() => onResumeAutomation(row.id, 'nd_active')}
+                title="Manually set — click to resume automatic ND sync"
+                style={{ border: 'none', background: 'transparent', color: '#3b82f6', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                <RotateCcw size={10} />
+              </button>
+            )}
+          </span>
           <div style={{ flex: 1 }}>
             <ServiceChip name={value} active={!!active}
               onToggleActive={() => onToggleActive(row.id, activeField, active)}
@@ -929,7 +957,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
       <div key={c.field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
         <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{c.label}</span>
         <div style={{ flex: 1 }}>
-          <ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} compact />
+          <ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} compact isManual={!!row.manual_fields?.[c.field]} />
         </div>
       </div>
     );
@@ -937,7 +965,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
 
   const renderWideField = (c: { field: ColumnField; label: string }, marginTop = 8) => (
     <div key={c.field} style={{ marginTop }}>
-      <ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} />
+      <ModalField id={row.id} field={c.field} label={c.label} value={(row as unknown as Record<string, string | null>)[c.field]} onSave={onSave} isManual={!!row.manual_fields?.[c.field]} />
     </div>
   );
 
@@ -1221,6 +1249,17 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: !!json.currentValue } : r));
       });
   }, [me]);
+
+  // Hands nd_active back to tonight's TeamWork sync — a click on the
+  // checkbox always marks it manual (there's no "empty" state to clear it
+  // back to, unlike a text field), so this is the only way to undo that.
+  // Only touches manual_fields, never the checkbox's own value.
+  const resumeAutomation = useCallback((id: number, field: string) => {
+    setRows(prev => prev.map(r => r.id === id
+      ? { ...r, manual_fields: { ...r.manual_fields, [field]: false } }
+      : r));
+    fetch('/api/master-list', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, field, resumeAutomation: true }) });
+  }, []);
 
   // ACC/TAX name edits write to the *_override column, which only takes
   // effect ahead of AR Reminder's synced value once set server-side — reload
@@ -1801,16 +1840,23 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         ) : listType === 'active_client' && c.field === 'nominee_director' ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <CheckSquare checked={!!r.nd_active} onToggle={() => toggleActive(r.id, 'nd_active', r.nd_active)} />
-                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                            {r.manual_fields?.nd_active && (
+                              <button onClick={e => { e.stopPropagation(); resumeAutomation(r.id, 'nd_active'); }}
+                                title="Manually set — click to resume automatic ND sync"
+                                style={{ border: 'none', background: 'transparent', color: '#3b82f6', cursor: 'pointer', padding: 0, display: 'flex', flexShrink: 0 }}>
+                                <RotateCcw size={10} />
+                              </button>
+                            )}
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                           </div>
                         ) : listType === 'active_client' && c.field === 'secretary' ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <CheckSquare checked={!!r.secretary_active} onToggle={() => toggleActive(r.id, 'secretary_active', r.secretary_active)} />
-                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                           </div>
                         ) : c.field === 'company_name' && r.renamed_from ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                             <span
                               title={`Renamed from "${r.renamed_from}"${r.renamed_to ? ` to "${r.renamed_to}"` : ''}`}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
@@ -1821,7 +1867,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                           (c.w ?? 180) <= 80
                             ? <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} compactFyeMismatch={r.tw_fye} />
                             : <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                                <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                                 <span
                                   title={`⚠ FYE mismatch — TeamWork says "${r.tw_fye}", manual entry is "${r.fye}". Please verify which is correct.`}
                                   style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
@@ -1830,7 +1876,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                               </div>
                         ) : c.field === 'last_agm_date' && dateMismatch(r.last_agm_date, r.ar_date_of_agm) ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                             <span
                               title={`⚠ AGM date mismatch — TeamWork's latest Held Date is "${r.last_agm_date}", AR Reminder's AGM column shows "${r.ar_date_of_agm}". Please verify which is correct.`}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
@@ -1839,7 +1885,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                           </div>
                         ) : c.field === 'last_ar_date' && dateMismatch(r.last_ar_date, r.ar_filling_date) ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                             <span
                               title={`⚠ AR filing date mismatch — TeamWork's latest Filing Date is "${r.last_ar_date}", AR Reminder's AR column shows "${r.ar_filling_date}". Please verify which is correct.`}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
@@ -1847,7 +1893,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                             </span>
                           </div>
                         ) : (
-                          <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} />
+                          <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                         )}
                       </td>
                     );
@@ -1910,6 +1956,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           onSave={handleSave}
           onToggleActive={toggleActive}
           onSaveOverride={saveOverride}
+          onResumeAutomation={resumeAutomation}
           moveTargets={moveTargets}
           onMove={moveRow}
           onDelete={deleteRow}

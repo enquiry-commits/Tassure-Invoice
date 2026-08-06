@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase';
 export type AutomationSource =
   | 'teamwork_companies'
   | 'teamwork_nd'
+  | 'teamwork_secretary'
   | 'ar_generate'
   | 'ar_workflow'
   | 'late_filing'
