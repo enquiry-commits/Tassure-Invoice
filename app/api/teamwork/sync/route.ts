@@ -6,6 +6,7 @@ import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@
 import { todaySGT } from '@/lib/date';
 import { syncTeamworkCampaignRecipients } from '@/lib/teamwork-recipients';
 import { syncTeamworkContactPersons } from '@/lib/teamwork-contact-report';
+import { logFieldChange } from '@/lib/audit-log';
 
 // Daily TeamWork -> companies sync (see vercel.json cron, 18:30 UTC / SGT
 // 02:30 — before the 19:00 UTC ar-reminder generator so new clients enter
@@ -142,6 +143,13 @@ async function syncTeamworkCompanies() {
   }
 
   const now = new Date().toISOString();
+  // UEN -> TeamWork's registered office address, collected in the loop below
+  // and used afterward to patch Master List's Active Client "Invoice/Reg Add"
+  // column — verified live against 16 real companies (2026-08-06) that this
+  // field reliably matches known-good addresses, unlike company_secretary_
+  // staff/company_email_address/company_telephone_number, which came back
+  // empty for nearly every company checked and are NOT used for auto-sync.
+  const regAddrByRegNo = new Map<string, string>();
   const updates: { id: number; patch: Record<string, unknown> }[] = [];
   const inserts: Record<string, unknown>[] = [];
   const unknownPicIds: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
@@ -179,6 +187,7 @@ async function syncTeamworkCompanies() {
     if (/^\d+$/.test(rawPic) && !resolvedPic) {
       unknownPicIds.push({ key: tw.company_id, name: twName, details: { teamwork_pic_id: rawPic } });
     }
+    if (regNo && regAddr) regAddrByRegNo.set(regNo.toUpperCase(), regAddr);
 
     if (row) {
       matched++;
@@ -291,6 +300,35 @@ async function syncTeamworkCompanies() {
     }
   }
 
+  // ── Active Client "Invoice/Reg Add" — always mirrors TeamWork's registered
+  // office address, keyed by UEN. Same fully-automated-column principle as
+  // last_agm_date/last_ar_date (see app/api/ar-reminder/sync-workflow's
+  // docstring) — this one just uses the address already fetched above rather
+  // than a second TeamWork call.
+  let activeClientAddressUpdated = 0, activeClientAddressErrors = 0;
+  {
+    const acRows: { id: number; roc_no: string | null; invoice_address: string | null }[] = [];
+    for (let start = 0; ; start += 1000) {
+      const { data: page } = await supabase.from('master_list')
+        .select('id, roc_no, invoice_address').eq('list_type', 'active_client').range(start, start + 999);
+      acRows.push(...(page ?? []));
+      if (!page || page.length < 1000) break;
+    }
+    for (const acRow of acRows) {
+      if (!acRow.roc_no) continue;
+      const regAddr = regAddrByRegNo.get(String(acRow.roc_no).trim().toUpperCase());
+      if (!regAddr || regAddr === acRow.invoice_address) continue;
+      const { error: addrErr } = await supabase.from('master_list')
+        .update({ invoice_address: regAddr, updated_at: now }).eq('id', acRow.id);
+      if (addrErr) { activeClientAddressErrors++; continue; }
+      activeClientAddressUpdated++;
+      await logFieldChange(supabase, {
+        tableName: 'master_list', rowId: acRow.id, field: 'invoice_address',
+        oldValue: acRow.invoice_address, newValue: regAddr, changedBy: 'system:teamwork',
+      });
+    }
+  }
+
   let updatedCount = 0;
   const updateErrors: string[] = [];
   for (let i = 0; i < updates.length; i += 10) {
@@ -348,6 +386,8 @@ async function syncTeamworkCompanies() {
     updated: updatedCount,
     nd_flag_updates: ndFlagUpdates,
     nd_active_updates: ndActiveUpdates,
+    active_client_address_updates: activeClientAddressUpdated,
+    active_client_address_errors: activeClientAddressErrors,
     inserted: insertedCount,
     inserted_names: dedupedInserts.map(r => r.company_name),
     skipped_ambiguous_names: skippedAmbiguous,

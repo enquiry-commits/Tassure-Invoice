@@ -45,9 +45,10 @@ import { logFieldChange } from '@/lib/audit-log';
  * changed FYE has OLDER cycles under its old month still sitting earlier
  * in the history).
  *
- * Also fills Master List's Active Client "Last AGM Date"/"Last AR Date"
- * columns (master_list.last_agm_date/last_ar_date) — a DIFFERENT, always-
- * automated pair from ar_reminder's date_of_agm/filling_date above, which
+ * Also fills Master List's Active Client "Last AGM Date"/"Last AR Date"/
+ * "Last Accts Date"/"Next AGM Due" columns (master_list.last_agm_date/
+ * last_ar_date/last_accounts_date/next_agm_due_date) — a DIFFERENT, always-
+ * automated set from ar_reminder's date_of_agm/filling_date above, which
  * stay staff-editable (Vincent: Active Client's columns should be the fully
  * automated source of truth; AR Reminder's stay manual, and any drift
  * between the two shows as a mismatch badge — see app/api/master-list's
@@ -56,6 +57,9 @@ import { logFieldChange } from '@/lib/audit-log';
  * the LATEST AGM "Held Date" and LATEST AR "Filing Date" across its whole
  * history (not scoped to one FYE cycle, since Active Client has no cycle
  * dimension) is written to the matching Active Client row, keyed by UEN.
+ * Last Accts Date is the FYE Date of that same latest-filed AR row (not
+ * just the newest FYE on file); Next AGM Due is the Due Date of the
+ * nearest not-yet-held AGM event.
  *
  * Cron: 20:00 UTC / SGT 04:00 daily (after the 19:00 UTC generator so new
  * rows sync same-day; the whole nightly chain targets finishing by SGT
@@ -123,9 +127,12 @@ async function syncArWorkflow(req: NextRequest) {
   }
   const { data: activeClientRows } = await supabase
     .from('master_list')
-    .select('id, roc_no, last_agm_date, last_ar_date')
+    .select('id, roc_no, last_agm_date, last_ar_date, last_accounts_date, next_agm_due_date')
     .eq('list_type', 'active_client');
-  const activeClientByUen = new Map<string, { id: number; last_agm_date: string | null; last_ar_date: string | null }>();
+  const activeClientByUen = new Map<string, {
+    id: number; last_agm_date: string | null; last_ar_date: string | null;
+    last_accounts_date: string | null; next_agm_due_date: string | null;
+  }>();
   for (const row of activeClientRows ?? []) {
     if (!row.roc_no) continue;
     activeClientByUen.set(String(row.roc_no).trim().toUpperCase(), row);
@@ -182,30 +189,48 @@ async function syncArWorkflow(req: NextRequest) {
       continue;
     }
 
-    // Active Client's Last AGM/AR Date — the latest event of each type across
-    // this company's WHOLE history (not scoped to one ar_reminder row's FYE
-    // cycle, unlike the per-row patch below), always overwritten with
-    // whatever TeamWork currently shows since this column is meant to be
-    // fully automated, not staff-editable.
+    // Active Client's Last AGM/AR/Accounts Date and Next AGM Due Date — the
+    // latest/next event of each type across this company's WHOLE history (not
+    // scoped to one ar_reminder row's FYE cycle, unlike the per-row patch
+    // below), always overwritten with whatever TeamWork currently shows since
+    // these columns are meant to be fully automated, not staff-editable.
+    //
+    // Field mapping confirmed against a real TeamWork AGM/AR history screenshot
+    // (Vincent, 2026-08-06): Last Accounts Date is the FYE Date on the SAME AR
+    // row as the latest filing (not just the newest FYE date on file — that
+    // could belong to a future, not-yet-filed cycle); Next AGM Due Date is the
+    // Due Date of the nearest not-yet-held AGM (the soonest deadline, so a
+    // company with more than one overdue year still gets the most urgent one).
     const uen = uenByInternalId.get(companyId);
     if (uen) {
       const acRow = activeClientByUen.get(uen);
       if (acRow) {
         let latestAgmHeld: string | null = null;
         let latestArFiled: string | null = null;
+        let latestArFiledFye: string | null = null;
+        let nextAgmDue: string | null = null;
         for (const ev of result.data ?? []) {
-          const [event, , , , , heldRaw, filingRaw] = ev;
+          const [event, , fyeRaw, , dueRaw, heldRaw, filingRaw] = ev;
           if (event === 'AGM') {
             const held = toIsoDate(parseDmy(heldRaw));
             if (held && (!latestAgmHeld || held > latestAgmHeld)) latestAgmHeld = held;
+            if (!held) {
+              const due = toIsoDate(parseDmy(dueRaw));
+              if (due && (!nextAgmDue || due < nextAgmDue)) nextAgmDue = due;
+            }
           } else if (event === 'AR') {
             const filing = toIsoDate(parseDmy(filingRaw));
-            if (filing && (!latestArFiled || filing > latestArFiled)) latestArFiled = filing;
+            if (filing && (!latestArFiled || filing > latestArFiled)) {
+              latestArFiled = filing;
+              latestArFiledFye = toIsoDate(parseDmy(fyeRaw));
+            }
           }
         }
         const acPatch: Record<string, string> = {};
         if (latestAgmHeld && latestAgmHeld !== acRow.last_agm_date) acPatch.last_agm_date = latestAgmHeld;
         if (latestArFiled && latestArFiled !== acRow.last_ar_date) acPatch.last_ar_date = latestArFiled;
+        if (latestArFiledFye && latestArFiledFye !== acRow.last_accounts_date) acPatch.last_accounts_date = latestArFiledFye;
+        if (nextAgmDue && nextAgmDue !== acRow.next_agm_due_date) acPatch.next_agm_due_date = nextAgmDue;
         if (Object.keys(acPatch).length) {
           const { error: acErr } = await supabase.from('master_list')
             .update({ ...acPatch, updated_at: new Date().toISOString() })
@@ -216,7 +241,7 @@ async function syncArWorkflow(req: NextRequest) {
             for (const [field, value] of Object.entries(acPatch)) {
               await logFieldChange(supabase, {
                 tableName: 'master_list', rowId: acRow.id, field,
-                oldValue: field === 'last_agm_date' ? acRow.last_agm_date : acRow.last_ar_date,
+                oldValue: acRow[field as keyof typeof acRow] as string | null,
                 newValue: value, changedBy: 'system:teamwork',
               });
             }
