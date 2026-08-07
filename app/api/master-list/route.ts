@@ -55,6 +55,43 @@ const AUTO_SYNCED_FIELDS = new Set([
   'internal_code', 'email', 'fye',
 ]);
 
+// CODE/Email/FYE specifically: their automation source is one cheap,
+// already-persisted `companies` row lookup (no live TeamWork call needed,
+// unlike the date fields or Secretary), so — per Vincent — a save is only
+// treated as manual when it genuinely DIFFERS from what automation
+// currently has, not just because it happens to be non-empty. A value a
+// human typed that happens to already match automation stays auto-owned
+// (blue dot), matching his own words: "只要是和TW的自动化内容是一致的，
+// 就先默认为自动化内容，要有小蓝点...但是后续如果有用户手动改了，才判断
+// 为手动内容". The other AUTO_SYNCED_FIELDS keep the simpler stored!==null
+// rule — their automation values aren't cheaply comparable at save time.
+const LIVE_COMPARISON_FIELDS = new Set(['internal_code', 'email', 'fye']);
+const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const MONTH_FULL = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+function fyeToAbbr(v: string | null): string | null {
+  if (!v) return null;
+  const s = v.trim().toUpperCase();
+  const fullIdx = MONTH_FULL.indexOf(s);
+  if (fullIdx >= 0) return MONTH_ABBR[fullIdx];
+  return MONTH_ABBR.includes(s.slice(0, 3)) ? s.slice(0, 3) : s;
+}
+
+async function computeAutomationValue(
+  supabase: ReturnType<typeof createAdminClient>, field: string, rocNo: string | null,
+): Promise<string | null> {
+  if (!rocNo) return null;
+  const { data: c } = await supabase.from('companies')
+    .select('internal_code, best_email, tw_to_emails, fye_month')
+    .eq('registration_no', rocNo).maybeSingle();
+  if (!c) return null;
+  if (field === 'internal_code') return c.internal_code ?? null;
+  if (field === 'email') {
+    return (Array.isArray(c.tw_to_emails) && c.tw_to_emails.length ? c.tw_to_emails.join(', ') : null) ?? c.best_email ?? null;
+  }
+  if (field === 'fye') return fyeToAbbr(c.fye_month);
+  return null;
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const type   = searchParams.get('type') ?? 'strike_off';
@@ -370,7 +407,11 @@ export async function PATCH(req: NextRequest) {
   // itself is never patched directly anymore, only nominee_director — see
   // AUTO_SYNCED_FIELDS comment above — but this stays correct if it ever is.)
   if (AUTO_SYNCED_FIELDS.has(field)) {
-    const isManual = BOOLEAN_FIELDS.has(field) ? true : stored !== null;
+    const isManual = BOOLEAN_FIELDS.has(field)
+      ? true
+      : LIVE_COMPARISON_FIELDS.has(field)
+        ? stored !== (await computeAutomationValue(supabase, field, row.roc_no as string | null))
+        : stored !== null;
     await supabase.rpc('set_master_list_manual_field', { p_row_id: id, p_field: field, p_manual: isManual });
   }
 
