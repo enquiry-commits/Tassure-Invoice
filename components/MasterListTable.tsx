@@ -457,7 +457,7 @@ type SaveStatus = 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
 // Fields a nightly TeamWork sync also writes (see AUTO_SYNCED_FIELDS in
 // app/api/master-list/route.ts — kept in sync with that set by hand, since
 // this is a client component and can't import a server route's constant).
-const AUTO_SYNCED_FIELDS_UI = new Set(['last_agm_date', 'last_ar_date', 'last_accounts_date', 'next_agm_due_date', 'invoice_address', 'secretary', 'nominee_director']);
+const AUTO_SYNCED_FIELDS_UI = new Set(['last_agm_date', 'last_ar_date', 'last_accounts_date', 'next_agm_due_date', 'invoice_address', 'secretary', 'nominee_director', 'internal_code', 'email', 'fye']);
 
 function AutoFillDot() {
   return <span title="Auto-filled from TeamWork — clear the cell to hand this back to automation, or type a value to override it." style={{ width: 6, height: 6, minWidth: 6, borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }} />;
@@ -1234,6 +1234,13 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           // 做一样的处理").
           ...(field === 'secretary' ? { secretary_active: !!val } : {}),
           ...(field === 'nominee_director' ? { nd_active: !!val } : {}),
+          // Same instant-sync fix, generalized: the server also flags
+          // manual_fields[field] on every auto-synced text field's save
+          // (see app/api/master-list/route.ts's `isManual` computation) —
+          // mirror it here too so the blue AutoFillDot appears/disappears
+          // immediately rather than only on the next reload, for every
+          // field in AUTO_SYNCED_FIELDS_UI (CODE/EMAIL/FYE included).
+          ...(AUTO_SYNCED_FIELDS_UI.has(field) ? { manual_fields: { ...r.manual_fields, [field]: !!val } } : {}),
         }
       : r));
   }, [me]);

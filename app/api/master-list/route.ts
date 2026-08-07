@@ -43,6 +43,15 @@ const BOOLEAN_FIELDS = new Set(['nd_active', 'secretary_active', 'acc_active', '
 const AUTO_SYNCED_FIELDS = new Set([
   'last_agm_date', 'last_ar_date', 'last_accounts_date', 'next_agm_due_date',
   'invoice_address', 'secretary', 'nominee_director', 'nd_active',
+  // Added per Vincent: "CODE / EMAIL / FYE(FYE MONTH) 都要做自动化处理" —
+  // internal_code mirrors companies.internal_code (TeamWork's own client_id,
+  // already synced there), email mirrors companies.best_email/tw_to_emails
+  // (already populated by the existing upcoming-events + contact-person-
+  // report fill-in, see lib/teamwork-contact-report.ts), fye mirrors
+  // companies.fye_month (the same self-corrected value ar-reminder/sync-
+  // workflow already proved reliable today) — all three had a real,
+  // already-computed automation source sitting unused.
+  'internal_code', 'email', 'fye',
 ]);
 
 export async function GET(req: NextRequest) {

@@ -150,6 +150,9 @@ async function syncTeamworkCompanies() {
   // staff/company_email_address/company_telephone_number, which came back
   // empty for nearly every company checked and are NOT used for auto-sync.
   const regAddrByRegNo = new Map<string, string>();
+  // UEN -> TeamWork's own client code (Vincent: "CODE...都要做自动化处理") —
+  // collected alongside regAddrByRegNo, same loop, no extra TeamWork call.
+  const codeByRegNo = new Map<string, string>();
   const updates: { id: number; patch: Record<string, unknown> }[] = [];
   const inserts: Record<string, unknown>[] = [];
   const unknownPicIds: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
@@ -188,6 +191,7 @@ async function syncTeamworkCompanies() {
       unknownPicIds.push({ key: tw.company_id, name: twName, details: { teamwork_pic_id: rawPic } });
     }
     if (regNo && regAddr) regAddrByRegNo.set(regNo.toUpperCase(), regAddr);
+    if (regNo && clientCode) codeByRegNo.set(regNo.toUpperCase(), clientCode);
 
     if (row) {
       matched++;
@@ -346,17 +350,19 @@ async function syncTeamworkCompanies() {
     }
   }
 
-  // ── Active Client "Invoice/Reg Add" — always mirrors TeamWork's registered
-  // office address, keyed by UEN. Same fully-automated-column principle as
-  // last_agm_date/last_ar_date (see app/api/ar-reminder/sync-workflow's
-  // docstring) — this one just uses the address already fetched above rather
-  // than a second TeamWork call.
+  // ── Active Client "Invoice/Reg Add" + "CODE" — always mirror TeamWork's
+  // registered office address and client code, both keyed by UEN. Same
+  // fully-automated-column principle as last_agm_date/last_ar_date (see
+  // app/api/ar-reminder/sync-workflow's docstring) — both just use data
+  // already fetched above rather than a second TeamWork call. CODE added
+  // per Vincent: "CODE / EMAIL / FYE(FYE MONTH) 都要做自动化处理".
   let activeClientAddressUpdated = 0, activeClientAddressErrors = 0;
+  let activeClientCodeUpdated = 0, activeClientCodeErrors = 0;
   {
-    const acRows: { id: number; roc_no: string | null; invoice_address: string | null; manual_fields: Record<string, boolean> | null }[] = [];
+    const acRows: { id: number; roc_no: string | null; invoice_address: string | null; internal_code: string | null; manual_fields: Record<string, boolean> | null }[] = [];
     for (let start = 0; ; start += 1000) {
       const { data: page } = await supabase.from('master_list')
-        .select('id, roc_no, invoice_address, manual_fields').eq('list_type', 'active_client').range(start, start + 999);
+        .select('id, roc_no, invoice_address, internal_code, manual_fields').eq('list_type', 'active_client').range(start, start + 999);
       acRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }
@@ -364,24 +370,36 @@ async function syncTeamworkCompanies() {
       if (!acRow.roc_no || acRow.manual_fields?.invoice_address) return [];
       const regAddr = regAddrByRegNo.get(String(acRow.roc_no).trim().toUpperCase());
       if (!regAddr || regAddr === acRow.invoice_address) return [];
-      return [{ id: acRow.id, oldValue: acRow.invoice_address, newValue: regAddr }];
+      return [{ id: acRow.id, field: 'invoice_address' as const, oldValue: acRow.invoice_address, newValue: regAddr }];
+    });
+    const codePatches = acRows.flatMap(acRow => {
+      if (!acRow.roc_no || acRow.manual_fields?.internal_code) return [];
+      const code = codeByRegNo.get(String(acRow.roc_no).trim().toUpperCase());
+      if (!code || code === acRow.internal_code) return [];
+      return [{ id: acRow.id, field: 'internal_code' as const, oldValue: acRow.internal_code, newValue: code }];
     });
     // Batched like updates/ndPatches/mlPatches above — a sequential per-row
     // await here (one update + one audit-log call each) was slow enough
     // across ~900 Active Client rows to blow past Vercel's 300s cap and
     // leave the whole sync stuck mid-run (caught in production 2026-08-06).
-    for (let i = 0; i < addrPatches.length; i += 10) {
-      const results = await Promise.all(addrPatches.slice(i, i + 10).map(async p => {
-        const { error: addrErr } = await supabase.from('master_list')
-          .update({ invoice_address: p.newValue, updated_at: now }).eq('id', p.id);
-        if (addrErr) return addrErr.message;
+    const allPatches = [...addrPatches, ...codePatches];
+    for (let i = 0; i < allPatches.length; i += 10) {
+      const results = await Promise.all(allPatches.slice(i, i + 10).map(async p => {
+        const { error: err } = await supabase.from('master_list')
+          .update({ [p.field]: p.newValue, updated_at: now }).eq('id', p.id);
+        if (err) return err.message;
         await logFieldChange(supabase, {
-          tableName: 'master_list', rowId: p.id, field: 'invoice_address',
+          tableName: 'master_list', rowId: p.id, field: p.field,
           oldValue: p.oldValue, newValue: p.newValue, changedBy: 'system:teamwork',
         });
         return null;
       }));
-      for (const err of results) err ? activeClientAddressErrors++ : activeClientAddressUpdated++;
+      for (let j = 0; j < results.length; j++) {
+        const p = allPatches[i + j];
+        const err = results[j];
+        if (p.field === 'invoice_address') err ? activeClientAddressErrors++ : activeClientAddressUpdated++;
+        else err ? activeClientCodeErrors++ : activeClientCodeUpdated++;
+      }
     }
   }
 
@@ -434,6 +452,54 @@ async function syncTeamworkCompanies() {
     contactPersonFillInError = error instanceof Error ? error.message : String(error);
   }
 
+  // ── Active Client "Email" — mirrors companies.tw_to_emails/best_email,
+  // which the two sync steps above (upcoming-events recipient report, then
+  // this contact-person-report fill-in) already keep populated for nearly
+  // every company. Runs last, after contactPersonFillIn, so a company that
+  // only just got its email filled in by that step still gets it mirrored
+  // into master_list the same run rather than waiting a day. Per Vincent:
+  // "CODE / EMAIL / FYE(FYE MONTH) 都要做自动化处理".
+  let activeClientEmailUpdated = 0, activeClientEmailErrors = 0;
+  {
+    const acRows: { id: number; roc_no: string | null; email: string | null; manual_fields: Record<string, boolean> | null }[] = [];
+    for (let start = 0; ; start += 1000) {
+      const { data: page } = await supabase.from('master_list')
+        .select('id, roc_no, email, manual_fields').eq('list_type', 'active_client').range(start, start + 999);
+      acRows.push(...(page ?? []));
+      if (!page || page.length < 1000) break;
+    }
+    const rocs = acRows.filter(r => r.roc_no && !r.manual_fields?.email).map(r => String(r.roc_no).trim().toUpperCase());
+    const emailByRegNo = new Map<string, string>();
+    if (rocs.length) {
+      const { data: comps } = await supabase.from('companies')
+        .select('registration_no, best_email, tw_to_emails').in('registration_no', rocs);
+      for (const c of comps ?? []) {
+        if (!c.registration_no) continue;
+        const emails = Array.isArray(c.tw_to_emails) && c.tw_to_emails.length ? c.tw_to_emails.join(', ') : c.best_email;
+        if (emails) emailByRegNo.set(c.registration_no.toUpperCase(), emails);
+      }
+    }
+    const emailPatches = acRows.flatMap(acRow => {
+      if (!acRow.roc_no || acRow.manual_fields?.email) return [];
+      const email = emailByRegNo.get(String(acRow.roc_no).trim().toUpperCase());
+      if (!email || email === acRow.email) return [];
+      return [{ id: acRow.id, oldValue: acRow.email, newValue: email }];
+    });
+    for (let i = 0; i < emailPatches.length; i += 10) {
+      const results = await Promise.all(emailPatches.slice(i, i + 10).map(async p => {
+        const { error: err } = await supabase.from('master_list')
+          .update({ email: p.newValue, updated_at: now }).eq('id', p.id);
+        if (err) return err.message;
+        await logFieldChange(supabase, {
+          tableName: 'master_list', rowId: p.id, field: 'email',
+          oldValue: p.oldValue, newValue: p.newValue, changedBy: 'system:teamwork',
+        });
+        return null;
+      }));
+      for (const err of results) err ? activeClientEmailErrors++ : activeClientEmailUpdated++;
+    }
+  }
+
   return NextResponse.json({
     ok: !insertError && !updateErrors.length && !recipientSyncError && !contactPersonFillInError,
     tw_total: twList.length,
@@ -444,6 +510,10 @@ async function syncTeamworkCompanies() {
     nd_active_updates: ndActiveUpdates,
     active_client_address_updates: activeClientAddressUpdated,
     active_client_address_errors: activeClientAddressErrors,
+    active_client_code_updates: activeClientCodeUpdated,
+    active_client_code_errors: activeClientCodeErrors,
+    active_client_email_updates: activeClientEmailUpdated,
+    active_client_email_errors: activeClientEmailErrors,
     inserted: insertedCount,
     inserted_names: dedupedInserts.map(r => r.company_name),
     skipped_ambiguous_names: skippedAmbiguous,
