@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, memo, Fragment } from 'react';
 import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, Calendar, Building2, Users, UserCheck, Landmark, CloudOff, History, RefreshCw } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import MetricCard from './MetricCard';
@@ -1487,13 +1487,18 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     usePagination(visibleRows, `${listType}|${search}|${catFilter}|${columnFilterKey}`);
 
   useEffect(() => { updateSb(); }, [rows, page, updateSb]);
+  // Order here is the actual on-screen order (Vincent: "non teamwork /
+  // missing from active client 卡片放到 第3/第4张的排序") — non_teamwork is
+  // 3rd; Missing from Active Client (its own card below, not in this array
+  // since it toggles a different panel) is rendered right after it as the
+  // 4th, ahead of fye_mismatch/has_nd/mas.
   const catCards: { key: typeof catFilter; label: string; sub: string; color: string; Icon: typeof Building2 }[] = [
     { key: 'all',           label: 'Total Records',   sub: 'in this list',                          color: '#1d3a5c', Icon: Building2 },
     { key: 'tw_css_client', label: 'TW CSS Clients',  sub: 'synced as CSS Client (Companies page)', color: '#0f766e', Icon: Users },
+    { key: 'non_teamwork',  label: 'Non-TeamWork',    sub: 'not found in TeamWork',                 color: '#b45309', Icon: CloudOff },
     { key: 'fye_mismatch',  label: 'FYE Mismatch',    sub: 'differs from TeamWork',                 color: '#dc2626', Icon: AlertTriangle },
     { key: 'has_nd',        label: 'Has Nominee Dir', sub: 'nominee director on file',              color: '#7c3aed', Icon: UserCheck },
     { key: 'mas',           label: 'MAS Regulated',   sub: 'MAS grade assigned',                    color: '#0369a1', Icon: Landmark },
-    { key: 'non_teamwork',  label: 'Non-TeamWork',    sub: 'not found in TeamWork',                 color: '#b45309', Icon: CloudOff },
   ];
 
   return (
@@ -1505,31 +1510,32 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         {catCards.map(c => {
           const active = catFilter === c.key;
           return (
-            <MetricCard
-              key={c.key}
-              onClick={() => setCatFilter(c.key)}
-              active={active}
-              value={catCount(c.key)}
-              label={c.label}
-              sub={c.sub}
-              icon={<c.Icon size={16} />}
-              color={c.color}
-              ariaLabel={`Filter records by ${c.label}`}
-            />
+            <Fragment key={c.key}>
+              <MetricCard
+                onClick={() => setCatFilter(c.key)}
+                active={active}
+                value={catCount(c.key)}
+                label={c.label}
+                sub={c.sub}
+                icon={<c.Icon size={16} />}
+                color={c.color}
+                ariaLabel={`Filter records by ${c.label}`}
+              />
+              {c.key === 'non_teamwork' && listType === 'active_client' && (
+                <MetricCard
+                  onClick={() => setShowMissingPanel(v => !v)}
+                  active={showMissingPanel}
+                  value={missingCssClients.length}
+                  label="Missing from Active Client"
+                  sub="TW CSS Client, no row here yet"
+                  icon={<AlertTriangle size={16} />}
+                  color="#b45309"
+                  ariaLabel="Show TeamWork CSS clients missing from Active Client"
+                />
+              )}
+            </Fragment>
           );
         })}
-        {listType === 'active_client' && (
-          <MetricCard
-            onClick={() => setShowMissingPanel(v => !v)}
-            active={showMissingPanel}
-            value={missingCssClients.length}
-            label="Missing from Active Client"
-            sub="TW CSS Client, no row here yet"
-            icon={<AlertTriangle size={16} />}
-            color="#b45309"
-            ariaLabel="Show TeamWork CSS clients missing from Active Client"
-          />
-        )}
       </div>
 
       {showMissingPanel && listType === 'active_client' && (
