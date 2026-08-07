@@ -1769,8 +1769,17 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           <h2 className="system-list-title">{title}</h2>
         </div>
 
-        {/* Phone: native swipe-scroll (the mirrored scrollbar is desktop-only) */}
-        <div ref={outerRef} style={{ overflowX: isMobile ? 'auto' : 'hidden', maxHeight: 'calc(100vh - 280px)', overflowY: 'auto' }}>
+        {/* Phone: native swipe-scroll (the mirrored scrollbar is desktop-only).
+            minHeight keeps this from shrinking to just a few rows' worth of
+            height when the filtered/searched result set is small — a column
+            filter dropdown opened from the header needs room to render its
+            search box, option list and buttons below it, and with too few
+            rows the container's own height (driven by its normal-flow
+            content; the dropdown itself is position:absolute and doesn't
+            expand it) was clipping that dropdown via overflowY (Vincent:
+            "当我的数据很小的时候，窗口会变到很小，导致我很难使用filter功能，
+            能不能默认窗口大小"). */}
+        <div ref={outerRef} style={{ overflowX: isMobile ? 'auto' : 'hidden', maxHeight: 'calc(100vh - 280px)', minHeight: 400, overflowY: 'auto' }}>
           <table style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
             <thead>
               <tr className="list-column-header-gray">
