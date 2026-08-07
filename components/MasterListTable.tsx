@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo, memo, Fragment } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, Calendar, Building2, Users, UserCheck, Landmark, CloudOff, History, RefreshCw } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, Calendar, Building2, Users, UserCheck, CloudOff, History, RefreshCw } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import MetricCard from './MetricCard';
 import { usePagination, PaginationBar } from './Pagination';
@@ -196,13 +196,6 @@ const STICKY_WIDTHS = [240, 110, 110]; // company_name, roc_no, status
 // both the table's inline editor and the modal, like AR Reminder's date
 // fields.
 const DATE_FIELDS = new Set<ColumnField>(['update_date', 'join_date', 'inc_date', 'last_ar_date', 'last_agm_date', 'last_accounts_date', 'next_agm_due_date', 'kyc_year']);
-
-// A free-text master_list cell counts as "set" (service in use) when it
-// holds anything beyond the common ways staff mark something absent.
-function isSet(v: string | null | undefined) {
-  const t = (v ?? '').trim().toUpperCase();
-  return t !== '' && !['NO', 'NA', 'N.A.', 'NONE', '-', '—', '0'].includes(t);
-}
 
 // On/off indicator for Active Client's Nominee Dir./Secretary/ACC/TAX
 // checkboxes — green+check when active. Freely toggleable (independent of
@@ -1122,7 +1115,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [rows, setRows]       = useState<MasterListRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch]   = useState('');
-  const [catFilter, setCatFilter] = useState<'all' | 'tw_css_client' | 'fye_mismatch' | 'has_nd' | 'mas' | 'non_teamwork'>('all');
+  const [catFilter, setCatFilter] = useState<'all' | 'tw_css_client' | 'fye_mismatch' | 'has_nd' | 'non_teamwork'>('all');
   const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnField, Set<string>>>>({});
   const [view, setView] = useState<'list' | 'table'>('list');
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
@@ -1132,6 +1125,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // its own small panel instead of a catFilter card.
   const [missingCssClients, setMissingCssClients] = useState<{ company_name: string; registration_no: string | null; internal_code: string | null }[]>([]);
   const [showMissingPanel, setShowMissingPanel] = useState(false);
+  // TeamWork's own total client count, independent of master_list — see
+  // app/api/master-list/route.ts's GET for how it's computed.
+  const [twTotalClientCount, setTwTotalClientCount] = useState(0);
   // Only for stamping the "last edited by" trace optimistically on this
   // client's own saves (see handleSave/toggleActive below) — not an auth
   // check, the server already enforces that.
@@ -1146,6 +1142,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       const json = await res.json();
       setRows(json.data ?? []);
       setMissingCssClients(json.missingCssClients ?? []);
+      setTwTotalClientCount(json.twTotalClientCount ?? 0);
     } finally { setLoading(false); }
   }, [listType, search]);
 
@@ -1459,7 +1456,6 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       case 'tw_css_client': return r.is_css_client === true;
       case 'fye_mismatch':  return isFyeMismatch(r);
       case 'has_nd':        return !!r.nd_active;
-      case 'mas':           return isSet(r.mas);
       case 'non_teamwork':  return r.in_teamwork === false;
       default:              return true;
     }
@@ -1491,14 +1487,15 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // missing from active client 卡片放到 第3/第4张的排序") — non_teamwork is
   // 3rd; Missing from Active Client (its own card below, not in this array
   // since it toggles a different panel) is rendered right after it as the
-  // 4th, ahead of fye_mismatch/has_nd/mas.
+  // 4th, ahead of fye_mismatch/has_nd. MAS Regulated removed per Vincent
+  // (replaced by the standalone TW Total Client card, rendered first,
+  // ahead of this whole array — see below).
   const catCards: { key: typeof catFilter; label: string; sub: string; color: string; Icon: typeof Building2 }[] = [
     { key: 'all',           label: 'Total Records',   sub: 'in this list',                          color: '#1d3a5c', Icon: Building2 },
     { key: 'tw_css_client', label: 'TW CSS Clients',  sub: 'synced as CSS Client (Companies page)', color: '#0f766e', Icon: Users },
     { key: 'non_teamwork',  label: 'Non-TeamWork',    sub: 'not found in TeamWork',                 color: '#b45309', Icon: CloudOff },
     { key: 'fye_mismatch',  label: 'FYE Mismatch',    sub: 'differs from TeamWork',                 color: '#dc2626', Icon: AlertTriangle },
     { key: 'has_nd',        label: 'Has Nominee Dir', sub: 'nominee director on file',              color: '#7c3aed', Icon: UserCheck },
-    { key: 'mas',           label: 'MAS Regulated',   sub: 'MAS grade assigned',                    color: '#0369a1', Icon: Landmark },
   ];
 
   return (
@@ -1507,6 +1504,16 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
 
       {/* Category cards — click to filter */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 16, width: '100%' }}>
+        {listType === 'active_client' && (
+          <MetricCard
+            value={twTotalClientCount}
+            label="TW Total Client"
+            sub="CSS Client, active in TeamWork"
+            icon={<Building2 size={16} />}
+            color="#1d3a5c"
+            ariaLabel="TeamWork's total active CSS Client count"
+          />
+        )}
         {catCards.map(c => {
           const active = catFilter === c.key;
           return (

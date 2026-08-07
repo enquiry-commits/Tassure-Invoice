@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
   //  - in_teamwork: this row's UEN exists in TeamWork. The master list is
   //    maintained by hand and normally has MORE companies than TeamWork —
   //    in_teamwork=false marks the ones TeamWork has no record of.
-  const { data: companies } = await supabase.from('companies').select('company_name, registration_no, fye_month, client_type, internal_code');
+  const { data: companies } = await supabase.from('companies').select('company_name, registration_no, fye_month, client_type, internal_code, is_active');
   const twFyeByUen = new Map<string, string>();
   const twUens = new Set<string>();
   const cssClientByUen = new Map<string, boolean>();
@@ -251,7 +251,18 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => a.company_name.localeCompare(b.company_name));
   }
 
-  return NextResponse.json({ type, total: enriched.length, data: enriched, missingCssClients });
+  // Active Client only: TeamWork's own total client count, independent of
+  // what's in master_list at all (Vincent: "TW TOTAL CLIENT...目前数据是
+  // 786...你要确保每天可以自动化准确的匹配到TW的数量") — reads companies.
+  // client_type/is_active, which the nightly teamwork/sync cron already
+  // keeps fresh for every TeamWork company (not just ones matched to a
+  // master_list row), so this number tracks TeamWork on its own without
+  // needing any new automation.
+  const twTotalClientCount = type === 'active_client'
+    ? (companies ?? []).filter(c => c.client_type === 'CSS Client' && c.is_active === true).length
+    : 0;
+
+  return NextResponse.json({ type, total: enriched.length, data: enriched, missingCssClients, twTotalClientCount });
 }
 
 export async function POST(req: NextRequest) {
