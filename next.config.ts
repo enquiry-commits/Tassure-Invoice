@@ -8,6 +8,9 @@ const nextConfig: NextConfig = {
       './node_modules/playwright-core/**',
       './node_modules/@sparticuz/chromium/**',
     ],
+    '/api/post-incorporate/generate': [
+      './templates/post-incorporate/**',
+    ],
   },
 };
 

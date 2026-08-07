@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, FileSignature } from 'lucide-react';
 
 // `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
 // yet (see NavImg below) — currently just Proposal Generator, a link out to
@@ -53,6 +53,9 @@ const tree: Node[] = [
       },
     ],
   },
+  // No 3D PNG asset yet for this one — falls back to the lucide icon (see
+  // the `node.img ? NavImg : Icon` branch in Level1/collapsed rendering).
+  { label: 'Post Incorporate', href: '/post-incorporate', icon: FileSignature },
   // Separate Vercel app (different domain — no shared session cookie), so
   // this goes through an SSO handoff route instead of the raw URL: it signs
   // a short-lived token for whoever's already logged in here, so Proposal
