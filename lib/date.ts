@@ -47,6 +47,17 @@ export function toIsoDateValue(input: string | null | undefined): string | null 
       : null;
   }
 
+  // Year-first with dot/slash separators, e.g. "2022.10.27" — unambiguous
+  // (a 4-digit leading group can only be the year), unlike the day/month/
+  // year pattern below. Found in Strike Off/Terminated's update_date field.
+  match = s.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);
+  if (match) {
+    const year = +match[1], month = +match[2], day = +match[3];
+    return validDateParts(year, month, day)
+      ? `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      : null;
+  }
+
   match = s.match(/^(\d{1,2})\s+([A-Za-z]+)\.?,?\s+(\d{4})$/);
   if (match) {
     const monthIndex = MONTH_INDEX[match[2].toLowerCase()];
@@ -84,6 +95,9 @@ export function toDisplayDate(input: string | null | undefined): string | null {
   if (!s) return null;
 
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);            // ISO (date or timestamp)
+  if (m) return fmtParts(+m[1], +m[2] - 1, +m[3]);
+
+  m = s.match(/^(\d{4})[./](\d{1,2})[./](\d{1,2})$/);     // "2022.10.27" (year-first, unambiguous)
   if (m) return fmtParts(+m[1], +m[2] - 1, +m[3]);
 
   m = s.match(/^(\d{1,2})\s+([A-Za-z]+)\.?,?\s+(\d{4})$/); // "3 Sep 2025" / "30 Sept 2025"

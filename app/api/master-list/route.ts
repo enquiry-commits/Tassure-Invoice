@@ -5,6 +5,7 @@ import { loadRenameMap } from '@/lib/company-rename';
 import { getRequestAccount } from '@/lib/request-account';
 import { logFieldChange } from '@/lib/audit-log';
 import { syncPicToArReminder, type PicField } from '@/lib/pic-sync';
+import { toIsoDateValue } from '@/lib/date';
 
 const EDITABLE_FIELDS = new Set([
   'update_date', 'internal_code', 'company_name', 'roc_no', 'status',
@@ -75,6 +76,27 @@ export async function GET(req: NextRequest) {
     .order('internal_code', { ascending: true, nullsFirst: false })
     .order('company_name', { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Strike Off / Terminated: Vincent wants newest Update Date at the top
+  // ("我要这两个TABLE的排序是按照最新的日期在最上方") — update_date is
+  // free-text with genuinely mixed formats across this dataset (DD/MM/YYYY,
+  // DD.MM.YYYY, "14 Nov 2019", even stray trailing text like "15/11/2023
+  // Resigned" or placeholder junk like "00/01/1900"), so a plain SQL sort
+  // would order it as text, not chronologically. Re-sorted here in JS using
+  // the same date parser already calibrated to this exact dataset's
+  // ambiguous dd/mm-vs-mm/dd conventions (lib/date.ts's toIsoDateValue,
+  // shared with the display formatter). Unparseable/missing dates sort last
+  // rather than being silently dropped or crashing the page.
+  if (type === 'strike_off' || type === 'terminated') {
+    (data ?? []).sort((a, b) => {
+      const isoA = toIsoDateValue(a.update_date);
+      const isoB = toIsoDateValue(b.update_date);
+      if (isoA && isoB) return isoB.localeCompare(isoA);
+      if (isoA) return -1;
+      if (isoB) return 1;
+      return 0;
+    });
+  }
 
   // Cross-check against the TeamWork-synced companies table, by UEN only:
   //  - tw_fye: authoritative FYE month, to flag mismatches vs the manual fye
