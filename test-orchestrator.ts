@@ -169,5 +169,28 @@ const simpleRondText = fullText(simpleRond.buffer);
 check('simple ROND: no unresolved placeholders', !/\{\{[^}]+\}\}/.test(simpleRondText));
 check('simple ROND: no leftover markers', !/\[\[?(?:END)?SECTION:/i.test(simpleRondText));
 
+console.log('\n=== Nominee shareholder scenario (RONS) ===');
+const nomineeShareholderInput: PostIncorporateInput = {
+  ...input,
+  shareholders: [
+    { ...input.shareholders[0], isNomineeShareholder: true, nominatorType: 'individual',
+      nominatorIndName: 'Shareholder Nominator', nominatorIndAddress: 'X', nominatorIndNationality: 'Singaporean',
+      nominatorIndIdentificationNumber: 'S9', nominatorIndBirthDate: '1970-01-01', nominatorIndEmail: 'x@x.com',
+      nominatorIndContactNumber: '9', nominatorIndDateBecameNominator: '2026-08-01' },
+    input.shareholders[1],
+  ],
+};
+const nomineeShareholderDocs = generatePostIncorporateDocuments(nomineeShareholderInput);
+const nomineeRons = nomineeShareholderDocs.find(d => d.filename.includes('Declaration of Maintenance of RONS'))!;
+const nomineeRonsText = fullText(nomineeRons.buffer);
+check('RONS: nominee shareholder nominator name appears', nomineeRonsText.includes('SHAREHOLDER NOMINATOR'));
+check('RONS: no unresolved placeholders', !/\{\{[^}]+\}\}/.test(nomineeRonsText));
+check('RONS: no leftover markers', !/\[\[?(?:END)?SECTION:/i.test(nomineeRonsText));
+check('RONS: strikethrough applied (has-nominee branch active)', (() => {
+  const zip = new PizZip(nomineeRons.buffer);
+  const xml = zip.file('word/document.xml')!.asText();
+  return /<w:strike w:val="1"\/>/.test(xml);
+})());
+
 console.log(`\n=== SUMMARY: ${failures === 0 ? 'ALL PASSED' : `${failures} FAILURE(S)`} ===`);
 process.exit(failures === 0 ? 0 : 1);

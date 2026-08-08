@@ -28,6 +28,7 @@ function emptyShareholder(): PostIncorporateShareholder {
     name: '', address: '', identificationType: 'NRIC', identificationNumber: '',
     numberOfShares: '', paidUpCapital: '', fullyPaidUp: false, shareCertificateNo: '',
     corporateDirectorNames: [], corpRepresentative: '', corpRepIdType: '', corpRepIdNo: '',
+    isNomineeShareholder: false, nominatorType: '',
   };
 }
 
@@ -259,6 +260,45 @@ export default function PostIncorporatePage() {
                           onChange={e => updateShareholder(i, { corporateDirectorNames: e.target.value.split('\n') })} />
                       </Field>
                     </div>
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2 text-sm mt-3">
+                  <input type="checkbox" checked={!!s.isNomineeShareholder} onChange={e => updateShareholder(i, { isNomineeShareholder: e.target.checked, nominatorType: e.target.checked ? (s.nominatorType || 'individual') : '' })} />
+                  <span>Nominee Shareholder</span>
+                </label>
+
+                {s.isNomineeShareholder && (
+                  <div className="mt-3 rounded-md bg-slate-50 border border-slate-200 p-3">
+                    <Field label="Nominator Type">
+                      <select className={inputClass} value={s.nominatorType} onChange={e => updateShareholder(i, { nominatorType: e.target.value as PostIncorporateShareholder['nominatorType'] })}>
+                        <option value="individual">Individual</option>
+                        <option value="corporate entity">Corporate Entity</option>
+                      </select>
+                    </Field>
+                    {s.nominatorType === 'individual' ? (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                        <Field label="Nominator Name"><input className={inputClass} value={s.nominatorIndName || ''} onChange={e => updateShareholder(i, { nominatorIndName: e.target.value })} /></Field>
+                        <Field label="Nominator Address"><input className={inputClass} value={s.nominatorIndAddress || ''} onChange={e => updateShareholder(i, { nominatorIndAddress: e.target.value })} /></Field>
+                        <Field label="Nominator Nationality"><input className={inputClass} value={s.nominatorIndNationality || ''} onChange={e => updateShareholder(i, { nominatorIndNationality: e.target.value })} /></Field>
+                        <Field label="Nominator ID Number"><input className={inputClass} value={s.nominatorIndIdentificationNumber || ''} onChange={e => updateShareholder(i, { nominatorIndIdentificationNumber: e.target.value })} /></Field>
+                        <Field label="Nominator Birth Date"><input type="date" className={inputClass} value={s.nominatorIndBirthDate || ''} onChange={e => updateShareholder(i, { nominatorIndBirthDate: e.target.value })} /></Field>
+                        <Field label="Nominator Email"><input className={inputClass} value={s.nominatorIndEmail || ''} onChange={e => updateShareholder(i, { nominatorIndEmail: e.target.value })} /></Field>
+                        <Field label="Nominator Contact No."><input className={inputClass} value={s.nominatorIndContactNumber || ''} onChange={e => updateShareholder(i, { nominatorIndContactNumber: e.target.value })} /></Field>
+                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={s.nominatorIndDateBecameNominator || ''} onChange={e => updateShareholder(i, { nominatorIndDateBecameNominator: e.target.value })} /></Field>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                        <Field label="Nominator Corp Name"><input className={inputClass} value={s.nominatorCorpName || ''} onChange={e => updateShareholder(i, { nominatorCorpName: e.target.value })} /></Field>
+                        <Field label="Nominator Corp UEN"><input className={inputClass} value={s.nominatorCorpUen || ''} onChange={e => updateShareholder(i, { nominatorCorpUen: e.target.value })} /></Field>
+                        <Field label="Registered Address"><input className={inputClass} value={s.nominatorCorpRegisteredAddress || ''} onChange={e => updateShareholder(i, { nominatorCorpRegisteredAddress: e.target.value })} /></Field>
+                        <Field label="Legal Form"><input className={inputClass} value={s.nominatorCorpLegalForm || ''} onChange={e => updateShareholder(i, { nominatorCorpLegalForm: e.target.value })} /></Field>
+                        <Field label="Corp Representative"><input className={inputClass} value={s.nominatorCorpRepresentative || ''} onChange={e => updateShareholder(i, { nominatorCorpRepresentative: e.target.value })} /></Field>
+                        <Field label="Corp Email"><input className={inputClass} value={s.nominatorCorpEmail || ''} onChange={e => updateShareholder(i, { nominatorCorpEmail: e.target.value })} /></Field>
+                        <Field label="Corp Contact No."><input className={inputClass} value={s.nominatorCorpContactNumber || ''} onChange={e => updateShareholder(i, { nominatorCorpContactNumber: e.target.value })} /></Field>
+                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={s.nominatorCorpDateBecameNominator || ''} onChange={e => updateShareholder(i, { nominatorCorpDateBecameNominator: e.target.value })} /></Field>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

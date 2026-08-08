@@ -106,6 +106,24 @@ export type PostIncorporateShareholder = {
   corpRepresentative?: string;
   corpRepIdType?: string;
   corpRepIdNo?: string;
+  isNomineeShareholder?: boolean;
+  nominatorType?: NominatorType;
+  nominatorIndName?: string;
+  nominatorIndAddress?: string;
+  nominatorIndNationality?: string;
+  nominatorIndIdentificationNumber?: string;
+  nominatorIndBirthDate?: string;
+  nominatorIndEmail?: string;
+  nominatorIndContactNumber?: string;
+  nominatorIndDateBecameNominator?: string;
+  nominatorCorpName?: string;
+  nominatorCorpUen?: string;
+  nominatorCorpRegisteredAddress?: string;
+  nominatorCorpLegalForm?: string;
+  nominatorCorpRepresentative?: string;
+  nominatorCorpEmail?: string;
+  nominatorCorpContactNumber?: string;
+  nominatorCorpDateBecameNominator?: string;
 };
 
 export type PostIncorporateCompany = {
@@ -549,28 +567,85 @@ function generateRondMaintenance(input: PostIncorporateInput): GeneratedDoc {
 
 // --- 09 Declaration of Maintenance of RONS -------------------------------
 
-// Post Incorporate does not currently collect nominee-shareholder detail on
-// the shareholder form (only nominee DIRECTOR is modeled) — RONS is
-// generated with nomineeYes = false (the common case) unless/until a
-// nominee-shareholder UI is added. This matches the template's own "no
-// nominee shareholder" branch faithfully rather than guessing data that
-// isn't collected.
+function nomineeShareholderItem(s: PostIncorporateShareholder): Record<string, string> {
+  const name = s.name.trim().toUpperCase();
+  const item: Record<string, string> = { ...BLANK_NOMINEE_FIELDS, nominator_type: s.nominatorType || '', nominee_shareholder_name: name, signature_position: '' };
+  if (s.nominatorType === 'individual') {
+    const indName = (s.nominatorIndName || '').trim().toUpperCase();
+    Object.assign(item, {
+      nominator_ind_name: indName,
+      nominator_corp_name: '',
+      nominator_ind_address: (s.nominatorIndAddress || '').trim(),
+      nominator_ind_nationality: (s.nominatorIndNationality || '').trim().toUpperCase(),
+      nominator_ind_nation: (s.nominatorIndNationality || '').trim().toUpperCase(),
+      nominator_ind_identification_number: (s.nominatorIndIdentificationNumber || '').trim().toUpperCase(),
+      nominator_ind_identityno: (s.nominatorIndIdentificationNumber || '').trim().toUpperCase(),
+      nominator_ind_birth_date: (s.nominatorIndBirthDate || '').trim(),
+      nominator_ind_birthdate: (s.nominatorIndBirthDate || '').trim(),
+      nominator_ind_email: (s.nominatorIndEmail || '').trim(),
+      nominator_ind_email_address: (s.nominatorIndEmail || '').trim(),
+      nominator_email: (s.nominatorIndEmail || '').trim(),
+      nominator_ind_contact_number: (s.nominatorIndContactNumber || '').trim(),
+      nominator_ind_contact_no: (s.nominatorIndContactNumber || '').trim(),
+      nominator_contactnumber: (s.nominatorIndContactNumber || '').trim(),
+      nominator_ind_date_became_nominator: (s.nominatorIndDateBecameNominator || '').trim(),
+      nominator_ind_date: (s.nominatorIndDateBecameNominator || '').trim(),
+      signature_name: indName,
+    });
+  } else if (s.nominatorType === 'corporate entity') {
+    const corpName = (s.nominatorCorpName || '').trim().toUpperCase();
+    const corpRep = (s.nominatorCorpRepresentative || '').trim().toUpperCase();
+    Object.assign(item, {
+      nominator_ind_name: '',
+      nominator_corp_name: corpName,
+      nominator_corp_uen: (s.nominatorCorpUen || '').trim().toUpperCase(),
+      nominator_corp_identityno: (s.nominatorCorpUen || '').trim().toUpperCase(),
+      nominator_corp_registered_address: (s.nominatorCorpRegisteredAddress || '').trim(),
+      nominator_corp_address: (s.nominatorCorpRegisteredAddress || '').trim(),
+      nominator_corp_legal_form: (s.nominatorCorpLegalForm || '').trim(),
+      nominator_corp_form: (s.nominatorCorpLegalForm || '').trim(),
+      nominator_corp_representative: corpRep,
+      nominator_corp_corp_representative: corpRep,
+      nominator_corp_email: (s.nominatorCorpEmail || '').trim(),
+      nominator_corp_email_address: (s.nominatorCorpEmail || '').trim(),
+      nominator_corp_contact_number: (s.nominatorCorpContactNumber || '').trim(),
+      nominator_corp_contact_no: (s.nominatorCorpContactNumber || '').trim(),
+      nominator_corp_date_became_nominator: (s.nominatorCorpDateBecameNominator || '').trim(),
+      nominator_corp_date: (s.nominatorCorpDateBecameNominator || '').trim(),
+      signature_name: corpName,
+      signature_position: corpRep ? `Corporate Representative of the Entity: ${corpRep}` : 'Corporate Representative of the Entity:',
+    });
+  } else {
+    Object.assign(item, { nominator_ind_name: '', nominator_corp_name: '', signature_name: name });
+  }
+  return item;
+}
+
 function generateRonsMaintenance(input: PostIncorporateInput): GeneratedDoc {
   const { xml: templateXml } = loadTemplate(TEMPLATE_FILES.ronsMaintenance);
   const chairman = chairmanDirector(input);
+  const nomineeShareholders = input.shareholders.filter(s => s.name.trim() && s.isNomineeShareholder);
+  const nomineeYes = nomineeShareholders.length > 0;
   const data: Record<string, string> = {
     ...baseData(input),
     ...directorIdFields(chairman, input.company.chairmanName),
   };
   let xml = templateXml;
-  xml = keepBothStrikeInactive(xml, 'nothavenomineeshareholder', 'havenomineeshareholder');
-  xml = keepSectionIf(xml, 'nomineeshareholder', false);
-  xml = replaceAllPlaceholders(xml, {
-    ...data, ...BLANK_NOMINEE_FIELDS,
-    nominator_type: '', nominee_shareholder_name: 'NA',
-    nominator_ind_name: 'NA', nominator_corp_name: 'NA',
-    signature_name: data.Chairman, signature_position: 'Director',
-  });
+  xml = keepBothStrikeInactive(xml, nomineeYes ? 'havenomineeshareholder' : 'nothavenomineeshareholder', nomineeYes ? 'nothavenomineeshareholder' : 'havenomineeshareholder');
+
+  if (nomineeYes) {
+    const items = nomineeShareholders.map(s => ({ ...data, ...nomineeShareholderItem(s) }));
+    xml = repeatSection(xml, 'nomineeshareholder', items, data);
+    xml = replaceAllPlaceholders(xml, { ...data, nominee_shareholder_name: nomineeShareholders[0].name.trim().toUpperCase() });
+  } else {
+    xml = keepSectionIf(xml, 'nomineeshareholder', false);
+    xml = replaceAllPlaceholders(xml, {
+      ...data, ...BLANK_NOMINEE_FIELDS,
+      nominator_type: '', nominee_shareholder_name: 'NA',
+      nominator_ind_name: 'NA', nominator_corp_name: 'NA',
+      signature_name: data.Chairman, signature_position: 'Director',
+    });
+  }
   xml = stripMarkerText(xml);
   return { filename: outputName(TEMPLATE_FILES.ronsMaintenance, 'strip'), buffer: renderDoc(TEMPLATE_FILES.ronsMaintenance, xml) };
 }
