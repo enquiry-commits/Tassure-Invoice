@@ -33,7 +33,17 @@ export type CompanyProfile = {
 // controller/director, that entity's own UEN — see inferIdType below.
 export type CompanyOfficial = { name: string; role: string; idNo: string; address: string; dateOfAppointment: string };
 
-export type CompanyProfileFull = CompanyProfile & { officials: CompanyOfficial[] };
+// One row of the "Shareholders Information" table — the actual share
+// register (distinct from the "Active Officials" Controller rows above,
+// which have no share data at all). Confirmed present on the same page,
+// under its own "Shareholders Information" heading.
+export type ShareholderShareInfo = {
+  name: string; issuedShareCapital: string; paidUpCapital: string;
+  considerationPaidUpCapital: string; numberOfShares: string; currency: string;
+  shareType: string; shareClass: string;
+};
+
+export type CompanyProfileFull = CompanyProfile & { officials: CompanyOfficial[]; shareholderShares: ShareholderShareInfo[] };
 
 // Singapore NRIC/FIN are a fixed 9-character shape (letter + 7 digits +
 // checksum letter); local UENs are 9-10 characters, digits with a trailing
@@ -105,6 +115,41 @@ function extractOfficials(html: string): CompanyOfficial[] {
   return officials;
 }
 
+// The company profile page renders a "Shareholders Information" heading
+// THREE times with three different table variants (confirmed 2026-08-09):
+// an empty hidden-state placeholder, the real current share register (8
+// columns: Shareholder Name, Issued Share Capital, Paid-up Capital,
+// Consideration Paid-up Capital, Number of Share, Currency, Share Type,
+// Share Class), and a separate share-transaction-history table with a
+// different column set entirely. Anchoring on the heading text picks
+// whichever occurs first — the empty placeholder — so anchor instead on
+// "Consideration Paid up Capital", a header phrase unique to the real
+// table, then find its enclosing <table>...</table> directly.
+function extractShareholderShares(html: string): ShareholderShareInfo[] {
+  const anchorIdx = html.indexOf('Consideration Paid up Capital');
+  if (anchorIdx === -1) return [];
+  const tableStart = html.lastIndexOf('<table', anchorIdx);
+  const tableEnd = html.indexOf('</table>', anchorIdx);
+  if (tableStart === -1 || tableEnd === -1) return [];
+  const tableHtml = html.slice(tableStart, tableEnd);
+  const rowRe = /<tr>([\s\S]*?)<\/tr>/g;
+  const out: ShareholderShareInfo[] = [];
+  let rowMatch: RegExpExecArray | null;
+  while ((rowMatch = rowRe.exec(tableHtml))) {
+    const cellRe = /<td[^>]*><label[^>]*>([\s\S]*?)<\/label><\/td>/g;
+    const cells: string[] = [];
+    let cellMatch: RegExpExecArray | null;
+    while ((cellMatch = cellRe.exec(rowMatch[1]))) cells.push(cellMatch[1].replace(/<[^>]+>/g, '').trim());
+    if (cells.length !== 8 || cells[0] === 'Shareholder Name') continue;
+    out.push({
+      name: cells[0], issuedShareCapital: cells[1], paidUpCapital: cells[2],
+      considerationPaidUpCapital: cells[3], numberOfShares: cells[4], currency: cells[5],
+      shareType: cells[6], shareClass: cells[7],
+    });
+  }
+  return out;
+}
+
 export async function fetchCompanyProfile(cookie: string, companyId: string, signal?: AbortSignal): Promise<CompanyProfile> {
   const html = await fetchProfileHtml(cookie, companyId, signal);
   const officials = extractOfficials(html);
@@ -119,7 +164,8 @@ export async function fetchCompanyProfile(cookie: string, companyId: string, sig
 export async function fetchCompanyProfileFull(cookie: string, companyId: string, signal?: AbortSignal): Promise<CompanyProfileFull> {
   const html = await fetchProfileHtml(cookie, companyId, signal);
   const officials = extractOfficials(html);
-  return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name), officials };
+  const shareholderShares = extractShareholderShares(html);
+  return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name), officials, shareholderShares };
 }
 
 // TeamWork throttles this endpoint at roughly a fixed total throughput

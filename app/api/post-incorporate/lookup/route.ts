@@ -15,12 +15,15 @@ import { fetchCompanyProfileFull, inferIdType } from '@/lib/teamwork-company-pro
 // against 5 real companies before wiring this up. This is a genuinely
 // reliable source, unlike master_list's own free-text `directors` column.
 //
-// Shareholders do NOT come from that same page automatically: TeamWork's
-// table has no "Shareholder" role or share-count column, only "Controller"
-// (Registrable Controller under RORC — commonly, but not legally always,
-// the same people as shareholders, and with no share count on file either
-// way). Controllers come back as `shareholderCandidates` for the page to
-// offer as one-click-add suggestions, not silently inserted as shareholders.
+// Shareholders come from a SEPARATE table on the same page — the real share
+// register (Shareholder Name/Issued Share Capital/Paid-up Capital/Number of
+// Share/Currency/Share Type), confirmed present and populated on real
+// companies (2026-08-09), joined by name against `officials` for
+// address/ID (Controller/Director rows for the same person, when present).
+// Still surfaced as one-click-add `shareholderCandidates` rather than
+// auto-inserted, since share data occasionally needs a human's judgment
+// (e.g. confirming which currently-active shareholder to use) that
+// Directors generally don't.
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
@@ -60,7 +63,10 @@ export async function GET(req: NextRequest) {
   const financialYearEndDayMonth = /^[A-Za-z]+$/.test(fyeRaw) ? fyeRaw : '';
 
   const directors: { name: string; address: string; identificationType: string; identificationNumber: string }[] = [];
-  const shareholderCandidates: { name: string; address: string; identificationType: string; identificationNumber: string }[] = [];
+  const shareholderCandidates: {
+    name: string; address: string; identificationType: string; identificationNumber: string;
+    numberOfShares: string; paidUpCapital: string; currency: string; shareType: string;
+  }[] = [];
   let teamworkError: string | null = null;
 
   const internalId = companyRow?.internal_id ? String(companyRow.internal_id) : '';
@@ -68,12 +74,28 @@ export async function GET(req: NextRequest) {
     try {
       const cookie = await getSessionCookie();
       const profile = await fetchCompanyProfileFull(cookie, internalId);
+      const byName = new Map(profile.officials.map(o => [o.name.trim().toUpperCase(), o]));
+
       for (const o of profile.officials) {
         const idType = inferIdType(o.idNo);
-        const person = { name: o.name, address: o.address, identificationType: idType, identificationNumber: o.idNo };
-        if (o.role === 'Director' && o.name) directors.push(person);
-        if (o.role === 'Controller' && o.name) shareholderCandidates.push(person);
+        if (o.role === 'Director' && o.name) directors.push({ name: o.name, address: o.address, identificationType: idType, identificationNumber: o.idNo });
         if (o.role === 'Secretary' && o.name && !secretaryName) secretaryName = o.name;
+      }
+
+      for (const s of profile.shareholderShares) {
+        if (!s.name) continue;
+        const matchedOfficial = byName.get(s.name.trim().toUpperCase());
+        const idNo = matchedOfficial?.idNo || '';
+        shareholderCandidates.push({
+          name: s.name,
+          address: matchedOfficial?.address || '',
+          identificationType: idNo ? inferIdType(idNo) : '',
+          identificationNumber: idNo,
+          numberOfShares: s.numberOfShares,
+          paidUpCapital: s.paidUpCapital,
+          currency: s.currency,
+          shareType: s.shareType,
+        });
       }
     } catch (error) {
       // TeamWork lookup is a bonus, not a hard requirement — a login/fetch

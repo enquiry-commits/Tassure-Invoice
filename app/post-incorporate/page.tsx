@@ -57,7 +57,8 @@ export default function PostIncorporatePage() {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupMessage, setLookupMessage] = useState<string | null>(null);
   const [hints, setHints] = useState<{ directors: string; shareholders: string; nomineeDirector: string } | null>(null);
-  const [shareholderCandidates, setShareholderCandidates] = useState<{ name: string; address: string; identificationType: string; identificationNumber: string }[]>([]);
+  type ShareholderCandidate = { name: string; address: string; identificationType: string; identificationNumber: string; numberOfShares: string; paidUpCapital: string; currency: string; shareType: string };
+  const [shareholderCandidates, setShareholderCandidates] = useState<ShareholderCandidate[]>([]);
 
   const updateDirector = (index: number, patch: Partial<PostIncorporateDirector>) =>
     setDirectors(current => current.map((d, i) => (i === index ? { ...d, ...patch } : d)));
@@ -88,9 +89,10 @@ export default function PostIncorporatePage() {
       setShareholderCandidates(body.shareholderCandidates || []);
 
       const twDirectors = (body.directors || []) as { name: string; address: string; identificationType: string; identificationNumber: string }[];
+      const candidateCount = (body.shareholderCandidates || []).length;
       if (twDirectors.length) {
-        setDirectors(twDirectors.map(d => ({ ...emptyDirector(), name: d.name, address: d.address, identificationType: d.identificationType, identificationNumber: d.identificationNumber })));
-        setLookupMessage(`Company info and ${twDirectors.length} director(s) pre-filled from TeamWork. Verify each director's details, and add Shareholders manually (or from the suggestions below) — share counts and paid-up capital aren't tracked in TeamWork.`);
+        setDirectors(twDirectors.map(d => ({ ...emptyDirector(), name: d.name, address: d.address, identificationType: d.identificationType || 'NRIC', identificationNumber: d.identificationNumber })));
+        setLookupMessage(`Company info and ${twDirectors.length} director(s) pre-filled from TeamWork.${candidateCount ? ` ${candidateCount} shareholder(s) found — click a suggestion below to add.` : ''} Verify all details before generating.`);
       } else {
         setLookupMessage('Company info pre-filled from existing records. TeamWork had no director records for this UEN (or this company isn\'t tracked there yet) — Directors/Shareholders need to be entered manually.');
       }
@@ -101,8 +103,13 @@ export default function PostIncorporatePage() {
     }
   }
 
-  function addShareholderFromCandidate(c: { name: string; address: string; identificationType: string; identificationNumber: string }) {
-    setShareholders(current => [...current, { ...emptyShareholder(), name: c.name, address: c.address, identificationType: c.identificationType, identificationNumber: c.identificationNumber }]);
+  function addShareholderFromCandidate(c: ShareholderCandidate) {
+    setShareholders(current => [...current, {
+      ...emptyShareholder(),
+      name: c.name, address: c.address,
+      identificationType: c.identificationType || 'NRIC', identificationNumber: c.identificationNumber,
+      numberOfShares: c.numberOfShares, paidUpCapital: c.paidUpCapital,
+    }]);
   }
 
   async function handleSubmit() {
@@ -294,12 +301,12 @@ export default function PostIncorporatePage() {
         </div>
         {shareholderCandidates.length > 0 && (
           <div className="rounded-md bg-blue-50 border border-blue-200 p-3 mb-4 text-sm">
-            <div className="font-medium text-blue-800 mb-1.5">From TeamWork&apos;s Registrable Controller register — verify shareholding % / share count before using, then add:</div>
+            <div className="font-medium text-blue-800 mb-1.5">From TeamWork&apos;s share register — verify before use, then add:</div>
             <div className="flex flex-wrap gap-2">
               {shareholderCandidates.map((c, idx) => (
                 <button key={idx} type="button" onClick={() => addShareholderFromCandidate(c)}
                   className="flex items-center gap-1 rounded-full bg-white border border-blue-300 text-blue-700 hover:bg-blue-100 px-3 py-1 text-xs font-medium">
-                  <Plus size={12} /> {c.name}
+                  <Plus size={12} /> {c.name} — {c.numberOfShares} {c.shareType} shares
                 </button>
               ))}
             </div>
