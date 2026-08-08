@@ -25,6 +25,29 @@ export type CompanyProfile = {
   secretaries: string[];
 };
 
+// A single row of the "Active Officials" table — Director, Secretary,
+// Controller (Registrable Controller under RORC — commonly but not always
+// the same people as shareholders; there is no distinct "Shareholder" role
+// or share-count column on this page), Representative, or Contact Person.
+// idNo covers both personal NRIC/FIN/passport numbers and, for a corporate
+// controller/director, that entity's own UEN — see inferIdType below.
+export type CompanyOfficial = { name: string; role: string; idNo: string; address: string; dateOfAppointment: string };
+
+export type CompanyProfileFull = CompanyProfile & { officials: CompanyOfficial[] };
+
+// Singapore NRIC/FIN are a fixed 9-character shape (letter + 7 digits +
+// checksum letter); local UENs are 9-10 characters, digits with a trailing
+// checksum letter, but no S/T/F/G prefix. Passports vary by issuing country
+// with no fixed shape. This is a best-effort classification for pre-filling
+// a form field, not a validated determination — always editable by staff.
+export function inferIdType(idNo: string): 'NRIC' | 'FIN' | 'UEN' | 'PASSPORT' {
+  const v = (idNo || '').trim().toUpperCase();
+  if (/^[ST]\d{7}[A-Z]$/.test(v)) return 'NRIC';
+  if (/^[FG]\d{7}[A-Z]$/.test(v)) return 'FIN';
+  if (/^\d{8,9}[A-Z]$/.test(v) || /^(19|20)\d{7}[A-Z]$/.test(v)) return 'UEN';
+  return 'PASSPORT';
+}
+
 function fetchProfileHtml(cookie: string, companyId: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -62,14 +85,14 @@ function fetchProfileHtml(cookie: string, companyId: string, signal?: AbortSigna
 // page (a literal "Articles/Constitution" info block) — scope the search to
 // start after the "Active Officials" heading so the first match of that
 // class after that point is the real officials table.
-function extractSecretaries(html: string): string[] {
+function extractOfficials(html: string): CompanyOfficial[] {
   const headingIdx = html.indexOf('Active Officials');
   if (headingIdx === -1) return [];
   const after = html.slice(headingIdx);
   const tableMatch = after.match(/<table[^>]*class="tble articles_constitution"[^>]*>([\s\S]*?)<\/table>/);
   if (!tableMatch) return [];
   const rowRe = /<tr>([\s\S]*?)<\/tr>/g;
-  const names: string[] = [];
+  const officials: CompanyOfficial[] = [];
   let rowMatch: RegExpExecArray | null;
   while ((rowMatch = rowRe.exec(tableMatch[1]))) {
     const cellRe = /<td[^>]*><label[^>]*>([\s\S]*?)<\/label><\/td>/g;
@@ -77,14 +100,26 @@ function extractSecretaries(html: string): string[] {
     let cellMatch: RegExpExecArray | null;
     while ((cellMatch = cellRe.exec(rowMatch[1]))) cells.push(cellMatch[1].replace(/<[^>]+>/g, '').trim());
     if (cells.length !== 5 || cells[0] === 'Name') continue;
-    if (cells[1] === 'Secretary') names.push(cells[0]);
+    officials.push({ name: cells[0], role: cells[1], idNo: cells[2], address: cells[3], dateOfAppointment: cells[4] });
   }
-  return names;
+  return officials;
 }
 
 export async function fetchCompanyProfile(cookie: string, companyId: string, signal?: AbortSignal): Promise<CompanyProfile> {
   const html = await fetchProfileHtml(cookie, companyId, signal);
-  return { companyId, secretaries: extractSecretaries(html) };
+  const officials = extractOfficials(html);
+  return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name) };
+}
+
+// Full "Active Officials" table — Directors, Controllers, etc., each with ID
+// number/address/appointment date, not just the Secretary name. Used by the
+// Post Incorporate UEN lookup to pre-fill Directors reliably; unlike
+// fetchCompanyProfile above (a rotating nightly sync writing one column),
+// this is called on-demand for a single company at a time.
+export async function fetchCompanyProfileFull(cookie: string, companyId: string, signal?: AbortSignal): Promise<CompanyProfileFull> {
+  const html = await fetchProfileHtml(cookie, companyId, signal);
+  const officials = extractOfficials(html);
+  return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name), officials };
 }
 
 // TeamWork throttles this endpoint at roughly a fixed total throughput
