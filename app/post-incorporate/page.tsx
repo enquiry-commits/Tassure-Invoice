@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, Loader2, FileSignature, Download } from 'lucide-react';
+import { Plus, Trash2, Loader2, FileSignature, Download, Search, Info } from 'lucide-react';
 import type { PostIncorporateCompany, PostIncorporateDirector, PostIncorporateShareholder } from '@/lib/docx-post-incorporate';
 
 const ID_TYPES_DIRECTOR = ['NRIC', 'PASSPORT', 'FIN'];
@@ -53,10 +53,43 @@ export default function PostIncorporatePage() {
   const [errors, setErrors] = useState<string[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const [uenLookup, setUenLookup] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupMessage, setLookupMessage] = useState<string | null>(null);
+  const [hints, setHints] = useState<{ directors: string; shareholders: string; nomineeDirector: string } | null>(null);
+
   const updateDirector = (index: number, patch: Partial<PostIncorporateDirector>) =>
     setDirectors(current => current.map((d, i) => (i === index ? { ...d, ...patch } : d)));
   const updateShareholder = (index: number, patch: Partial<PostIncorporateShareholder>) =>
     setShareholders(current => current.map((s, i) => (i === index ? { ...s, ...patch } : s)));
+
+  async function handleUenLookup() {
+    const uen = uenLookup.trim();
+    if (!uen) return;
+    setLookupLoading(true);
+    setLookupMessage(null);
+    setHints(null);
+    try {
+      const res = await fetch(`/api/post-incorporate/lookup?uen=${encodeURIComponent(uen)}`);
+      const body = await res.json();
+      if (!res.ok) { setLookupMessage(body.error || 'Lookup failed.'); return; }
+      if (!body.found) { setLookupMessage(`No record found for UEN "${uen}" — fill in the details manually.`); return; }
+      setCompany(current => ({
+        ...current,
+        name: body.company.name || current.name,
+        uen: body.company.uen || current.uen,
+        address: body.company.address || current.address,
+        secretaryName: body.company.secretaryName || current.secretaryName,
+        financialYearEndDayMonth: body.company.financialYearEndDayMonth || current.financialYearEndDayMonth,
+      }));
+      setHints(body.hints);
+      setLookupMessage('Company info pre-filled from existing records. Directors/Shareholders still need to be entered manually — see reference notes below (this system doesn\'t hold verified ID/address details for them).');
+    } catch (error) {
+      setLookupMessage(error instanceof Error ? error.message : 'Unexpected error during lookup.');
+    } finally {
+      setLookupLoading(false);
+    }
+  }
 
   async function handleSubmit() {
     setErrors([]);
@@ -105,6 +138,25 @@ export default function PostIncorporatePage() {
         Staff then file the ZIP's contents into the client's network folder manually, as usual.
       </p>
 
+      {/* UEN lookup */}
+      <section className={cardClass}>
+        <div className={sectionTitleClass}>Auto-fill from UEN</div>
+        <div className="flex items-end gap-3">
+          <div className="flex-1 max-w-xs">
+            <Field label="UEN">
+              <input className={inputClass} value={uenLookup} onChange={e => setUenLookup(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleUenLookup(); } }} placeholder="e.g. 202612345X" />
+            </Field>
+          </div>
+          <button type="button" onClick={handleUenLookup} disabled={lookupLoading || !uenLookup.trim()}
+            className="flex items-center gap-2 rounded-md bg-slate-800 hover:bg-slate-900 disabled:opacity-60 text-white text-sm font-medium px-4 py-2">
+            {lookupLoading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+            Look up
+          </button>
+        </div>
+        {lookupMessage && <p className="text-sm text-slate-500 mt-2">{lookupMessage}</p>}
+      </section>
+
       {/* Company */}
       <section className={cardClass}>
         <div className={sectionTitleClass}>Company Information</div>
@@ -125,6 +177,20 @@ export default function PostIncorporatePage() {
           <span>Company needs Nominee Director (ND) service — generates the ND Agreement</span>
         </label>
       </section>
+
+      {hints && (hints.directors || hints.shareholders || hints.nomineeDirector) && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 flex gap-2">
+          <Info size={16} className="shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold mb-1">Reference notes from existing records (not auto-filled — verify and enter below)</div>
+            <ul className="flex flex-col gap-0.5">
+              {hints.directors && <li><span className="font-medium">Directors:</span> {hints.directors}</li>}
+              {hints.shareholders && <li><span className="font-medium">Shareholders:</span> {hints.shareholders}</li>}
+              {hints.nomineeDirector && <li><span className="font-medium">Nominee Director:</span> {hints.nomineeDirector}</li>}
+            </ul>
+          </div>
+        </div>
+      )}
 
       {/* Directors */}
       <section className={cardClass}>
