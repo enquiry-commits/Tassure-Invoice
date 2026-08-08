@@ -11,10 +11,6 @@ const nextConfig: NextConfig = {
     '/api/post-incorporate/generate': [
       './templates/post-incorporate/**',
     ],
-    '/api/post-incorporate/lookup': [
-      './node_modules/playwright-core/**',
-      './node_modules/@sparticuz/chromium/**',
-    ],
   },
 };
 

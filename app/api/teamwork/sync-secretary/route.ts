@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getSessionCookie } from '@/lib/teamwork-agm';
-import { fetchCompanyProfiles } from '@/lib/teamwork-company-profile';
+import { fetchCompanyProfilesFull, inferIdType } from '@/lib/teamwork-company-profile';
 import { withAutomationRun } from '@/lib/automation-sync';
 import { logFieldChange } from '@/lib/audit-log';
 
 /**
  * Active Client "Secretary" auto-sync — rotating batch, not a full sweep.
+ * ALSO writes the full officials list and shareholder share register to
+ * teamwork_company_officials/teamwork_shareholder_shares for every company
+ * fetched this run (added 2026-08-09, per Vincent: "这些可以做每天更新吗？
+ * ...可以记录在数据库，更方便调用在post incorp") — reuses this route's
+ * existing per-company profile fetch rather than hitting TeamWork a second
+ * time for the same page, since Post Incorporate's UEN lookup only needs
+ * Director/Shareholder data, not a live fetch on every request.
  *
  * TeamWork's per-company profile page (view_company/<id>/?comp) has the real
  * Secretary appointment (its bulk company API does not — company_secretary_
@@ -67,9 +74,41 @@ async function syncSecretaries(req: NextRequest) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 502 });
   }
 
-  const { results, errors } = await fetchCompanyProfiles(cookie, [...acRowByInternalId.keys()]);
+  const { results, errors } = await fetchCompanyProfilesFull(cookie, [...acRowByInternalId.keys()]);
 
   const now = new Date().toISOString();
+
+  // Officials + share register: wholesale replace per company (delete then
+  // insert), so each company's rows are always a full, current snapshot as
+  // of this sync, not a partial merge with whatever was there before.
+  const uenByInternalId = new Map((companies ?? []).map(c => [c.internal_id as string, String(c.registration_no).trim().toUpperCase()]));
+  const fetchedInternalIds = results.map(p => p.companyId);
+  if (fetchedInternalIds.length) {
+    await supabase.from('teamwork_company_officials').delete().in('internal_id', fetchedInternalIds);
+    await supabase.from('teamwork_shareholder_shares').delete().in('internal_id', fetchedInternalIds);
+    const officialRows = results.flatMap(p => p.officials
+      .filter(o => o.name)
+      .map(o => ({
+        internal_id: p.companyId, uen: uenByInternalId.get(p.companyId) ?? null,
+        name: o.name, role: o.role, id_no: o.idNo, id_type: o.idNo ? inferIdType(o.idNo) : null,
+        address: o.address, date_of_appointment: o.dateOfAppointment, synced_at: now,
+      })));
+    const shareRows = results.flatMap(p => p.shareholderShares
+      .filter(s => s.name)
+      .map(s => ({
+        internal_id: p.companyId, uen: uenByInternalId.get(p.companyId) ?? null,
+        shareholder_name: s.name, issued_share_capital: s.issuedShareCapital, paid_up_capital: s.paidUpCapital,
+        consideration_paid_up_capital: s.considerationPaidUpCapital, number_of_shares: s.numberOfShares,
+        currency: s.currency, share_type: s.shareType, share_class: s.shareClass, synced_at: now,
+      })));
+    for (let i = 0; i < officialRows.length; i += 500) {
+      await supabase.from('teamwork_company_officials').insert(officialRows.slice(i, i + 500));
+    }
+    for (let i = 0; i < shareRows.length; i += 500) {
+      await supabase.from('teamwork_shareholder_shares').insert(shareRows.slice(i, i + 500));
+    }
+  }
+
   let updated = 0, unchanged = 0, updateErrors = 0;
   for (let i = 0; i < results.length; i += 10) {
     const batchResults = await Promise.all(results.slice(i, i + 10).map(async profile => {
@@ -127,6 +166,8 @@ async function syncSecretaries(req: NextRequest) {
     updated,
     unchanged,
     update_errors: updateErrors,
+    officials_synced: results.reduce((n, p) => n + p.officials.filter(o => o.name).length, 0),
+    shareholders_synced: results.reduce((n, p) => n + p.shareholderShares.filter(s => s.name).length, 0),
   });
 }
 

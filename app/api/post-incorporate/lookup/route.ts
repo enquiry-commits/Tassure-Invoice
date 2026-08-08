@@ -1,33 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
-import { getSessionCookie } from '@/lib/teamwork-agm';
-import { fetchCompanyProfileFull, inferIdType } from '@/lib/teamwork-company-profile';
 
 // Looks up a company by UEN to pre-fill the Post Incorporate form.
 //
 // Company Information (name, UEN, address, secretary, FYE) comes from
 // master_list/companies — fields this system already tracks reliably.
 //
-// Directors come from TeamWork's own per-company "Active Officials" page
-// (view_company/<id>/?comp), which turns out to hold real, structured
-// Name/Role/ID No./Address/Date of Appointment data per official — verified
-// against 5 real companies before wiring this up. This is a genuinely
-// reliable source, unlike master_list's own free-text `directors` column.
+// Directors and Shareholders come from teamwork_company_officials /
+// teamwork_shareholder_shares — a nightly-synced snapshot of TeamWork's
+// per-company profile page (view_company/<id>/?comp), populated by
+// app/api/teamwork/sync-secretary/route.ts's existing rotating batch (added
+// 2026-08-09, per Vincent: "这些可以做每天更新吗？...可以记录在数据库，更方便
+// 调用在post incorp"). This route is now a pure Supabase read — no live
+// TeamWork login/fetch on the request path, so it's fast and has no
+// Playwright dependency here.
 //
-// Shareholders come from a SEPARATE table on the same page — the real share
-// register (Shareholder Name/Issued Share Capital/Paid-up Capital/Number of
-// Share/Currency/Share Type), confirmed present and populated on real
-// companies (2026-08-09), joined by name against `officials` for
-// address/ID (Controller/Director rows for the same person, when present).
-// Still surfaced as one-click-add `shareholderCandidates` rather than
-// auto-inserted, since share data occasionally needs a human's judgment
-// (e.g. confirming which currently-active shareholder to use) that
-// Directors generally don't.
-export const maxDuration = 60;
-export const dynamic = 'force-dynamic';
-export const preferredRegion = 'sin1';
-
+// Directors come back ready to auto-fill directly (name/address/ID number).
+// Shareholders come back as `shareholderCandidates` for one-click-add rather
+// than auto-inserted: TeamWork's share register occasionally needs a
+// human's judgment (e.g. confirming which currently-active shareholder to
+// use) that Directors generally don't.
 function looksLikeRealName(value: string | null): boolean {
   if (!value) return false;
   const v = value.trim();
@@ -43,9 +36,11 @@ export async function GET(req: NextRequest) {
   if (!uen) return NextResponse.json({ error: 'UEN is required' }, { status: 400 });
 
   const supabase = createAdminClient();
-  const [{ data: masterRow }, { data: companyRow }] = await Promise.all([
+  const [{ data: masterRow }, { data: companyRow }, { data: officialRows }, { data: shareRows }] = await Promise.all([
     supabase.from('master_list').select('company_name, roc_no, invoice_address, secretary, nominee_director, directors, shareholders, fye').ilike('roc_no', uen).maybeSingle(),
-    supabase.from('companies').select('company_name, registration_no, fye_month, internal_id').ilike('registration_no', uen).maybeSingle(),
+    supabase.from('companies').select('company_name, registration_no, fye_month').ilike('registration_no', uen).maybeSingle(),
+    supabase.from('teamwork_company_officials').select('name, role, id_no, id_type, address').ilike('uen', uen),
+    supabase.from('teamwork_shareholder_shares').select('shareholder_name, number_of_shares, paid_up_capital, currency, share_type').ilike('uen', uen),
   ]);
 
   if (!masterRow && !companyRow) {
@@ -62,58 +57,42 @@ export async function GET(req: NextRequest) {
   // wrong shape would be a worse starting point than leaving it blank.
   const financialYearEndDayMonth = /^[A-Za-z]+$/.test(fyeRaw) ? fyeRaw : '';
 
-  const directors: { name: string; address: string; identificationType: string; identificationNumber: string }[] = [];
-  const shareholderCandidates: {
-    name: string; address: string; identificationType: string; identificationNumber: string;
-    numberOfShares: string; paidUpCapital: string; currency: string; shareType: string;
-  }[] = [];
-  let teamworkError: string | null = null;
+  const officials = officialRows ?? [];
+  const byName = new Map(officials.map(o => [(o.name || '').trim().toUpperCase(), o]));
 
-  const internalId = companyRow?.internal_id ? String(companyRow.internal_id) : '';
-  if (internalId) {
-    try {
-      const cookie = await getSessionCookie();
-      const profile = await fetchCompanyProfileFull(cookie, internalId);
-      const byName = new Map(profile.officials.map(o => [o.name.trim().toUpperCase(), o]));
+  const directors = officials
+    .filter(o => o.role === 'Director' && o.name)
+    .map(o => ({ name: o.name as string, address: (o.address || '') as string, identificationType: (o.id_type || '') as string, identificationNumber: (o.id_no || '') as string }));
 
-      for (const o of profile.officials) {
-        const idType = inferIdType(o.idNo);
-        if (o.role === 'Director' && o.name) directors.push({ name: o.name, address: o.address, identificationType: idType, identificationNumber: o.idNo });
-        if (o.role === 'Secretary' && o.name && !secretaryName) secretaryName = o.name;
-      }
-
-      for (const s of profile.shareholderShares) {
-        if (!s.name) continue;
-        const matchedOfficial = byName.get(s.name.trim().toUpperCase());
-        const idNo = matchedOfficial?.idNo || '';
-        shareholderCandidates.push({
-          name: s.name,
-          address: matchedOfficial?.address || '',
-          identificationType: idNo ? inferIdType(idNo) : '',
-          identificationNumber: idNo,
-          numberOfShares: s.numberOfShares,
-          paidUpCapital: s.paidUpCapital,
-          currency: s.currency,
-          shareType: s.shareType,
-        });
-      }
-    } catch (error) {
-      // TeamWork lookup is a bonus, not a hard requirement — a login/fetch
-      // failure should still return the master_list-only data below rather
-      // than fail the whole request.
-      teamworkError = error instanceof Error ? error.message : String(error);
-    }
+  if (!secretaryName) {
+    const secretaryRow = officials.find(o => o.role === 'Secretary' && o.name);
+    if (secretaryRow) secretaryName = secretaryRow.name as string;
   }
+
+  const shareholderCandidates = (shareRows ?? [])
+    .filter(s => s.shareholder_name)
+    .map(s => {
+      const matched = byName.get((s.shareholder_name || '').trim().toUpperCase());
+      return {
+        name: s.shareholder_name as string,
+        address: (matched?.address || '') as string,
+        identificationType: (matched?.id_type || '') as string,
+        identificationNumber: (matched?.id_no || '') as string,
+        numberOfShares: (s.number_of_shares || '') as string,
+        paidUpCapital: (s.paid_up_capital || '') as string,
+        currency: (s.currency || '') as string,
+        shareType: (s.share_type || '') as string,
+      };
+    });
 
   return NextResponse.json({
     found: true,
     company: { name, uen, address, secretaryName, financialYearEndDayMonth },
     directors,
     shareholderCandidates,
-    teamworkError,
     hints: {
       directors: directors.length ? '' : (looksLikeRealName(masterRow?.directors ?? null) ? masterRow!.directors : ''),
-      shareholders: looksLikeRealName(masterRow?.shareholders ?? null) ? masterRow!.shareholders : '',
+      shareholders: shareholderCandidates.length ? '' : (looksLikeRealName(masterRow?.shareholders ?? null) ? masterRow!.shareholders : ''),
       nomineeDirector: looksLikeRealName(masterRow?.nominee_director ?? null) ? masterRow!.nominee_director : '',
     },
   });

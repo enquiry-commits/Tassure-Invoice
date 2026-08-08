@@ -156,16 +156,44 @@ export async function fetchCompanyProfile(cookie: string, companyId: string, sig
   return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name) };
 }
 
-// Full "Active Officials" table — Directors, Controllers, etc., each with ID
-// number/address/appointment date, not just the Secretary name. Used by the
-// Post Incorporate UEN lookup to pre-fill Directors reliably; unlike
-// fetchCompanyProfile above (a rotating nightly sync writing one column),
-// this is called on-demand for a single company at a time.
+// Full "Active Officials" + "Shareholders Information" data — Directors,
+// Controllers, etc. with ID number/address/appointment date, and the real
+// share register (name/share count/paid-up capital/currency/type), not just
+// the Secretary name. Used both by the Post Incorporate UEN lookup (reading
+// the nightly-synced copy — see teamwork_company_officials/
+// teamwork_shareholder_shares) and by the nightly sync-secretary route,
+// which fetches this same full profile once per company and also writes it
+// through to those two tables so Post Incorporate never needs its own live
+// TeamWork fetch.
 export async function fetchCompanyProfileFull(cookie: string, companyId: string, signal?: AbortSignal): Promise<CompanyProfileFull> {
   const html = await fetchProfileHtml(cookie, companyId, signal);
   const officials = extractOfficials(html);
   const shareholderShares = extractShareholderShares(html);
   return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name), officials, shareholderShares };
+}
+
+// Bulk variant of fetchCompanyProfileFull, mirroring fetchCompanyProfiles'
+// concurrency pattern below.
+export async function fetchCompanyProfilesFull(
+  cookie: string,
+  companyIds: string[],
+  concurrency = 10,
+): Promise<{ results: CompanyProfileFull[]; errors: Array<{ companyId: string; error: string }> }> {
+  const results: CompanyProfileFull[] = [];
+  const errors: Array<{ companyId: string; error: string }> = [];
+  let next = 0;
+  const worker = async () => {
+    while (next < companyIds.length) {
+      const companyId = companyIds[next++];
+      try {
+        results.push(await fetchCompanyProfileFull(cookie, companyId));
+      } catch (error) {
+        errors.push({ companyId, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, companyIds.length) }, () => worker()));
+  return { results, errors };
 }
 
 // TeamWork throttles this endpoint at roughly a fixed total throughput
