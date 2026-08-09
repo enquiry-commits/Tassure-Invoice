@@ -172,6 +172,14 @@ export default function PostIncorporatePage() {
       const bfShareholders = (body.shareholders || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; numberOfShares: string }[];
       if (bfDirectors.length) {
         setDirectors(bfDirectors.map(d => ({ ...emptyDirector(), name: d.name, address: d.address, identificationType: d.identificationType || 'NRIC', identificationNumber: d.identificationNumber, nationality: d.nationality, dateOfAppointment: d.dateOfAppointment || '' })));
+        // Chairman isn't a field ACRA's Bizfile extract carries at all —
+        // there's no reliable way to know who's chairman when there are
+        // multiple directors, so this only auto-fills the unambiguous
+        // case: exactly one director parsed. Otherwise it's left for
+        // staff to pick, same as before.
+        if (bfDirectors.length === 1) {
+          setCompany(current => ({ ...current, chairmanName: bfDirectors[0].name }));
+        }
       }
       if (bfShareholders.length) {
         setShareholders(bfShareholders.map(s => ({ ...emptyShareholder(), name: s.name, address: s.address, identificationType: s.identificationType || 'NRIC', identificationNumber: s.identificationNumber, nationality: s.nationality || '', numberOfShares: s.numberOfShares })));
