@@ -100,13 +100,14 @@ const COL_W = {
   idNumber: 112, nationality: 140, address: 240, dateOfAppointment: 124,
   numberOfShares: 100, rorc: 80, nominee: 68,
 };
-// Steel-blue full-width tab bar (matches the reference app's native
-// WinForms-style tab control exactly, per Vincent's follow-up screenshot):
-// the active tab pops forward in white, the inactive tab and the empty
-// filler space both sit flush in the same steel-blue bar. A real
+// Full-width tab bar matching the reference app's native tab control: the
+// active tab pops forward in white, the inactive tab and the empty filler
+// space both sit flush in the same light background bar. Vincent
+// color-picked the reference's exact bar color: "背景条的颜色是（#e4e9ef）"
+// (the first guess, a saturated steel-blue, was too dark). A real
 // bordered/shadowed button for "Add Row" instead of a plain text link too
 // — Vincent: "按钮UI也要凸显，不能偷懒."
-const tabClass = (active: boolean) => `px-5 py-2 text-sm font-medium ${active ? 'bg-white text-slate-900' : 'text-white/90 hover:bg-white/10'}`;
+const tabClass = (active: boolean) => `px-5 py-2 text-sm font-medium ${active ? 'bg-white text-slate-900' : 'text-slate-500 hover:bg-white/50'}`;
 const addRowButtonClass = 'flex items-center gap-1.5 rounded-md border border-slate-400 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-sm font-medium px-3.5 py-1.5 shadow-sm';
 
 export default function PostIncorporatePage() {
@@ -267,7 +268,7 @@ export default function PostIncorporatePage() {
 
         <div className="mt-5">
           <div className="text-sm font-medium text-slate-600 mb-2">Capital 股本信息</div>
-          <div className="flex bg-[#8ea1c2] rounded-t-md overflow-hidden">
+          <div className="flex bg-[#e4e9ef] rounded-t-md overflow-hidden">
             <button type="button" className={tabClass(capitalTab === 'issued')} onClick={() => setCapitalTab('issued')}>Issued Share Capital</button>
             <button type="button" className={tabClass(capitalTab === 'paidUp')} onClick={() => setCapitalTab('paidUp')}>Paid-Up Capital</button>
             <div className="flex-1" />
