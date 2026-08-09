@@ -259,6 +259,28 @@ export type { Item as BizfilePageItem };
 // per-item (x, y) positions (needed for the Officer(s)/Shareholder(s)
 // tables — see the module-level comment above for why).
 export async function parseBizfilePdf(buffer: Buffer): Promise<ParsedBizfile> {
+  // pdfjs-dist's legacy/Node build references the browser-only `DOMMatrix`
+  // global at module-evaluation time (`const SCALE_MATRIX = new DOMMatrix()`
+  // — runs unconditionally just from importing the module, before any of
+  // our own code executes), and normally gets it from the optional
+  // `@napi-rs/canvas` native addon. Confirmed via real production logs
+  // (not guessed) that addon fails to load in the deployed bundle
+  // ("Cannot find module '@napi-rs/canvas'"), which crashed every request
+  // with "ReferenceError: DOMMatrix is not defined" — even though we only
+  // ever call getTextContent(), never page.render(), so no actual canvas
+  // drawing is needed. Every other DOMMatrix method pdfjs-dist calls
+  // (preMultiplySelf, invertSelf, multiplySelf, etc.) lives exclusively in
+  // the CanvasGraphics rendering path (confirmed by reading the bundled
+  // source), which getTextContent() never reaches — so a real canvas/
+  // native binary isn't needed, just something satisfying `new DOMMatrix()`
+  // so the module can finish loading. Must run before pdf-parse is
+  // imported too, since it uses pdfjs-dist internally for its own
+  // getText() and would hit the same crash first otherwise.
+  if (!('DOMMatrix' in globalThis)) {
+    const { default: DOMMatrixPolyfill } = await import('dommatrix');
+    (globalThis as unknown as { DOMMatrix: unknown }).DOMMatrix = DOMMatrixPolyfill;
+  }
+
   // pdfjs-dist (used both by pdf-parse internally and directly below)
   // normally spawns its worker by dynamically importing "./pdf.worker.mjs"
   // relative to its own bundled chunk — a path that only exists in
