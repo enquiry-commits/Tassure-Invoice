@@ -259,7 +259,33 @@ export type { Item as BizfilePageItem };
 // per-item (x, y) positions (needed for the Officer(s)/Shareholder(s)
 // tables — see the module-level comment above for why).
 export async function parseBizfilePdf(buffer: Buffer): Promise<ParsedBizfile> {
+  // pdfjs-dist (used both by pdf-parse internally and directly below)
+  // normally spawns its worker by dynamically importing "./pdf.worker.mjs"
+  // relative to its own bundled chunk — a path that only exists in
+  // pdfjs-dist's own package layout, not in Next.js's bundled serverless
+  // output, so that import fails there even though it resolves fine outside
+  // a bundler ("Setting up fake worker failed", confirmed against the
+  // actual dev server, not just guessed — this broke pdf-parse's own
+  // getText() too, not only the direct pdfjs-dist usage below). pdf-parse
+  // ships a `pdf-parse/worker` helper exactly for this (getPath()), but
+  // that module's own top-level imports pull in @napi-rs/canvas (for an
+  // unrelated screenshot feature this file never uses) — a native binary
+  // addon whose Turbopack-bundled loading fails the same way. The worker
+  // file itself sits right next to pdf-parse's own resolved entry point
+  // (dist/pdf-parse/cjs/pdf.worker.mjs, confirmed on disk), so resolve that
+  // directly instead of importing the canvas-coupled helper module.
+  const path = await import('path');
+  const { pathToFileURL } = await import('url');
+  const { createRequire } = await import('module');
+  const requireFromHere = createRequire(process.cwd() + '/package.json');
+  const pdfParseEntry = requireFromHere.resolve('pdf-parse');
+  const workerAbsPath = path.default.resolve(path.default.dirname(pdfParseEntry), 'pdf.worker.mjs');
+  // pdfjs-dist's Node ESM loader requires a proper file:// URL for absolute
+  // paths — a bare "C:\..." string isn't a valid URL scheme on Windows.
+  const workerSrc = pathToFileURL(workerAbsPath).href;
+
   const { PDFParse } = await import('pdf-parse');
+  PDFParse.setWorker(workerSrc);
   const parser = new PDFParse({ data: new Uint8Array(buffer) });
   let pageTexts: string[];
   try {
@@ -270,6 +296,7 @@ export async function parseBizfilePdf(buffer: Buffer): Promise<ParsedBizfile> {
   }
 
   const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
   const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
   const pageItems: Item[][] = [];
   for (let i = 1; i <= doc.numPages; i++) {
