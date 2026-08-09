@@ -82,10 +82,13 @@ const thClass = 'border border-slate-200 bg-slate-50 px-2 py-2 text-left font-me
 const tdClass = 'border border-slate-200 px-1.5 py-1.5 align-top';
 const cardClass = 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm';
 const sectionTitleClass = 'text-base font-semibold text-slate-800 mb-4';
-// Folder-tab look (matches the reference app's native tab control) rather
-// than a flat underline tab, and a real bordered/shadowed button for "Add
-// Row" instead of a plain text link — Vincent: "按钮UI也要凸显，不能偷懒."
-const tabClass = (active: boolean) => `relative px-4 py-1.5 text-sm font-medium border rounded-t-md ${active ? 'bg-white border-slate-300 text-slate-800 -mb-px border-b-white z-10' : 'bg-slate-100 border-slate-300 text-slate-500 hover:bg-slate-50'}`;
+// Steel-blue full-width tab bar (matches the reference app's native
+// WinForms-style tab control exactly, per Vincent's follow-up screenshot):
+// the active tab pops forward in white, the inactive tab and the empty
+// filler space both sit flush in the same steel-blue bar. A real
+// bordered/shadowed button for "Add Row" instead of a plain text link too
+// — Vincent: "按钮UI也要凸显，不能偷懒."
+const tabClass = (active: boolean) => `px-5 py-2 text-sm font-medium ${active ? 'bg-white text-slate-900' : 'text-white/90 hover:bg-white/10'}`;
 const addRowButtonClass = 'flex items-center gap-1.5 rounded-md border border-slate-400 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-sm font-medium px-3.5 py-1.5 shadow-sm';
 
 export default function PostIncorporatePage() {
@@ -246,11 +249,12 @@ export default function PostIncorporatePage() {
 
         <div className="mt-5">
           <div className="text-sm font-medium text-slate-600 mb-2">Capital 股本信息</div>
-          <div className="flex gap-1">
+          <div className="flex bg-[#8ea1c2] rounded-t-md overflow-hidden">
             <button type="button" className={tabClass(capitalTab === 'issued')} onClick={() => setCapitalTab('issued')}>Issued Share Capital</button>
             <button type="button" className={tabClass(capitalTab === 'paidUp')} onClick={() => setCapitalTab('paidUp')}>Paid-Up Capital</button>
+            <div className="flex-1" />
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 rounded-b-md rounded-tr-md bg-white border border-slate-300 p-4 relative">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 rounded-b-md bg-white border border-t-0 border-slate-300 p-4 relative">
             <Field label="Amount 金额"><input className={inputClass} value={activeCapital.amount} onChange={e => setActiveCapital({ amount: e.target.value })} /></Field>
             <Field label="Number of Shares 股份数量"><input className={inputClass} value={activeCapital.numberOfShares} onChange={e => setActiveCapital({ numberOfShares: e.target.value })} /></Field>
             <Field label="Currency 币种"><input className={inputClass} value={activeCapital.currency} onChange={e => setActiveCapital({ currency: e.target.value })} /></Field>
