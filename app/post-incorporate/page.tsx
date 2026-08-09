@@ -69,19 +69,37 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputClass = 'rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400';
-// Table cells: a plain single-line <input> truncates or horizontally
-// scrolls long values (addresses, activity names) out of view — Vincent
-// specifically flagged this against the reference desktop app, which wraps
-// long content onto a second line within the cell instead of hiding it:
-// "过长的内容不可以被遮挡要转到下行...每个格子的上下大小，最少要显示出两行."
-// A <textarea> is the only form control that can wrap; sized to ~2 lines by
-// default, growing internally (native scroll) rather than the row itself.
-const cellInputClass = 'w-full min-w-[100px] rounded border border-slate-300 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/40 focus:border-blue-400';
+// Table cells deliberately have NO visible border/radius of their own —
+// Vincent flagged the previous version as a "box inside a box": the cell
+// already has a border, so an <input> with its own separate border/rounded
+// corners inside that cell just doubles up the boundary for no reason
+// ("已经在框内了，还要再来一个小框在内...设计很复杂"). The only visible
+// boundary should be the table cell's own border (tdClass below); focus
+// state gets an inset ring + light tint instead of a permanent border.
+const cellInputClass = 'w-full h-full bg-transparent border-0 px-1.5 py-1 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-blue-400 focus:bg-blue-50/60';
+// A plain single-line <input> truncates or horizontally scrolls long
+// values (addresses, activity names) out of view — Vincent flagged this
+// against the reference desktop app, which wraps long content onto a
+// second line within the cell instead of hiding it: "过长的内容不可以被
+// 遮挡要转到下行...每个格子的上下大小，最少要显示出两行." A <textarea> is
+// the only form control that can wrap; sized to ~2 lines, growing
+// internally (native scroll) rather than the row itself.
 const cellTextareaClass = `${cellInputClass} min-h-[2.75rem] resize-none leading-snug`;
-const thClass = 'border border-slate-200 bg-slate-50 px-2 py-2 text-left font-medium text-slate-600';
-const tdClass = 'border border-slate-200 px-1.5 py-1.5 align-top';
+const thClass = 'border border-slate-200 bg-slate-50 px-2 py-2 text-left font-medium text-slate-600 overflow-hidden text-ellipsis';
+const tdClass = 'border border-slate-200 p-0 align-top';
 const cardClass = 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm';
 const sectionTitleClass = 'text-base font-semibold text-slate-800 mb-4';
+// Shared literal pixel widths for the columns Director/Secretary/
+// Shareholder tables have in common, applied identically via `<col>` in
+// all three (with `table-fixed`) so they line up vertically when stacked
+// — Vincent: "上下列可以同样的内容可以对齐宽度." Browsers auto-size
+// `table-auto` columns per-table from that table's own content, which is
+// exactly why the three tables drifted out of alignment before.
+const COL_W = {
+  no: 48, name: 150, birthDate: 116, contactNo: 100, email: 140, idType: 88,
+  idNumber: 112, nationality: 140, address: 240, dateOfAppointment: 124,
+  numberOfShares: 100, rorc: 80, nominee: 68,
+};
 // Steel-blue full-width tab bar (matches the reference app's native
 // WinForms-style tab control exactly, per Vincent's follow-up screenshot):
 // the active tab pops forward in white, the inactive tab and the empty
@@ -284,28 +302,38 @@ export default function PostIncorporatePage() {
 
       {/* Directors */}
       <section className={cardClass}>
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className={`${sectionTitleClass} mb-0`}>DIRECTOR 董事{parsedSuffix}</div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="font-medium text-slate-600">Chairman 主席</span>
-              <select className={inputClass} value={company.chairmanName} onChange={e => setCompany({ ...company, chairmanName: e.target.value })}>
-                <option value="">—</option>
-                {directors.filter(d => d.name.trim()).map((d, idx) => <option key={idx} value={d.name}>{d.name}</option>)}
-              </select>
-            </div>
-          </div>
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
+          <div className={`${sectionTitleClass} mb-0`}>DIRECTOR 董事{parsedSuffix}</div>
           <button type="button" onClick={() => setDirectors([...directors, emptyDirector()])}
             className={addRowButtonClass}>
             <Plus size={15} /> 新增一行 Add Row
           </button>
         </div>
+        <div className="flex items-center gap-2 text-sm mb-3">
+          <span className="font-medium text-slate-600">Chairman 主席</span>
+          <select className={inputClass} value={company.chairmanName} onChange={e => setCompany({ ...company, chairmanName: e.target.value })}>
+            <option value="">—</option>
+            {directors.filter(d => d.name.trim()).map((d, idx) => <option key={idx} value={d.name}>{d.name}</option>)}
+          </select>
+        </div>
         <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="min-w-full border-collapse text-xs">
+          <table className="w-full border-collapse text-xs table-fixed">
+            <colgroup>
+              <col style={{ width: COL_W.no }} />
+              <col style={{ width: COL_W.name }} />
+              <col style={{ width: COL_W.birthDate }} />
+              <col style={{ width: COL_W.contactNo }} />
+              <col style={{ width: COL_W.email }} />
+              <col style={{ width: COL_W.idType }} />
+              <col style={{ width: COL_W.idNumber }} />
+              <col style={{ width: COL_W.nationality }} />
+              <col style={{ width: COL_W.address }} />
+              <col style={{ width: COL_W.dateOfAppointment }} />
+              <col style={{ width: COL_W.nominee }} />
+            </colgroup>
             <thead>
               <tr>
-                <th className={`${thClass} w-7`}></th>
-                <th className={`${thClass} w-9`}>No.</th>
+                <th className={thClass}>No.</th>
                 <th className={thClass}>Name</th>
                 <th className={thClass}>Birth Date</th>
                 <th className={thClass}>Contact No</th>
@@ -321,14 +349,15 @@ export default function PostIncorporatePage() {
             <tbody>
               {directors.map((d, i) => (
                 <tr key={i}>
-                  <td className={`${tdClass} text-center`}>
+                  <td className={`${tdClass} relative group`}>
+                    <div className="text-center text-slate-500 py-1.5">{i + 1}</div>
                     {directors.length > 1 && (
-                      <button type="button" onClick={() => setDirectors(directors.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500">
-                        <Trash2 size={13} />
+                      <button type="button" onClick={() => setDirectors(directors.filter((_, idx) => idx !== i))}
+                        className="absolute inset-y-0 right-0 flex items-center pr-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 bg-gradient-to-l from-white via-white to-transparent pl-3">
+                        <Trash2 size={12} />
                       </button>
                     )}
                   </td>
-                  <td className={`${tdClass} text-center text-slate-500`}>{i + 1}</td>
                   <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={d.name} onChange={e => updateDirector(i, { name: e.target.value })} /></td>
                   <td className={tdClass}><input type="date" className={cellInputClass} value={d.dateOfBirth} onChange={e => updateDirector(i, { dateOfBirth: e.target.value })} /></td>
                   <td className={tdClass}><input className={cellInputClass} value={d.phone} onChange={e => updateDirector(i, { phone: e.target.value })} /></td>
@@ -340,9 +369,9 @@ export default function PostIncorporatePage() {
                   </td>
                   <td className={tdClass}><input className={cellInputClass} value={d.identificationNumber} onChange={e => updateDirector(i, { identificationNumber: e.target.value })} /></td>
                   <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={d.nationality} onChange={e => updateDirector(i, { nationality: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={`${cellTextareaClass} min-w-[220px]`} value={d.address} onChange={e => updateDirector(i, { address: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={d.address} onChange={e => updateDirector(i, { address: e.target.value })} /></td>
                   <td className={tdClass}><input type="date" className={cellInputClass} value={d.dateOfAppointment} onChange={e => updateDirector(i, { dateOfAppointment: e.target.value })} /></td>
-                  <td className={`${tdClass} text-center`}>
+                  <td className={`${tdClass} text-center py-2`}>
                     <input type="checkbox" checked={d.isNomineeDirector}
                       onChange={e => updateDirector(i, { isNomineeDirector: e.target.checked, nominatorType: e.target.checked ? (d.nominatorType || 'individual') : '' })} />
                   </td>
@@ -394,28 +423,34 @@ export default function PostIncorporatePage() {
 
       {/* Secretary */}
       <section className={cardClass}>
-        <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className={`${sectionTitleClass} mb-0`}>SECRETARY 秘书{parsedSuffix}</div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="font-medium text-slate-600">SECRETARY 秘书</span>
-              <select className={inputClass} value={company.secretaryName} onChange={e => setCompany({ ...company, secretaryName: e.target.value })}>
-                <option value="">—</option>
-                {secretaries.filter(s => s.name.trim()).map((s, idx) => <option key={idx} value={s.name}>{s.name}</option>)}
-              </select>
-            </div>
-          </div>
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
+          <div className={`${sectionTitleClass} mb-0`}>SECRETARY 秘书{parsedSuffix}</div>
           <button type="button" onClick={() => setSecretaries([...secretaries, emptySecretary()])}
             className={addRowButtonClass}>
             <Plus size={15} /> 新增一行 Add Row
           </button>
         </div>
+        <div className="flex items-center gap-2 text-sm mb-3">
+          <span className="font-medium text-slate-600">SECRETARY 秘书</span>
+          <select className={inputClass} value={company.secretaryName} onChange={e => setCompany({ ...company, secretaryName: e.target.value })}>
+            <option value="">—</option>
+            {secretaries.filter(s => s.name.trim()).map((s, idx) => <option key={idx} value={s.name}>{s.name}</option>)}
+          </select>
+        </div>
         <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="min-w-full border-collapse text-xs">
+          <table className="w-full border-collapse text-xs table-fixed">
+            <colgroup>
+              <col style={{ width: COL_W.no }} />
+              <col style={{ width: COL_W.name }} />
+              <col style={{ width: COL_W.idType }} />
+              <col style={{ width: COL_W.idNumber }} />
+              <col style={{ width: COL_W.nationality }} />
+              <col style={{ width: COL_W.address }} />
+              <col style={{ width: COL_W.dateOfAppointment }} />
+            </colgroup>
             <thead>
               <tr>
-                <th className={`${thClass} w-7`}></th>
-                <th className={`${thClass} w-9`}>No.</th>
+                <th className={thClass}>No.</th>
                 <th className={thClass}>Name</th>
                 <th className={thClass}>ID Type</th>
                 <th className={thClass}>Identification Number</th>
@@ -427,18 +462,18 @@ export default function PostIncorporatePage() {
             <tbody>
               {secretaries.map((s, i) => (
                 <tr key={i}>
-                  <td className={`${tdClass} text-center`}>
+                  <td className={`${tdClass} relative group`}>
+                    <div className="text-center text-slate-500 py-1.5">{i + 1}</div>
                     {secretaries.length > 1 && (
                       <button type="button" onClick={() => {
                         const removedName = s.name;
                         setSecretaries(secretaries.filter((_, idx) => idx !== i));
                         setCompany(c => (c.secretaryName === removedName ? { ...c, secretaryName: '' } : c));
-                      }} className="text-slate-400 hover:text-red-500">
-                        <Trash2 size={13} />
+                      }} className="absolute inset-y-0 right-0 flex items-center pr-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 bg-gradient-to-l from-white via-white to-transparent pl-3">
+                        <Trash2 size={12} />
                       </button>
                     )}
                   </td>
-                  <td className={`${tdClass} text-center text-slate-500`}>{i + 1}</td>
                   <td className={tdClass}>
                     <textarea rows={2} className={cellTextareaClass} value={s.name} onChange={e => {
                       const prevName = s.name;
@@ -453,7 +488,7 @@ export default function PostIncorporatePage() {
                   </td>
                   <td className={tdClass}><input className={cellInputClass} value={s.identificationNumber} onChange={e => updateSecretary(i, { identificationNumber: e.target.value })} /></td>
                   <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.nationality} onChange={e => updateSecretary(i, { nationality: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={`${cellTextareaClass} min-w-[220px]`} value={s.address} onChange={e => updateSecretary(i, { address: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.address} onChange={e => updateSecretary(i, { address: e.target.value })} /></td>
                   <td className={tdClass}><input type="date" className={cellInputClass} value={s.dateOfAppointment} onChange={e => updateSecretary(i, { dateOfAppointment: e.target.value })} /></td>
                 </tr>
               ))}
@@ -472,11 +507,24 @@ export default function PostIncorporatePage() {
           </button>
         </div>
         <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="min-w-full border-collapse text-xs">
+          <table className="w-full border-collapse text-xs table-fixed">
+            <colgroup>
+              <col style={{ width: COL_W.no }} />
+              <col style={{ width: COL_W.name }} />
+              <col style={{ width: COL_W.birthDate }} />
+              <col style={{ width: COL_W.contactNo }} />
+              <col style={{ width: COL_W.email }} />
+              <col style={{ width: COL_W.idType }} />
+              <col style={{ width: COL_W.idNumber }} />
+              <col style={{ width: COL_W.nationality }} />
+              <col style={{ width: COL_W.address }} />
+              <col style={{ width: COL_W.numberOfShares }} />
+              <col style={{ width: COL_W.rorc }} />
+              <col style={{ width: COL_W.nominee }} />
+            </colgroup>
             <thead>
               <tr>
-                <th className={`${thClass} w-7`}></th>
-                <th className={`${thClass} w-9`}>No.</th>
+                <th className={thClass}>No.</th>
                 <th className={thClass}>Name</th>
                 <th className={thClass}>Birth Date</th>
                 <th className={thClass}>Contact No</th>
@@ -493,14 +541,15 @@ export default function PostIncorporatePage() {
             <tbody>
               {shareholders.map((s, i) => (
                 <tr key={i}>
-                  <td className={`${tdClass} text-center`}>
+                  <td className={`${tdClass} relative group`}>
+                    <div className="text-center text-slate-500 py-1.5">{i + 1}</div>
                     {shareholders.length > 1 && (
-                      <button type="button" onClick={() => setShareholders(shareholders.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500">
-                        <Trash2 size={13} />
+                      <button type="button" onClick={() => setShareholders(shareholders.filter((_, idx) => idx !== i))}
+                        className="absolute inset-y-0 right-0 flex items-center pr-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 bg-gradient-to-l from-white via-white to-transparent pl-3">
+                        <Trash2 size={12} />
                       </button>
                     )}
                   </td>
-                  <td className={`${tdClass} text-center text-slate-500`}>{i + 1}</td>
                   <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.name} onChange={e => updateShareholder(i, { name: e.target.value })} /></td>
                   <td className={tdClass}><input type="date" className={cellInputClass} value={s.dateOfBirth} onChange={e => updateShareholder(i, { dateOfBirth: e.target.value })} /></td>
                   <td className={tdClass}><input className={cellInputClass} value={s.phone} onChange={e => updateShareholder(i, { phone: e.target.value })} /></td>
@@ -512,7 +561,7 @@ export default function PostIncorporatePage() {
                   </td>
                   <td className={tdClass}><input className={cellInputClass} value={s.identificationNumber} onChange={e => updateShareholder(i, { identificationNumber: e.target.value })} /></td>
                   <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.nationality} onChange={e => updateShareholder(i, { nationality: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={`${cellTextareaClass} min-w-[220px]`} value={s.address} onChange={e => updateShareholder(i, { address: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.address} onChange={e => updateShareholder(i, { address: e.target.value })} /></td>
                   <td className={tdClass}><input className={cellInputClass} value={s.numberOfShares} onChange={e => updateShareholder(i, { numberOfShares: e.target.value })} /></td>
                   <td className={`${tdClass} text-center`}>
                     <select className={cellInputClass} value={s.isRorc ? 'YES' : 'NO'} onChange={e => updateShareholder(i, { isRorc: e.target.value === 'YES' })}>
@@ -520,7 +569,7 @@ export default function PostIncorporatePage() {
                       <option value="YES">YES</option>
                     </select>
                   </td>
-                  <td className={`${tdClass} text-center`}>
+                  <td className={`${tdClass} text-center py-2`}>
                     <input type="checkbox" checked={!!s.isNomineeShareholder}
                       onChange={e => updateShareholder(i, { isNomineeShareholder: e.target.checked, nominatorType: e.target.checked ? (s.nominatorType || 'individual') : '' })} />
                   </td>
