@@ -103,6 +103,44 @@ export default function PostIncorporatePage() {
     }
   }
 
+  const [bizfileLoading, setBizfileLoading] = useState(false);
+  const [bizfileMessage, setBizfileMessage] = useState<string | null>(null);
+
+  async function handleBizfileUpload(file: File) {
+    setBizfileLoading(true);
+    setBizfileMessage(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/post-incorporate/parse-bizfile', { method: 'POST', body: formData });
+      const body = await res.json();
+      if (!res.ok) { setBizfileMessage(body.error || 'Could not parse this PDF.'); return; }
+
+      setCompany(current => ({
+        ...current,
+        name: body.company.name || current.name,
+        uen: body.company.uen || current.uen,
+        regDate: body.company.regDate || current.regDate,
+        address: body.company.address || current.address,
+        secretaryName: body.company.secretaryName || current.secretaryName,
+      }));
+
+      const bfDirectors = (body.directors || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string }[];
+      const bfShareholders = (body.shareholders || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; numberOfShares: string }[];
+      if (bfDirectors.length) {
+        setDirectors(bfDirectors.map(d => ({ ...emptyDirector(), name: d.name, address: d.address, identificationType: d.identificationType || 'NRIC', identificationNumber: d.identificationNumber, nationality: d.nationality })));
+      }
+      if (bfShareholders.length) {
+        setShareholders(bfShareholders.map(s => ({ ...emptyShareholder(), name: s.name, address: s.address, identificationType: s.identificationType || 'NRIC', identificationNumber: s.identificationNumber, nationality: s.nationality, numberOfShares: s.numberOfShares })));
+      }
+      setBizfileMessage(`Parsed from Bizfile: company info, ${bfDirectors.length} director(s), ${bfShareholders.length} shareholder(s) pre-filled. This is the official ACRA extract — still verify before generating (e.g. nominee status, paid-up amounts, and date of birth aren't on the Bizfile and need to be filled in manually).`);
+    } catch (error) {
+      setBizfileMessage(error instanceof Error ? error.message : 'Unexpected error parsing the PDF.');
+    } finally {
+      setBizfileLoading(false);
+    }
+  }
+
   function addShareholderFromCandidate(c: ShareholderCandidate) {
     setShareholders(current => [...current, {
       ...emptyShareholder(),
@@ -158,6 +196,22 @@ export default function PostIncorporatePage() {
         Fills the Post Incorporate (Tassure) document set from the details below and downloads a ZIP.
         Staff then file the ZIP's contents into the client's network folder manually, as usual.
       </p>
+
+      {/* Bizfile upload */}
+      <section className={cardClass}>
+        <div className={sectionTitleClass}>Auto-fill from Bizfile PDF (recommended)</div>
+        <p className="text-sm text-slate-500 -mt-2 mb-3">
+          Upload the company&apos;s ACRA Bizfile Business Profile (text-based PDF, not a scan) to pre-fill company info,
+          Directors, and Shareholders directly from the official registry extract.
+        </p>
+        <label className="flex items-center gap-2 rounded-md bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium px-4 py-2 w-fit cursor-pointer">
+          {bizfileLoading ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
+          {bizfileLoading ? 'Parsing…' : 'Upload Bizfile PDF'}
+          <input type="file" accept="application/pdf" className="hidden" disabled={bizfileLoading}
+            onChange={e => { const f = e.target.files?.[0]; if (f) handleBizfileUpload(f); e.target.value = ''; }} />
+        </label>
+        {bizfileMessage && <p className="text-sm text-slate-500 mt-2">{bizfileMessage}</p>}
+      </section>
 
       {/* UEN lookup */}
       <section className={cardClass}>
