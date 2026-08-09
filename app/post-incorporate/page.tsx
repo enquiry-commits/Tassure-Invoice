@@ -68,7 +68,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inputClass = 'rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400';
+const inputClass = 'rounded-md border border-slate-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400';
 // Table cells deliberately have NO visible border/radius of their own —
 // Vincent flagged the previous version as a "box inside a box": the cell
 // already has a border, so an <input> with its own separate border/rounded
@@ -76,7 +76,7 @@ const inputClass = 'rounded-md border border-slate-300 px-2.5 py-1.5 text-sm foc
 // ("已经在框内了，还要再来一个小框在内...设计很复杂"). The only visible
 // boundary should be the table cell's own border (tdClass below); focus
 // state gets an inset ring + light tint instead of a permanent border.
-const cellInputClass = 'w-full h-full bg-transparent border-0 px-1.5 py-1 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-blue-400 focus:bg-blue-50/60';
+const cellInputClass = 'w-full h-full bg-transparent border-0 px-1.5 py-1 text-[11px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-blue-400 focus:bg-blue-50/60';
 // A plain single-line <input> truncates or horizontally scrolls long
 // values (addresses, activity names) out of view — Vincent flagged this
 // against the reference desktop app, which wraps long content onto a
@@ -85,7 +85,7 @@ const cellInputClass = 'w-full h-full bg-transparent border-0 px-1.5 py-1 text-x
 // the only form control that can wrap; sized to ~2 lines, growing
 // internally (native scroll) rather than the row itself.
 const cellTextareaClass = `${cellInputClass} min-h-[2.75rem] resize-none leading-snug`;
-const thClass = 'border border-slate-200 bg-slate-50 px-2 py-2 text-left font-medium text-slate-600 overflow-hidden text-ellipsis';
+const thClass = 'border border-slate-200 bg-slate-50 px-2 py-2 text-left text-[11px] font-medium text-slate-600 overflow-hidden text-ellipsis';
 const tdClass = 'border border-slate-200 p-0 align-top';
 const cardClass = 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm';
 const sectionTitleClass = 'text-base font-semibold text-slate-800 mb-4';
@@ -107,7 +107,7 @@ const COL_W = {
 // (the first guess, a saturated steel-blue, was too dark). A real
 // bordered/shadowed button for "Add Row" instead of a plain text link too
 // — Vincent: "按钮UI也要凸显，不能偷懒."
-const tabClass = (active: boolean) => `px-5 py-2 text-sm font-medium border border-slate-300 ${active ? 'bg-blue-700 border-blue-700 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`;
+const tabClass = (active: boolean) => `px-5 py-2 text-sm font-medium border border-slate-300 ${active ? 'bg-[#1d395e] border-[#1d395e] text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`;
 const addRowButtonClass = 'flex items-center gap-1.5 rounded-md border border-slate-400 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-sm font-medium px-3.5 py-1.5 shadow-sm';
 
 export default function PostIncorporatePage() {
@@ -676,7 +676,7 @@ export default function PostIncorporatePage() {
 
       <div className="flex justify-end">
         <button type="button" onClick={handleSubmit} disabled={submitting}
-          className="flex items-center gap-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium px-5 py-2.5 text-sm">
+          className="flex items-center gap-2 rounded-lg bg-[#1d395e] hover:bg-[#16293f] disabled:opacity-60 text-white font-medium px-5 py-2.5 text-sm">
           {submitting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
           {submitting ? 'Generating…' : 'Generate Documents (ZIP)'}
         </button>
