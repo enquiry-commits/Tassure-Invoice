@@ -69,12 +69,24 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputClass = 'rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400';
-const cellInputClass = 'w-full min-w-[110px] rounded border border-slate-300 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/40 focus:border-blue-400';
-const thClass = 'border border-slate-200 bg-slate-50 px-2 py-1.5 text-left font-medium text-slate-600 whitespace-nowrap';
-const tdClass = 'border border-slate-200 px-1 py-1 align-top';
+// Table cells: a plain single-line <input> truncates or horizontally
+// scrolls long values (addresses, activity names) out of view — Vincent
+// specifically flagged this against the reference desktop app, which wraps
+// long content onto a second line within the cell instead of hiding it:
+// "过长的内容不可以被遮挡要转到下行...每个格子的上下大小，最少要显示出两行."
+// A <textarea> is the only form control that can wrap; sized to ~2 lines by
+// default, growing internally (native scroll) rather than the row itself.
+const cellInputClass = 'w-full min-w-[100px] rounded border border-slate-300 px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500/40 focus:border-blue-400';
+const cellTextareaClass = `${cellInputClass} min-h-[2.75rem] resize-none leading-snug`;
+const thClass = 'border border-slate-200 bg-slate-50 px-2 py-2 text-left font-medium text-slate-600';
+const tdClass = 'border border-slate-200 px-1.5 py-1.5 align-top';
 const cardClass = 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm';
 const sectionTitleClass = 'text-base font-semibold text-slate-800 mb-4';
-const tabClass = (active: boolean) => `px-3 py-1.5 text-sm font-medium border-b-2 ${active ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`;
+// Folder-tab look (matches the reference app's native tab control) rather
+// than a flat underline tab, and a real bordered/shadowed button for "Add
+// Row" instead of a plain text link — Vincent: "按钮UI也要凸显，不能偷懒."
+const tabClass = (active: boolean) => `relative px-4 py-1.5 text-sm font-medium border rounded-t-md ${active ? 'bg-white border-slate-300 text-slate-800 -mb-px border-b-white z-10' : 'bg-slate-100 border-slate-300 text-slate-500 hover:bg-slate-50'}`;
+const addRowButtonClass = 'flex items-center gap-1.5 rounded-md border border-slate-400 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-sm font-medium px-3.5 py-1.5 shadow-sm';
 
 export default function PostIncorporatePage() {
   const [company, setCompany] = useState<PostIncorporateCompany>(emptyCompany());
@@ -195,7 +207,7 @@ export default function PostIncorporatePage() {
     }));
 
   return (
-    <div className="p-6 max-w-6xl mx-auto flex flex-col gap-6">
+    <div className="p-6 max-w-[1500px] mx-auto flex flex-col gap-7">
       <div className="mb-1 text-sm text-slate-500">Dashboard › Post Incorporate</div>
       <div className="flex items-center gap-2">
         <FileSignature size={22} className="text-blue-600" />
@@ -234,11 +246,11 @@ export default function PostIncorporatePage() {
 
         <div className="mt-5">
           <div className="text-sm font-medium text-slate-600 mb-2">Capital 股本信息</div>
-          <div className="flex gap-1 border-b border-slate-200 mb-3">
+          <div className="flex gap-1">
             <button type="button" className={tabClass(capitalTab === 'issued')} onClick={() => setCapitalTab('issued')}>Issued Share Capital</button>
             <button type="button" className={tabClass(capitalTab === 'paidUp')} onClick={() => setCapitalTab('paidUp')}>Paid-Up Capital</button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 rounded-md bg-slate-50 border border-slate-200 p-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 rounded-b-md rounded-tr-md bg-white border border-slate-300 p-4 relative">
             <Field label="Amount 金额"><input className={inputClass} value={activeCapital.amount} onChange={e => setActiveCapital({ amount: e.target.value })} /></Field>
             <Field label="Number of Shares 股份数量"><input className={inputClass} value={activeCapital.numberOfShares} onChange={e => setActiveCapital({ numberOfShares: e.target.value })} /></Field>
             <Field label="Currency 币种"><input className={inputClass} value={activeCapital.currency} onChange={e => setActiveCapital({ currency: e.target.value })} /></Field>
@@ -280,7 +292,7 @@ export default function PostIncorporatePage() {
             </div>
           </div>
           <button type="button" onClick={() => setDirectors([...directors, emptyDirector()])}
-            className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium">
+            className={addRowButtonClass}>
             <Plus size={15} /> 新增一行 Add Row
           </button>
         </div>
@@ -313,18 +325,18 @@ export default function PostIncorporatePage() {
                     )}
                   </td>
                   <td className={`${tdClass} text-center text-slate-500`}>{i + 1}</td>
-                  <td className={tdClass}><input className={cellInputClass} value={d.name} onChange={e => updateDirector(i, { name: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={d.name} onChange={e => updateDirector(i, { name: e.target.value })} /></td>
                   <td className={tdClass}><input type="date" className={cellInputClass} value={d.dateOfBirth} onChange={e => updateDirector(i, { dateOfBirth: e.target.value })} /></td>
                   <td className={tdClass}><input className={cellInputClass} value={d.phone} onChange={e => updateDirector(i, { phone: e.target.value })} /></td>
-                  <td className={tdClass}><input className={cellInputClass} value={d.email} onChange={e => updateDirector(i, { email: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={d.email} onChange={e => updateDirector(i, { email: e.target.value })} /></td>
                   <td className={tdClass}>
                     <select className={cellInputClass} value={d.identificationType} onChange={e => updateDirector(i, { identificationType: e.target.value })}>
                       {ID_TYPES_DIRECTOR.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </td>
                   <td className={tdClass}><input className={cellInputClass} value={d.identificationNumber} onChange={e => updateDirector(i, { identificationNumber: e.target.value })} /></td>
-                  <td className={tdClass}><input className={cellInputClass} value={d.nationality} onChange={e => updateDirector(i, { nationality: e.target.value })} /></td>
-                  <td className={tdClass}><input className={`${cellInputClass} min-w-[220px]`} value={d.address} onChange={e => updateDirector(i, { address: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={d.nationality} onChange={e => updateDirector(i, { nationality: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={`${cellTextareaClass} min-w-[220px]`} value={d.address} onChange={e => updateDirector(i, { address: e.target.value })} /></td>
                   <td className={tdClass}><input type="date" className={cellInputClass} value={d.dateOfAppointment} onChange={e => updateDirector(i, { dateOfAppointment: e.target.value })} /></td>
                   <td className={`${tdClass} text-center`}>
                     <input type="checkbox" checked={d.isNomineeDirector}
@@ -390,7 +402,7 @@ export default function PostIncorporatePage() {
             </div>
           </div>
           <button type="button" onClick={() => setSecretaries([...secretaries, emptySecretary()])}
-            className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium">
+            className={addRowButtonClass}>
             <Plus size={15} /> 新增一行 Add Row
           </button>
         </div>
@@ -424,7 +436,7 @@ export default function PostIncorporatePage() {
                   </td>
                   <td className={`${tdClass} text-center text-slate-500`}>{i + 1}</td>
                   <td className={tdClass}>
-                    <input className={cellInputClass} value={s.name} onChange={e => {
+                    <textarea rows={2} className={cellTextareaClass} value={s.name} onChange={e => {
                       const prevName = s.name;
                       updateSecretary(i, { name: e.target.value });
                       setCompany(c => (c.secretaryName === prevName || !c.secretaryName ? { ...c, secretaryName: e.target.value } : c));
@@ -436,8 +448,8 @@ export default function PostIncorporatePage() {
                     </select>
                   </td>
                   <td className={tdClass}><input className={cellInputClass} value={s.identificationNumber} onChange={e => updateSecretary(i, { identificationNumber: e.target.value })} /></td>
-                  <td className={tdClass}><input className={cellInputClass} value={s.nationality} onChange={e => updateSecretary(i, { nationality: e.target.value })} /></td>
-                  <td className={tdClass}><input className={`${cellInputClass} min-w-[220px]`} value={s.address} onChange={e => updateSecretary(i, { address: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.nationality} onChange={e => updateSecretary(i, { nationality: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={`${cellTextareaClass} min-w-[220px]`} value={s.address} onChange={e => updateSecretary(i, { address: e.target.value })} /></td>
                   <td className={tdClass}><input type="date" className={cellInputClass} value={s.dateOfAppointment} onChange={e => updateSecretary(i, { dateOfAppointment: e.target.value })} /></td>
                 </tr>
               ))}
@@ -451,7 +463,7 @@ export default function PostIncorporatePage() {
         <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
           <div className={`${sectionTitleClass} mb-0`}>Shareholder 股东{parsedSuffix}</div>
           <button type="button" onClick={() => setShareholders([...shareholders, emptyShareholder()])}
-            className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium">
+            className={addRowButtonClass}>
             <Plus size={15} /> 新增一行 Add Row
           </button>
         </div>
@@ -485,18 +497,18 @@ export default function PostIncorporatePage() {
                     )}
                   </td>
                   <td className={`${tdClass} text-center text-slate-500`}>{i + 1}</td>
-                  <td className={tdClass}><input className={cellInputClass} value={s.name} onChange={e => updateShareholder(i, { name: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.name} onChange={e => updateShareholder(i, { name: e.target.value })} /></td>
                   <td className={tdClass}><input type="date" className={cellInputClass} value={s.dateOfBirth} onChange={e => updateShareholder(i, { dateOfBirth: e.target.value })} /></td>
                   <td className={tdClass}><input className={cellInputClass} value={s.phone} onChange={e => updateShareholder(i, { phone: e.target.value })} /></td>
-                  <td className={tdClass}><input className={cellInputClass} value={s.email} onChange={e => updateShareholder(i, { email: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.email} onChange={e => updateShareholder(i, { email: e.target.value })} /></td>
                   <td className={tdClass}>
                     <select className={cellInputClass} value={s.identificationType} onChange={e => updateShareholder(i, { identificationType: e.target.value })}>
                       {ID_TYPES_SHAREHOLDER.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </td>
                   <td className={tdClass}><input className={cellInputClass} value={s.identificationNumber} onChange={e => updateShareholder(i, { identificationNumber: e.target.value })} /></td>
-                  <td className={tdClass}><input className={cellInputClass} value={s.nationality} onChange={e => updateShareholder(i, { nationality: e.target.value })} /></td>
-                  <td className={tdClass}><input className={`${cellInputClass} min-w-[220px]`} value={s.address} onChange={e => updateShareholder(i, { address: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.nationality} onChange={e => updateShareholder(i, { nationality: e.target.value })} /></td>
+                  <td className={tdClass}><textarea rows={2} className={`${cellTextareaClass} min-w-[220px]`} value={s.address} onChange={e => updateShareholder(i, { address: e.target.value })} /></td>
                   <td className={tdClass}><input className={cellInputClass} value={s.numberOfShares} onChange={e => updateShareholder(i, { numberOfShares: e.target.value })} /></td>
                   <td className={`${tdClass} text-center`}>
                     <select className={cellInputClass} value={s.isRorc ? 'YES' : 'NO'} onChange={e => updateShareholder(i, { isRorc: e.target.value === 'YES' })}>
