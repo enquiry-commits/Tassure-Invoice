@@ -107,7 +107,7 @@ const COL_W = {
 // (the first guess, a saturated steel-blue, was too dark). A real
 // bordered/shadowed button for "Add Row" instead of a plain text link too
 // — Vincent: "按钮UI也要凸显，不能偷懒."
-const tabClass = (active: boolean) => `px-5 py-2 text-sm font-medium ${active ? 'bg-white text-slate-900' : 'text-slate-500 hover:bg-white/50'}`;
+const tabClass = (active: boolean) => `px-5 py-2 text-sm font-medium border border-slate-300 ${active ? 'bg-white text-slate-900' : 'bg-transparent text-slate-500 hover:bg-white/50'}`;
 const addRowButtonClass = 'flex items-center gap-1.5 rounded-md border border-slate-400 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-sm font-medium px-3.5 py-1.5 shadow-sm';
 
 export default function PostIncorporatePage() {
