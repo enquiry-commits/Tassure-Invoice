@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       name: o.name, address: o.address,
       identificationType: o.idNo ? inferIdType(o.idNo) : '',
       identificationNumber: o.idNo, nationality: o.nationality,
+      dateOfAppointment: toIsoDate(o.dateOfAppointment),
     }));
   const shareholders = parsed.shareholders.map(s => ({
     name: s.name, address: s.address,
@@ -60,6 +61,17 @@ export async function POST(req: NextRequest) {
       address: parsed.company.registeredAddress,
       secretaryName: secretary?.name || '',
     },
+    // Full secretary record — the response above only ever carried the
+    // name (all lib/docx-post-incorporate.ts's templates need), but the
+    // Bizfile extract has the same address/ID/nationality/appointment-date
+    // detail as any other officer, so surface it for display/verification
+    // parity with the Director table rather than silently dropping it.
+    secretary: secretary ? {
+      name: secretary.name, address: secretary.address,
+      identificationType: secretary.idNo ? inferIdType(secretary.idNo) : '',
+      identificationNumber: secretary.idNo, nationality: secretary.nationality,
+      dateOfAppointment: toIsoDate(secretary.dateOfAppointment),
+    } : null,
     directors,
     shareholders,
     // Not currently wired into any form field — Post Incorporate's 16
