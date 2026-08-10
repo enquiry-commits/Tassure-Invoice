@@ -208,8 +208,8 @@ function CheckSquare({ checked, onToggle }: { checked: boolean; onToggle?: () =>
       style={{
         width: 14, height: 14, minWidth: 14, borderRadius: 4, flexShrink: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: checked ? '#16a34a' : '#e5e7eb',
-        border: `1px solid ${checked ? '#15803d' : '#cbd5e1'}`,
+        background: checked ? '#60a5fa' : '#e5e7eb',
+        border: `1px solid ${checked ? '#3b82f6' : '#cbd5e1'}`,
         cursor: onToggle ? 'pointer' : undefined,
       }}>
       {checked && <Check size={10} color="#fff" strokeWidth={3} />}
@@ -249,9 +249,9 @@ function PicCell({ name, active, onToggleActive, onSaveName }: {
 // a colored check tile + stacked uppercase label/name, matching the same
 // on-green/off-muted language AR Reminder's OverrideChip uses, instead of a
 // plain checkbox next to a bare input.
-// Same green used everywhere else in this table for "active" (CheckSquare's
+// Same blue used everywhere else in this table for "active" (CheckSquare's
 // checked state, the status pills, …) — not a distinct color per service.
-const SERVICE_CHIP_ACTIVE = { bg: '#f0fdf4', color: '#16a34a' };
+const SERVICE_CHIP_ACTIVE = { bg: '#eff6ff', color: '#60a5fa' };
 
 function ServiceChip({ name, active, onToggleActive, onSaveName }: {
   name: string | null | undefined; active: boolean; onToggleActive?: () => void; onSaveName: (val: string) => void;
@@ -261,7 +261,7 @@ function ServiceChip({ name, active, onToggleActive, onSaveName }: {
   useEffect(() => { setVal(formatStaffName(name)); }, [name]);
   const chipColor = active ? SERVICE_CHIP_ACTIVE.color : '#94a3b8';
   const chipBg = active ? SERVICE_CHIP_ACTIVE.bg : '#f8fafc';
-  const chipBorder = active ? '#bbf7d0' : '#e2e8f0';
+  const chipBorder = active ? '#bfdbfe' : '#e2e8f0';
   return (
     <div onClick={e => e.stopPropagation()} style={{
       display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, boxSizing: 'border-box', width: '100%',

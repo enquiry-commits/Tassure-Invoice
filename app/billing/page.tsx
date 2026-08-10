@@ -3366,7 +3366,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 7, alignItems: 'center' }}>
                     {activeSvc.map(k => (
                       <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: '#475569' }}>
-                        <ServiceSquare on color={SVC_SQUARE_COLOR.manual} />
+                        <ServiceSquare on color={svcStateOf(r.services, r.servicesManual, k) === 'manual-on' ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto} />
                         {SVC[k].label}
                       </span>
                     ))}
@@ -3393,15 +3393,16 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div className="company-registration-text" style={{ padding: '0 6px' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
                   {/* Fixed slots in fixed order — every service always in the
                       same position, so rows align and differences pop out.
-                      Every active service shown here is a green check —
-                      this list only ever shows services that ARE on. */}
+                      Color follows the same Locked/Auto (blue) vs Manual On
+                      (green) distinction as the modal's legend — previously
+                      hardcoded to manual/green regardless of actual state. */}
                   <div style={{ margin: '0 6px', padding: '2px 0', minHeight: 32, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                     {SVC_ORDER.filter(k => r.services[k]).map(k => {
                       const state = svcStateOf(r.services, r.servicesManual, k);
                       return (
                         <span key={k} title={`${SVC[k].label} — ${state === 'auto-on' ? 'auto' : state === 'manual-on' ? 'manually on' : 'not provided / off'}`}
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
-                          <ServiceSquare on color={SVC_SQUARE_COLOR.manual} />
+                          <ServiceSquare on color={state === 'manual-on' ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto} />
                           {SVC_SHORT[k]}
                         </span>
                       );
