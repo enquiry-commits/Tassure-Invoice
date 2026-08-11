@@ -81,7 +81,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-const inputClass = 'rounded-md border border-slate-300 px-2.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400';
+const inputClass = 'rounded-md border border-slate-300 bg-white px-2.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400';
 const cardClass = 'rounded-xl border border-slate-200 bg-[#fafafa] p-5 shadow-md';
 const sectionTitleClass = 'text-base font-semibold text-slate-800 mb-4';
 // Full-width tab bar matching the reference app's native tab control: the
@@ -446,7 +446,7 @@ export default function PostIncorporatePage() {
                   </button>
                 ))}
               </div>
-              <div className="border border-slate-300 border-t-0 rounded-b-md p-4 relative">
+              <div className="border border-slate-300 border-t-0 rounded-b-md bg-white p-4 relative">
                 {directors.length > 1 && (
                   <button type="button" onClick={() => { setDirectors(directors.filter((_, idx) => idx !== di)); setActiveDirectorTab(Math.max(0, di - 1)); }}
                     className="absolute top-3 right-3 text-slate-400 hover:text-red-500" title="Delete this director">
@@ -549,7 +549,7 @@ export default function PostIncorporatePage() {
                   </button>
                 ))}
               </div>
-              <div className="border border-slate-300 border-t-0 rounded-b-md p-4 relative">
+              <div className="border border-slate-300 border-t-0 rounded-b-md bg-white p-4 relative">
                 {secretaries.length > 1 && (
                   <button type="button" onClick={() => {
                     const removedName = s.name;
@@ -612,7 +612,7 @@ export default function PostIncorporatePage() {
                   </button>
                 ))}
               </div>
-              <div className="border border-slate-300 border-t-0 rounded-b-md p-4 relative">
+              <div className="border border-slate-300 border-t-0 rounded-b-md bg-white p-4 relative">
                 {shareholders.length > 1 && (
                   <button type="button" onClick={() => { setShareholders(shareholders.filter((_, idx) => idx !== si)); setActiveShareholderTab(Math.max(0, si - 1)); }}
                     className="absolute top-3 right-3 text-slate-400 hover:text-red-500" title="Delete this shareholder">
