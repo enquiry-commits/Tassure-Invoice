@@ -6,15 +6,15 @@ import { withAutomationRun } from '@/lib/automation-sync';
 import { logFieldChange } from '@/lib/audit-log';
 
 /**
- * Active Client "Secretary" auto-sync — a full sweep every run, not a
- * multi-night rotation. ALSO writes the full officials list and shareholder
- * share register to teamwork_company_officials/teamwork_shareholder_shares
- * for every company fetched this run (added 2026-08-09, per Vincent: "这些
- * 可以做每天更新吗？...可以记录在数据库，更方便调用在post incorp") — reuses
- * this route's existing per-company profile fetch rather than hitting
- * TeamWork a second time for the same page, since Post Incorporate's UEN
- * lookup only needs Director/Shareholder data, not a live fetch on every
- * request.
+ * Active Client "Secretary" auto-sync — two runs per night now cover every
+ * company within the same day, not a multi-night rotation. ALSO writes the
+ * full officials list and shareholder share register to teamwork_company_
+ * officials/teamwork_shareholder_shares for every company fetched this run
+ * (added 2026-08-09, per Vincent: "这些可以做每天更新吗？...可以记录在数据库，
+ * 更方便调用在post incorp") — reuses this route's existing per-company
+ * profile fetch rather than hitting TeamWork a second time for the same
+ * page, since Post Incorporate's UEN lookup only needs Director/Shareholder
+ * data, not a live fetch on every request.
  *
  * TeamWork's per-company profile page (view_company/<id>/?comp) has the real
  * Secretary appointment (its bulk company API does not — company_secretary_
@@ -23,33 +23,37 @@ import { logFieldChange } from '@/lib/audit-log';
  * of concurrency (measured 2026-08-06: ~500ms/company whether concurrency is
  * 5, 10, or 20) — ~783 current Active Client companies take ~390s to fetch
  * alone. This originally meant capping each run at 250 companies and
- * rotating oldest-first over several nights (Vercel's classic 300s ceiling),
- * but that left Post Incorporate's per-person data up to several days stale
- * — a real problem Vincent flagged directly: "我要的是每一天都能分批轮完，
- * 但是一天内要轮完全部公司，不是一天只轮250家，这样数据就很难同步了." This
- * project's Vercel deployment has Fluid Compute enabled (confirmed via the
- * project API, resourceConfig.fluid: true), which raises the real duration
- * ceiling well past the classic 300s default — so the batch cap was removed
- * entirely instead of adding more cron triggers per day; one nightly run now
- * covers every Active Client company, with generous headroom in
- * maxDuration/BATCH_SIZE above the current ~783-company/~390s baseline for
- * the roster to keep growing without silently falling back into rotation.
+ * rotating oldest-first over several nights, but that left Post
+ * Incorporate's per-person data up to several days stale — a real problem
+ * Vincent flagged directly: "我要的是每一天都能分批轮完，但是一天内要轮完全部
+ * 公司，不是一天只轮250家，这样数据就很难同步了." First tried removing the
+ * batch cap entirely and raising maxDuration, reasoning Fluid Compute
+ * (confirmed enabled via the project API, resourceConfig.fluid: true) would
+ * cover a single ~390s run — wrong: the actual plan is Hobby, which hard-
+ * caps maxDuration at 300 regardless of Fluid Compute (confirmed by a real
+ * failed deployment: "Serverless Functions must have a maxDuration between 1
+ * and 300 for plan hobby"). A single run genuinely cannot fit all ~783
+ * companies under that ceiling, so instead: two cron-triggered runs per
+ * night (18:45 and 22:45 UTC — both still within Singapore's overnight quiet
+ * window, ~4h apart so the second always starts well after the first
+ * finishes), each comfortably within 300s, together covering the full
+ * roster with real headroom for it to keep growing.
  *
- * Cron: 18:45 UTC / SGT 02:45 daily (between teamwork/sync at 18:30 and
- * ar-reminder/generate at 19:00).
+ * Cron: 18:45 and 22:45 UTC / SGT 02:45 and 06:45 daily.
  */
-export const maxDuration = 650;
+export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
-// Comfortably above the current ~783 Active Client companies — a plain,
-// unparameterized cron run now covers every one of them in a single
-// invocation rather than needing several nights to rotate through.
-const BATCH_SIZE = 1200;
+// ~450 companies * ~500ms fixed TeamWork throughput ≈ 225s, leaving ~75s of
+// the 300s Hobby-plan ceiling for login + DB writes — two runs/night at this
+// size cover the current ~783-company roster with room to grow before
+// needing a third nightly run.
+const BATCH_SIZE = 450;
 
 async function syncSecretaries(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const limit = Math.min(parseInt(searchParams.get('limit') ?? '', 10) || BATCH_SIZE, 2000);
+  const limit = Math.min(parseInt(searchParams.get('limit') ?? '', 10) || BATCH_SIZE, 900);
 
   const supabase = createAdminClient();
 
