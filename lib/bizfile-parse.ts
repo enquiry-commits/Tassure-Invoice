@@ -81,7 +81,14 @@ function labelValue(text: string, label: string): string {
 function labelValueActivity(lines: string[], label: string): string {
   const idx = lines.findIndex(l => new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\t:`).test(l));
   if (idx === -1) return '';
-  const parts = [lines[idx].replace(/^.*?\t:\s*/, '').trim()];
+  const firstValue = lines[idx].replace(/^.*?\t:\s*/, '').trim();
+  // Secondary Activity is routinely blank on a real Bizfile. Without this
+  // guard an empty first value still enters the continuation loop below
+  // (empty string doesn't match the "(NNNNN)" end pattern either), so it
+  // keeps swallowing whatever unrelated lines come next looking for a
+  // continuation that was never there.
+  if (!firstValue) return '';
+  const parts = [firstValue];
   let i = idx + 1;
   while (i < lines.length && !/\(\d+\)\s*$/.test(parts[parts.length - 1]) && !/\t:/.test(lines[i])) {
     parts.push(lines[i].trim());
@@ -132,6 +139,31 @@ function findHeaderX(items: Item[], label: string, belowY: number, aboveY: numbe
   return hit ? hit.x : null;
 }
 
+// Boilerplate that appears at the bottom of every Bizfile page — mirrors
+// normalizeText's line filters above, but matched against individual
+// pdfjs-dist items (not joined lines), since the coordinate-based table
+// extraction below never goes through normalizeText at all.
+const FOOTER_ITEM_PATTERNS = [
+  /^Page \d+ of \d+$/,
+  /^Verify Document Instantly$/,
+  /^Check if this document is issued$/,
+  /^by ACRA\.$/,
+  /^https:\/\/www\.acratrustbar/i,
+  /^erify\//i,
+];
+
+// Y position of the topmost footer line on this page, if any — used as a
+// floor so a table with no following section heading on the same page
+// doesn't extend into the footer.
+function footerTopY(items: Item[]): number | null {
+  let top: number | null = null;
+  for (const it of items) {
+    const s = it.str.trim();
+    if (s && FOOTER_ITEM_PATTERNS.some(re => re.test(s)) && (top == null || it.y > top)) top = it.y;
+  }
+  return top;
+}
+
 // Slices the page's items down to one table's own vertical band — between
 // its own section heading and the next one (or a sensible floor when it's
 // the last table on the page) — so a later table's data (or the page
@@ -144,6 +176,16 @@ function sectionBand(items: Item[], headingLabel: string, nextHeadingLabels: str
   for (const nextLabel of nextHeadingLabels) {
     const next = items.find(it => it.str.trim().startsWith(nextLabel) && it.y < heading.y);
     if (next && next.y > bottom) bottom = next.y;
+  }
+  // No next section heading found on THIS page — either genuinely the last
+  // table in the document, or this table's last few rows continue onto the
+  // next PDF page. Either way, nothing bounds the row-extraction below from
+  // running straight through the page footer (page number, the "Verify
+  // Document Instantly" QR blurb, the verify URL) and gluing it onto the
+  // last row's address/nationality — confirmed happening in production.
+  if (bottom === -Infinity) {
+    const footerY = footerTopY(items);
+    if (footerY != null && footerY < heading.y) bottom = footerY;
   }
   return { top: heading.y, bottom };
 }

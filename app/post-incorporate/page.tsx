@@ -216,6 +216,8 @@ export default function PostIncorporatePage() {
       }
 
       if (bfDirectors.length) {
+        const anyNomineeDirector = bfDirectors.some(d => nomineeDirectorNames.includes(d.name.trim().toUpperCase()));
+        setCompany(current => ({ ...current, needNdService: anyNomineeDirector }));
         setDirectors(bfDirectors.map(d => {
           const isNominee = nomineeDirectorNames.includes(d.name.trim().toUpperCase());
           const match = officialByName.get(d.name.trim().toUpperCase());
