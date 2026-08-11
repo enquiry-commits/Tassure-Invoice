@@ -175,7 +175,7 @@ export default function PostIncorporatePage() {
           paidUpCapital: { ...emptyCapitalInfo(), ...body.extra.paidUpCapital },
         });
       }
-      const bfDirectors = (body.directors || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; dateOfAppointment: string }[];
+      const bfDirectors = (body.directors || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; dateOfAppointment: string; isNomineeDirector: boolean }[];
       const bfShareholders = (body.shareholders || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; numberOfShares: string }[];
 
       // Bizfile is the official ACRA extract — it doesn't carry FYE (a
@@ -216,18 +216,27 @@ export default function PostIncorporatePage() {
       }
 
       if (bfDirectors.length) {
-        const anyNomineeDirector = bfDirectors.some(d => nomineeDirectorNames.includes(d.name.trim().toUpperCase()));
+        // Two independent sources can each mark someone a nominee director,
+        // and neither is strictly more authoritative than the other:
+        // Tassure's own nd_appointments roster (an internal appointment
+        // record), and ACRA's own "ND" superscript on the Bizfile extract
+        // itself (the official registry filing). Either one is enough —
+        // Vincent, after a real case where the roster missed it but the
+        // Bizfile's own marker had it right there: "ZHANG LIN那边都有标记他是
+        // ND了...是否为名义董事那边是YES".
+        const isNomineeDirector = (d: typeof bfDirectors[number]) =>
+          d.isNomineeDirector || nomineeDirectorNames.includes(d.name.trim().toUpperCase());
+        const anyNomineeDirector = bfDirectors.some(isNomineeDirector);
         setCompany(current => ({ ...current, needNdService: anyNomineeDirector }));
         setDirectors(bfDirectors.map(d => {
-          const isNominee = nomineeDirectorNames.includes(d.name.trim().toUpperCase());
+          const isNominee = isNomineeDirector(d);
           const match = officialByName.get(d.name.trim().toUpperCase());
           return {
             ...emptyDirector(), name: d.name, address: d.address, identificationType: d.identificationType || 'NRIC',
             identificationNumber: d.identificationNumber, nationality: d.nationality, dateOfAppointment: d.dateOfAppointment || '',
             dateOfBirth: match?.dob || '', email: match?.email || '', phone: match?.mobile || '',
-            // Tassure's own ND roster (nd_appointments), not something Bizfile
-            // has — the nominator's own details (who engaged Tassure to
-            // provide this ND) still aren't tracked anywhere, so only the
+            // The nominator's own details (who engaged Tassure to provide
+            // this ND) aren't tracked anywhere by either source, so only the
             // flag itself is auto-set; those sub-fields stay manual.
             isNomineeDirector: isNominee, nominatorType: isNominee ? 'individual' : '',
           };
@@ -254,6 +263,7 @@ export default function PostIncorporatePage() {
         setActiveShareholderTab(0);
       }
       if (enrichedFye) setCompany(current => ({ ...current, financialYearEndDayMonth: enrichedFye }));
+      const nomineeDirectorCount = bfDirectors.filter(d => d.isNomineeDirector || nomineeDirectorNames.includes(d.name.trim().toUpperCase())).length;
 
       // TeamWork-known people in a role Bizfile's own result didn't include
       // at all — e.g. a company with two directors where only one made it
@@ -275,7 +285,7 @@ export default function PostIncorporatePage() {
       );
 
       setBizfileParsed(true);
-      const ndNote = nomineeDirectorNames.length ? ` ${nomineeDirectorNames.length} nominee director(s) auto-detected from Tassure's ND roster.` : '';
+      const ndNote = nomineeDirectorCount ? ` ${nomineeDirectorCount} nominee director(s) auto-detected (Tassure's ND roster and/or ACRA's own "ND" marker on the Bizfile).` : '';
       const contactNote = teamworkOfficials.length ? ' Birth Date/Email/Contact filled in from TeamWork where a name matched.' : '';
       const missingNote = (missingDirectors.length || missingSecretaries.length || missingShareholderNames.length)
         ? ' TeamWork shows people in these roles that this Bizfile parse didn’t include — see the popup to add them.' : '';

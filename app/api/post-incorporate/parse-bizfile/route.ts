@@ -45,6 +45,10 @@ export async function POST(req: NextRequest) {
       identificationType: o.idNo ? inferIdType(o.idNo) : '',
       identificationNumber: o.idNo, nationality: o.nationality,
       dateOfAppointment: toIsoDate(o.dateOfAppointment),
+      // ACRA's own "ND" marker on the Bizfile extract — a real signal in its
+      // own right, checked alongside (not instead of) Tassure's internal
+      // nd_appointments roster on the frontend.
+      isNomineeDirector: o.isNomineeDirector,
     }));
   const shareholders = parsed.shareholders.map(s => ({
     name: s.name, address: s.address,

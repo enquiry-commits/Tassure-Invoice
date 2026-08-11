@@ -30,6 +30,12 @@ type Item = { str: string; x: number; y: number };
 
 export type ParsedOfficer = {
   name: string; address: string; idNo: string; nationality: string; position: string; dateOfAppointment: string;
+  // ACRA's own "ND" superscript next to a director's name on the Bizfile
+  // extract — a real, authoritative signal in its own right (the official
+  // registry filing), not something to defer entirely to Tassure's separate
+  // nd_appointments roster. Both are checked; either one marks a director as
+  // nominee (Vincent: "ZHANG LIN那边都有标记他是ND了...是否为名义董事那边是YES").
+  isNomineeDirector: boolean;
 };
 export type ParsedShareholder = {
   name: string; address: string; idNo: string; nationality: string;
@@ -137,16 +143,22 @@ function rowBoundaryBottom(rowStartYs: number[], i: number, sectionBottom: numbe
 
 // ACRA marks a nominee director with a bare "ND" superscript next to their
 // name, plus a one-off "ND – Nominee Director" legend line after the table
-// explaining it — neither is officer data, both sit in the name/address
-// column and would otherwise get glued onto whichever row's boundary they
-// land closest to. Deliberately not parsed into ParsedOfficer at all: this
-// system already derives nominee-director status from Tassure's own
-// nd_appointments roster (a real internal appointment record), which is a
-// more reliable source than reverse-engineering ACRA's own public-filing
-// annotation here.
+// explaining it. The legend line is pure document-level noise (not tied to
+// any one person) and always gets dropped. The bare "ND" marker itself is
+// real signal though — the official registry's own nominee-director flag —
+// so it's deliberately NOT filtered out here; extractOfficersFromItems
+// captures it per-row instead (into ParsedOfficer.isNomineeDirector) rather
+// than discarding it, since this system's Tassure-internal nd_appointments
+// roster and ACRA's own filing can each know something the other doesn't.
+function isNomineeDirectorLegend(str: string): boolean {
+  return /^ND\s*[–-]\s*Nominee Director$/i.test(str.trim());
+}
+// Shareholders have no equivalent concept — ACRA doesn't mark a "nominee
+// shareholder" with this notation — so both the marker and its legend are
+// just noise there.
 function isNomineeDirectorAnnotation(str: string): boolean {
   const s = str.trim();
-  return s === 'ND' || /^ND\s*[–-]\s*Nominee Director$/i.test(s);
+  return s === 'ND' || isNomineeDirectorLegend(s);
 }
 
 function groupItemsByColumn(items: Item[], columnStartXs: number[]): Item[][] {
@@ -256,7 +268,7 @@ function extractOfficersFromItems(items: Item[]): ParsedOfficer[] {
   // own Y, well above rowBoundaryTop's cutoff for row 0, so the row-boundary
   // check below already excludes them without also having to blacklist every
   // bare digit a real row might legitimately contain.
-  const dataItems = items.filter(it => it.y < headerY - 5 && it.y > band.bottom && it.str.trim() && !isNomineeDirectorAnnotation(it.str));
+  const dataItems = items.filter(it => it.y < headerY - 5 && it.y > band.bottom && it.str.trim() && !isNomineeDirectorLegend(it.str));
   const idItems = dataItems.filter(it => it.x >= idX - NAME_COLUMN_MAX_X_GAP && it.x < natX - NAME_COLUMN_MAX_X_GAP && ID_ANCHOR_RE.test(it.str.trim()));
   const rowStartYs = [...new Set(idItems.map(it => it.y))].sort((a, b) => b - a);
 
@@ -266,7 +278,12 @@ function extractOfficersFromItems(items: Item[]): ParsedOfficer[] {
     const bottomY = rowBoundaryBottom(rowStartYs, i, band.bottom);
     const rowItems = dataItems.filter(it => it.y <= topY && it.y > bottomY);
     const [nameCol, idCol, natCol, posCol, dateCol] = groupItemsByColumn(rowItems, [nameX, idX, natX, posX, dateX]);
-    const nameLines = nameCol.sort((a, b) => b.y - a.y);
+    // The bare "ND" marker (kept in dataItems above, unlike the legend line)
+    // rides along in this same column as the name/address it annotates —
+    // pull it out as a real signal instead of letting it become a stray
+    // token in the name or address text.
+    const isNomineeMarked = nameCol.some(it => it.str.trim() === 'ND');
+    const nameLines = nameCol.filter(it => it.str.trim() !== 'ND').sort((a, b) => b.y - a.y);
     officers.push({
       name: (nameLines[0]?.str || '').trim(),
       address: nameLines.slice(1).map(it => it.str.trim().replace(/,\s*$/, '')).filter(Boolean).join(', '),
@@ -274,6 +291,7 @@ function extractOfficersFromItems(items: Item[]): ParsedOfficer[] {
       nationality: joinColumn(natCol),
       position: joinColumn(posCol),
       dateOfAppointment: joinColumn(dateCol),
+      isNomineeDirector: isNomineeMarked,
     });
   }
   return officers;
