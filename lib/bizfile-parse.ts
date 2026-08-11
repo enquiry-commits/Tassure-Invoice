@@ -111,6 +111,44 @@ function parseCapitalTable(text: string, heading: string): CapitalInfo {
 const ID_ANCHOR_RE = /^[A-Z0-9]{7,12}$/;
 const NAME_COLUMN_MAX_X_GAP = 40; // items sharing the leftmost column, allowing for minor kerning drift
 
+// A row's own boundary used to be "its ID anchor's Y + 2" — a fixed 2pt
+// buffer meant to catch the row's own Name/ID/Nationality items, which sit
+// at very nearly the same Y as the ID anchor itself. Measured against a
+// real sample (1V Capital): a superscript annotation next to a name (ACRA's
+// "ND" nominee-director marker) sits ~4.5pt above its own row's baseline —
+// enough to cross the old +2 threshold and get misattributed to the
+// PREVIOUS row instead, appended onto that person's address. Widening the
+// buffer to 8pt covers that with margin while staying well clear of a
+// genuine wrapped address line in the row ABOVE (measured ~12-15pt of line
+// spacing in the same sample) — the two failure modes need buffers on
+// opposite sides of that gap, and 8 sits between them. This same buffer
+// also turns out to correctly exclude row 0's own multi-line column headers
+// ("Name"/"Address", "Identification"/"Number", "Date of"/"Appointment" —
+// every header wraps onto 2-3 stacked lines, tightly spaced, ending well
+// more than 8pt above the first real row) without needing any special case
+// for row 0 at all.
+const ROW_BOUNDARY_EPSILON = 8;
+function rowBoundaryTop(rowStartYs: number[], i: number): number {
+  return rowStartYs[i] + ROW_BOUNDARY_EPSILON;
+}
+function rowBoundaryBottom(rowStartYs: number[], i: number, sectionBottom: number): number {
+  return i + 1 < rowStartYs.length ? rowStartYs[i + 1] + ROW_BOUNDARY_EPSILON : sectionBottom;
+}
+
+// ACRA marks a nominee director with a bare "ND" superscript next to their
+// name, plus a one-off "ND – Nominee Director" legend line after the table
+// explaining it — neither is officer data, both sit in the name/address
+// column and would otherwise get glued onto whichever row's boundary they
+// land closest to. Deliberately not parsed into ParsedOfficer at all: this
+// system already derives nominee-director status from Tassure's own
+// nd_appointments roster (a real internal appointment record), which is a
+// more reliable source than reverse-engineering ACRA's own public-filing
+// annotation here.
+function isNomineeDirectorAnnotation(str: string): boolean {
+  const s = str.trim();
+  return s === 'ND' || /^ND\s*[–-]\s*Nominee Director$/i.test(s);
+}
+
 function groupItemsByColumn(items: Item[], columnStartXs: number[]): Item[][] {
   const sorted = [...columnStartXs].sort((a, b) => a - b);
   const buckets: Item[][] = sorted.map(() => []);
@@ -175,7 +213,14 @@ function sectionBand(items: Item[], headingLabel: string, nextHeadingLabels: str
   let bottom = -Infinity;
   for (const nextLabel of nextHeadingLabels) {
     const next = items.find(it => it.str.trim().startsWith(nextLabel) && it.y < heading.y);
-    if (next && next.y > bottom) bottom = next.y;
+    // The footnote text this often anchors to ("Includes nationality and
+    // citizenship", "Includes place of incorporation...") has its own
+    // reference-number superscript ("²"/"³") floating ~4.5pt above it, same
+    // offset as every other superscript on this page — without the same
+    // buffer used for row boundaries, that stray digit sits just inside the
+    // table's own band and gets read as trailing data on the LAST row
+    // (confirmed in production: a real address ending in ", 2").
+    if (next && next.y + ROW_BOUNDARY_EPSILON > bottom) bottom = next.y + ROW_BOUNDARY_EPSILON;
   }
   // No next section heading found on THIS page — either genuinely the last
   // table in the document, or this table's last few rows continue onto the
@@ -201,14 +246,24 @@ function extractOfficersFromItems(items: Item[]): ParsedOfficer[] {
   if (nameX == null || idX == null || natX == null || posX == null || dateX == null) return [];
 
   const headerY = items.find(it => it.str.trim() === 'Name' && it.y < band.top && it.y > band.bottom)!.y;
-  const dataItems = items.filter(it => it.y < headerY - 5 && it.y > band.bottom && it.str.trim() && !/^\d$/.test(it.str.trim()));
+  // Used to also drop any bare single digit here, meant to catch the
+  // superscript footnote-reference numbers ACRA attaches to some column
+  // headers (e.g. "Number of Shares³") — but that same filter also drops a
+  // genuine single-digit share count ("1" share), which is a completely
+  // ordinary real value, not a footnote marker (confirmed wrong in
+  // production: a real 1-share holding came back with numberOfShares empty).
+  // No longer needed: those footnote markers sit right at/above the header's
+  // own Y, well above rowBoundaryTop's cutoff for row 0, so the row-boundary
+  // check below already excludes them without also having to blacklist every
+  // bare digit a real row might legitimately contain.
+  const dataItems = items.filter(it => it.y < headerY - 5 && it.y > band.bottom && it.str.trim() && !isNomineeDirectorAnnotation(it.str));
   const idItems = dataItems.filter(it => it.x >= idX - NAME_COLUMN_MAX_X_GAP && it.x < natX - NAME_COLUMN_MAX_X_GAP && ID_ANCHOR_RE.test(it.str.trim()));
   const rowStartYs = [...new Set(idItems.map(it => it.y))].sort((a, b) => b - a);
 
   const officers: ParsedOfficer[] = [];
   for (let i = 0; i < rowStartYs.length; i++) {
-    const topY = rowStartYs[i] + 2;
-    const bottomY = i + 1 < rowStartYs.length ? rowStartYs[i + 1] + 2 : band.bottom;
+    const topY = rowBoundaryTop(rowStartYs, i);
+    const bottomY = rowBoundaryBottom(rowStartYs, i, band.bottom);
     const rowItems = dataItems.filter(it => it.y <= topY && it.y > bottomY);
     const [nameCol, idCol, natCol, posCol, dateCol] = groupItemsByColumn(rowItems, [nameX, idX, natX, posX, dateX]);
     const nameLines = nameCol.sort((a, b) => b.y - a.y);
@@ -231,20 +286,31 @@ function extractShareholdersFromItems(items: Item[]): ParsedShareholder[] {
   const idX = findHeaderX(items, 'Identification', band.top, band.bottom);
   const natX = findHeaderX(items, 'Nationality /', band.top, band.bottom) ?? findHeaderX(items, 'Nationality', band.top, band.bottom);
   const sharesX = findHeaderX(items, 'Number of', band.top, band.bottom);
-  const changedHits = items.filter(it => it.str.trim() === 'Address' && it.y < band.top && it.y > band.bottom);
-  const changedX = changedHits.length ? changedHits[changedHits.length - 1].x : null;
   if (nameX == null || idX == null || natX == null || sharesX == null) return [];
 
   const headerY = items.find(it => it.str.trim() === 'Name' && it.y < band.top && it.y > band.bottom)!.y;
-  const dataItems = items.filter(it => it.y < headerY - 5 && it.y > band.bottom && it.str.trim() && !/^\d$/.test(it.str.trim()));
+  // "Address" (the first word of the wrapped "Address Changed" column header)
+  // appears TWICE in this table: once on the header's own first line (same Y
+  // as "Name"/"Number of", the real "Address Changed" column this needs) and
+  // again as the Name column's own sub-header two lines further down ("Name"
+  // / "Address" stacked, like every other column here). Scoping to headerY's
+  // own Y disambiguates them — a plain first/last match picked whichever
+  // happened to come first in the PDF's content-stream order, which isn't
+  // guaranteed to be the header line and in production picked the wrong one
+  // (confirmed: real "Number of Shares" data came back corrupted with the
+  // neighboring "Address Changed" column's date glued on, because nothing
+  // bounded the shares column's right edge without this).
+  const changedHit = items.find(it => it.str.trim() === 'Address' && Math.abs(it.y - headerY) < 2);
+  const changedX = changedHit ? changedHit.x : null;
+  const dataItems = items.filter(it => it.y < headerY - 5 && it.y > band.bottom && it.str.trim() && !isNomineeDirectorAnnotation(it.str));
   const idItems = dataItems.filter(it => it.x >= idX - NAME_COLUMN_MAX_X_GAP && it.x < natX - NAME_COLUMN_MAX_X_GAP && ID_ANCHOR_RE.test(it.str.trim()));
   const rowStartYs = [...new Set(idItems.map(it => it.y))].sort((a, b) => b - a);
 
   const columnXs = [nameX, idX, natX, sharesX, ...(changedX != null ? [changedX] : [])];
   const shareholders: ParsedShareholder[] = [];
   for (let i = 0; i < rowStartYs.length; i++) {
-    const topY = rowStartYs[i] + 2;
-    const bottomY = i + 1 < rowStartYs.length ? rowStartYs[i + 1] + 2 : band.bottom;
+    const topY = rowBoundaryTop(rowStartYs, i);
+    const bottomY = rowBoundaryBottom(rowStartYs, i, band.bottom);
     const rowItems = dataItems.filter(it => it.y <= topY && it.y > bottomY);
     const buckets = groupItemsByColumn(rowItems, columnXs);
     const [nameCol, idCol, natCol, sharesCol] = buckets;
