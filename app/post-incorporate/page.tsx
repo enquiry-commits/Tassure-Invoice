@@ -216,18 +216,26 @@ export default function PostIncorporatePage() {
       }
 
       if (bfDirectors.length) {
-        // Two independent sources can each mark someone a nominee director,
-        // and neither is strictly more authoritative than the other:
-        // Tassure's own nd_appointments roster (an internal appointment
-        // record), and ACRA's own "ND" superscript on the Bizfile extract
-        // itself (the official registry filing). Either one is enough —
-        // Vincent, after a real case where the roster missed it but the
-        // Bizfile's own marker had it right there: "ZHANG LIN那边都有标记他是
-        // ND了...是否为名义董事那边是YES".
+        // "是否为名义董事" (is THIS director a nominee) and "是否需提供ND服务"
+        // (does Tassure's secretarial firm need to PROVIDE that ND service)
+        // are different questions, per Vincent's explicit correction: a
+        // director can be a nominee director without Tassure being the one
+        // supplying that arrangement. The per-director flag takes either
+        // signal — Tassure's own nd_appointments roster, or ACRA's own "ND"
+        // marker on the Bizfile extract itself (neither is strictly more
+        // authoritative; a real case showed the roster missing someone the
+        // Bizfile had right: "ZHANG LIN那边都有标记他是ND了...是否为名义董事那边
+        // 是YES"). But whether Tassure needs to PROVIDE the service can only
+        // come from Tassure's own roster — specifically nominee_directors,
+        // Vincent's fixed roster of 13 named individuals Tassure supplies as
+        // ND-for-hire ("我原定的13人") — Bizfile's own marker says nothing
+        // about who is actually supplying the arrangement, so it must NOT
+        // feed this company-level flag ("DIRECTOR是ND，不代表需要秘书公司有
+        // 提供ND服务...这两个属于不同的东西").
         const isNomineeDirector = (d: typeof bfDirectors[number]) =>
           d.isNomineeDirector || nomineeDirectorNames.includes(d.name.trim().toUpperCase());
-        const anyNomineeDirector = bfDirectors.some(isNomineeDirector);
-        setCompany(current => ({ ...current, needNdService: anyNomineeDirector }));
+        const anyTassureSuppliedNd = bfDirectors.some(d => nomineeDirectorNames.includes(d.name.trim().toUpperCase()));
+        setCompany(current => ({ ...current, needNdService: anyTassureSuppliedNd }));
         setDirectors(bfDirectors.map(d => {
           const isNominee = isNomineeDirector(d);
           const match = officialByName.get(d.name.trim().toUpperCase());
