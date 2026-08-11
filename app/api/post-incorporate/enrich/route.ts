@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     // PostgREST-embeddable FK exists between them.
     companyName ? supabase.from('nominee_directors').select('id, name') : Promise.resolve({ data: null }),
     uen
-      ? supabase.from('teamwork_company_officials').select('name, role, dob, email, mobile, telephone, sub_roles').ilike('uen', uen)
+      ? supabase.from('teamwork_company_officials').select('name, role, address, id_no, id_type, dob, email, mobile, telephone, sub_roles').ilike('uen', uen)
       : Promise.resolve({ data: null }),
     // The REAL share register — a Controller (Registrable Controller under
     // RORC) is commonly but NOT always the same person as a Shareholder (no
@@ -131,14 +131,22 @@ export async function GET(req: NextRequest) {
   }
 
   // Returned in full (not just a name list) so the caller can both (a) fill
-  // in dob/email/mobile for people it already matched from Bizfile, and (b)
-  // notice TeamWork-known people in a role that Bizfile's own result didn't
-  // include at all — Vincent: "系统从BIZFILE检测出来的结构和TW的不同要跳出
-  // 弹窗提示是否要修改."
+  // in address/ID/dob/email/mobile for people it already matched from
+  // Bizfile, and (b) notice TeamWork-known people in a role that Bizfile's
+  // own result didn't include at all — Vincent: "系统从BIZFILE检测出来的结构
+  // 和TW的不同要跳出弹窗提示是否要修改." role now also includes "Shareholder"
+  // (added by sync-secretary from the Shareholders tab's own rich detail
+  // cards, which the plain "Active Officials" summary table never had) —
+  // Vincent caught this gap directly, with a real screenshot of a
+  // shareholder's fully-populated TeamWork card next to the system showing
+  // nothing for that same person: "你检测到的结果和我在TW直接看到的结果完全
+  // 不同."
   const teamworkOfficials = ((officialRows ?? []) as {
-    name: string; role: string; dob: string | null; email: string | null; mobile: string | null; telephone: string | null; sub_roles: string | null;
+    name: string; role: string; address: string | null; id_no: string | null; id_type: string | null;
+    dob: string | null; email: string | null; mobile: string | null; telephone: string | null; sub_roles: string | null;
   }[]).map(o => ({
-    name: o.name, role: o.role, dob: o.dob || '', email: o.email || '', mobile: o.mobile || '',
+    name: o.name, role: o.role, address: o.address || '', idNo: o.id_no || '', idType: o.id_type || '',
+    dob: o.dob || '', email: o.email || '', mobile: o.mobile || '',
     telephone: o.telephone || '', subRoles: o.sub_roles || '',
   }));
 

@@ -106,7 +106,7 @@ async function syncSecretaries(req: NextRequest) {
       // officials (the plain summary table) other than name — join on that,
       // same as every other name-based match already used across this file.
       const detailByName = new Map(p.officerDetails.map(d => [d.name.trim().toUpperCase(), d]));
-      return p.officials
+      const fromOfficialsTable = p.officials
         .filter(o => o.name)
         .map(o => {
           const detail = detailByName.get(o.name.trim().toUpperCase());
@@ -119,6 +119,33 @@ async function syncSecretaries(req: NextRequest) {
             sub_roles: detail?.roles.length ? detail.roles.map(r => r.role).join(', ') : null,
           };
         });
+      // Individual shareholders never appear on the plain "Active Officials"
+      // summary table above — confirmed 2026-08-06 it has no Shareholder
+      // role or share-count column at all — but DO have their own rich
+      // detail card under the Shareholders tab specifically (cardType
+      // "Individual", distinct from "IndividualDirector"), already scraped
+      // by extractOfficerDetails and, until now, simply discarded rather
+      // than persisted — real dob/email/mobile TeamWork has on file getting
+      // thrown away. Caught with real evidence, not assumed: Vincent's own
+      // screenshot of a shareholder's full TeamWork card (D.O.B/Individual
+      // Email/Individual Mobile No # all populated) next to the system
+      // showing nothing for that same person ("你检测到的结果和我在TW直接看到
+      // 的结果完全不同"). Corporate shareholder cards ("Corporate
+      // Shareholders" cardType) use an entirely different field set (Reg.No,
+      // no D.O.B/nationality/personal email — it's a company, not a person)
+      // that extractOfficerDetails doesn't parse at all yet; out of scope
+      // here, individual shareholders only.
+      const individualShareholders = p.officerDetails
+        .filter(d => d.cardType === 'Individual' && d.name)
+        .map(d => ({
+          internal_id: p.companyId, uen: uenByInternalId.get(p.companyId) ?? null,
+          name: d.name, role: 'Shareholder', id_no: d.idNo, id_type: d.idNo ? inferIdType(d.idNo) : null,
+          address: d.address, date_of_appointment: d.dateOfAppointment, synced_at: now,
+          dob: d.dob || null, email: d.email || null, mobile: d.mobile || null,
+          telephone: d.telephone || null,
+          sub_roles: d.roles.length ? d.roles.map(r => r.role).join(', ') : null,
+        }));
+      return [...fromOfficialsTable, ...individualShareholders];
     });
     const shareRows = results.flatMap(p => p.shareholderShares
       .filter(s => s.name)
@@ -194,6 +221,7 @@ async function syncSecretaries(req: NextRequest) {
     unchanged,
     update_errors: updateErrors,
     officials_synced: results.reduce((n, p) => n + p.officials.filter(o => o.name).length, 0),
+    individual_shareholders_synced: results.reduce((n, p) => n + p.officerDetails.filter(d => d.cardType === 'Individual' && d.name).length, 0),
     shareholders_synced: results.reduce((n, p) => n + p.shareholderShares.filter(s => s.name).length, 0),
   });
 }

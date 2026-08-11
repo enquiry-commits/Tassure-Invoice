@@ -23,7 +23,7 @@ type SecretaryRow = { name: string; address: string; identificationType: string;
 // TeamWork's own per-person detail (see lib/teamwork-company-profile.ts's
 // OfficerDetail) — used both to enrich matched people and to offer adding
 // people TeamWork knows about that Bizfile's own result didn't include.
-type TeamworkOfficial = { name: string; role: string; dob: string; email: string; mobile: string; telephone: string; subRoles: string };
+type TeamworkOfficial = { name: string; role: string; address: string; idNo: string; idType: string; dob: string; email: string; mobile: string; telephone: string; subRoles: string };
 
 // Tassure's own registered name — the corporate secretarial firm on every
 // Post Incorporate document regardless of client, confirmed against the
@@ -149,6 +149,12 @@ export default function PostIncorporatePage() {
   // this set specifically answers "does Tassure supply THIS one," per
   // Vincent: "这个是只针对当秘书提供ND服务...这两个属于不同的东西".
   const [tassureNdNames, setTassureNdNames] = useState<Set<string>>(new Set());
+  // Kept at page level (not just a local var inside the parse handler) so
+  // addMissingShareholder can look up a name's real address/ID/dob/email/
+  // mobile — the share register missingShareholderNames comes from is just
+  // names, but the same person is very likely also in this map now that
+  // sync-secretary persists individual shareholders' own detail cards too.
+  const [teamworkOfficialByName, setTeamworkOfficialByName] = useState<Map<string, TeamworkOfficial>>(new Map());
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
@@ -227,6 +233,7 @@ export default function PostIncorporatePage() {
       const officialByName = new Map(teamworkOfficials.map(o => [o.name.trim().toUpperCase(), o]));
       const nomineeDetailByName = new Map(nomineeDirectorDetails.map(d => [d.name, d]));
       setTassureNdNames(new Set(nomineeDirectorNames));
+      setTeamworkOfficialByName(officialByName);
 
       if (body.secretary) {
         const match = officialByName.get((body.secretary.name || '').trim().toUpperCase());
@@ -348,17 +355,35 @@ export default function PostIncorporatePage() {
   }
 
   function addMissingDirector(o: TeamworkOfficial) {
-    setDirectors(current => [...current, { ...emptyDirector(), name: o.name, dateOfBirth: teamworkDateToIso(o.dob), email: o.email, phone: o.mobile }]);
+    setDirectors(current => [...current, {
+      ...emptyDirector(), name: o.name, address: o.address,
+      identificationType: o.idType || 'NRIC', identificationNumber: o.idNo,
+      dateOfBirth: teamworkDateToIso(o.dob), email: o.email, phone: o.mobile,
+    }]);
     setActiveDirectorTab(directors.length);
     setMissingFromBizfile(current => current && { ...current, directors: current.directors.filter(d => d !== o) });
   }
   function addMissingSecretary(o: TeamworkOfficial) {
-    setSecretaries(current => [...current, { ...emptySecretary(), name: o.name, dateOfBirth: teamworkDateToIso(o.dob), email: o.email, phone: o.mobile }]);
+    setSecretaries(current => [...current, {
+      ...emptySecretary(), name: o.name, address: o.address,
+      identificationType: o.idType || 'NRIC', identificationNumber: o.idNo,
+      dateOfBirth: teamworkDateToIso(o.dob), email: o.email, phone: o.mobile,
+    }]);
     setActiveSecretaryTab(secretaries.length);
     setMissingFromBizfile(current => current && { ...current, secretaries: current.secretaries.filter(s => s !== o) });
   }
   function addMissingShareholder(name: string) {
-    setShareholders(current => [...current, { ...emptyShareholder(), name }]);
+    // The share register (teamworkShareholderNames, what missingShareholderNames
+    // comes from) is just names — no personal details. But since sync-secretary
+    // now also persists individual shareholders' own Shareholders-tab cards
+    // (role: 'Shareholder'), the SAME name is very likely also present in
+    // teamworkOfficialByName with real address/ID/dob/email/mobile on it.
+    const match = teamworkOfficialByName.get(name.trim().toUpperCase());
+    setShareholders(current => [...current, {
+      ...emptyShareholder(), name,
+      address: match?.address || '', identificationType: match?.idType || 'NRIC', identificationNumber: match?.idNo || '',
+      dateOfBirth: teamworkDateToIso(match?.dob || ''), email: match?.email || '', phone: match?.mobile || '',
+    }]);
     setActiveShareholderTab(shareholders.length);
     setMissingFromBizfile(current => current && { ...current, shareholderNames: current.shareholderNames.filter(n => n !== name) });
   }
