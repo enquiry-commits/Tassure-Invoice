@@ -19,7 +19,11 @@ type CapitalInfo = { amount: string; numberOfShares: string; currency: string; s
 type CompanyExtra = { companyType: string; primaryActivity: string; secondaryActivity: string; issuedShareCapital: CapitalInfo; paidUpCapital: CapitalInfo };
 type DirectorRow = PostIncorporateDirector & { dateOfAppointment: string };
 type ShareholderRow = PostIncorporateShareholder & { dateOfAppointment: string; phone: string; email: string; isRorc: boolean; nationality: string; dateOfBirth: string };
-type SecretaryRow = { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; dateOfAppointment: string };
+type SecretaryRow = { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; dateOfAppointment: string; dateOfBirth: string; email: string; phone: string };
+// TeamWork's own per-person detail (see lib/teamwork-company-profile.ts's
+// OfficerDetail) — used both to enrich matched people and to offer adding
+// people TeamWork knows about that Bizfile's own result didn't include.
+type TeamworkOfficial = { name: string; role: string; dob: string; email: string; mobile: string; telephone: string; subRoles: string };
 
 // Tassure's own registered name — the corporate secretarial firm on every
 // Post Incorporate document regardless of client, confirmed against the
@@ -55,7 +59,7 @@ function emptyDirector(): DirectorRow {
 }
 
 function emptySecretary(): SecretaryRow {
-  return { name: '', address: '', identificationType: 'NRIC', identificationNumber: '', nationality: '', dateOfAppointment: '' };
+  return { name: '', address: '', identificationType: 'NRIC', identificationNumber: '', nationality: '', dateOfAppointment: '', dateOfBirth: '', email: '', phone: '' };
 }
 
 function emptyShareholder(): ShareholderRow {
@@ -119,6 +123,11 @@ export default function PostIncorporatePage() {
   const [activeDirectorTab, setActiveDirectorTab] = useState(0);
   const [activeSecretaryTab, setActiveSecretaryTab] = useState(0);
   const [activeShareholderTab, setActiveShareholderTab] = useState(0);
+  // People TeamWork's own records show for this company that Bizfile's
+  // parsed result didn't include — Vincent: "系统只会从BIZFILE读取一个人...
+  // 因此我要你从TW做比对，并且当系统从BIZFILE检测出来的结构和TW的不同要跳出
+  // 弹窗提示是否要修改." null = no check run yet or nothing to flag.
+  const [missingFromBizfile, setMissingFromBizfile] = useState<{ directors: TeamworkOfficial[]; secretaries: TeamworkOfficial[]; shareholderNames: string[] } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
@@ -166,44 +175,54 @@ export default function PostIncorporatePage() {
           paidUpCapital: { ...emptyCapitalInfo(), ...body.extra.paidUpCapital },
         });
       }
-      if (body.secretary) {
-        setSecretaries([{
-          name: body.secretary.name || '', address: body.secretary.address || '',
-          identificationType: body.secretary.identificationType || 'NRIC',
-          identificationNumber: body.secretary.identificationNumber || '',
-          nationality: body.secretary.nationality || '', dateOfAppointment: body.secretary.dateOfAppointment || '',
-        }]);
-        setActiveSecretaryTab(0);
-      }
-
       const bfDirectors = (body.directors || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; dateOfAppointment: string }[];
       const bfShareholders = (body.shareholders || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; numberOfShares: string }[];
 
       // Bizfile is the official ACRA extract — it doesn't carry FYE (a
-      // TeamWork/Tassure-tracked concept, not an ACRA one) or nominee-
-      // director status (which Tassure's own nd_appointments roster
-      // actually knows). Both are already sitting in Supabase from other
-      // nightly syncs, so fetch them now rather than leaving fields empty
-      // that the system genuinely already has an answer for — Vincent:
+      // TeamWork/Tassure-tracked concept, not an ACRA one), nominee-director
+      // status (Tassure's own nd_appointments roster), or per-person Birth
+      // Date/Email/Mobile (TeamWork's own detail cards — see
+      // lib/teamwork-company-profile.ts). All already sit in Supabase from
+      // other nightly syncs, so fetch them now rather than leaving fields
+      // empty the system genuinely already has an answer for — Vincent:
       // "这些资料在 TW其实都可以拿到，你之前也拿到了，只是我现在要你填写
       // 进去系统内的空格."
       let enrichedFye = '';
       let nomineeDirectorNames: string[] = [];
+      let teamworkOfficials: TeamworkOfficial[] = [];
+      let teamworkShareholderNames: string[] = [];
       try {
         const enrichRes = await fetch(`/api/post-incorporate/enrich?uen=${encodeURIComponent(body.company.uen || '')}&company=${encodeURIComponent(body.company.name || '')}`);
         if (enrichRes.ok) {
           const enrichBody = await enrichRes.json();
           enrichedFye = enrichBody.financialYearEndDayMonth || '';
           nomineeDirectorNames = enrichBody.nomineeDirectorNames || [];
+          teamworkOfficials = enrichBody.teamworkOfficials || [];
+          teamworkShareholderNames = enrichBody.teamworkShareholderNames || [];
         }
       } catch { /* enrichment is a nice-to-have; a failure here shouldn't block the Bizfile result itself */ }
+      const officialByName = new Map(teamworkOfficials.map(o => [o.name.trim().toUpperCase(), o]));
+
+      if (body.secretary) {
+        const match = officialByName.get((body.secretary.name || '').trim().toUpperCase());
+        setSecretaries([{
+          name: body.secretary.name || '', address: body.secretary.address || '',
+          identificationType: body.secretary.identificationType || 'NRIC',
+          identificationNumber: body.secretary.identificationNumber || '',
+          nationality: body.secretary.nationality || '', dateOfAppointment: body.secretary.dateOfAppointment || '',
+          dateOfBirth: match?.dob || '', email: match?.email || '', phone: match?.mobile || '',
+        }]);
+        setActiveSecretaryTab(0);
+      }
 
       if (bfDirectors.length) {
         setDirectors(bfDirectors.map(d => {
           const isNominee = nomineeDirectorNames.includes(d.name.trim().toUpperCase());
+          const match = officialByName.get(d.name.trim().toUpperCase());
           return {
             ...emptyDirector(), name: d.name, address: d.address, identificationType: d.identificationType || 'NRIC',
             identificationNumber: d.identificationNumber, nationality: d.nationality, dateOfAppointment: d.dateOfAppointment || '',
+            dateOfBirth: match?.dob || '', email: match?.email || '', phone: match?.mobile || '',
             // Tassure's own ND roster (nd_appointments), not something Bizfile
             // has — the nominator's own details (who engaged Tassure to
             // provide this ND) still aren't tracked anywhere, so only the
@@ -222,19 +241,64 @@ export default function PostIncorporatePage() {
         }
       }
       if (bfShareholders.length) {
-        setShareholders(bfShareholders.map(s => ({ ...emptyShareholder(), name: s.name, address: s.address, identificationType: s.identificationType || 'NRIC', identificationNumber: s.identificationNumber, nationality: s.nationality || '', numberOfShares: s.numberOfShares })));
+        setShareholders(bfShareholders.map(s => {
+          const match = officialByName.get(s.name.trim().toUpperCase());
+          return {
+            ...emptyShareholder(), name: s.name, address: s.address, identificationType: s.identificationType || 'NRIC',
+            identificationNumber: s.identificationNumber, nationality: s.nationality || '', numberOfShares: s.numberOfShares,
+            dateOfBirth: match?.dob || '', email: match?.email || '', phone: match?.mobile || '',
+          };
+        }));
         setActiveShareholderTab(0);
       }
       if (enrichedFye) setCompany(current => ({ ...current, financialYearEndDayMonth: enrichedFye }));
 
+      // TeamWork-known people in a role Bizfile's own result didn't include
+      // at all — e.g. a company with two directors where only one made it
+      // into this parse. Bizfile's own extractor already loops over every
+      // ID-anchored row it finds rather than assuming exactly one person
+      // (verified by reading lib/bizfile-parse.ts), so this is a genuine
+      // cross-check against a second source, not a known single-person
+      // limitation being patched over here.
+      const directorNamesFound = new Set(bfDirectors.map(d => d.name.trim().toUpperCase()));
+      const missingDirectors = teamworkOfficials.filter(o => o.role === 'Director' && !directorNamesFound.has(o.name.trim().toUpperCase()));
+      const secretaryNamesFound = new Set(body.secretary ? [(body.secretary.name || '').trim().toUpperCase()] : []);
+      const missingSecretaries = teamworkOfficials.filter(o => o.role === 'Secretary' && !secretaryNamesFound.has(o.name.trim().toUpperCase()));
+      const shareholderNamesFound = new Set(bfShareholders.map(s => s.name.trim().toUpperCase()));
+      const missingShareholderNames = teamworkShareholderNames.filter(n => !shareholderNamesFound.has(n));
+      setMissingFromBizfile(
+        missingDirectors.length || missingSecretaries.length || missingShareholderNames.length
+          ? { directors: missingDirectors, secretaries: missingSecretaries, shareholderNames: missingShareholderNames }
+          : null,
+      );
+
       setBizfileParsed(true);
       const ndNote = nomineeDirectorNames.length ? ` ${nomineeDirectorNames.length} nominee director(s) auto-detected from Tassure's ND roster.` : '';
-      setBizfileMessage(`Parsed from Bizfile: company info, ${bfDirectors.length} director(s), ${bfShareholders.length} shareholder(s) pre-filled.${enrichedFye ? ' FYE filled from existing records.' : ''}${ndNote} This is the official ACRA extract — still verify before generating (Contact No/Email Address/Birth Date/Nominee Shareholder status aren't on file anywhere in this system and always need manual entry).`);
+      const contactNote = teamworkOfficials.length ? ' Birth Date/Email/Contact filled in from TeamWork where a name matched.' : '';
+      const missingNote = (missingDirectors.length || missingSecretaries.length || missingShareholderNames.length)
+        ? ' TeamWork shows people in these roles that this Bizfile parse didn’t include — see the popup to add them.' : '';
+      setBizfileMessage(`Parsed from Bizfile: company info, ${bfDirectors.length} director(s), ${bfShareholders.length} shareholder(s) pre-filled.${enrichedFye ? ' FYE filled from existing records.' : ''}${ndNote}${contactNote}${missingNote} This is the official ACRA extract — still verify before generating (Nominee Shareholder status still needs manual entry; TeamWork contact fields are best-effort and worth a second look).`);
     } catch (error) {
       setBizfileMessage(error instanceof Error ? error.message : 'Unexpected error parsing the PDF.');
     } finally {
       setBizfileLoading(false);
     }
+  }
+
+  function addMissingDirector(o: TeamworkOfficial) {
+    setDirectors(current => [...current, { ...emptyDirector(), name: o.name, dateOfBirth: o.dob, email: o.email, phone: o.mobile }]);
+    setActiveDirectorTab(directors.length);
+    setMissingFromBizfile(current => current && { ...current, directors: current.directors.filter(d => d !== o) });
+  }
+  function addMissingSecretary(o: TeamworkOfficial) {
+    setSecretaries(current => [...current, { ...emptySecretary(), name: o.name, dateOfBirth: o.dob, email: o.email, phone: o.mobile }]);
+    setActiveSecretaryTab(secretaries.length);
+    setMissingFromBizfile(current => current && { ...current, secretaries: current.secretaries.filter(s => s !== o) });
+  }
+  function addMissingShareholder(name: string) {
+    setShareholders(current => [...current, { ...emptyShareholder(), name }]);
+    setActiveShareholderTab(shareholders.length);
+    setMissingFromBizfile(current => current && { ...current, shareholderNames: current.shareholderNames.filter(n => n !== name) });
   }
 
   async function handleSubmit() {
@@ -281,6 +345,7 @@ export default function PostIncorporatePage() {
     }));
 
   return (
+    <>
     <div className="p-6 max-w-[1500px] mx-auto flex flex-col gap-7">
       <div className="mb-1 text-sm text-slate-500">Dashboard › Post Incorporate</div>
       <div className="flex items-center gap-2">
@@ -512,6 +577,9 @@ export default function PostIncorporatePage() {
                   <Field label="Identification Number"><input className={inputClass} value={s.identificationNumber} onChange={e => updateSecretary(si, { identificationNumber: e.target.value })} /></Field>
                   <Field label="Nationality"><input className={inputClass} value={s.nationality} onChange={e => updateSecretary(si, { nationality: e.target.value })} /></Field>
                   <Field label="Date of Appointment"><input type="date" className={inputClass} value={s.dateOfAppointment} onChange={e => updateSecretary(si, { dateOfAppointment: e.target.value })} /></Field>
+                  <Field label="Date of birth"><input type="date" className={inputClass} value={s.dateOfBirth} onChange={e => updateSecretary(si, { dateOfBirth: e.target.value })} /></Field>
+                  <Field label="Email Address"><input className={inputClass} value={s.email} onChange={e => updateSecretary(si, { email: e.target.value })} /></Field>
+                  <Field label="Contact Number"><input className={inputClass} value={s.phone} onChange={e => updateSecretary(si, { phone: e.target.value })} /></Field>
                 </div>
                 <div className="mt-4">
                   <Field label="Address"><textarea rows={2} className={`${inputClass} resize-none`} value={s.address} onChange={e => updateSecretary(si, { address: e.target.value })} /></Field>
@@ -571,6 +639,9 @@ export default function PostIncorporatePage() {
                   <YesNoField label="是否fully paid-up" value={s.fullyPaidUp} onChange={v => updateShareholder(si, { fullyPaidUp: v })} />
                   <Field label="Share Certificate No."><input className={inputClass} value={s.shareCertificateNo || ''} onChange={e => updateShareholder(si, { shareCertificateNo: e.target.value })} /></Field>
                   <YesNoField label="是否为Registrable Controller" value={s.isRorc} onChange={v => updateShareholder(si, { isRorc: v })} />
+                  <Field label="Date of birth"><input type="date" className={inputClass} value={s.dateOfBirth} onChange={e => updateShareholder(si, { dateOfBirth: e.target.value })} /></Field>
+                  <Field label="Email Address"><input className={inputClass} value={s.email} onChange={e => updateShareholder(si, { email: e.target.value })} /></Field>
+                  <Field label="Contact Number"><input className={inputClass} value={s.phone} onChange={e => updateShareholder(si, { phone: e.target.value })} /></Field>
                 </div>
                 <div className="mt-4">
                   <Field label="Address"><textarea rows={2} className={`${inputClass} resize-none`} value={s.address} onChange={e => updateShareholder(si, { address: e.target.value })} /></Field>
@@ -656,5 +727,76 @@ export default function PostIncorporatePage() {
         </button>
       </div>
     </div>
+
+    {missingFromBizfile && (missingFromBizfile.directors.length > 0 || missingFromBizfile.secretaries.length > 0 || missingFromBizfile.shareholderNames.length > 0) && (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5 max-h-[85vh] overflow-y-auto">
+          <div className="text-base font-semibold text-slate-800 mb-1">TeamWork 检测到额外人员 Structure mismatch</div>
+          <p className="text-sm text-slate-500 mb-4">
+            TeamWork 的记录里，以下人员在对应角色里存在，但这次 Bizfile 解析结果里没有检测到。要加进来吗？
+          </p>
+          <div className="flex flex-col gap-4">
+            {missingFromBizfile.directors.length > 0 && (
+              <div>
+                <div className="text-sm font-medium text-slate-600 mb-2">Directors 董事</div>
+                <div className="flex flex-col gap-2">
+                  {missingFromBizfile.directors.map((o, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 p-2.5">
+                      <div className="text-sm">
+                        <div className="font-medium text-slate-800">{o.name}</div>
+                        <div className="text-xs text-slate-500">{o.subRoles || 'Director'}</div>
+                      </div>
+                      <button type="button" onClick={() => addMissingDirector(o)}
+                        className="flex items-center gap-1 rounded-md border border-slate-400 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium px-2.5 py-1.5">
+                        <Plus size={13} /> Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {missingFromBizfile.secretaries.length > 0 && (
+              <div>
+                <div className="text-sm font-medium text-slate-600 mb-2">Secretaries 秘书</div>
+                <div className="flex flex-col gap-2">
+                  {missingFromBizfile.secretaries.map((o, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 p-2.5">
+                      <div className="text-sm font-medium text-slate-800">{o.name}</div>
+                      <button type="button" onClick={() => addMissingSecretary(o)}
+                        className="flex items-center gap-1 rounded-md border border-slate-400 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium px-2.5 py-1.5">
+                        <Plus size={13} /> Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {missingFromBizfile.shareholderNames.length > 0 && (
+              <div>
+                <div className="text-sm font-medium text-slate-600 mb-2">Shareholders 股东（来自TW真实股权登记册）</div>
+                <div className="flex flex-col gap-2">
+                  {missingFromBizfile.shareholderNames.map((name, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 p-2.5">
+                      <div className="text-sm font-medium text-slate-800">{name}</div>
+                      <button type="button" onClick={() => addMissingShareholder(name)}
+                        className="flex items-center gap-1 rounded-md border border-slate-400 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-medium px-2.5 py-1.5">
+                        <Plus size={13} /> Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end mt-5">
+            <button type="button" onClick={() => setMissingFromBizfile(null)}
+              className="rounded-md border border-slate-300 text-slate-600 hover:bg-slate-50 text-sm font-medium px-4 py-2">
+              Dismiss (不添加)
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

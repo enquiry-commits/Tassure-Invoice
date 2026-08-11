@@ -43,7 +43,32 @@ export type ShareholderShareInfo = {
   shareType: string; shareClass: string;
 };
 
-export type CompanyProfileFull = CompanyProfile & { officials: CompanyOfficial[]; shareholderShares: ShareholderShareInfo[] };
+// One person's full detail card — the "Directors / Shareholders / UBO /
+// Secretaries / Controllers / Contact Person / ..." tabbed section on the
+// SAME company profile page as the plain "Active Officials" summary table
+// above (extractOfficials), just a different, much richer section: Vincent
+// found this by comparing the ported system's empty Birth Date/Contact/
+// Email fields against TeamWork's own detail view directly ("你之前讲找不到
+// 具体的DIRECTORS / SHAREHOLDERS/SECRETARIES详细资料，我这边给你看") — a real
+// gap in the earlier 2026-08-06 investigation, which only ever checked (a)
+// the bulk getCompanies API's company-level contact fields and (b) this same
+// page's plain summary table, never this per-person card section. Verified
+// field-by-field against a live fetch of a real company (1075) before
+// writing this — every field here was confirmed present with real,
+// non-placeholder data (D.O.B., Individual Email, Individual Mobile No #),
+// not assumed from the earlier (correct, but narrower) finding.
+export type OfficerDetail = {
+  cardType: string; name: string; memberId: string; idNo: string; address: string;
+  dateOfAppointment: string; dateOfCessation: string; dob: string; idExpiryDate: string;
+  nationality: string; email: string; mobile: string; telephone: string;
+  // Directors show "Sub Role N. {role} : {from} - {to}"; Shareholders/
+  // Controllers show "Role N. {role} : {from} - {to}" (no "Sub"). Both
+  // captured as the same shape since callers care about the role name
+  // either way (e.g. detecting "Nominee Director").
+  roles: { role: string; period: string }[];
+};
+
+export type CompanyProfileFull = CompanyProfile & { officials: CompanyOfficial[]; shareholderShares: ShareholderShareInfo[]; officerDetails: OfficerDetail[] };
 
 // Singapore NRIC/FIN are a fixed 9-character shape (letter + 7 digits +
 // checksum letter); local UENs are 9-10 characters, digits with a trailing
@@ -150,6 +175,63 @@ function extractShareholderShares(html: string): ShareholderShareInfo[] {
   return out;
 }
 
+// Matches a label whether or not there's a space between the closing `>`
+// of the preceding icon tag and the label text — confirmed both forms occur
+// in real cards (e.g. "</i>ID:" with no space, but "</i> Address:" with
+// one), so anchoring strictly to ">" alone silently misses about half the
+// fields.
+function cardField(chunk: string, label: string): string {
+  const re = new RegExp('(?:>|\\s)' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*([^<]*)<');
+  const m = re.exec(chunk);
+  return m ? m[1].trim() : '';
+}
+
+// Each person is its own "<h4 class="brief"><i>{CardType}</i>...<h2>{Name}
+// </h2>..." block; card boundaries are the next such heading (or end of
+// document for the last one) — NOT a fixed character budget, which silently
+// truncated real cards during development (a director with a populated
+// "Main Role" table has meaningfully more content before its trailing
+// Nationality/Email/Mobile fields than one without).
+function extractOfficerDetails(html: string): OfficerDetail[] {
+  const anchors: { index: number; cardType: string }[] = [];
+  const anchorRe = /<h4 class="brief"><i>([^<]*)<\/i>/g;
+  let anchorMatch: RegExpExecArray | null;
+  while ((anchorMatch = anchorRe.exec(html))) anchors.push({ index: anchorMatch.index, cardType: anchorMatch[1].trim() });
+
+  const details: OfficerDetail[] = [];
+  for (let i = 0; i < anchors.length; i++) {
+    const start = anchors[i].index;
+    const end = i + 1 < anchors.length ? anchors[i + 1].index : html.length;
+    const chunk = html.slice(start, end);
+    const nameMatch = /<h2>([^<]*)<\/h2>/.exec(chunk);
+    const memberIdMatch = /member_id="(\d+)"/.exec(chunk);
+    if (!nameMatch || !nameMatch[1].trim()) continue;
+
+    const roles: { role: string; period: string }[] = [];
+    const roleRe = /(?:Sub )?Role \d+\.\s*([^:<]+?)\s*:\s*([^<]*)</g;
+    let roleMatch: RegExpExecArray | null;
+    while ((roleMatch = roleRe.exec(chunk))) roles.push({ role: roleMatch[1].trim(), period: roleMatch[2].trim() });
+
+    details.push({
+      cardType: anchors[i].cardType,
+      name: nameMatch[1].trim(),
+      memberId: memberIdMatch ? memberIdMatch[1] : '',
+      idNo: cardField(chunk, 'ID:'),
+      address: cardField(chunk, 'Address:'),
+      dateOfAppointment: cardField(chunk, 'Date of Appointment(Effective):') || cardField(chunk, 'Date of Joining:'),
+      dateOfCessation: cardField(chunk, 'Date of Cessation(Effective):'),
+      dob: cardField(chunk, 'D.O.B:'),
+      idExpiryDate: cardField(chunk, 'ID Expiry Date:'),
+      nationality: cardField(chunk, 'Nationality:'),
+      email: cardField(chunk, 'Individual Email:'),
+      mobile: cardField(chunk, 'Individual Mobile No #:'),
+      telephone: cardField(chunk, 'Individual Telephone No #:'),
+      roles,
+    });
+  }
+  return details;
+}
+
 export async function fetchCompanyProfile(cookie: string, companyId: string, signal?: AbortSignal): Promise<CompanyProfile> {
   const html = await fetchProfileHtml(cookie, companyId, signal);
   const officials = extractOfficials(html);
@@ -169,7 +251,8 @@ export async function fetchCompanyProfileFull(cookie: string, companyId: string,
   const html = await fetchProfileHtml(cookie, companyId, signal);
   const officials = extractOfficials(html);
   const shareholderShares = extractShareholderShares(html);
-  return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name), officials, shareholderShares };
+  const officerDetails = extractOfficerDetails(html);
+  return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name), officials, shareholderShares, officerDetails };
 }
 
 // Bulk variant of fetchCompanyProfileFull, mirroring fetchCompanyProfiles'

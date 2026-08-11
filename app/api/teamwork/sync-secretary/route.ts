@@ -86,13 +86,25 @@ async function syncSecretaries(req: NextRequest) {
   if (fetchedInternalIds.length) {
     await supabase.from('teamwork_company_officials').delete().in('internal_id', fetchedInternalIds);
     await supabase.from('teamwork_shareholder_shares').delete().in('internal_id', fetchedInternalIds);
-    const officialRows = results.flatMap(p => p.officials
-      .filter(o => o.name)
-      .map(o => ({
-        internal_id: p.companyId, uen: uenByInternalId.get(p.companyId) ?? null,
-        name: o.name, role: o.role, id_no: o.idNo, id_type: o.idNo ? inferIdType(o.idNo) : null,
-        address: o.address, date_of_appointment: o.dateOfAppointment, synced_at: now,
-      })));
+    const officialRows = results.flatMap(p => {
+      // officerDetails (the rich per-person cards) has no shared row key with
+      // officials (the plain summary table) other than name — join on that,
+      // same as every other name-based match already used across this file.
+      const detailByName = new Map(p.officerDetails.map(d => [d.name.trim().toUpperCase(), d]));
+      return p.officials
+        .filter(o => o.name)
+        .map(o => {
+          const detail = detailByName.get(o.name.trim().toUpperCase());
+          return {
+            internal_id: p.companyId, uen: uenByInternalId.get(p.companyId) ?? null,
+            name: o.name, role: o.role, id_no: o.idNo, id_type: o.idNo ? inferIdType(o.idNo) : null,
+            address: o.address, date_of_appointment: o.dateOfAppointment, synced_at: now,
+            dob: detail?.dob || null, email: detail?.email || null, mobile: detail?.mobile || null,
+            telephone: detail?.telephone || null,
+            sub_roles: detail?.roles.length ? detail.roles.map(r => r.role).join(', ') : null,
+          };
+        });
+    });
     const shareRows = results.flatMap(p => p.shareholderShares
       .filter(s => s.name)
       .map(s => ({
