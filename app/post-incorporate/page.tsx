@@ -34,6 +34,17 @@ type TeamworkOfficial = { name: string; role: string; dob: string; email: string
 // Secretary below rather than being a second hardcoded constant).
 const SECRETARY_COMPANY_NAME = 'TASSURE ASIA BIZSERVICES PTE LTD';
 
+// TeamWork's own scraped D.O.B. is "DD/MM/YYYY" text — every <input
+// type="date"> on this page needs "YYYY-MM-DD" or the browser just renders
+// it blank (silently — no console error, nothing to notice), which is what
+// was actually happening every time this auto-fill "worked": the sync had
+// real data, but it was never in a format the date input could display.
+function teamworkDateToIso(raw: string): string {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw.trim());
+  if (!m) return '';
+  return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+}
+
 function emptyCompany(): PostIncorporateCompany {
   return {
     name: '', uen: '', address: '', regDate: '', chairmanName: '', secretaryName: '',
@@ -128,6 +139,16 @@ export default function PostIncorporatePage() {
   // 因此我要你从TW做比对，并且当系统从BIZFILE检测出来的结构和TW的不同要跳出
   // 弹窗提示是否要修改." null = no check run yet or nothing to flag.
   const [missingFromBizfile, setMissingFromBizfile] = useState<{ directors: TeamworkOfficial[]; secretaries: TeamworkOfficial[]; shareholderNames: string[] } | null>(null);
+  // Uppercased names from Tassure's own 13-person ND roster (nominee_
+  // directors) matched for the currently-parsed company — kept at page
+  // level, not just inside the parse handler, so the "Nominee Director
+  // details" panel gates correctly even for a director added/renamed after
+  // the initial parse, not only the exact rows the parse itself touched.
+  // "是否为名义董事" (is this director a nominee at all — from either Bizfile's
+  // own ND marker or this same roster) is a different, broader question;
+  // this set specifically answers "does Tassure supply THIS one," per
+  // Vincent: "这个是只针对当秘书提供ND服务...这两个属于不同的东西".
+  const [tassureNdNames, setTassureNdNames] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
@@ -189,6 +210,7 @@ export default function PostIncorporatePage() {
       // 进去系统内的空格."
       let enrichedFye = '';
       let nomineeDirectorNames: string[] = [];
+      let nomineeDirectorDetails: { name: string; address: string; idType: string; idNo: string; dob: string; email: string; mobile: string; dateBecameNominator: string }[] = [];
       let teamworkOfficials: TeamworkOfficial[] = [];
       let teamworkShareholderNames: string[] = [];
       try {
@@ -197,11 +219,14 @@ export default function PostIncorporatePage() {
           const enrichBody = await enrichRes.json();
           enrichedFye = enrichBody.financialYearEndDayMonth || '';
           nomineeDirectorNames = enrichBody.nomineeDirectorNames || [];
+          nomineeDirectorDetails = enrichBody.nomineeDirectorDetails || [];
           teamworkOfficials = enrichBody.teamworkOfficials || [];
           teamworkShareholderNames = enrichBody.teamworkShareholderNames || [];
         }
       } catch { /* enrichment is a nice-to-have; a failure here shouldn't block the Bizfile result itself */ }
       const officialByName = new Map(teamworkOfficials.map(o => [o.name.trim().toUpperCase(), o]));
+      const nomineeDetailByName = new Map(nomineeDirectorDetails.map(d => [d.name, d]));
+      setTassureNdNames(new Set(nomineeDirectorNames));
 
       if (body.secretary) {
         const match = officialByName.get((body.secretary.name || '').trim().toUpperCase());
@@ -210,7 +235,7 @@ export default function PostIncorporatePage() {
           identificationType: body.secretary.identificationType || 'NRIC',
           identificationNumber: body.secretary.identificationNumber || '',
           nationality: body.secretary.nationality || '', dateOfAppointment: body.secretary.dateOfAppointment || '',
-          dateOfBirth: match?.dob || '', email: match?.email || '', phone: match?.mobile || '',
+          dateOfBirth: teamworkDateToIso(match?.dob || ''), email: match?.email || '', phone: match?.mobile || '',
         }]);
         setActiveSecretaryTab(0);
       }
@@ -239,14 +264,31 @@ export default function PostIncorporatePage() {
         setDirectors(bfDirectors.map(d => {
           const isNominee = isNomineeDirector(d);
           const match = officialByName.get(d.name.trim().toUpperCase());
+          const nameKey = d.name.trim().toUpperCase();
+          const isTassureNd = nomineeDirectorNames.includes(nameKey);
+          const nomineeDetail = nomineeDetailByName.get(nameKey);
           return {
             ...emptyDirector(), name: d.name, address: d.address, identificationType: d.identificationType || 'NRIC',
             identificationNumber: d.identificationNumber, nationality: d.nationality, dateOfAppointment: d.dateOfAppointment || '',
-            dateOfBirth: match?.dob || '', email: match?.email || '', phone: match?.mobile || '',
-            // The nominator's own details (who engaged Tassure to provide
-            // this ND) aren't tracked anywhere by either source, so only the
-            // flag itself is auto-set; those sub-fields stay manual.
+            dateOfBirth: teamworkDateToIso(match?.dob || ''), email: match?.email || '', phone: match?.mobile || '',
             isNomineeDirector: isNominee, nominatorType: isNominee ? 'individual' : '',
+            // The "nominator" here is this SAME director acting in that
+            // capacity (see nomineeDirectorItem/signature_position:
+            // 'Director' in lib/docx-post-incorporate.ts) — only knowable
+            // when Tassure itself is the one supplying the arrangement,
+            // since only then does Tassure have this person's own bio on
+            // file (nomineeDirectorDetails, from the SAME 13-person roster
+            // used for isTassureNd/needNdService above). Nationality isn't
+            // captured anywhere in the synced snapshot yet, so stays blank.
+            ...(isTassureNd && nomineeDetail ? {
+              nominatorIndName: d.name,
+              nominatorIndAddress: nomineeDetail.address,
+              nominatorIndIdentificationNumber: nomineeDetail.idNo,
+              nominatorIndBirthDate: teamworkDateToIso(nomineeDetail.dob),
+              nominatorIndEmail: nomineeDetail.email,
+              nominatorIndContactNumber: nomineeDetail.mobile,
+              nominatorIndDateBecameNominator: nomineeDetail.dateBecameNominator,
+            } : {}),
           };
         }));
         setActiveDirectorTab(0);
@@ -265,7 +307,7 @@ export default function PostIncorporatePage() {
           return {
             ...emptyShareholder(), name: s.name, address: s.address, identificationType: s.identificationType || 'NRIC',
             identificationNumber: s.identificationNumber, nationality: s.nationality || '', numberOfShares: s.numberOfShares,
-            dateOfBirth: match?.dob || '', email: match?.email || '', phone: match?.mobile || '',
+            dateOfBirth: teamworkDateToIso(match?.dob || ''), email: match?.email || '', phone: match?.mobile || '',
           };
         }));
         setActiveShareholderTab(0);
@@ -306,12 +348,12 @@ export default function PostIncorporatePage() {
   }
 
   function addMissingDirector(o: TeamworkOfficial) {
-    setDirectors(current => [...current, { ...emptyDirector(), name: o.name, dateOfBirth: o.dob, email: o.email, phone: o.mobile }]);
+    setDirectors(current => [...current, { ...emptyDirector(), name: o.name, dateOfBirth: teamworkDateToIso(o.dob), email: o.email, phone: o.mobile }]);
     setActiveDirectorTab(directors.length);
     setMissingFromBizfile(current => current && { ...current, directors: current.directors.filter(d => d !== o) });
   }
   function addMissingSecretary(o: TeamworkOfficial) {
-    setSecretaries(current => [...current, { ...emptySecretary(), name: o.name, dateOfBirth: o.dob, email: o.email, phone: o.mobile }]);
+    setSecretaries(current => [...current, { ...emptySecretary(), name: o.name, dateOfBirth: teamworkDateToIso(o.dob), email: o.email, phone: o.mobile }]);
     setActiveSecretaryTab(secretaries.length);
     setMissingFromBizfile(current => current && { ...current, secretaries: current.secretaries.filter(s => s !== o) });
   }
@@ -457,6 +499,11 @@ export default function PostIncorporatePage() {
         {(() => {
           const di = Math.min(activeDirectorTab, directors.length - 1);
           const d = directors[di];
+          // "是否为名义董事" alone isn't enough to show the nominator sub-panel
+          // — that also requires Tassure itself to be the one supplying this
+          // specific director's ND arrangement (tassureNdNames), otherwise
+          // Tassure has no nominator bio on file to ask staff to confirm.
+          const isTassureNd = tassureNdNames.has(d.name.trim().toUpperCase());
           return (
             <>
               <div className="flex gap-1 overflow-x-auto">
@@ -501,7 +548,7 @@ export default function PostIncorporatePage() {
                   <YesNoField label="是否为名义董事" value={d.isNomineeDirector} onChange={v => updateDirector(di, { isNomineeDirector: v, nominatorType: v ? (d.nominatorType || 'individual') : '' })} />
                 </div>
 
-                {d.isNomineeDirector && (
+                {d.isNomineeDirector && isTassureNd && (
                   <div className="mt-3 rounded-md bg-slate-50 border border-slate-200 p-3">
                     <div className="text-sm font-medium text-slate-600 mb-2">Nominee Director details</div>
                     <Field label="Nominator Type">

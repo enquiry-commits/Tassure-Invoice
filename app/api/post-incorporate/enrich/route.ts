@@ -25,6 +25,13 @@ import { createAdminClient } from '@/lib/supabase';
 //   just didn't cover this third, richer one.
 // - Nominee Shareholder status: still not returned — no equivalent to
 //   nd_appointments exists for shareholders.
+// - nomineeDirectorDetails: personal details (address/ID/DOB/email/mobile)
+//   for whichever of Tassure's own 13-person ND roster matched this
+//   company, plus their nd_appointments.appointment_date — fills the
+//   "Nominee Director details" (nominator) sub-panel, which only applies
+//   when Tassure itself is supplying that specific director's arrangement,
+//   not any nominee director in general (Vincent: "这个是只针对当秘书提供ND
+//   服务...并且这些信息都应该是自动填好的").
 export async function GET(req: NextRequest) {
   const account = await getRequestAccount(req);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
@@ -43,7 +50,7 @@ export async function GET(req: NextRequest) {
       ? supabase.from('master_list').select('fye').ilike('roc_no', uen).maybeSingle()
       : Promise.resolve({ data: null }),
     companyName
-      ? supabase.from('nd_appointments').select('nd_id').ilike('company_name', companyName).is('cessation_date', null)
+      ? supabase.from('nd_appointments').select('nd_id, appointment_date').ilike('company_name', companyName).is('cessation_date', null)
       : Promise.resolve({ data: null }),
     // Same two-query-then-join-in-JS pattern app/api/nominee-directors/route.ts
     // already uses for this exact pair of tables, rather than assuming a
@@ -69,10 +76,59 @@ export async function GET(req: NextRequest) {
   const financialYearEndDayMonth = /^[A-Za-z]+$/.test(fyeRaw) ? fyeRaw : '';
 
   const ndNameById = new Map(((ndPeople ?? []) as { id: number; name: string }[]).map(p => [p.id, p.name]));
-  const activeNdIds = new Set(((ndAppointmentRows ?? []) as { nd_id: number }[]).map(r => r.nd_id));
+  const ndAppointments = (ndAppointmentRows ?? []) as { nd_id: number; appointment_date: string | null }[];
+  const activeNdIds = new Set(ndAppointments.map(r => r.nd_id));
   const nomineeDirectorNames = [...new Set(
     [...activeNdIds].map(id => ndNameById.get(id)).filter((n): n is string => !!n && n.trim().length > 0).map(n => n.trim().toUpperCase()),
   )];
+  // appointment_date is already stored per (nd_id, company) — a date, not a
+  // timestamp, so it's already the plain YYYY-MM-DD an <input type="date">
+  // wants, no conversion needed like the DD/MM/YYYY dob values below.
+  const ndIdByName = new Map([...ndNameById.entries()].map(([id, name]) => [name.trim().toUpperCase(), id]));
+  const appointmentDateByNdId = new Map(ndAppointments.map(r => [r.nd_id, r.appointment_date || '']));
+
+  // Personal details for whichever of Tassure's own 13-person ND roster
+  // (nominee_directors) is actually relevant to THIS company's parse — used
+  // to auto-fill the "Nominee Director details" (nominator) sub-panel, which
+  // only applies when Tassure itself supplies the arrangement (Vincent:
+  // "这个是只针对当秘书提供ND服务...并且这些信息都应该是自动填好的，毕竟都是有
+  // 数据的"). A global lookup by name (not scoped to this UEN) since these
+  // are Tassure's own staff serving many companies — their own address/ID/
+  // DOB/email/mobile stay the same person regardless of which company row
+  // it's read from.
+  let nomineeDirectorDetails: {
+    name: string; address: string; idType: string; idNo: string; dob: string; email: string; mobile: string; dateBecameNominator: string;
+  }[] = [];
+  if (nomineeDirectorNames.length) {
+    const { data: bioRows } = await supabase
+      .from('teamwork_company_officials')
+      .select('name, address, id_no, id_type, dob, email, mobile, synced_at')
+      .in('name', nomineeDirectorNames)
+      .not('dob', 'is', null)
+      .order('synced_at', { ascending: false });
+    const bioByName = new Map<string, { address: string; idNo: string; idType: string; dob: string; email: string; mobile: string }>();
+    for (const row of (bioRows ?? []) as { name: string; address: string | null; id_no: string | null; id_type: string | null; dob: string | null; email: string | null; mobile: string | null }[]) {
+      const key = row.name.trim().toUpperCase();
+      // Most-recently-synced row wins where a person has several (one per
+      // company they serve) — order() above already sorted newest-first.
+      if (!bioByName.has(key)) {
+        bioByName.set(key, {
+          address: row.address || '', idNo: row.id_no || '', idType: row.id_type || '',
+          dob: row.dob || '', email: row.email || '', mobile: row.mobile || '',
+        });
+      }
+    }
+    nomineeDirectorDetails = nomineeDirectorNames.map(name => {
+      const bio = bioByName.get(name);
+      const ndId = ndIdByName.get(name);
+      return {
+        name,
+        address: bio?.address || '', idType: bio?.idType || '', idNo: bio?.idNo || '',
+        dob: bio?.dob || '', email: bio?.email || '', mobile: bio?.mobile || '',
+        dateBecameNominator: ndId != null ? (appointmentDateByNdId.get(ndId) || '') : '',
+      };
+    });
+  }
 
   // Returned in full (not just a name list) so the caller can both (a) fill
   // in dob/email/mobile for people it already matched from Bizfile, and (b)
@@ -90,5 +146,5 @@ export async function GET(req: NextRequest) {
     ((shareRows ?? []) as { shareholder_name: string }[]).map(s => s.shareholder_name.trim().toUpperCase()).filter(Boolean),
   )];
 
-  return NextResponse.json({ financialYearEndDayMonth, nomineeDirectorNames, teamworkOfficials, teamworkShareholderNames });
+  return NextResponse.json({ financialYearEndDayMonth, nomineeDirectorNames, nomineeDirectorDetails, teamworkOfficials, teamworkShareholderNames });
 }
