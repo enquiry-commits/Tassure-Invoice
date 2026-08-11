@@ -45,6 +45,20 @@ import { logFieldChange } from '@/lib/audit-log';
  * changed FYE has OLDER cycles under its old month still sitting earlier
  * in the history).
  *
+ * Whenever this correction actually changes companies.fye_month, it also
+ * excludes (soft-deletes, same reversible status the manual delete button
+ * uses) any of that company's still-pending (filling_date empty)
+ * ar_reminder rows left under the OLD month — those rows are immutable
+ * snapshots /generate created before the correction and nothing else ever
+ * revisits them, so without this a company shows up under BOTH its old and
+ * new FYE month at once (the stale row never disappears, and /generate's
+ * daily run creates a fresh row under the new month since it only checks
+ * for an existing row in that SAME month, not any other). Already-filed
+ * rows under the old month are real history and are never touched. Caught
+ * directly by Vincent from a real company that had already self-corrected
+ * JUN→DEC but still showed under JUN too: "明明DEC才是最新的，JUN不应该再
+ * 出现了."
+ *
  * Also fills Master List's Active Client "Last AGM Date"/"Last AR Date"/
  * "Last Accts Date"/"Next AGM Due" columns (master_list.last_agm_date/
  * last_ar_date/last_accounts_date/next_agm_due_date) — a DIFFERENT, always-
@@ -219,6 +233,7 @@ async function syncArWorkflow(req: NextRequest) {
   let updated = 0, checked = 0, fetchErrors = 0, updateErrors = 0, conflicts = 0;
   let activeClientUpdated = 0, activeClientErrors = 0;
   let fyeMonthCorrected = 0, fyeMonthErrors = 0;
+  let staleArRowsExcluded = 0, staleArRowsErrors = 0;
   let activeClientFyeUpdated = 0, activeClientFyeErrors = 0;
   const changes: { entity: string; patch: Record<string, string> }[] = [];
 
@@ -356,6 +371,39 @@ async function syncArWorkflow(req: NextRequest) {
               tableName: 'companies', rowId: companyInfo.id, field: 'fye_month',
               oldValue: companyInfo.fye_month, newValue: correctMonth, changedBy: 'system:teamwork-agm-history',
             });
+
+            // ar_reminder rows are immutable snapshots — nothing else ever
+            // touches a row's OWN fye_month once /generate creates it, so a
+            // row generated under the OLD month before this correction just
+            // sits there forever. Meanwhile /generate's window keeps running
+            // daily and, seeing no row yet under the NEW (correct) month,
+            // creates a fresh one — leaving the same company visible under
+            // BOTH months at once. Caught by Vincent directly, from a real
+            // company that had already self-corrected JUN→DEC but still
+            // showed under JUN too: "明明DEC才是最新的，JUN不应该再出现了."
+            // Exclude (soft-delete, same reversible status the manual
+            // delete button already uses) only rows still genuinely
+            // pending under the stale month — a row that's already been
+            // filed (filling_date set) is real history, not a phantom
+            // future cycle, and must never be touched here.
+            const { data: staleRows, error: staleErr } = await supabase
+              .from('ar_reminder')
+              .update({ status: 'Excluded', updated_by_email: 'system:teamwork', updated_by_name: 'TeamWork Sync (FYE corrected)' })
+              .eq('company_id', companyInfo.id)
+              .eq('fye_month', companyInfo.fye_month)
+              .is('filling_date', null)
+              .or('status.is.null,status.neq.Excluded')
+              .select('id, fye_year');
+            if (staleErr) staleArRowsErrors++;
+            else if (staleRows?.length) {
+              staleArRowsExcluded += staleRows.length;
+              for (const row of staleRows) {
+                await logFieldChange(supabase, {
+                  tableName: 'ar_reminder', rowId: row.id, field: 'status',
+                  oldValue: null, newValue: 'Excluded', changedBy: 'system:teamwork-agm-history',
+                });
+              }
+            }
           }
         }
 
@@ -428,7 +476,7 @@ async function syncArWorkflow(req: NextRequest) {
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
   const result = {
-    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0 && activeClientFyeErrors === 0,
+    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0 && activeClientFyeErrors === 0 && staleArRowsErrors === 0,
     rows: rows.length,
     companies_checked: checked,
     extra_companies_added: extraCompaniesAdded,
@@ -442,6 +490,8 @@ async function syncArWorkflow(req: NextRequest) {
     active_client_errors: activeClientErrors,
     fye_month_corrected: fyeMonthCorrected,
     fye_month_errors: fyeMonthErrors,
+    stale_ar_rows_excluded: staleArRowsExcluded,
+    stale_ar_rows_errors: staleArRowsErrors,
     active_client_fye_updated: activeClientFyeUpdated,
     active_client_fye_errors: activeClientFyeErrors,
     changes: changes.slice(0, 30),
