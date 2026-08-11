@@ -338,10 +338,13 @@ export default function PostIncorporatePage() {
           <Field label="Primary Activity 主营业务"><input className={inputClass} value={companyExtra.primaryActivity} onChange={e => setCompanyExtra({ ...companyExtra, primaryActivity: e.target.value })} /></Field>
           <Field label="Secondary Activity 副营业务"><input className={inputClass} value={companyExtra.secondaryActivity} onChange={e => setCompanyExtra({ ...companyExtra, secondaryActivity: e.target.value })} /></Field>
         </div>
+      </section>
 
-        {/* Fields the templates actually consume but aren't part of ACRA's
-            own Company Information page — kept visually separated below. */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-100">
+      {/* Fields the templates actually consume but aren't part of ACRA's own
+          Company Information page — Vincent: "这个单独一张卡片" (own card,
+          was a divided sub-section within Company Information before). */}
+      <section className={cardClass}>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <Field label="Secretarial Firm Name 秘书公司"><input className={inputClass} value={company.secretaryCompanyName} onChange={e => setCompany({ ...company, secretaryCompanyName: e.target.value })} /></Field>
           <Field label="Secretarial Firm Address 秘书公司地址"><input className={inputClass} value={company.secretaryCompanyAddress} onChange={e => setCompany({ ...company, secretaryCompanyAddress: e.target.value })} /></Field>
           <Field label="Currency (for documents)"><input className={inputClass} value={company.currency} onChange={e => setCompany({ ...company, currency: e.target.value })} /></Field>
