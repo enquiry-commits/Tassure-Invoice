@@ -39,17 +39,39 @@ import { logFieldChange } from '@/lib/audit-log';
  * finishes), each comfortably within 300s, together covering the full
  * roster with real headroom for it to keep growing.
  *
- * Cron: 18:45 and 22:45 UTC / SGT 02:45 and 06:45 daily.
+ * This run now ALSO fetches TeamWork's own Shares module (shares/
+ * share_list/<id> — the real, current share register; see lib/teamwork-
+ * company-profile.ts's fetchShareRegister for why the profile page's own
+ * "Shareholders Information" table turned out to be a stale source) per
+ * company, in parallel with the existing profile-page fetch rather than
+ * after it, so the added latency costs roughly max(profile, shares), not
+ * their sum. Measured end-to-end through the real fetchCompanyProfileFull
+ * (not just the shares request alone): ~750-800ms/company sequentially —
+ * higher than the ~500ms profile-only baseline, since this also includes
+ * officials/officerDetails HTML parsing on top of two parallel network
+ * calls. That number is NOT a measurement of real 10-worker concurrent
+ * throughput under production load (only sequential single-company
+ * timing) — TeamWork's own server-side throttling behavior for this new
+ * endpoint at full concurrency hasn't been observed yet, unlike the
+ * profile page's (measured 2026-08-06: ~500ms/company fixed regardless of
+ * concurrency 5/10/20). BATCH_SIZE below is deliberately conservative
+ * given that uncertainty; check automation_sync_runs' actual duration
+ * after the first few real nightly runs and tighten or loosen from there
+ * rather than trusting this estimate indefinitely.
+ *
+ * Cron: 18:45, 22:45, and 02:45 UTC / SGT 02:45, 06:45, and 10:45 daily.
  */
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
-// ~450 companies * ~500ms fixed TeamWork throughput ≈ 225s, leaving ~75s of
-// the 300s Hobby-plan ceiling for login + DB writes — two runs/night at this
-// size cover the current ~783-company roster with room to grow before
-// needing a third nightly run.
-const BATCH_SIZE = 450;
+// ~280 companies * ~800ms (conservative, real end-to-end measurement, not
+// the optimistic parallel-fetch estimate) ≈ 224s, leaving real margin
+// under the 300s Hobby-plan ceiling for login + DB writes even if
+// concurrent-load throughput turns out worse than sequential timing
+// suggested. Three runs/night at this size (840 total) still comfortably
+// cover the current ~783-company roster with real headroom to grow.
+const BATCH_SIZE = 280;
 
 async function syncSecretaries(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -147,13 +169,22 @@ async function syncSecretaries(req: NextRequest) {
         }));
       return [...fromOfficialsTable, ...individualShareholders];
     });
+    // p.shareholderShares now comes from TeamWork's own Shares module
+    // (fetchShareRegister) — the current, accurate register, not the
+    // company profile page's "Shareholders Information" table this used
+    // to read (confirmed stale 2026-08-11: showed people/numbers that
+    // don't match the real register at all for a real test company).
+    // share_type/share_class aren't available from this source at all
+    // (nothing to map them from) — left null rather than carrying over
+    // the old source's now-untrustworthy values.
     const shareRows = results.flatMap(p => p.shareholderShares
       .filter(s => s.name)
       .map(s => ({
         internal_id: p.companyId, uen: uenByInternalId.get(p.companyId) ?? null,
         shareholder_name: s.name, issued_share_capital: s.issuedShareCapital, paid_up_capital: s.paidUpCapital,
-        consideration_paid_up_capital: s.considerationPaidUpCapital, number_of_shares: s.numberOfShares,
-        currency: s.currency, share_type: s.shareType, share_class: s.shareClass, synced_at: now,
+        consideration_paid_up_capital: s.paidUpCapital, number_of_shares: s.numberOfShares,
+        currency: s.currency, share_type: null, share_class: null,
+        share_certificate_no: s.shareCertificateNo || null, synced_at: now,
       })));
     for (let i = 0; i < officialRows.length; i += 500) {
       await supabase.from('teamwork_company_officials').insert(officialRows.slice(i, i + 500));

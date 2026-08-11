@@ -33,14 +33,14 @@ export type CompanyProfile = {
 // controller/director, that entity's own UEN — see inferIdType below.
 export type CompanyOfficial = { name: string; role: string; idNo: string; address: string; dateOfAppointment: string };
 
-// One row of the "Shareholders Information" table — the actual share
-// register (distinct from the "Active Officials" Controller rows above,
-// which have no share data at all). Confirmed present on the same page,
-// under its own "Shareholders Information" heading.
-export type ShareholderShareInfo = {
-  name: string; issuedShareCapital: string; paidUpCapital: string;
-  considerationPaidUpCapital: string; numberOfShares: string; currency: string;
-  shareType: string; shareClass: string;
+// One shareholder's CURRENT aggregate holding, from TeamWork's own Shares
+// module (shares/share_list/<id> — a proper share register with per-
+// transaction allotment history), not the company profile page's
+// "Shareholders Information" table this file used to scrape here (see
+// fetchShareRegister below for why that source turned out unreliable).
+export type ShareRegisterHolding = {
+  name: string; numberOfShares: string; paidUpCapital: string; issuedShareCapital: string;
+  currency: string; shareCertificateNo: string;
 };
 
 // One person's full detail card — the "Directors / Shareholders / UBO /
@@ -68,7 +68,7 @@ export type OfficerDetail = {
   roles: { role: string; period: string }[];
 };
 
-export type CompanyProfileFull = CompanyProfile & { officials: CompanyOfficial[]; shareholderShares: ShareholderShareInfo[]; officerDetails: OfficerDetail[] };
+export type CompanyProfileFull = CompanyProfile & { officials: CompanyOfficial[]; shareholderShares: ShareRegisterHolding[]; officerDetails: OfficerDetail[] };
 
 // Singapore NRIC/FIN are a fixed 9-character shape (letter + 7 digits +
 // checksum letter); local UENs are 9-10 characters, digits with a trailing
@@ -140,39 +140,135 @@ function extractOfficials(html: string): CompanyOfficial[] {
   return officials;
 }
 
-// The company profile page renders a "Shareholders Information" heading
-// THREE times with three different table variants (confirmed 2026-08-09):
-// an empty hidden-state placeholder, the real current share register (8
-// columns: Shareholder Name, Issued Share Capital, Paid-up Capital,
-// Consideration Paid-up Capital, Number of Share, Currency, Share Type,
-// Share Class), and a separate share-transaction-history table with a
-// different column set entirely. Anchoring on the heading text picks
-// whichever occurs first — the empty placeholder — so anchor instead on
-// "Consideration Paid up Capital", a header phrase unique to the real
-// table, then find its enclosing <table>...</table> directly.
-function extractShareholderShares(html: string): ShareholderShareInfo[] {
-  const anchorIdx = html.indexOf('Consideration Paid up Capital');
-  if (anchorIdx === -1) return [];
-  const tableStart = html.lastIndexOf('<table', anchorIdx);
-  const tableEnd = html.indexOf('</table>', anchorIdx);
-  if (tableStart === -1 || tableEnd === -1) return [];
-  const tableHtml = html.slice(tableStart, tableEnd);
-  const rowRe = /<tr>([\s\S]*?)<\/tr>/g;
-  const out: ShareholderShareInfo[] = [];
-  let rowMatch: RegExpExecArray | null;
-  while ((rowMatch = rowRe.exec(tableHtml))) {
-    const cellRe = /<td[^>]*><label[^>]*>([\s\S]*?)<\/label><\/td>/g;
-    const cells: string[] = [];
-    let cellMatch: RegExpExecArray | null;
-    while ((cellMatch = cellRe.exec(rowMatch[1]))) cells.push(cellMatch[1].replace(/<[^>]+>/g, '').trim());
-    if (cells.length !== 8 || cells[0] === 'Shareholder Name') continue;
-    out.push({
-      name: cells[0], issuedShareCapital: cells[1], paidUpCapital: cells[2],
-      considerationPaidUpCapital: cells[3], numberOfShares: cells[4], currency: cells[5],
-      shareType: cells[6], shareClass: cells[7],
+function postForm(cookie: string, path: string, formData: Record<string, string>, signal?: AbortSignal): Promise<string> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason instanceof Error ? signal.reason : new Error('TeamWork share register request was cancelled.'));
+      return;
+    }
+    const body = new URLSearchParams(formData).toString();
+    const req = https.request({
+      hostname: 'apps.teamworkcss.com',
+      path,
+      method: 'POST',
+      headers: {
+        Cookie: cookie,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, res => {
+      let data = '';
+      res.on('data', chunk => (data += chunk));
+      res.on('end', () => {
+        if (!res.statusCode || res.statusCode < 200 || res.statusCode >= 300) {
+          reject(new Error(`TeamWork share register HTTP ${res.statusCode ?? 'unknown'}`));
+          return;
+        }
+        resolve(data);
+      });
     });
+    const abortRequest = () => req.destroy(
+      signal?.reason instanceof Error ? signal.reason : new Error('TeamWork share register request was cancelled.'),
+    );
+    signal?.addEventListener('abort', abortRequest, { once: true });
+    req.on('close', () => signal?.removeEventListener('abort', abortRequest));
+    req.on('error', reject);
+    req.setTimeout(20_000, () => req.destroy(new Error('TeamWork share register request timed out after 20 seconds.')));
+    req.write(body);
+    req.end();
+  });
+}
+
+// The "Total Consideration Paid" cell nests <a data-content="Cash:
+// X<br> ...">VALUE</a> — the <br> INSIDE the quoted attribute value
+// confuses a naive <[^>]+> strip into treating it as a tag boundary,
+// leaving attribute leftovers mixed into the "visible" text (confirmed
+// against a real response). Blank out quoted attribute values first so
+// only genuine tags remain to strip.
+function stripCellTags(s: string): string {
+  const withoutAttrs = s.replace(/="[^"]*"/g, '=""');
+  return withoutAttrs.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function parseShareAmount(s: string): number {
+  return parseFloat(s.replace(/,/g, '').trim()) || 0;
+}
+
+// TeamWork's own Shares module (shares/share_list/<id>) — a proper share
+// register with per-transaction allotment/transfer history, distinct from
+// the company profile page's "Shareholders Information" table this file
+// used to scrape (extractShareholderShares, now removed). Confirmed
+// 2026-08-11 that the OLD source was stale: for a real test company it
+// showed 4 shareholders with numbers that didn't match this module at
+// all, while this module showed the single genuinely-current shareholder
+// — confirmed directly by Vincent ("最新股权登记只有WANG WEI，另外一个应该
+// 就是历史存档").
+//
+// POST shares/load_sahre_list (TeamWork's own typo, not ours) returns a
+// raw HTML fragment meant to be dropped straight into an existing page's
+// DOM by the browser's own tolerant parser — it never closes its own
+// <table> tag (confirmed: zero </table> occurrences in a real response),
+// so table boundaries have to be found by the NEXT table's own opening
+// tag (or end of string), same next-anchor pattern as
+// extractOfficerDetails's card boundaries. One table per currency
+// actually in use for that company (an unused currency renders "Shares
+// not found.."); a person can have multiple transaction rows (allotments,
+// transfers, ...) for the same holding, summed here into one current
+// total per person — this request scopes to status=Valid (Active) only,
+// so the sum reflects current holdings, not the company's full
+// transaction history.
+function parseShareRegisterHtml(html: string): ShareRegisterHolding[] {
+  const holdings = new Map<string, { name: string; shares: number; paid: number; issued: number; currency: string; certs: Set<string> }>();
+  const startRe = /<table width="100%" class="shares_table/g;
+  const starts: number[] = [];
+  let startMatch: RegExpExecArray | null;
+  while ((startMatch = startRe.exec(html))) starts.push(startMatch.index);
+  for (let i = 0; i < starts.length; i++) {
+    const tableHtml = html.slice(starts[i], i + 1 < starts.length ? starts[i + 1] : html.length);
+    const currencyMatch = /Currency:\s*([A-Za-z]+)/.exec(tableHtml);
+    const currency = currencyMatch ? currencyMatch[1].trim() : '';
+    const rowRe = /<tr cid="\d+" share_id="\d+"[^>]*>([\s\S]*?)<\/tr>/g;
+    let rowMatch: RegExpExecArray | null;
+    while ((rowMatch = rowRe.exec(tableHtml))) {
+      const cellRe = /<td[^>]*>([\s\S]*?)<\/td>/g;
+      const cells: string[] = [];
+      let cellMatch: RegExpExecArray | null;
+      while ((cellMatch = cellRe.exec(rowMatch[1]))) cells.push(stripCellTags(cellMatch[1]));
+      if (cells.length < 9) continue;
+      const [, , shareholderName, , shareCertNo, noOfShare, issuedShareCapital, totalConsiderationPaid] = cells;
+      if (!shareholderName) continue;
+      const key = shareholderName.trim().toUpperCase();
+      const existing = holdings.get(key) ?? { name: shareholderName.trim(), shares: 0, paid: 0, issued: 0, currency, certs: new Set<string>() };
+      existing.shares += parseShareAmount(noOfShare);
+      existing.paid += parseShareAmount(totalConsiderationPaid);
+      existing.issued += parseShareAmount(issuedShareCapital);
+      if (shareCertNo) existing.certs.add(shareCertNo.trim());
+      holdings.set(key, existing);
+    }
   }
-  return out;
+  return [...holdings.values()].map(h => ({
+    name: h.name,
+    numberOfShares: String(h.shares),
+    paidUpCapital: h.paid.toFixed(2),
+    issuedShareCapital: h.issued.toFixed(2),
+    currency: h.currency,
+    shareCertificateNo: [...h.certs].join(', '),
+  }));
+}
+
+// The endpoint needs a CSRF token per TeamWork's own form, but the
+// server-rendered page's own hidden field for it is genuinely blank
+// (confirmed: still empty even after the real page's JS has fully run) —
+// a plain HTTPS POST with an empty value works identically to what the
+// real browser sends, so this doesn't need a full Playwright page load
+// per company, only the one-time login already shared with every other
+// fetch in this file (confirmed: measured ~250ms/company, comparable to
+// or faster than the existing profile-page fetch).
+async function fetchShareRegister(cookie: string, companyId: string, signal?: AbortSignal): Promise<ShareRegisterHolding[]> {
+  const html = await postForm(cookie, '/tassure_asia/shares/load_sahre_list', {
+    ci_csrf_token: '', company_id: companyId, status: 'Valid',
+  }, signal);
+  return parseShareRegisterHtml(html);
 }
 
 // Matches a label whether or not there's a space between the closing `>`
@@ -248,9 +344,14 @@ export async function fetchCompanyProfile(cookie: string, companyId: string, sig
 // through to those two tables so Post Incorporate never needs its own live
 // TeamWork fetch.
 export async function fetchCompanyProfileFull(cookie: string, companyId: string, signal?: AbortSignal): Promise<CompanyProfileFull> {
-  const html = await fetchProfileHtml(cookie, companyId, signal);
+  // Run alongside the profile-page fetch rather than after it — independent
+  // requests against the same session, so the added share-register latency
+  // costs roughly max(profile, shares) instead of profile + shares.
+  const [html, shareholderShares] = await Promise.all([
+    fetchProfileHtml(cookie, companyId, signal),
+    fetchShareRegister(cookie, companyId, signal),
+  ]);
   const officials = extractOfficials(html);
-  const shareholderShares = extractShareholderShares(html);
   const officerDetails = extractOfficerDetails(html);
   return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name), officials, shareholderShares, officerDetails };
 }

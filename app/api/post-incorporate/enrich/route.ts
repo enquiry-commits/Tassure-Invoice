@@ -62,9 +62,14 @@ export async function GET(req: NextRequest) {
     // The REAL share register — a Controller (Registrable Controller under
     // RORC) is commonly but NOT always the same person as a Shareholder (no
     // share-count column on the officials table at all), so shareholder
-    // comparison uses this table, not the Controller role above.
+    // comparison uses this table, not the Controller role above. Sourced
+    // from TeamWork's own Shares module now (fetchShareRegister), not the
+    // company profile page's "Shareholders Information" table — that
+    // turned out to be a stale/historical source, confirmed 2026-08-11
+    // against a real company where it showed 4 shareholders with numbers
+    // that didn't match the actual current register at all.
     uen
-      ? supabase.from('teamwork_shareholder_shares').select('shareholder_name').ilike('uen', uen)
+      ? supabase.from('teamwork_shareholder_shares').select('shareholder_name, number_of_shares, paid_up_capital, currency, share_certificate_no').ilike('uen', uen)
       : Promise.resolve({ data: null }),
   ]);
 
@@ -154,5 +159,22 @@ export async function GET(req: NextRequest) {
     ((shareRows ?? []) as { shareholder_name: string }[]).map(s => s.shareholder_name.trim().toUpperCase()).filter(Boolean),
   )];
 
-  return NextResponse.json({ financialYearEndDayMonth, nomineeDirectorNames, nomineeDirectorDetails, teamworkOfficials, teamworkShareholderNames });
+  // Full share-register detail per shareholder (not just the name list
+  // above) — auto-fills Number of Shares/Paid-Up Capital/Share
+  // Certificate No./currency for a matched shareholder, or for one added
+  // from the "missing" popup. Vincent pointed at TeamWork's own Shares
+  // module specifically for this: "这个TW页面就有准确的shareholder的
+  // paidup capital."
+  const teamworkShareholderDetails = ((shareRows ?? []) as {
+    shareholder_name: string; number_of_shares: string | null; paid_up_capital: string | null;
+    currency: string | null; share_certificate_no: string | null;
+  }[]).map(s => ({
+    name: s.shareholder_name, numberOfShares: s.number_of_shares || '', paidUpCapital: s.paid_up_capital || '',
+    currency: s.currency || '', shareCertificateNo: s.share_certificate_no || '',
+  }));
+
+  return NextResponse.json({
+    financialYearEndDayMonth, nomineeDirectorNames, nomineeDirectorDetails,
+    teamworkOfficials, teamworkShareholderNames, teamworkShareholderDetails,
+  });
 }
