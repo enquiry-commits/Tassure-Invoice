@@ -6,39 +6,50 @@ import { withAutomationRun } from '@/lib/automation-sync';
 import { logFieldChange } from '@/lib/audit-log';
 
 /**
- * Active Client "Secretary" auto-sync — rotating batch, not a full sweep.
- * ALSO writes the full officials list and shareholder share register to
- * teamwork_company_officials/teamwork_shareholder_shares for every company
- * fetched this run (added 2026-08-09, per Vincent: "这些可以做每天更新吗？
- * ...可以记录在数据库，更方便调用在post incorp") — reuses this route's
- * existing per-company profile fetch rather than hitting TeamWork a second
- * time for the same page, since Post Incorporate's UEN lookup only needs
- * Director/Shareholder data, not a live fetch on every request.
+ * Active Client "Secretary" auto-sync — a full sweep every run, not a
+ * multi-night rotation. ALSO writes the full officials list and shareholder
+ * share register to teamwork_company_officials/teamwork_shareholder_shares
+ * for every company fetched this run (added 2026-08-09, per Vincent: "这些
+ * 可以做每天更新吗？...可以记录在数据库，更方便调用在post incorp") — reuses
+ * this route's existing per-company profile fetch rather than hitting
+ * TeamWork a second time for the same page, since Post Incorporate's UEN
+ * lookup only needs Director/Shareholder data, not a live fetch on every
+ * request.
  *
  * TeamWork's per-company profile page (view_company/<id>/?comp) has the real
  * Secretary appointment (its bulk company API does not — company_secretary_
  * staff came back empty for every company checked). But that page is slow
  * and TeamWork throttles it at a roughly fixed total throughput regardless
  * of concurrency (measured 2026-08-06: ~500ms/company whether concurrency is
- * 5, 10, or 20) — all ~900+ Active Client companies in one run would take
- * ~450s, over Vercel's 300s cap. A one-time full backfill ran locally
- * (bypassing that cap, same pattern as the FYE-month backfill); this route
- * processes a bounded batch per run, oldest-checked-first via
- * master_list.secretary_synced_at (NULLS FIRST), so the whole roster cycles
- * through over a few nights rather than needing to fit in one invocation.
+ * 5, 10, or 20) — ~783 current Active Client companies take ~390s to fetch
+ * alone. This originally meant capping each run at 250 companies and
+ * rotating oldest-first over several nights (Vercel's classic 300s ceiling),
+ * but that left Post Incorporate's per-person data up to several days stale
+ * — a real problem Vincent flagged directly: "我要的是每一天都能分批轮完，
+ * 但是一天内要轮完全部公司，不是一天只轮250家，这样数据就很难同步了." This
+ * project's Vercel deployment has Fluid Compute enabled (confirmed via the
+ * project API, resourceConfig.fluid: true), which raises the real duration
+ * ceiling well past the classic 300s default — so the batch cap was removed
+ * entirely instead of adding more cron triggers per day; one nightly run now
+ * covers every Active Client company, with generous headroom in
+ * maxDuration/BATCH_SIZE above the current ~783-company/~390s baseline for
+ * the roster to keep growing without silently falling back into rotation.
  *
  * Cron: 18:45 UTC / SGT 02:45 daily (between teamwork/sync at 18:30 and
  * ar-reminder/generate at 19:00).
  */
-export const maxDuration = 300;
+export const maxDuration = 650;
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
-const BATCH_SIZE = 250;
+// Comfortably above the current ~783 Active Client companies — a plain,
+// unparameterized cron run now covers every one of them in a single
+// invocation rather than needing several nights to rotate through.
+const BATCH_SIZE = 1200;
 
 async function syncSecretaries(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const limit = Math.min(parseInt(searchParams.get('limit') ?? '', 10) || BATCH_SIZE, 900);
+  const limit = Math.min(parseInt(searchParams.get('limit') ?? '', 10) || BATCH_SIZE, 2000);
 
   const supabase = createAdminClient();
 
