@@ -55,6 +55,12 @@ export async function POST(req: NextRequest) {
     identificationType: s.idNo ? inferIdType(s.idNo) : '',
     identificationNumber: s.idNo, nationality: s.nationality,
     numberOfShares: s.numberOfShares,
+    // The shareholding's own currency, straight off the Bizfile — was
+    // previously extracted but silently dropped here, so the frontend fell
+    // back to a hardcoded "SINGAPORE DOLLAR" label regardless of what the
+    // Bizfile actually said (confirmed wrong for a real CNY-denominated
+    // shareholding).
+    currency: s.currency,
   }));
 
   return NextResponse.json({

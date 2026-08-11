@@ -18,7 +18,7 @@ const ID_TYPES_SHAREHOLDER = ['NRIC', 'PASSPORT', 'FIN', 'UEN'];
 type CapitalInfo = { amount: string; numberOfShares: string; currency: string; shareType: string };
 type CompanyExtra = { companyType: string; primaryActivity: string; secondaryActivity: string; issuedShareCapital: CapitalInfo; paidUpCapital: CapitalInfo };
 type DirectorRow = PostIncorporateDirector & { dateOfAppointment: string };
-type ShareholderRow = PostIncorporateShareholder & { dateOfAppointment: string; phone: string; email: string; isRorc: boolean; nationality: string; dateOfBirth: string };
+type ShareholderRow = PostIncorporateShareholder & { dateOfAppointment: string; phone: string; email: string; isRorc: boolean; nationality: string; dateOfBirth: string; currency: string };
 type SecretaryRow = { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; dateOfAppointment: string; dateOfBirth: string; email: string; phone: string };
 // TeamWork's own per-person detail (see lib/teamwork-company-profile.ts's
 // OfficerDetail) — used both to enrich matched people and to offer adding
@@ -79,7 +79,7 @@ function emptyShareholder(): ShareholderRow {
     numberOfShares: '', paidUpCapital: '', fullyPaidUp: false, shareCertificateNo: '',
     corporateDirectorNames: [], corpRepresentative: '', corpRepIdType: '', corpRepIdNo: '',
     isNomineeShareholder: false, nominatorType: '',
-    dateOfAppointment: '', phone: '', email: '', isRorc: false, nationality: '', dateOfBirth: '',
+    dateOfAppointment: '', phone: '', email: '', isRorc: false, nationality: '', dateOfBirth: '', currency: '',
   };
 }
 
@@ -203,7 +203,7 @@ export default function PostIncorporatePage() {
         });
       }
       const bfDirectors = (body.directors || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; dateOfAppointment: string; isNomineeDirector: boolean }[];
-      const bfShareholders = (body.shareholders || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; numberOfShares: string }[];
+      const bfShareholders = (body.shareholders || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; numberOfShares: string; currency: string }[];
 
       // Bizfile is the official ACRA extract — it doesn't carry FYE (a
       // TeamWork/Tassure-tracked concept, not an ACRA one), nominee-director
@@ -314,6 +314,7 @@ export default function PostIncorporatePage() {
           return {
             ...emptyShareholder(), name: s.name, address: s.address, identificationType: s.identificationType || 'NRIC',
             identificationNumber: s.identificationNumber, nationality: s.nationality || '', numberOfShares: s.numberOfShares,
+            currency: s.currency || '',
             dateOfBirth: teamworkDateToIso(match?.dob || ''), email: match?.email || '', phone: match?.mobile || '',
           };
         }));
@@ -725,7 +726,7 @@ export default function PostIncorporatePage() {
                   <Field label="Paid-Up Capital">
                     <div className="flex items-center gap-2">
                       <input className={inputClass} value={s.paidUpCapital} onChange={e => updateShareholder(si, { paidUpCapital: e.target.value })} />
-                      <span className="text-xs text-slate-500 whitespace-nowrap">SINGAPORE DOLLAR</span>
+                      <span className="text-xs text-slate-500 whitespace-nowrap">{s.currency || 'SINGAPORE DOLLAR'}</span>
                     </div>
                   </Field>
                   <YesNoField label="是否fully paid-up" value={s.fullyPaidUp} onChange={v => updateShareholder(si, { fullyPaidUp: v })} />

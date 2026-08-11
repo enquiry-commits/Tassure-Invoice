@@ -335,6 +335,16 @@ function extractShareholdersFromItems(items: Item[]): ParsedShareholder[] {
     const nameLines = nameCol.sort((a, b) => b.y - a.y);
     const sharesText = joinColumn(sharesCol);
     const sharesMatch = /([\d,]+)\s*\(([A-Za-z]+)\)/.exec(sharesText);
+    // Whatever text follows "N (TYPE)" in this column is the currency's own
+    // full name as printed on the Bizfile ("SINGAPORE DOLLAR", "CHINA YUAN
+    // RENMINBI", ...) — previously hardcoded to only ever recognize
+    // Singapore Dollar, so any other currency silently came back as an
+    // empty string (confirmed wrong: a real CNY-denominated shareholding
+    // showed blank here, and the frontend's own hardcoded "SINGAPORE
+    // DOLLAR" label papered over it regardless of what the Bizfile said).
+    const currency = sharesMatch
+      ? sharesText.slice(sharesMatch.index + sharesMatch[0].length).replace(/\s+/g, ' ').trim()
+      : '';
     shareholders.push({
       name: (nameLines[0]?.str || '').trim(),
       address: nameLines.slice(1).map(it => it.str.trim().replace(/,\s*$/, '')).filter(Boolean).join(', '),
@@ -342,7 +352,7 @@ function extractShareholdersFromItems(items: Item[]): ParsedShareholder[] {
       nationality: joinColumn(natCol),
       numberOfShares: sharesMatch ? sharesMatch[1] : '',
       shareType: sharesMatch ? sharesMatch[2].toUpperCase() : '',
-      currency: /SINGAPORE DOLLAR/i.test(sharesText) ? 'SGD' : (/SGD/i.test(sharesText) ? 'SGD' : ''),
+      currency,
     });
   }
   return shareholders;
