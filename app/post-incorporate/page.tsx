@@ -170,8 +170,39 @@ export default function PostIncorporatePage() {
 
       const bfDirectors = (body.directors || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; dateOfAppointment: string }[];
       const bfShareholders = (body.shareholders || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; numberOfShares: string }[];
+
+      // Bizfile is the official ACRA extract — it doesn't carry FYE (a
+      // TeamWork/Tassure-tracked concept, not an ACRA one) or nominee-
+      // director status (which Tassure's own nd_appointments roster
+      // actually knows). Both are already sitting in Supabase from other
+      // nightly syncs, so fetch them now rather than leaving fields empty
+      // that the system genuinely already has an answer for — Vincent:
+      // "这些资料在 TW其实都可以拿到，你之前也拿到了，只是我现在要你填写
+      // 进去系统内的空格."
+      let enrichedFye = '';
+      let nomineeDirectorNames: string[] = [];
+      try {
+        const enrichRes = await fetch(`/api/post-incorporate/enrich?uen=${encodeURIComponent(body.company.uen || '')}&company=${encodeURIComponent(body.company.name || '')}`);
+        if (enrichRes.ok) {
+          const enrichBody = await enrichRes.json();
+          enrichedFye = enrichBody.financialYearEndDayMonth || '';
+          nomineeDirectorNames = enrichBody.nomineeDirectorNames || [];
+        }
+      } catch { /* enrichment is a nice-to-have; a failure here shouldn't block the Bizfile result itself */ }
+
       if (bfDirectors.length) {
-        setDirectors(bfDirectors.map(d => ({ ...emptyDirector(), name: d.name, address: d.address, identificationType: d.identificationType || 'NRIC', identificationNumber: d.identificationNumber, nationality: d.nationality, dateOfAppointment: d.dateOfAppointment || '' })));
+        setDirectors(bfDirectors.map(d => {
+          const isNominee = nomineeDirectorNames.includes(d.name.trim().toUpperCase());
+          return {
+            ...emptyDirector(), name: d.name, address: d.address, identificationType: d.identificationType || 'NRIC',
+            identificationNumber: d.identificationNumber, nationality: d.nationality, dateOfAppointment: d.dateOfAppointment || '',
+            // Tassure's own ND roster (nd_appointments), not something Bizfile
+            // has — the nominator's own details (who engaged Tassure to
+            // provide this ND) still aren't tracked anywhere, so only the
+            // flag itself is auto-set; those sub-fields stay manual.
+            isNomineeDirector: isNominee, nominatorType: isNominee ? 'individual' : '',
+          };
+        }));
         // Chairman isn't a field ACRA's Bizfile extract carries at all —
         // there's no reliable way to know who's chairman when there are
         // multiple directors, so this only auto-fills the unambiguous
@@ -184,8 +215,11 @@ export default function PostIncorporatePage() {
       if (bfShareholders.length) {
         setShareholders(bfShareholders.map(s => ({ ...emptyShareholder(), name: s.name, address: s.address, identificationType: s.identificationType || 'NRIC', identificationNumber: s.identificationNumber, nationality: s.nationality || '', numberOfShares: s.numberOfShares })));
       }
+      if (enrichedFye) setCompany(current => ({ ...current, financialYearEndDayMonth: enrichedFye }));
+
       setBizfileParsed(true);
-      setBizfileMessage(`Parsed from Bizfile: company info, ${bfDirectors.length} director(s), ${bfShareholders.length} shareholder(s) pre-filled. This is the official ACRA extract — still verify before generating (e.g. nominee status, paid-up amounts, and date of birth aren't on the Bizfile and need to be filled in manually).`);
+      const ndNote = nomineeDirectorNames.length ? ` ${nomineeDirectorNames.length} nominee director(s) auto-detected from Tassure's ND roster.` : '';
+      setBizfileMessage(`Parsed from Bizfile: company info, ${bfDirectors.length} director(s), ${bfShareholders.length} shareholder(s) pre-filled.${enrichedFye ? ' FYE filled from existing records.' : ''}${ndNote} This is the official ACRA extract — still verify before generating (Contact No/Email Address/Birth Date/Nominee Shareholder status aren't on file anywhere in this system and always need manual entry).`);
     } catch (error) {
       setBizfileMessage(error instanceof Error ? error.message : 'Unexpected error parsing the PDF.');
     } finally {
