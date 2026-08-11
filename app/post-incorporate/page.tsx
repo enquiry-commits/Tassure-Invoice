@@ -78,46 +78,33 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputClass = 'rounded-md border border-slate-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400';
-// Table cells deliberately have NO visible border/radius of their own —
-// Vincent flagged the previous version as a "box inside a box": the cell
-// already has a border, so an <input> with its own separate border/rounded
-// corners inside that cell just doubles up the boundary for no reason
-// ("已经在框内了，还要再来一个小框在内...设计很复杂"). The only visible
-// boundary should be the table cell's own border (tdClass below); focus
-// state gets an inset ring + light tint instead of a permanent border.
-const cellInputClass = 'w-full h-full bg-transparent border-0 px-1.5 py-1 text-[11px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-inset focus:ring-blue-400 focus:bg-blue-50/60';
-// A plain single-line <input> truncates or horizontally scrolls long
-// values (addresses, activity names) out of view — Vincent flagged this
-// against the reference desktop app, which wraps long content onto a
-// second line within the cell instead of hiding it: "过长的内容不可以被
-// 遮挡要转到下行...每个格子的上下大小，最少要显示出两行." A <textarea> is
-// the only form control that can wrap; sized to ~2 lines, growing
-// internally (native scroll) rather than the row itself.
-const cellTextareaClass = `${cellInputClass} min-h-[2.75rem] resize-none leading-snug`;
-const thClass = 'border border-slate-200 bg-slate-50 px-2 py-2 text-left text-[11px] font-medium text-slate-600 overflow-hidden text-ellipsis';
-const tdClass = 'border border-slate-200 p-0 align-top';
 const cardClass = 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm';
 const sectionTitleClass = 'text-base font-semibold text-slate-800 mb-4';
-// Shared literal pixel widths for the columns Director/Secretary/
-// Shareholder tables have in common, applied identically via `<col>` in
-// all three (with `table-fixed`) so they line up vertically when stacked
-// — Vincent: "上下列可以同样的内容可以对齐宽度." Browsers auto-size
-// `table-auto` columns per-table from that table's own content, which is
-// exactly why the three tables drifted out of alignment before.
-const COL_W = {
-  no: 48, name: 150, birthDate: 116, contactNo: 100, email: 140, idType: 88,
-  idNumber: 112, nationality: 140, address: 240, dateOfAppointment: 124,
-  numberOfShares: 100, rorc: 80, nominee: 68,
-};
 // Full-width tab bar matching the reference app's native tab control: the
 // active tab pops forward in white, the inactive tab and the empty filler
 // space both sit flush in the same light background bar. Vincent
 // color-picked the reference's exact bar color: "背景条的颜色是（#e4e9ef）"
-// (the first guess, a saturated steel-blue, was too dark). A real
-// bordered/shadowed button for "Add Row" instead of a plain text link too
-// — Vincent: "按钮UI也要凸显，不能偷懒."
+// (the first guess, a saturated steel-blue, was too dark). Reused for the
+// per-person Director/Secretary/Shareholder tabs too, per Vincent's later
+// request to switch those from table rows to a tab-per-person + full-form
+// layout ("改成每个人一个Tab+完整表单") — matching the reference app's own
+// screens exactly, rather than inventing a third tab style.
 const tabClass = (active: boolean) => `px-5 py-2 text-sm font-medium border border-slate-300 ${active ? 'bg-[#1d395e] border-[#1d395e] text-white' : 'bg-white text-slate-500 hover:bg-slate-50'}`;
 const addRowButtonClass = 'flex items-center gap-1.5 rounded-md border border-slate-400 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-800 text-sm font-medium px-3.5 py-1.5 shadow-sm';
+
+// Every "是否..." (yes/no) field in the reference app is a dropdown, not a
+// checkbox — matches its own screens exactly rather than the checkbox
+// shorthand used before the per-person tab redesign.
+function YesNoField({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <Field label={label}>
+      <select className={inputClass} value={value ? 'YES' : 'NO'} onChange={e => onChange(e.target.value === 'YES')}>
+        <option value="NO">NO</option>
+        <option value="YES">YES</option>
+      </select>
+    </Field>
+  );
+}
 
 export default function PostIncorporatePage() {
   const [company, setCompany] = useState<PostIncorporateCompany>(emptyCompany());
@@ -126,6 +113,12 @@ export default function PostIncorporatePage() {
   const [directors, setDirectors] = useState<DirectorRow[]>([emptyDirector()]);
   const [secretaries, setSecretaries] = useState<SecretaryRow[]>([emptySecretary()]);
   const [shareholders, setShareholders] = useState<ShareholderRow[]>([emptyShareholder()]);
+  // Which person's tab is open per section — clamped at render time rather
+  // than kept perfectly in sync on every add/remove/Bizfile-reset, since a
+  // stale index just needs to fall back to the last valid one, never crash.
+  const [activeDirectorTab, setActiveDirectorTab] = useState(0);
+  const [activeSecretaryTab, setActiveSecretaryTab] = useState(0);
+  const [activeShareholderTab, setActiveShareholderTab] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [success, setSuccess] = useState<string | null>(null);
@@ -180,6 +173,7 @@ export default function PostIncorporatePage() {
           identificationNumber: body.secretary.identificationNumber || '',
           nationality: body.secretary.nationality || '', dateOfAppointment: body.secretary.dateOfAppointment || '',
         }]);
+        setActiveSecretaryTab(0);
       }
 
       const bfDirectors = (body.directors || []) as { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; dateOfAppointment: string }[];
@@ -217,6 +211,7 @@ export default function PostIncorporatePage() {
             isNomineeDirector: isNominee, nominatorType: isNominee ? 'individual' : '',
           };
         }));
+        setActiveDirectorTab(0);
         // Chairman isn't a field ACRA's Bizfile extract carries at all —
         // there's no reliable way to know who's chairman when there are
         // multiple directors, so this only auto-fills the unambiguous
@@ -228,6 +223,7 @@ export default function PostIncorporatePage() {
       }
       if (bfShareholders.length) {
         setShareholders(bfShareholders.map(s => ({ ...emptyShareholder(), name: s.name, address: s.address, identificationType: s.identificationType || 'NRIC', identificationNumber: s.identificationNumber, nationality: s.nationality || '', numberOfShares: s.numberOfShares })));
+        setActiveShareholderTab(0);
       }
       if (enrichedFye) setCompany(current => ({ ...current, financialYearEndDayMonth: enrichedFye }));
 
@@ -346,22 +342,19 @@ export default function PostIncorporatePage() {
         {/* Fields the templates actually consume but aren't part of ACRA's
             own Company Information page — kept visually separated below. */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-slate-100">
-          <Field label="Secretarial Firm Name"><input className={inputClass} value={company.secretaryCompanyName} onChange={e => setCompany({ ...company, secretaryCompanyName: e.target.value })} /></Field>
-          <Field label="Secretarial Firm Address"><input className={inputClass} value={company.secretaryCompanyAddress} onChange={e => setCompany({ ...company, secretaryCompanyAddress: e.target.value })} /></Field>
+          <Field label="Secretarial Firm Name 秘书公司"><input className={inputClass} value={company.secretaryCompanyName} onChange={e => setCompany({ ...company, secretaryCompanyName: e.target.value })} /></Field>
+          <Field label="Secretarial Firm Address 秘书公司地址"><input className={inputClass} value={company.secretaryCompanyAddress} onChange={e => setCompany({ ...company, secretaryCompanyAddress: e.target.value })} /></Field>
           <Field label="Currency (for documents)"><input className={inputClass} value={company.currency} onChange={e => setCompany({ ...company, currency: e.target.value })} /></Field>
-          <Field label="Financial Year End (e.g. 31 December)"><input className={inputClass} value={company.financialYearEndDayMonth} onChange={e => setCompany({ ...company, financialYearEndDayMonth: e.target.value })} /></Field>
+          <Field label="Financial Year End Day and Month(DD/MM)"><input className={inputClass} value={company.financialYearEndDayMonth} onChange={e => setCompany({ ...company, financialYearEndDayMonth: e.target.value })} /></Field>
+          <YesNoField label="是否需提供ND服务" value={company.needNdService} onChange={v => setCompany({ ...company, needNdService: v })} />
         </div>
-        <label className="flex items-center gap-2 text-sm mt-4">
-          <input type="checkbox" checked={company.needNdService} onChange={e => setCompany({ ...company, needNdService: e.target.checked })} />
-          <span>Company needs Nominee Director (ND) service — generates the ND Agreement</span>
-        </label>
       </section>
 
       {/* Directors */}
       <section className={cardClass}>
         <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
-          <div className={`${sectionTitleClass} mb-0`}>DIRECTOR 董事{parsedSuffix}</div>
-          <button type="button" onClick={() => setDirectors([...directors, emptyDirector()])}
+          <div className={`${sectionTitleClass} mb-0`}>董事 Directors{parsedSuffix}</div>
+          <button type="button" onClick={() => { setDirectors([...directors, emptyDirector()]); setActiveDirectorTab(directors.length); }}
             className={addRowButtonClass}>
             <Plus size={15} /> 新增一行 Add Row
           </button>
@@ -373,341 +366,271 @@ export default function PostIncorporatePage() {
             {directors.filter(d => d.name.trim()).map((d, idx) => <option key={idx} value={d.name}>{d.name}</option>)}
           </select>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="w-full border-collapse text-xs table-fixed">
-            <colgroup>
-              <col style={{ width: COL_W.no }} />
-              <col style={{ width: COL_W.name }} />
-              <col style={{ width: COL_W.birthDate }} />
-              <col style={{ width: COL_W.contactNo }} />
-              <col style={{ width: COL_W.email }} />
-              <col style={{ width: COL_W.idType }} />
-              <col style={{ width: COL_W.idNumber }} />
-              <col style={{ width: COL_W.nationality }} />
-              <col style={{ width: COL_W.address }} />
-              <col style={{ width: COL_W.dateOfAppointment }} />
-              <col style={{ width: COL_W.nominee }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className={thClass}>No.</th>
-                <th className={thClass}>Name</th>
-                <th className={thClass}>Birth Date</th>
-                <th className={thClass}>Contact No</th>
-                <th className={thClass}>Email Address</th>
-                <th className={thClass}>ID Type</th>
-                <th className={thClass}>Identification Number</th>
-                <th className={thClass}>Nationality/Place of Origin</th>
-                <th className={thClass}>Address</th>
-                <th className={thClass}>Date of Appointment</th>
-                <th className={thClass}>Nominee</th>
-              </tr>
-            </thead>
-            <tbody>
-              {directors.map((d, i) => (
-                <tr key={i}>
-                  <td className={`${tdClass} relative group`}>
-                    <div className="text-center text-slate-500 py-1.5">{i + 1}</div>
-                    {directors.length > 1 && (
-                      <button type="button" onClick={() => setDirectors(directors.filter((_, idx) => idx !== i))}
-                        className="absolute inset-y-0 right-0 flex items-center pr-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 bg-gradient-to-l from-white via-white to-transparent pl-3">
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </td>
-                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={d.name} onChange={e => updateDirector(i, { name: e.target.value })} /></td>
-                  <td className={tdClass}><input type="date" className={cellInputClass} value={d.dateOfBirth} onChange={e => updateDirector(i, { dateOfBirth: e.target.value })} /></td>
-                  <td className={tdClass}><input className={cellInputClass} value={d.phone} onChange={e => updateDirector(i, { phone: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={d.email} onChange={e => updateDirector(i, { email: e.target.value })} /></td>
-                  <td className={tdClass}>
-                    <select className={cellInputClass} value={d.identificationType} onChange={e => updateDirector(i, { identificationType: e.target.value })}>
+        {(() => {
+          const di = Math.min(activeDirectorTab, directors.length - 1);
+          const d = directors[di];
+          return (
+            <>
+              <div className="flex gap-1 overflow-x-auto">
+                {directors.map((dd, i) => (
+                  <button key={i} type="button" className={tabClass(i === di)} onClick={() => setActiveDirectorTab(i)}>
+                    {dd.name.trim() || `Director ${i + 1}`}
+                  </button>
+                ))}
+              </div>
+              <div className="border border-slate-300 border-t-0 rounded-b-md p-4 relative">
+                {directors.length > 1 && (
+                  <button type="button" onClick={() => { setDirectors(directors.filter((_, idx) => idx !== di)); setActiveDirectorTab(Math.max(0, di - 1)); }}
+                    className="absolute top-3 right-3 text-slate-400 hover:text-red-500" title="Delete this director">
+                    <Trash2 size={15} />
+                  </button>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Name"><input className={inputClass} value={d.name} onChange={e => updateDirector(di, { name: e.target.value })} /></Field>
+                  <Field label="ID Type">
+                    <select className={inputClass} value={d.identificationType} onChange={e => updateDirector(di, { identificationType: e.target.value })}>
+                      <option value="">—</option>
                       {ID_TYPES_DIRECTOR.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                  </td>
-                  <td className={tdClass}><input className={cellInputClass} value={d.identificationNumber} onChange={e => updateDirector(i, { identificationNumber: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={d.nationality} onChange={e => updateDirector(i, { nationality: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={d.address} onChange={e => updateDirector(i, { address: e.target.value })} /></td>
-                  <td className={tdClass}><input type="date" className={cellInputClass} value={d.dateOfAppointment} onChange={e => updateDirector(i, { dateOfAppointment: e.target.value })} /></td>
-                  <td className={`${tdClass} text-center py-2`}>
-                    <input type="checkbox" checked={d.isNomineeDirector}
-                      onChange={e => updateDirector(i, { isNomineeDirector: e.target.checked, nominatorType: e.target.checked ? (d.nominatorType || 'individual') : '' })} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </Field>
+                  <Field label="Identification Number"><input className={inputClass} value={d.identificationNumber} onChange={e => updateDirector(di, { identificationNumber: e.target.value })} /></Field>
+                  <Field label="Nationality"><input className={inputClass} value={d.nationality} onChange={e => updateDirector(di, { nationality: e.target.value })} /></Field>
+                  <Field label="Date of birth"><input type="date" className={inputClass} value={d.dateOfBirth} onChange={e => updateDirector(di, { dateOfBirth: e.target.value })} /></Field>
+                  <Field label="Gender">
+                    <select className={inputClass} value={d.gender} onChange={e => updateDirector(di, { gender: e.target.value })}>
+                      <option value="">—</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                    </select>
+                  </Field>
+                  <Field label="Email Address"><input className={inputClass} value={d.email} onChange={e => updateDirector(di, { email: e.target.value })} /></Field>
+                  <Field label="Contact Number"><input className={inputClass} value={d.phone} onChange={e => updateDirector(di, { phone: e.target.value })} /></Field>
+                </div>
+                <div className="mt-4">
+                  <Field label="Address"><textarea rows={2} className={`${inputClass} resize-none`} value={d.address} onChange={e => updateDirector(di, { address: e.target.value })} /></Field>
+                </div>
+                <div className="mt-4 max-w-xs">
+                  <YesNoField label="是否为名义董事" value={d.isNomineeDirector} onChange={v => updateDirector(di, { isNomineeDirector: v, nominatorType: v ? (d.nominatorType || 'individual') : '' })} />
+                </div>
 
-        {directors.some(d => d.isNomineeDirector) && (
-          <div className="flex flex-col gap-3 mt-4">
-            {directors.map((d, i) => d.isNomineeDirector && (
-              <div key={i} className="rounded-md bg-slate-50 border border-slate-200 p-3">
-                <div className="text-sm font-medium text-slate-600 mb-2">Nominee Director details — {d.name || `row ${i + 1}`}</div>
-                <Field label="Nominator Type">
-                  <select className={inputClass} value={d.nominatorType} onChange={e => updateDirector(i, { nominatorType: e.target.value as PostIncorporateDirector['nominatorType'] })}>
-                    <option value="individual">Individual</option>
-                    <option value="corporate entity">Corporate Entity</option>
-                  </select>
-                </Field>
-                {d.nominatorType === 'individual' ? (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-                    <Field label="Nominator Name"><input className={inputClass} value={d.nominatorIndName || ''} onChange={e => updateDirector(i, { nominatorIndName: e.target.value })} /></Field>
-                    <Field label="Nominator Address"><input className={inputClass} value={d.nominatorIndAddress || ''} onChange={e => updateDirector(i, { nominatorIndAddress: e.target.value })} /></Field>
-                    <Field label="Nominator Nationality"><input className={inputClass} value={d.nominatorIndNationality || ''} onChange={e => updateDirector(i, { nominatorIndNationality: e.target.value })} /></Field>
-                    <Field label="Nominator ID Number"><input className={inputClass} value={d.nominatorIndIdentificationNumber || ''} onChange={e => updateDirector(i, { nominatorIndIdentificationNumber: e.target.value })} /></Field>
-                    <Field label="Nominator Birth Date"><input type="date" className={inputClass} value={d.nominatorIndBirthDate || ''} onChange={e => updateDirector(i, { nominatorIndBirthDate: e.target.value })} /></Field>
-                    <Field label="Nominator Email"><input className={inputClass} value={d.nominatorIndEmail || ''} onChange={e => updateDirector(i, { nominatorIndEmail: e.target.value })} /></Field>
-                    <Field label="Nominator Contact No."><input className={inputClass} value={d.nominatorIndContactNumber || ''} onChange={e => updateDirector(i, { nominatorIndContactNumber: e.target.value })} /></Field>
-                    <Field label="Date Became Nominator"><input type="date" className={inputClass} value={d.nominatorIndDateBecameNominator || ''} onChange={e => updateDirector(i, { nominatorIndDateBecameNominator: e.target.value })} /></Field>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-                    <Field label="Nominator Corp Name"><input className={inputClass} value={d.nominatorCorpName || ''} onChange={e => updateDirector(i, { nominatorCorpName: e.target.value })} /></Field>
-                    <Field label="Nominator Corp UEN"><input className={inputClass} value={d.nominatorCorpUen || ''} onChange={e => updateDirector(i, { nominatorCorpUen: e.target.value })} /></Field>
-                    <Field label="Registered Address"><input className={inputClass} value={d.nominatorCorpRegisteredAddress || ''} onChange={e => updateDirector(i, { nominatorCorpRegisteredAddress: e.target.value })} /></Field>
-                    <Field label="Legal Form"><input className={inputClass} value={d.nominatorCorpLegalForm || ''} onChange={e => updateDirector(i, { nominatorCorpLegalForm: e.target.value })} /></Field>
-                    <Field label="Corp Representative"><input className={inputClass} value={d.nominatorCorpRepresentative || ''} onChange={e => updateDirector(i, { nominatorCorpRepresentative: e.target.value })} /></Field>
-                    <Field label="Corp Email"><input className={inputClass} value={d.nominatorCorpEmail || ''} onChange={e => updateDirector(i, { nominatorCorpEmail: e.target.value })} /></Field>
-                    <Field label="Corp Contact No."><input className={inputClass} value={d.nominatorCorpContactNumber || ''} onChange={e => updateDirector(i, { nominatorCorpContactNumber: e.target.value })} /></Field>
-                    <Field label="Date Became Nominator"><input type="date" className={inputClass} value={d.nominatorCorpDateBecameNominator || ''} onChange={e => updateDirector(i, { nominatorCorpDateBecameNominator: e.target.value })} /></Field>
+                {d.isNomineeDirector && (
+                  <div className="mt-3 rounded-md bg-slate-50 border border-slate-200 p-3">
+                    <div className="text-sm font-medium text-slate-600 mb-2">Nominee Director details</div>
+                    <Field label="Nominator Type">
+                      <select className={inputClass} value={d.nominatorType} onChange={e => updateDirector(di, { nominatorType: e.target.value as PostIncorporateDirector['nominatorType'] })}>
+                        <option value="individual">Individual</option>
+                        <option value="corporate entity">Corporate Entity</option>
+                      </select>
+                    </Field>
+                    {d.nominatorType === 'individual' ? (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                        <Field label="Nominator Name"><input className={inputClass} value={d.nominatorIndName || ''} onChange={e => updateDirector(di, { nominatorIndName: e.target.value })} /></Field>
+                        <Field label="Nominator Address"><input className={inputClass} value={d.nominatorIndAddress || ''} onChange={e => updateDirector(di, { nominatorIndAddress: e.target.value })} /></Field>
+                        <Field label="Nominator Nationality"><input className={inputClass} value={d.nominatorIndNationality || ''} onChange={e => updateDirector(di, { nominatorIndNationality: e.target.value })} /></Field>
+                        <Field label="Nominator ID Number"><input className={inputClass} value={d.nominatorIndIdentificationNumber || ''} onChange={e => updateDirector(di, { nominatorIndIdentificationNumber: e.target.value })} /></Field>
+                        <Field label="Nominator Birth Date"><input type="date" className={inputClass} value={d.nominatorIndBirthDate || ''} onChange={e => updateDirector(di, { nominatorIndBirthDate: e.target.value })} /></Field>
+                        <Field label="Nominator Email"><input className={inputClass} value={d.nominatorIndEmail || ''} onChange={e => updateDirector(di, { nominatorIndEmail: e.target.value })} /></Field>
+                        <Field label="Nominator Contact No."><input className={inputClass} value={d.nominatorIndContactNumber || ''} onChange={e => updateDirector(di, { nominatorIndContactNumber: e.target.value })} /></Field>
+                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={d.nominatorIndDateBecameNominator || ''} onChange={e => updateDirector(di, { nominatorIndDateBecameNominator: e.target.value })} /></Field>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                        <Field label="Nominator Corp Name"><input className={inputClass} value={d.nominatorCorpName || ''} onChange={e => updateDirector(di, { nominatorCorpName: e.target.value })} /></Field>
+                        <Field label="Nominator Corp UEN"><input className={inputClass} value={d.nominatorCorpUen || ''} onChange={e => updateDirector(di, { nominatorCorpUen: e.target.value })} /></Field>
+                        <Field label="Registered Address"><input className={inputClass} value={d.nominatorCorpRegisteredAddress || ''} onChange={e => updateDirector(di, { nominatorCorpRegisteredAddress: e.target.value })} /></Field>
+                        <Field label="Legal Form"><input className={inputClass} value={d.nominatorCorpLegalForm || ''} onChange={e => updateDirector(di, { nominatorCorpLegalForm: e.target.value })} /></Field>
+                        <Field label="Corp Representative"><input className={inputClass} value={d.nominatorCorpRepresentative || ''} onChange={e => updateDirector(di, { nominatorCorpRepresentative: e.target.value })} /></Field>
+                        <Field label="Corp Email"><input className={inputClass} value={d.nominatorCorpEmail || ''} onChange={e => updateDirector(di, { nominatorCorpEmail: e.target.value })} /></Field>
+                        <Field label="Corp Contact No."><input className={inputClass} value={d.nominatorCorpContactNumber || ''} onChange={e => updateDirector(di, { nominatorCorpContactNumber: e.target.value })} /></Field>
+                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={d.nominatorCorpDateBecameNominator || ''} onChange={e => updateDirector(di, { nominatorCorpDateBecameNominator: e.target.value })} /></Field>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            ))}
-          </div>
-        )}
+            </>
+          );
+        })()}
       </section>
 
       {/* Secretary */}
       <section className={cardClass}>
         <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
-          <div className={`${sectionTitleClass} mb-0`}>SECRETARY 秘书{parsedSuffix}</div>
-          <button type="button" onClick={() => setSecretaries([...secretaries, emptySecretary()])}
+          <div className={`${sectionTitleClass} mb-0`}>秘书 Secretary{parsedSuffix}</div>
+          <button type="button" onClick={() => { setSecretaries([...secretaries, emptySecretary()]); setActiveSecretaryTab(secretaries.length); }}
             className={addRowButtonClass}>
             <Plus size={15} /> 新增一行 Add Row
           </button>
         </div>
         <div className="flex items-center gap-2 text-sm mb-3">
-          <span className="font-medium text-slate-600">SECRETARY 秘书</span>
+          <span className="font-medium text-slate-600">秘书姓名 Secretary Name</span>
           <select className={inputClass} value={company.secretaryName} onChange={e => setCompany({ ...company, secretaryName: e.target.value })}>
             <option value="">—</option>
             {secretaries.filter(s => s.name.trim()).map((s, idx) => <option key={idx} value={s.name}>{s.name}</option>)}
           </select>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="w-full border-collapse text-xs table-fixed">
-            <colgroup>
-              <col style={{ width: COL_W.no }} />
-              <col style={{ width: COL_W.name }} />
-              <col style={{ width: COL_W.idType }} />
-              <col style={{ width: COL_W.idNumber }} />
-              <col style={{ width: COL_W.nationality }} />
-              <col style={{ width: COL_W.address }} />
-              <col style={{ width: COL_W.dateOfAppointment }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className={thClass}>No.</th>
-                <th className={thClass}>Name</th>
-                <th className={thClass}>ID Type</th>
-                <th className={thClass}>Identification Number</th>
-                <th className={thClass}>Nationality/Place of Origin</th>
-                <th className={thClass}>Address</th>
-                <th className={thClass}>Date of Appointment</th>
-              </tr>
-            </thead>
-            <tbody>
-              {secretaries.map((s, i) => (
-                <tr key={i}>
-                  <td className={`${tdClass} relative group`}>
-                    <div className="text-center text-slate-500 py-1.5">{i + 1}</div>
-                    {secretaries.length > 1 && (
-                      <button type="button" onClick={() => {
-                        const removedName = s.name;
-                        setSecretaries(secretaries.filter((_, idx) => idx !== i));
-                        setCompany(c => (c.secretaryName === removedName ? { ...c, secretaryName: '' } : c));
-                      }} className="absolute inset-y-0 right-0 flex items-center pr-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 bg-gradient-to-l from-white via-white to-transparent pl-3">
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </td>
-                  <td className={tdClass}>
-                    <textarea rows={2} className={cellTextareaClass} value={s.name} onChange={e => {
+        {(() => {
+          const si = Math.min(activeSecretaryTab, secretaries.length - 1);
+          const s = secretaries[si];
+          return (
+            <>
+              <div className="flex gap-1 overflow-x-auto">
+                {secretaries.map((ss, i) => (
+                  <button key={i} type="button" className={tabClass(i === si)} onClick={() => setActiveSecretaryTab(i)}>
+                    {ss.name.trim() || `Secretary ${i + 1}`}
+                  </button>
+                ))}
+              </div>
+              <div className="border border-slate-300 border-t-0 rounded-b-md p-4 relative">
+                {secretaries.length > 1 && (
+                  <button type="button" onClick={() => {
+                    const removedName = s.name;
+                    setSecretaries(secretaries.filter((_, idx) => idx !== si));
+                    setCompany(c => (c.secretaryName === removedName ? { ...c, secretaryName: '' } : c));
+                    setActiveSecretaryTab(Math.max(0, si - 1));
+                  }} className="absolute top-3 right-3 text-slate-400 hover:text-red-500" title="Delete this secretary">
+                    <Trash2 size={15} />
+                  </button>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Name">
+                    <input className={inputClass} value={s.name} onChange={e => {
                       const prevName = s.name;
-                      updateSecretary(i, { name: e.target.value });
+                      updateSecretary(si, { name: e.target.value });
                       setCompany(c => (c.secretaryName === prevName || !c.secretaryName ? { ...c, secretaryName: e.target.value } : c));
                     }} />
-                  </td>
-                  <td className={tdClass}>
-                    <select className={cellInputClass} value={s.identificationType} onChange={e => updateSecretary(i, { identificationType: e.target.value })}>
+                  </Field>
+                  <Field label="ID Type">
+                    <select className={inputClass} value={s.identificationType} onChange={e => updateSecretary(si, { identificationType: e.target.value })}>
+                      <option value="">—</option>
                       {ID_TYPES_DIRECTOR.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                  </td>
-                  <td className={tdClass}><input className={cellInputClass} value={s.identificationNumber} onChange={e => updateSecretary(i, { identificationNumber: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.nationality} onChange={e => updateSecretary(i, { nationality: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.address} onChange={e => updateSecretary(i, { address: e.target.value })} /></td>
-                  <td className={tdClass}><input type="date" className={cellInputClass} value={s.dateOfAppointment} onChange={e => updateSecretary(i, { dateOfAppointment: e.target.value })} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </Field>
+                  <Field label="Identification Number"><input className={inputClass} value={s.identificationNumber} onChange={e => updateSecretary(si, { identificationNumber: e.target.value })} /></Field>
+                  <Field label="Nationality"><input className={inputClass} value={s.nationality} onChange={e => updateSecretary(si, { nationality: e.target.value })} /></Field>
+                  <Field label="Date of Appointment"><input type="date" className={inputClass} value={s.dateOfAppointment} onChange={e => updateSecretary(si, { dateOfAppointment: e.target.value })} /></Field>
+                </div>
+                <div className="mt-4">
+                  <Field label="Address"><textarea rows={2} className={`${inputClass} resize-none`} value={s.address} onChange={e => updateSecretary(si, { address: e.target.value })} /></Field>
+                </div>
+              </div>
+            </>
+          );
+        })()}
       </section>
 
       {/* Shareholders */}
       <section className={cardClass}>
         <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-          <div className={`${sectionTitleClass} mb-0`}>Shareholder 股东{parsedSuffix}</div>
-          <button type="button" onClick={() => setShareholders([...shareholders, emptyShareholder()])}
+          <div className={`${sectionTitleClass} mb-0`}>股东 Shareholders{parsedSuffix}</div>
+          <button type="button" onClick={() => { setShareholders([...shareholders, emptyShareholder()]); setActiveShareholderTab(shareholders.length); }}
             className={addRowButtonClass}>
             <Plus size={15} /> 新增一行 Add Row
           </button>
         </div>
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
-          <table className="w-full border-collapse text-xs table-fixed">
-            <colgroup>
-              <col style={{ width: COL_W.no }} />
-              <col style={{ width: COL_W.name }} />
-              <col style={{ width: COL_W.birthDate }} />
-              <col style={{ width: COL_W.contactNo }} />
-              <col style={{ width: COL_W.email }} />
-              <col style={{ width: COL_W.idType }} />
-              <col style={{ width: COL_W.idNumber }} />
-              <col style={{ width: COL_W.nationality }} />
-              <col style={{ width: COL_W.address }} />
-              <col style={{ width: COL_W.numberOfShares }} />
-              <col style={{ width: COL_W.rorc }} />
-              <col style={{ width: COL_W.nominee }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th className={thClass}>No.</th>
-                <th className={thClass}>Name</th>
-                <th className={thClass}>Birth Date</th>
-                <th className={thClass}>Contact No</th>
-                <th className={thClass}>Email Address</th>
-                <th className={thClass}>ID Type</th>
-                <th className={thClass}>Identification Number</th>
-                <th className={thClass}>Nationality/Place of Origin</th>
-                <th className={thClass}>Address</th>
-                <th className={thClass}>Number of Shares</th>
-                <th className={thClass}>是否RORC</th>
-                <th className={thClass}>Nominee</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shareholders.map((s, i) => (
-                <tr key={i}>
-                  <td className={`${tdClass} relative group`}>
-                    <div className="text-center text-slate-500 py-1.5">{i + 1}</div>
-                    {shareholders.length > 1 && (
-                      <button type="button" onClick={() => setShareholders(shareholders.filter((_, idx) => idx !== i))}
-                        className="absolute inset-y-0 right-0 flex items-center pr-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 bg-gradient-to-l from-white via-white to-transparent pl-3">
-                        <Trash2 size={12} />
-                      </button>
-                    )}
-                  </td>
-                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.name} onChange={e => updateShareholder(i, { name: e.target.value })} /></td>
-                  <td className={tdClass}><input type="date" className={cellInputClass} value={s.dateOfBirth} onChange={e => updateShareholder(i, { dateOfBirth: e.target.value })} /></td>
-                  <td className={tdClass}><input className={cellInputClass} value={s.phone} onChange={e => updateShareholder(i, { phone: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.email} onChange={e => updateShareholder(i, { email: e.target.value })} /></td>
-                  <td className={tdClass}>
-                    <select className={cellInputClass} value={s.identificationType} onChange={e => updateShareholder(i, { identificationType: e.target.value })}>
+        {(() => {
+          const si = Math.min(activeShareholderTab, shareholders.length - 1);
+          const s = shareholders[si];
+          const isCorp = s.identificationType.trim().toUpperCase() === 'UEN';
+          return (
+            <>
+              <div className="flex gap-1 overflow-x-auto">
+                {shareholders.map((ss, i) => (
+                  <button key={i} type="button" className={tabClass(i === si)} onClick={() => setActiveShareholderTab(i)}>
+                    {ss.name.trim() || `Shareholder ${i + 1}`}
+                  </button>
+                ))}
+              </div>
+              <div className="border border-slate-300 border-t-0 rounded-b-md p-4 relative">
+                {shareholders.length > 1 && (
+                  <button type="button" onClick={() => { setShareholders(shareholders.filter((_, idx) => idx !== si)); setActiveShareholderTab(Math.max(0, si - 1)); }}
+                    className="absolute top-3 right-3 text-slate-400 hover:text-red-500" title="Delete this shareholder">
+                    <Trash2 size={15} />
+                  </button>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Name"><input className={inputClass} value={s.name} onChange={e => updateShareholder(si, { name: e.target.value })} /></Field>
+                  <Field label="ID Type">
+                    <select className={inputClass} value={s.identificationType} onChange={e => updateShareholder(si, { identificationType: e.target.value })}>
+                      <option value="">—</option>
                       {ID_TYPES_SHAREHOLDER.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                  </td>
-                  <td className={tdClass}><input className={cellInputClass} value={s.identificationNumber} onChange={e => updateShareholder(i, { identificationNumber: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.nationality} onChange={e => updateShareholder(i, { nationality: e.target.value })} /></td>
-                  <td className={tdClass}><textarea rows={2} className={cellTextareaClass} value={s.address} onChange={e => updateShareholder(i, { address: e.target.value })} /></td>
-                  <td className={tdClass}><input className={cellInputClass} value={s.numberOfShares} onChange={e => updateShareholder(i, { numberOfShares: e.target.value })} /></td>
-                  <td className={`${tdClass} text-center`}>
-                    <select className={cellInputClass} value={s.isRorc ? 'YES' : 'NO'} onChange={e => updateShareholder(i, { isRorc: e.target.value === 'YES' })}>
-                      <option value="NO">NO</option>
-                      <option value="YES">YES</option>
-                    </select>
-                  </td>
-                  <td className={`${tdClass} text-center py-2`}>
-                    <input type="checkbox" checked={!!s.isNomineeShareholder}
-                      onChange={e => updateShareholder(i, { isNomineeShareholder: e.target.checked, nominatorType: e.target.checked ? (s.nominatorType || 'individual') : '' })} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex flex-col gap-4 mt-4">
-          {shareholders.map((s, i) => {
-            const isCorp = s.identificationType.trim().toUpperCase() === 'UEN';
-            if (!isCorp && !s.fullyPaidUp && !s.isNomineeShareholder) return null;
-            return (
-              <div key={i} className="rounded-md bg-slate-50 border border-slate-200 p-3">
-                <div className="text-sm font-medium text-slate-600 mb-2">Additional details — {s.name || `row ${i + 1}`}</div>
-
-                <label className="flex items-center gap-2 text-sm">
-                  <input type="checkbox" checked={s.fullyPaidUp} onChange={e => updateShareholder(i, { fullyPaidUp: e.target.checked })} />
-                  <span>Fully paid-up (generates a Share Certificate)</span>
-                </label>
-                {s.fullyPaidUp && (
-                  <div className="mt-2 max-w-xs">
-                    <Field label="Share Certificate No."><input className={inputClass} value={s.shareCertificateNo || ''} onChange={e => updateShareholder(i, { shareCertificateNo: e.target.value })} /></Field>
-                  </div>
-                )}
+                  </Field>
+                  <Field label="Identification Number"><input className={inputClass} value={s.identificationNumber} onChange={e => updateShareholder(si, { identificationNumber: e.target.value })} /></Field>
+                  <Field label="Nationality"><input className={inputClass} value={s.nationality} onChange={e => updateShareholder(si, { nationality: e.target.value })} /></Field>
+                  <Field label="Number of Shares"><input className={inputClass} value={s.numberOfShares} onChange={e => updateShareholder(si, { numberOfShares: e.target.value })} /></Field>
+                  <Field label="Paid-Up Capital">
+                    <div className="flex items-center gap-2">
+                      <input className={inputClass} value={s.paidUpCapital} onChange={e => updateShareholder(si, { paidUpCapital: e.target.value })} />
+                      <span className="text-xs text-slate-500 whitespace-nowrap">SINGAPORE DOLLAR</span>
+                    </div>
+                  </Field>
+                  <YesNoField label="是否fully paid-up" value={s.fullyPaidUp} onChange={v => updateShareholder(si, { fullyPaidUp: v })} />
+                  <Field label="Share Certificate No."><input className={inputClass} value={s.shareCertificateNo || ''} onChange={e => updateShareholder(si, { shareCertificateNo: e.target.value })} /></Field>
+                  <YesNoField label="是否为Registrable Controller" value={s.isRorc} onChange={v => updateShareholder(si, { isRorc: v })} />
+                </div>
+                <div className="mt-4">
+                  <Field label="Address"><textarea rows={2} className={`${inputClass} resize-none`} value={s.address} onChange={e => updateShareholder(si, { address: e.target.value })} /></Field>
+                </div>
+                <div className="mt-4 max-w-xs">
+                  <YesNoField label="是否为名义股东" value={!!s.isNomineeShareholder} onChange={v => updateShareholder(si, { isNomineeShareholder: v, nominatorType: v ? (s.nominatorType || 'individual') : '' })} />
+                </div>
 
                 {isCorp && (
-                  <div className="mt-3">
+                  <div className="mt-3 rounded-md bg-slate-50 border border-slate-200 p-3">
                     <div className="text-sm font-medium text-slate-600 mb-2">Corporate Shareholder Details</div>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      <Field label="Corp Representative"><input className={inputClass} value={s.corpRepresentative || ''} onChange={e => updateShareholder(i, { corpRepresentative: e.target.value })} /></Field>
-                      <Field label="Corp Rep ID Type"><input className={inputClass} value={s.corpRepIdType || ''} onChange={e => updateShareholder(i, { corpRepIdType: e.target.value })} /></Field>
-                      <Field label="Corp Rep ID No."><input className={inputClass} value={s.corpRepIdNo || ''} onChange={e => updateShareholder(i, { corpRepIdNo: e.target.value })} /></Field>
+                      <Field label="Corp Representative"><input className={inputClass} value={s.corpRepresentative || ''} onChange={e => updateShareholder(si, { corpRepresentative: e.target.value })} /></Field>
+                      <Field label="Corp Rep ID Type"><input className={inputClass} value={s.corpRepIdType || ''} onChange={e => updateShareholder(si, { corpRepIdType: e.target.value })} /></Field>
+                      <Field label="Corp Rep ID No."><input className={inputClass} value={s.corpRepIdNo || ''} onChange={e => updateShareholder(si, { corpRepIdNo: e.target.value })} /></Field>
                     </div>
                     <div className="mt-3">
                       <Field label="Corporate Director Names (one per line — at least one required)">
                         <textarea className={`${inputClass} min-h-[70px]`} value={(s.corporateDirectorNames || []).join('\n')}
-                          onChange={e => updateShareholder(i, { corporateDirectorNames: e.target.value.split('\n') })} />
+                          onChange={e => updateShareholder(si, { corporateDirectorNames: e.target.value.split('\n') })} />
                       </Field>
                     </div>
                   </div>
                 )}
 
                 {s.isNomineeShareholder && (
-                  <div className="mt-3">
+                  <div className="mt-3 rounded-md bg-slate-50 border border-slate-200 p-3">
+                    <div className="text-sm font-medium text-slate-600 mb-2">Nominee Shareholder details</div>
                     <Field label="Nominator Type">
-                      <select className={inputClass} value={s.nominatorType} onChange={e => updateShareholder(i, { nominatorType: e.target.value as PostIncorporateShareholder['nominatorType'] })}>
+                      <select className={inputClass} value={s.nominatorType} onChange={e => updateShareholder(si, { nominatorType: e.target.value as PostIncorporateShareholder['nominatorType'] })}>
                         <option value="individual">Individual</option>
                         <option value="corporate entity">Corporate Entity</option>
                       </select>
                     </Field>
                     {s.nominatorType === 'individual' ? (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-                        <Field label="Nominator Name"><input className={inputClass} value={s.nominatorIndName || ''} onChange={e => updateShareholder(i, { nominatorIndName: e.target.value })} /></Field>
-                        <Field label="Nominator Address"><input className={inputClass} value={s.nominatorIndAddress || ''} onChange={e => updateShareholder(i, { nominatorIndAddress: e.target.value })} /></Field>
-                        <Field label="Nominator Nationality"><input className={inputClass} value={s.nominatorIndNationality || ''} onChange={e => updateShareholder(i, { nominatorIndNationality: e.target.value })} /></Field>
-                        <Field label="Nominator ID Number"><input className={inputClass} value={s.nominatorIndIdentificationNumber || ''} onChange={e => updateShareholder(i, { nominatorIndIdentificationNumber: e.target.value })} /></Field>
-                        <Field label="Nominator Birth Date"><input type="date" className={inputClass} value={s.nominatorIndBirthDate || ''} onChange={e => updateShareholder(i, { nominatorIndBirthDate: e.target.value })} /></Field>
-                        <Field label="Nominator Email"><input className={inputClass} value={s.nominatorIndEmail || ''} onChange={e => updateShareholder(i, { nominatorIndEmail: e.target.value })} /></Field>
-                        <Field label="Nominator Contact No."><input className={inputClass} value={s.nominatorIndContactNumber || ''} onChange={e => updateShareholder(i, { nominatorIndContactNumber: e.target.value })} /></Field>
-                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={s.nominatorIndDateBecameNominator || ''} onChange={e => updateShareholder(i, { nominatorIndDateBecameNominator: e.target.value })} /></Field>
+                        <Field label="Nominator Name"><input className={inputClass} value={s.nominatorIndName || ''} onChange={e => updateShareholder(si, { nominatorIndName: e.target.value })} /></Field>
+                        <Field label="Nominator Address"><input className={inputClass} value={s.nominatorIndAddress || ''} onChange={e => updateShareholder(si, { nominatorIndAddress: e.target.value })} /></Field>
+                        <Field label="Nominator Nationality"><input className={inputClass} value={s.nominatorIndNationality || ''} onChange={e => updateShareholder(si, { nominatorIndNationality: e.target.value })} /></Field>
+                        <Field label="Nominator ID Number"><input className={inputClass} value={s.nominatorIndIdentificationNumber || ''} onChange={e => updateShareholder(si, { nominatorIndIdentificationNumber: e.target.value })} /></Field>
+                        <Field label="Nominator Birth Date"><input type="date" className={inputClass} value={s.nominatorIndBirthDate || ''} onChange={e => updateShareholder(si, { nominatorIndBirthDate: e.target.value })} /></Field>
+                        <Field label="Nominator Email"><input className={inputClass} value={s.nominatorIndEmail || ''} onChange={e => updateShareholder(si, { nominatorIndEmail: e.target.value })} /></Field>
+                        <Field label="Nominator Contact No."><input className={inputClass} value={s.nominatorIndContactNumber || ''} onChange={e => updateShareholder(si, { nominatorIndContactNumber: e.target.value })} /></Field>
+                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={s.nominatorIndDateBecameNominator || ''} onChange={e => updateShareholder(si, { nominatorIndDateBecameNominator: e.target.value })} /></Field>
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
-                        <Field label="Nominator Corp Name"><input className={inputClass} value={s.nominatorCorpName || ''} onChange={e => updateShareholder(i, { nominatorCorpName: e.target.value })} /></Field>
-                        <Field label="Nominator Corp UEN"><input className={inputClass} value={s.nominatorCorpUen || ''} onChange={e => updateShareholder(i, { nominatorCorpUen: e.target.value })} /></Field>
-                        <Field label="Registered Address"><input className={inputClass} value={s.nominatorCorpRegisteredAddress || ''} onChange={e => updateShareholder(i, { nominatorCorpRegisteredAddress: e.target.value })} /></Field>
-                        <Field label="Legal Form"><input className={inputClass} value={s.nominatorCorpLegalForm || ''} onChange={e => updateShareholder(i, { nominatorCorpLegalForm: e.target.value })} /></Field>
-                        <Field label="Corp Representative"><input className={inputClass} value={s.nominatorCorpRepresentative || ''} onChange={e => updateShareholder(i, { nominatorCorpRepresentative: e.target.value })} /></Field>
-                        <Field label="Corp Email"><input className={inputClass} value={s.nominatorCorpEmail || ''} onChange={e => updateShareholder(i, { nominatorCorpEmail: e.target.value })} /></Field>
-                        <Field label="Corp Contact No."><input className={inputClass} value={s.nominatorCorpContactNumber || ''} onChange={e => updateShareholder(i, { nominatorCorpContactNumber: e.target.value })} /></Field>
-                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={s.nominatorCorpDateBecameNominator || ''} onChange={e => updateShareholder(i, { nominatorCorpDateBecameNominator: e.target.value })} /></Field>
+                        <Field label="Nominator Corp Name"><input className={inputClass} value={s.nominatorCorpName || ''} onChange={e => updateShareholder(si, { nominatorCorpName: e.target.value })} /></Field>
+                        <Field label="Nominator Corp UEN"><input className={inputClass} value={s.nominatorCorpUen || ''} onChange={e => updateShareholder(si, { nominatorCorpUen: e.target.value })} /></Field>
+                        <Field label="Registered Address"><input className={inputClass} value={s.nominatorCorpRegisteredAddress || ''} onChange={e => updateShareholder(si, { nominatorCorpRegisteredAddress: e.target.value })} /></Field>
+                        <Field label="Legal Form"><input className={inputClass} value={s.nominatorCorpLegalForm || ''} onChange={e => updateShareholder(si, { nominatorCorpLegalForm: e.target.value })} /></Field>
+                        <Field label="Corp Representative"><input className={inputClass} value={s.nominatorCorpRepresentative || ''} onChange={e => updateShareholder(si, { nominatorCorpRepresentative: e.target.value })} /></Field>
+                        <Field label="Corp Email"><input className={inputClass} value={s.nominatorCorpEmail || ''} onChange={e => updateShareholder(si, { nominatorCorpEmail: e.target.value })} /></Field>
+                        <Field label="Corp Contact No."><input className={inputClass} value={s.nominatorCorpContactNumber || ''} onChange={e => updateShareholder(si, { nominatorCorpContactNumber: e.target.value })} /></Field>
+                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={s.nominatorCorpDateBecameNominator || ''} onChange={e => updateShareholder(si, { nominatorCorpDateBecameNominator: e.target.value })} /></Field>
                       </div>
                     )}
                   </div>
                 )}
               </div>
-            );
-          })}
-        </div>
+            </>
+          );
+        })()}
       </section>
 
       {errors.length > 0 && (
