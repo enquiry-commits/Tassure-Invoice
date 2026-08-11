@@ -71,14 +71,14 @@ function emptyShareholder(): ShareholderRow {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
-      <span className="font-medium text-slate-600">{label}</span>
+      <span className="font-medium text-[13px] text-slate-600">{label}</span>
       {children}
     </label>
   );
 }
 
-const inputClass = 'rounded-md border border-slate-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400';
-const cardClass = 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm';
+const inputClass = 'rounded-md border border-slate-300 px-2.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400';
+const cardClass = 'rounded-xl border border-slate-200 bg-[#fafafa] p-5 shadow-md';
 const sectionTitleClass = 'text-base font-semibold text-slate-800 mb-4';
 // Full-width tab bar matching the reference app's native tab control: the
 // active tab pops forward in white, the inactive tab and the empty filler
