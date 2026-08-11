@@ -21,10 +21,19 @@ type DirectorRow = PostIncorporateDirector & { dateOfAppointment: string };
 type ShareholderRow = PostIncorporateShareholder & { dateOfAppointment: string; phone: string; email: string; isRorc: boolean; nationality: string; dateOfBirth: string };
 type SecretaryRow = { name: string; address: string; identificationType: string; identificationNumber: string; nationality: string; dateOfAppointment: string };
 
+// Tassure's own registered name — the corporate secretarial firm on every
+// Post Incorporate document regardless of client, confirmed against the
+// reference desktop app's own output for a real company (its Secretarial
+// Firm Address there matched the named Secretary's own parsed Bizfile
+// address exactly, since Tassure's appointed secretary staff are based out
+// of Tassure's own office — so the address auto-fills from the parsed
+// Secretary below rather than being a second hardcoded constant).
+const SECRETARY_COMPANY_NAME = 'TASSURE ASIA BIZSERVICES PTE LTD';
+
 function emptyCompany(): PostIncorporateCompany {
   return {
     name: '', uen: '', address: '', regDate: '', chairmanName: '', secretaryName: '',
-    secretaryCompanyName: '', secretaryCompanyAddress: '', currency: 'SGD',
+    secretaryCompanyName: SECRETARY_COMPANY_NAME, secretaryCompanyAddress: '', currency: 'SGD',
     financialYearEndDayMonth: '', needNdService: false,
   };
 }
@@ -149,6 +158,11 @@ export default function PostIncorporatePage() {
         regDate: body.company.regDate || current.regDate,
         address: body.company.address || current.address,
         secretaryName: body.company.secretaryName || current.secretaryName,
+        // Tassure's appointed secretary staff are based out of Tassure's own
+        // office, so the secretarial firm's own address is, in practice, the
+        // named Secretary's own on-file address — confirmed against a real
+        // reference example rather than assumed.
+        secretaryCompanyAddress: body.secretary?.address || current.secretaryCompanyAddress,
       }));
       if (body.extra) {
         setCompanyExtra({
