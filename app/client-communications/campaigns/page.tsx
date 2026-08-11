@@ -21,6 +21,7 @@ import CommsTabs from '@/components/client-communications/CommsTabs';
 import {
   getHelperHealth,
   isHelperOutdated,
+  LATEST_HELPER_VERSION,
   openDraftsInOutlook,
   type DraftLike,
   type DraftOpenResult,
@@ -169,6 +170,14 @@ export default function EmailDraftWorkbenchPage() {
   const [helperOutdated, setHelperOutdated] = useState(false);
   const [helperVersion, setHelperVersion] = useState<string | null>(null);
   const [helperClassicOutlook, setHelperClassicOutlook] = useState<boolean | null>(null);
+  // The inline "Update available" banner (helper-readiness section below)
+  // already existed, but Vincent pointed out it's easy to miss on page
+  // load: "如果没有更新到最新，在进入这个页面的时候要出现一个弹窗提醒更新最新
+  // 的HELPER." Only auto-shown on the initial mount check (see recheckHelper
+  // below), not on every manual "Recheck" click — an explicit re-check
+  // already gives its own visible feedback via the banner, so a second
+  // popup on top of that would just be noise.
+  const [showOutdatedModal, setShowOutdatedModal] = useState(false);
   const [me, setMe] = useState<AuthUser | null>(null);
   const [message, setMessage] = useState<{ tone: 'success' | 'warning' | 'error'; text: string } | null>(null);
   const [commonFiles, setCommonFiles] = useState<File[]>([]);
@@ -184,17 +193,19 @@ export default function EmailDraftWorkbenchPage() {
   const selectedSender = senders.find(s => s.id === senderId) ?? null;
   const typeTemplates = templates.filter(t => t.type === type);
 
-  const recheckHelper = useCallback(() => {
+  const recheckHelper = useCallback((opts?: { announceOutdated?: boolean }) => {
     getHelperHealth().then(health => {
       setHelperAvailable(health !== null);
-      setHelperOutdated(isHelperOutdated(health));
+      const outdated = isHelperOutdated(health);
+      setHelperOutdated(outdated);
       setHelperVersion(health?.version ?? null);
       setHelperClassicOutlook(health?.isClassicOutlook ?? null);
+      if (opts?.announceOutdated && outdated) setShowOutdatedModal(true);
     });
   }, []);
 
   useEffect(() => {
-    recheckHelper();
+    recheckHelper({ announceOutdated: true });
     fetch('/api/auth/me')
       .then(r => r.ok ? r.json() : { user: null })
       .then(j => setMe(j.user ?? null))
@@ -506,6 +517,26 @@ export default function EmailDraftWorkbenchPage() {
 
   return (
     <div>
+      {showOutdatedModal && (
+        <div className="helper-outdated-overlay" onClick={() => setShowOutdatedModal(false)}>
+          <div className="helper-outdated-modal" onClick={e => e.stopPropagation()}>
+            <div className="helper-outdated-modal__icon"><AlertTriangle size={20} /></div>
+            <strong>Outlook Helper update available</strong>
+            <p>
+              This computer is running Helper {helperVersion ? `v${helperVersion}` : ''}, but v{LATEST_HELPER_VERSION} is available.
+              Download and install the update before creating drafts.
+            </p>
+            <div className="helper-outdated-modal__actions">
+              <a href="/downloads/TassureDraftHelper.exe" download className="helper-download">
+                <Download size={14} /> Download update
+              </a>
+              <button type="button" onClick={() => setShowOutdatedModal(false)} className="helper-recheck">
+                Remind me later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Client Communications</div>
       <CommsTabs />
 
@@ -890,6 +921,12 @@ export default function EmailDraftWorkbenchPage() {
         .helper-inline-status>span{width:6px;height:6px;border-radius:50%;background:#cbd5e1}
         .helper-inline-status--ready{color:#15803d}
         .helper-inline-status--ready>span{background:#22c55e}
+        .helper-outdated-overlay{position:fixed;inset:0;background:rgba(15,26,42,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
+        .helper-outdated-modal{background:#fff;border-radius:14px;box-shadow:0 20px 50px rgba(15,26,42,.25);padding:22px;max-width:380px;width:100%;text-align:center}
+        .helper-outdated-modal__icon{width:42px;height:42px;border-radius:50%;background:#fff8e8;color:#9a6700;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
+        .helper-outdated-modal strong{display:block;color:#18324f;font-size:14.5px;margin-bottom:8px}
+        .helper-outdated-modal p{color:#5b7089;font-size:12px;line-height:1.55;margin:0 0 16px}
+        .helper-outdated-modal__actions{display:flex;align-items:center;justify-content:center;gap:8px}
         @media(max-width:900px){
           .helper-readiness{align-items:flex-start;flex-wrap:wrap}
           .helper-readiness__actions{width:100%;padding-left:50px}
