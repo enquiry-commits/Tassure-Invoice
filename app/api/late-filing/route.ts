@@ -66,11 +66,23 @@ export async function GET(req: NextRequest) {
   // 2. Companies master (for UEN + Strike Off status)
   const { data: companies } = await sb
     .from('companies')
-    .select('company_name, registration_no, fye_month');
+    .select('company_name, registration_no, fye_month, is_active, tw_status');
 
   const uenMap = new Map<string, string>();
+  // Vincent: "有一些公司已经是STRIKE OFF了的，或者TERMINATED了的，就不需要出现
+  // 在这个页面了，这个页面只显示还ACTIVE 但是late filling的公司" — this route
+  // re-derives "late" fresh from ar_reminder on every load and never checked
+  // is_active/tw_status at all, so a company that's since been struck off
+  // (its overdue AR cycle just sitting there, never filed, because it's
+  // being wound up instead) kept showing up here forever. Only exclude on a
+  // POSITIVE match — a company not found in `companies` at all keeps
+  // showing (unmatched, not confirmed inactive).
+  const inactiveNames = new Set<string>();
   for (const c of companies ?? []) {
     uenMap.set(c.company_name.toLowerCase(), c.registration_no ?? '');
+    if (c.is_active === false || c.tw_status === 'Striking Off' || c.tw_status === 'Terminated') {
+      inactiveNames.add(c.company_name.toLowerCase());
+    }
   }
 
   // 3. Manual overrides from late_filing_companies table (if exists)
@@ -136,6 +148,7 @@ export async function GET(req: NextRequest) {
   const detected: LateRow[] = [];
 
   for (const [entityName, group] of byEntity) {
+    if (inactiveNames.has(entityName.toLowerCase())) continue;
     const fyeMonth = group.fye_month?.toUpperCase() ?? '';
     const sorted   = [...group.years].sort((a,b) => b.year - a.year);
 
@@ -182,6 +195,7 @@ export async function GET(req: NextRequest) {
 
   // 6. Also include manually-added entries not found in ar_reminder
   for (const m of manualRows ?? []) {
+    if (inactiveNames.has(m.company_name.toLowerCase())) continue;
     const alreadyIn = detected.some(d =>
       d.uen === m.uen || d.company_name.toLowerCase() === m.company_name.toLowerCase()
     );

@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { AlertTriangle, Plus, Trash2, Check, X, RefreshCw, Zap, Calendar, Building2, Clock, ChevronRight } from 'lucide-react';
-import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
+import { AlertTriangle, Plus, Check, X, RefreshCw, Zap, Calendar, Building2, Clock, ChevronRight } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { fmtDate as fmtDateStr, toDisplayDate, toIsoDateValue } from '@/lib/date';
@@ -173,7 +172,6 @@ export default function LateFilingPage() {
   const [editId, setEditId]     = useState<string | 'new' | null>(null);
   const [editForm, setEditForm] = useState<EditState & { financial_year_end?: string; }>({});
   const [saving, setSaving]     = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<LateRow | null>(null);
   const [customRemarks, setCustomRemarks] = useState(false);
   const remarksTaRef = useRef<HTMLTextAreaElement>(null);
   // Auto-grow to fit whatever's already in the field (e.g. a long
@@ -287,23 +285,6 @@ export default function LateFilingPage() {
       }
       cancelEdit(); load();
     } finally { setSaving(false); }
-  }
-
-  function del(row: LateRow) {
-    if (row.source !== 'manual') {
-      alert('Auto-detected companies cannot be deleted. Remove via TeamWork or add a manual override.');
-      return;
-    }
-    setPendingDelete(row);
-  }
-
-  async function confirmDel() {
-    const row = pendingDelete;
-    if (!row) return;
-    setPendingDelete(null);
-    await fetch('/api/late-filing', { method:'DELETE',
-      headers:{'Content-Type':'application/json'}, body: JSON.stringify({ uen: row.uen }) });
-    load();
   }
 
   async function resolve(row: LateRow) {
@@ -580,20 +561,17 @@ export default function LateFilingPage() {
                       </span>
                     </td>
                     <td style={{ whiteSpace:'nowrap' }} onClick={e => e.stopPropagation()}>
-                      {catOf.get(row.id) === 'review' ? (
-                        <button onClick={()=>resolve(row)}
-                          className="system-list-action"
-                          title="Mark as resolved and retain this record">
-                          <Check size={12} />
-                        </button>
-                      ) : (
-                        <button onClick={()=>del(row)}
-                          className={row.source === 'manual' ? 'system-list-action system-list-action--danger' : 'system-list-action'}
-                          style={{ color: row.source === 'manual' ? undefined : '#cbd5e1' }}
-                          title={row.source==='auto'?'Auto-detected — edit remarks instead':'Remove'}>
-                          <Trash2 size={12} />
-                        </button>
-                      )}
+                      {(() => {
+                        const isResolved = catOf.get(row.id) === 'resolved';
+                        return (
+                          <button onClick={()=>resolve(row)}
+                            className="system-list-action"
+                            style={isResolved ? { color: '#15803d', background: '#f0fdf4' } : undefined}
+                            title={isResolved ? 'Already marked resolved — click to re-confirm' : 'Mark as resolved and retain this record'}>
+                            <Check size={12} />
+                          </button>
+                        );
+                      })()}
                     </td>
                   </tr>
                 )
@@ -641,14 +619,6 @@ export default function LateFilingPage() {
           <span style={{ color:'#dc2626', fontWeight:700, fontSize:11 }}>OVERDUE</span> = Next AGM due date has passed
         </div>
       </div>
-
-      {pendingDelete && (
-        <ConfirmDeleteModal
-          label={pendingDelete.company_name}
-          onCancel={() => setPendingDelete(null)}
-          onConfirm={confirmDel}
-        />
-      )}
     </div>
   );
 }
