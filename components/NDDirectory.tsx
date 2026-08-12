@@ -9,6 +9,7 @@ interface Appointment {
   sub_role: string | null;
   appointment_date: string | null;
   cessation_date: string | null;
+  is_company_active: boolean;
 }
 
 interface NDPerson {
@@ -27,7 +28,7 @@ export default function NDDirectory({ persons }: { persons: NDPerson[] }) {
   // whose name contains the query.
   const filtered = query
     ? persons.filter(p => p.appointments.some(a =>
-        a.sub_role === 'Nominee Director' && !a.cessation_date && a.appointment_date &&
+        a.sub_role === 'Nominee Director' && !a.cessation_date && a.appointment_date && a.is_company_active &&
         a.company_name.toLowerCase().includes(query)))
     : persons;
 

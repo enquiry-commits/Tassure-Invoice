@@ -8,6 +8,7 @@ interface Appointment {
   sub_role: string | null;
   appointment_date: string | null;
   cessation_date: string | null;
+  is_company_active: boolean;
 }
 
 interface NDPerson {
@@ -42,7 +43,7 @@ export default function NDPersonCard({ person, query = '' }: { person: NDPerson;
   const q = query.trim().toLowerCase();
 
   const active = person.appointments.filter(
-    a => a.sub_role === 'Nominee Director' && !!a.appointment_date && !a.cessation_date
+    a => a.sub_role === 'Nominee Director' && !!a.appointment_date && !a.cessation_date && a.is_company_active
   );
   // When searching, force the card open and show only the matching companies.
   const isOpen = q ? true : open;

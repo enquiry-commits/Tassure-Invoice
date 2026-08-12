@@ -2,13 +2,14 @@ import NDDirectory from '@/components/NDDirectory';
 import NDSubroleReview, { type NDSubroleReviewItem } from '@/components/NDSubroleReview';
 import MetricCard from '@/components/MetricCard';
 import { createAdminClient } from '@/lib/supabase';
+import { normalize } from '@/lib/company-name';
 import { AlertTriangle, BriefcaseBusiness, UserCheck, Users } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
 async function getData() {
   const supabase = createAdminClient();
-  const [{ data: nds }, { data: appts }, { data: reviewRows }, { data: latestRuns }] = await Promise.all([
+  const [{ data: nds }, { data: appts }, { data: reviewRows }, { data: latestRuns }, { data: companies }] = await Promise.all([
     supabase.from('nominee_directors').select('id, name, member_id').order('name'),
     supabase.from('nd_appointments').select('nd_id, company_name, sub_role, appointment_date, cessation_date'),
     supabase.from('automation_exceptions')
@@ -23,10 +24,26 @@ async function getData() {
       .eq('status', 'success')
       .order('started_at', { ascending: false })
       .limit(1),
+    supabase.from('companies').select('company_name, is_active, client_type'),
   ]);
 
-  const apptsByND = new Map<number, typeof appts>();
-  for (const a of appts ?? []) {
+  // Vincent: ND page counts should match Active Client's "Has Nominee Dir"
+  // count — an appointment TeamWork itself never marked ceased can still
+  // belong to a company that's no longer an active CSS Client (struck off,
+  // or its master_list nd_active flag just hasn't caught up yet due to a
+  // separate name-matching gap in that sync). Checking directly against
+  // companies.is_active/client_type here — the same source of truth Active
+  // Client itself reads — sidesteps that fragile propagation entirely
+  // rather than chasing every place it can drift. Uses the shared fuzzy
+  // normalize() (handles "(F.K.A. ...)"/spacing variants) since nd_appointments
+  // only stores a plain company_name string, no id to join on.
+  const activeCssClientNames = new Set(
+    (companies ?? []).filter(c => c.is_active === true && c.client_type === 'CSS Client').map(c => normalize(c.company_name)),
+  );
+  const taggedAppts = (appts ?? []).map(a => ({ ...a, is_company_active: activeCssClientNames.has(normalize(a.company_name)) }));
+
+  const apptsByND = new Map<number, typeof taggedAppts>();
+  for (const a of taggedAppts) {
     const list = apptsByND.get(a.nd_id) ?? [];
     list.push(a);
     apptsByND.set(a.nd_id, list);
@@ -37,7 +54,8 @@ async function getData() {
     const activeCount = appointments.filter(a =>
       a.sub_role === 'Nominee Director' &&
       !!a.appointment_date &&
-      !a.cessation_date
+      !a.cessation_date &&
+      a.is_company_active
     ).length;
     return { ...nd, appointments, activeCount, totalCount: appointments.length };
   }).sort((a, b) => b.activeCount - a.activeCount);
