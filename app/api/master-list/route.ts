@@ -341,8 +341,15 @@ export async function PATCH(req: NextRequest) {
 
   const supabase = createAdminClient();
   const account = await getRequestAccount(req);
-  const stored = BOOLEAN_FIELDS.has(field) ? !!value : (value || null);
-  const prevStored = BOOLEAN_FIELDS.has(field) ? !!body.previousValue : (body.previousValue || null);
+  // fye is always normalised to the 3-letter abbreviation on save, even for
+  // a manual edit — Vincent: staff typing "JULY" instead of "JUL" shouldn't
+  // leave the column in a different format from every other row just
+  // because it's protected from automated correction; manual_fields.fye
+  // still protects WHICH month a human chose, this only fixes how it's
+  // written. Reuses fyeToAbbr, the same conversion already used to compare
+  // against tw_fye in GET above.
+  const stored = BOOLEAN_FIELDS.has(field) ? !!value : (field === 'fye' ? fyeToAbbr(value || null) : (value || null));
+  const prevStored = BOOLEAN_FIELDS.has(field) ? !!body.previousValue : (field === 'fye' ? fyeToAbbr(body.previousValue || null) : (body.previousValue || null));
   const needsRoc = field === 'acc_pic_override' || field === 'tax_pic_override';
   const cols = field === 'roc_no' ? 'id,roc_no' : `id,roc_no,${field}`;
   const updatedAt = new Date().toISOString();
