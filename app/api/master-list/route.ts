@@ -143,13 +143,23 @@ export async function GET(req: NextRequest) {
   const { data: companies } = await supabase.from('companies').select('company_name, registration_no, fye_month, client_type, internal_code, is_active');
   const twFyeByUen = new Map<string, string>();
   const twUens = new Set<string>();
+  // is_css_client: matched to a CSS Client company that's still active in
+  // TeamWork — this is what "TW CSS Clients" card counts and filters on.
+  // cssClientInactiveByUen: matched to a CSS Client company, but TeamWork
+  // now shows it as inactive (e.g. struck off/terminated there, not yet
+  // moved out of this list) — Vincent: 卡片本身只算active的，但点开要能看到
+  // 不active 的是哪些, so this stays a separate flag rather than folding
+  // into is_css_client.
   const cssClientByUen = new Map<string, boolean>();
+  const cssClientInactiveByUen = new Map<string, boolean>();
   for (const c of companies ?? []) {
     const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
     if (!uen) continue;
     twUens.add(uen);
     if (c.fye_month) twFyeByUen.set(uen, c.fye_month);
-    cssClientByUen.set(uen, c.client_type === 'CSS Client');
+    const isCssClient = c.client_type === 'CSS Client';
+    cssClientByUen.set(uen, isCssClient && c.is_active === true);
+    cssClientInactiveByUen.set(uen, isCssClient && c.is_active !== true);
   }
 
   // Active Client only: pull ACC/TAX PIC from ar_reminder (joined by UEN —
@@ -204,6 +214,7 @@ export async function GET(req: NextRequest) {
       tw_fye: uen ? (twFyeByUen.get(uen) ?? null) : null,
       in_teamwork: uen !== null && twUens.has(uen),
       is_css_client: uen ? (cssClientByUen.get(uen) ?? null) : null,
+      css_client_inactive: uen ? (cssClientInactiveByUen.get(uen) ?? false) : false,
       acc_pic: r.acc_pic_override?.trim() || (uen ? (accByUen.get(uen) ?? null) : null),
       tax_pic: r.tax_pic_override?.trim() || (uen ? (taxByUen.get(uen) ?? null) : null),
       ar_date_of_agm: uen ? (arAgmByUen.get(uen) ?? null) : null,

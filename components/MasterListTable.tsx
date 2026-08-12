@@ -61,7 +61,8 @@ export interface MasterListRow {
   grade: string | null;
   tw_fye?: string | null;      // authoritative FYE month from TeamWork (for cross-check)
   in_teamwork?: boolean;       // whether this row exists in TeamWork at all
-  is_css_client?: boolean | null; // TeamWork client_type === 'CSS Client' (null when not matched to a TeamWork company at all)
+  is_css_client?: boolean | null; // TeamWork client_type === 'CSS Client' AND still active there (null when not matched to a TeamWork company at all)
+  css_client_inactive?: boolean;  // matched to a CSS Client company, but TeamWork now shows it as inactive
   // Set when this row's UEN matches a Change Co Name (name_change) record —
   // a "formerly known as" hint, computed server-side, never on name_change
   // rows themselves (see lib/company-rename.ts).
@@ -120,7 +121,7 @@ function dateMismatch(a: string | null | undefined, b: string | null | undefined
 // tax_pic/nominee_director/secretary columns, not columns of their own —
 // excluded here so they can never be added to a `fields` list by mistake.
 type ColumnField = Exclude<keyof MasterListRow,
-  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to' | 'ar_date_of_agm' | 'ar_filling_date' | 'updated_at' | 'updated_by_name' | 'manual_fields'>;
+  'id' | 'tw_fye' | 'in_teamwork' | 'is_css_client' | 'css_client_inactive' | 'acc_pic_override' | 'tax_pic_override' | 'nd_active' | 'secretary_active' | 'acc_active' | 'tax_active' | 'renamed_from' | 'renamed_to' | 'ar_date_of_agm' | 'ar_filling_date' | 'updated_at' | 'updated_by_name' | 'manual_fields'>;
 
 // Full column set — the default for every Master List page that passes no
 // `fields` prop (Strike Off, Terminated, Change Co Name). A page can pass
@@ -1125,6 +1126,11 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // its own small panel instead of a catFilter card.
   const [missingCssClients, setMissingCssClients] = useState<{ company_name: string; registration_no: string | null; internal_code: string | null }[]>([]);
   const [showMissingPanel, setShowMissingPanel] = useState(false);
+  // Rows already in this list whose matched TeamWork company is a CSS
+  // Client but no longer active there — derived straight from `rows`
+  // (css_client_inactive is computed server-side per row), no extra fetch.
+  const [showInactiveCssPanel, setShowInactiveCssPanel] = useState(false);
+  const inactiveCssClients = useMemo(() => rows.filter(r => r.css_client_inactive), [rows]);
   // TeamWork's own total client count, independent of master_list — see
   // app/api/master-list/route.ts's GET for how it's computed.
   const [twTotalClientCount, setTwTotalClientCount] = useState(0);
@@ -1492,7 +1498,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // ahead of this whole array — see below).
   const catCards: { key: typeof catFilter; label: string; sub: string; color: string; Icon: typeof Building2 }[] = [
     { key: 'all',           label: 'Total Records',   sub: 'in this list',                          color: '#1d3a5c', Icon: Building2 },
-    { key: 'tw_css_client', label: 'TW CSS Clients',  sub: 'synced as CSS Client (Companies page)', color: '#0f766e', Icon: Users },
+    { key: 'tw_css_client', label: 'TW CSS Clients',  sub: 'active CSS Client (Companies page)',    color: '#0f766e', Icon: Users },
     { key: 'non_teamwork',  label: 'Non-TeamWork',    sub: 'not found in TeamWork',                 color: '#b45309', Icon: CloudOff },
     { key: 'fye_mismatch',  label: 'FYE Mismatch',    sub: 'differs from TeamWork',                 color: '#dc2626', Icon: AlertTriangle },
     { key: 'has_nd',        label: 'Has Nominee Dir', sub: 'nominee director on file',              color: '#7c3aed', Icon: UserCheck },
@@ -1540,6 +1546,18 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                   ariaLabel="Show TeamWork CSS clients missing from Active Client"
                 />
               )}
+              {c.key === 'tw_css_client' && listType === 'active_client' && (
+                <MetricCard
+                  onClick={() => setShowInactiveCssPanel(v => !v)}
+                  active={showInactiveCssPanel}
+                  value={inactiveCssClients.length}
+                  label="Inactive in TeamWork"
+                  sub="Matched CSS Client, no longer active"
+                  icon={<AlertTriangle size={16} />}
+                  color="#b45309"
+                  ariaLabel="Show Active Client rows matched to a CSS Client no longer active in TeamWork"
+                />
+              )}
             </Fragment>
           );
         })}
@@ -1575,6 +1593,39 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                     style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '5px 10px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#b45309', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                     <Plus size={11} />Add to Master List
                   </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showInactiveCssPanel && listType === 'active_client' && (
+        <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: 14, marginBottom: 16, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px' }}>
+            <span style={{ width: 34, height: 34, borderRadius: 10, display: 'grid', placeItems: 'center', flexShrink: 0, background: '#fef3c7', color: '#b45309' }}>
+              <AlertTriangle size={16} />
+            </span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#1e293b' }}>Inactive in TeamWork</span>
+                <span style={{ borderRadius: 999, background: '#fff', border: '1px solid #fde68a', color: '#92400e', padding: '3px 9px', fontSize: 10.5, fontWeight: 800 }}>
+                  {inactiveCssClients.length} row{inactiveCssClients.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: '#78716c', marginTop: 3 }}>Still in this list and matched to a CSS Client, but TeamWork now shows that company as no longer active — check if it should move to Strike Off/Terminated.</div>
+            </div>
+          </div>
+          {inactiveCssClients.length === 0 ? (
+            <div style={{ background: '#fff', borderTop: '1px solid #fde68a', padding: '14px 16px', fontSize: 11.5, color: '#94a3b8' }}>None — every matched CSS Client here is still active in TeamWork.</div>
+          ) : (
+            <div style={{ background: '#fff', borderTop: '1px solid #fde68a', maxHeight: 220, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
+              {inactiveCssClients.map(r => (
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 16px', borderBottom: '1px solid #fef3c7', fontSize: 11.5 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <span className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{r.company_name}</span>
+                    <span className="company-registration-text">{r.roc_no ?? '—'}</span>
+                  </div>
                 </div>
               ))}
             </div>
