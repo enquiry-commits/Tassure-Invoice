@@ -291,17 +291,21 @@ async function syncArWorkflow(req: NextRequest) {
       const acRow = activeClientByUen.get(uen);
       if (acRow) {
         let latestAgmHeld: string | null = null;
+        let latestHeldAgmFye: string | null = null;
         let latestArFiled: string | null = null;
         let latestArFiledFye: string | null = null;
-        let nextAgmDue: string | null = null;
+        const unheldAgmCandidates: { fyeDate: string; due: string }[] = [];
         for (const ev of result.data ?? []) {
           const [event, , fyeRaw, , dueRaw, heldRaw, filingRaw] = ev;
           if (event === 'AGM') {
             const held = toIsoDate(parseDmy(heldRaw));
-            if (held && (!latestAgmHeld || held > latestAgmHeld)) latestAgmHeld = held;
-            if (!held) {
+            const fyeDate = toIsoDate(parseDmy(fyeRaw));
+            if (held) {
+              if (!latestAgmHeld || held > latestAgmHeld) latestAgmHeld = held;
+              if (fyeDate && (!latestHeldAgmFye || fyeDate > latestHeldAgmFye)) latestHeldAgmFye = fyeDate;
+            } else {
               const due = toIsoDate(parseDmy(dueRaw));
-              if (due && (!nextAgmDue || due < nextAgmDue)) nextAgmDue = due;
+              if (due && fyeDate) unheldAgmCandidates.push({ fyeDate, due });
             }
           } else if (event === 'AR') {
             const filing = toIsoDate(parseDmy(filingRaw));
@@ -310,6 +314,25 @@ async function syncArWorkflow(req: NextRequest) {
               latestArFiledFye = toIsoDate(parseDmy(fyeRaw));
             }
           }
+        }
+        // Next AGM Due: the earliest still-open cycle — but only among
+        // cycles not already superseded by a later one confirmed held.
+        // TeamWork's own historical data sometimes leaves an OLD AGM's Held
+        // Date blank even though every cycle since has a real held date
+        // (confirmed live: GERITO TECHNOLOGY's 2018 and 2021 AGM rows both
+        // have a blank Held Date despite 2022-2025 all being properly held
+        // — a legacy TeamWork data-entry gap, not a real open item).
+        // Naively taking the global-earliest unheld due date picks up that
+        // ancient gap (reported "next due" 2019 for a company whose AGMs
+        // are current through 2026) instead of the real next cycle. Only
+        // count an unheld cycle if its own FYE date is after the latest
+        // cycle actually confirmed held — Vincent caught this from the
+        // Active Client table: "至少33家是读错的...你读取最上方的日期，不
+        // 是读取最新的."
+        let nextAgmDue: string | null = null;
+        for (const c of unheldAgmCandidates) {
+          if (latestHeldAgmFye && c.fyeDate <= latestHeldAgmFye) continue;
+          if (!nextAgmDue || c.due < nextAgmDue) nextAgmDue = c.due;
         }
         // A field flagged manual in master_list.manual_fields was edited by
         // staff directly on this row — skip it here so this sync never
