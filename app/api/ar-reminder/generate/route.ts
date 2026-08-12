@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
-import { withAutomationRun } from '@/lib/automation-sync';
+import { withAutomationRun, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { getSessionCookie, fetchAgmList, parseDmy, toIsoDate } from '@/lib/teamwork-agm';
 
 /**
@@ -190,6 +190,7 @@ async function generateArRows() {
         try {
           const cookie = await getSessionCookie();
           const catchUpRows: { entity_name: string; company_id: number; uen: string; fye_month: string; fye_year: number; fye_date: string; due_date: string; pic: string | null }[] = [];
+          const skippedCompanies: { id: number; company_name: string; fye_month: string }[] = [];
           let nextIndex = 0;
           const worker = async () => {
             while (nextIndex < neverGenerated.length) {
@@ -233,6 +234,7 @@ async function generateArRows() {
                   });
                 } else {
                   catchUpSkipped++;
+                  skippedCompanies.push({ id: c.id, company_name: c.company_name, fye_month: c.fye_month as string });
                 }
               } catch (e) {
                 catchUpErrors.push(`${c.company_name}: ${e instanceof Error ? e.message : String(e)}`);
@@ -245,6 +247,21 @@ async function generateArRows() {
             if (catchUpInsErr) catchUpErrors.push(catchUpInsErr.message);
             else catchUpInserted = catchUpRows.length;
           }
+          // Surface skipped companies on the automation health dashboard
+          // instead of them silently vanishing — a company with no live row
+          // and no open TeamWork cycle needs a human to check TeamWork
+          // itself (same "flag, don't guess" pattern as teamwork_nd's
+          // missing_nominee_subrole). Auto-resolves once the company either
+          // gets a real open cycle in TeamWork or otherwise gets a live row.
+          await replaceAutomationExceptions('ar_generate', 'catch_up_no_open_cycle', skippedCompanies.map(c => ({
+            key: String(c.id),
+            name: c.company_name,
+            details: {
+              company_id: c.id,
+              fye_month: c.fye_month,
+              reason: 'No ar_reminder row under this fye_month, and TeamWork has no open (unheld/unfiled) AGM/AR cycle to backfill from — check TeamWork directly.',
+            },
+          })));
         } catch (e) {
           catchUpErrors.push(`TeamWork login failed: ${e instanceof Error ? e.message : String(e)}`);
         }

@@ -27,6 +27,13 @@ function parseDmy(s) {
   return new Date(`${m[3]}-${m[2]}-${m[1]}`);
 }
 const iso = d => d ? d.toISOString().slice(0, 10) : null;
+function addMonths(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const day = d.getUTCDate();
+  d.setUTCMonth(d.getUTCMonth() + n);
+  if (d.getUTCDate() !== day) d.setUTCDate(0);
+  return d.toISOString().slice(0, 10);
+}
 
 async function getSessionCookie() {
   const browser = await chromium.launch({ headless: true });
@@ -101,16 +108,21 @@ function fetchAgmList(cookie, companyId) {
     try {
       const result = await fetchAgmList(cookie, internalId);
       const targetYear = m.real_years[0];
-      let fyeDate = null, dueDate = null;
+      let fyeDate = null;
       for (const ev of result.data ?? []) {
-        const [event, yearLabel, fyeRaw, , dueRaw] = ev;
+        const [event, yearLabel, fyeRaw] = ev;
         if ((event === 'AGM' || event === 'AR') && yearLabel === targetYear) {
           const f = iso(parseDmy(fyeRaw));
-          const d = iso(parseDmy(dueRaw));
-          if (f && (!fyeDate || f < fyeDate)) { fyeDate = f; dueDate = d; }
+          if (f && (!fyeDate || f < fyeDate)) fyeDate = f;
         }
       }
-      if (!fyeDate || !dueDate) { fixErrors.push(`${m.entity_name}: could not find real fye/due date for ${targetYear}`); continue; }
+      if (!fyeDate) { fixErrors.push(`${m.entity_name}: could not find real fye date for ${targetYear}`); continue; }
+      // Always FYE+7 (this system's own convention), never the scraped "due
+      // date" column directly — AGM shows FYE+6mo, AR shows FYE+7mo, and
+      // trusting whichever event matched first got all 27 real rows wrong
+      // by a month the first time this script ran. See /generate's
+      // catch-up pass for the same fix applied to the live route.
+      const dueDate = addMonths(fyeDate, 7);
       const { error: updErr } = await sb.from('ar_reminder').update({ fye_year: Number(targetYear), fye_date: fyeDate, due_date: dueDate }).eq('id', m.id);
       if (updErr) { fixErrors.push(`${m.entity_name}: ${updErr.message}`); continue; }
       console.log(`Fixed: ${m.entity_name} -> ${targetYear}, FYE ${fyeDate}, Due ${dueDate}`);
