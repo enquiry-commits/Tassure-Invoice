@@ -354,7 +354,7 @@ export default function LateFilingPage() {
       {/* Stats — total + risk breakdown (click a card to filter) */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(6,minmax(0,1fr))', gap:12, marginBottom:24 }}>
         {([
-          { key: 'ALL',      label: 'Total Late Filers', sub: 'all flagged companies',          count: rows.length,   color: '#1e3a5f', Icon: Building2 },
+          { key: 'ALL',      label: 'Total Late Filers', sub: 'outstanding, excludes resolved', count: rows.length - cats.resolved, color: '#1e3a5f', Icon: Building2 },
           { key: 'serious',  label: 'Seriously Overdue', sub: 'over 1 year late / strike-off',   count: cats.serious,  color: '#dc2626', Icon: AlertTriangle },
           { key: 'recent',   label: 'Recently Overdue',  sub: 'past due within the last year',   count: cats.recent,   color: '#ea580c', Icon: Clock },
           { key: 'habitual', label: 'Habitual Risk',     sub: 'chronic late-filer, not yet due', count: cats.habitual, color: '#ca8a04', Icon: RefreshCw },
