@@ -3507,7 +3507,7 @@ function CombinedPage() {
                 padding: '10px 22px', border: 'none', cursor: 'pointer', background: 'transparent',
                 borderBottom: active ? '2px solid #2563eb' : '2px solid transparent',
                 marginBottom: -2,
-                color: active ? '#2563eb' : '#64748b',
+                color: active ? '#203d5f' : '#64748b',
                 fontWeight: active ? 700 : 500,
                 fontSize: 13,
                 display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1,
