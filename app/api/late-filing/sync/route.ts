@@ -225,6 +225,44 @@ async function syncLateFiling(run: AutomationRun) {
       let earliestOverdueDue: Date | null = null;
       let newestAgmDue: Date | null = null;
 
+      // Pass 1: latest FYE month/cycle stats, plus the FYE of the most
+      // recent cycle that's actually been completed (AGM held OR AR filed)
+      // — needed before pass 2 can tell a genuinely-outstanding cycle apart
+      // from an old superseded one (see below). A separate pass rather than
+      // tracking this inline avoids depending on TeamWork's rows already
+      // being newest-first, which pass 2's guard would otherwise silently
+      // rely on.
+      let latestCompletionFyeIso: string | null = null;
+      for (const row of rows) {
+        const [event, , fyeDateRaw, , , heldDateRaw, filingDateRaw] = row;
+        if (!['AGM', 'AR'].includes(event)) continue;
+        const heldDate = parseDmy(heldDateRaw);
+        const filingDate = parseDmy(filingDateRaw);
+        const completionDate = filingDate || heldDate;
+        const fyeDate = parseDmy(fyeDateRaw);
+        const fyeIso = fyeDate ? toIsoDate(fyeDate) : null;
+        if (fyeDate && fyeIso && (!latestFyeIso || fyeIso > latestFyeIso)) {
+          latestFyeIso = fyeIso;
+          latestFyeMonth = MONTH_ABBR[fyeDate.getMonth()];
+        }
+        if (completionDate && fyeIso && (!latestCompletionFyeIso || fyeIso > latestCompletionFyeIso)) {
+          latestCompletionFyeIso = fyeIso;
+        }
+        if (event === 'AGM' && heldDate && (!lastAgmHeld || heldDate > lastAgmHeld)) lastAgmHeld = heldDate;
+        if (event === 'AR' && filingDate && (!lastArFiled || filingDate > lastArFiled)) lastArFiled = filingDate;
+      }
+
+      // Pass 2: outstanding/overdue detection. TeamWork's own historical
+      // data sometimes leaves an OLD row's Held/Filing Date blank even
+      // though every cycle since has a real completion date (confirmed
+      // live: MITRADE GROUP/IUIGA RETAIL/COCOMELON/HAIPA INTERNATIONAL and
+      // others all showed "Overdue 1000+ days" here despite a real AGM/AR
+      // filed in 2026 — a legacy TeamWork data-entry gap, not a real open
+      // item; same root cause as the Active Client "Next AGM Due Date" bug
+      // fixed in ar-reminder/sync-workflow). Naively taking the earliest
+      // due date among ALL incomplete rows picks up that ancient gap and
+      // reports it as massively overdue. Only count a row as outstanding if
+      // its own FYE date is after the latest cycle actually completed.
       for (const row of rows) {
         const [event, , fyeDateRaw, , dueDateRaw, heldDateRaw, filingDateRaw] = row;
         if (!['AGM', 'AR'].includes(event)) continue;
@@ -235,22 +273,12 @@ async function syncLateFiling(run: AutomationRun) {
         const completionDate = filingDate || heldDate;
         const fyeDate = parseDmy(fyeDateRaw);
         const fyeIso = fyeDate ? toIsoDate(fyeDate) : null;
-        if (fyeDate && fyeIso && (!latestFyeIso || fyeIso > latestFyeIso)) {
-          latestFyeIso = fyeIso;
-          latestFyeMonth = MONTH_ABBR[fyeDate.getMonth()];
-        }
 
-        if (event === 'AGM') {
-          if (heldDate && (!lastAgmHeld || heldDate > lastAgmHeld)) lastAgmHeld = heldDate;
-          if (!newestAgmDue || dueDate > newestAgmDue) newestAgmDue = dueDate;
-        }
-        if (event === 'AR' && filingDate && (!lastArFiled || filingDate > lastArFiled)) {
-          lastArFiled = filingDate;
-        }
+        if (event === 'AGM' && (!newestAgmDue || dueDate > newestAgmDue)) newestAgmDue = dueDate;
 
         if (completionDate) {
           gaps.push(Math.round((completionDate.getTime() - dueDate.getTime()) / 86_400_000));
-        } else {
+        } else if (!fyeIso || !latestCompletionFyeIso || fyeIso > latestCompletionFyeIso) {
           if (!earliestOutstandingDue || dueDate < earliestOutstandingDue) earliestOutstandingDue = dueDate;
           if (dueDate < today) {
             const overdueDays = Math.round((today.getTime() - dueDate.getTime()) / 86_400_000);
