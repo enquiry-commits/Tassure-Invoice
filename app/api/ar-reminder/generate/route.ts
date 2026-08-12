@@ -169,21 +169,56 @@ async function generateArRows() {
   const eligibleForCatchUp = (companies ?? []).filter(c => c.fye_month && MONTH_NAMES.includes(c.fye_month) && c.internal_id);
   let catchUpInserted = 0;
   let catchUpSkipped = 0;
+  let catchUpLinked = 0;
   const catchUpErrors: string[] = [];
   if (eligibleForCatchUp.length) {
     const eligibleIds = eligibleForCatchUp.map(c => c.id);
-    const { data: anyExisting, error: anyExistingError } = await supabase
-      .from('ar_reminder')
-      .select('company_id, fye_month, status')
-      .in('company_id', eligibleIds);
+    const eligibleUenMap = new Map<string, (typeof eligibleForCatchUp)[number]>();
+    for (const c of eligibleForCatchUp) {
+      const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
+      if (uen) eligibleUenMap.set(uen, c);
+    }
+    const eligibleUens = [...eligibleUenMap.keys()];
+    // Checked by company_id AND separately by UEN — a legacy row from before
+    // company_id was backfilled onto ar_reminder (bulk imports predating
+    // that column) has company_id=null and is invisible to a company_id-only
+    // check, so this pass would wrongly conclude "never generated" and
+    // create a second, empty row duplicating one that already has real
+    // staff-tracked progress. Confirmed live: 22 companies had exactly this
+    // — e.g. GRAND CHEN RESOURCES had a real row with accounts_status=paid/
+    // ar_status/dpo/pic assignments sitting with company_id=null, and this
+    // pass (before this fix) created a second, blank "March 2026" row next
+    // to it. All 22 were cleaned up by hand (linked the real row's
+    // company_id, deleted the empty duplicate) once found.
+    const [{ data: byId, error: byIdError }, { data: byUen, error: byUenError }] = await Promise.all([
+      supabase.from('ar_reminder').select('id, company_id, uen, fye_month, status').in('company_id', eligibleIds),
+      eligibleUens.length
+        ? supabase.from('ar_reminder').select('id, company_id, uen, fye_month, status').is('company_id', null).in('uen', eligibleUens)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    const anyExistingError = byIdError || byUenError;
     if (anyExistingError) {
       catchUpErrors.push(anyExistingError.message);
     } else {
       const liveMonthsByCompany = new Map<number, Set<string>>();
-      for (const r of anyExisting ?? []) {
+      for (const r of byId ?? []) {
         if (!r.company_id || r.status === 'Excluded') continue;
         if (!liveMonthsByCompany.has(r.company_id)) liveMonthsByCompany.set(r.company_id, new Set());
         liveMonthsByCompany.get(r.company_id)!.add(r.fye_month);
+      }
+      // Orphaned rows matched by UEN: link company_id now (self-heals the
+      // legacy gap instead of leaving it for the next person to rediscover)
+      // and count them as live so catch-up doesn't duplicate them.
+      for (const r of byUen ?? []) {
+        const uen = r.uen ? String(r.uen).trim().toUpperCase() : null;
+        const company = uen ? eligibleUenMap.get(uen) : undefined;
+        if (!company) continue;
+        if (r.status !== 'Excluded') {
+          if (!liveMonthsByCompany.has(company.id)) liveMonthsByCompany.set(company.id, new Set());
+          liveMonthsByCompany.get(company.id)!.add(r.fye_month);
+        }
+        const { error: linkErr } = await supabase.from('ar_reminder').update({ company_id: company.id }).eq('id', r.id);
+        if (!linkErr) catchUpLinked++;
       }
       const neverGenerated = eligibleForCatchUp.filter(c => !liveMonthsByCompany.get(c.id)?.has(c.fye_month as string));
       if (neverGenerated.length) {
@@ -271,7 +306,7 @@ async function generateArRows() {
   totalInserted += catchUpInserted;
   errors.push(...catchUpErrors);
 
-  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, catchUpSkipped, summary, errors };
+  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, catchUpSkipped, catchUpLinked, summary, errors };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }
 
