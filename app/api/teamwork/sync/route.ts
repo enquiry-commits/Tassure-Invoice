@@ -160,7 +160,15 @@ async function syncTeamworkCompanies() {
   let matched = 0, backfilled = 0, skippedAmbiguous = 0;
 
   for (const tw of twList) {
-    const twName = (tw.company_name ?? '').trim();
+    // Uppercased at the source — TeamWork's own API sometimes returns a
+    // company name in mixed case (confirmed: 19 companies, e.g. "Bao
+    // Fortune Shipping (G) Pte. Ltd.", inconsistent with every other
+    // company's ALL-CAPS name everywhere else in this system — Vincent:
+    // "这个大写问题，不要再出现"). Only affects brand-new company inserts
+    // below (existing rows' company_name is deliberately never touched
+    // here, see this file's own docstring), so this can't clobber a
+    // manual typo fix on an existing row.
+    const twName = (tw.company_name ?? '').trim().toUpperCase();
     let row = byInternal.get(tw.company_id) ?? null;
 
     if (!row && twName) {
