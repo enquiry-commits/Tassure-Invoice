@@ -147,15 +147,25 @@ async function generateArRows() {
   // 55 eligible companies system-wide with ZERO ar_reminder rows across
   // every fye_year, all created_at between 2026-06-17 and 2026-08-07.
   //
-  // Runs once per company with no ar_reminder row at all (any fye_year, so
-  // it never re-fires for a company that already has history). For each,
-  // fetches its REAL TeamWork AGM/AR event history and only inserts when a
-  // genuinely open cycle is found (an AGM or AR row with no held/filing
-  // date yet — the earliest one, if more than one is open) — using
-  // TeamWork's own year and FYE date for that cycle, never a computed
-  // guess. A company with no open cycle at all (e.g. its only history is
-  // years-old and already completed) is left alone and counted in
-  // `catchUpSkipped` rather than guessing at a fabricated cycle.
+  // Also catches a second, related case: a company whose FYE self-corrected
+  // (sync-workflow excludes the stale-month row when that happens — see
+  // that route's docstring) but whose NEW month had already rolled out of
+  // the forward window by the time the correction landed, so no
+  // replacement row was ever created either. Checking "has ANY row at all"
+  // misses this — the company has a row, it's just Excluded and under the
+  // OLD month. What actually matters is "has a LIVE row under the
+  // company's CURRENT fye_month" (Vincent caught this too: YAN BIN/GOLDHILL
+  // MEMORIAL CENTRE/SFS CARE all had an Excluded row from a past FYE
+  // correction and nothing live since).
+  //
+  // Runs once per company with no live row under its current fye_month. For
+  // each, fetches its REAL TeamWork AGM/AR event history and only inserts
+  // when a genuinely open cycle is found (an AGM or AR row with no
+  // held/filing date yet — the earliest one, if more than one is open) —
+  // using TeamWork's own year and FYE date for that cycle, never a
+  // computed guess. A company with no open cycle at all (e.g. its only
+  // history is years-old and already completed) is left alone and counted
+  // in `catchUpSkipped` rather than guessing at a fabricated cycle.
   const eligibleForCatchUp = (companies ?? []).filter(c => c.fye_month && MONTH_NAMES.includes(c.fye_month) && c.internal_id);
   let catchUpInserted = 0;
   let catchUpSkipped = 0;
@@ -164,13 +174,18 @@ async function generateArRows() {
     const eligibleIds = eligibleForCatchUp.map(c => c.id);
     const { data: anyExisting, error: anyExistingError } = await supabase
       .from('ar_reminder')
-      .select('company_id')
+      .select('company_id, fye_month, status')
       .in('company_id', eligibleIds);
     if (anyExistingError) {
       catchUpErrors.push(anyExistingError.message);
     } else {
-      const hasAnyRow = new Set((anyExisting ?? []).map(r => r.company_id).filter(Boolean));
-      const neverGenerated = eligibleForCatchUp.filter(c => !hasAnyRow.has(c.id));
+      const liveMonthsByCompany = new Map<number, Set<string>>();
+      for (const r of anyExisting ?? []) {
+        if (!r.company_id || r.status === 'Excluded') continue;
+        if (!liveMonthsByCompany.has(r.company_id)) liveMonthsByCompany.set(r.company_id, new Set());
+        liveMonthsByCompany.get(r.company_id)!.add(r.fye_month);
+      }
+      const neverGenerated = eligibleForCatchUp.filter(c => !liveMonthsByCompany.get(c.id)?.has(c.fye_month as string));
       if (neverGenerated.length) {
         try {
           const cookie = await getSessionCookie();
