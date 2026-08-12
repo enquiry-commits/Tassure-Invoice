@@ -822,7 +822,11 @@ function LateFilingBadge({ remarks }: { remarks: string | null | undefined }) {
 function DueBadge({ days, filed }: { days: number | null; filed: boolean }) {
   if (filed) return <BillingStatusPill label="Filed" color="#15803d" background="#fff" border="#dbe3ec" title="The Annual Return for this FYE cycle has already been filed with ACRA — no due date to track." />;
   if (days === null) return <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>;
-  const color = days < 0 ? '#dc2626' : days < 30 ? '#ea580c' : days < 90 ? '#ca8a04' : '#16a34a';
+  // Neutral grey, not urgency-colored — Vincent: match Active Client List's
+  // own Status pill (components/MasterListTable.tsx's list-view status
+  // span, color #64748b) exactly. Same pill shape/background/border as
+  // before, only the color changes.
+  const color = '#64748b';
   const label = days < 0 ? `${Math.abs(days)}d overdue` : days === 0 ? 'Due today' : `${days}d left`;
   const title = days < 0
     ? `The Annual Return filing deadline for this FYE cycle was ${Math.abs(days)} day(s) ago and it has not been filed yet.`
