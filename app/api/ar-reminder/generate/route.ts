@@ -198,20 +198,29 @@ async function generateArRows() {
                 const result = await fetchAgmList(cookie, c.internal_id as string);
                 let openYear: string | null = null;
                 let openFyeDate: string | null = null;
-                let openDueDate: string | null = null;
                 for (const ev of result.data ?? []) {
-                  const [event, yearLabel, fyeRaw, , dueRaw, heldRaw, filingRaw] = ev;
+                  const [event, yearLabel, fyeRaw, , , heldRaw, filingRaw] = ev;
                   if (event !== 'AGM' && event !== 'AR') continue;
                   if (toIsoDate(parseDmy(heldRaw)) || toIsoDate(parseDmy(filingRaw))) continue; // already completed
                   const fyeDate = toIsoDate(parseDmy(fyeRaw));
                   if (!fyeDate) continue;
+                  // Deliberately NOT using this event's own "due date" column —
+                  // AGM due is FYE+6mo, AR due is FYE+7mo, and TeamWork's
+                  // scraped column reflects whichever event this row is, not
+                  // this system's own due_date convention (always FYE+7,
+                  // per this file's own docstring). due_date below is always
+                  // computed from the confirmed real fyeDate instead, so it
+                  // can never inherit the wrong one depending on which event
+                  // (AGM vs AR) happened to be scanned. Caught after an
+                  // earlier one-off fix script (fix-ar-mismatch-years.js)
+                  // used the scraped due date directly and got 27/27 rows
+                  // wrong by exactly one month.
                   if (!openFyeDate || fyeDate < openFyeDate) {
                     openYear = yearLabel;
                     openFyeDate = fyeDate;
-                    openDueDate = toIsoDate(parseDmy(dueRaw));
                   }
                 }
-                if (openYear && openFyeDate && openDueDate) {
+                if (openYear && openFyeDate) {
                   catchUpRows.push({
                     entity_name: c.company_name,
                     company_id: c.id,
@@ -219,7 +228,7 @@ async function generateArRows() {
                     fye_month: c.fye_month as string,
                     fye_year: Number(openYear),
                     fye_date: openFyeDate,
-                    due_date: openDueDate,
+                    due_date: toDateStr(addMonths(new Date(`${openFyeDate}T00:00:00Z`), 7)),
                     pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
                   });
                 } else {
