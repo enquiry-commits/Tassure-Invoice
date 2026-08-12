@@ -88,11 +88,41 @@ function fetchAgmList(cookie, companyId) {
   });
 }
 
+// Matches the two fixes applied to the live routes (app/api/late-filing/
+// sync/route.ts, app/api/ar-reminder/sync-workflow/route.ts) — this
+// standalone script had its own separate copy of the same logic and would
+// reintroduce both bugs if run as-is: (1) latestFyeMonth used to keep the
+// FIRST fyeDate seen, not genuinely the latest; (2) earliestOutstandingDue
+// used to take the earliest due date across ALL incomplete rows, including
+// an old row whose Held/Filing Date is blank only because of a legacy
+// TeamWork data-entry gap, even when later cycles are already completed
+// (confirmed live: MITRADE GROUP showed "Overdue 1686 days" from a blank
+// 2021 record despite filing normally every year since).
 function analyse(rows, today) {
-  let lastAgmHeld = null, lastArFiled = null, latestFyeMonth = null;
+  let lastAgmHeld = null, lastArFiled = null, latestFyeMonth = null, latestFyeIso = null;
   let earliestOutstandingDue = null, newestAgmDue = null;
   const gaps = [];
   let currentOverdueDays = 0;
+
+  let latestCompletionFyeIso = null;
+  for (const row of rows) {
+    const [event, , fyeDateRaw, , , heldDateRaw, filingDateRaw] = row;
+    if (!['AGM', 'AR'].includes(event)) continue;
+    const heldDate = parseDmy(heldDateRaw);
+    const filingDate = parseDmy(filingDateRaw);
+    const completionDate = filingDate || heldDate;
+    const fyeDate = parseDmy(fyeDateRaw);
+    const fyeIso = fyeDate ? iso(fyeDate) : null;
+    if (fyeDate && fyeIso && (!latestFyeIso || fyeIso > latestFyeIso)) {
+      latestFyeIso = fyeIso;
+      latestFyeMonth = MONTH_ABB_SAFE(fyeDate);
+    }
+    if (completionDate && fyeIso && (!latestCompletionFyeIso || fyeIso > latestCompletionFyeIso)) {
+      latestCompletionFyeIso = fyeIso;
+    }
+    if (event === 'AGM' && heldDate && (!lastAgmHeld || heldDate > lastAgmHeld)) lastAgmHeld = heldDate;
+    if (event === 'AR' && filingDate && (!lastArFiled || filingDate > lastArFiled)) lastArFiled = filingDate;
+  }
 
   for (const row of rows) {
     const [event, , fyeDateRaw, , dueDateRaw, heldDateRaw, filingDateRaw] = row;
@@ -103,17 +133,13 @@ function analyse(rows, today) {
     const filingDate = parseDmy(filingDateRaw);
     const completionDate = filingDate || heldDate;
     const fyeDate = parseDmy(fyeDateRaw);
-    if (fyeDate && !latestFyeMonth) latestFyeMonth = MONTH_ABB_SAFE(fyeDate);
+    const fyeIso = fyeDate ? iso(fyeDate) : null;
 
-    if (event === 'AGM') {
-      if (heldDate && (!lastAgmHeld || heldDate > lastAgmHeld)) lastAgmHeld = heldDate;
-      if (!newestAgmDue || dueDate > newestAgmDue) newestAgmDue = dueDate;
-    }
-    if (event === 'AR' && filingDate && (!lastArFiled || filingDate > lastArFiled)) lastArFiled = filingDate;
+    if (event === 'AGM' && (!newestAgmDue || dueDate > newestAgmDue)) newestAgmDue = dueDate;
 
     if (completionDate) {
       gaps.push(Math.round((completionDate - dueDate) / 86400000));
-    } else {
+    } else if (!fyeIso || !latestCompletionFyeIso || fyeIso > latestCompletionFyeIso) {
       if (!earliestOutstandingDue || dueDate < earliestOutstandingDue) earliestOutstandingDue = dueDate;
       if (dueDate < today) {
         const od = Math.round((today - dueDate) / 86400000);
