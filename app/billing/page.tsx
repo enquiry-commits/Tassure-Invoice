@@ -2194,7 +2194,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     <div>
       {/* Controls — month/year shared with AR Reminder */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: isMobile ? 'wrap' : undefined }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#0f766e', display: 'flex', alignItems: 'center', gap: 5 }}><Calendar size={14} />Invoicing FYE</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#203d5f', display: 'flex', alignItems: 'center', gap: 5 }}><Calendar size={14} />Invoicing FYE</span>
         <select value={month} onChange={e => setMonth(e.target.value)} style={S}>
           {FYE_MONTHS.map(m => <option key={m}>{m}</option>)}
         </select>
