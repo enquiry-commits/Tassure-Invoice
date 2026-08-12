@@ -7,13 +7,22 @@ export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
-async function syncNdAppointments() {
+async function syncNdAppointments(req: NextRequest) {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('nominee_directors')
     .select('id, name, member_id')
     .not('member_id', 'is', null)
     .order('id');
+  // Optional single-person scope (?member_id=3290) — e.g. right after adding
+  // someone new to the roster, staff want that one person's appointments
+  // confirmed immediately rather than waiting for tonight's full run. Safe
+  // to run standalone: replace_nd_appointments below only ever
+  // DELETE...WHERE nd_id = ANY(p_nd_ids) before inserting, so scoping to
+  // one nd_id never touches anyone else's rows.
+  const onlyMemberId = new URL(req.url).searchParams.get('member_id');
+  if (onlyMemberId) query = query.eq('member_id', onlyMemberId);
+  const { data, error } = await query;
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
   const people = (data ?? []) as TeamworkNdPerson[];
@@ -68,5 +77,5 @@ async function syncNdAppointments() {
 }
 
 export async function GET(req: NextRequest) {
-  return withAutomationRun(req, 'teamwork_nd', syncNdAppointments, 10);
+  return withAutomationRun(req, 'teamwork_nd', () => syncNdAppointments(req), 10);
 }
