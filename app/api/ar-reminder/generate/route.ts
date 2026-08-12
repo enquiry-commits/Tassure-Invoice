@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { withAutomationRun } from '@/lib/automation-sync';
+import { getSessionCookie, fetchAgmList, parseDmy, toIsoDate } from '@/lib/teamwork-agm';
 
 /**
  * Auto-generates ar_reminder rows for a rolling 6-month window (current
@@ -18,6 +19,20 @@ import { withAutomationRun } from '@/lib/automation-sync';
  * `catchUpInserted`) for companies whose fye_month had already rolled out
  * of the forward window before they ever appeared in `companies` — the
  * main loop above is forward-only and would otherwise never backfill them.
+ * Deliberately does NOT guess the catch-up year from the calendar (an
+ * earlier version of this pass did — "June" plus "today is past June"
+ * doesn't mean this year's June cycle exists: a recently-incorporated
+ * company's FIRST-EVER cycle can land next year instead, e.g. HUAKO KIDS/
+ * HUAKO PHOTO ALPHA/HUAKO PHOTO BETA/ALPHA Z all have fye_month=June but
+ * their only real TeamWork cycle is June 2027, not 2026 — confirmed live
+ * against TeamWork after Vincent caught 4 of these showing the wrong year.
+ * Same root cause as an even earlier manual one-off
+ * (scripts/generate-ar-reminder-month.js, run 2026-07-07) that inserted 86
+ * "June 2026" rows the same way — 31 of those 141 rows turned out wrong
+ * when audited against real TeamWork data). This pass instead fetches each
+ * never-generated company's real AGM/AR history and only inserts when a
+ * genuinely open (not yet held/filed) cycle is found, using TeamWork's own
+ * year/date for that cycle — never a computed guess.
  *
  * Triggered by a daily Vercel Cron (see vercel.json) and can also be
  * called manually.
@@ -26,6 +41,11 @@ import { withAutomationRun } from '@/lib/automation-sync';
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const EXCLUDED_STATUSES = ['Striking Off', 'Terminated'];
 const WINDOW_MONTHS = 6;
+const CATCH_UP_CONCURRENCY = 10;
+
+export const maxDuration = 300;
+export const dynamic = 'force-dynamic';
+export const preferredRegion = 'sin1';
 
 function fyeDateFor(year: number, monthIndex0: number, preferredDay: number | null) {
   const lastDay = new Date(Date.UTC(year, monthIndex0 + 1, 0)).getUTCDate();
@@ -59,7 +79,7 @@ async function generateArRows() {
 
   const { data: companies, error } = await supabase
     .from('companies')
-    .select('id, company_name, registration_no, fye_month, fye_day, pic, sec_pic, is_active, tw_status')
+    .select('id, company_name, registration_no, fye_month, fye_day, pic, sec_pic, is_active, tw_status, internal_id')
     .eq('is_active', true)
     .not('tw_status', 'in', `(${EXCLUDED_STATUSES.map(s => `"${s}"`).join(',')})`);
 
@@ -122,22 +142,26 @@ async function generateArRows() {
   // company whose fye_month had ALREADY rolled out of the window by the time
   // it first appeared in `companies` (newly onboarded, or newly matched by
   // some other sync) never gets a row — not now, not ever, since the window
-  // never looks backward. Confirmed as a real, ongoing gap, not one-off:
-  // Vincent reported 6 active CSS Clients "missing in June 2026" despite
-  // fye_month=June; checked live and found 55 eligible companies system-wide
-  // with ZERO ar_reminder rows across every fye_year, all created_at between
-  // 2026-06-17 and 2026-08-07 — by which point their own fye_month had
-  // already scrolled past the leading edge of the 6-month forward window.
+  // never looks backward. Confirmed as a real, ongoing gap: Vincent reported
+  // active CSS Clients "missing in June 2026" despite fye_month=June; found
+  // 55 eligible companies system-wide with ZERO ar_reminder rows across
+  // every fye_year, all created_at between 2026-06-17 and 2026-08-07.
+  //
   // Runs once per company with no ar_reminder row at all (any fye_year, so
-  // it never re-fires for a company that already has history) — backfills
-  // the most recent calendar occurrence of its fye_month (this year if that
-  // month isn't after the current month, else last year), i.e. the cycle
-  // that's actually still open right now, not a future one the normal
-  // window will create on its own in due course.
-  const eligibleIds = (companies ?? []).map(c => c.id);
+  // it never re-fires for a company that already has history). For each,
+  // fetches its REAL TeamWork AGM/AR event history and only inserts when a
+  // genuinely open cycle is found (an AGM or AR row with no held/filing
+  // date yet — the earliest one, if more than one is open) — using
+  // TeamWork's own year and FYE date for that cycle, never a computed
+  // guess. A company with no open cycle at all (e.g. its only history is
+  // years-old and already completed) is left alone and counted in
+  // `catchUpSkipped` rather than guessing at a fabricated cycle.
+  const eligibleForCatchUp = (companies ?? []).filter(c => c.fye_month && MONTH_NAMES.includes(c.fye_month) && c.internal_id);
   let catchUpInserted = 0;
+  let catchUpSkipped = 0;
   const catchUpErrors: string[] = [];
-  if (eligibleIds.length) {
+  if (eligibleForCatchUp.length) {
+    const eligibleIds = eligibleForCatchUp.map(c => c.id);
     const { data: anyExisting, error: anyExistingError } = await supabase
       .from('ar_reminder')
       .select('company_id')
@@ -146,34 +170,67 @@ async function generateArRows() {
       catchUpErrors.push(anyExistingError.message);
     } else {
       const hasAnyRow = new Set((anyExisting ?? []).map(r => r.company_id).filter(Boolean));
-      const neverGenerated = (companies ?? []).filter(c => c.fye_month && MONTH_NAMES.includes(c.fye_month) && !hasAnyRow.has(c.id));
-      const catchUpRows = neverGenerated.map(c => {
-        const monthIndex0 = MONTH_NAMES.indexOf(c.fye_month as string);
-        const year = monthIndex0 <= currentMonthIndex ? currentYear : currentYear - 1;
-        const fyeDate = fyeDateFor(year, monthIndex0, c.fye_day);
-        const dueDate = addMonths(fyeDate, 7);
-        return {
-          entity_name: c.company_name,
-          company_id: c.id,
-          uen: c.registration_no || '',
-          fye_month: c.fye_month as string,
-          fye_year: year,
-          fye_date: toDateStr(fyeDate),
-          due_date: toDateStr(dueDate),
-          pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
-        };
-      });
-      if (catchUpRows.length) {
-        const { error: catchUpInsErr } = await supabase.from('ar_reminder').insert(catchUpRows);
-        if (catchUpInsErr) catchUpErrors.push(catchUpInsErr.message);
-        else catchUpInserted = catchUpRows.length;
+      const neverGenerated = eligibleForCatchUp.filter(c => !hasAnyRow.has(c.id));
+      if (neverGenerated.length) {
+        try {
+          const cookie = await getSessionCookie();
+          const catchUpRows: { entity_name: string; company_id: number; uen: string; fye_month: string; fye_year: number; fye_date: string; due_date: string; pic: string | null }[] = [];
+          let nextIndex = 0;
+          const worker = async () => {
+            while (nextIndex < neverGenerated.length) {
+              const c = neverGenerated[nextIndex++];
+              try {
+                const result = await fetchAgmList(cookie, c.internal_id as string);
+                let openYear: string | null = null;
+                let openFyeDate: string | null = null;
+                let openDueDate: string | null = null;
+                for (const ev of result.data ?? []) {
+                  const [event, yearLabel, fyeRaw, , dueRaw, heldRaw, filingRaw] = ev;
+                  if (event !== 'AGM' && event !== 'AR') continue;
+                  if (toIsoDate(parseDmy(heldRaw)) || toIsoDate(parseDmy(filingRaw))) continue; // already completed
+                  const fyeDate = toIsoDate(parseDmy(fyeRaw));
+                  if (!fyeDate) continue;
+                  if (!openFyeDate || fyeDate < openFyeDate) {
+                    openYear = yearLabel;
+                    openFyeDate = fyeDate;
+                    openDueDate = toIsoDate(parseDmy(dueRaw));
+                  }
+                }
+                if (openYear && openFyeDate && openDueDate) {
+                  catchUpRows.push({
+                    entity_name: c.company_name,
+                    company_id: c.id,
+                    uen: c.registration_no || '',
+                    fye_month: c.fye_month as string,
+                    fye_year: Number(openYear),
+                    fye_date: openFyeDate,
+                    due_date: openDueDate,
+                    pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
+                  });
+                } else {
+                  catchUpSkipped++;
+                }
+              } catch (e) {
+                catchUpErrors.push(`${c.company_name}: ${e instanceof Error ? e.message : String(e)}`);
+              }
+            }
+          };
+          await Promise.all(Array.from({ length: Math.min(CATCH_UP_CONCURRENCY, neverGenerated.length) }, worker));
+          if (catchUpRows.length) {
+            const { error: catchUpInsErr } = await supabase.from('ar_reminder').insert(catchUpRows);
+            if (catchUpInsErr) catchUpErrors.push(catchUpInsErr.message);
+            else catchUpInserted = catchUpRows.length;
+          }
+        } catch (e) {
+          catchUpErrors.push(`TeamWork login failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
       }
     }
   }
   totalInserted += catchUpInserted;
   errors.push(...catchUpErrors);
 
-  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, summary, errors };
+  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, catchUpSkipped, summary, errors };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }
 

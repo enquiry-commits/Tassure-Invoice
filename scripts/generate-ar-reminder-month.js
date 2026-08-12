@@ -4,6 +4,18 @@
  * same company filter (is_active=true, tw_status not Striking Off/Terminated),
  * same due_date = FYE + 7 months formula. Only inserts missing rows.
  *
+ * WARNING — DO NOT run this to backfill "missing" companies without first
+ * checking each one's real TeamWork AGM/AR history. A run on 2026-07-07
+ * (June 2026) inserted 86 rows for every fye_month=June company with no
+ * existing row, assuming the current calendar year — 27 of those were
+ * actually wrong (real cycle was June 2027: recently-incorporated companies
+ * whose first-ever cycle hasn't happened yet), and 4 more had no June cycle
+ * anywhere near this year at all in TeamWork. All were corrected/excluded
+ * on 2026-08-12 after Vincent caught 4 of them showing the wrong year. The
+ * production /api/ar-reminder/generate route now does this catch-up
+ * correctly (verifies against real TeamWork data per company instead of
+ * guessing the year) — prefer that over running this script.
+ *
  * Usage: node scripts/generate-ar-reminder-month.js <Month> <Year> [--dry-run]
  */
 const path = require('path');
