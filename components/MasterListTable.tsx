@@ -1863,22 +1863,11 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                           <PicCell name={r.acc_pic} active={!!r.acc_active} onToggleActive={() => toggleActive(r.id, 'acc_active', r.acc_active)} onSaveName={val => saveOverride(r.id, 'acc_pic_override', val, r.acc_pic_override ?? null)} />
                         ) : c.field === 'tax_pic' ? (
                           <PicCell name={r.tax_pic} active={!!r.tax_active} onToggleActive={() => toggleActive(r.id, 'tax_active', r.tax_active)} onSaveName={val => saveOverride(r.id, 'tax_pic_override', val, r.tax_pic_override ?? null)} />
-                        ) : listType === 'active_client' && c.field === 'nominee_director' ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {/* Same treatment as Secretary (Vincent: "ND的打勾也做一样的处理") —
-                                the checkbox is purely a "has a name on file" indicator, always
-                                derived from nominee_director itself, not independently clickable.
-                                Clearing the name (like any other auto-synced text field) is what
-                                hands the row back to automation, so the old nd_active-specific
-                                resumeAutomation button is no longer needed here. */}
-                            <CheckSquare checked={!!r.nd_active} />
-                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
-                          </div>
-                        ) : listType === 'active_client' && c.field === 'secretary' ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <CheckSquare checked={!!r.secretary_active} />
-                            <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
-                          </div>
+                        ) : listType === 'active_client' && (c.field === 'nominee_director' || c.field === 'secretary') ? (
+                          // Table view: name only, no checkbox (Vincent: 表格视图去掉打勾，
+                          // List 视图的打勾保留不变 — see the CheckSquare usage further down
+                          // near the compact ND/SEC pills for that view).
+                          <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                         ) : c.field === 'company_name' && r.renamed_from ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
