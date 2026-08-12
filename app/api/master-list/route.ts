@@ -224,16 +224,18 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  // Active Client only: TeamWork companies confirmed as a genuine CSS Client
-  // (same field the Companies page's "Client (CSS Client)" card uses) that
-  // have no row at ALL anywhere in master_list — independent of the `search`
-  // box, since this checks against the full roster either way. Checks every
-  // list_type, not just active_client: a company TeamWork still tags CSS
-  // Client but that staff have already filed under Strike Off/Terminated
-  // (TeamWork's own status not yet updated to match) is already accounted
-  // for, not a real gap — flagging it here too was a false positive Vincent
-  // caught directly (14 shown, only 5 genuinely missing; the other 9 were
-  // already sitting in Strike Off/Terminated).
+  // Active Client only: TeamWork companies confirmed as a genuine, currently
+  // ACTIVE CSS Client (same field the Companies page's "Client (CSS Client)"
+  // card uses, plus is_active — Vincent: 一家 is_active=false 的公司出现在了
+  // Missing 里，这个逻辑也要限制对方必须是active) that have no row at ALL
+  // anywhere in master_list — independent of the `search` box, since this
+  // checks against the full roster either way. Checks every list_type, not
+  // just active_client: a company TeamWork still tags CSS Client but that
+  // staff have already filed under Strike Off/Terminated (TeamWork's own
+  // status not yet updated to match) is already accounted for, not a real
+  // gap — flagging it here too was a false positive Vincent caught directly
+  // (14 shown, only 5 genuinely missing; the other 9 were already sitting in
+  // Strike Off/Terminated).
   let missingCssClients: { company_name: string; registration_no: string | null; internal_code: string | null }[] = [];
   if (type === 'active_client') {
     // master_list has more rows than PostgREST's default page size (1000),
@@ -253,7 +255,7 @@ export async function GET(req: NextRequest) {
       allMasterListRows.map(r => (r.roc_no ? String(r.roc_no).trim().toUpperCase() : null)).filter((v): v is string => !!v),
     );
     missingCssClients = (companies ?? [])
-      .filter(c => c.client_type === 'CSS Client')
+      .filter(c => c.client_type === 'CSS Client' && c.is_active === true)
       .filter(c => {
         const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
         return !uen || !knownUens.has(uen);
