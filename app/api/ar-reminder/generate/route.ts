@@ -14,6 +14,11 @@ import { withAutomationRun } from '@/lib/automation-sync';
  * existing entries are untouched. Safe to call repeatedly; the window is
  * computed from "today" each time, so it naturally rolls forward.
  *
+ * Also runs a one-time-per-company catch-up pass (see below, near
+ * `catchUpInserted`) for companies whose fye_month had already rolled out
+ * of the forward window before they ever appeared in `companies` — the
+ * main loop above is forward-only and would otherwise never backfill them.
+ *
  * Triggered by a daily Vercel Cron (see vercel.json) and can also be
  * called manually.
  */
@@ -113,7 +118,62 @@ async function generateArRows() {
     totalInserted += toInsert.length;
   }
 
-  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, summary, errors };
+  // Catch-up pass: the loop above only ever looks forward from "today," so a
+  // company whose fye_month had ALREADY rolled out of the window by the time
+  // it first appeared in `companies` (newly onboarded, or newly matched by
+  // some other sync) never gets a row — not now, not ever, since the window
+  // never looks backward. Confirmed as a real, ongoing gap, not one-off:
+  // Vincent reported 6 active CSS Clients "missing in June 2026" despite
+  // fye_month=June; checked live and found 55 eligible companies system-wide
+  // with ZERO ar_reminder rows across every fye_year, all created_at between
+  // 2026-06-17 and 2026-08-07 — by which point their own fye_month had
+  // already scrolled past the leading edge of the 6-month forward window.
+  // Runs once per company with no ar_reminder row at all (any fye_year, so
+  // it never re-fires for a company that already has history) — backfills
+  // the most recent calendar occurrence of its fye_month (this year if that
+  // month isn't after the current month, else last year), i.e. the cycle
+  // that's actually still open right now, not a future one the normal
+  // window will create on its own in due course.
+  const eligibleIds = (companies ?? []).map(c => c.id);
+  let catchUpInserted = 0;
+  const catchUpErrors: string[] = [];
+  if (eligibleIds.length) {
+    const { data: anyExisting, error: anyExistingError } = await supabase
+      .from('ar_reminder')
+      .select('company_id')
+      .in('company_id', eligibleIds);
+    if (anyExistingError) {
+      catchUpErrors.push(anyExistingError.message);
+    } else {
+      const hasAnyRow = new Set((anyExisting ?? []).map(r => r.company_id).filter(Boolean));
+      const neverGenerated = (companies ?? []).filter(c => c.fye_month && MONTH_NAMES.includes(c.fye_month) && !hasAnyRow.has(c.id));
+      const catchUpRows = neverGenerated.map(c => {
+        const monthIndex0 = MONTH_NAMES.indexOf(c.fye_month as string);
+        const year = monthIndex0 <= currentMonthIndex ? currentYear : currentYear - 1;
+        const fyeDate = fyeDateFor(year, monthIndex0, c.fye_day);
+        const dueDate = addMonths(fyeDate, 7);
+        return {
+          entity_name: c.company_name,
+          company_id: c.id,
+          uen: c.registration_no || '',
+          fye_month: c.fye_month as string,
+          fye_year: year,
+          fye_date: toDateStr(fyeDate),
+          due_date: toDateStr(dueDate),
+          pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
+        };
+      });
+      if (catchUpRows.length) {
+        const { error: catchUpInsErr } = await supabase.from('ar_reminder').insert(catchUpRows);
+        if (catchUpInsErr) catchUpErrors.push(catchUpInsErr.message);
+        else catchUpInserted = catchUpRows.length;
+      }
+    }
+  }
+  totalInserted += catchUpInserted;
+  errors.push(...catchUpErrors);
+
+  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, summary, errors };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }
 
