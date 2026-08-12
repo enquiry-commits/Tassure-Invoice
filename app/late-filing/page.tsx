@@ -115,6 +115,10 @@ function DateField({ label, value, onChange }: { label: string; value: string | 
   );
 }
 
+// Vincent: match Billing tab's "Invoiced"/"To invoice" pill palette exactly
+// (app/billing/page.tsx's BillingStatusPill) — green #15803d/#f0fdf4/#bbf7d0
+// for the good state, soft orange #c2410c/#fff7ed/#fed7aa for "needs
+// attention" instead of this page's previous harsher red.
 function SemanticStatusPill({ label, background, color, border }: { label: string; background: string; color: string; border: string }) {
   return (
     <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:999,
@@ -538,7 +542,7 @@ export default function LateFilingPage() {
                       {(() => {
                         const yr = lateYear(row);
                         return yr
-                          ? <SemanticStatusPill label={`FY ${yr}`} background="#fef2f2" color="#dc2626" border="#fecaca" />
+                          ? <SemanticStatusPill label={`FY ${yr}`} background="#fff7ed" color="#c2410c" border="#fed7aa" />
                           : '—';
                       })()}
                     </td>
@@ -562,9 +566,9 @@ export default function LateFilingPage() {
                           const isPast = new Date(row.next_agm_due_date) < new Date();
                           return <SemanticStatusPill
                             label={`${fmtDateStr(row.next_agm_due_date)}${isPast ? ' · OVERDUE' : ''}`}
-                            background={isPast ? '#fef2f2' : '#f0fdf4'}
-                            color={isPast ? '#dc2626' : '#16a34a'}
-                            border={isPast ? '#fecaca' : '#bbf7d0'}
+                            background={isPast ? '#fff7ed' : '#f0fdf4'}
+                            color={isPast ? '#c2410c' : '#15803d'}
+                            border={isPast ? '#fed7aa' : '#bbf7d0'}
                           />;
                         })() : <span style={{ color:'#94a3b8' }}>NA</span>}
                       </span>
