@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo, memo, Fragment } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, memo, Fragment } from 'react';
 import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, Calendar, Building2, Users, UserCheck, CloudOff, History, RefreshCw } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import MetricCard from './MetricCard';
@@ -1281,6 +1281,22 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   // Reminder's PIC columns (app/billing/page.tsx's ARTableView), since the
   // status badge (e.g. "STRUCK OFF") can take up a lot of width per row.
   const [statusOpen, setStatusOpen] = useState(true);
+  // Expanding/collapsing this column changes the table's total scroll
+  // width, which was snapping the view back to the leftmost columns —
+  // Vincent had scrolled right to find a column, opened Status, and lost
+  // that position every time. Explicitly save scrollLeft right before the
+  // toggle and restore it once the new width has rendered.
+  const scrollLeftBeforeToggle = useRef<number | null>(null);
+  const toggleStatusOpen = (next: boolean) => {
+    scrollLeftBeforeToggle.current = outerRef.current?.scrollLeft ?? null;
+    setStatusOpen(next);
+  };
+  useLayoutEffect(() => {
+    if (scrollLeftBeforeToggle.current !== null && outerRef.current) {
+      outerRef.current.scrollLeft = scrollLeftBeforeToggle.current;
+      scrollLeftBeforeToggle.current = null;
+    }
+  }, [statusOpen]);
 
   // ── Add Manual ──────────────────────────────────────────────────────────
   // Change Co Name gets its own Add Manual flow: UEN first (auto-fills the
@@ -1863,13 +1879,13 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                     }}>
                       {isStatus ? (
                         collapsed ? (
-                          <button type="button" onClick={() => setStatusOpen(true)} title={`Expand ${c.label}`}
+                          <button type="button" onClick={() => toggleStatusOpen(true)} title={`Expand ${c.label}`}
                             style={{ width: '100%', padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <ChevronRight size={11} />
                           </button>
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                            <button type="button" onClick={() => setStatusOpen(false)} title={`Collapse ${c.label} to the left`}
+                            <button type="button" onClick={() => toggleStatusOpen(false)} title={`Collapse ${c.label} to the left`}
                               style={{ padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700 }}>
                               <ChevronLeft size={11} /><span>{c.label}</span>
                             </button>

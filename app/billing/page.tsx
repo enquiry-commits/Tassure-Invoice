@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
@@ -2781,6 +2781,22 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
   const dragRef   = useRef({ startX: 0, startScroll: 0 });
   const metaRef   = useRef({ tw: 0, sbW: 0 });
   const [picOpen, setPicOpen] = useState({ sec: true, acc: false, tax: false });
+  // Expanding/collapsing a PIC column changes the table's total scroll
+  // width, which was snapping the view back to the leftmost columns —
+  // same bug and fix as Master List's collapsible Status column
+  // (components/MasterListTable.tsx). Save scrollLeft right before the
+  // toggle and restore it once the new width has rendered.
+  const scrollLeftBeforeToggle = useRef<number | null>(null);
+  const togglePicOpen = (key: keyof typeof picOpen) => {
+    scrollLeftBeforeToggle.current = outerRef.current?.scrollLeft ?? null;
+    setPicOpen(current => ({ ...current, [key]: !current[key] }));
+  };
+  useLayoutEffect(() => {
+    if (scrollLeftBeforeToggle.current !== null && outerRef.current) {
+      outerRef.current.scrollLeft = scrollLeftBeforeToggle.current;
+      scrollLeftBeforeToggle.current = null;
+    }
+  }, [picOpen]);
 
   const picHeader = (key: keyof typeof picOpen, label: string, field: ARColumnKey) => {
     const open = picOpen[key];
@@ -2788,7 +2804,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
       <TH w={open ? 100 : 34} center>
         {open ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, width: '100%' }}>
-            <button type="button" onClick={() => setPicOpen(current => ({ ...current, [key]: !current[key] }))}
+            <button type="button" onClick={() => togglePicOpen(key)}
               title={`Collapse ${label} to the left`}
               style={{ padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700 }}>
               <ChevronLeft size={11} /><span>{label}</span>
@@ -2796,7 +2812,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             <ARColumnFilterMenu field={field} label={label} records={allRecords} selected={columnFilters[field] ?? null} onApply={next => onApplyFilter(field, next)} />
           </div>
         ) : (
-          <button type="button" onClick={() => setPicOpen(current => ({ ...current, [key]: !current[key] }))}
+          <button type="button" onClick={() => togglePicOpen(key)}
             title={`Expand ${label}`}
             style={{ width: '100%', padding: 0, border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, fontSize: 11, fontWeight: 700 }}>
             <ChevronRight size={10} /><span>{label.replace(' PIC', '')}</span>
