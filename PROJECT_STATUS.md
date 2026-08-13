@@ -3611,3 +3611,47 @@ a reviewer can check it before anything is created.
 - Established shared Codex / Claude Code collaboration files.
 - No application source code was changed.
 - Confirmed the repository was clean before creating the handoff files.
+- Fixed "Next AGM Due Date" picking an ancient, already-superseded unheld AGM/AR
+  cycle instead of the genuinely current one (TeamWork's own historical data
+  sometimes leaves an old cycle's Held/Filing Date blank even though every
+  cycle since has a real completion date). Applied a two-pass fix — find the
+  latest genuinely-completed cycle's FYE first, then only consider unheld
+  cycles after it — in `ar-reminder/sync-workflow`, `late-filing/sync`, and the
+  standalone `scripts/backfill-late-filing-details.js`. 181 rows corrected.
+- Removed FYE-mirroring from `sync-workflow` back to `master_list.fye`, and
+  removed `'fye'` from `AUTO_SYNCED_FIELDS`/`LIVE_COMPARISON_FIELDS`/
+  `AUTO_SYNCED_FIELDS_UI`. FYE is now purely staff-editable on Active Client;
+  previously-automated values are preserved untouched. CODE/EMAIL automation
+  is unaffected.
+- Hidden the Email and Tel columns across all Master List pages (data and
+  automation untouched, just removed from the shared `COLUMNS` array and each
+  page's explicit `fields` list) — restorable later if needed.
+- Late Filing page: replaced the per-row delete action with a universal "mark
+  as resolved" checkmark; resolved rows are now excluded from the default/ALL
+  view (not just the "Total Late Filers" count); Struck Off/Terminated
+  companies are excluded from the page entirely regardless of historical
+  ar_reminder data.
+- Fixed AR Reminder/Billing tab's default-cycle selection (`ar-reminder/latest`)
+  picking whichever invoice was most recently created instead of the
+  representative current month; now uses the mode of the last 30 invoices.
+- Fixed Master List "Missing from Active Client" / TW client-count mismatch by
+  requiring `is_active = true` in both counts; added an "Inactive in TeamWork"
+  exception panel.
+- Fixed AR Reminder `generate` catch-up pass missing legacy null-`company_id`
+  rows (caused 22 real duplicate `ar_reminder` rows) and calendar-based
+  year-guessing producing wrong fye_year for newly-incorporated companies; both
+  now verified against live TeamWork data instead of guessed. Also fixed
+  `due_date` being read from TeamWork's own AGM/AR "due" column (off by one
+  month vs. AR) — now always computed as FYE + 7 months.
+- Fixed both Master List and AR Reminder tables losing horizontal scroll
+  position when expanding/collapsing a collapsible column (Status; SEC/ACC/TAX
+  PIC) — scrollLeft is now saved before toggle and restored via
+  `useLayoutEffect`.
+- Added `minHeight: 400` to AR Reminder's table scroll container to match
+  Master List's table.
+- Fixed a CSS bug where table cell text (e.g. dates) could collapse into one
+  character per line when squeezed by an adjacent mismatch warning badge
+  (`table-layout: fixed` + flex child's implicit `min-width: auto`). Fixed via
+  `whiteSpace: nowrap` + `overflow: hidden` + `textOverflow: ellipsis` +
+  `minWidth: 0` on the value span, and `minWidth: 0` on all mismatch-badge
+  wrapper containers.
