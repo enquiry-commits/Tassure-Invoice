@@ -12,6 +12,11 @@ import MasterListTable from '@/components/MasterListTable';
 // view (still available on the other Master List pages that use the full
 // column set, and still stored in the DB — just not shown here).
 //
+// Email/Tel hidden per Vincent: "用户说暂时用不到，但是以后可能会用到" — not
+// deleted, just left out of this array; still in the DB and still shown on
+// other Master List pages. Add them back to this list (after 'invoice_address')
+// to restore.
+//
 // nominee_director/secretary are grouped right after status as a "who's
 // assigned" cluster — MasterListTable renders these with a green/grey
 // checkbox next to the name (Active Client only; every other Master List
@@ -20,7 +25,7 @@ const ACTIVE_CLIENT_FIELDS = [
   'company_name', 'roc_no', 'status',
   'nominee_director', 'secretary',
   'internal_code', 'join_date',
-  'invoice_address', 'email', 'tel',
+  'invoice_address',
   'annual_return', 'fye',
   'last_ar_date', 'last_agm_date', 'last_accounts_date', 'next_agm_due_date',
   'remark', 'referral', 'risk_level', 'grade',
