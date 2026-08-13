@@ -635,14 +635,21 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
   // title-case columns (never dates) instead go through their formatter.
   const shown = FORMATTED_TEXT_FIELDS.has(field) ? displayFieldValue(field, display) : (display ? (toDisplayDate(display) ?? display) : display);
   return (
-    <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
+    <div onClick={() => setEditing(true)} title="Click to edit" style={{ cursor: 'text', minHeight: 22, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px', minWidth: 0 }}
       onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f0f6ff'}
       onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}>
       {AUTO_SYNCED_FIELDS_UI.has(field) && !!shown && !isManual && <AutoFillDot />}
       {shown
+        // whiteSpace/overflow/minWidth: without these, a narrow fixed-width
+        // column (table-layout:fixed) squeezed further by an adjacent
+        // mismatch badge (e.g. last_agm_date/last_ar_date's "AR:" warning,
+        // rendered next to this cell further down) wrapped this text one
+        // character per line instead of truncating — Vincent's screenshot
+        // showed "26 Dec 2025" stacked vertically as single characters.
+        // Ellipsis-truncating is the worst case now, not that.
         ? <span
             className={field === 'company_name' ? 'company-name-text' : field === 'roc_no' ? 'company-registration-text' : undefined}
-            style={field === 'company_name' || field === 'roc_no' ? undefined : { fontSize: 11, color: '#374151' }}
+            style={field === 'company_name' || field === 'roc_no' ? undefined : { fontSize: 11, color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}
           >{shown}</span>
         : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>}
       {statusDot}
@@ -1945,7 +1952,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                           // near the compact ND/SEC pills for that view).
                           <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                         ) : c.field === 'company_name' && r.renamed_from ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3, minWidth: 0 }}>
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                             <span
                               title={`Renamed from "${r.renamed_from}"${r.renamed_to ? ` to "${r.renamed_to}"` : ''}`}
@@ -1956,7 +1963,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                         ) : c.field === 'fye' && r.tw_fye && fyeMonthNum(r.fye) !== null && fyeMonthNum(r.fye) !== fyeMonthNum(r.tw_fye) ? (
                           (c.w ?? 180) <= 80
                             ? <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} compactFyeMismatch={r.tw_fye} />
-                            : <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                            : <div style={{ display: 'flex', alignItems: 'center', gap: 3, minWidth: 0 }}>
                                 <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                                 <span
                                   title={`⚠ FYE mismatch — TeamWork says "${r.tw_fye}", manual entry is "${r.fye}". Please verify which is correct.`}
@@ -1965,7 +1972,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                                 </span>
                               </div>
                         ) : c.field === 'last_agm_date' && dateMismatch(r.last_agm_date, r.ar_date_of_agm) ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3, minWidth: 0 }}>
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                             <span
                               title={`⚠ AGM date mismatch — TeamWork's latest Held Date is "${r.last_agm_date}", AR Reminder's AGM column shows "${r.ar_date_of_agm}". Please verify which is correct.`}
@@ -1974,7 +1981,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                             </span>
                           </div>
                         ) : c.field === 'last_ar_date' && dateMismatch(r.last_ar_date, r.ar_filling_date) ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 3, minWidth: 0 }}>
                             <EditCell id={r.id} field={c.field} value={r[c.field]} onSave={handleSave} isManual={!!r.manual_fields?.[c.field]} />
                             <span
                               title={`⚠ AR filing date mismatch — TeamWork's latest Filing Date is "${r.last_ar_date}", AR Reminder's AR column shows "${r.ar_filling_date}". Please verify which is correct.`}
