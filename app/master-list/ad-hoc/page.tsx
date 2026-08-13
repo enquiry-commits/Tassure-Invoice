@@ -9,7 +9,7 @@ const AD_HOC_FIELDS = [
   'register_of_controllers', 'corporate_tax', 'efiling_authorization',
   'ac', 'audit', 'gst', 'compil_report', 'cpf_submit', 'add_here',
   'invoice_address', 'mailing_address', 'contact_window', 'mailing_list',
-  'email', 'tel', 'inc_date', 'remark', 'referral', 'risk_level',
+  'inc_date', 'remark', 'referral', 'risk_level',
   'incorp_with_us', 'acra_update',
 ] as const;
 

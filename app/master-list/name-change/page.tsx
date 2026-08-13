@@ -8,7 +8,7 @@ const NAME_CHANGE_FIELDS = [
   'update_date', 'join_date', 'sec_agent', 'kyc_year', 'register_of_controllers',
   'corporate_tax', 'efiling_authorization', 'ac', 'audit', 'gst', 'compil_report',
   'cpf_submit', 'add_here', 'invoice_address', 'mailing_address', 'contact_window',
-  'mailing_list', 'email', 'tel', 'inc_date', 'shareholders', 'directors',
+  'mailing_list', 'inc_date', 'shareholders', 'directors',
   'nominee_director', 'secretary', 'annual_return', 'fye', 'last_ar_date',
   'last_agm_date', 'last_accounts_date', 'next_agm_due_date', 'months_from_last_accounts',
   'remark', 'referral', 'risk_level', 'incorp_with_us', 'acra_update', 'mas', 'grade',

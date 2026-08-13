@@ -134,6 +134,15 @@ type ColumnField = Exclude<keyof MasterListRow,
 // "Services" column meant only for Active Client leaked onto Strike Off/
 // Terminated/Change Co Name). Page-specific derived columns belong in
 // EXTRA_COLUMNS below instead, and must be opted into via `fields`.
+//
+// Email/Tel removed entirely per Vincent: "Strike Off/Terminated等也不需要
+// 显示这两列" — not currently used anywhere, but not deleted from the
+// database, just hidden. A page's own `fields` array naming 'email'/'tel'
+// (ad-hoc, name-change) silently drops them too, since `fields` only ever
+// looks columns up from this array — removed those explicit mentions there
+// as well for clarity. To restore everywhere: add both rows back here, and
+// add 'email', 'tel' back to AD_HOC_FIELDS/NAME_CHANGE_FIELDS/
+// ACTIVE_CLIENT_FIELDS (app/master-list/*/page.tsx) wherever still wanted.
 const COLUMNS: { field: ColumnField; label: string; w: number }[] = [
   { field: 'company_name',               label: 'Company Name',    w: 240 },
   { field: 'roc_no',                     label: 'UEN / ROC',       w: 110 },
@@ -156,8 +165,6 @@ const COLUMNS: { field: ColumnField; label: string; w: number }[] = [
   { field: 'mailing_address',            label: 'Mailing Add',     w: 220 },
   { field: 'contact_window',             label: 'Contact Window',  w: 140 },
   { field: 'mailing_list',               label: 'Mailing List',    w: 140 },
-  { field: 'email',                      label: 'Email',           w: 200 },
-  { field: 'tel',                        label: 'Tel',             w: 130 },
   { field: 'inc_date',                   label: 'Inc. Date',       w: 100 },
   { field: 'shareholders',               label: 'Shareholders',    w: 200 },
   { field: 'directors',                  label: 'Directors',       w: 200 },
