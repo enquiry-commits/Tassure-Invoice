@@ -164,12 +164,12 @@ async function syncArWorkflow(req: NextRequest) {
   }
   const { data: activeClientRows } = await supabase
     .from('master_list')
-    .select('id, roc_no, last_agm_date, last_ar_date, last_accounts_date, next_agm_due_date, fye, manual_fields')
+    .select('id, roc_no, last_agm_date, last_ar_date, last_accounts_date, next_agm_due_date, manual_fields')
     .eq('list_type', 'active_client');
   const activeClientByUen = new Map<string, {
     id: number; last_agm_date: string | null; last_ar_date: string | null;
     last_accounts_date: string | null; next_agm_due_date: string | null;
-    fye: string | null; manual_fields: Record<string, boolean> | null;
+    manual_fields: Record<string, boolean> | null;
   }>();
   for (const row of activeClientRows ?? []) {
     if (!row.roc_no) continue;
@@ -234,7 +234,6 @@ async function syncArWorkflow(req: NextRequest) {
   let activeClientUpdated = 0, activeClientErrors = 0;
   let fyeMonthCorrected = 0, fyeMonthErrors = 0;
   let staleArRowsExcluded = 0, staleArRowsErrors = 0;
-  let activeClientFyeUpdated = 0, activeClientFyeErrors = 0;
   const changes: { entity: string; patch: Record<string, string> }[] = [];
 
   // Concurrency 15 — same proven range as late-filing/sync's worker pool
@@ -430,27 +429,15 @@ async function syncArWorkflow(req: NextRequest) {
           }
         }
 
-        // Mirror the same (now self-corrected) FYE month onto Active
-        // Client's own FYE column — per Vincent: "CODE / EMAIL / FYE(FYE
-        // MONTH) 都要做自动化处理". Uses correctMonth if it was just
-        // corrected above, else companyInfo.fye_month if already right —
-        // either way this is always today's true latest FYE, never stale.
-        const fyeAbbr = correctMonth.slice(0, 3).toUpperCase();
-        const uenForFye = uenByInternalId.get(companyId);
-        const acRowForFye = uenForFye ? activeClientByUen.get(uenForFye) : undefined;
-        if (acRowForFye && !acRowForFye.manual_fields?.fye && fyeAbbr !== acRowForFye.fye) {
-          const { error: fyeMirrorErr } = await supabase.from('master_list')
-            .update({ fye: fyeAbbr, updated_at: new Date().toISOString() })
-            .eq('id', acRowForFye.id);
-          if (fyeMirrorErr) activeClientFyeErrors++;
-          else {
-            activeClientFyeUpdated++;
-            await logFieldChange(supabase, {
-              tableName: 'master_list', rowId: acRowForFye.id, field: 'fye',
-              oldValue: acRowForFye.fye, newValue: fyeAbbr, changedBy: 'system:teamwork-agm-history',
-            });
-          }
-        }
+        // Active Client's own FYE column was mirrored here per an earlier
+        // request ("CODE / EMAIL / FYE(FYE MONTH) 都要做自动化处理") — Vincent
+        // later reversed that specifically for FYE: keep it staff-editable,
+        // stop auto-correcting it, but leave whatever automation had already
+        // written in place ("之前自动化的数据保留，只是以后不需要自动化"). CODE
+        // and EMAIL automation are unaffected; only this FYE mirror was
+        // removed. See also AUTO_SYNCED_FIELDS/LIVE_COMPARISON_FIELDS in
+        // app/api/master-list/route.ts and AUTO_SYNCED_FIELDS_UI in
+        // components/MasterListTable.tsx, where 'fye' was removed to match.
       }
     }
 
@@ -499,7 +486,7 @@ async function syncArWorkflow(req: NextRequest) {
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
   const result = {
-    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0 && activeClientFyeErrors === 0 && staleArRowsErrors === 0,
+    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0 && staleArRowsErrors === 0,
     rows: rows.length,
     companies_checked: checked,
     extra_companies_added: extraCompaniesAdded,
@@ -515,8 +502,6 @@ async function syncArWorkflow(req: NextRequest) {
     fye_month_errors: fyeMonthErrors,
     stale_ar_rows_excluded: staleArRowsExcluded,
     stale_ar_rows_errors: staleArRowsErrors,
-    active_client_fye_updated: activeClientFyeUpdated,
-    active_client_fye_errors: activeClientFyeErrors,
     changes: changes.slice(0, 30),
   };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });

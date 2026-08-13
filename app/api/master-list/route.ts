@@ -44,18 +44,20 @@ const BOOLEAN_FIELDS = new Set(['nd_active', 'secretary_active', 'acc_active', '
 const AUTO_SYNCED_FIELDS = new Set([
   'last_agm_date', 'last_ar_date', 'last_accounts_date', 'next_agm_due_date',
   'invoice_address', 'secretary', 'nominee_director', 'nd_active',
-  // Added per Vincent: "CODE / EMAIL / FYE(FYE MONTH) 都要做自动化处理" —
-  // internal_code mirrors companies.internal_code (TeamWork's own client_id,
-  // already synced there), email mirrors companies.best_email/tw_to_emails
-  // (already populated by the existing upcoming-events + contact-person-
-  // report fill-in, see lib/teamwork-contact-report.ts), fye mirrors
-  // companies.fye_month (the same self-corrected value ar-reminder/sync-
-  // workflow already proved reliable today) — all three had a real,
-  // already-computed automation source sitting unused.
-  'internal_code', 'email', 'fye',
+  // Added per Vincent: "CODE / EMAIL ... 都要做自动化处理" — internal_code
+  // mirrors companies.internal_code (TeamWork's own client_id, already
+  // synced there), email mirrors companies.best_email/tw_to_emails (already
+  // populated by the existing upcoming-events + contact-person-report
+  // fill-in, see lib/teamwork-contact-report.ts). FYE was included here too
+  // originally but Vincent later reversed that specifically for FYE — keep
+  // it staff-editable, no more auto-correction (see ar-reminder/sync-
+  // workflow's own removed FYE-mirror block for the full explanation); the
+  // fye column itself and any data already written by that automation are
+  // untouched, it's just an ordinary manual field like most others now.
+  'internal_code', 'email',
 ]);
 
-// CODE/Email/FYE specifically: their automation source is one cheap,
+// CODE/Email specifically: their automation source is one cheap,
 // already-persisted `companies` row lookup (no live TeamWork call needed,
 // unlike the date fields or Secretary), so — per Vincent — a save is only
 // treated as manual when it genuinely DIFFERS from what automation
@@ -65,7 +67,7 @@ const AUTO_SYNCED_FIELDS = new Set([
 // 就先默认为自动化内容，要有小蓝点...但是后续如果有用户手动改了，才判断
 // 为手动内容". The other AUTO_SYNCED_FIELDS keep the simpler stored!==null
 // rule — their automation values aren't cheaply comparable at save time.
-const LIVE_COMPARISON_FIELDS = new Set(['internal_code', 'email', 'fye']);
+const LIVE_COMPARISON_FIELDS = new Set(['internal_code', 'email']);
 const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const MONTH_FULL = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
 function fyeToAbbr(v: string | null): string | null {
@@ -81,14 +83,13 @@ async function computeAutomationValue(
 ): Promise<string | null> {
   if (!rocNo) return null;
   const { data: c } = await supabase.from('companies')
-    .select('internal_code, best_email, tw_to_emails, fye_month')
+    .select('internal_code, best_email, tw_to_emails')
     .eq('registration_no', rocNo).maybeSingle();
   if (!c) return null;
   if (field === 'internal_code') return c.internal_code ?? null;
   if (field === 'email') {
     return (Array.isArray(c.tw_to_emails) && c.tw_to_emails.length ? c.tw_to_emails.join(', ') : null) ?? c.best_email ?? null;
   }
-  if (field === 'fye') return fyeToAbbr(c.fye_month);
   return null;
 }
 
