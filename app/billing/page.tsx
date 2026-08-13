@@ -241,7 +241,7 @@ interface ARRecord {
   pic: string | null; acc_pic: string | null; tax_pic: string | null;
   prepared_date: string | null; sent_date: string | null; received_date: string | null;
   date_of_agm: string | null; agm_held_date: string | null; filling_date: string | null;
-  date_of_agm_manual?: boolean | null; filling_date_manual?: boolean | null;
+  date_of_agm_manual?: boolean | null; filling_date_manual?: boolean | null; reminder_note_manual?: boolean | null;
   ar_status: string | null; xbrl: string | null; software_update: string | null;
   dpo: string | null; ond_ron: string | null; dormant: string | null;
   accounts_status: string | null; fin_stmt_status: string | null;
@@ -2962,7 +2962,12 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                 </TD>
                 <TD stickyLeft={230} lastSticky><span className="company-registration-text">{r.uen || '—'}</span></TD>
-                <TD><EditField id={r.id} field="reminder_note"   value={r.reminder_note}   onSave={onSave} placeholder="—" isDate /></TD>
+                <TD>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <AutoFillDot show={!!r.reminder_note && !r.reminder_note_manual} />
+                    <EditField id={r.id} field="reminder_note" value={r.reminder_note} onSave={onSave} placeholder="—" isDate />
+                  </div>
+                </TD>
                 <TD><EditField id={r.id} field="prepared_date"   value={r.prepared_date}   onSave={onSave} placeholder="—" isDate /></TD>
                 <TD>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -3159,10 +3164,11 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   }, [load, month, year]);
 
   const handleSave = useCallback((id: number, field: string, value: string) => {
-    // date_of_agm/filling_date flip their own "manual" flag alongside the
-    // value — matches the PATCH handler's server-side behaviour so the blue
-    // auto-fill dot updates immediately, without waiting for a refetch.
-    const extra = (field === 'date_of_agm' || field === 'filling_date') ? { [`${field}_manual`]: !!value } : {};
+    // date_of_agm/filling_date/reminder_note flip their own "manual" flag
+    // alongside the value — matches the PATCH handler's server-side
+    // behaviour so the blue auto-fill dot updates immediately, without
+    // waiting for a refetch.
+    const extra = (field === 'date_of_agm' || field === 'filling_date' || field === 'reminder_note') ? { [`${field}_manual`]: !!value } : {};
     const updated = (r: ARRecord) => r.id === id ? recomputeArRecord({ ...r, [field]: value || null, ...extra }) : r;
     setRecords(prev => prev.map(updated));
     setModalRecord(prev => prev && prev.id === id ? recomputeArRecord({ ...prev, [field]: value || null, ...extra }) : prev);

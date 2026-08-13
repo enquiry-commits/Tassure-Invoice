@@ -17,13 +17,16 @@ import { logFieldChange } from '@/lib/audit-log';
  *
  * Field mapping per (company, FYE cycle):
  *   AR  event → filling_date (Filing Date), due_date (Due Date)
- *   AGM event → agm_held_date (Held Date), date_of_agm (Held Date, if empty)
+ *   AGM event → agm_held_date (Held Date), date_of_agm (Held Date, if empty),
+ *               reminder_note (Reminder dates — AGM-only in TeamWork's own
+ *               feed, AR events always leave it blank)
  *
  * Write rules (consistent with the other syncs):
- *   - TeamWork is the source of truth for date_of_agm/filling_date UNTIL a
- *     human edits that cell directly (tracked via date_of_agm_manual/
- *     filling_date_manual, set by the PATCH handler in ../route.ts) — a
- *     manual value is never overwritten by this sync. Clearing the cell
+ *   - TeamWork is the source of truth for date_of_agm/filling_date/
+ *     reminder_note UNTIL a human edits that cell directly (tracked via
+ *     date_of_agm_manual/filling_date_manual/reminder_note_manual, set by
+ *     the PATCH handler in ../route.ts) — a manual value is never
+ *     overwritten by this sync. Clearing the cell
  *     (PATCH with an empty value) unsets the manual flag, handing control
  *     back to automation on the next run.
  *   - agm_held_date (the internal "AGM was held" progress signal, distinct
@@ -130,7 +133,25 @@ interface ArRow {
   fye_date: string | null; due_date: string | null;
   date_of_agm: string | null; agm_held_date: string | null; filling_date: string | null;
   date_of_agm_manual: boolean; filling_date_manual: boolean;
+  reminder_note: string | null; reminder_note_manual: boolean;
   status: string | null; version: number;
+}
+
+// TeamWork's per-company AGM/AR event row carries a "Reminder dates" column
+// (company_agm/agm_list_ajax's 8th field, index 7) only on AGM-type events —
+// AR events always leave it blank (confirmed against a real TeamWork
+// screenshot, Vincent 2026-08-13). Can hold more than one dd/mm/yyyy date
+// (HTML <br>-joined); the Reminder column here is a single value, so the
+// latest one wins, matching how every other "pick the real current value"
+// field in this route already behaves.
+function latestReminderIso(raw: string | undefined): string | null {
+  if (!raw) return null;
+  let latest: string | null = null;
+  for (const part of raw.split(/<br\s*\/?>/i)) {
+    const iso = toIsoDate(parseDmy(part));
+    if (iso && (!latest || iso > latest)) latest = iso;
+  }
+  return latest;
 }
 
 async function syncArWorkflow(req: NextRequest) {
@@ -141,7 +162,7 @@ async function syncArWorkflow(req: NextRequest) {
 
   let q = supabase
     .from('ar_reminder')
-    .select('id, company_id, entity_name, fye_month, fye_year, fye_date, due_date, date_of_agm, agm_held_date, filling_date, date_of_agm_manual, filling_date_manual, status, version')
+    .select('id, company_id, entity_name, fye_month, fye_year, fye_date, due_date, date_of_agm, agm_held_date, filling_date, date_of_agm_manual, filling_date_manual, reminder_note, reminder_note_manual, status, version')
     .or('status.is.null,status.neq.Excluded');
   if (onlyMonth) q = q.eq('fye_month', onlyMonth);
   if (onlyYear)  q = q.eq('fye_year', parseInt(onlyYear, 10));
@@ -460,7 +481,7 @@ async function syncArWorkflow(req: NextRequest) {
       const patch: Record<string, string | null> = {};
 
       for (const ev of result.data ?? []) {
-        const [event, , fyeRaw, , dueRaw, heldRaw, filingRaw] = ev;
+        const [event, , fyeRaw, , dueRaw, heldRaw, filingRaw, reminderRaw] = ev;
         if (!['AGM', 'AR'].includes(event)) continue;
         const evFye = toIsoDate(parseDmy(fyeRaw));
         if (!evFye) continue;
@@ -497,6 +518,16 @@ async function syncArWorkflow(req: NextRequest) {
           } else {
             if (r.agm_held_date !== null) patch.agm_held_date = null;
             if (!r.date_of_agm_manual && r.date_of_agm !== null) patch.date_of_agm = null;
+          }
+
+          // Reminder column — see latestReminderIso() above (Vincent,
+          // 2026-08-13: "AGM-REMINDER DATES... 我要系统自动化去 AR REMINDER
+          // 页面中TABLE的REMINDER列"). Same manual/reconcile-both-ways
+          // treatment as date_of_agm.
+          if (!r.reminder_note_manual) {
+            const reminder = latestReminderIso(reminderRaw);
+            if (reminder && reminder !== r.reminder_note) patch.reminder_note = reminder;
+            else if (!reminder && r.reminder_note !== null) patch.reminder_note = null;
           }
         }
       }
