@@ -557,7 +557,23 @@ const C = {
   amber:  { bg: '#fef3c7', color: '#b45309' },
   purple: { bg: '#ede9fe', color: '#6d28d9' },
   red:    { bg: '#fee2e2', color: '#b91c1c' },
+  grey:   { bg: '#e2e8f0', color: '#475569' },
 };
+
+// Drives ARTableView's whole-row tint (Vincent, 2026-08-13: TERMINATED/STRIKE
+// OFF -> grey row, AR COMPLETED -> green row, a free-typed CUSTOM remark ->
+// row unchanged). See remarksRowState() below.
+const REMARKS_OPTIONS: SelectOption[] = [
+  { label: 'TERMINATED',   ...C.grey  },
+  { label: 'STRIKE OFF',   ...C.amber },
+  { label: 'AR COMPLETED', ...C.green },
+];
+
+function remarksRowState(remarks: string | null | undefined): 'closed' | 'done' | null {
+  if (remarks === 'TERMINATED' || remarks === 'STRIKE OFF') return 'closed';
+  if (remarks === 'AR COMPLETED') return 'done';
+  return null;
+}
 
 const ROND_OPTIONS: SelectOption[] = [
   { label: 'DONE',         ...C.green  },
@@ -579,10 +595,12 @@ const XBRL_OPTIONS: SelectOption[] = [
   { label: 'FULL', ...C.green },
 ];
 
-const SelectField = memo(function SelectField({ id, field, value, onSave, options }: {
+const SelectField = memo(function SelectField({ id, field, value, onSave, options, customLabel = 'Date / custom…', dateHelper = true }: {
   id: number; field: string; value: string | null;
   onSave: (id: number, field: string, val: string) => void;
   options: SelectOption[];
+  customLabel?: string;
+  dateHelper?: boolean;
 }) {
   const [open,   setOpen]   = useState(false);
   const [custom, setCustom] = useState(false);
@@ -698,18 +716,20 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
             onChange={e => setVal(e.target.value)}
             onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(val); }}
             onKeyDown={e => { if (e.key === 'Enter') commit(val); if (e.key === 'Escape') { setVal(value ?? ''); setCustom(false); } }}
-            placeholder="e.g. 03 Apr 2026"
+            placeholder={dateHelper ? 'e.g. 03 Apr 2026' : 'Type your own remarks…'}
             style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
           />
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <button data-cal-btn="1" tabIndex={0}
-              onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
-              style={{ border: '1px solid #c7d2fe', borderRadius: 4, background: '#eef2ff', color: '#4338ca', cursor: 'pointer', padding: '2px 5px', display: 'flex', alignItems: 'center' }}>
-              <Calendar size={12} />
-            </button>
-            <input ref={dateRef} type="date" onChange={handleDatePick}
-              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
-          </div>
+          {dateHelper && (
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <button data-cal-btn="1" tabIndex={0}
+                onMouseDown={e => { e.preventDefault(); dateRef.current?.showPicker?.(); }}
+                style={{ border: '1px solid #c7d2fe', borderRadius: 4, background: '#eef2ff', color: '#4338ca', cursor: 'pointer', padding: '2px 5px', display: 'flex', alignItems: 'center' }}>
+                <Calendar size={12} />
+              </button>
+              <input ref={dateRef} type="date" onChange={handleDatePick}
+                style={{ position: 'absolute', opacity: 0, pointerEvents: 'none', width: 0, height: 0, top: 0, left: 0 }} />
+            </div>
+          )}
         </div>
       ) : (
         <div onClick={() => setOpen(current => { if (!current) editBaselineRef.current = value ?? ''; return !current; })} title="Click to select" style={{ cursor: 'pointer', minHeight: 24, display: 'flex', alignItems: 'center', gap: 4, borderRadius: 3, padding: '1px 3px' }}
@@ -749,7 +769,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
             style={{ padding: '7px 12px', cursor: 'pointer', borderTop: '1px solid #f1f5f9', fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fff'}>
-            <Calendar size={11} style={{ color: '#4338ca' }} /> Date / custom…
+            {dateHelper && <Calendar size={11} style={{ color: '#4338ca' }} />} {customLabel}
           </div>
         </div>
       )}
@@ -2883,11 +2903,11 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
     }}>{children}</th>
   );
 
-  const TD = ({ children, style, finance, stickyLeft, lastSticky }: { children: React.ReactNode; style?: React.CSSProperties; finance?: boolean; stickyLeft?: number; lastSticky?: boolean }) => (
+  const TD = ({ children, style, finance, stickyLeft, lastSticky, tint }: { children: React.ReactNode; style?: React.CSSProperties; finance?: boolean; stickyLeft?: number; lastSticky?: boolean; tint?: string }) => (
     <td style={{
       padding: '3px 6px', verticalAlign: 'top',
       borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9',
-      background: finance ? FIN_CELL : stickyLeft !== undefined ? '#fff' : undefined,
+      background: tint ?? (finance ? FIN_CELL : stickyLeft !== undefined ? '#fff' : undefined),
       wordBreak: 'break-word', overflowWrap: 'break-word',
       position: stickyLeft !== undefined ? 'sticky' : undefined,
       left: stickyLeft !== undefined ? stickyLeft : undefined,
@@ -2951,49 +2971,57 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             const overdue = !filed && r.daysUntilDue !== null && r.daysUntilDue < 0;
             const inProg  = !filed && (r.stages.sentToClient || r.stages.docsReceived || r.stages.agmHeld);
             const accent  = filed ? '#16a34a' : overdue ? '#dc2626' : inProg ? '#f59e0b' : '#e2e8f0';
+            // Whole-row tint from the Remarks selection (Vincent, 2026-08-13:
+            // TERMINATED/STRIKE OFF -> grey row, AR COMPLETED -> green row, a
+            // free-typed custom remark -> row unchanged). Passed to every TD
+            // as `tint` rather than styling the <tr> itself, because
+            // .system-list-row's own background is `!important` in
+            // globals.css and would silently win over a <tr>-level override.
+            const rowState = remarksRowState(r.remarks);
+            const rowTint  = rowState === 'closed' ? '#eef1f5' : rowState === 'done' ? '#f0fdf4' : undefined;
             return (
               <tr key={r.id} className="system-list-row">
-                <TD stickyLeft={0} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
-                <TD stickyLeft={30}>
+                <TD stickyLeft={0} tint={rowTint} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
+                <TD stickyLeft={30} tint={rowTint}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <div className="company-name-text">{r.entity_name}</div>
                     <LateFilingBadge remarks={r.remarks} />
                   </div>
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                 </TD>
-                <TD stickyLeft={230} lastSticky><span className="company-registration-text">{r.uen || '—'}</span></TD>
-                <TD>
+                <TD stickyLeft={230} lastSticky tint={rowTint}><span className="company-registration-text">{r.uen || '—'}</span></TD>
+                <TD tint={rowTint}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                     <AutoFillDot show={!!r.reminder_note && !r.reminder_note_manual} />
                     <EditField id={r.id} field="reminder_note" value={r.reminder_note} onSave={onSave} placeholder="—" isDate />
                   </div>
                 </TD>
-                <TD><EditField id={r.id} field="prepared_date"   value={r.prepared_date}   onSave={onSave} placeholder="—" isDate /></TD>
-                <TD>
+                <TD tint={rowTint}><EditField id={r.id} field="prepared_date"   value={r.prepared_date}   onSave={onSave} placeholder="—" isDate /></TD>
+                <TD tint={rowTint}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                     <AutoFillDot show={!!r.date_of_agm && !r.date_of_agm_manual} />
                     <EditField id={r.id} field="date_of_agm" value={r.date_of_agm} onSave={onSave} placeholder="—" isDate />
                   </div>
                 </TD>
-                <TD><EditField id={r.id} field="sent_date"       value={r.sent_date}       onSave={onSave} placeholder="—" isDate /></TD>
-                <TD><EditField id={r.id} field="received_date"   value={r.received_date}   onSave={onSave} placeholder="—" isDate /></TD>
-                <TD>
+                <TD tint={rowTint}><EditField id={r.id} field="sent_date"       value={r.sent_date}       onSave={onSave} placeholder="—" isDate /></TD>
+                <TD tint={rowTint}><EditField id={r.id} field="received_date"   value={r.received_date}   onSave={onSave} placeholder="—" isDate /></TD>
+                <TD tint={rowTint}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                     <AutoFillDot show={!!r.filling_date && !r.filling_date_manual} />
                     <EditField id={r.id} field="filling_date" value={r.filling_date} onSave={onSave} placeholder="—" isDate />
                   </div>
                 </TD>
-                <TD><SelectField id={r.id} field="xbrl"          value={r.xbrl}            onSave={onSave} options={XBRL_OPTIONS} /></TD>
-                <TD><EditField id={r.id} field="software_update" value={r.software_update} onSave={onSave} placeholder="—" isDate /></TD>
-                <TD><SelectField id={r.id} field="dpo"           value={r.dpo}             onSave={onSave} options={DPO_OPTIONS} /></TD>
-                <TD><SelectField id={r.id} field="ond_ron"       value={r.ond_ron}         onSave={onSave} options={ROND_OPTIONS} /></TD>
-                <TD style={!picOpen.sec ? { padding: 0 } : undefined}>{picOpen.sec && <EditField id={r.id} field="pic"     value={r.pic}     onSave={onSave} placeholder="—" />}</TD>
-                <TD style={!picOpen.acc ? { padding: 0 } : undefined}>{picOpen.acc && <EditField id={r.id} field="acc_pic" value={r.acc_pic} onSave={onSave} placeholder="—" />}</TD>
-                <TD style={!picOpen.tax ? { padding: 0 } : undefined}>{picOpen.tax && <EditField id={r.id} field="tax_pic" value={r.tax_pic} onSave={onSave} placeholder="—" />}</TD>
-                <TD><EditField id={r.id} field="remarks"         value={r.remarks}         onSave={onSave} placeholder="—" /></TD>
-                <TD finance><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
-                <TD finance><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate /></TD>
-                <TD style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                <TD tint={rowTint}><SelectField id={r.id} field="xbrl"          value={r.xbrl}            onSave={onSave} options={XBRL_OPTIONS} /></TD>
+                <TD tint={rowTint}><EditField id={r.id} field="software_update" value={r.software_update} onSave={onSave} placeholder="—" isDate /></TD>
+                <TD tint={rowTint}><SelectField id={r.id} field="dpo"           value={r.dpo}             onSave={onSave} options={DPO_OPTIONS} /></TD>
+                <TD tint={rowTint}><SelectField id={r.id} field="ond_ron"       value={r.ond_ron}         onSave={onSave} options={ROND_OPTIONS} /></TD>
+                <TD tint={rowTint} style={!picOpen.sec ? { padding: 0 } : undefined}>{picOpen.sec && <EditField id={r.id} field="pic"     value={r.pic}     onSave={onSave} placeholder="—" />}</TD>
+                <TD tint={rowTint} style={!picOpen.acc ? { padding: 0 } : undefined}>{picOpen.acc && <EditField id={r.id} field="acc_pic" value={r.acc_pic} onSave={onSave} placeholder="—" />}</TD>
+                <TD tint={rowTint} style={!picOpen.tax ? { padding: 0 } : undefined}>{picOpen.tax && <EditField id={r.id} field="tax_pic" value={r.tax_pic} onSave={onSave} placeholder="—" />}</TD>
+                <TD tint={rowTint}><SelectField id={r.id} field="remarks" value={r.remarks} onSave={onSave} options={REMARKS_OPTIONS} customLabel="Custom…" dateHelper={false} /></TD>
+                <TD finance tint={rowTint}><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
+                <TD finance tint={rowTint}><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate /></TD>
+                <TD tint={rowTint} style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                   <button onClick={() => onOpenDetail(r)} title="Open full details & edit history"
                     style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: 'pointer', display: 'inline-flex' }}>
                     <History size={11} />
