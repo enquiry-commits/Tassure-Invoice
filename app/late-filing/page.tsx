@@ -321,7 +321,11 @@ export default function LateFilingPage() {
   const allYears = [...new Set(rows.map(r => lateYear(r)).filter(Boolean) as number[])].sort((a,b)=>a-b);
   const displayRows = rows
     .filter(r => yearFilter === 'ALL' || String(lateYear(r)) === yearFilter)
-    .filter(r => catFilter === 'ALL' || catOf.get(r.id) === catFilter);
+    // Vincent: "只要是resolved了，就只会出现在resolved，不会出现在total late
+    // flier了" — a resolved company should only show up when the Resolved
+    // card is specifically selected, never mixed into the default/"Total
+    // Late Filers" (catFilter === 'ALL') list.
+    .filter(r => catFilter === 'ALL' ? catOf.get(r.id) !== 'resolved' : catOf.get(r.id) === catFilter);
   // Paginate AFTER the year/category filters — only rendering is capped.
   const { page, setPage, totalPages, pageItems, startIndex, total } =
     usePagination(displayRows, `${yearFilter}|${catFilter}`);
