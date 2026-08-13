@@ -1977,7 +1977,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                             <span
                               title={`⚠ AGM date mismatch — TeamWork's latest Held Date is "${r.last_agm_date}", AR Reminder's AGM column shows "${r.ar_date_of_agm}". Please verify which is correct.`}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: 2, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 4, padding: '0 4px', fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0 }}>
-                              <AlertTriangle size={10} />AR:{String(r.ar_date_of_agm).slice(0, 10)}
+                              <AlertTriangle size={10} />AGM:{String(r.ar_date_of_agm).slice(0, 10)}
                             </span>
                           </div>
                         ) : c.field === 'last_ar_date' && dateMismatch(r.last_ar_date, r.ar_filling_date) ? (
