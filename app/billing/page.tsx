@@ -2891,7 +2891,16 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
 
   return (
     <>
-    <div ref={outerRef} style={{ overflowX: 'hidden', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
+    {/* minHeight keeps this from shrinking to just a few rows' worth of
+        height when the filtered/searched result set is small — a column
+        filter dropdown opened from the header needs room to render below it,
+        and with too few rows the container's own content-driven height was
+        clipping that dropdown via overflowY. Same fix already applied to
+        Master List's table view (components/MasterListTable.tsx) — this is
+        a separate, independent table implementation that never got it
+        (Vincent: "之前你就处理过了...可能你只是处理了 MATER LIST那边 AR
+        REMINDER 这边的TABLE没有处理好"). */}
+    <div ref={outerRef} style={{ overflowX: 'hidden', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)', minHeight: 400, background: '#fff', borderRadius: '0 0 12px 12px', border: '1px solid #e2e8f0', borderTop: 'none' }}>
       <table style={{ borderCollapse: 'separate', borderSpacing: 0, tableLayout: 'fixed', width: 'max-content', fontSize: 11 }}>
         <thead>
           <tr>
