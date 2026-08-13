@@ -28,8 +28,21 @@ import { logFieldChange } from '@/lib/audit-log';
  *     back to automation on the next run.
  *   - agm_held_date (the internal "AGM was held" progress signal, distinct
  *     from the user-facing date_of_agm column) always mirrors TeamWork.
+ *   - Reconciles in BOTH directions, not just fill-forward: when this run
+ *     finds the matching same-cycle TeamWork event, that event's own
+ *     Held/Filing field is authoritative — present writes the date, blank
+ *     clears any previously-synced (non-manual) value back to null. Root
+ *     cause found 2026-08-13 (KANG HUA CONSTRUCTION, reported by Vincent as
+ *     Master List's AGM/AR columns looking "放错了"): a Held/Filing date
+ *     got synced in from a real TeamWork event, TeamWork's own entry was
+ *     later corrected back to blank (a mis-keyed date on the wrong FYE
+ *     cycle), but the old fill-forward-only logic never re-checked — the
+ *     stale value sat in ar_reminder forever with no manual flag to explain
+ *     it, showing a false AGM/AR mismatch badge on Master List AND making
+ *     billing/page.tsx's workflow stages think that cycle's AGM/AR was
+ *     already done. Only clears when a same-cycle event was actually found
+ *     this run (never guesses a clear from a fetch that matched nothing).
  *   - prepared/sent/received dates are NOT in this feed and stay manual.
- *   - Already-filed rows are skipped (filing is terminal).
  *
  * Also corrects companies.fye_month when it's stale. Root cause found
  * 2026-08-05: companies.fye_month is synced from TeamWork's getCompanies
@@ -234,7 +247,7 @@ async function syncArWorkflow(req: NextRequest) {
   let activeClientUpdated = 0, activeClientErrors = 0;
   let fyeMonthCorrected = 0, fyeMonthErrors = 0;
   let staleArRowsExcluded = 0, staleArRowsErrors = 0;
-  const changes: { entity: string; patch: Record<string, string> }[] = [];
+  const changes: { entity: string; patch: Record<string, string | null> }[] = [];
 
   // Concurrency 15 — same proven range as late-filing/sync's worker pool
   // (up to MAX_CONCURRENCY 20) for the exact same fetchAgmList call. This
@@ -444,7 +457,7 @@ async function syncArWorkflow(req: NextRequest) {
     for (const r of companyRows) {
       // The row's cycle key: exact FYE date if present, else month+year.
       const rowFyeIso = r.fye_date ? String(r.fye_date).slice(0, 10) : null;
-      const patch: Record<string, string> = {};
+      const patch: Record<string, string | null> = {};
 
       for (const ev of result.data ?? []) {
         const [event, , fyeRaw, , dueRaw, heldRaw, filingRaw] = ev;
@@ -456,16 +469,34 @@ async function syncArWorkflow(req: NextRequest) {
           : evFye.slice(0, 7) === `${r.fye_year}-${String(new Date(`1 ${r.fye_month} 2000`).getMonth() + 1).padStart(2, '0')}`;
         if (!sameCycle) continue;
 
+        // Reconcile in both directions, not just fill-forward. Root cause
+        // (KANG HUA CONSTRUCTION, found 2026-08-13): a Held/Filing date can
+        // get written here from a real TeamWork event, then TeamWork's own
+        // entry is later corrected back to blank (e.g. staff had mis-keyed
+        // a date onto the wrong FYE cycle) — but the old fill-forward-only
+        // logic below never re-checked, so the stale value sat in our DB
+        // forever with no manual flag to explain it, silently mismatching
+        // Active Client's real values AND making billing/page.tsx think the
+        // AGM/AR for that cycle was already done when it wasn't. Since we
+        // found a matching same-cycle event this run, its own held/filing
+        // field (blank or not) is now authoritative for this pass — clear
+        // a previously-synced value the same way a new one gets written.
         if (event === 'AR') {
           const filing = toIsoDate(parseDmy(filingRaw));
           const due = toIsoDate(parseDmy(dueRaw));
-          if (filing && !r.filling_date_manual && filing !== r.filling_date) patch.filling_date = filing;
+          if (!r.filling_date_manual) {
+            if (filing && filing !== r.filling_date) patch.filling_date = filing;
+            else if (!filing && r.filling_date !== null) patch.filling_date = null;
+          }
           if (due && due !== (r.due_date ? String(r.due_date).slice(0, 10) : null)) patch.due_date = due;
         } else { // AGM
           const held = toIsoDate(parseDmy(heldRaw));
           if (held) {
             if (held !== (r.agm_held_date ? String(r.agm_held_date).slice(0, 10) : null)) patch.agm_held_date = held;
             if (!r.date_of_agm_manual && held !== r.date_of_agm) patch.date_of_agm = held;
+          } else {
+            if (r.agm_held_date !== null) patch.agm_held_date = null;
+            if (!r.date_of_agm_manual && r.date_of_agm !== null) patch.date_of_agm = null;
           }
         }
       }
