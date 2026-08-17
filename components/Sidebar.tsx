@@ -64,7 +64,27 @@ const tree: Node[] = [
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
 const firstLeaf = (n: Node): string => n.href ?? (n.children ? firstLeaf(n.children[0]) : '#');
-const level1 = tree;
+
+function findNode(nodes: Node[], href: string): Node | null {
+  for (const n of nodes) {
+    if (n.href === href) return n;
+    if (n.children) {
+      const found = findNode(n.children, href);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+// An account with `restrictedTo` set (lib/approved-accounts.ts) sees only
+// that one page — a single flat nav item, not the full tree with everything
+// else hidden. Falls back to the full tree if the href can't be found (a
+// stale value shouldn't lock someone out of the whole nav).
+function level1For(restrictedTo: string | null | undefined): Node[] {
+  if (!restrictedTo) return tree;
+  const node = findNode(tree, restrictedTo);
+  return node ? [{ label: node.label, href: node.href, img: '/nav/billing.png' }] : tree;
+}
 
 const RAIL = 'rgba(255,255,255,0.18)';
 const ACTIVE_BG = 'linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.05))';
@@ -192,7 +212,7 @@ function Branch({ nodes, depth, act, expanded, toggle }:
   );
 }
 
-function NavTree({ collapsed }: { collapsed: boolean }) {
+function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) {
   const pathname = usePathname();
   const tab = useSearchParams().get('tab') ?? '';
   const act = (href?: string) => (href ? isActive(href, pathname, tab) : false);
@@ -268,8 +288,9 @@ function NavTree({ collapsed }: { collapsed: boolean }) {
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ restrictedTo }: { restrictedTo?: string | null }) {
   const [collapsed, setCollapsed] = useState(false);
+  const level1 = level1For(restrictedTo);
 
   useEffect(() => {
     if (localStorage.getItem('sidebar-collapsed') === 'true') setCollapsed(true);
@@ -314,7 +335,7 @@ export default function Sidebar() {
             </div>
           ))
         }>
-          <NavTree collapsed={collapsed} />
+          <NavTree collapsed={collapsed} level1={level1} />
         </Suspense>
       </nav>
 

@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
-import { getApprovedAccount } from '@/lib/approved-accounts';
+import { getApprovedAccount, isWithinRestriction } from '@/lib/approved-accounts';
 
 // Intuit cannot carry a Tassure Google session. The webhook route is public at
 // the session layer and authenticates the exact raw request body with Intuit's
@@ -44,7 +44,8 @@ export async function proxy(req: NextRequest) {
     },
   });
   const { data } = await supabase.auth.getUser();
-  const authenticated = !!getApprovedAccount(data.user?.email);
+  const account = getApprovedAccount(data.user?.email);
+  const authenticated = !!account;
 
   if (isPublic) {
     if (path === '/login' && authenticated) return NextResponse.redirect(new URL('/', req.url));
@@ -53,6 +54,13 @@ export async function proxy(req: NextRequest) {
   if (!authenticated) {
     if (isApi) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     return NextResponse.redirect(new URL('/login', req.url));
+  }
+  // Some accounts only see one page (Vincent, 2026-08-17 — an Accounting-team
+  // group confined to AR Reminder). Page navigation only, same as the rest of
+  // this file: API routes stay reachable so the allowed page's own fetches
+  // (and shared ones like /api/auth/me) keep working.
+  if (!isApi && account.restrictedTo && !isWithinRestriction(account.restrictedTo, path, req.nextUrl.searchParams)) {
+    return NextResponse.redirect(new URL(account.restrictedTo, req.url));
   }
   return response;
 }

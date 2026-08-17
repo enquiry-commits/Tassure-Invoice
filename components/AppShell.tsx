@@ -7,7 +7,7 @@ import Sidebar from '@/components/Sidebar';
 import MobileNav from '@/components/MobileNav';
 import AssistantWidget from '@/components/AssistantWidget';
 
-type SessionUser = { email?: string; name: string };
+type SessionUser = { email?: string; name: string; restrictedTo?: string | null };
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -55,7 +55,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <Sidebar />
+        <Sidebar restrictedTo={user?.restrictedTo ?? null} />
         <main style={{ flex: 1, overflowY: 'auto', background: '#f1f5f9' }}><div className="p-6">{children}</div></main>
       </div>
     </>
