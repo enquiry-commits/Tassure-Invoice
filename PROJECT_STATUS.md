@@ -1,6 +1,8 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-08-17 (Widened the expanded SEC/ACC/TAX PIC columns from 100px to 120px — single shared width in `picHeader()`, applies to all three. Collapsed width (34px) unchanged.
+Last updated: 2026-08-17 (Added the rest of the Accounting team to tassure-invoice login access: Lee Jing Fei, Tee Yu Heng, Vernice Chai, Chee Wei En — the same 4 names (plus Jay Tay, added earlier) used to build the ACC PIC dropdown. No `qbLocations` entry, same as Jay Tay. Only added to `lib/approved-accounts.ts` (tassure-invoice) this time, not the separate Proposal Generator project — that was a distinct, explicit ask for Jay Tay specifically, not implied here.
+
+Previous update: 2026-08-17 (Widened the expanded SEC/ACC/TAX PIC columns from 100px to 120px — single shared width in `picHeader()`, applies to all three. Collapsed width (34px) unchanged.
 
 Previous update: 2026-08-17 (PIC dropdown follow-up: "Client" option + plain display. Vincent, after seeing the three PIC dropdowns: no grey chip outline once a value is picked — just plain text next to the dropdown arrow, matching how a free-typed custom value already rendered. Added a `plainDisplay` prop to `SelectField` that skips the chip/date-chip branches for the CLOSED state only (the open picker menu still shows each option as a chip, unaffected — only the selected/closed display changed). Applied to all three PIC dropdowns (table + modal). Also added "Client" to all three option lists — a real pre-existing non-person value already documented in `lib/staff-directory.ts`'s own comment ("Client"/"dormant"/"Waiver"/... deliberately left unmatched), not a new concept. `npx tsc --noEmit` and `npm run build` both clean.
 
