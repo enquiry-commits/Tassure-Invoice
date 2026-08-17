@@ -2850,7 +2850,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
   const picHeader = (key: keyof typeof picOpen, label: string, field: ARColumnKey) => {
     const open = picOpen[key];
     return (
-      <TH w={open ? 100 : 34} center>
+      <TH w={open ? 120 : 34} center>
         {open ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, width: '100%' }}>
             <button type="button" onClick={() => togglePicOpen(key)}
