@@ -49,8 +49,6 @@ export const AR_REMINDER_COLUMNS: ExportColumn[] = [
   { key: 'acc_pic', label: 'ACC PIC', width: 18, format: 'staffName' },
   { key: 'tax_pic', label: 'TAX PIC', width: 18, format: 'staffName' },
   { key: 'remarks', label: 'Remarks', width: 36 },
-  { key: 'status', label: 'Status', width: 16 },
-  { key: 'updated_at', label: 'Last Updated', width: 22, format: 'date' },
 ];
 
 export const ACTIVE_CLIENT_COLUMNS: ExportColumn[] = [
