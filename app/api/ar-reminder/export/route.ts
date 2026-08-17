@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
-import { type DataRow, AR_REMINDER_COLUMNS, makeSheet } from '@/lib/export-columns';
+import { type DataRow, AR_REMINDER_COLUMNS, buildWorkbook } from '@/lib/export-columns';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -34,16 +33,10 @@ export async function GET(req: NextRequest) {
       .order('entity_name');
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const workbook = XLSX.utils.book_new();
-    workbook.Props = {
-      Title: `Tassure AR Reminder — ${month} ${year}`,
-      Subject: 'AR Reminder',
-      Author: 'Tassure',
-      CreatedDate: new Date(),
-    };
-    XLSX.utils.book_append_sheet(workbook, makeSheet((data ?? []) as DataRow[], AR_REMINDER_COLUMNS), 'AR Reminder');
-
-    const file = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx', compression: true });
+    const file = await buildWorkbook(
+      [{ name: 'AR Reminder', rows: (data ?? []) as DataRow[], columns: AR_REMINDER_COLUMNS }],
+      { title: `Tassure AR Reminder — ${month} ${year}`, subject: 'AR Reminder' },
+    );
     return new Response(new Uint8Array(file), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

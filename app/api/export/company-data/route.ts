@@ -1,7 +1,6 @@
-import * as XLSX from 'xlsx';
 import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
-import { type DataRow, ACTIVE_CLIENT_COLUMNS, AR_REMINDER_COLUMNS, makeSheet } from '@/lib/export-columns';
+import { type DataRow, ACTIVE_CLIENT_COLUMNS, AR_REMINDER_COLUMNS, buildWorkbook } from '@/lib/export-columns';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -24,17 +23,13 @@ export async function GET() {
         .order('entity_name', { ascending: true })),
     ]);
 
-    const workbook = XLSX.utils.book_new();
-    workbook.Props = {
-      Title: 'Tassure Latest Company Data',
-      Subject: 'Active Clients and AR Reminder',
-      Author: 'Tassure',
-      CreatedDate: new Date(),
-    };
-    XLSX.utils.book_append_sheet(workbook, makeSheet(activeClients, ACTIVE_CLIENT_COLUMNS), 'Active Clients');
-    XLSX.utils.book_append_sheet(workbook, makeSheet(arReminder, AR_REMINDER_COLUMNS), 'AR Reminder');
-
-    const file = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx', compression: true });
+    const file = await buildWorkbook(
+      [
+        { name: 'Active Clients', rows: activeClients, columns: ACTIVE_CLIENT_COLUMNS },
+        { name: 'AR Reminder', rows: arReminder, columns: AR_REMINDER_COLUMNS },
+      ],
+      { title: 'Tassure Latest Company Data', subject: 'Active Clients and AR Reminder' },
+    );
     const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date());
 
     return new Response(new Uint8Array(file), {
