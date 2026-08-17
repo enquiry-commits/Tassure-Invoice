@@ -16,13 +16,19 @@ const EDITABLE_FIELDS = new Set([
 ]);
 
 const STRICT_DATE_FIELDS = new Set([
-  'reminder_note', 'prepared_date', 'date_of_agm', 'agm_held_date',
+  'reminder_note', 'date_of_agm', 'agm_held_date',
   'sent_date', 'received_date', 'filling_date', 'software_update', 'accounts_status',
 ]);
 const DATABASE_DATE_FIELDS = new Set([
-  'prepared_date', 'date_of_agm', 'agm_held_date', 'sent_date', 'received_date', 'filling_date',
+  'date_of_agm', 'agm_held_date', 'sent_date', 'received_date', 'filling_date',
 ]);
-const DATE_OR_STATUS_FIELDS = new Set(['xbrl']);
+// A date OR a fixed status string, never both validated the same way — a
+// value that parses as a date is normalized to ISO; anything else (XBRL's
+// "NO"/"FULL", prepared_date's "DORMANT") is accepted as-is rather than
+// rejected. prepared_date joined 2026-08-17 once its column became `text`
+// (scripts/alter-ar-reminder-prepared-date-to-text.sql) so "Report Ready"
+// can hold DORMANT/custom text, not just a real date.
+const DATE_OR_STATUS_FIELDS = new Set(['xbrl', 'prepared_date']);
 
 type QbItem = {
   customer_name: string;

@@ -299,7 +299,7 @@ const AR_FIELD_LABELS: Record<string, string> = {
   accounts_status: 'Email Sent', dormant: 'Strike Off', agm_documents: 'ND Pending',
 };
 const AR_DATABASE_DATE_FIELDS = new Set([
-  'prepared_date', 'date_of_agm', 'agm_held_date', 'sent_date', 'received_date', 'filling_date',
+  'date_of_agm', 'agm_held_date', 'sent_date', 'received_date', 'filling_date',
 ]);
 
 function historyValue(value: string | null) {
@@ -610,7 +610,14 @@ const TAX_PIC_OPTIONS: SelectOption[] = [
   'Clarence Saw', 'Quinnie Tan', 'Victoria Yap', 'Client',
 ].map(label => ({ label, ...C.grey }));
 
-const SelectField = memo(function SelectField({ id, field, value, onSave, options, customLabel = 'Date / custom…', dateHelper = true, formatDisplay, plainDisplay = false }: {
+// Report Ready dropdown (Vincent, 2026-08-17): a date -> plain text (no
+// chip, see plainDates on SelectField), DORMANT -> colored, anything else
+// typed -> the existing plain-text fallback every custom value already got.
+const REPORT_READY_OPTIONS: SelectOption[] = [
+  { label: 'DORMANT', ...C.amber },
+];
+
+const SelectField = memo(function SelectField({ id, field, value, onSave, options, customLabel = 'Date / custom…', dateHelper = true, formatDisplay, plainDisplay = false, plainDates = false }: {
   id: number; field: string; value: string | null;
   onSave: (id: number, field: string, val: string) => void;
   options: SelectOption[];
@@ -623,6 +630,11 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
   // 了，不需要灰色外轮廓" — the picker itself still shows chips, only the
   // closed/selected state goes plain.
   plainDisplay?: boolean;
+  // Narrower than plainDisplay: only a date-shaped value goes plain (e.g.
+  // Report Ready's "日期(纯文字显示)") — a matched preset chip (its
+  // "DORMANT(可以带颜色)") still keeps its color. Ignored when plainDisplay
+  // is set, since that already forces everything plain.
+  plainDates?: boolean;
 }) {
   const [open,   setOpen]   = useState(false);
   const [custom, setCustom] = useState(false);
@@ -766,7 +778,9 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
             ? plainDisplay
               ? <span style={{ fontSize: 12, color: '#374151' }}>{display}</span>
               : isDateValue
-                ? <span style={{ background: C.green.bg, color: C.green.color, borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{fmtDate(display)}</span>
+                ? plainDates
+                  ? <span style={{ fontSize: 12, color: '#374151' }}>{fmtDate(display)}</span>
+                  : <span style={{ background: C.green.bg, color: C.green.color, borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{fmtDate(display)}</span>
                 : chip
                   ? <span style={{ background: chip.bg, color: chip.color, borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{display}</span>
                   : <span style={{ fontSize: 12, color: '#374151' }}>{display}</span>
@@ -1053,12 +1067,26 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
         <div>
           <h4 style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Progress</h4>
           {([
-            { label: 'Reminder',      field: 'reminder_note', isDate: true  },
-            { label: 'Report Ready',  field: 'prepared_date', isDate: true  },
-            { label: 'To Client',     field: 'sent_date',     isDate: true  },
-            { label: 'Signed / Rcvd', field: 'received_date', isDate: true  },
-            { label: 'AGM Date',      field: 'date_of_agm',   isDate: true  },
-            { label: 'AR Filed',      field: 'filling_date',  isDate: true  },
+            { label: 'Reminder', field: 'reminder_note', isDate: true },
+          ] as const).map(({ label, field, isDate }) => (
+            <div key={field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+              <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{label}</span>
+              <div style={{ flex: 1 }}>
+                <EditField id={r.id} field={field} value={(r as unknown as Record<string, string | null>)[field]} onSave={onSave} placeholder="—" isDate={isDate} />
+              </div>
+            </div>
+          ))}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>Report Ready</span>
+            <div style={{ flex: 1 }}>
+              <SelectField id={r.id} field="prepared_date" value={r.prepared_date} onSave={onSave} options={REPORT_READY_OPTIONS} plainDates />
+            </div>
+          </div>
+          {([
+            { label: 'To Client',     field: 'sent_date',     isDate: true },
+            { label: 'Signed / Rcvd', field: 'received_date', isDate: true },
+            { label: 'AGM Date',      field: 'date_of_agm',   isDate: true },
+            { label: 'AR Filed',      field: 'filling_date',  isDate: true },
           ] as const).map(({ label, field, isDate }) => (
             <div key={field} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
               <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>{label}</span>
@@ -3025,7 +3053,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                     <EditField id={r.id} field="reminder_note" value={r.reminder_note} onSave={onSave} placeholder="—" isDate />
                   </div>
                 </TD>
-                <TD tint={rowTint}><EditField id={r.id} field="prepared_date"   value={r.prepared_date}   onSave={onSave} placeholder="—" isDate /></TD>
+                <TD tint={rowTint}><SelectField id={r.id} field="prepared_date" value={r.prepared_date} onSave={onSave} options={REPORT_READY_OPTIONS} plainDates /></TD>
                 <TD tint={rowTint}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                     <AutoFillDot show={!!r.date_of_agm && !r.date_of_agm_manual} />
