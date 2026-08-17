@@ -7,6 +7,7 @@ import {
   AlertTriangle, Clock, CheckCircle2, FileText, Calendar,
   ShieldCheck, MapPin, UserCheck, BarChart3, BookOpen, DollarSign,
   Plus, Check, X, Trash2, History, RotateCcw, Filter, Mail, Send, Loader2,
+  FileSpreadsheet, Download,
 } from 'lucide-react';
 import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
@@ -3167,6 +3168,8 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   const [records,     setRecords]     = useState<ARRecord[]>([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState<string | null>(null);
+  const [exporting,   setExporting]   = useState(false);
+  const [exportError, setExportError] = useState('');
   const [modalRecord, setModalRecord] = useState<ARRecord | null>(null);
   const [search,      setSearch]      = useState('');
   const [filter,      setFilter]      = useState('all');
@@ -3188,6 +3191,28 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       setRecords(json.companies ?? []);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Network error'); }
     finally { setLoading(false); }
+  }, [month, year]);
+
+  const exportAr = useCallback(async () => {
+    if (!month || !year) return;
+    setExporting(true); setExportError('');
+    try {
+      const response = await fetch(`/api/ar-reminder/export?month=${month}&year=${year}`);
+      if (!response.ok) throw new Error('Export failed');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `AR-Reminder-${month}-${year}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setExportError('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   }, [month, year]);
 
   useEffect(() => {
@@ -3346,20 +3371,35 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   return (
     <div>
       {/* Controls */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 14, flexWrap: isMobile ? 'wrap' : undefined }}>
-        <select value={month} onChange={e => setMonth(e.target.value)} style={S}>
-          {FYE_MONTHS.map(m => <option key={m}>{m}</option>)}
-        </select>
-        <select value={year} onChange={e => setYear(e.target.value)} style={S}>
-          {YEAR_OPTIONS.map(y => <option key={y}>{y}</option>)}
-        </select>
-        <button onClick={load} disabled={loading} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: '#1d3a5c', color: '#fff', border: 'none', fontWeight: 600 }}>
-          <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
-        <button onClick={() => setShowAddForm(v => !v)} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: '#1d3a5c', color: '#fff', border: 'none', fontWeight: 600 }}>
-          <Plus size={13} />Add Manual
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: isMobile ? 'wrap' : undefined }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <button
+            onClick={exportAr}
+            disabled={exporting}
+            title="Download this month's AR Reminder table as an Excel file"
+            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 750, color: '#fff', background: exporting ? '#769a95' : '#397f78', border: '1px solid rgba(21,94,89,.2)', borderRadius: 9, padding: '8px 12px', cursor: exporting ? 'wait' : 'pointer', boxShadow: '0 5px 14px rgba(57,127,120,.14)' }}
+          >
+            <FileSpreadsheet size={15} />
+            {exporting ? 'Preparing Excel…' : 'Export Excel'}
+            <Download size={13} />
+          </button>
+          {exportError && <span style={{ fontSize: 9.5, color: '#b91c1c' }}>{exportError}</span>}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: isMobile ? 'wrap' : undefined }}>
+          <select value={month} onChange={e => setMonth(e.target.value)} style={S}>
+            {FYE_MONTHS.map(m => <option key={m}>{m}</option>)}
+          </select>
+          <select value={year} onChange={e => setYear(e.target.value)} style={S}>
+            {YEAR_OPTIONS.map(y => <option key={y}>{y}</option>)}
+          </select>
+          <button onClick={load} disabled={loading} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: '#1d3a5c', color: '#fff', border: 'none', fontWeight: 600 }}>
+            <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            {loading ? 'Loading…' : 'Refresh'}
+          </button>
+          <button onClick={() => setShowAddForm(v => !v)} style={{ ...S, display: 'flex', alignItems: 'center', gap: 6, background: '#1d3a5c', color: '#fff', border: 'none', fontWeight: 600 }}>
+            <Plus size={13} />Add Manual
+          </button>
+        </div>
       </div>
 
       {/* Add Manual — modal, same navy/grey/white chrome as Master List's */}
