@@ -525,9 +525,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     </div>
   );
 
-  const rawDisplay = (value ?? '').trim();
-  const isPicField = field === 'pic' || field === 'acc_pic' || field === 'tax_pic';
-  const display = isPicField ? formatStaffName(rawDisplay) : rawDisplay;
+  const display = (value ?? '').trim();
   // No visible saving/saved indicator (Vincent: doesn't need every keystroke
   // shown — it's already recorded in the audit trail). error/conflict states
   // above still render their own explicit UI since those need attention.
@@ -595,12 +593,30 @@ const XBRL_OPTIONS: SelectOption[] = [
   { label: 'FULL', ...C.green },
 ];
 
-const SelectField = memo(function SelectField({ id, field, value, onSave, options, customLabel = 'Date / custom…', dateHelper = true }: {
+// SEC/ACC/TAX PIC dropdowns (Vincent, 2026-08-17) — every option uses the
+// same neutral grey ("不需要有什么特别颜色处理", unlike Remarks/XBRL/DPO/ROND
+// which carry semantic color). Names match lib/staff-directory.ts's own
+// Corporate-Secretarial+Malaysia / Accounting / Tax groupings.
+const SEC_PIC_OPTIONS: SelectOption[] = [
+  'Lim Hoe Chyi', 'Hoo Seng Xin', 'Jenny Lai', 'Chin Kah Ye',
+  'Ang Shi Ming', 'Tey Shemin', 'Tan Min Quan',
+].map(label => ({ label, ...C.grey }));
+
+const ACC_PIC_OPTIONS: SelectOption[] = [
+  'Jay Tay', 'Lee Jing Fei', 'Tee Yu Heng', 'Vernice Chai', 'Chee Wei En',
+].map(label => ({ label, ...C.grey }));
+
+const TAX_PIC_OPTIONS: SelectOption[] = [
+  'Clarence Saw', 'Quinnie Tan', 'Victoria Yap',
+].map(label => ({ label, ...C.grey }));
+
+const SelectField = memo(function SelectField({ id, field, value, onSave, options, customLabel = 'Date / custom…', dateHelper = true, formatDisplay }: {
   id: number; field: string; value: string | null;
   onSave: (id: number, field: string, val: string) => void;
   options: SelectOption[];
   customLabel?: string;
   dateHelper?: boolean;
+  formatDisplay?: (raw: string) => string;
 }) {
   const [open,   setOpen]   = useState(false);
   const [custom, setCustom] = useState(false);
@@ -682,7 +698,12 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const display = (value ?? '').trim();
+  const rawDisplay = (value ?? '').trim();
+  // formatDisplay (e.g. formatStaffName) normalizes messy legacy values
+  // ("JF", "Kah Ye Chin") into the clean canonical name before chip-matching
+  // — so a shorthand that already resolves to a preset renders as that chip,
+  // not as unrecognised plain text.
+  const display = rawDisplay && formatDisplay ? formatDisplay(rawDisplay) || rawDisplay : rawDisplay;
   const chip = display ? options.find(o => o.label === display && !o.type) : null;
   const isDateValue = !!toDisplayDate(display);
   // No visible saving/saved indicator (Vincent: doesn't need every keystroke
@@ -1071,14 +1092,14 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '14px 16px' }}>
           <h4 style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10 }}>Team</h4>
           {([
-            { label: 'SEC PIC', field: 'pic'     },
-            { label: 'ACC PIC', field: 'acc_pic' },
-            { label: 'TAX PIC', field: 'tax_pic' },
-          ] as const).map(({ label, field }) => (
+            { label: 'SEC PIC', field: 'pic',     options: SEC_PIC_OPTIONS },
+            { label: 'ACC PIC', field: 'acc_pic', options: ACC_PIC_OPTIONS },
+            { label: 'TAX PIC', field: 'tax_pic', options: TAX_PIC_OPTIONS },
+          ] as const).map(({ label, field, options }) => (
             <div key={field} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, padding: '4px 8px', background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
               <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 70 }}>{label}</span>
               <div style={{ flex: 1 }}>
-                <EditField id={r.id} field={field} value={(r as unknown as Record<string, string | null>)[field]} onSave={onSave} placeholder="—" />
+                <SelectField id={r.id} field={field} value={(r as unknown as Record<string, string | null>)[field]} onSave={onSave} options={options} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} />
               </div>
             </div>
           ))}
@@ -3015,9 +3036,9 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                 <TD tint={rowTint}><EditField id={r.id} field="software_update" value={r.software_update} onSave={onSave} placeholder="—" isDate /></TD>
                 <TD tint={rowTint}><SelectField id={r.id} field="dpo"           value={r.dpo}             onSave={onSave} options={DPO_OPTIONS} /></TD>
                 <TD tint={rowTint}><SelectField id={r.id} field="ond_ron"       value={r.ond_ron}         onSave={onSave} options={ROND_OPTIONS} /></TD>
-                <TD tint={rowTint} style={!picOpen.sec ? { padding: 0 } : undefined}>{picOpen.sec && <EditField id={r.id} field="pic"     value={r.pic}     onSave={onSave} placeholder="—" />}</TD>
-                <TD tint={rowTint} style={!picOpen.acc ? { padding: 0 } : undefined}>{picOpen.acc && <EditField id={r.id} field="acc_pic" value={r.acc_pic} onSave={onSave} placeholder="—" />}</TD>
-                <TD tint={rowTint} style={!picOpen.tax ? { padding: 0 } : undefined}>{picOpen.tax && <EditField id={r.id} field="tax_pic" value={r.tax_pic} onSave={onSave} placeholder="—" />}</TD>
+                <TD tint={rowTint} style={!picOpen.sec ? { padding: 0 } : undefined}>{picOpen.sec && <SelectField id={r.id} field="pic"     value={r.pic}     onSave={onSave} options={SEC_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} />}</TD>
+                <TD tint={rowTint} style={!picOpen.acc ? { padding: 0 } : undefined}>{picOpen.acc && <SelectField id={r.id} field="acc_pic" value={r.acc_pic} onSave={onSave} options={ACC_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} />}</TD>
+                <TD tint={rowTint} style={!picOpen.tax ? { padding: 0 } : undefined}>{picOpen.tax && <SelectField id={r.id} field="tax_pic" value={r.tax_pic} onSave={onSave} options={TAX_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} />}</TD>
                 <TD tint={rowTint}><SelectField id={r.id} field="remarks" value={r.remarks} onSave={onSave} options={REMARKS_OPTIONS} customLabel="Custom…" dateHelper={false} /></TD>
                 <TD finance tint={rowTint}><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
                 <TD finance tint={rowTint}><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate /></TD>
