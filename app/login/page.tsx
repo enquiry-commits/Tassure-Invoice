@@ -8,7 +8,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
       <section className="login-box-wrap">
         <header className="login-heading">
           <h1>Sign In</h1>
-          <p>Tassure Review System</p>
+          <p>Tassure Corporate Services System</p>
         </header>
         <div className="login-card-simple">
           <div className="login-instruction">
