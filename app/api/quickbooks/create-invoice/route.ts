@@ -1,30 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
-import { nextDocNumber, invoiceDocNumberExists, getNet7TermId, findPicClass, isGovFeeLine } from '@/lib/qb-invoice-conventions';
+import {
+  nextDocNumber, invoiceDocNumberExists, getNet7TermId, findPicClass,
+  findCustomer, getItemMap, findLocation, buildInvoiceLineArray,
+  type DraftLineItem,
+} from '@/lib/qb-invoice-conventions';
 import { createAdminClient } from '@/lib/supabase';
 import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
-import { findUniqueBestMatch } from '@/lib/company-name';
 import { isValidEmail } from '@/lib/campaign-recipients';
 import { isPrimaryRenewalProduct, parseInvoicePeriod, servicePeriodOverlapError } from '@/lib/invoice-period';
 import { createHash } from 'node:crypto';
 
+export type { DraftLineItem };
+
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
   : 'https://quickbooks.api.intuit.com';
-
-export interface DraftLineItem {
-  service: string;          // 'Secretary' | 'Address' | 'ND' etc.
-  description: string;      // full line description
-  rate: number;
-  qty?: number;
-  productService?: string;  // exact QB Product/Service name, e.g. "Secretary:Corporate Secretarial Services"
-  periodConfirmed?: boolean; // required when the latest QB renewal has no readable period
-}
-
-function requiresPicClass(line: DraftLineItem) {
-  return line.service === 'Secretary' || line.service === 'XBRL';
-}
 
 interface CompanyResult {
   invoiceNo?: string;
@@ -45,91 +37,6 @@ function quickBooksRequestId(company: QbCompany, idempotencyKey: string) {
     .digest('hex')
     .slice(0, 32);
   return `tcs-${company.toLowerCase()}-${digest}`;
-}
-
-// ── Look up QB Customer by display name ───────────────────────────────────────
-async function findCustomer(token: string, realmId: string, name: string) {
-  const escaped = name.replace(/'/g, "\\'");
-  const q = encodeURIComponent(`SELECT * FROM Customer WHERE DisplayName = '${escaped}' MAXRESULTS 5`);
-  const res = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q}&minorversion=65`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-  });
-  if (!res.ok) return null;
-  const json = await res.json();
-  const rows: Record<string, unknown>[] = json.QueryResponse?.Customer ?? [];
-  if (rows.length) return { id: rows[0].Id as string, name: rows[0].DisplayName as string };
-
-  // Fuzzy fallback: partial word match
-  const words = name.toLowerCase().replace(/pte\.?\s*ltd\.?/gi,'').trim().split(/\s+/).filter(w => w.length > 2);
-  if (!words.length) return null;
-  const q2 = encodeURIComponent(`SELECT * FROM Customer WHERE DisplayName LIKE '%${words[0]}%' MAXRESULTS 20`);
-  const res2 = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q2}&minorversion=65`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-  });
-  if (!res2.ok) return null;
-  const json2 = await res2.json();
-  const rows2: Record<string, unknown>[] = json2.QueryResponse?.Customer ?? [];
-  const match = findUniqueBestMatch(name, rows2, row => String(row.DisplayName ?? ''), 70);
-  return match.value
-    ? { id: match.value.Id as string, name: match.value.DisplayName as string }
-    : null;
-}
-
-// ── Look up QB Items to get ItemRef for each service ─────────────────────────
-async function getItemMap(token: string, realmId: string): Promise<Map<string, { id: string; name: string }>> {
-  const q = encodeURIComponent('SELECT * FROM Item WHERE Type = \'Service\' MAXRESULTS 200');
-  const res = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q}&minorversion=65`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-  });
-  const map = new Map<string, { id: string; name: string }>();
-  if (!res.ok) return map;
-  const json = await res.json();
-  for (const item of json.QueryResponse?.Item ?? []) {
-    const name = item.Name as string;
-    const fullyQualifiedName = (item.FullyQualifiedName as string | undefined) ?? name;
-    const ref = { id: item.Id as string, name: fullyQualifiedName };
-    map.set(name.toLowerCase(), ref);
-    map.set(fullyQualifiedName.toLowerCase(), ref);
-  }
-  return map;
-}
-
-async function findLocation(token: string, realmId: string, locationName: string) {
-  const q = encodeURIComponent('SELECT * FROM Department MAXRESULTS 1000');
-  const res = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q}&minorversion=65`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-  });
-  if (!res.ok) return null;
-  const json = await res.json();
-  const target = locationName.trim().toLowerCase();
-  const match = (json.QueryResponse?.Department ?? []).find((department: Record<string, unknown>) => {
-    if (department.Active === false) return false;
-    const name = String(department.FullyQualifiedName ?? department.Name ?? '').trim().toLowerCase();
-    return name === target;
-  });
-  return match ? {
-    value: String(match.Id),
-    name: String(match.FullyQualifiedName ?? match.Name),
-  } : null;
-}
-
-function pickItem(service: string, itemMap: Map<string, { id: string; name: string }>) {
-  const keywords: Record<string, string[]> = {
-    Secretary: ['secretarial', 'corporate sec', 'secretary'],
-    Address:   ['address', 'virtual office', 'registered office'],
-    ND:        ['nominee', 'director'],
-    AR:        ['annual return', 'government fee'],
-    XBRL:      ['xbrl', 'ixbrl'],
-    Accounts:  ['account', 'bookkeeping', 'compilation'],
-    Tax:       ['tax', 'iras'],
-    Audit:     ['audit'],
-  };
-  const kws = keywords[service] ?? [service.toLowerCase()];
-  for (const [key, val] of itemMap) {
-    if (kws.some(k => key.includes(k))) return val;
-  }
-  // Generic fallback — first service item
-  return itemMap.size ? [...itemMap.values()][0] : { id: '1', name: 'Services' };
 }
 
 async function validateRenewalPeriods(
@@ -223,22 +130,7 @@ async function createInvoiceInCompany(
     return { error: `QuickBooks ${company} Location not found: "${locationName}"` };
   }
 
-  const invoiceLines = lines.map((l, i) => {
-    const exact = l.productService ? itemMap.get(l.productService.toLowerCase()) : undefined;
-    const item = exact ?? pickItem(l.service, itemMap);
-    return {
-      LineNum: i + 1,
-      DetailType: 'SalesItemLineDetail',
-      Amount: +(l.rate * (l.qty ?? 1)).toFixed(2),
-      Description: l.description,
-      SalesItemLineDetail: {
-        ItemRef: { value: item.id, name: item.name },
-        Qty:       l.qty ?? 1,
-        UnitPrice: l.rate,
-        ...(picClass && requiresPicClass(l) && !isGovFeeLine(l) ? { ClassRef: picClass } : {}),
-      },
-    };
-  });
+  const invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass);
 
   const payload: Record<string, unknown> = {
     Line:        invoiceLines,

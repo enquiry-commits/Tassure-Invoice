@@ -1,4 +1,5 @@
 import type { QbCompany } from './quickbooks';
+import { findUniqueBestMatch } from './company-name';
 
 // Invoice conventions learned from Tassure's real QB invoices (verified by
 // inspecting manual invoices 02610732 (TAB) and 02680230 (TAC)):
@@ -16,7 +17,14 @@ import type { QbCompany } from './quickbooks';
 //    ("Ang Shi Ming", "Chin Kah Ye", …); government-fee/disbursement lines
 //    carry no class. TAC invoices carry no classes at all.
 
-const QB_BASE = 'https://quickbooks.api.intuit.com';
+// create-invoice/route.ts's own copy of findCustomer/getItemMap/findLocation
+// (now merged in below) respected QB_ENVIRONMENT=sandbox; this file's
+// pre-existing QB_BASE didn't. Matching lib/quickbooks.ts's own sandbox
+// switch here so moving those functions in doesn't quietly drop sandbox
+// support for any of them.
+const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
+  ? 'https://sandbox-quickbooks.api.intuit.com'
+  : 'https://quickbooks.api.intuit.com';
 
 async function qbGet(token: string, realmId: string, query: string) {
   const res = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=65`, {
@@ -85,4 +93,130 @@ export async function findPicClass(token: string, realmId: string, pic: string):
 // Government-fee / disbursement lines carry no PIC class on manual invoices.
 export function isGovFeeLine(l: { service: string; productService?: string }): boolean {
   return l.service === 'AR' || /disbursement|government/i.test(l.productService ?? '');
+}
+
+// Shared between the create-invoice and update-invoice routes so the two
+// can't silently diverge on how a line becomes a QB SalesItemLineDetail.
+export interface DraftLineItem {
+  service: string;          // 'Secretary' | 'Address' | 'ND' etc.
+  description: string;      // full line description
+  rate: number;
+  qty?: number;
+  productService?: string;  // exact QB Product/Service name, e.g. "Secretary:Corporate Secretarial Services"
+  periodConfirmed?: boolean; // required when the latest QB renewal has no readable period
+}
+
+export function requiresPicClass(line: DraftLineItem): boolean {
+  return line.service === 'Secretary' || line.service === 'XBRL';
+}
+
+// ── Look up QB Customer by display name ───────────────────────────────────────
+export async function findCustomer(token: string, realmId: string, name: string) {
+  const escaped = name.replace(/'/g, "\\'");
+  const q = encodeURIComponent(`SELECT * FROM Customer WHERE DisplayName = '${escaped}' MAXRESULTS 5`);
+  const res = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q}&minorversion=65`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  const rows: Record<string, unknown>[] = json.QueryResponse?.Customer ?? [];
+  if (rows.length) return { id: rows[0].Id as string, name: rows[0].DisplayName as string };
+
+  // Fuzzy fallback: partial word match
+  const words = name.toLowerCase().replace(/pte\.?\s*ltd\.?/gi,'').trim().split(/\s+/).filter(w => w.length > 2);
+  if (!words.length) return null;
+  const q2 = encodeURIComponent(`SELECT * FROM Customer WHERE DisplayName LIKE '%${words[0]}%' MAXRESULTS 20`);
+  const res2 = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q2}&minorversion=65`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  });
+  if (!res2.ok) return null;
+  const json2 = await res2.json();
+  const rows2: Record<string, unknown>[] = json2.QueryResponse?.Customer ?? [];
+  const match = findUniqueBestMatch(name, rows2, row => String(row.DisplayName ?? ''), 70);
+  return match.value
+    ? { id: match.value.Id as string, name: match.value.DisplayName as string }
+    : null;
+}
+
+// ── Look up QB Items to get ItemRef for each service ─────────────────────────
+export async function getItemMap(token: string, realmId: string): Promise<Map<string, { id: string; name: string }>> {
+  const q = encodeURIComponent('SELECT * FROM Item WHERE Type = \'Service\' MAXRESULTS 200');
+  const res = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q}&minorversion=65`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  });
+  const map = new Map<string, { id: string; name: string }>();
+  if (!res.ok) return map;
+  const json = await res.json();
+  for (const item of json.QueryResponse?.Item ?? []) {
+    const name = item.Name as string;
+    const fullyQualifiedName = (item.FullyQualifiedName as string | undefined) ?? name;
+    const ref = { id: item.Id as string, name: fullyQualifiedName };
+    map.set(name.toLowerCase(), ref);
+    map.set(fullyQualifiedName.toLowerCase(), ref);
+  }
+  return map;
+}
+
+export async function findLocation(token: string, realmId: string, locationName: string) {
+  const q = encodeURIComponent('SELECT * FROM Department MAXRESULTS 1000');
+  const res = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q}&minorversion=65`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  const target = locationName.trim().toLowerCase();
+  const match = (json.QueryResponse?.Department ?? []).find((department: Record<string, unknown>) => {
+    if (department.Active === false) return false;
+    const name = String(department.FullyQualifiedName ?? department.Name ?? '').trim().toLowerCase();
+    return name === target;
+  });
+  return match ? {
+    value: String(match.Id),
+    name: String(match.FullyQualifiedName ?? match.Name),
+  } : null;
+}
+
+export function pickItem(service: string, itemMap: Map<string, { id: string; name: string }>) {
+  const keywords: Record<string, string[]> = {
+    Secretary: ['secretarial', 'corporate sec', 'secretary'],
+    Address:   ['address', 'virtual office', 'registered office'],
+    ND:        ['nominee', 'director'],
+    AR:        ['annual return', 'government fee'],
+    XBRL:      ['xbrl', 'ixbrl'],
+    Accounts:  ['account', 'bookkeeping', 'compilation'],
+    Tax:       ['tax', 'iras'],
+    Audit:     ['audit'],
+  };
+  const kws = keywords[service] ?? [service.toLowerCase()];
+  for (const [key, val] of itemMap) {
+    if (kws.some(k => key.includes(k))) return val;
+  }
+  // Generic fallback — first service item
+  return itemMap.size ? [...itemMap.values()][0] : { id: '1', name: 'Services' };
+}
+
+// The Line-array shape shared by create-invoice and update-invoice — every
+// line the same way, so a service invoiced via one path looks identical to
+// one invoiced via the other.
+export function buildInvoiceLineArray(
+  lines: DraftLineItem[],
+  itemMap: Map<string, { id: string; name: string }>,
+  picClass: { value: string; name: string } | null,
+) {
+  return lines.map((l, i) => {
+    const exact = l.productService ? itemMap.get(l.productService.toLowerCase()) : undefined;
+    const item = exact ?? pickItem(l.service, itemMap);
+    return {
+      LineNum: i + 1,
+      DetailType: 'SalesItemLineDetail',
+      Amount: +(l.rate * (l.qty ?? 1)).toFixed(2),
+      Description: l.description,
+      SalesItemLineDetail: {
+        ItemRef: { value: item.id, name: item.name },
+        Qty:       l.qty ?? 1,
+        UnitPrice: l.rate,
+        ...(picClass && requiresPicClass(l) && !isGovFeeLine(l) ? { ClassRef: picClass } : {}),
+      },
+    };
+  });
 }
