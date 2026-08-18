@@ -217,6 +217,7 @@ export async function openDraftsInOutlook(
   });
 
   const payload: {
+    id: number | null;
     senderEmail: string;
     to: string;
     cc: string;
@@ -230,6 +231,11 @@ export async function openDraftsInOutlook(
     if (!item) continue;
     const draft = item.draft;
     payload.push({
+      // Tagged onto the Outlook item as a hidden property so the Helper can
+      // report back here automatically once the item is actually sent (not
+      // just displayed) — see app.py's ItemSend listener. null for anything
+      // opened without a persisted draft row; the Helper just skips tagging.
+      id: draft.id ?? null,
       senderEmail: draft.sender_email ?? '',
       to: draft.to_email ?? '',
       cc: draft.cc_email ?? '',
