@@ -392,8 +392,8 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
   );
 }
 
-const EditField = memo(function EditField({ id, field, value, onSave, placeholder = '—', isDate = false, multiline = false }:
-  { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; placeholder?: string; isDate?: boolean; multiline?: boolean }) {
+const EditField = memo(function EditField({ id, field, value, onSave, placeholder = '—', isDate = false, multiline = false, looseDate = false }:
+  { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; placeholder?: string; isDate?: boolean; multiline?: boolean; looseDate?: boolean }) {
   const inputValue = useCallback((raw: string | null) => isDate ? (toDisplayDate(raw) ?? raw ?? '') : (raw ?? ''), [isDate]);
   // multiline fields (Vincent, 2026-08-17: Billing Drafts Remarks — "可以做
   // 成这种吗" referencing Late Filing's always-visible auto-growing
@@ -461,7 +461,11 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     if (committingRef.current) return;
     if (!multiline) setEditing(false);
     const typed = val.trim();
-    const next = isDate && typed ? toIsoDateValue(typed) : typed;
+    // looseDate fields (Email Sent, mirrored with Billing Drafts' free-typed
+    // Remarks — Vincent, 2026-08-18: whatever's typed in either must show up
+    // identically in the other) accept a real date OR arbitrary text: never
+    // reject, just normalize to ISO when it happens to parse as a date.
+    const next = isDate && typed ? (toIsoDateValue(typed) ?? (looseDate ? typed : null)) : typed;
     const baseline = editBaselineRef.current;
     const prev = isDate && baseline && AR_DATABASE_DATE_FIELDS.has(field)
       ? (toIsoDateValue(baseline) ?? baseline.trim())
@@ -475,7 +479,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     committingRef.current = true;
     onSave(id, field, next ?? '');
     void persist(next ?? '', prev);
-  }, [val, id, field, isDate, multiline, onSave, persist]);
+  }, [val, id, field, isDate, looseDate, multiline, onSave, persist]);
 
   const retry = useCallback(() => { committingRef.current = true; void persist(pendingRef.current.next, pendingRef.current.prev); }, [persist]);
   const acceptLatest = useCallback(() => {
@@ -511,7 +515,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
         onChange={e => setVal(e.target.value)}
         onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) save(); }}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') { setVal(inputValue(value)); setEditing(false); } }}
-        placeholder={isDate ? 'e.g. 03 Apr 2026' : ''}
+        placeholder={isDate ? (looseDate ? 'Date or note…' : 'e.g. 03 Apr 2026') : ''}
         style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
       />
       {isDate && (
@@ -1236,7 +1240,7 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
           </div>
           <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #e2e8f0', padding: '8px 12px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Email Sent</div>
-            <EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate />
+            <EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate looseDate />
           </div>
         </div>
       </div>
@@ -3113,7 +3117,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                 <TD tint={rowTint} style={!picOpen.tax ? { padding: 0 } : undefined}>{picOpen.tax && <SelectField id={r.id} field="tax_pic" value={r.tax_pic} onSave={onSave} options={TAX_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay />}</TD>
                 <TD tint={rowTint}><SelectField id={r.id} field="remarks" value={r.remarks} onSave={onSave} options={REMARKS_OPTIONS} customLabel="Custom…" dateHelper={false} /></TD>
                 <TD finance tint={rowTint}><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
-                <TD finance tint={rowTint}><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate /></TD>
+                <TD finance tint={rowTint}><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate looseDate /></TD>
                 <TD tint={rowTint} style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                   <button onClick={() => onOpenDetail(r)} title="Open full details & edit history"
                     style={{ padding: '3px 6px', borderRadius: 5, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: 'pointer', display: 'inline-flex' }}>

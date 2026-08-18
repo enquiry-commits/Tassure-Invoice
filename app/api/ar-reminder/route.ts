@@ -17,7 +17,7 @@ const EDITABLE_FIELDS = new Set([
 
 const STRICT_DATE_FIELDS = new Set([
   'reminder_note', 'date_of_agm', 'agm_held_date',
-  'sent_date', 'received_date', 'filling_date', 'software_update', 'accounts_status',
+  'sent_date', 'received_date', 'filling_date', 'software_update',
 ]);
 const DATABASE_DATE_FIELDS = new Set([
   'date_of_agm', 'agm_held_date', 'sent_date', 'received_date', 'filling_date',
@@ -27,8 +27,11 @@ const DATABASE_DATE_FIELDS = new Set([
 // "NO"/"FULL", prepared_date's "DORMANT") is accepted as-is rather than
 // rejected. prepared_date joined 2026-08-17 once its column became `text`
 // (scripts/alter-ar-reminder-prepared-date-to-text.sql) so "Report Ready"
-// can hold DORMANT/custom text, not just a real date.
-const DATE_OR_STATUS_FIELDS = new Set(['xbrl', 'prepared_date']);
+// can hold DORMANT/custom text, not just a real date. accounts_status
+// ("Email Sent") joined 2026-08-18 once it started mirroring Billing
+// Drafts' free-typed billing_remarks (see the PATCH handler below) — it
+// still holds real dates most of the time, but can no longer reject text.
+const DATE_OR_STATUS_FIELDS = new Set(['xbrl', 'prepared_date', 'accounts_status']);
 
 type QbItem = {
   customer_name: string;
@@ -390,6 +393,17 @@ export async function PATCH(req: NextRequest) {
     updated_by_email: account.email,
     updated_by_name: account.name,
   };
+  // Billing Drafts' Remarks and AR Reminder's Email Sent are two views onto
+  // one idea, mirrored in both directions (Vincent, 2026-08-18: "不管我在那
+  // 一份填写内容，都需要出现在另外一方一样的内容"). Mirror the raw typed text
+  // (not accounts_status's ISO-normalized nextValue) so both columns always
+  // hold byte-identical content rather than a date in one and its ISO form
+  // in the other.
+  if (field === 'billing_remarks' || field === 'accounts_status') {
+    const mirrorTarget = field === 'billing_remarks' ? 'accounts_status' : 'billing_remarks';
+    const rawTyped = body.value == null ? null : (String(body.value).trim() || null);
+    updatePayload[mirrorTarget] = rawTyped;
+  }
   // date_of_agm/filling_date/reminder_note are otherwise auto-synced from
   // TeamWork (see sync-workflow/route.ts) — a manual edit here must win from
   // now on, and clearing the cell hands control back to automation.
