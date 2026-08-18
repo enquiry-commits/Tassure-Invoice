@@ -1733,7 +1733,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           <span style={{ fontSize: 11, color: '#64748b' }}>Invoice date</span>
           <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} style={inputStyle} />
         </div>
-        {c.pic && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>SEC / XBRL PIC: <strong style={{ color: '#334155' }}>{c.pic}</strong></span>}
+        {c.pic && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>SEC / XBRL PIC: <strong style={{ color: '#334155' }}>{formatStaffName(c.pic)}</strong></span>}
       </div>
 
       {/* TAB — basic services (Secretary/Address/AR/XBRL/Accounts/Tax/Discount).
@@ -2381,7 +2381,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', marginTop: 7, alignItems: 'center' }}>
                     {latestInvoiceNo(c, 'TAB') && <BillingInvoiceReference company="TAB" invoiceNo={latestInvoiceNo(c, 'TAB')} />}
                     {latestInvoiceNo(c, 'TAC') && <BillingInvoiceReference company="TAC" invoiceNo={latestInvoiceNo(c, 'TAC')} />}
-                    {c.pic && <span style={{ fontSize: 10.5, color: '#64748b' }}>PIC: {c.pic}</span>}
+                    {c.pic && <span style={{ fontSize: 10.5, color: '#64748b' }}>PIC: {formatStaffName(c.pic)}</span>}
                   </div>
                 )}
               </div>
@@ -2437,7 +2437,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                       return <BillingInvoiceReference company="TAC" />;
                     })()}
                   </div>
-                  <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ?? '—'}</div>
+                  <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ? formatStaffName(c.pic) : '—'}</div>
                   <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
                     <button title="Email Drafts" onClick={e => { e.stopPropagation(); setDraftError(null); setDraftNotice(null); setDraftPopoverFor(v => v === c.companyId ? null : c.companyId); }}
                       style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: draftPopoverFor === c.companyId ? '#1d3a5c' : '#94a3b8' }}>
