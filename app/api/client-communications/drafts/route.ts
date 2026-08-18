@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 
-// GET: cross-campaign search/listing — powers Delivery History. Filters:
-// status, type (via joined campaign), search (company name), limit/offset.
+// GET: cross-campaign search/listing — powers Delivery History (and Billing
+// Drafts' per-row sent/drafted tint via fyeMonth/fyeYear). Filters: status,
+// type (via joined campaign), fyeMonth/fyeYear (ditto), search (company
+// name), limit/offset.
 export async function GET(req: NextRequest) {
   const supabase = createAdminClient();
   const { searchParams } = req.nextUrl;
   const status = searchParams.get('status');
   const type = searchParams.get('type');
   const search = searchParams.get('search');
+  const fyeMonth = searchParams.get('fyeMonth');
+  const fyeYear = searchParams.get('fyeYear');
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '200', 10), 500);
 
   let q = supabase.from('email_drafts')
@@ -17,6 +21,8 @@ export async function GET(req: NextRequest) {
     .limit(limit);
   if (status) q = q.eq('status', status);
   if (type) q = q.eq('email_campaigns.type', type);
+  if (fyeMonth) q = q.eq('email_campaigns.fye_month', fyeMonth);
+  if (fyeYear) q = q.eq('email_campaigns.fye_year', parseInt(fyeYear, 10));
   if (search) q = q.ilike('company_name', `%${search}%`);
 
   const { data, error } = await q;

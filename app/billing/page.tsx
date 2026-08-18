@@ -2108,6 +2108,27 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.ok ? r.json() : { user: null }).then(j => setMe(j.user ?? null)).catch(() => setMe(null));
   }, []);
+  // Whole-row tint (Vincent, 2026-08-18): green once a company's AR draft
+  // for this cycle is confirmed sent (auto-detected via Draft Helper's
+  // ItemSend listener, or manually confirmed in Delivery History), amber if
+  // one exists but isn't sent yet, untouched if none exists at all. "sent"
+  // wins over "drafted" if a company somehow has more than one this cycle.
+  const [draftStatusByCompany, setDraftStatusByCompany] = useState<Map<string, 'sent' | 'drafted'>>(new Map());
+  const loadDraftStatus = useCallback(() => {
+    fetch(`/api/client-communications/drafts?type=ar&fyeMonth=${encodeURIComponent(month)}&fyeYear=${year}&limit=500`)
+      .then(r => r.json())
+      .then(j => {
+        const rows: { company_name: string; status: string }[] = j.data ?? [];
+        const map = new Map<string, 'sent' | 'drafted'>();
+        for (const row of rows) {
+          const key = normName(row.company_name);
+          const next = row.status === 'sent' ? 'sent' : 'drafted';
+          if (next === 'sent' || map.get(key) !== 'sent') map.set(key, next);
+        }
+        setDraftStatusByCompany(map);
+      }).catch(() => {});
+  }, [month, year]);
+  useEffect(() => { loadDraftStatus(); }, [loadDraftStatus]);
   const [helperAvailable, setHelperAvailable] = useState<boolean | null>(null);
   const [helperOutdated, setHelperOutdated] = useState(false);
   useEffect(() => {
@@ -2198,6 +2219,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         window.location.href = buildMailtoLink(draftForOutlook);
       }
       setDraftPopoverFor(null);
+      loadDraftStatus();
     } catch (e: unknown) {
       setDraftError(e instanceof Error ? e.message : 'Unable to create this draft.');
     } finally {
@@ -2406,9 +2428,11 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             const ndR    = c.renewals.find(r => r.service === 'ND');
             const arA    = c.annuals.find(a => a.service === 'AR');
             const xbrlA  = c.annuals.find(a => a.service === 'XBRL');
+            const draftStatus = draftStatusByCompany.get(normName(c.companyName));
+            const draftRowBg = draftStatus === 'sent' ? '#dfffeb' : draftStatus === 'drafted' ? '#fef3c7' : undefined;
             // Phone: view-only card (no draft modal — that's a desktop task)
             if (isMobile) return (
-              <div key={c.companyId} className="system-list-row" style={{ padding: '11px 12px' }}>
+              <div key={c.companyId} className="system-list-row" style={{ padding: '11px 12px', background: draftRowBg ?? '#fff' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                   <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -2438,7 +2462,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             return (
               <div key={c.companyId}>
                 <div className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}`} onClick={() => setExpanded(isOpen ? null : c.companyId)}
-                  style={{ display: 'grid', gridTemplateColumns: billingListColumns, alignItems: 'center', minHeight: 68, columnGap: 10, padding: '11px 14px', background: isOpen ? '#f0f6ff' : '#fff', cursor: 'pointer', transition: 'background 0.15s' }}>
+                  style={{ display: 'grid', gridTemplateColumns: billingListColumns, alignItems: 'center', minHeight: 68, columnGap: 10, padding: '11px 14px', background: isOpen ? '#f0f6ff' : (draftRowBg ?? '#fff'), cursor: 'pointer', transition: 'background 0.15s' }}>
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
                     <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
