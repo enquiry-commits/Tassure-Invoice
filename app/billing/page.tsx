@@ -2429,10 +2429,15 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             const arA    = c.annuals.find(a => a.service === 'AR');
             const xbrlA  = c.annuals.find(a => a.service === 'XBRL');
             const draftStatus = draftStatusByCompany.get(normName(c.companyName));
-            const draftRowBg = draftStatus === 'sent' ? '#dfffeb' : draftStatus === 'drafted' ? '#fef3c7' : undefined;
+            // .system-list-row's own background is !important (see
+            // globals.css) — a plain inline style here would silently lose
+            // to it, so the tint has to be a real class, same reasoning
+            // --selected below already relies on.
+            const draftRowClass = draftStatus === 'sent' ? ' system-list-row--draft-sent'
+              : draftStatus === 'drafted' ? ' system-list-row--draft-pending' : '';
             // Phone: view-only card (no draft modal — that's a desktop task)
             if (isMobile) return (
-              <div key={c.companyId} className="system-list-row" style={{ padding: '11px 12px', background: draftRowBg ?? '#fff' }}>
+              <div key={c.companyId} className={`system-list-row${draftRowClass}`} style={{ padding: '11px 12px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                   <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -2461,8 +2466,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
             );
             return (
               <div key={c.companyId}>
-                <div className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}`} onClick={() => setExpanded(isOpen ? null : c.companyId)}
-                  style={{ display: 'grid', gridTemplateColumns: billingListColumns, alignItems: 'center', minHeight: 68, columnGap: 10, padding: '11px 14px', background: isOpen ? '#f0f6ff' : (draftRowBg ?? '#fff'), cursor: 'pointer', transition: 'background 0.15s' }}>
+                <div className={`system-list-row${isOpen ? ' system-list-row--selected' : draftRowClass}`} onClick={() => setExpanded(isOpen ? null : c.companyId)}
+                  style={{ display: 'grid', gridTemplateColumns: billingListColumns, alignItems: 'center', minHeight: 68, columnGap: 10, padding: '11px 14px', cursor: 'pointer', transition: 'background 0.15s' }}>
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
                     <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

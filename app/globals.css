@@ -146,6 +146,18 @@ body {
   outline: none;
 }
 
+/* Billing Drafts row tint by email draft status (Vincent, 2026-08-18) —
+   .system-list-row's own background above is !important, so this has to be
+   a real class (like --selected) rather than an inline style, which would
+   silently lose to it. */
+.system-list-row--draft-sent {
+  background: #dfffeb !important;
+}
+
+.system-list-row--draft-pending {
+  background: #fef3c7 !important;
+}
+
 .system-list-row-muted {
   color: #64748b;
 }
