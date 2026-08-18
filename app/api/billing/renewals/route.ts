@@ -64,6 +64,9 @@ export interface CompanyBilling {
   annuals: AnnualStatus[];
   email: string | null;
   contactName: string | null;
+  // Sourced only from the matching ar_reminder row (see arToBillingRow in
+  // app/billing/page.tsx) -- this endpoint never sets it, only defaults it.
+  billingRemarks: string | null;
   billedCycles: string[]; // FYE dates ("dd.mm.yyyy") this company has already been invoiced for
   priorLines: PriorLine[]; // every line from the most recent renewal invoice (to clone)
   priorInvoiceDate: string | null;
@@ -524,6 +527,7 @@ export async function GET(req: NextRequest) {
       // reaching QuickBooks and hard-failing invoice creation.
       email: isValidEmail(company.best_email) ? company.best_email : isValidEmail(primary?.email) ? primary!.email! : null,
       contactName: primary?.contactName ?? null,
+      billingRemarks: null,
       billedCycles: [...(billedCyclesMap.get(normName) ?? [])],
       priorLines: carriedLines,
       priorInvoiceDate: prior?.txn_date ?? null,

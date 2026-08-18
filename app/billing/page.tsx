@@ -1934,6 +1934,7 @@ type ARCompany = {
   id: number; entity_name: string; uen: string | null; fye_date: string | null;
   due_date: string | null; pic: string | null; status: string | null;
   acc_pic: string | null; tax_pic: string | null; dormant: string | null;
+  billing_remarks: string | null;
   services: ARServiceFlags;
 };
 
@@ -1975,6 +1976,7 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
     annuals: [mkAnnual('AR', true), mkAnnual('XBRL', !!svc.xbrl)],
     email: matched?.email ?? null,
     contactName: matched?.contactName ?? null,
+    billingRemarks: ar.billing_remarks ?? null,
     billedCycles: matched?.billedCycles ?? [],
     priorLines: matched?.priorLines ?? [],
     priorInvoiceDate: matched?.priorInvoiceDate ?? null,
@@ -2062,6 +2064,14 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   const [withinDays, setWithinDays] = useState(90);
 
   const [arList, setArList] = useState<ARCompany[]>([]);
+  // EditField already PATCHes /api/ar-reminder itself (ar.id === the AR
+  // Reminder row id, per arToBillingRow's own comment) -- this just keeps
+  // arList (and therefore monthCompanies, derived from it) in sync after a
+  // successful save, same optimistic-update role handleSave plays on the
+  // AR Reminder tab.
+  const handleArSave = useCallback((id: number, field: string, value: string) => {
+    setArList(prev => prev.map(ar => ar.id === id ? { ...ar, [field]: value || null } : ar));
+  }, []);
 
   // Quick "EMAIL DRAFTS" action: pick a template, jump straight to Outlook,
   // without the Campaign Centre wizard. Reuses the same recipient/invoice
@@ -2262,7 +2272,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   const { page, setPage, totalPages, pageItems, startIndex, total } =
     usePagination(filtered, `${search}|${filter}|${month}|${year}`);
   const isMobile = useIsMobile();
-  const billingListColumns = '32px minmax(230px,1.55fr) 112px 68px 190px 94px 180px 116px 116px 100px 38px';
+  const billingListColumns = '32px minmax(230px,1.55fr) 112px 68px 190px 94px 180px 116px 116px 100px 160px 38px';
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, background: '#fff', outline: 'none', color: '#1e3a5f' };
   // Counts scoped to the selected FYE month.
@@ -2339,7 +2349,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)' }}>
           <div style={{ minWidth: isMobile ? undefined : 1320 }}>
           {!isMobile && <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: billingListColumns, columnGap: 10, padding: '10px 14px', borderLeft: '3px solid transparent', alignItems: 'center' }}>
-            {['', 'Company Name', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC', ''].map((h, i) => (
+            {['', 'Company Name', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC', 'Remarks', ''].map((h, i) => (
               i === 5
                 ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>ND (TAC)</div>
                 : (i >= 2 && i <= 8)
@@ -2438,6 +2448,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                     })()}
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ? formatStaffName(c.pic) : '—'}</div>
+                  <div style={{ padding: '0 6px' }} onClick={e => e.stopPropagation()}>
+                    <EditField id={c.companyId} field="billing_remarks" value={c.billingRemarks} onSave={handleArSave} placeholder="—" />
+                  </div>
                   <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
                     <button title="Email Drafts" onClick={e => { e.stopPropagation(); setDraftError(null); setDraftNotice(null); setDraftPopoverFor(v => v === c.companyId ? null : c.companyId); }}
                       style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: draftPopoverFor === c.companyId ? '#1d3a5c' : '#94a3b8' }}>
