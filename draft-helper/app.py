@@ -54,7 +54,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.5.3"
+VERSION = "1.5.4"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -271,18 +271,33 @@ def _set_body(mail, body_text: str):
     if os.path.isfile(image_path):
         attachment = mail.Attachments.Add(image_path)
         # PR_ATTACH_CONTENT_ID (MAPI) — marks this attachment as the inline
-        # image the cid: reference below points to, which is also what
-        # keeps Outlook from showing it as a regular visible attachment.
+        # image the cid: reference below points to.
         attachment.PropertyAccessor.SetProperty(
             "http://schemas.microsoft.com/mapi/proptag/0x3712001E", PAYMENT_IMAGE_CID,
         )
-        # The source file is shipped at 4x its display size (Vincent,
-        # 2026-08-18: the old file's QR code didn't actually scan at all —
-        # confirmed with two separate decoders — so it was rebuilt from the
-        # official Bank Details PDF at real resolution). Constraining the
-        # display width keeps the email's layout the same as before while
-        # giving the QR real pixels to work with once Outlook downscales it.
-        html_body += f'<br><img src="cid:{PAYMENT_IMAGE_CID}" width="700">'
+        # PR_ATTACHMENT_HIDDEN — without this, Content-ID alone still isn't
+        # enough for every receiving client to treat it as purely inline;
+        # Gmail in particular kept listing it as a separate downloadable
+        # attachment ("3 Attachments") even though it also rendered inline
+        # in the body (Vincent, 2026-08-18, screenshot of a received copy).
+        attachment.PropertyAccessor.SetProperty(
+            "http://schemas.microsoft.com/mapi/proptag/0x7FFE000B", True,
+        )
+        # Vincent, 2026-08-18: explicit physical size — 14cm x 7cm. First
+        # attempt used a CSS style="width:14cm;height:7cm" — Outlook's own
+        # HTML renderer (Word-based, not a browser engine) silently ignores
+        # CSS sizing on <img> and just shows the image at its native pixel
+        # size instead (confirmed: Vincent's Picture Format panel showed
+        # 46.95 x 23.47cm, exactly the source file's 1774x887px at the
+        # standard 96 DPI, i.e. the style attribute had zero effect). The
+        # classic HTML width/height attributes (pixels only, no cm) are
+        # what it actually respects — 14cm/7cm at 96 DPI rounds to 529x265.
+        # Kept as a matching CSS style too for any non-Outlook recipient
+        # whose own client reads inline style instead of the attributes.
+        html_body += (
+            f'<br><img src="cid:{PAYMENT_IMAGE_CID}" '
+            f'width="529" height="265" style="width:529px;height:265px;">'
+        )
     mail.HTMLBody = html_body
 
 
