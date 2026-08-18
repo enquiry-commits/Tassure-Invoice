@@ -54,7 +54,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.5.0"
+VERSION = "1.5.1"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -268,7 +268,13 @@ def _set_body(mail, body_text: str):
         attachment.PropertyAccessor.SetProperty(
             "http://schemas.microsoft.com/mapi/proptag/0x3712001E", PAYMENT_IMAGE_CID,
         )
-        html_body += f'<br><img src="cid:{PAYMENT_IMAGE_CID}">'
+        # The source file is shipped at 4x its display size (Vincent,
+        # 2026-08-18: the old file's QR code didn't actually scan at all —
+        # confirmed with two separate decoders — so it was rebuilt from the
+        # official Bank Details PDF at real resolution). Constraining the
+        # display width keeps the email's layout the same as before while
+        # giving the QR real pixels to work with once Outlook downscales it.
+        html_body += f'<br><img src="cid:{PAYMENT_IMAGE_CID}" width="700">'
     mail.HTMLBody = html_body
 
 
