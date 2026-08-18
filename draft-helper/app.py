@@ -54,7 +54,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.5.2"
+VERSION = "1.5.3"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -245,20 +245,28 @@ def _plain_text_to_html(text: str) -> str:
     return html.escape(text).replace("\r\n", "\n").replace("\n", "<br>\n")
 
 
+BODY_FONT_FAMILY = "Arial"
+BODY_FONT_SIZE_PT = 10
+
+
 def _set_body(mail, body_text: str):
     """
-    Plain body normally — Outlook's own .Body already renders that with no
-    surprises. Only upgrades to an HTML body (to embed the payment-options
-    image) when the text actually reaches the PAYMENT_MARKER line, so a
-    template with no payment section (e.g. a document-reminder letter)
-    behaves exactly as before.
+    Always HTML now (Vincent, 2026-08-18: wants every draft to render in a
+    fixed font/size, not whatever a given machine's own Outlook default
+    happens to be — a plain-text .Body carries no font info at all, so
+    forcing Arial/10pt requires HTML regardless of whether this particular
+    template has a payment section). Only embeds the payment-options image
+    when the text actually reaches the PAYMENT_MARKER line.
     """
     body_text = body_text or ""
+    html_body = (
+        f'<div style="font-family:{BODY_FONT_FAMILY},sans-serif;'
+        f'font-size:{BODY_FONT_SIZE_PT}pt;">{_plain_text_to_html(body_text)}</div>'
+    )
     if PAYMENT_MARKER not in body_text.upper():
-        mail.Body = body_text
+        mail.HTMLBody = html_body
         return
 
-    html_body = _plain_text_to_html(body_text)
     image_path = _asset_path("payment_options.png")
     if os.path.isfile(image_path):
         attachment = mail.Attachments.Add(image_path)
