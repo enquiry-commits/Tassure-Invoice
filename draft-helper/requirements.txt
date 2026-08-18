@@ -1,0 +1,6 @@
+flask
+flask-cors
+pywin32
+pystray
+pillow
+pyinstaller
