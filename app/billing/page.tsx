@@ -500,7 +500,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     <textarea ref={textareaRef} value={val} rows={1}
       onChange={e => { setVal(e.target.value); resizeTextarea(); }}
       onBlur={save}
-      placeholder={placeholder === '—' ? 'Type your remarks…' : placeholder}
+      placeholder={placeholder}
       style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', fontSize: 12.5, color: '#1e293b', outline: 'none', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, background: '#fff' }}
     />
   );
