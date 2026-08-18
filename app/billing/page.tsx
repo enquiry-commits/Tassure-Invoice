@@ -2125,6 +2125,22 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     }).catch(() => {});
   }, []);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  // Billing Drafts' quick draft used to always send from finance@tassure.com
+  // with no picker at all. Vincent, 2026-08-18: needed a second option
+  // (vincenttassure@outlook.com) after hitting "account not configured on
+  // this computer" — but finance@tassure.com must stay the default. Reuses
+  // the same email_senders table/API Campaign Centre's sender picker
+  // already uses, so adding another sender there covers both pages at once.
+  const [senders, setSenders] = useState<{ id: number; email: string; display_name: string | null; is_default: boolean }[]>([]);
+  const [senderId, setSenderId] = useState<number | null>(null);
+  useEffect(() => {
+    fetch('/api/client-communications/senders').then(r => r.json()).then(j => {
+      const list = j.data ?? [];
+      setSenders(list);
+      setSenderId(prev => prev ?? list.find((s: { is_default: boolean }) => s.is_default)?.id ?? list[0]?.id ?? null);
+    }).catch(() => {});
+  }, []);
+  const selectedSender = senders.find(s => s.id === senderId) ?? null;
   const [draftPopoverFor, setDraftPopoverFor] = useState<number | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
@@ -2166,10 +2182,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         id: createdDraft.id, version: createdDraft.version,
         company_name: createdDraft.company_name, to_email: createdDraft.to_email, cc_email: createdDraft.cc_email,
         subject: createdDraft.subject, body: createdDraft.body, invoice_refs: createdDraft.invoice_refs,
-        // Billing Drafts' quick-draft always sends from this fixed account,
-        // per Vincent's request — unlike Campaign Centre's full workflow,
-        // there's no sender picker here.
-        sender_email: 'finance@tassure.com',
+        sender_email: selectedSender?.email ?? 'finance@tassure.com',
       };
       if (helperAvailable) {
         const [result] = await openDraftsInOutlook([draftForOutlook]);
@@ -2500,6 +2513,11 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                           </>
                         ) : (
                           <>
+                            <select value={senderId ?? ''} onChange={e => setSenderId(Number(e.target.value))}
+                              style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
+                              {senders.length === 0 && <option value="">No senders found</option>}
+                              {senders.map(s => <option key={s.id} value={s.id}>{s.display_name ?? s.email}</option>)}
+                            </select>
                             <select value={selectedTemplateId ?? ''} onChange={e => setSelectedTemplateId(Number(e.target.value))}
                               style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
                               {emailTemplates.length === 0 && <option value="">No AR templates found</option>}
