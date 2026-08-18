@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 python -m PyInstaller --onefile --noconsole --name TassureDraftHelper `
   --hidden-import=win32timezone `
   --add-data "assets;assets" `
+  --add-data "outlook_gen_py_cache;outlook_gen_py_cache" `
   main.py
 
 Write-Host "Built: dist\TassureDraftHelper.exe"

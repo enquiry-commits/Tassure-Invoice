@@ -15,7 +15,7 @@ import winreg
 import pystray
 from PIL import Image, ImageDraw
 
-from app import PORT, app as flask_app
+from app import PORT, app as flask_app, start_outlook_event_listener
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_VALUE_NAME = "TassureDraftHelper"
@@ -94,6 +94,7 @@ def main():
 
     _register_for_startup()
     threading.Thread(target=_run_flask, daemon=True).start()
+    start_outlook_event_listener()
 
     icon = pystray.Icon(
         "tassure-draft-helper",

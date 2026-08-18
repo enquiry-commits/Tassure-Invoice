@@ -5,7 +5,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets', 'assets')],
+    datas=[('assets', 'assets'), ('outlook_gen_py_cache', 'outlook_gen_py_cache')],
     hiddenimports=['win32timezone'],
     hookspath=[],
     hooksconfig={},

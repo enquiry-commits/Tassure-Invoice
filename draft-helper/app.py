@@ -14,15 +14,55 @@ import shutil
 import sys
 import tempfile
 import threading
+import time
 import winreg
 
 import pythoncom
+import requests
+import win32com
 import win32com.client
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+# DispatchWithEvents (used below to catch Outlook's ItemSend) needs a
+# generated wrapper module for Outlook's COM type library. Generating one
+# fresh at runtime works fine unpackaged, but fails inside a frozen
+# PyInstaller onefile build — its import system can't pick up a module
+# written to disk mid-run the way a normal Python process can (confirmed by
+# reproducing it: ModuleNotFoundError right after a successful-looking
+# generate). The fix, and the standard one for this exact pywin32+PyInstaller
+# combination: pre-generate it once at build time (see BUILD.md) and ship it
+# as bundled data — outlook_gen_py_cache/, alongside assets/ — so the frozen
+# exe only ever *reads* an already-existing module, never generates one.
+# Only covers whatever Outlook typelib version was installed at build time;
+# a real mismatch on a staff machine just means this one feature quietly
+# doesn't activate (see start_outlook_event_listener) — Display() itself
+# never depends on any of this.
+# Same base-path resolution as _asset_path below (defined inline since this
+# needs to run before DispatchWithEvents is ever called, well above that
+# function's own definition).
+#
+# Setting win32com.__gen_path__ alone is not enough: `import win32com`
+# already materialized `sys.modules["win32com.gen_py"].__path__` from
+# win32com's OWN default before this line ever runs (see win32com/__init__.py
+# — it computes __gen_path__ and freezes it into gen_py.__path__ as part of
+# package init), so a later reassignment of the win32com.__gen_path__
+# attribute doesn't retroactively change where imports actually search.
+# gen_py.__path__ itself has to be replaced directly.
+_BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
+sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
+
 PORT = 51820
-VERSION = "1.4.1"
+VERSION = "1.5.0"
+
+WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
+# Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
+# route — the web app requires a Tassure login session on every other
+# route, which this background COM event thread has no way to carry.
+# Shared across every staff install (baked into the exe, not per-user); a
+# leaked copy can only mark drafts as sent, nothing more sensitive.
+DRAFT_HELPER_SECRET = "q7X9NyxHSIux_m7p3V7Jtvg4x-oimxzFKv6c2wp24iM"
 
 # Every AR template's body ends with this line ("PAYMENT METHOD付款方式:"),
 # right where the original Word templates had the payment-options graphic
@@ -53,6 +93,92 @@ CORS(app, origins=ALLOWED_ORIGINS)
 # Flask dev server handles requests on separate threads — serialize with a
 # lock rather than letting two /drafts/open requests race each other.
 _outlook_lock = threading.Lock()
+
+# Custom MAPI property used to tag every MailItem we create with the web
+# app's own draft id, so the ItemSend listener below can report back which
+# draft was actually sent — Outlook's ItemSend event carries no such link on
+# its own, and Display() only opens a window with no further callback.
+# GUID is arbitrary but must stay fixed once shipped, since an in-flight
+# draft opened by an older Helper version still needs to match after an
+# update. PT_UNICODE (0x001F): stored as a plain string.
+DRAFT_ID_PROP = (
+    "http://schemas.microsoft.com/mapi/string/"
+    "{5C43E92B-15C3-4EA1-A019-0432EEA178AD}/TassureDraftId/0x001F"
+)
+
+
+def _report_sent(draft_id, sender_email):
+    # Best-effort, fire-and-forget: a missed report (network blip, laptop
+    # asleep, etc.) just leaves the draft for a human to click "Mark as
+    # Sent" in Delivery History, exactly like before this feature existed —
+    # never something worth surfacing to the user or retrying aggressively.
+    try:
+        requests.post(
+            f"{WEB_APP_URL}/api/client-communications/drafts/mark-sent",
+            json={"id": int(draft_id), "senderEmail": sender_email},
+            headers={"Authorization": f"Bearer {DRAFT_HELPER_SECRET}"},
+            timeout=10,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
+class _OutlookEvents:
+    """
+    Event sink for Outlook.Application, bound in a dedicated long-lived
+    background thread (see start_outlook_event_listener) rather than the
+    short-lived Application object /drafts/open creates per-request — staff
+    often sit on a draft for hours before actually sending it, well after
+    that request has finished. Both COM objects drive the same one running
+    Outlook.exe, so events fire regardless of which object created the item.
+    """
+
+    def OnItemSend(self, item, cancel):
+        try:
+            draft_id = item.PropertyAccessor.GetProperty(DRAFT_ID_PROP)
+        except Exception:  # noqa: BLE001 - not one of ours, or property unset
+            draft_id = None
+        if draft_id:
+            try:
+                sender_email = item.SendUsingAccount.SmtpAddress
+            except Exception:  # noqa: BLE001
+                sender_email = None
+            threading.Thread(
+                target=_report_sent, args=(draft_id, sender_email), daemon=True,
+            ).start()
+        return cancel  # never intercept the send — purely observing
+
+
+_event_listener_started = False
+
+
+def start_outlook_event_listener():
+    """
+    Best-effort: if COM event registration fails for any reason (Outlook not
+    installed yet, a locked-down environment, missing typelib cache), the
+    Helper's core open-draft feature must keep working regardless — auto-
+    detected "sent" status simply won't fire this session, and the manual
+    "Mark as Sent" fallback in Delivery History still covers it.
+    """
+    global _event_listener_started
+    if _event_listener_started:
+        return
+    _event_listener_started = True
+
+    def _run():
+        try:
+            pythoncom.CoInitialize()
+            # Must stay referenced for the life of this thread — the event
+            # connection is tied to this object; letting it get garbage
+            # collected would silently stop delivering ItemSend.
+            outlook = win32com.client.DispatchWithEvents("Outlook.Application", _OutlookEvents)
+            while True:
+                pythoncom.PumpWaitingMessages()
+                time.sleep(0.2)
+        except Exception:  # noqa: BLE001
+            pass
+
+    threading.Thread(target=_run, daemon=True, name="outlook-event-listener").start()
 
 
 def _resolve_outlook_exe_path() -> str | None:
@@ -112,10 +238,7 @@ def _assign_sender(outlook, mail, sender_email: str):
 
 
 def _asset_path(name: str) -> str:
-    # PyInstaller onefile builds unpack bundled data next to sys._MEIPASS at
-    # runtime, not next to this script's own (temporary, unpacked) location.
-    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base, "assets", name)
+    return os.path.join(_BASE_DIR, "assets", name)
 
 
 def _plain_text_to_html(text: str) -> str:
@@ -158,6 +281,10 @@ def _open_one_draft(outlook, draft: dict) -> dict:
         mail.CC = draft.get("cc") or ""
         mail.Subject = draft.get("subject") or ""
         _set_body(mail, draft.get("body"))
+
+        draft_id = draft.get("id")
+        if draft_id:
+            mail.PropertyAccessor.SetProperty(DRAFT_ID_PROP, str(draft_id))
 
         for att in draft.get("attachments") or []:
             file_name = att.get("fileName") or "attachment.pdf"
@@ -225,4 +352,5 @@ def open_drafts():
 
 
 if __name__ == "__main__":
+    start_outlook_event_listener()
     app.run(host="127.0.0.1", port=PORT, threaded=True)
