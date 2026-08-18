@@ -392,10 +392,15 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
   );
 }
 
-const EditField = memo(function EditField({ id, field, value, onSave, placeholder = '—', isDate = false }:
-  { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; placeholder?: string; isDate?: boolean }) {
+const EditField = memo(function EditField({ id, field, value, onSave, placeholder = '—', isDate = false, multiline = false }:
+  { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; placeholder?: string; isDate?: boolean; multiline?: boolean }) {
   const inputValue = useCallback((raw: string | null) => isDate ? (toDisplayDate(raw) ?? raw ?? '') : (raw ?? ''), [isDate]);
-  const [editing, setEditing] = useState(false);
+  // multiline fields (Vincent, 2026-08-17: Billing Drafts Remarks — "可以做
+  // 成这种吗" referencing Late Filing's always-visible auto-growing
+  // textarea) never use the click-to-reveal pattern the rest of this
+  // component is built around — they start, and stay, in the "editing"
+  // render below instead of collapsing to a plain span.
+  const [editing, setEditing] = useState(multiline);
   const [val, setVal] = useState(inputValue(value));
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error' | 'conflict'>('idle');
   const [message, setMessage] = useState('');
@@ -407,7 +412,15 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dateRef  = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const resizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
+  useEffect(() => { if (multiline) resizeTextarea(); }, [multiline, val, resizeTextarea]);
   useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
 
   const persist = useCallback(async (next: string, prev: string) => {
@@ -446,7 +459,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
 
   const save = useCallback(() => {
     if (committingRef.current) return;
-    setEditing(false);
+    if (!multiline) setEditing(false);
     const typed = val.trim();
     const next = isDate && typed ? toIsoDateValue(typed) : typed;
     const baseline = editBaselineRef.current;
@@ -462,7 +475,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     committingRef.current = true;
     onSave(id, field, next ?? '');
     void persist(next ?? '', prev);
-  }, [val, id, field, isDate, onSave, persist]);
+  }, [val, id, field, isDate, multiline, onSave, persist]);
 
   const retry = useCallback(() => { committingRef.current = true; void persist(pendingRef.current.next, pendingRef.current.prev); }, [persist]);
   const acceptLatest = useCallback(() => {
@@ -482,6 +495,15 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
     e.target.value = '';
     setTimeout(() => inputRef.current?.focus(), 0);
   };
+
+  if (editing && multiline) return (
+    <textarea ref={textareaRef} value={val} rows={1}
+      onChange={e => { setVal(e.target.value); resizeTextarea(); }}
+      onBlur={save}
+      placeholder={placeholder === '—' ? 'Type your remarks…' : placeholder}
+      style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', fontSize: 12.5, color: '#1e293b', outline: 'none', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, background: '#fff' }}
+    />
+  );
 
   if (editing) return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -2449,7 +2471,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   </div>
                   <div style={{ padding: '0 6px', fontSize: 11, color: '#374151' }}>{c.pic ? formatStaffName(c.pic) : '—'}</div>
                   <div style={{ padding: '0 6px' }} onClick={e => e.stopPropagation()}>
-                    <EditField id={c.companyId} field="billing_remarks" value={c.billingRemarks} onSave={handleArSave} placeholder="—" />
+                    <EditField id={c.companyId} field="billing_remarks" value={c.billingRemarks} onSave={handleArSave} multiline />
                   </div>
                   <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
                     <button title="Email Drafts" onClick={e => { e.stopPropagation(); setDraftError(null); setDraftNotice(null); setDraftPopoverFor(v => v === c.companyId ? null : c.companyId); }}
