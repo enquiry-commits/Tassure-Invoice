@@ -32,7 +32,7 @@ const SERVICE_PATTERNS = [
   { type: 'Deferred',  kw: ['deferred revenue'] },
 ];
 
-function classify(description: string, product: string) {
+export function classify(description: string, product: string) {
   const normalizedProduct = product.toLowerCase();
   for (const rule of PRODUCT_MAP) {
     if (rule.match.some(value => normalizedProduct.includes(value))) {

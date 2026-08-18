@@ -7,7 +7,7 @@ import {
   AlertTriangle, Clock, CheckCircle2, FileText, Calendar,
   ShieldCheck, MapPin, UserCheck, BarChart3, BookOpen, DollarSign,
   Plus, Check, X, Trash2, History, RotateCcw, Filter, Mail, Send, Loader2,
-  FileSpreadsheet, Download,
+  FileSpreadsheet, Download, Pencil,
 } from 'lucide-react';
 import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
@@ -1333,6 +1333,18 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const [savingPdfs, setSavingPdfs] = useState(false);
   const [pdfResult, setPdfResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
+  // Edit mode (Vincent, 2026-08-18): once an invoice already exists for a
+  // company+cycle, this section switches to editing that real QB invoice
+  // instead of generating another one — see PATCH /api/quickbooks/update-invoice.
+  // Independent per QB company, since a company can have e.g. a TAB invoice
+  // already generated and a separate TAC one not yet. No client-side
+  // SyncToken tracking needed — the update route always re-reads the
+  // invoice's current one itself right before writing.
+  const [editLoading, setEditLoading] = useState<Partial<Record<'TAB' | 'TAC', boolean>>>({});
+  const [editLoadError, setEditLoadError] = useState<Partial<Record<'TAB' | 'TAC', string>>>({});
+  const [savingEdit, setSavingEdit] = useState<Partial<Record<'TAB' | 'TAC', boolean>>>({});
+  const [editResult, setEditResult] = useState<Partial<Record<'TAB' | 'TAC', { ok: boolean; msg: string; blocked?: boolean }>>>({});
+
   // Build the editable draft. Each line defaults to how THIS company was last
   // invoiced for that service (same QB item + description wording + rate, from
   // history), refreshing the period/FYE; when there's no history it falls back
@@ -1468,6 +1480,45 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   // line — most companies never will.
   const hasTac = tacRows.length > 0;
 
+  const tabInvoice = generatedPdfs.find(p => p.company === 'TAB') ?? null;
+  const tacInvoice = generatedPdfs.find(p => p.company === 'TAC') ?? null;
+
+  // Fetch each edit-mode company's live QB lines once, replacing that
+  // company's slice of `lines` with what's actually on the invoice — not
+  // the historical-template guess `initialLines` started from.
+  const loadedEditCompanies = useRef(new Set<'TAB' | 'TAC'>()).current;
+  const loadLiveLines = useCallback(async (company: 'TAB' | 'TAC', qbId: string) => {
+    setEditLoading(prev => ({ ...prev, [company]: true }));
+    setEditLoadError(prev => ({ ...prev, [company]: undefined }));
+    try {
+      const res = await fetch(`/api/quickbooks/invoice-lines?company=${company}&id=${encodeURIComponent(qbId)}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Unable to load this invoice from QuickBooks.');
+      const liveLines: EditableLine[] = (json.lines ?? []).map((l: { service: string; productService: string; description: string; qty: number; rate: number }) => ({
+        service: l.service, productService: l.productService, description: l.description,
+        qty: l.qty, rate: l.rate, include: true, due: false, reason: 'Live from QuickBooks',
+      }));
+      setLines(prev => company === 'TAB'
+        ? [...liveLines, ...prev.filter(l => l.service === 'ND')]
+        : [...prev.filter(l => l.service !== 'ND'), ...liveLines]);
+    } catch (error) {
+      setEditLoadError(prev => ({ ...prev, [company]: error instanceof Error ? error.message : 'Unable to load this invoice.' }));
+    } finally {
+      setEditLoading(prev => ({ ...prev, [company]: false }));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tabInvoice && !loadedEditCompanies.has('TAB')) {
+      loadedEditCompanies.add('TAB');
+      void loadLiveLines('TAB', tabInvoice.qbId);
+    }
+    if (tacInvoice && !loadedEditCompanies.has('TAC')) {
+      loadedEditCompanies.add('TAC');
+      void loadLiveLines('TAC', tacInvoice.qbId);
+    }
+  }, [tabInvoice, tacInvoice, loadLiveLines, loadedEditCompanies]);
+
   const [tacStatus, setTacStatus] = useState<{ connected: boolean } | null>(null);
   useEffect(() => {
     if (!hasTac) return;
@@ -1510,7 +1561,10 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const totalTab = includedTab.reduce((s, l) => s + l.qty * l.rate, 0);
   const totalTac = includedTac.reduce((s, l) => s + l.qty * l.rate, 0);
   const missingRate = included.some(l => !l.rate);
-  const missingInvoiceNumber = (includedTab.length > 0 && !invoiceNumbers.TAB) || (includedTac.length > 0 && !invoiceNumbers.TAC);
+  // Only the side(s) still being generated need a confirmed QB number —
+  // an already-existing invoice being edited keeps its real DocNumber,
+  // untouched by this panel.
+  const missingInvoiceNumber = (!tabInvoice && includedTab.length > 0 && !invoiceNumbers.TAB) || (!tacInvoice && includedTac.length > 0 && !invoiceNumbers.TAC);
   const periodValidationErrors = included.flatMap(line => {
     if (!['Secretary', 'Address', 'ND'].includes(line.service)) return [];
     const errors: string[] = [];
@@ -1526,6 +1580,14 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     return errors;
   });
   const hasPeriodError = periodValidationErrors.length > 0;
+
+  // Once a company already has an invoice this cycle, it's edited via its
+  // own "Save … changes" button (see renderSaveButton) instead of the
+  // combined bottom Generate button below — that button only ever creates
+  // NEW invoices, for whichever company(ies) don't have one yet.
+  const needsGenerateTab = !tabInvoice;
+  const needsGenerateTac = hasTac && !tacInvoice;
+  const showGenerateButton = needsGenerateTab || needsGenerateTac;
 
   const createInvoice = async () => {
     if (hasPeriodError) {
@@ -1551,8 +1613,10 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           txnDate,
           sendEmail: false,
           pic: c.pic ?? undefined,
-          tabLines: includedTab.map(toApiLine),
-          tacLines: includedTac.map(toApiLine),
+          // A company that already has an invoice this cycle is edited via
+          // saveInvoiceEdit/renderSaveButton instead — never re-created here.
+          tabLines: needsGenerateTab ? includedTab.map(toApiLine) : [],
+          tacLines: needsGenerateTac ? includedTac.map(toApiLine) : [],
           fyeMonth: c.fyeMonth, fyeYear, fyeCycle: cycleFye ?? null,
           idempotencyKey: invoiceRequestKey,
           docNumbers: invoiceNumbers,
@@ -1606,6 +1670,45 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     } catch (e: unknown) {
       setDraftResult({ ok: false, msg: e instanceof Error ? e.message : 'Request failed' });
     } finally { setDrafting(false); }
+  };
+
+  // Saves changes to an invoice that ALREADY exists (edit mode) — a
+  // completely different QB call from createInvoice above (a sparse update
+  // to one existing invoice, not creating a new one), so it's its own
+  // function rather than a branch inside createInvoice.
+  const saveInvoiceEdit = async (company: 'TAB' | 'TAC') => {
+    const invoice = company === 'TAB' ? tabInvoice : tacInvoice;
+    if (!invoice) return;
+    const companyLines = company === 'TAB' ? includedTab : includedTac;
+    if (!companyLines.length) {
+      setEditResult(prev => ({ ...prev, [company]: { ok: false, msg: 'At least one line must be included.' } }));
+      return;
+    }
+    setSavingEdit(prev => ({ ...prev, [company]: true }));
+    setEditResult(prev => ({ ...prev, [company]: undefined }));
+    try {
+      const toApiLine = (l: EditableLine) => ({
+        service: l.service, productService: l.productService, description: l.description, rate: l.rate, qty: l.qty,
+      });
+      const res = await fetch('/api/quickbooks/update-invoice', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qbCompany: company, qbInvoiceId: invoice.qbId, pic: c.pic ?? undefined, lines: companyLines.map(toApiLine) }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setEditResult(prev => ({
+          ...prev,
+          [company]: { ok: false, msg: json.error ?? 'Unable to save changes.', blocked: !!(json.alreadySent || json.staleSyncToken) },
+        }));
+        return;
+      }
+      setGeneratedPdfs(prev => prev.map(pdf => pdf.company === company ? { ...pdf, total: json.total ?? pdf.total } : pdf));
+      setEditResult(prev => ({ ...prev, [company]: { ok: true, msg: `Saved — ${company} invoice #${displayInvoiceNo(json.invoiceNo)} updated in QuickBooks.` } }));
+    } catch (error) {
+      setEditResult(prev => ({ ...prev, [company]: { ok: false, msg: error instanceof Error ? error.message : 'Request failed.' } }));
+    } finally {
+      setSavingEdit(prev => ({ ...prev, [company]: false }));
+    }
   };
 
   const saveInvoicePdf = async (invoice: GeneratedPdf) => {
@@ -1745,6 +1848,48 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     </div>
   );
 
+  // Replaces renderInvoiceNumber(company) in the section header once that
+  // company already has an invoice this cycle — editing never touches
+  // DocNumber, so there's nothing to estimate/confirm here anymore.
+  const renderEditHeader = (company: 'TAB' | 'TAC', invoice: GeneratedPdf | null) =>
+    invoice ? (
+      <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 8, background: '#eef2ff', border: '1px solid #c7d2fe', fontSize: 11, fontWeight: 700, color: '#4338ca' }}>
+        <Pencil size={12} /> Editing invoice #{displayInvoiceNo(invoice.invoiceNo)}
+      </span>
+    ) : renderInvoiceNumber(company);
+
+  // Per-company Save button + result banner, shown instead of the combined
+  // bottom Generate button once that company is in edit mode.
+  const renderSaveButton = (company: 'TAB' | 'TAC', invoice: GeneratedPdf) => {
+    const companyLines = company === 'TAB' ? includedTab : includedTac;
+    const saving = !!savingEdit[company];
+    const disabled = saving || !!editLoading[company] || companyLines.length === 0 || companyLines.some(l => !l.rate);
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+        <button
+          onClick={() => saveInvoiceEdit(company)}
+          disabled={disabled}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            background: disabled ? '#94a3b8' : '#4338ca', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+          }}>
+          {saving ? 'Saving…' : `Save ${company} changes to QuickBooks`}
+        </button>
+        {editResult[company] && (
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: editResult[company]!.ok ? '#15803d' : '#dc2626' }}>
+            {editResult[company]!.ok ? '✓ ' : '✕ '}{editResult[company]!.msg}
+            {editResult[company]!.blocked && (
+              <button onClick={() => loadLiveLines(company, invoice.qbId)} style={{ marginLeft: 8, border: 'none', background: 'transparent', color: '#4338ca', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontSize: 11.5 }}>
+                Reload latest from QuickBooks
+              </button>
+            )}
+          </span>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div style={{ padding: '28px 20px', background: '#fff' }}>
       {/* Header: contact + PIC + invoice date */}
@@ -1769,11 +1914,13 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         <span style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 5, padding: '2px 8px' }}>TAB</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Basic Services</span>
         <span style={{ fontSize: 10, color: '#94a3b8' }}>· default QuickBooks company</span>
-        {renderInvoiceNumber('TAB')}
+        {renderEditHeader('TAB', tabInvoice)}
       </div>
       <div style={{ fontSize: 11, color: '#64748b', margin: '2px 0 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
         <FileText size={12} />
-        {c.priorInvoiceDate
+        {tabInvoice
+          ? <span>Editing the real invoice — lines below are loaded live from QuickBooks, not a template.</span>
+          : c.priorInvoiceDate
           ? <span>
               Based on last invoice
               {c.priorInvoiceNo && <strong style={{ color: '#1d4ed8', fontFamily: 'monospace', margin: '0 5px', background: '#eff6ff', border: '1px solid #dbeafe', padding: '1px 7px', borderRadius: 4 }}>#{c.priorInvoiceNo}</strong>}
@@ -1782,7 +1929,11 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           : <span style={{ color: '#b45309' }}>No prior renewal invoice found — draft built from standard template. Confirm each line.</span>}
       </div>
       <div style={{ marginBottom: 0 }}>
-        {renderTable(tabRows, 'No applicable services for this company.')}
+        {editLoading.TAB ? (
+          <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>Loading live invoice lines from QuickBooks…</div>
+        ) : editLoadError.TAB ? (
+          <div style={{ padding: 12, borderRadius: 8, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600 }}>{editLoadError.TAB}</div>
+        ) : renderTable(tabRows, 'No applicable services for this company.')}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#f8fafc' }}>
           <Plus size={13} style={{ color: '#0f766e' }} />
           <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add line</span>
@@ -1802,6 +1953,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             ))}
           </select>
         </div>
+        {tabInvoice && renderSaveButton('TAB', tabInvoice)}
       </div>
 
       {/* TAC — Nominee Director only, and only shown when this company has an
@@ -1830,11 +1982,16 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
                 <a href="/api/quickbooks/auth?company=TAC" style={{ color: '#1d4ed8', textDecoration: 'underline', fontWeight: 700 }}>Connect TAC</a>
               </span>
             )}
-            {renderInvoiceNumber('TAC')}
+            {renderEditHeader('TAC', tacInvoice)}
           </div>
           {/* Provenance for the TAC invoice — mirrors the TAB note above. The
               ND draft line's item & fee come from this exact invoice. */}
-          {(() => {
+          {tacInvoice ? (
+            <div style={{ fontSize: 11, color: '#64748b', margin: '2px 0 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <FileText size={12} />
+              <span>Editing the real invoice — lines below are loaded live from QuickBooks, not a template.</span>
+            </div>
+          ) : (() => {
             const ndPrior = c.renewals.find(r => r.service === 'ND')?.history?.[0] ?? null;
             return (
               <div style={{ fontSize: 11, color: '#64748b', margin: '2px 0 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1851,7 +2008,11 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             );
           })()}
           <div style={{ marginBottom: 0 }}>
-            {renderTable(tacRows, 'No Nominee Director line.')}
+            {editLoading.TAC ? (
+              <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>Loading live invoice lines from QuickBooks…</div>
+            ) : editLoadError.TAC ? (
+              <div style={{ padding: 12, borderRadius: 8, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600 }}>{editLoadError.TAC}</div>
+            ) : renderTable(tacRows, 'No Nominee Director line.')}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#fff7ed' }}>
               <Plus size={13} style={{ color: '#9a3412' }} />
               <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add ND line</span>
@@ -1867,6 +2028,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
                 ))}
               </select>
             </div>
+            {tacInvoice && renderSaveButton('TAC', tacInvoice)}
           </div>
           </div>
         </>
@@ -1888,21 +2050,29 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             Period check required: {periodValidationErrors.slice(0, 3).join(' · ')}
           </div>
         )}
-        <button
-          onClick={createInvoice}
-          disabled={drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber || hasPeriodError}
-          style={{
-            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none',
-            cursor: (drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber || hasPeriodError) ? 'not-allowed' : 'pointer',
-            background: (drafting || numberLoading || included.length === 0 || missingRate || missingInvoiceNumber || hasPeriodError) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
-          }}>
-          {
-            drafting ? 'Generating…'
-            : includedTab.length && includedTac.length ? 'Generate 2 Invoices (TAB + TAC)'
-            : includedTac.length ? 'Generate Invoice in QB (TAC)'
-            : 'Generate Invoice in QB (TAB)'
-          }
-        </button>
+        {showGenerateButton && (() => {
+          const pendingTabCount = needsGenerateTab ? includedTab.length : 0;
+          const pendingTacCount = needsGenerateTac ? includedTac.length : 0;
+          const nothingPending = pendingTabCount + pendingTacCount === 0;
+          const disabled = drafting || numberLoading || nothingPending || missingRate || missingInvoiceNumber || hasPeriodError;
+          return (
+            <button
+              onClick={createInvoice}
+              disabled={disabled}
+              style={{
+                marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                background: disabled ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+              }}>
+              {
+                drafting ? 'Generating…'
+                : pendingTabCount && pendingTacCount ? 'Generate 2 Invoices (TAB + TAC)'
+                : pendingTacCount ? 'Generate Invoice in QB (TAC)'
+                : 'Generate Invoice in QB (TAB)'
+              }
+            </button>
+          );
+        })()}
       </div>
 
       {numberWarning && (
