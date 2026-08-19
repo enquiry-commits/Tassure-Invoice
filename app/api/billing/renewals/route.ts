@@ -72,6 +72,9 @@ export interface CompanyBilling {
   priorInvoiceDate: string | null;
   priorInvoiceNo: string | null; // QB DocNumber of that prior renewal invoice
   generatedInvoices: GeneratedInvoice[]; // invoices OUR system has created (authoritative)
+  resolvedCompanyId: number | null; // the real companies.id — see app/billing/page.tsx's arToBillingRow (companyId there is the AR Reminder row's own id, not this)
+  parentCompanyId: number | null; // Vincent's Bill-To-override link: invoice this company, but show this parent's name/address to the client
+  parentCompanyName: string | null;
 }
 
 export interface GeneratedInvoice {
@@ -131,7 +134,7 @@ export async function GET(req: NextRequest) {
   ] = await Promise.all([
     supabase
       .from('companies')
-      .select('id, company_name, registration_no, fye_month, pic, sec_pic, has_nd, uses_address, has_xbrl, tw_status, client_type, is_active, best_email, primary_contact')
+      .select('id, company_name, registration_no, fye_month, pic, sec_pic, has_nd, uses_address, has_xbrl, tw_status, client_type, is_active, best_email, primary_contact, parent_company_id')
       .eq('client_type', 'CSS Client')
       .eq('tw_status', 'Active'),
     supabase
@@ -186,6 +189,17 @@ export async function GET(req: NextRequest) {
       .order('created_at', { ascending: false }),
   ]);
   if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
+
+  // A parent company (Vincent's Bill-To-override feature) need not itself be
+  // an active CSS client, so it can be missing from `companies` above (which
+  // is filtered to client_type='CSS Client'/tw_status='Active') — resolve
+  // parent names from the full, unfiltered table instead.
+  const parentIds = [...new Set((companies ?? []).map(c => c.parent_company_id).filter((id): id is number => id != null))];
+  const parentNameById = new Map<number, string>();
+  if (parentIds.length) {
+    const { data: parentRows } = await supabase.from('companies').select('id, company_name').in('id', parentIds);
+    for (const p of parentRows ?? []) parentNameById.set(p.id, p.company_name);
+  }
 
   const ndActiveSet = new Set((activeNDs ?? []).map(a => normalize(a.company_name)));
   const ndNameById = new Map((nomineeDirectors ?? []).map(person => [person.id, person.name as string]));
@@ -533,6 +547,9 @@ export async function GET(req: NextRequest) {
       priorInvoiceDate: prior?.txn_date ?? null,
       priorInvoiceNo: prior?.invoice_no ?? null,
       generatedInvoices: generatedMap.get(normName) ?? [],
+      resolvedCompanyId: company.id,
+      parentCompanyId: company.parent_company_id ?? null,
+      parentCompanyName: company.parent_company_id ? (parentNameById.get(company.parent_company_id) ?? null) : null,
     };
   });
 

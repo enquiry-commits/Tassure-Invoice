@@ -111,7 +111,7 @@ export function requiresPicClass(line: DraftLineItem): boolean {
 }
 
 // ── Look up QB Customer by display name ───────────────────────────────────────
-export async function findCustomer(token: string, realmId: string, name: string) {
+export async function findCustomer(token: string, realmId: string, name: string): Promise<{ id: string; name: string; billAddr: Record<string, unknown> | null } | null> {
   const escaped = name.replace(/'/g, "\\'");
   const q = encodeURIComponent(`SELECT * FROM Customer WHERE DisplayName = '${escaped}' MAXRESULTS 5`);
   const res = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q}&minorversion=65`, {
@@ -120,7 +120,7 @@ export async function findCustomer(token: string, realmId: string, name: string)
   if (!res.ok) return null;
   const json = await res.json();
   const rows: Record<string, unknown>[] = json.QueryResponse?.Customer ?? [];
-  if (rows.length) return { id: rows[0].Id as string, name: rows[0].DisplayName as string };
+  if (rows.length) return { id: rows[0].Id as string, name: rows[0].DisplayName as string, billAddr: (rows[0].BillAddr as Record<string, unknown>) ?? null };
 
   // Fuzzy fallback: partial word match
   const words = name.toLowerCase().replace(/pte\.?\s*ltd\.?/gi,'').trim().split(/\s+/).filter(w => w.length > 2);
@@ -134,7 +134,7 @@ export async function findCustomer(token: string, realmId: string, name: string)
   const rows2: Record<string, unknown>[] = json2.QueryResponse?.Customer ?? [];
   const match = findUniqueBestMatch(name, rows2, row => String(row.DisplayName ?? ''), 70);
   return match.value
-    ? { id: match.value.Id as string, name: match.value.DisplayName as string }
+    ? { id: match.value.Id as string, name: match.value.DisplayName as string, billAddr: (match.value.BillAddr as Record<string, unknown>) ?? null }
     : null;
 }
 

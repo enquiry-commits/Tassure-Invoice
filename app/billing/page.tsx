@@ -7,7 +7,7 @@ import {
   AlertTriangle, Clock, CheckCircle2, FileText, Calendar,
   ShieldCheck, MapPin, UserCheck, BarChart3, BookOpen, DollarSign,
   Plus, Check, X, Trash2, History, RotateCcw, Filter, Mail, Send, Loader2,
-  FileSpreadsheet, Download, Pencil,
+  FileSpreadsheet, Download, Pencil, Building2,
 } from 'lucide-react';
 import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
@@ -904,6 +904,113 @@ function LateFilingBadge({ remarks }: { remarks: string | null | undefined }) {
   );
 }
 
+// Vincent: some clients have a parent/subsidiary structure — invoices for
+// the subsidiary should still be created under the subsidiary's own QB
+// customer (revenue tracking stays correct), but the "Bill To" name/address
+// on the PDF the client sees should be the PARENT's (see
+// app/api/quickbooks/create-invoice/route.ts's resolveParentBillAddr). This
+// link is persistent (companies.parent_company_id), not a per-invoice
+// choice — set once here, applies to every future cycle until changed.
+function ParentCompanyBadge({ name }: { name: string | null | undefined }) {
+  if (!name) return null;
+  return (
+    <span title={`Invoices for this company show "${name}" as the Bill-To name/address`} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3, background: '#eef2ff', color: '#4338ca',
+      border: '1px solid #e0e7ff', borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700,
+      whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0,
+    }}>
+      <Building2 size={9} />{name}
+    </span>
+  );
+}
+
+// Module-level cache: ExpandedBillingRow fully unmounts every time the
+// draft modal closes, so a component-local fetch would re-run on every
+// re-open. One fetch shared for the page's lifetime; the in-flight promise
+// dedups concurrent opens.
+let parentPickCache: { id: number; company_name: string }[] | null = null;
+let parentPickPromise: Promise<{ id: number; company_name: string }[]> | null = null;
+function loadParentPicklist() {
+  if (parentPickCache) return Promise.resolve(parentPickCache);
+  if (!parentPickPromise) {
+    parentPickPromise = fetch('/api/companies/parent').then(r => r.json())
+      .then(j => { parentPickCache = j.companies ?? []; return parentPickCache!; })
+      .catch(() => { parentPickPromise = null; return []; });
+  }
+  return parentPickPromise;
+}
+
+function ParentCompanyPicker({ companyId, parentCompanyId, parentCompanyName, onChange }: {
+  companyId: number | null; parentCompanyId: number | null; parentCompanyName: string | null;
+  onChange: (id: number | null, name: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [options, setOptions] = useState<{ id: number; company_name: string }[]>([]);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    loadParentPicklist().then(setOptions);
+    const onOutside = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onOutside);
+    return () => document.removeEventListener('mousedown', onOutside);
+  }, [open]);
+
+  if (!companyId) return null; // this row never resolved a real companies.id — nothing to link yet
+
+  const filtered = (query.trim()
+    ? options.filter(o => o.company_name.toLowerCase().includes(query.trim().toLowerCase()) && o.id !== companyId)
+    : options.filter(o => o.id !== companyId)).slice(0, 30);
+
+  const save = async (id: number | null, name: string | null) => {
+    const prev = { id: parentCompanyId, name: parentCompanyName };
+    onChange(id, name); // optimistic
+    setOpen(false); setQuery('');
+    try {
+      const res = await fetch('/api/companies/parent', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, parentCompanyId: id }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(`Failed to save parent company: ${j.error ?? res.status}`);
+        onChange(prev.id, prev.name);
+      }
+    } catch {
+      alert('Failed to save parent company — check your connection.');
+      onChange(prev.id, prev.name);
+    }
+  };
+
+  return (
+    <div ref={boxRef} style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+      {parentCompanyId && !open ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#64748b' }}>
+          <Building2 size={11} />Bill-To parent: <strong style={{ color: '#334155' }}>{parentCompanyName}</strong>
+          <button onClick={() => setOpen(true)} style={{ border: 'none', background: 'none', color: 'var(--accent-blue)', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>Change</button>
+          <button onClick={() => save(null, null)} style={{ border: 'none', background: 'none', color: '#94a3b8', fontSize: 10.5, cursor: 'pointer', padding: 0 }}>Clear</button>
+        </span>
+      ) : !open ? (
+        <button onClick={() => setOpen(true)} style={{ border: '1px dashed #cbd5e1', background: 'none', color: '#94a3b8', fontSize: 10.5, fontWeight: 600, cursor: 'pointer', borderRadius: 5, padding: '2px 7px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Plus size={10} />Set parent company
+        </button>
+      ) : (
+        <div style={{ position: 'relative' }}>
+          <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search company…"
+            style={{ border: '1px solid #cbd5e1', borderRadius: 5, padding: '4px 7px', fontSize: 11.5, width: 200 }} />
+          <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 2, zIndex: 40, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, boxShadow: '0 8px 20px rgba(0,0,0,0.15)', maxHeight: 220, overflowY: 'auto', width: 260 }}>
+            {filtered.length === 0 && <div style={{ padding: '8px 10px', fontSize: 11, color: '#94a3b8' }}>No match</div>}
+            {filtered.map(o => (
+              <div key={o.id} onClick={() => save(o.id, o.company_name)} style={{ padding: '6px 10px', fontSize: 11.5, cursor: 'pointer' }}>{o.company_name}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Matches BillingStatusPill's own look (white/neutral-bordered with just a
 // colored dot + text, e.g. the "Invoiced" pill elsewhere on this page)
 // instead of a solid colored background — Vincent: "DUE DATE那边的胶囊优化成
@@ -1333,6 +1440,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const [generatedPdfs, setGeneratedPdfs] = useState<GeneratedPdf[]>(() => existingGeneratedPdfs(c, cycleFye));
   const [savingPdfs, setSavingPdfs] = useState(false);
   const [pdfResult, setPdfResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [parentOverride, setParentOverride] = useState<{ id: number | null; name: string | null }>({ id: c.parentCompanyId, name: c.parentCompanyName });
 
   // Edit mode (Vincent, 2026-08-18): once an invoice already exists for a
   // company+cycle, this section switches to editing that real QB invoice
@@ -1628,6 +1736,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           companyName: c.companyName,
+          companyId: c.resolvedCompanyId ?? undefined,
           email: email || undefined,
           txnDate,
           sendEmail: false,
@@ -1922,6 +2031,14 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   return (
     <>
     <div style={{ padding: '28px 20px', background: '#fff' }}>
+      <div style={{ marginBottom: 12 }}>
+        <ParentCompanyPicker
+          companyId={c.resolvedCompanyId}
+          parentCompanyId={parentOverride.id}
+          parentCompanyName={parentOverride.name}
+          onChange={(id, name) => setParentOverride({ id, name })}
+        />
+      </div>
       {/* Header: contact + PIC + invoice date */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2242,6 +2359,9 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
     priorInvoiceDate: matched?.priorInvoiceDate ?? null,
     priorInvoiceNo: matched?.priorInvoiceNo ?? null,
     generatedInvoices: matched?.generatedInvoices ?? [],
+    resolvedCompanyId: matched?.companyId ?? null,
+    parentCompanyId: matched?.parentCompanyId ?? null,
+    parentCompanyName: matched?.parentCompanyName ?? null,
   };
 }
 
@@ -2675,7 +2795,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                   <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="company-name-text">{c.companyName}</div>
+                    <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {c.companyName}<ParentCompanyBadge name={c.parentCompanyName} />
+                    </div>
                     {c.uen && <div className="company-registration-text">{c.uen} · FYE {c.fyeMonth ?? '—'}</div>}
                   </div>
                   {notInvoicedYet(c)
@@ -2705,7 +2827,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
                     <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName}
+                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName}<ParentCompanyBadge name={c.parentCompanyName} />
                     </div>
                     {c.uen && <div className="company-registration-text">{c.uen}</div>}
                   </div>

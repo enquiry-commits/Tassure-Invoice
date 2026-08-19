@@ -118,11 +118,60 @@ async function validateRenewalPeriods(
   return { blocking, overlapWarnings };
 }
 
+// Vincent: a subsidiary's invoice should record against the SUBSIDIARY's own
+// QB customer (CustomerRef, unchanged) but show the PARENT's name+address on
+// the "Bill To" block the client actually sees. companies.parent_company_id
+// is the persistent staff-set link (app/api/companies/parent/route.ts).
+// Re-derived from Supabase + QuickBooks here, not trusted from the client —
+// only `companyId` (identity) is client-supplied, same trust level
+// `companyName` already has for the customer lookup just above this call.
+type ParentBillAddrResult =
+  | { kind: 'none' }
+  | { kind: 'error'; error: string }
+  | { kind: 'ok'; billAddr: Record<string, unknown> };
+
+async function resolveParentBillAddr(
+  token: string, realmId: string, company: QbCompany,
+  companyId: number | null, companyName: string,
+): Promise<ParentBillAddrResult> {
+  const supabase = createAdminClient();
+  let parentCompanyId: number | null = null;
+  if (companyId) {
+    const { data } = await supabase.from('companies').select('parent_company_id').eq('id', companyId).maybeSingle();
+    parentCompanyId = data?.parent_company_id ?? null;
+  }
+  // Fallback for an AR row that never resolved a real companies.id — exact
+  // name match, same string already trusted for the QB customer lookup above.
+  if (!parentCompanyId) {
+    const { data } = await supabase.from('companies').select('parent_company_id').eq('company_name', companyName).maybeSingle();
+    parentCompanyId = data?.parent_company_id ?? null;
+  }
+  if (!parentCompanyId) return { kind: 'none' }; // no parent linked — normal invoice, unchanged
+
+  const { data: parentRow } = await supabase.from('companies').select('company_name').eq('id', parentCompanyId).maybeSingle();
+  if (!parentRow?.company_name) {
+    return { kind: 'error', error: `Parent company link is broken for "${companyName}" — the linked parent record no longer exists. Fix the parent link before generating this invoice.` };
+  }
+  const parent = await findCustomer(token, realmId, parentRow.company_name);
+  if (!parent) {
+    return { kind: 'error', error: `Cannot generate invoice: parent company "${parentRow.company_name}" (linked to "${companyName}") was not found in QuickBooks ${company}. Set up its QuickBooks customer record first, or check the parent company link.` };
+  }
+  if (!parent.billAddr) {
+    return { kind: 'error', error: `Cannot generate invoice: parent company "${parentRow.company_name}"'s QuickBooks customer record has no Billing Address configured. Add one in QuickBooks before generating invoices for "${companyName}".` };
+  }
+  // PhysicalAddress.Id identifies that address as it exists under the
+  // PARENT's own customer record — carrying it onto a different entity (this
+  // invoice, under a different CustomerRef) risks QBO rejecting it or
+  // misreading it as a reference rather than inline address data.
+  const { Id: _unused, ...billAddrFields } = parent.billAddr;
+  return { kind: 'ok', billAddr: billAddrFields };
+}
+
 // Create one invoice in ONE QB company for the given lines. Used twice per
 // request when a draft has both TAB lines (basic services) and TAC lines
 // (Nominee Director) — each is its own invoice in its own QB company.
 async function createInvoiceInCompany(
-  company: QbCompany, companyName: string, lines: DraftLineItem[],
+  company: QbCompany, companyName: string, companyId: number | null, lines: DraftLineItem[],
   email: string | undefined, txnDate: string, sendEmail: boolean | undefined,
   pic: string | undefined, docNumber: string | undefined,
   numberMode: InvoiceNumberMode, requestId: string,
@@ -134,6 +183,9 @@ async function createInvoiceInCompany(
 
   const customer = await findCustomer(token, realmId, companyName);
   if (!customer) return { error: `Customer not found in QB ${company}: "${companyName}"` };
+
+  const parentBillAddr = await resolveParentBillAddr(token, realmId, company, companyId, companyName);
+  if (parentBillAddr.kind === 'error') return { error: parentBillAddr.error };
 
   const { blocking, overlapWarnings } = await validateRenewalPeriods(company, customer.name, lines);
   if (blocking.length) {
@@ -171,6 +223,7 @@ async function createInvoiceInCompany(
     PrintStatus: 'NeedToPrint',
     // Default: create as a draft for review in QB — do NOT queue for sending.
     EmailStatus: sendEmail && email ? 'NeedToSend' : 'NotSet',
+    ...(parentBillAddr.kind === 'ok' ? { BillAddr: parentBillAddr.billAddr } : {}),
   };
   // Both TAB and TAC enable CustomTxnNumbers. In that mode QuickBooks treats
   // every supplied DocNumber literally; "AUTO_GENERATE" is not a sentinel.
@@ -238,12 +291,13 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const {
-    companyName, email, txnDate, sendEmail, pic,
+    companyName, companyId, email, txnDate, sendEmail, pic,
     tabLines, tacLines,
     fyeMonth, fyeYear, fyeCycle, docNumbers, expectedNextNumbers, idempotencyKey,
     overlapConfirmed,
   } = body as {
     companyName: string;
+    companyId?: number; // real companies.id — resolves a parent-company Bill-To override, if linked
     email?: string;
     txnDate?: string;
     sendEmail?: boolean;
@@ -425,7 +479,7 @@ export async function POST(req: NextRequest) {
     if (!lines.length) return null;
     try {
       return await createInvoiceInCompany(
-        company, companyName, lines, email, date, sendEmail, pic,
+        company, companyName, companyId ?? null, lines, email, date, sendEmail, pic,
         resolvedNumbers[company], numberModes[company] ?? 'sequential',
         quickBooksRequestId(company, idempotencyKey), account.qbLocations?.[company],
         overlapConfirmed === true,
