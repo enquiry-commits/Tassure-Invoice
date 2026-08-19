@@ -130,6 +130,8 @@ async function generateArRows() {
         pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
         acc_pic: accFor(c.id, c.registration_no),
         tax_pic: taxFor(c.id, c.registration_no),
+        acc_pic_manual: false,
+        tax_pic_manual: false,
         };
       });
 
@@ -232,7 +234,7 @@ async function generateArRows() {
       if (neverGenerated.length) {
         try {
           const cookie = await getSessionCookie();
-          const catchUpRows: { entity_name: string; company_id: number; uen: string; fye_month: string; fye_year: number; fye_date: string; due_date: string; pic: string | null; acc_pic: string | null; tax_pic: string | null }[] = [];
+          const catchUpRows: { entity_name: string; company_id: number; uen: string; fye_month: string; fye_year: number; fye_date: string; due_date: string; pic: string | null; acc_pic: string | null; tax_pic: string | null; acc_pic_manual: boolean; tax_pic_manual: boolean }[] = [];
           const skippedCompanies: { id: number; company_name: string; fye_month: string }[] = [];
           let nextIndex = 0;
           const worker = async () => {
@@ -276,6 +278,8 @@ async function generateArRows() {
                     pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
                     acc_pic: accFor(c.id, c.registration_no),
                     tax_pic: taxFor(c.id, c.registration_no),
+                    acc_pic_manual: false,
+                    tax_pic_manual: false,
                   });
                 } else {
                   catchUpSkipped++;

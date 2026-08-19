@@ -348,11 +348,16 @@ export async function POST(req: NextRequest) {
   // No upstream system tracks Accounts/Tax PIC — carry forward this
   // company's own most recent prior acc_pic/tax_pic as a starting
   // suggestion when the caller didn't already supply one (see pic-sync.ts).
+  // A caller-supplied value counts as manual (a person typed it while
+  // adding the row); a carried-forward one doesn't, matching the blue
+  // auto-fill dot's convention for date_of_agm/filling_date/reminder_note.
+  if (record.acc_pic !== undefined) record.acc_pic_manual = true;
+  if (record.tax_pic !== undefined) record.tax_pic_manual = true;
   if (record.acc_pic === undefined || record.tax_pic === undefined) {
     const { accFor, taxFor } = await loadCarriedForwardPics(supabase);
     const uen = (record.uen as string | undefined) ?? null;
-    if (record.acc_pic === undefined) record.acc_pic = accFor(null, uen);
-    if (record.tax_pic === undefined) record.tax_pic = taxFor(null, uen);
+    if (record.acc_pic === undefined) { record.acc_pic = accFor(null, uen); record.acc_pic_manual = false; }
+    if (record.tax_pic === undefined) { record.tax_pic = taxFor(null, uen); record.tax_pic_manual = false; }
   }
 
   const { data, error } = await supabase.from('ar_reminder').insert(record).select().single();
@@ -417,6 +422,14 @@ export async function PATCH(req: NextRequest) {
   // TeamWork (see sync-workflow/route.ts) — a manual edit here must win from
   // now on, and clearing the cell hands control back to automation.
   if (field === 'date_of_agm' || field === 'filling_date' || field === 'reminder_note') {
+    updatePayload[`${field}_manual`] = nextValue !== null;
+  }
+  // acc_pic/tax_pic have no ongoing re-sync (unlike the TeamWork fields
+  // above — the carry-forward suggestion only ever runs once, at row
+  // creation), but flip the same _manual flag on an edit so the blue
+  // auto-fill dot correctly disappears once a person has actually chosen a
+  // value themselves, matching that convention.
+  if (field === 'acc_pic' || field === 'tax_pic') {
     updatePayload[`${field}_manual`] = nextValue !== null;
   }
   let updateQuery = supabase

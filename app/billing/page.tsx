@@ -243,6 +243,7 @@ interface ARRecord {
   prepared_date: string | null; sent_date: string | null; received_date: string | null;
   date_of_agm: string | null; agm_held_date: string | null; filling_date: string | null;
   date_of_agm_manual?: boolean | null; filling_date_manual?: boolean | null; reminder_note_manual?: boolean | null;
+  acc_pic_manual?: boolean | null; tax_pic_manual?: boolean | null;
   ar_status: string | null; xbrl: string | null; software_update: string | null;
   dpo: string | null; ond_ron: string | null; dormant: string | null;
   accounts_status: string | null; fin_stmt_status: string | null;
@@ -850,9 +851,9 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
 // Marks a date as filled by the TeamWork sync rather than typed in by a
 // staff member — only shown in the AR Table view (Vincent: distinguish
 // automated vs. manual so it's obvious which cells automation still owns).
-function AutoFillDot({ show }: { show: boolean }) {
+function AutoFillDot({ show, title = 'Auto-filled from TeamWork — clear the cell to hand this back to automation, or type a date to override it.' }: { show: boolean; title?: string }) {
   if (!show) return null;
-  return <span title="Auto-filled from TeamWork — clear the cell to hand this back to automation, or type a date to override it." style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }} />;
+  return <span title={title} style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }} />;
 }
 
 function WorkflowBar({ stages, compact = false }: { stages: Stages; compact?: boolean }) {
@@ -3393,8 +3394,18 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                 <TD tint={rowTint}><SelectField id={r.id} field="dpo"           value={r.dpo}             onSave={onSave} options={DPO_OPTIONS} /></TD>
                 <TD tint={rowTint}><SelectField id={r.id} field="ond_ron"       value={r.ond_ron}         onSave={onSave} options={ROND_OPTIONS} /></TD>
                 <TD tint={rowTint} style={!picOpen.sec ? { padding: 0 } : undefined}>{picOpen.sec && <SelectField id={r.id} field="pic"     value={r.pic}     onSave={onSave} options={SEC_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay />}</TD>
-                <TD tint={rowTint} style={!picOpen.acc ? { padding: 0 } : undefined}>{picOpen.acc && <SelectField id={r.id} field="acc_pic" value={r.acc_pic} onSave={onSave} options={ACC_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay />}</TD>
-                <TD tint={rowTint} style={!picOpen.tax ? { padding: 0 } : undefined}>{picOpen.tax && <SelectField id={r.id} field="tax_pic" value={r.tax_pic} onSave={onSave} options={TAX_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay />}</TD>
+                <TD tint={rowTint} style={!picOpen.acc ? { padding: 0 } : undefined}>{picOpen.acc && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <AutoFillDot show={!!r.acc_pic && !r.acc_pic_manual} title="Carried forward from this company's last cycle — pick someone to override it, or clear it to leave blank." />
+                    <SelectField id={r.id} field="acc_pic" value={r.acc_pic} onSave={onSave} options={ACC_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay />
+                  </div>
+                )}</TD>
+                <TD tint={rowTint} style={!picOpen.tax ? { padding: 0 } : undefined}>{picOpen.tax && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <AutoFillDot show={!!r.tax_pic && !r.tax_pic_manual} title="Carried forward from this company's last cycle — pick someone to override it, or clear it to leave blank." />
+                    <SelectField id={r.id} field="tax_pic" value={r.tax_pic} onSave={onSave} options={TAX_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay />
+                  </div>
+                )}</TD>
                 <TD tint={rowTint}><SelectField id={r.id} field="remarks" value={r.remarks} onSave={onSave} options={REMARKS_OPTIONS} customLabel="Custom…" dateHelper={false} /></TD>
                 <TD finance tint={rowTint}><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
                 <TD finance tint={rowTint}><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate looseDate /></TD>
@@ -3593,11 +3604,12 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   }, [load, month, year]);
 
   const handleSave = useCallback((id: number, field: string, value: string) => {
-    // date_of_agm/filling_date/reminder_note flip their own "manual" flag
-    // alongside the value — matches the PATCH handler's server-side
-    // behaviour so the blue auto-fill dot updates immediately, without
-    // waiting for a refetch.
-    const extra = (field === 'date_of_agm' || field === 'filling_date' || field === 'reminder_note') ? { [`${field}_manual`]: !!value } : {};
+    // date_of_agm/filling_date/reminder_note/acc_pic/tax_pic flip their own
+    // "manual" flag alongside the value — matches the PATCH handler's
+    // server-side behaviour so the blue auto-fill dot updates immediately,
+    // without waiting for a refetch.
+    const extra = (field === 'date_of_agm' || field === 'filling_date' || field === 'reminder_note' || field === 'acc_pic' || field === 'tax_pic')
+      ? { [`${field}_manual`]: !!value } : {};
     const updated = (r: ARRecord) => r.id === id ? recomputeArRecord({ ...r, [field]: value || null, ...extra }) : r;
     setRecords(prev => prev.map(updated));
     setModalRecord(prev => prev && prev.id === id ? recomputeArRecord({ ...prev, [field]: value || null, ...extra }) : prev);
