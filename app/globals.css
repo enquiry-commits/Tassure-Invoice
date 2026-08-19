@@ -43,6 +43,8 @@
   --status-danger: #dc2626;
   --status-danger-tint: #fef2f2;
   --status-info-tint: #eff6ff;
+  --list-scrollbar-thumb: #c5d0dc;
+  --scrollbar-thumb: #94a3b8;
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
@@ -202,7 +204,7 @@ body {
 
 .system-list-scroll {
   overflow: auto;
-  scrollbar-color: #c5d0dc transparent;
+  scrollbar-color: var(--list-scrollbar-thumb) transparent;
   scrollbar-width: thin;
 }
 
@@ -395,7 +397,7 @@ body {
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #f1f5f9; }
-::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
 
 /* ── Mobile breakpoint utilities ──────────────────────────────────────────
    Desktop (>768px) is COMPLETELY untouched: .mobile-only elements are hidden
