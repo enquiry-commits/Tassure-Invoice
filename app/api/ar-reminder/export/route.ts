@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
-import { type DataRow, AR_REMINDER_COLUMNS, buildWorkbook } from '@/lib/export-columns';
+import { type DataRow, AR_REMINDER_EXPORT_COLUMNS, buildWorkbook } from '@/lib/export-columns';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const MONTH_ABBR: Record<string, string> = {
+  January: 'JAN', February: 'FEB', March: 'MAR', April: 'APR', May: 'MAY', June: 'JUN',
+  July: 'JUL', August: 'AUG', September: 'SEP', October: 'OCT', November: 'NOV', December: 'DEC',
+};
 
 // One sheet, one FYE cycle — the same rows currently on screen in the AR
 // Reminder table for whatever month/year is selected there (Vincent,
@@ -33,8 +38,14 @@ export async function GET(req: NextRequest) {
       .order('entity_name');
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+    const fyeLabel = `${MONTH_ABBR[month] ?? month.slice(0, 3).toUpperCase()} ${year}`;
     const file = await buildWorkbook(
-      [{ name: 'AR Reminder', rows: (data ?? []) as DataRow[], columns: AR_REMINDER_COLUMNS }],
+      [{
+        name: 'AR Reminder',
+        rows: (data ?? []) as DataRow[],
+        columns: AR_REMINDER_EXPORT_COLUMNS,
+        titleRow: `ANNUAL RETURN REMINDER (FYE: ${fyeLabel})`,
+      }],
       { title: `Tassure AR Reminder — ${month} ${year}`, subject: 'AR Reminder' },
     );
     return new Response(new Uint8Array(file), {

@@ -28,6 +28,21 @@ export type ExportColumn = {
   format?: 'date' | 'staffName';
 };
 
+// The standalone AR Reminder download (app/api/ar-reminder/export) — 7
+// columns only, per Vincent's reference screenshot (2026-08-19). Kept
+// separate from AR_REMINDER_COLUMNS below, which stays the full detail set
+// used by the Dashboard's combined workbook — trimming the shared constant
+// would have silently shrunk that export too.
+export const AR_REMINDER_EXPORT_COLUMNS: ExportColumn[] = [
+  { key: 'entity_name', label: 'Company Name', width: 42 },
+  { key: 'uen', label: 'UEN', width: 18 },
+  { key: 'reminder_note', label: 'Reminder', width: 18, format: 'date' },
+  { key: 'pic', label: 'SEC PIC', width: 18, format: 'staffName' },
+  { key: 'acc_pic', label: 'ACC PIC', width: 18, format: 'staffName' },
+  { key: 'tax_pic', label: 'TAX PIC', width: 18, format: 'staffName' },
+  { key: 'remarks', label: 'Remarks', width: 36 },
+];
+
 export const AR_REMINDER_COLUMNS: ExportColumn[] = [
   { key: 'entity_name', label: 'Company Name', width: 42 },
   { key: 'uen', label: 'UEN', width: 18 },
@@ -87,24 +102,43 @@ function formatCell(raw: unknown, format: ExportColumn['format']): string {
   return text;
 }
 
-function addSheet(workbook: ExcelJS.Workbook, name: string, rows: DataRow[], columns: ExportColumn[]) {
+function addSheet(workbook: ExcelJS.Workbook, name: string, rows: DataRow[], columns: ExportColumn[], titleRow?: string) {
   const sheet = workbook.addWorksheet(name);
   sheet.columns = columns.map(c => ({ header: c.label, key: c.key, width: c.width }));
+
+  // Optional title banner above the column headers (e.g. "ANNUAL RETURN
+  // REMINDER (FYE: JUL 2026)"), merged across every column, bold+underline.
+  // Shifts the auto-generated header row from 1 to 2 — spliceRows moves it
+  // (and every row after it) down, so this must run before any addRow().
+  const headerRowNum = titleRow ? 2 : 1;
+  if (titleRow) {
+    sheet.spliceRows(1, 0, []);
+    sheet.mergeCells(1, 1, 1, columns.length);
+    const cell = sheet.getCell(1, 1);
+    cell.value = titleRow;
+    cell.font = { bold: true, underline: true, size: 12 };
+    cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  }
+
   for (const row of rows) {
     sheet.addRow(Object.fromEntries(columns.map(c => [c.key, formatCell(row[c.key], c.format)])));
   }
   // Vincent, 2026-08-17: every column left-aligned — set explicitly per
   // cell (header included) rather than relying on column-level defaults,
   // since a cell added via addRow() only inherits a column's style if that
-  // style was set before the row existed.
-  sheet.eachRow(row => row.eachCell(cell => { cell.alignment = { horizontal: 'left', vertical: 'top' }; }));
+  // style was set before the row existed. Skip the merged title row — it
+  // has its own centered alignment set above.
+  sheet.eachRow((row, rowNumber) => {
+    if (titleRow && rowNumber === 1) return;
+    row.eachCell(cell => { cell.alignment = { horizontal: 'left', vertical: 'top' }; });
+  });
   const lastCol = sheet.getColumn(columns.length).letter;
-  sheet.autoFilter = `A1:${lastCol}1`;
+  sheet.autoFilter = `A${headerRowNum}:${lastCol}${headerRowNum}`;
   return sheet;
 }
 
 export async function buildWorkbook(
-  sheets: { name: string; rows: DataRow[]; columns: ExportColumn[] }[],
+  sheets: { name: string; rows: DataRow[]; columns: ExportColumn[]; titleRow?: string }[],
   props?: { title?: string; subject?: string },
 ): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
@@ -112,6 +146,6 @@ export async function buildWorkbook(
   workbook.created = new Date();
   if (props?.title) workbook.title = props.title;
   if (props?.subject) workbook.subject = props.subject;
-  for (const s of sheets) addSheet(workbook, s.name, s.rows, s.columns);
+  for (const s of sheets) addSheet(workbook, s.name, s.rows, s.columns, s.titleRow);
   return Buffer.from(await workbook.xlsx.writeBuffer());
 }
