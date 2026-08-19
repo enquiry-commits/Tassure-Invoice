@@ -37,19 +37,19 @@ interface BillingSummary { total: number; expired: number; expiringSoon: number;
 
 const SVC_CONFIG = {
   Secretary: { label: 'Secretary',    short: 'SEC',  bg: '#f5f3ff', color: '#6d28d9', Icon: BookOpen   },
-  Address:   { label: 'Reg. Address', short: 'ADDR', bg: '#f0fdf4', color: '#15803d', Icon: MapPin     },
+  Address:   { label: 'Reg. Address', short: 'ADDR', bg: 'var(--status-success-tint)', color: '#15803d', Icon: MapPin     },
   ND:        { label: 'Nominee Dir.', short: 'ND',   bg: '#dcfce7', color: '#166534', Icon: UserCheck  },
-  AR:        { label: 'AR / AGM',     short: 'AR',   bg: '#fff7ed', color: '#c2410c', Icon: BarChart3  },
+  AR:        { label: 'AR / AGM',     short: 'AR',   bg: 'var(--status-warning-tint)', color: '#c2410c', Icon: BarChart3  },
   XBRL:      { label: 'XBRL',         short: 'XBRL', bg: '#fdf4ff', color: '#7e22ce', Icon: ShieldCheck },
-  Discount:  { label: 'Discount',     short: 'DISC', bg: '#fef2f2', color: '#dc2626', Icon: DollarSign },
-  Accounts:  { label: 'Accounts',     short: 'ACCT', bg: '#eff6ff', color: '#1d4ed8', Icon: FileText   },
+  Discount:  { label: 'Discount',     short: 'DISC', bg: 'var(--status-danger-tint)', color: 'var(--status-danger)', Icon: DollarSign },
+  Accounts:  { label: 'Accounts',     short: 'ACCT', bg: 'var(--status-info-tint)', color: 'var(--accent-blue)', Icon: FileText   },
   Tax:       { label: 'Tax',          short: 'TAX',  bg: '#f0fdfa', color: '#0f766e', Icon: FileText   },
 };
 
 function RenewalCard({ r }: { r: RenewalStatus }) {
   const cfg = SVC_CONFIG[r.service];
-  const statusColor = r.status === 'expired' ? '#dc2626' : r.status === 'expiring_soon' ? '#ea580c' : r.status === 'active' ? '#16a34a' : '#9ca3af';
-  const statusBg    = r.status === 'expired' ? '#fef2f2' : r.status === 'expiring_soon' ? '#fff7ed' : r.status === 'active' ? '#f0fdf4' : '#f9fafb';
+  const statusColor = r.status === 'expired' ? 'var(--status-danger)' : r.status === 'expiring_soon' ? '#ea580c' : r.status === 'active' ? 'var(--status-success)' : '#9ca3af';
+  const statusBg    = r.status === 'expired' ? 'var(--status-danger-tint)' : r.status === 'expiring_soon' ? 'var(--status-warning-tint)' : r.status === 'active' ? 'var(--status-success-tint)' : '#f9fafb';
   const statusLabel = r.status === 'expired' ? 'EXPIRED' : r.status === 'expiring_soon' ? `${r.daysUntilExpiry}d left` : r.status === 'active' ? 'ACTIVE' : 'NO DATA';
 
   if (!r.applicable) return (
@@ -72,7 +72,7 @@ function RenewalCard({ r }: { r: RenewalStatus }) {
         <span style={{ background: statusBg, color: statusColor, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{statusLabel}</span>
       </div>
       {r.periodNeedsReview && (
-        <div style={{ marginBottom: 8, border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', borderRadius: 6, padding: '6px 7px', fontSize: 9.5, fontWeight: 650 }}>
+        <div style={{ marginBottom: 8, border: '1px solid #fed7aa', background: 'var(--status-warning-tint)', color: '#9a3412', borderRadius: 6, padding: '6px 7px', fontSize: 9.5, fontWeight: 650 }}>
           {r.periodWarning}
         </div>
       )}
@@ -115,8 +115,8 @@ function RenewalCard({ r }: { r: RenewalStatus }) {
 
 function AnnualCard({ a }: { a: AnnualStatus }) {
   const cfg = SVC_CONFIG[a.service];
-  const statusColor = a.status === 'billed' ? '#16a34a' : a.status === 'pending' ? '#ea580c' : '#9ca3af';
-  const statusBg    = a.status === 'billed' ? '#f0fdf4' : a.status === 'pending' ? '#fff7ed' : '#f9fafb';
+  const statusColor = a.status === 'billed' ? 'var(--status-success)' : a.status === 'pending' ? '#ea580c' : '#9ca3af';
+  const statusBg    = a.status === 'billed' ? 'var(--status-success-tint)' : a.status === 'pending' ? 'var(--status-warning-tint)' : '#f9fafb';
   const statusLabel = a.status === 'billed' ? 'BILLED' : a.status === 'pending' ? 'PENDING' : 'NOT FOUND';
 
   if (!a.applicable) return (
@@ -181,9 +181,9 @@ function AnnualCard({ a }: { a: AnnualStatus }) {
 // grey = not applicable), check = "active/billed", cross = anything else.
 function ServiceMini({ label, status, applicable }: { label: string; status: string; applicable: boolean }) {
   const color = !applicable ? '#94a3b8'
-    : status === 'expired' || status === 'pending' ? '#dc2626'
+    : status === 'expired' || status === 'pending' ? 'var(--status-danger)'
     : status === 'expiring_soon' ? '#ea580c'
-    : status === 'active' || status === 'billed' ? '#16a34a'
+    : status === 'active' || status === 'billed' ? 'var(--status-success)'
     : '#94a3b8';
   const on = applicable && (status === 'active' || status === 'billed');
   return (
@@ -309,11 +309,11 @@ function historyValue(value: string | null) {
 }
 
 const SVC: Record<string, { label: string; bg: string; color: string }> = {
-  ar:        { label: 'Annual Return', bg: '#dbeafe', color: '#1d4ed8' },
+  ar:        { label: 'Annual Return', bg: '#dbeafe', color: 'var(--accent-blue)' },
   agm:       { label: 'AGM',           bg: '#e0e7ff', color: '#4338ca' },
   xbrl:      { label: 'XBRL',          bg: '#fce7f3', color: '#be185d' },
   nd:        { label: 'Nominee Dir.',  bg: '#dcfce7', color: '#15803d' },
-  address:   { label: 'Reg. Address',  bg: '#f0fdf4', color: '#166534' },
+  address:   { label: 'Reg. Address',  bg: 'var(--status-success-tint)', color: '#166534' },
   accounts:  { label: 'Accounts',      bg: '#fef9c3', color: '#92400e' },
   tax:       { label: 'Tax Filing',    bg: '#ffedd5', color: '#c2410c' },
   secretary: { label: 'Secretary',     bg: '#f5f3ff', color: '#6d28d9' },
@@ -353,7 +353,7 @@ const OVERRIDABLE_SVC = ['secretary', 'accounts', 'tax', 'xbrl'] as const;
 // (same #e5e7eb fill / #cbd5e1 border as CheckSquare's unchecked state,
 // no icon) — used for "off" / "not applicable", where Vincent didn't
 // want a cross mark once he saw it rendered.
-const SVC_SQUARE_COLOR = { off: '#e5e7eb', auto: '#60a5fa', manual: '#16a34a' } as const;
+const SVC_SQUARE_COLOR = { off: '#e5e7eb', auto: '#60a5fa', manual: 'var(--status-success)' } as const;
 function ServiceSquare({ on, color, grey }: { on: boolean; color: string; grey?: boolean }) {
   if (grey) {
     return <span aria-hidden="true" style={{ width: 14, height: 14, minWidth: 14, borderRadius: 4, flexShrink: 0, background: '#e5e7eb', border: '1px solid #cbd5e1' }} />;
@@ -516,7 +516,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
         onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) save(); }}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') { setVal(inputValue(value)); setEditing(false); } }}
         placeholder={isDate ? (looseDate ? 'Date or note…' : 'e.g. 03 Apr 2026') : ''}
-        style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
+        style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: 'var(--status-info-tint)', minWidth: 0 }}
       />
       {isDate && (
         <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -533,7 +533,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
   );
 
   if (status === 'conflict') return (
-    <div title={`Updated by ${conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}`} style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 5, padding: '3px 5px', minHeight: 28 }}>
+    <div title={`Updated by ${conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}`} style={{ background: 'var(--status-warning-tint)', border: '1px solid #fdba74', borderRadius: 5, padding: '3px 5px', minHeight: 28 }}>
       <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         Changed by {conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}
       </div>
@@ -545,9 +545,9 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
   );
 
   if (status === 'error') return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, padding: '1px 4px', minHeight: 24 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', borderRadius: 4, padding: '1px 4px', minHeight: 24 }}>
       <span title={message || 'Save failed'} style={{ fontSize: 11, color: '#b91c1c', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{message || val || 'Save failed'}</span>
-      <button onClick={retry}  title="Retry save"   style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}><RefreshCw size={11} /></button>
+      <button onClick={retry}  title="Retry save"   style={{ border: 'none', background: 'transparent', color: 'var(--status-danger)', cursor: 'pointer', padding: 0, display: 'flex' }}><RefreshCw size={11} /></button>
       <button onClick={revert} title="Revert change" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={11} /></button>
     </div>
   );
@@ -578,8 +578,8 @@ type SelectOption = { label: string; bg: string; color: string; type?: 'date' };
 // Unified chip palette
 const C = {
   green:  { bg: '#dcfce7', color: '#15803d' },
-  blue:   { bg: '#dbeafe', color: '#1d4ed8' },
-  amber:  { bg: '#fef3c7', color: '#b45309' },
+  blue:   { bg: '#dbeafe', color: 'var(--accent-blue)' },
+  amber:  { bg: '#fef3c7', color: 'var(--status-warning)' },
   purple: { bg: '#ede9fe', color: '#6d28d9' },
   red:    { bg: '#fee2e2', color: '#b91c1c' },
   grey:   { bg: '#e2e8f0', color: '#475569' },
@@ -757,7 +757,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
   const statusDot = null;
 
   if (status === 'conflict') return (
-    <div title={`Updated by ${conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}`} style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 5, padding: '3px 5px', minHeight: 28 }}>
+    <div title={`Updated by ${conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}`} style={{ background: 'var(--status-warning-tint)', border: '1px solid #fdba74', borderRadius: 5, padding: '3px 5px', minHeight: 28 }}>
       <div style={{ fontSize: 9, color: '#c2410c', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Changed by {conflict?.updatedByName ?? conflict?.updatedByEmail ?? 'another user'}</div>
       <div style={{ display: 'flex', gap: 5, marginTop: 2 }}>
         <button onClick={acceptLatest} style={{ border: 0, background: 'transparent', padding: 0, color: '#64748b', fontSize: 9, cursor: 'pointer' }}>Use latest</button>
@@ -767,9 +767,9 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
   );
 
   if (status === 'error') return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, padding: '1px 4px', minHeight: 24 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', borderRadius: 4, padding: '1px 4px', minHeight: 24 }}>
       <span title={message || 'Save failed'} style={{ fontSize: 11, color: '#b91c1c', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{message || val || 'Save failed'}</span>
-      <button onClick={retry}  title="Retry save"   style={{ border: 'none', background: 'transparent', color: '#dc2626', cursor: 'pointer', padding: 0, display: 'flex' }}><RefreshCw size={11} /></button>
+      <button onClick={retry}  title="Retry save"   style={{ border: 'none', background: 'transparent', color: 'var(--status-danger)', cursor: 'pointer', padding: 0, display: 'flex' }}><RefreshCw size={11} /></button>
       <button onClick={revert} title="Revert change" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }}><X size={11} /></button>
     </div>
   );
@@ -783,7 +783,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
             onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(val); }}
             onKeyDown={e => { if (e.key === 'Enter') commit(val); if (e.key === 'Escape') { setVal(value ?? ''); setCustom(false); } }}
             placeholder={dateHelper ? 'e.g. 03 Apr 2026' : 'Type your own remarks…'}
-            style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
+            style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: 'var(--status-info-tint)', minWidth: 0 }}
           />
           {dateHelper && (
             <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -829,14 +829,14 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
           ))}
           {display && (
             <div onClick={() => commit('')}
-              style={{ padding: '7px 12px', cursor: 'pointer', borderTop: '1px solid #f1f5f9', fontSize: 11, color: '#ef4444' }}
-              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#fef2f2'}
+              style={{ padding: '7px 12px', cursor: 'pointer', borderTop: '1px solid #f1f5f9', fontSize: 11, color: 'var(--accent-red)' }}
+              onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--status-danger-tint)'}
               onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fff'}>
               Clear
             </div>
           )}
           <div onClick={() => { editBaselineRef.current = value ?? ''; setOpen(false); setVal(value ?? ''); setCustom(true); }}
-            style={{ padding: '7px 12px', cursor: 'pointer', borderTop: '1px solid #f1f5f9', fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}
+            style={{ padding: '7px 12px', cursor: 'pointer', borderTop: '1px solid #f1f5f9', fontSize: 11, color: 'var(--accent-gray)', display: 'flex', alignItems: 'center', gap: 6 }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = '#f8fafc'}
             onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = '#fff'}>
             {dateHelper && <Calendar size={11} style={{ color: '#4338ca' }} />} {customLabel}
@@ -864,13 +864,13 @@ function WorkflowBar({ stages, compact = false }: { stages: Stages; compact?: bo
         <div key={i} style={{ display: 'flex', alignItems: 'center' }}>
           <div title={STAGE_LABELS[i].replace('\n',' ')} style={{
             width: compact ? 18 : 22, height: compact ? 18 : 22, borderRadius: '50%',
-            background: v ? '#16a34a' : i === done ? '#f59e0b' : '#e2e8f0',
+            background: v ? 'var(--status-success)' : i === done ? '#f59e0b' : '#e2e8f0',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: compact ? 8 : 9, fontWeight: 700,
             color: v ? '#fff' : i === done ? '#fff' : '#9ca3af', flexShrink: 0,
           }}>{v ? '✓' : i + 1}</div>
-          {compact && i < 4 && <div style={{ width: 6, height: 1, background: v ? '#16a34a' : '#e2e8f0', margin: '0 1px' }} />}
-          {!compact && i < 4 && <div style={{ width: 12, height: 2, background: v ? '#16a34a' : '#e2e8f0' }} />}
+          {compact && i < 4 && <div style={{ width: 6, height: 1, background: v ? 'var(--status-success)' : '#e2e8f0', margin: '0 1px' }} />}
+          {!compact && i < 4 && <div style={{ width: 12, height: 2, background: v ? 'var(--status-success)' : '#e2e8f0' }} />}
         </div>
       ))}
       {!compact && <span style={{ fontSize: 10, color: '#94a3b8', marginLeft: 4 }}>{done}/5</span>}
@@ -894,7 +894,7 @@ function LateFilingBadge({ remarks }: { remarks: string | null | undefined }) {
   if (!reason) return null;
   return (
     <span title={`Flagged on the Late Filing page: ${reason}`} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 3, background: '#fef2f2', color: '#dc2626',
+      display: 'inline-flex', alignItems: 'center', gap: 3, background: 'var(--status-danger-tint)', color: 'var(--status-danger)',
       border: '1px solid #fecaca', borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700,
       whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0,
     }}>
@@ -944,7 +944,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
         const end   = info?.periodEnd ? new Date(info.periodEnd) : null;
         const days  = end ? Math.ceil((end.getTime() - today.getTime()) / 86400000) : null;
         const st    = !end ? 'none' : days! < 0 ? 'expired' : days! <= 90 ? 'expiring' : 'active';
-        const clr   = ({ none: { bg: '#f1f5f9', text: '#94a3b8' }, expired: { bg: '#fee2e2', text: '#dc2626' }, expiring: { bg: '#fef9c3', text: '#d97706' }, active: { bg: '#dcfce7', text: '#16a34a' } })[st];
+        const clr   = ({ none: { bg: '#f1f5f9', text: '#94a3b8' }, expired: { bg: '#fee2e2', text: 'var(--status-danger)' }, expiring: { bg: '#fef9c3', text: '#d97706' }, active: { bg: '#dcfce7', text: 'var(--status-success)' } })[st];
         const isND  = svc === 'nd';
         const hasNdName = isND && info?.ndName;
 
@@ -962,7 +962,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: isND ? 8 : 5 }}>
-                {isND && <span style={{ width: 28, height: 28, borderRadius: 8, background: '#dbeafe', color: '#1d4ed8', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><UserCheck size={14} /></span>}
+                {isND && <span style={{ width: 28, height: 28, borderRadius: 8, background: '#dbeafe', color: 'var(--accent-blue)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><UserCheck size={14} /></span>}
                 <div>
                   <span style={{ fontSize: isND ? 11.5 : 11, fontWeight: isND ? 750 : 600, color: isND ? '#1e3a5f' : '#475569' }}>{label}</span>
                   {isND && <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, color: '#2563eb', fontSize: 8.5, fontWeight: 700 }}><ChevronDown size={10} style={{ transform: ndRevealed ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />{ndRevealed ? 'Hide director details' : 'View director details'}</div>}
@@ -994,8 +994,8 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
 
             {/* ND name reveal panel */}
             {isND && ndRevealed && (
-              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderTop: 'none', borderRadius: ndStrikeOff || ndPending ? '0' : '0 0 8px 8px', padding: '9px 11px', display: 'flex', alignItems: 'center', gap: 9 }}>
-                <UserCheck size={14} color="#16a34a" />
+              <div style={{ background: 'var(--status-success-tint)', border: '1px solid #bbf7d0', borderTop: 'none', borderRadius: ndStrikeOff || ndPending ? '0' : '0 0 8px 8px', padding: '9px 11px', display: 'flex', alignItems: 'center', gap: 9 }}>
+                <UserCheck size={14} color="var(--status-success)" />
                 <div>
                   <div style={{ fontSize: 8, color: '#65a30d', fontWeight: 800, letterSpacing: '0.45px', marginBottom: 2 }}>ASSIGNED DIRECTOR · FROM TEAMWORK</div>
                   {hasNdName
@@ -1026,7 +1026,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                     display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', flex: '1 1 165px',
                     fontSize: 10, fontWeight: 700, borderRadius: 7, padding: '7px 9px',
                     border: `1px solid ${ndStrikeOff ? '#fdba74' : '#e2e8f0'}`,
-                    background: ndStrikeOff ? '#fff7ed' : '#fff', color: ndStrikeOff ? '#c2410c' : '#64748b',
+                    background: ndStrikeOff ? 'var(--status-warning-tint)' : '#fff', color: ndStrikeOff ? '#c2410c' : '#64748b',
                   }}
                 >
                   {/* Checkbox square */}
@@ -1035,7 +1035,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                     width: 13, height: 13, flexShrink: 0,
                     border: `1.5px solid ${ndStrikeOff ? '#c2410c' : '#cbd5e1'}`,
                     borderRadius: 2,
-                    background: ndStrikeOff ? '#fff7ed' : '#fff',
+                    background: ndStrikeOff ? 'var(--status-warning-tint)' : '#fff',
                   }}>
                     {ndStrikeOff && (
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#c2410c" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1054,19 +1054,19 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                     display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', flex: '1 1 165px',
                     fontSize: 10, fontWeight: 700, borderRadius: 7, padding: '7px 9px',
                     border: `1px solid ${ndPending ? '#fcd34d' : '#e2e8f0'}`,
-                    background: ndPending ? '#fefce8' : '#fff', color: ndPending ? '#b45309' : '#64748b',
+                    background: ndPending ? '#fefce8' : '#fff', color: ndPending ? 'var(--status-warning)' : '#64748b',
                   }}
                 >
                   {/* Checkbox square */}
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                     width: 13, height: 13, flexShrink: 0,
-                    border: `1.5px solid ${ndPending ? '#b45309' : '#cbd5e1'}`,
+                    border: `1.5px solid ${ndPending ? 'var(--status-warning)' : '#cbd5e1'}`,
                     borderRadius: 2,
                     background: ndPending ? '#fef3c7' : '#fff',
                   }}>
                     {ndPending && (
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="var(--status-warning)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="20 6 9 17 4 12"/>
                       </svg>
                     )}
@@ -1206,8 +1206,8 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
                     <span style={{ fontSize: 10, color: '#64748b' }}>{fmtDate(inv.txn_date)}</span>
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#1e3a5f' }}>S${(inv.total_amt ?? 0).toLocaleString()}</span>
                     <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 3, padding: '1px 5px',
-                      background: inv.status === 'Paid' ? '#dcfce7' : inv.status === 'Overdue' ? '#fef2f2' : '#fef9c3',
-                      color:      inv.status === 'Paid' ? '#15803d' : inv.status === 'Overdue' ? '#dc2626' : '#92400e',
+                      background: inv.status === 'Paid' ? '#dcfce7' : inv.status === 'Overdue' ? 'var(--status-danger-tint)' : '#fef9c3',
+                      color:      inv.status === 'Paid' ? '#15803d' : inv.status === 'Overdue' ? 'var(--status-danger)' : '#92400e',
                     }}>{inv.status}</span>
                   </div>
                 ))}
@@ -1816,7 +1816,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     return (
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 9px', borderRadius: 8, background: manuallyChanged ? '#fffbeb' : '#f8fafc', border: `1px solid ${manuallyChanged ? '#fcd34d' : '#dbe5ee'}` }}>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-          <span style={{ fontSize: 8, fontWeight: 800, color: manuallyChanged ? '#b45309' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
+          <span style={{ fontSize: 8, fontWeight: 800, color: manuallyChanged ? 'var(--status-warning)' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
           <span style={{ fontSize: 8.5, color: '#94a3b8' }}>{numberLoading ? 'Checking live…' : 'QB confirms when created'}</span>
         </div>
         <input
@@ -1855,10 +1855,10 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
               <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svcLabel}</span>
             </div>
             <AutoTextarea value={l.description} onChange={v => setLine(i, { description: v })} style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
-            <div style={{ fontSize: 10, fontWeight: 600, color: l.periodNeedsReview ? '#b45309' : l.due ? '#c2410c' : '#94a3b8', textAlign: 'center', padding: '0 5px' }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: l.periodNeedsReview ? 'var(--status-warning)' : l.due ? '#c2410c' : '#94a3b8', textAlign: 'center', padding: '0 5px' }}>
               <span>{l.reason}</span>
               {l.periodNeedsReview && (
-                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 6, color: l.periodReviewed ? '#15803d' : '#b45309', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 6, color: l.periodReviewed ? '#15803d' : 'var(--status-warning)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={l.periodReviewed === true} onChange={e => setLine(i, { periodReviewed: e.target.checked })} style={{ width: 12, height: 12, accentColor: '#15803d' }} />
                   Checked in QB
                 </label>
@@ -1866,7 +1866,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             </div>
             <input type="number" min={1} value={l.qty} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center', justifySelf: 'center' }} />
             <input type="number" min={0} value={l.rate || ''} placeholder="0" onChange={e => setLine(i, { rate: +e.target.value || 0 })}
-              style={{ ...inputStyle, width: 90, textAlign: 'center', justifySelf: 'center', borderColor: l.include && !l.rate ? '#f87171' : '#cbd5e1', background: l.include && !l.rate ? '#fef2f2' : '#fff' }} />
+              style={{ ...inputStyle, width: 90, textAlign: 'center', justifySelf: 'center', borderColor: l.include && !l.rate ? '#f87171' : '#cbd5e1', background: l.include && !l.rate ? 'var(--status-danger-tint)' : '#fff' }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: l.include ? '#0f766e' : '#94a3b8', textAlign: 'right' }}>{l.include ? `S$${(l.qty * l.rate).toLocaleString()}` : '—'}</span>
             <button onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))} title="Remove line" style={{ border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'center' }}><X size={13} /></button>
           </div>
@@ -1905,7 +1905,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           {saving ? 'Saving…' : `Save ${company} changes to QuickBooks`}
         </button>
         {editResult[company] && (
-          <span style={{ fontSize: 11.5, fontWeight: 600, color: editResult[company]!.ok ? '#15803d' : '#dc2626' }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: editResult[company]!.ok ? '#15803d' : 'var(--status-danger)' }}>
             {editResult[company]!.ok ? '✓ ' : '✕ '}{editResult[company]!.msg}
             {editResult[company]!.blocked && (
               <button onClick={() => loadLiveLines(company, invoice.qbId)} style={{ marginLeft: 8, border: 'none', background: 'transparent', color: '#4338ca', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontSize: 11.5 }}>
@@ -1926,7 +1926,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="client@email.com"
-            style={{ ...inputStyle, width: 240, color: '#1d4ed8', fontWeight: 600 }} />
+            style={{ ...inputStyle, width: 240, color: 'var(--accent-blue)', fontWeight: 600 }} />
         </div>
         {c.contactName && <span style={{ fontSize: 11, color: '#64748b' }}>· {c.contactName}</span>}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1940,7 +1940,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           Layout mirrors the TAC section: badge header first, then the
           "based on last invoice" provenance note. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: 5, padding: '2px 8px' }}>TAB</span>
+        <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent-blue)', background: 'var(--status-info-tint)', border: '1px solid #dbeafe', borderRadius: 5, padding: '2px 8px' }}>TAB</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Basic Services</span>
         <span style={{ fontSize: 10, color: '#94a3b8' }}>· default QuickBooks company</span>
         {renderEditHeader('TAB', tabInvoice)}
@@ -1952,16 +1952,16 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           : c.priorInvoiceDate
           ? <span>
               Based on last invoice
-              {c.priorInvoiceNo && <strong style={{ color: '#1d4ed8', fontFamily: 'monospace', margin: '0 5px', background: '#eff6ff', border: '1px solid #dbeafe', padding: '1px 7px', borderRadius: 4 }}>#{c.priorInvoiceNo}</strong>}
+              {c.priorInvoiceNo && <strong style={{ color: 'var(--accent-blue)', fontFamily: 'monospace', margin: '0 5px', background: 'var(--status-info-tint)', border: '1px solid #dbeafe', padding: '1px 7px', borderRadius: 4 }}>#{c.priorInvoiceNo}</strong>}
               {' '}dated <strong style={{ color: '#334155' }}>{fmtDate(c.priorInvoiceDate)}</strong> — items & amounts carried forward, period rolled to this cycle. Verify discount still applies.
             </span>
-          : <span style={{ color: '#b45309' }}>No prior renewal invoice found — draft built from standard template. Confirm each line.</span>}
+          : <span style={{ color: 'var(--status-warning)' }}>No prior renewal invoice found — draft built from standard template. Confirm each line.</span>}
       </div>
       <div style={{ marginBottom: 0 }}>
         {editLoading.TAB ? (
           <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>Loading live invoice lines from QuickBooks…</div>
         ) : editLoadError.TAB ? (
-          <div style={{ padding: 12, borderRadius: 8, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600 }}>{editLoadError.TAB}</div>
+          <div style={{ padding: 12, borderRadius: 8, border: '1px solid #fecaca', background: 'var(--status-danger-tint)', color: 'var(--status-danger)', fontSize: 12, fontWeight: 600 }}>{editLoadError.TAB}</div>
         ) : renderTable(tabRows, 'No applicable services for this company.')}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#f8fafc' }}>
           <Plus size={13} style={{ color: '#0f766e' }} />
@@ -2000,15 +2000,15 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Nominee Director</span>
             <span style={{ fontSize: 10, color: '#94a3b8' }}>· invoiced separately under the TAC company</span>
             {c.ndPic && (
-              <span style={{ fontSize: 10.5, color: '#9a3412', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 999, padding: '2px 8px', marginLeft: 3 }}>
+              <span style={{ fontSize: 10.5, color: '#9a3412', background: 'var(--status-warning-tint)', border: '1px solid #fed7aa', borderRadius: 999, padding: '2px 8px', marginLeft: 3 }}>
                 TAC PIC: <strong>{c.ndPic}</strong>{ndInitials ? ` · ${ndInitials} in service` : ' · confirm service shorthand'}
               </span>
             )}
             {tacStatus && !tacStatus.connected && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 5, padding: '2px 8px', marginLeft: 4 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, color: 'var(--status-danger)', background: 'var(--status-danger-tint)', border: '1px solid #fecaca', borderRadius: 5, padding: '2px 8px', marginLeft: 4 }}>
                 <AlertTriangle size={11} />
                 QuickBooks TAC not connected
-                <a href="/api/quickbooks/auth?company=TAC" style={{ color: '#1d4ed8', textDecoration: 'underline', fontWeight: 700 }}>Connect TAC</a>
+                <a href="/api/quickbooks/auth?company=TAC" style={{ color: 'var(--accent-blue)', textDecoration: 'underline', fontWeight: 700 }}>Connect TAC</a>
               </span>
             )}
             {renderEditHeader('TAC', tacInvoice)}
@@ -2032,7 +2032,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
                       {ndPrior.txn_date && <> dated <strong style={{ color: '#334155' }}>{fmtDate(ndPrior.txn_date)}</strong></>}
                       {' '}— ND fee &amp; director item carried forward, period rolled to this cycle.
                     </span>
-                  : <span style={{ color: '#b45309' }}>No prior ND invoice found — confirm the director&apos;s item &amp; fee before generating.</span>}
+                  : <span style={{ color: 'var(--status-warning)' }}>No prior ND invoice found — confirm the director&apos;s item &amp; fee before generating.</span>}
               </div>
             );
           })()}
@@ -2040,9 +2040,9 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             {editLoading.TAC ? (
               <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>Loading live invoice lines from QuickBooks…</div>
             ) : editLoadError.TAC ? (
-              <div style={{ padding: 12, borderRadius: 8, border: '1px solid #fecaca', background: '#fef2f2', color: '#dc2626', fontSize: 12, fontWeight: 600 }}>{editLoadError.TAC}</div>
+              <div style={{ padding: 12, borderRadius: 8, border: '1px solid #fecaca', background: 'var(--status-danger-tint)', color: 'var(--status-danger)', fontSize: 12, fontWeight: 600 }}>{editLoadError.TAC}</div>
             ) : renderTable(tacRows, 'No Nominee Director line.')}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#fff7ed' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: 'var(--status-warning-tint)' }}>
               <Plus size={13} style={{ color: '#9a3412' }} />
               <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add ND line</span>
               <select value="" onChange={e => {
@@ -2072,15 +2072,15 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 8 }}>(TAB S${totalTab.toLocaleString()} · TAC S${totalTac.toLocaleString()})</span>
           )}
         </div>
-        {missingRate && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>⚠ Fill in the highlighted rate(s) before generating</span>}
-        {missingInvoiceNumber && !numberLoading && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>Confirm the required QB invoice number</span>}
+        {missingRate && <span style={{ fontSize: 11, color: 'var(--status-danger)', fontWeight: 600 }}>⚠ Fill in the highlighted rate(s) before generating</span>}
+        {missingInvoiceNumber && !numberLoading && <span style={{ fontSize: 11, color: 'var(--status-danger)', fontWeight: 600 }}>Confirm the required QB invoice number</span>}
         {hasPeriodError && (
-          <div style={{ flexBasis: '100%', border: '1px solid #fecaca', background: '#fef2f2', color: '#b91c1c', borderRadius: 7, padding: '9px 12px', fontSize: 11, fontWeight: 600 }}>
+          <div style={{ flexBasis: '100%', border: '1px solid #fecaca', background: 'var(--status-danger-tint)', color: '#b91c1c', borderRadius: 7, padding: '9px 12px', fontSize: 11, fontWeight: 600 }}>
             Period check required: {blockingPeriodErrors.slice(0, 3).join(' · ')}
           </div>
         )}
         {!hasPeriodError && hasOverlapWarning && (
-          <div style={{ flexBasis: '100%', border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', borderRadius: 7, padding: '9px 12px', fontSize: 11, fontWeight: 600 }}>
+          <div style={{ flexBasis: '100%', border: '1px solid #fed7aa', background: 'var(--status-warning-tint)', color: '#9a3412', borderRadius: 7, padding: '9px 12px', fontSize: 11, fontWeight: 600 }}>
             ⚠ {overlapWarnings.slice(0, 3).join(' · ')} — you can still generate; you&apos;ll be asked to confirm.
           </div>
         )}
@@ -2110,7 +2110,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       </div>
 
       {numberWarning && (
-        <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 7, padding: '9px 11px', borderRadius: 8, background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 11, fontWeight: 650 }}>
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 7, padding: '9px 11px', borderRadius: 8, background: 'var(--status-warning-tint)', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 11, fontWeight: 650 }}>
           <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
           <span>{numberWarning}</span>
         </div>
@@ -2118,7 +2118,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
 
       {draftResult && (
         <div style={{ marginTop: 20, padding: '12px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
-          background: draftResult.ok ? '#f0fdf4' : '#fef2f2', color: draftResult.ok ? '#15803d' : '#dc2626',
+          background: draftResult.ok ? 'var(--status-success-tint)' : 'var(--status-danger-tint)', color: draftResult.ok ? '#15803d' : 'var(--status-danger)',
           border: `1px solid ${draftResult.ok ? '#bbf7d0' : '#fecaca'}` }}>
           {draftResult.ok ? '✓ ' : '✕ '}{draftResult.msg}
         </div>
@@ -2133,7 +2133,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
             </div>
           </div>
           {generatedPdfs.map(pdf => (
-            <button key={`${pdf.company}-${pdf.qbId}`} type="button" onClick={() => saveInvoicePdf(pdf)} disabled={savingPdfs} style={{ border: '1px solid #93c5fd', borderRadius: 7, background: savingPdfs ? '#dbeafe' : '#eff6ff', color: '#1d4ed8', padding: '8px 12px', fontSize: 11.5, fontWeight: 800, cursor: savingPdfs ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button key={`${pdf.company}-${pdf.qbId}`} type="button" onClick={() => saveInvoicePdf(pdf)} disabled={savingPdfs} style={{ border: '1px solid #93c5fd', borderRadius: 7, background: savingPdfs ? '#dbeafe' : 'var(--status-info-tint)', color: 'var(--accent-blue)', padding: '8px 12px', fontSize: 11.5, fontWeight: 800, cursor: savingPdfs ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
               <FileText size={13} /> {savingPdfs ? 'Preparing PDF…' : `Save ${pdf.company} PDF`}
             </button>
           ))}
@@ -2141,7 +2141,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       )}
 
       {pdfResult && (
-        <div style={{ marginTop: 8, fontSize: 11, fontWeight: 650, color: pdfResult.ok ? '#15803d' : '#b45309' }}>{pdfResult.msg}</div>
+        <div style={{ marginTop: 8, fontSize: 11, fontWeight: 650, color: pdfResult.ok ? '#15803d' : 'var(--status-warning)' }}>{pdfResult.msg}</div>
       )}
 
       <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, marginTop: 24, fontSize: 10, color: '#94a3b8' }}>
@@ -2152,8 +2152,8 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       <div onClick={() => setOverlapConfirmModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 440, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <AlertTriangle size={20} style={{ color: '#b45309' }} />
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--status-warning-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <AlertTriangle size={20} style={{ color: 'var(--status-warning)' }} />
             </div>
             <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b' }}>This period overlaps an existing invoice</div>
           </div>
@@ -2169,7 +2169,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
               Cancel
             </button>
             <button onClick={() => { setOverlapConfirmModal(null); void createInvoice(true); }}
-              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#b45309', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--status-warning)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
               Generate anyway
             </button>
           </div>
@@ -2603,7 +2603,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           {([
             { key: 'all',    label: `AR Reminder · FYE ${month || '—'} ${year}`, sub: 'staff-reviewed batch this cycle', value: mCount.total,    color: '#1d3a5c', Icon: FileText },
             { key: 'needs',  label: 'Needs Billing',               sub: 'not yet invoiced this cycle',  value: mCount.needs,    color: '#c2410c', Icon: AlertTriangle },
-            { key: 'active', label: 'Invoiced',                    sub: 'already invoiced this cycle',   value: mCount.invoiced, color: '#16a34a', Icon: CheckCircle2 },
+            { key: 'active', label: 'Invoiced',                    sub: 'already invoiced this cycle',   value: mCount.invoiced, color: 'var(--status-success)', Icon: CheckCircle2 },
           ] as const).map(({ key, label, sub, value, color, Icon }) => {
             const active = filter === key;
             return (
@@ -2623,7 +2623,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         </div>
       )}
 
-      {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: '#dc2626', fontSize: 12, marginBottom: 12 }}>{error}</div>}
+      {error && <div style={{ background: 'var(--status-danger-tint)', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: 'var(--status-danger)', fontSize: 12, marginBottom: 12 }}>{error}</div>}
 
       {/* Filter */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
@@ -2678,7 +2678,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                     {c.uen && <div className="company-registration-text">{c.uen} · FYE {c.fyeMonth ?? '—'}</div>}
                   </div>
                   {notInvoicedYet(c)
-                    ? <span style={{ fontSize: 10, fontWeight: 700, background: '#fff7ed', color: '#c2410c', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>To invoice</span>
+                    ? <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--status-warning-tint)', color: '#c2410c', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>To invoice</span>
                     : <span style={{ fontSize: 10, fontWeight: 700, background: '#dcfce7', color: '#15803d', borderRadius: 4, padding: '1px 6px', whiteSpace: 'nowrap' }}>✓ Invoiced</span>}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 7 }}>
@@ -2710,8 +2710,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   </div>
                   <div style={{ width: '100%', padding: '0 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
                     {notInvoicedYet(c)
-                      ? <BillingStatusPill label="To invoice" color="#c2410c" background="#fff7ed" border="#fed7aa" />
-                      : <BillingStatusPill label="Invoiced" color="#15803d" background="#f0fdf4" border="#bbf7d0" />}
+                      ? <BillingStatusPill label="To invoice" color="#c2410c" background="var(--status-warning-tint)" border="#fed7aa" />
+                      : <BillingStatusPill label="Invoiced" color="#15803d" background="var(--status-success-tint)" border="#bbf7d0" />}
                   </div>
                   <div style={{ width: '100%', padding: '0 6px', fontSize: 11, color: '#64748b', textAlign: 'center', boxSizing: 'border-box' }}>{c.fyeMonth ?? '—'}</div>
                   <div style={{ width: '100%', padding: '2px 6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, whiteSpace: 'nowrap', boxSizing: 'border-box' }}>
@@ -2765,7 +2765,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                         <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>Email Drafts — {c.companyName}</div>
                         {draftNotice ? (
                           <>
-                            <div style={{ fontSize: 10.5, color: '#b45309', marginBottom: 10, lineHeight: 1.5 }}>{draftNotice}</div>
+                            <div style={{ fontSize: 10.5, color: 'var(--status-warning)', marginBottom: 10, lineHeight: 1.5 }}>{draftNotice}</div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                               <button onClick={() => { setDraftNotice(null); setDraftPopoverFor(null); }}
                                 style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '6px 12px' }}>
@@ -2790,9 +2790,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                               {helperAvailable ? 'Opens directly in Outlook with the invoice attached.' : 'Draft Helper not detected — opens a blank Outlook draft (no attachment) instead.'}
                             </div>
                             {helperAvailable && helperOutdated && (
-                              <div style={{ fontSize: 10, color: '#b45309', marginBottom: 8 }}>
+                              <div style={{ fontSize: 10, color: 'var(--status-warning)', marginBottom: 8 }}>
                                 A newer Draft Helper is available.{' '}
-                                <a href="/downloads/TassureDraftHelper.exe" download style={{ color: '#b45309', fontWeight: 800 }}>Update it</a>.
+                                <a href="/downloads/TassureDraftHelper.exe" download style={{ color: 'var(--status-warning)', fontWeight: 800 }}>Update it</a>.
                               </div>
                             )}
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
@@ -2824,7 +2824,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         // modal must resolve against that same list — not the raw renewals data.
         const c = monthCompanies.find(x => x.companyId === expanded);
         if (!c) return null;
-        const accent = c.urgency === 'expired' ? '#dc2626' : c.urgency === 'expiring_soon' ? '#f59e0b' : '#16a34a';
+        const accent = c.urgency === 'expired' ? 'var(--status-danger)' : c.urgency === 'expiring_soon' ? '#f59e0b' : 'var(--status-success)';
         return (
           <div onClick={() => setExpanded(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
             <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 1040, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
@@ -2923,7 +2923,7 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
   }, [onClose]);
 
   const filed     = r.stages.arFiled;
-  const accent    = filed ? '#16a34a' : r.stagesDone > 0 ? '#f59e0b' : '#94a3b8';
+  const accent    = filed ? 'var(--status-success)' : r.stagesDone > 0 ? '#f59e0b' : '#94a3b8';
   const activeSvc = Object.entries(r.services).filter(([, v]) => v).map(([k]) => k);
 
   return (
@@ -2967,9 +2967,9 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, marginBottom: 14 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <ShieldCheck size={14} style={{ color: '#1d4ed8' }} />
+                  <ShieldCheck size={14} style={{ color: 'var(--accent-blue)' }} />
                   <span style={{ fontSize: 11.5, fontWeight: 800, color: '#1e3a5f' }}>Service configuration</span>
-                  <span style={{ padding: '2px 6px', borderRadius: 999, background: '#fff7ed', color: '#b45309', fontSize: 7.5, fontWeight: 800, letterSpacing: '0.35px' }}>REVIEW BEFORE BILLING</span>
+                  <span style={{ padding: '2px 6px', borderRadius: 999, background: 'var(--status-warning-tint)', color: 'var(--status-warning)', fontSize: 7.5, fontWeight: 800, letterSpacing: '0.35px' }}>REVIEW BEFORE BILLING</span>
                 </div>
                 <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 5, lineHeight: 1.5 }}>Click an adjustable service to override the system result. Click again to restore automatic detection.</div>
               </div>
@@ -3030,7 +3030,7 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
                 </div>
                 <button onClick={() => void loadHistory()} disabled={historyLoading} style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 6, padding: '4px 7px', cursor: 'pointer', display: 'flex' }}><RefreshCw size={11} /></button>
               </div>
-              {historyError && <div style={{ padding: '8px 13px', background: '#fef2f2', color: '#b91c1c', fontSize: 10 }}>{historyError}</div>}
+              {historyError && <div style={{ padding: '8px 13px', background: 'var(--status-danger-tint)', color: '#b91c1c', fontSize: 10 }}>{historyError}</div>}
               {historyLoading && historyRows.length === 0 ? (
                 <div style={{ padding: '18px 18px 28px', textAlign: 'center', color: '#94a3b8', fontSize: 10 }}>Loading history…</div>
               ) : historyRows.length === 0 ? (
@@ -3050,7 +3050,7 @@ function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARReco
                         <div style={{ color: '#94a3b8', marginTop: 2 }}>{new Date(entry.changed_at).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}</div>
                       </div>
                       <button onClick={() => void restoreHistory(entry)} disabled={restoringId !== null}
-                        style={{ border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', borderRadius: 6, padding: '4px 6px', fontSize: 9, fontWeight: 700, cursor: restoringId !== null ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                        style={{ border: '1px solid #bfdbfe', background: 'var(--status-info-tint)', color: 'var(--accent-blue)', borderRadius: 6, padding: '4px 6px', fontSize: 9, fontWeight: 700, cursor: restoringId !== null ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
                         <RotateCcw size={9} />{restoringId === entry.id ? 'Restoring' : 'Restore'}
                       </button>
                     </div>
@@ -3124,7 +3124,7 @@ function ARColumnFilterMenu({ field, label, records, selected, onApply }: {
   return (
     <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
       <button onClick={e => { e.stopPropagation(); setOpen(v => !v); }} title={`Filter ${label}`}
-        style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', color: active ? '#b45309' : 'rgba(30,41,59,0.4)' }}>
+        style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', color: active ? 'var(--status-warning)' : 'rgba(30,41,59,0.4)' }}>
         <Filter size={11} fill={active ? 'currentColor' : 'none'} />
       </button>
       {open && (
@@ -3347,7 +3347,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             const filed   = r.stages.arFiled;
             const overdue = !filed && r.daysUntilDue !== null && r.daysUntilDue < 0;
             const inProg  = !filed && (r.stages.sentToClient || r.stages.docsReceived || r.stages.agmHeld);
-            const accent  = filed ? '#16a34a' : overdue ? '#dc2626' : inProg ? '#f59e0b' : '#e2e8f0';
+            const accent  = filed ? 'var(--status-success)' : overdue ? 'var(--status-danger)' : inProg ? '#f59e0b' : '#e2e8f0';
             // Whole-row tint from the Remarks selection (Vincent, 2026-08-13:
             // TERMINATED/STRIKE OFF -> grey row, AR COMPLETED -> green row, a
             // free-typed custom remark -> row unchanged). Passed to every TD
@@ -3355,7 +3355,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             // .system-list-row's own background is `!important` in
             // globals.css and would silently win over a <tr>-level override.
             const rowState = remarksRowState(r.remarks);
-            const rowTint  = rowState === 'closed' ? '#eef1f5' : rowState === 'done' ? '#f0fdf4' : undefined;
+            const rowTint  = rowState === 'closed' ? '#eef1f5' : rowState === 'done' ? 'var(--status-success-tint)' : undefined;
             return (
               <tr key={r.id} className="system-list-row">
                 <TD stickyLeft={0} tint={rowTint} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
@@ -3404,7 +3404,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                     <History size={11} />
                   </button>
                   <button onClick={() => onDelete(r.id)} title="Remove"
-                    style={{ marginLeft: 4, padding: '3px 6px', borderRadius: 5, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', cursor: 'pointer', display: 'inline-flex' }}>
+                    style={{ marginLeft: 4, padding: '3px 6px', borderRadius: 5, border: '1px solid #fca5a5', background: '#fff', color: 'var(--status-danger)', cursor: 'pointer', display: 'inline-flex' }}>
                     <Trash2 size={11} />
                   </button>
                 </TD>
@@ -3763,10 +3763,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
         {([
           { key: 'all',         label: 'Total Companies', sub: 'in this FYE cycle',       value: stats.total,      color: '#1d3a5c', Icon: FileText },
-          { key: 'filed',       label: 'AR Filed',        sub: 'annual return filed',     value: stats.filed,      color: '#16a34a', Icon: CheckCircle2 },
-          { key: 'in_progress', label: 'In Progress',     sub: 'some steps done',         value: stats.inProgress, color: '#b45309', Icon: Clock },
+          { key: 'filed',       label: 'AR Filed',        sub: 'annual return filed',     value: stats.filed,      color: 'var(--status-success)', Icon: CheckCircle2 },
+          { key: 'in_progress', label: 'In Progress',     sub: 'some steps done',         value: stats.inProgress, color: 'var(--status-warning)', Icon: Clock },
           { key: 'pending',     label: 'Not Started',     sub: 'no steps yet',            value: stats.pending,    color: '#64748b', Icon: Calendar },
-          { key: 'overdue',     label: 'Overdue',         sub: 'past due, not filed',     value: stats.overdue,    color: '#dc2626', Icon: AlertTriangle },
+          { key: 'overdue',     label: 'Overdue',         sub: 'past due, not filed',     value: stats.overdue,    color: 'var(--status-danger)', Icon: AlertTriangle },
         ] as const).map(({ key, label, sub, value, color, Icon }) => {
           const active = filter === key;
           return (
@@ -3785,7 +3785,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
         })}
       </div>
 
-      {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: '#dc2626', fontSize: 12, marginBottom: 12 }}>{error}</div>}
+      {error && <div style={{ background: 'var(--status-danger-tint)', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: 'var(--status-danger)', fontSize: 12, marginBottom: 12 }}>{error}</div>}
 
       {/* Search + view toggle */}
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
@@ -3855,7 +3855,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     ))}
                   </div>
                   <div style={{ display: 'flex', gap: 10, marginTop: 7, fontSize: 10.5, color: '#64748b' }}>
-                    <span>Progress: <span style={{ fontWeight: 700, color: filed ? '#16a34a' : r.stagesDone > 0 ? '#b45309' : '#94a3b8' }}>{r.stagesDone}/5{filed ? ' · Filed' : ''}</span></span>
+                    <span>Progress: <span style={{ fontWeight: 700, color: filed ? 'var(--status-success)' : r.stagesDone > 0 ? 'var(--status-warning)' : '#94a3b8' }}>{r.stagesDone}/5{filed ? ' · Filed' : ''}</span></span>
                     {r.pic && <span>PIC: {formatStaffName(r.pic)}</span>}
                   </div>
                 </div>
