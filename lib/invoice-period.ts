@@ -49,15 +49,29 @@ export function isPrimaryRenewalProduct(service: string, productService: string 
   return product?.role === 'primary' && product.service === service;
 }
 
+// Genuine renewal records must always outrank ad-hoc lines that merely share
+// the same service_type bucket. Tassure bills one-off work like CPF
+// submission under a "Secretary:CPF Submission" QB item — organizationally
+// under the Secretary department, but not a corporate-secretarial renewal —
+// and its line description can still contain a date range ("Jan 2026 - Dec
+// 2026" for a calendar-year CPF service) that parses just like a real
+// period. Sorting by period_end FIRST (as this used to) let that bogus,
+// later-sorting date silently outrank the real renewal's actual period —
+// e.g. reporting a Jun-2026 Secretary renewal as covered until Dec 2026,
+// which then either hides a genuinely due renewal or falsely blocks
+// generating one as an "overlap". isPrimaryRenewalProduct must decide first;
+// period_end only breaks ties among lines that are equally primary (or
+// equally not) — the one case, multiple genuine renewal invoices for the
+// same service, where "latest period wins" is actually correct.
 export function compareRenewalPeriodProductLines(
   service: string,
   a: { period_end: string | null; product_service: string | null },
   b: { period_end: string | null; product_service: string | null },
 ) {
-  const periodOrder = (b.period_end ?? '').localeCompare(a.period_end ?? '');
-  if (periodOrder) return periodOrder;
-  return Number(isPrimaryRenewalProduct(service, b.product_service))
+  const primaryOrder = Number(isPrimaryRenewalProduct(service, b.product_service))
     - Number(isPrimaryRenewalProduct(service, a.product_service));
+  if (primaryOrder) return primaryOrder;
+  return (b.period_end ?? '').localeCompare(a.period_end ?? '');
 }
 
 export type RenewalFeeLine = {

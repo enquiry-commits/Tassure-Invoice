@@ -9,7 +9,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import { isValidEmail } from '@/lib/campaign-recipients';
-import { isPrimaryRenewalProduct, parseInvoicePeriod, servicePeriodOverlapError } from '@/lib/invoice-period';
+import { isPrimaryRenewalProduct, parseInvoicePeriod, servicePeriodOverlapError, compareRenewalPeriodProductLines } from '@/lib/invoice-period';
 import { createHash } from 'node:crypto';
 
 export type { DraftLineItem };
@@ -70,9 +70,18 @@ async function validateRenewalPeriods(
         },
       };
     });
+    // Same ordering the renewals-status computation uses (lib/invoice-period.ts)
+    // — a genuine renewal record must always outrank an ad-hoc line that only
+    // shares this service_type bucket (e.g. "Secretary:CPF Submission",
+    // whose description can still contain a date range), even when that
+    // line's parsed period_end happens to sort later.
     const parsedRows = resolvedRows
       .filter(row => row.parsed?.period_end)
-      .sort((a, b) => (b.parsed?.period_end ?? '').localeCompare(a.parsed?.period_end ?? ''));
+      .sort((a, b) => compareRenewalPeriodProductLines(
+        line.service,
+        { period_end: a.parsed?.period_end ?? null, product_service: a.product_service },
+        { period_end: b.parsed?.period_end ?? null, product_service: b.product_service },
+      ));
     const latestParsed = parsedRows[0] ?? null;
     const latestPrimary = resolvedRows
       .filter(row => isPrimaryRenewalProduct(line.service, row.product_service))
