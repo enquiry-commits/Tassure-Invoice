@@ -27,6 +27,12 @@ interface CompanyResult {
   numberAdjusted?: boolean;
   expectedInvoiceNo?: string;
   numberMode?: InvoiceNumberMode;
+  // A period overlap was found but not yet confirmed past — distinct from a
+  // hard failure: nothing was created, and resubmitting the same request
+  // with overlapConfirmed:true (same idempotencyKey, so it reuses this same
+  // reservation) proceeds instead of erroring again.
+  overlapConfirmationRequired?: boolean;
+  overlapWarnings?: string[];
 }
 
 type InvoiceNumberMode = 'sequential' | 'manual';
@@ -39,13 +45,21 @@ function quickBooksRequestId(company: QbCompany, idempotencyKey: string) {
   return `tcs-${company.toLowerCase()}-${digest}`;
 }
 
+type PeriodValidationResult = { blocking: string[]; overlapWarnings: string[] };
+
+// Vincent, 2026-08-19: an overlap warning is a judgment call, not always a
+// mistake ("有时候有特别情况" — sometimes there are special cases) — a human
+// who's seen the warning and generates anyway should be able to, rather
+// than this hard-blocking every time. "Incomplete period" (the description
+// has no readable period at all) still always blocks — that's a real data
+// problem to fix, not a decision to confirm past.
 async function validateRenewalPeriods(
   company: QbCompany,
   customerName: string,
   lines: DraftLineItem[],
-) {
+): Promise<PeriodValidationResult> {
   const renewalLines = lines.filter(line => ['Secretary', 'Address', 'ND'].includes(line.service));
-  if (!renewalLines.length) return [];
+  if (!renewalLines.length) return { blocking: [], overlapWarnings: [] };
 
   const services = [...new Set(renewalLines.map(line => line.service))];
   const supabase = createAdminClient();
@@ -55,9 +69,10 @@ async function validateRenewalPeriods(
     .eq('qb_company', company)
     .eq('customer_name', customerName)
     .in('service_type', services);
-  if (error) return [`Unable to verify prior service periods: ${error.message}`];
+  if (error) return { blocking: [`Unable to verify prior service periods: ${error.message}`], overlapWarnings: [] };
 
-  const errors: string[] = [];
+  const blocking: string[] = [];
+  const overlapWarnings: string[] = [];
   for (const line of renewalLines) {
     const rows = (data ?? []).filter(row => row.service_type === line.service);
     const resolvedRows = rows.map(row => {
@@ -91,15 +106,16 @@ async function validateRenewalPeriods(
       && (!latestParsed || (latestPrimary.txn_date ?? '') > (latestParsed.txn_date ?? ''));
 
     if (unresolvedLatest && !line.periodConfirmed) {
-      errors.push(`${line.service}: latest QuickBooks invoice #${latestPrimary!.invoice_no} has no readable period. Confirm it manually before generating.`);
+      blocking.push(`${line.service}: latest QuickBooks invoice #${latestPrimary!.invoice_no} has no readable period. Confirm it manually before generating.`);
       continue;
     }
 
     const proposed = parseInvoicePeriod(line.description, line.service);
-    const overlap = servicePeriodOverlapError(line.service, proposed, latestParsed?.parsed?.period_end);
-    if (overlap) errors.push(overlap);
+    const issue = servicePeriodOverlapError(line.service, proposed, latestParsed?.parsed?.period_end);
+    if (issue?.kind === 'incomplete') blocking.push(issue.message);
+    else if (issue?.kind === 'overlap') overlapWarnings.push(issue.message);
   }
-  return errors;
+  return { blocking, overlapWarnings };
 }
 
 // Create one invoice in ONE QB company for the given lines. Used twice per
@@ -110,7 +126,7 @@ async function createInvoiceInCompany(
   email: string | undefined, txnDate: string, sendEmail: boolean | undefined,
   pic: string | undefined, docNumber: string | undefined,
   numberMode: InvoiceNumberMode, requestId: string,
-  locationName: string | undefined,
+  locationName: string | undefined, overlapConfirmed: boolean,
 ): Promise<CompanyResult> {
   const tokenRow = await getValidToken(company);
   if (!tokenRow) return { error: `QuickBooks ${company} not connected` };
@@ -119,9 +135,16 @@ async function createInvoiceInCompany(
   const customer = await findCustomer(token, realmId, companyName);
   if (!customer) return { error: `Customer not found in QB ${company}: "${companyName}"` };
 
-  const periodErrors = await validateRenewalPeriods(company, customer.name, lines);
-  if (periodErrors.length) {
-    return { error: `Invoice period validation failed. ${periodErrors.join(' ')}` };
+  const { blocking, overlapWarnings } = await validateRenewalPeriods(company, customer.name, lines);
+  if (blocking.length) {
+    return { error: `Invoice period validation failed. ${blocking.join(' ')}` };
+  }
+  if (overlapWarnings.length && !overlapConfirmed) {
+    return {
+      overlapConfirmationRequired: true,
+      overlapWarnings,
+      error: overlapWarnings.join(' '),
+    };
   }
 
   // House conventions (see lib/qb-invoice-conventions.ts): QuickBooks
@@ -218,6 +241,7 @@ export async function POST(req: NextRequest) {
     companyName, email, txnDate, sendEmail, pic,
     tabLines, tacLines,
     fyeMonth, fyeYear, fyeCycle, docNumbers, expectedNextNumbers, idempotencyKey,
+    overlapConfirmed,
   } = body as {
     companyName: string;
     email?: string;
@@ -232,6 +256,10 @@ export async function POST(req: NextRequest) {
     docNumbers?: Partial<Record<QbCompany, string>>;
     expectedNextNumbers?: Partial<Record<QbCompany, string>>;
     idempotencyKey?: string;
+    // A human has already seen the period-overlap warning and chosen to
+    // generate anyway ("有时候有特别情况") — never trusted for anything
+    // OTHER than the overlap check itself; every other validation still runs.
+    overlapConfirmed?: boolean;
   };
 
   if (!companyName || (!tabLines?.length && !tacLines?.length)) {
@@ -400,6 +428,7 @@ export async function POST(req: NextRequest) {
         company, companyName, lines, email, date, sendEmail, pic,
         resolvedNumbers[company], numberModes[company] ?? 'sequential',
         quickBooksRequestId(company, idempotencyKey), account.qbLocations?.[company],
+        overlapConfirmed === true,
       );
     } catch (error) {
       return {
@@ -469,6 +498,7 @@ export async function POST(req: NextRequest) {
   }
 
   const anySuccess = !!(tab && !tab.error) || !!(tac && !tac.error);
+  const overlapConfirmationRequired = !!(tab?.overlapConfirmationRequired || tac?.overlapConfirmationRequired);
   return NextResponse.json({
     success: anySuccess,
     tab: tab && !tab.error ? {
@@ -487,10 +517,18 @@ export async function POST(req: NextRequest) {
       expectedInvoiceNo: tac.expectedInvoiceNo,
       numberMode: tac.numberMode,
     } : null,
+    // Distinct from `errors` below — a human decision pending, not a
+    // failure. The caller re-submits the identical request (same
+    // idempotencyKey) with overlapConfirmed:true to proceed.
+    overlapConfirmationRequired,
+    overlapWarnings: {
+      ...(tab?.overlapConfirmationRequired ? { tab: tab.overlapWarnings } : {}),
+      ...(tac?.overlapConfirmationRequired ? { tac: tac.overlapWarnings } : {}),
+    },
     errors: {
-      ...(tab?.error ? { tab: tab.error } : {}),
-      ...(tac?.error ? { tac: tac.error } : {}),
+      ...(tab?.error && !tab.overlapConfirmationRequired ? { tab: tab.error } : {}),
+      ...(tac?.error && !tac.overlapConfirmationRequired ? { tac: tac.error } : {}),
       ...(persistenceWarning ? { persistence: persistenceWarning } : {}),
     },
-  }, { status: anySuccess ? 200 : 500 });
+  }, { status: anySuccess ? 200 : overlapConfirmationRequired ? 409 : 500 });
 }

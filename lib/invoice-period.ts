@@ -394,17 +394,31 @@ export function rollRecurringDescriptionForward(raw: string) {
   return description;
 }
 
+export type PeriodValidationIssue = {
+  // 'incomplete' — the description has no readable period at all, a data
+  // problem that always blocks (nothing to override). 'overlap' — a real
+  // period was found but it overlaps the latest invoiced one; Vincent,
+  // 2026-08-19: this should warn, not hard-block — "有时候有特别情况"
+  // (sometimes there are special/exceptional cases) — so callers may let a
+  // human confirm past it instead of refusing outright.
+  kind: 'incomplete' | 'overlap';
+  message: string;
+};
+
 export function servicePeriodOverlapError(
   service: string,
   proposed: ParsedInvoicePeriod | null,
   latestPeriodEnd: string | null | undefined,
-) {
+): PeriodValidationIssue | null {
   if (!proposed?.period_start || !proposed.period_end) {
-    return `${service}: enter a complete service period before generating the invoice.`;
+    return { kind: 'incomplete', message: `${service}: enter a complete service period before generating the invoice.` };
   }
   if (!latestPeriodEnd) return null;
   if (proposed.period_start <= latestPeriodEnd) {
-    return `${service}: the proposed period ${proposed.period_start} to ${proposed.period_end} overlaps the latest invoiced period ending ${latestPeriodEnd}.`;
+    return {
+      kind: 'overlap',
+      message: `${service}: the proposed period ${proposed.period_start} to ${proposed.period_end} overlaps the latest invoiced period ending ${latestPeriodEnd}.`,
+    };
   }
   return null;
 }

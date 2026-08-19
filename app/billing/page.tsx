@@ -1565,21 +1565,32 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   // an already-existing invoice being edited keeps its real DocNumber,
   // untouched by this panel.
   const missingInvoiceNumber = (!tabInvoice && includedTab.length > 0 && !invoiceNumbers.TAB) || (!tacInvoice && includedTac.length > 0 && !invoiceNumbers.TAC);
-  const periodValidationErrors = included.flatMap(line => {
-    if (!['Secretary', 'Address', 'ND'].includes(line.service)) return [];
-    const errors: string[] = [];
+  // Overlap issues are split out from everything else (Vincent, 2026-08-19):
+  // a real period overlap is a judgment call, not always a mistake —
+  // "有时候有特别情况" (sometimes there are special cases) — so it still
+  // warns (both here and server-side in create-invoice/route.ts) but no
+  // longer disables Generate; instead createInvoice() below pops a confirm
+  // dialog the moment it's clicked. "Confirm the latest period" and
+  // "incomplete period" stay hard blocks — those are real data gaps, not
+  // something a human can just confirm past.
+  const blockingPeriodErrors: string[] = [];
+  const overlapWarnings: string[] = [];
+  for (const line of included) {
+    if (!['Secretary', 'Address', 'ND'].includes(line.service)) continue;
     if (line.periodNeedsReview && !line.periodReviewed) {
-      errors.push(`${line.service}: confirm the latest period against QuickBooks.`);
+      blockingPeriodErrors.push(`${line.service}: confirm the latest period against QuickBooks.`);
     }
-    const overlap = servicePeriodOverlapError(
+    const issue = servicePeriodOverlapError(
       line.service,
       parseInvoicePeriod(line.description, line.service),
       line.previousPeriodEnd,
     );
-    if (overlap) errors.push(overlap);
-    return errors;
-  });
-  const hasPeriodError = periodValidationErrors.length > 0;
+    if (issue?.kind === 'incomplete') blockingPeriodErrors.push(issue.message);
+    else if (issue?.kind === 'overlap') overlapWarnings.push(issue.message);
+  }
+  const hasPeriodError = blockingPeriodErrors.length > 0;
+  const hasOverlapWarning = overlapWarnings.length > 0;
+  const [overlapConfirmModal, setOverlapConfirmModal] = useState<string[] | null>(null);
 
   // Once a company already has an invoice this cycle, it's edited via its
   // own "Save … changes" button (see renderSaveButton) instead of the
@@ -1589,9 +1600,16 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const needsGenerateTac = hasTac && !tacInvoice;
   const showGenerateButton = needsGenerateTab || needsGenerateTac;
 
-  const createInvoice = async () => {
+  const createInvoice = async (overlapConfirmed = false) => {
     if (hasPeriodError) {
-      setDraftResult({ ok: false, msg: periodValidationErrors.join(' ') });
+      setDraftResult({ ok: false, msg: blockingPeriodErrors.join(' ') });
+      return;
+    }
+    // Pop the confirm dialog instead of blocking outright — Vincent,
+    // 2026-08-19. Only reached on the FIRST click; createInvoice(true) from
+    // the modal's own "Generate anyway" button skips straight past this.
+    if (hasOverlapWarning && !overlapConfirmed) {
+      setOverlapConfirmModal(overlapWarnings);
       return;
     }
     setDrafting(true); setDraftResult(null);
@@ -1621,9 +1639,19 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           idempotencyKey: invoiceRequestKey,
           docNumbers: invoiceNumbers,
           expectedNextNumbers: suggestedNumbers,
+          overlapConfirmed,
         }),
       });
       const json = await res.json();
+      // The server independently re-checks the same overlap — it may catch
+      // one the client's own (possibly slightly stale) renewal data didn't.
+      // Show the same confirm dialog rather than surfacing it as a plain
+      // error; confirming retries with overlapConfirmed:true.
+      if (res.status === 409 && json.overlapConfirmationRequired && !overlapConfirmed) {
+        const warnings = [...(json.overlapWarnings?.tab ?? []), ...(json.overlapWarnings?.tac ?? [])];
+        setOverlapConfirmModal(warnings.length ? warnings : ['This invoice period overlaps one already on file.']);
+        return;
+      }
       if (res.status === 409 && json.numberConflict) {
         const refreshed = {
           TAB: typeof json.nextNumbers?.TAB === 'string' ? json.nextNumbers.TAB : invoiceNumbers.TAB,
@@ -1891,6 +1919,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   };
 
   return (
+    <>
     <div style={{ padding: '28px 20px', background: '#fff' }}>
       {/* Header: contact + PIC + invoice date */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -2047,7 +2076,12 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         {missingInvoiceNumber && !numberLoading && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>Confirm the required QB invoice number</span>}
         {hasPeriodError && (
           <div style={{ flexBasis: '100%', border: '1px solid #fecaca', background: '#fef2f2', color: '#b91c1c', borderRadius: 7, padding: '9px 12px', fontSize: 11, fontWeight: 600 }}>
-            Period check required: {periodValidationErrors.slice(0, 3).join(' · ')}
+            Period check required: {blockingPeriodErrors.slice(0, 3).join(' · ')}
+          </div>
+        )}
+        {!hasPeriodError && hasOverlapWarning && (
+          <div style={{ flexBasis: '100%', border: '1px solid #fed7aa', background: '#fff7ed', color: '#9a3412', borderRadius: 7, padding: '9px 12px', fontSize: 11, fontWeight: 600 }}>
+            ⚠ {overlapWarnings.slice(0, 3).join(' · ')} — you can still generate; you&apos;ll be asked to confirm.
           </div>
         )}
         {showGenerateButton && (() => {
@@ -2057,7 +2091,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
           const disabled = drafting || numberLoading || nothingPending || missingRate || missingInvoiceNumber || hasPeriodError;
           return (
             <button
-              onClick={createInvoice}
+              onClick={() => createInvoice()}
               disabled={disabled}
               style={{
                 marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none',
@@ -2114,6 +2148,35 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         ⚠ The invoice is created as a draft in QuickBooks (not sent). Review it in QB, then send to the client from there.
       </div>
     </div>
+    {overlapConfirmModal && (
+      <div onClick={() => setOverlapConfirmModal(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 440, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <AlertTriangle size={20} style={{ color: '#b45309' }} />
+            </div>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b' }}>This period overlaps an existing invoice</div>
+          </div>
+          <div style={{ fontSize: 13, color: '#475569', marginBottom: 12, lineHeight: 1.5 }}>
+            {overlapConfirmModal.map((msg, i) => <div key={i} style={{ marginBottom: 4 }}>{msg}</div>)}
+          </div>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 20, lineHeight: 1.5 }}>
+            If this is genuinely a special case (a correction, a split invoice, etc.), you can generate it anyway. Otherwise, cancel and check the period or the company&apos;s existing invoices first.
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => setOverlapConfirmModal(null)}
+              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+              Cancel
+            </button>
+            <button onClick={() => { setOverlapConfirmModal(null); void createInvoice(true); }}
+              style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#b45309', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+              Generate anyway
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
