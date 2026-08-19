@@ -2529,21 +2529,42 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   // back to the company record, only used for this one draft.
   const [needsManualEmail, setNeedsManualEmail] = useState(false);
   const [manualToEmail, setManualToEmail] = useState('');
+  // Resolved as soon as the popover opens (Vincent, 2026-08-19: "不需要我按
+  // DRAFT了才写email，而是你一开始就应该知道") — reused for the actual draft
+  // rather than re-fetched, so opening early costs one lookup, not two.
+  const [previewRow, setPreviewRow] = useState<{
+    companyName: string; companyId: number | null; toEmail: string | null; ccEmail: string | null;
+    contactName: string; invoiceRefs: { qbCompany: 'TAB' | 'TAC' | 'TAO'; invoiceNo: string; amount: number; qbInvoiceId?: string | null }[];
+    totalAmount: number;
+  } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const resolveDraftPreview = async (c: CompanyBilling) => {
+    setPreviewLoading(true);
+    try {
+      const previewRes = await fetch(`/api/client-communications/campaigns/preview?lookup=${encodeURIComponent(c.companyName)}&type=ar&fyeMonth=${encodeURIComponent(month)}&fyeYear=${year}`);
+      const previewJson = await previewRes.json();
+      if (!previewRes.ok || !previewJson.row) { setDraftError(previewJson.error ?? 'Unable to resolve this company.'); return; }
+      setPreviewRow(previewJson.row);
+      if (!previewJson.row.toEmail) {
+        setNeedsManualEmail(true);
+        setDraftError('No valid recipient email on file — resolve this in Campaign Centre, or type one below to draft anyway.');
+      }
+    } catch {
+      setDraftError('Unable to resolve this company.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   const quickEmailDraft = async (c: CompanyBilling, overrideEmail?: string) => {
     const templateId = selectedTemplateId;
     if (!templateId) { setDraftError('No AR template found — add one in Client Communications › Templates.'); return; }
+    if (!previewRow) { setDraftError('Still resolving this company — try again in a moment.'); return; }
     setDrafting(true);
     setDraftError(null);
     try {
-      const previewRes = await fetch(`/api/client-communications/campaigns/preview?lookup=${encodeURIComponent(c.companyName)}&type=ar&fyeMonth=${encodeURIComponent(month)}&fyeYear=${year}`);
-      const previewJson = await previewRes.json();
-      if (!previewRes.ok || !previewJson.row) throw new Error(previewJson.error ?? 'Unable to resolve this company.');
-      const row = previewJson.row as {
-        companyName: string; companyId: number | null; toEmail: string | null; ccEmail: string | null;
-        contactName: string; invoiceRefs: { qbCompany: 'TAB' | 'TAC' | 'TAO'; invoiceNo: string; amount: number; qbInvoiceId?: string | null }[];
-        totalAmount: number;
-      };
+      const row = { ...previewRow };
       if (!row.toEmail && overrideEmail && isValidEmail(overrideEmail)) row.toEmail = overrideEmail;
       if (!row.toEmail) {
         setNeedsManualEmail(true);
@@ -2890,7 +2911,13 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                     <EditField id={c.companyId} field="billing_remarks" value={c.billingRemarks} onSave={handleArSave} multiline />
                   </div>
                   <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                    <button title="Email Drafts" onClick={e => { e.stopPropagation(); setDraftError(null); setDraftNotice(null); setNeedsManualEmail(false); setManualToEmail(''); setDraftPopoverFor(v => v === c.companyId ? null : c.companyId); }}
+                    <button title="Email Drafts" onClick={e => {
+                        e.stopPropagation();
+                        setDraftError(null); setDraftNotice(null); setNeedsManualEmail(false); setManualToEmail(''); setPreviewRow(null);
+                        const opening = draftPopoverFor !== c.companyId;
+                        setDraftPopoverFor(opening ? c.companyId : null);
+                        if (opening) void resolveDraftPreview(c);
+                      }}
                       style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: draftPopoverFor === c.companyId ? '#1d3a5c' : '#94a3b8' }}>
                       <Mail size={15} />
                     </button>
@@ -2922,6 +2949,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                               {emailTemplates.length === 0 && <option value="">No AR templates found</option>}
                               {emailTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                             </select>
+                            {previewLoading && <div style={{ fontSize: 10.5, color: '#94a3b8', marginBottom: 8 }}>Checking recipient…</div>}
                             {draftError && <div style={{ fontSize: 10.5, color: '#b91c1c', marginBottom: 8 }}>{draftError}</div>}
                             {needsManualEmail && (
                               <input type="email" value={manualToEmail} onChange={e => setManualToEmail(e.target.value)}
@@ -2940,8 +2968,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                               <button onClick={() => setDraftPopoverFor(null)} style={{ fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '5px 8px' }}>Cancel</button>
                               <button onClick={() => quickEmailDraft(c, needsManualEmail ? manualToEmail : undefined)}
-                                disabled={drafting || !selectedTemplateId || (needsManualEmail && !isValidEmail(manualToEmail))}
-                                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: drafting ? 'wait' : 'pointer', padding: '6px 12px', opacity: (!selectedTemplateId || (needsManualEmail && !isValidEmail(manualToEmail))) ? 0.6 : 1 }}>
+                                disabled={drafting || previewLoading || !selectedTemplateId || (needsManualEmail && !isValidEmail(manualToEmail))}
+                                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: drafting ? 'wait' : 'pointer', padding: '6px 12px', opacity: (previewLoading || !selectedTemplateId || (needsManualEmail && !isValidEmail(manualToEmail))) ? 0.6 : 1 }}>
                                 {drafting ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
                                 {drafting ? 'Drafting…' : 'Draft'}
                               </button>
