@@ -21,6 +21,7 @@ import { formatStaffName } from '@/lib/staff-directory';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
 import { getHelperHealth, isHelperOutdated, openDraftsInOutlook, buildMailtoLink } from '@/lib/draft-helper-client';
+import { isValidEmail } from '@/lib/campaign-recipients';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
@@ -2523,8 +2524,13 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  // No email on file (e.g. TeamWork never captured one) — offer a one-off
+  // manual entry instead of just blocking (Vincent, 2026-08-19). Not saved
+  // back to the company record, only used for this one draft.
+  const [needsManualEmail, setNeedsManualEmail] = useState(false);
+  const [manualToEmail, setManualToEmail] = useState('');
 
-  const quickEmailDraft = async (c: CompanyBilling) => {
+  const quickEmailDraft = async (c: CompanyBilling, overrideEmail?: string) => {
     const templateId = selectedTemplateId;
     if (!templateId) { setDraftError('No AR template found — add one in Client Communications › Templates.'); return; }
     setDrafting(true);
@@ -2538,7 +2544,12 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         contactName: string; invoiceRefs: { qbCompany: 'TAB' | 'TAC' | 'TAO'; invoiceNo: string; amount: number; qbInvoiceId?: string | null }[];
         totalAmount: number;
       };
-      if (!row.toEmail) throw new Error('No valid recipient email — resolve this in Campaign Centre first.');
+      if (!row.toEmail && overrideEmail && isValidEmail(overrideEmail)) row.toEmail = overrideEmail;
+      if (!row.toEmail) {
+        setNeedsManualEmail(true);
+        setDraftError('No valid recipient email on file — resolve this in Campaign Centre, or type one below to draft anyway.');
+        return;
+      }
 
       const createRes = await fetch('/api/client-communications/campaigns', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2879,7 +2890,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                     <EditField id={c.companyId} field="billing_remarks" value={c.billingRemarks} onSave={handleArSave} multiline />
                   </div>
                   <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-                    <button title="Email Drafts" onClick={e => { e.stopPropagation(); setDraftError(null); setDraftNotice(null); setDraftPopoverFor(v => v === c.companyId ? null : c.companyId); }}
+                    <button title="Email Drafts" onClick={e => { e.stopPropagation(); setDraftError(null); setDraftNotice(null); setNeedsManualEmail(false); setManualToEmail(''); setDraftPopoverFor(v => v === c.companyId ? null : c.companyId); }}
                       style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: draftPopoverFor === c.companyId ? '#1d3a5c' : '#94a3b8' }}>
                       <Mail size={15} />
                     </button>
@@ -2912,6 +2923,11 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                               {emailTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                             </select>
                             {draftError && <div style={{ fontSize: 10.5, color: '#b91c1c', marginBottom: 8 }}>{draftError}</div>}
+                            {needsManualEmail && (
+                              <input type="email" value={manualToEmail} onChange={e => setManualToEmail(e.target.value)}
+                                placeholder="recipient@email.com" autoFocus
+                                style={{ width: '100%', border: `1px solid ${manualToEmail && !isValidEmail(manualToEmail) ? '#fecaca' : '#e2e8f0'}`, borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }} />
+                            )}
                             <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8 }}>
                               {helperAvailable ? 'Opens directly in Outlook with the invoice attached.' : 'Draft Helper not detected — opens a blank Outlook draft (no attachment) instead.'}
                             </div>
@@ -2923,8 +2939,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                             )}
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                               <button onClick={() => setDraftPopoverFor(null)} style={{ fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '5px 8px' }}>Cancel</button>
-                              <button onClick={() => quickEmailDraft(c)} disabled={drafting || !selectedTemplateId}
-                                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: drafting ? 'wait' : 'pointer', padding: '6px 12px', opacity: !selectedTemplateId ? 0.6 : 1 }}>
+                              <button onClick={() => quickEmailDraft(c, needsManualEmail ? manualToEmail : undefined)}
+                                disabled={drafting || !selectedTemplateId || (needsManualEmail && !isValidEmail(manualToEmail))}
+                                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: drafting ? 'wait' : 'pointer', padding: '6px 12px', opacity: (!selectedTemplateId || (needsManualEmail && !isValidEmail(manualToEmail))) ? 0.6 : 1 }}>
                                 {drafting ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
                                 {drafting ? 'Drafting…' : 'Draft'}
                               </button>
