@@ -64,7 +64,7 @@ const tree: Node[] = [
 // Appended only for the one account with admin:true (lib/approved-accounts.ts)
 // — not part of `tree` itself, so groupIds()/level1For() (used by every
 // other account) stay untouched.
-const ADMIN_NODE: Node = { label: 'Appearance Settings', href: '/admin/appearance', icon: Palette };
+const ADMIN_NODE: Node = { label: '外观设置', href: '/admin/appearance', icon: Palette };
 
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
