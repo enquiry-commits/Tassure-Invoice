@@ -8,7 +8,7 @@ import { applyThemeTokens } from '@/lib/apply-theme';
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
-const GROUP_ORDER = ['Brand & Structure', 'Text', 'Surfaces & Borders', 'List & Table', 'Status', 'Font'];
+const GROUP_ORDER = ['品牌与结构', '文字', '背景与边框', '列表与表格', '状态颜色', '字体'];
 
 export default function AppearanceSettingsPage() {
   const router = useRouter();
@@ -81,7 +81,7 @@ export default function AppearanceSettingsPage() {
   }
 
   if (authorized === null || loading) {
-    return <div style={{ padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>;
+    return <div style={{ padding: 40, color: '#94a3b8', fontSize: 13 }}>加载中…</div>;
   }
 
   return (
@@ -92,8 +92,12 @@ export default function AppearanceSettingsPage() {
         </div>
         <div>
           <div style={{ fontSize: 16, fontWeight: 800, color: '#1e3a5f' }}>Appearance Settings</div>
-          <div style={{ fontSize: 12, color: '#64748b' }}>Colors and fonts apply globally, for every logged-in user, as soon as you save.</div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>颜色和字体保存后，会对所有登录用户全局生效。</div>
         </div>
+      </div>
+
+      <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 14 }}>
+        每项下面都标了实际生效范围：<span style={{ color: '#16a34a', fontWeight: 600 }}>✓ 绿色</span> = 已接入真实页面，改了马上能看到效果；<span style={{ color: '#c2410c', fontWeight: 600 }}>○ 橙色</span> = 暂未接入任何页面，改了不会有变化（预留给后续迁移）。
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -109,6 +113,9 @@ export default function AppearanceSettingsPage() {
                   return (
                     <label key={def.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <span style={{ fontSize: 11.5, fontWeight: 600, color: '#475569' }}>{def.label}</span>
+                      <span style={{ fontSize: 10.5, color: def.live ? '#16a34a' : '#c2410c', lineHeight: 1.4 }}>
+                        {def.live ? '✓ ' : '○ '}{def.scope}
+                      </span>
                       <select
                         value={value}
                         onChange={e => handleChange(def.key, e.target.value)}
@@ -123,6 +130,9 @@ export default function AppearanceSettingsPage() {
                 return (
                   <label key={def.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <span style={{ fontSize: 11.5, fontWeight: 600, color: '#475569' }}>{def.label}</span>
+                    <span style={{ fontSize: 10.5, color: def.live ? '#16a34a' : '#c2410c', lineHeight: 1.4 }}>
+                      {def.live ? '✓ ' : '○ '}{def.scope}
+                    </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <input
                         type="color"

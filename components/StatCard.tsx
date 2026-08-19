@@ -9,11 +9,11 @@ interface StatCardProps {
 }
 
 const colors = {
-  orange: { bg: '#f97316', text: '#ffffff' },
+  orange: { bg: 'var(--accent-orange)', text: '#ffffff' },
   yellow: { bg: '#d97706', text: '#ffffff' },
   gray:   { bg: '#475569', text: '#ffffff' },
   red:    { bg: '#dc2626', text: '#ffffff' },
-  blue:   { bg: '#1d4ed8', text: '#ffffff' },
+  blue:   { bg: 'var(--accent-blue)', text: '#ffffff' },
   green:  { bg: '#16a34a', text: '#ffffff' },
 };
 

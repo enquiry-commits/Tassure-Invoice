@@ -92,8 +92,8 @@ export default function TemplatesSendersPage() {
                     onBlur={() => patchTemplate(t.id, 'name', e.name, t.name)}
                     style={{ ...S, fontWeight: 700, width: 260 }} />
                   <button onClick={() => patchTemplate(t.id, 'is_default', true, t.is_default)} title="Set as default"
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: t.is_default ? '#eab308' : '#cbd5e1', fontSize: 11 }}>
-                    <Star size={13} fill={t.is_default ? '#eab308' : 'none'} />{t.is_default ? 'Default' : 'Set default'}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: t.is_default ? 'var(--accent-yellow)' : '#cbd5e1', fontSize: 11 }}>
+                    <Star size={13} fill={t.is_default ? 'var(--accent-yellow)' : 'none'} />{t.is_default ? 'Default' : 'Set default'}
                   </button>
                   <button onClick={() => deleteTemplate(t.id)} style={{ marginLeft: 'auto', border: 'none', background: 'transparent', cursor: 'pointer', color: '#dc2626' }}>
                     <Trash2 size={14} />
@@ -135,8 +135,8 @@ export default function TemplatesSendersPage() {
             <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e3a5f' }}>{s.display_name ?? '(no name)'}</span>
             <span style={{ fontSize: 11.5, color: '#64748b' }}>{s.email}</span>
             <button onClick={() => patchSender(s.id, 'is_default', true)}
-              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: s.is_default ? '#eab308' : '#cbd5e1', fontSize: 11 }}>
-              <Star size={13} fill={s.is_default ? '#eab308' : 'none'} />{s.is_default ? 'Default' : 'Set default'}
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: s.is_default ? 'var(--accent-yellow)' : '#cbd5e1', fontSize: 11 }}>
+              <Star size={13} fill={s.is_default ? 'var(--accent-yellow)' : 'none'} />{s.is_default ? 'Default' : 'Set default'}
             </button>
             <button onClick={() => deleteSender(s.id)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#dc2626' }}><Trash2 size={14} /></button>
           </div>

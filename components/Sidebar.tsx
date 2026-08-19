@@ -92,7 +92,11 @@ function level1For(restrictedTo: string | null | undefined): Node[] {
 }
 
 const RAIL = 'rgba(255,255,255,0.18)';
-const ACTIVE_BG = 'linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.05))';
+// Appearance Settings (lib/theme-tokens.ts) controls these two — previously
+// hardcoded, now genuine CSS-var references so the sidebar/hover colors are
+// actually editable. Nothing else about how/when they apply changed.
+const ACTIVE_BG = 'var(--sidebar-active)';
+const HOVER_BG = 'var(--sidebar-hover)';
 const ACTIVE_BORDER = 'rgba(255,255,255,0.15)';
 const ACTIVE_SHADOW = 'inset 0 1px 0 rgba(255,255,255,0.10), 0 3px 10px rgba(0,0,0,0.22)';
 
@@ -124,7 +128,7 @@ function Level1({ node, active, expanded, onToggle }:
   };
   const hover = (on: boolean) => (e: React.MouseEvent) => {
     if (active) return;
-    (e.currentTarget as HTMLElement).style.background = on ? 'rgba(255,255,255,0.07)' : 'transparent';
+    (e.currentTarget as HTMLElement).style.background = on ? HOVER_BG : 'transparent';
     (e.currentTarget as HTMLElement).style.color = on ? '#fff' : 'rgba(255,255,255,0.92)';
   };
   const Icon = node.icon;
@@ -165,7 +169,7 @@ function SubRow({ node, depth, active, expanded, onToggle }:
   };
   const hover = (on: boolean) => (e: React.MouseEvent) => {
     if (active) return;
-    (e.currentTarget as HTMLElement).style.background = on ? 'rgba(255,255,255,0.07)' : 'transparent';
+    (e.currentTarget as HTMLElement).style.background = on ? HOVER_BG : 'transparent';
     (e.currentTarget as HTMLElement).style.color = on ? '#fff' : idle;
   };
   const label = (
@@ -262,7 +266,7 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
                 background: active ? ACTIVE_BG : 'transparent', boxShadow: active ? ACTIVE_SHADOW : 'none',
                 color: '#fff',
               }}
-              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.07)'; }}
+              onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = HOVER_BG; }}
               onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
             >
               {n.img ? <NavImg src={n.img} size={24} /> : Icon ? <Icon size={21} /> : null}
@@ -309,7 +313,7 @@ export default function Sidebar({ restrictedTo, isAdmin }: { restrictedTo?: stri
   return (
     <aside
       className="desktop-only flex flex-col flex-shrink-0"
-      style={{ background: 'linear-gradient(180deg, #1e3a5f 0%, #17293f 100%)', width, overflow: 'hidden', transition: 'width 0.22s ease' }}
+      style={{ background: 'var(--sidebar-bg)', width, overflow: 'hidden', transition: 'width 0.22s ease' }}
     >
       {/* Header */}
       <div style={{ borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
