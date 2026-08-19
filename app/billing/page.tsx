@@ -2475,6 +2475,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         const rows: { company_name: string; status: string }[] = j.data ?? [];
         const map = new Map<string, 'sent' | 'drafted'>();
         for (const row of rows) {
+          // A skipped draft (Delivery History's "Skip") is a deliberate
+          // non-send, not a pending one — it must not keep the row amber.
+          if (row.status === 'skipped') continue;
           const key = normName(row.company_name);
           const next = row.status === 'sent' ? 'sent' : 'drafted';
           if (next === 'sent' || map.get(key) !== 'sent') map.set(key, next);
