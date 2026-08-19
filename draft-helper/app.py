@@ -55,7 +55,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.5.6"
+VERSION = "1.5.7"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -201,25 +201,51 @@ def _reconcile_sent_items(outlook):
     'sent'/'skipped' is left untouched), so re-reporting one OnItemSend
     already caught is harmless — this never needs to know what the live
     listener did or didn't see.
+
+    Scans EVERY configured account's own Sent Items folder, not just
+    GetNamespace("MAPI").GetDefaultFolder() — that call only ever returns
+    the PRIMARY account's folder. Vincent, 2026-08-19: staff send AR drafts
+    from finance@tassure.com, which is a secondary account on a profile
+    whose primary is contact@tassure.com — this system's whole reason for
+    existing (a secondary sending account) is exactly the case the old
+    single-folder scan could never see. Deduplicates by StoreID first
+    since single-account setups (or any account sharing a store with the
+    primary) would otherwise have their Sent Items scanned twice per cycle
+    for no benefit.
     """
     try:
-        sent_folder = outlook.GetNamespace("MAPI").GetDefaultFolder(_OL_FOLDER_SENT_MAIL)
+        seen_store_ids = set()
+        folders = []
+        for account in outlook.Session.Accounts:
+            try:
+                folder = account.DeliveryStore.GetDefaultFolder(_OL_FOLDER_SENT_MAIL)
+            except Exception:  # noqa: BLE001 - this one account's store unavailable
+                continue
+            if folder.StoreID in seen_store_ids:
+                continue
+            seen_store_ids.add(folder.StoreID)
+            folders.append(folder)
+
         cutoff = (
             datetime.datetime.now() - datetime.timedelta(days=RECONCILE_LOOKBACK_DAYS)
         ).strftime("%m/%d/%Y %I:%M %p")
-        items = sent_folder.Items.Restrict(f"[SentOn] >= '{cutoff}'")
-        for item in items:
+        for sent_folder in folders:
             try:
-                draft_id = item.PropertyAccessor.GetProperty(DRAFT_ID_PROP)
-            except Exception:  # noqa: BLE001 - not one of ours, or property unset
+                items = sent_folder.Items.Restrict(f"[SentOn] >= '{cutoff}'")
+            except Exception:  # noqa: BLE001 - this one folder failed, try the rest
                 continue
-            if not draft_id:
-                continue
-            try:
-                sender_email = item.SendUsingAccount.SmtpAddress
-            except Exception:  # noqa: BLE001
-                sender_email = None
-            _report_sent(draft_id, sender_email)
+            for item in items:
+                try:
+                    draft_id = item.PropertyAccessor.GetProperty(DRAFT_ID_PROP)
+                except Exception:  # noqa: BLE001 - not one of ours, or property unset
+                    continue
+                if not draft_id:
+                    continue
+                try:
+                    sender_email = item.SendUsingAccount.SmtpAddress
+                except Exception:  # noqa: BLE001
+                    sender_email = None
+                _report_sent(draft_id, sender_email)
     except Exception:  # noqa: BLE001 - best-effort, the next cycle tries again
         pass
 
