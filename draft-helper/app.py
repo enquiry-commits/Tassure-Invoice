@@ -8,6 +8,7 @@ manually, matching the legacy BULK.xlsm macro's behaviour.
 Bound to 127.0.0.1 only; never reachable from the network.
 """
 import base64
+import datetime
 import html
 import os
 import shutil
@@ -54,7 +55,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.5.4"
+VERSION = "1.5.5"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -179,6 +180,77 @@ def start_outlook_event_listener():
             pass
 
     threading.Thread(target=_run, daemon=True, name="outlook-event-listener").start()
+
+
+# olFolderSentMail — Outlook's own constant, not worth pulling in the full
+# win32com MAPI constants module for just this one value.
+_OL_FOLDER_SENT_MAIL = 5
+RECONCILE_INTERVAL_SECONDS = 300
+RECONCILE_LOOKBACK_DAYS = 3
+
+
+def _reconcile_sent_items(outlook):
+    """
+    Safety net for OnItemSend above: live COM event delivery is best-effort
+    (see that function's own docstring) and can occasionally miss a real
+    send with no visible sign to the user — Vincent, 2026-08-19, confirmed
+    a real miss with the computer and Helper both running the whole time,
+    so this isn't only the already-known "listener wasn't running" case.
+    Re-scans Sent Items on a fixed interval for anything carrying our
+    DRAFT_ID_PROP and reports it. /mark-sent is idempotent (a draft already
+    'sent'/'skipped' is left untouched), so re-reporting one OnItemSend
+    already caught is harmless — this never needs to know what the live
+    listener did or didn't see.
+    """
+    try:
+        sent_folder = outlook.GetNamespace("MAPI").GetDefaultFolder(_OL_FOLDER_SENT_MAIL)
+        cutoff = (
+            datetime.datetime.now() - datetime.timedelta(days=RECONCILE_LOOKBACK_DAYS)
+        ).strftime("%m/%d/%Y %I:%M %p")
+        items = sent_folder.Items.Restrict(f"[SentOn] >= '{cutoff}'")
+        for item in items:
+            try:
+                draft_id = item.PropertyAccessor.GetProperty(DRAFT_ID_PROP)
+            except Exception:  # noqa: BLE001 - not one of ours, or property unset
+                continue
+            if not draft_id:
+                continue
+            try:
+                sender_email = item.SendUsingAccount.SmtpAddress
+            except Exception:  # noqa: BLE001
+                sender_email = None
+            _report_sent(draft_id, sender_email)
+    except Exception:  # noqa: BLE001 - best-effort, the next cycle tries again
+        pass
+
+
+_reconciler_started = False
+
+
+def start_sent_items_reconciler():
+    """
+    Independent of the live OnItemSend listener above — its own thread, own
+    Outlook.Application dispatch (same one-apartment-per-thread pattern
+    that listener already uses), own fixed polling interval. If COM access
+    fails here for any reason, the loop below just tries again next cycle;
+    the Helper's core features are unaffected either way.
+    """
+    global _reconciler_started
+    if _reconciler_started:
+        return
+    _reconciler_started = True
+
+    def _run():
+        try:
+            pythoncom.CoInitialize()
+            outlook = win32com.client.Dispatch("Outlook.Application")
+        except Exception:  # noqa: BLE001
+            return
+        while True:
+            time.sleep(RECONCILE_INTERVAL_SECONDS)
+            _reconcile_sent_items(outlook)
+
+    threading.Thread(target=_run, daemon=True, name="sent-items-reconciler").start()
 
 
 def _resolve_outlook_exe_path() -> str | None:
@@ -382,4 +454,5 @@ def open_drafts():
 
 if __name__ == "__main__":
     start_outlook_event_listener()
+    start_sent_items_reconciler()
     app.run(host="127.0.0.1", port=PORT, threaded=True)
