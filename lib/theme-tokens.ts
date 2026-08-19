@@ -83,10 +83,10 @@ export const THEME_TOKENS: ThemeTokenDef[] = [
     scope: '同上 —— 鼠标悬停某一行时的背景色' },
   { key: 'list-row-selected', cssVar: '--list-row-selected', label: '行选中背景', group: '列表与表格', type: 'color', default: '#edf4fa', live: true,
     scope: '同上 —— 选中/展开某一行时的背景色' },
-  { key: 'list-scrollbar-thumb', cssVar: '--list-scrollbar-thumb', label: '表格滚动条', group: '列表与表格', type: 'color', default: '#c5d0dc', live: true,
-    scope: 'Billing Drafts、AR Reminder、Address Service、Companies、Client Communications（Email Drafts / History）—— 表格区域的滚动条颜色' },
+  { key: 'list-scrollbar-thumb', cssVar: '--list-scrollbar-thumb', label: '表格滚动条（窄）', group: '列表与表格', type: 'color', default: '#c5d0dc', live: true,
+    scope: 'Billing Drafts、AR Reminder、Address Service、Companies、Client Communications —— 仅限表格卡片内部、6px 细滚动条（不是页面底部那条宽的，那条是"全站滚动条"）' },
   { key: 'scrollbar-thumb', cssVar: '--scrollbar-thumb', label: '全站滚动条', group: '列表与表格', type: 'color', default: '#94a3b8', live: true,
-    scope: '全站所有可滚动区域的默认滚动条颜色（没有专属表格滚动条颜色的地方都用这个）' },
+    scope: '全站所有页面通用，包括 Billing Drafts 页面下方那条横向滚动条（表格比页面宽时，整个内容区域会横向滚动，出现在页面最下边——这条最容易被看到，就是这个变量）' },
 
   // Status
   { key: 'status-success', cssVar: '--status-success', label: '成功色', group: '状态颜色', type: 'color', default: '#16a34a', live: true,
