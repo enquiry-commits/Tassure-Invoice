@@ -55,7 +55,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.5.5"
+VERSION = "1.5.6"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -284,7 +284,22 @@ def _is_classic_outlook_path(path: str | None) -> bool:
 
 
 def _assign_sender(outlook, mail, sender_email: str):
-    """Assign the exact Outlook account selected in the web workbench."""
+    """
+    Assign the exact Outlook account selected in the web workbench.
+
+    Vincent, 2026-08-19: staff-observed proof (screenshot of the compose
+    window's From dropdown) that the account requested here wasn't what
+    actually showed — it always fell back to the profile's primary account.
+    Per Microsoft's own docs ("Create a Sendable Item for a Specific
+    Account Based on the Current Folder"): for a MailItem specifically,
+    SendUsingAccount alone is documented as the AppointmentItem pattern —
+    a MailItem needs its Sender property set to the account's own
+    AddressEntry, "otherwise the MailItem is created for the primary
+    account" (word for word what was observed). Keeping SendUsingAccount
+    too — it's still the documented way to control which account actually
+    transmits the message; Sender is what makes the compose window's own
+    From selector agree with it.
+    """
     requested = (sender_email or "").strip().lower()
     if not requested:
         return
@@ -295,6 +310,10 @@ def _assign_sender(outlook, mail, sender_email: str):
         if requested not in (smtp_address, display_name):
             continue
 
+        try:
+            mail.Sender = account.CurrentUser.AddressEntry
+        except Exception:  # noqa: BLE001
+            pass
         # SendUsingAccount is not exposed as a normal writable attribute in
         # every Outlook/pywin32 combination. DISPID 64209 is Outlook's
         # documented MailItem.SendUsingAccount property.
