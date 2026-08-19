@@ -15,6 +15,59 @@ function normalizeUen(value: string | null | undefined): string {
   return (value ?? '').trim().toUpperCase();
 }
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+type CarryForwardLookup = (companyId: number | null | undefined, uen: string | null | undefined) => string | null;
+
+// A brand-new ar_reminder row (new FYE cycle) starts with acc_pic/tax_pic
+// null — unlike Secretary PIC (sourced from TeamWork via companies.pic), NO
+// upstream system tracks who does a company's accounts/tax (confirmed:
+// companies.acc_pic/tax_pic are 100% empty — TeamWork simply never captured
+// this). The best available signal is the SAME company's own most recent
+// prior cycle: accounts/tax staff assignments are normally sticky year to
+// year. This is only ever a starting SUGGESTION written at row-creation
+// time — staff can freely overwrite it exactly like any other field, same
+// as they already do for the fully-manual value today; it's never enforced
+// or re-applied afterwards.
+export async function loadCarriedForwardPics(
+  supabase: SupabaseClient,
+): Promise<{ accFor: CarryForwardLookup; taxFor: CarryForwardLookup }> {
+  const { data } = await supabase
+    .from('ar_reminder')
+    .select('company_id, uen, acc_pic, tax_pic, fye_year, fye_month')
+    .or('acc_pic.not.is.null,tax_pic.not.is.null');
+
+  const cycleKey = (year: number, month: string) => year * 12 + MONTH_NAMES.indexOf(month);
+  const byCompanyId = { acc: new Map<number, { key: number; value: string }>(), tax: new Map<number, { key: number; value: string }>() };
+  const byUen = { acc: new Map<string, { key: number; value: string }>(), tax: new Map<string, { key: number; value: string }>() };
+
+  const consider = (field: 'acc' | 'tax', companyId: number | null, uen: string, key: number, value: string | null) => {
+    if (!value) return;
+    if (companyId) {
+      const cur = byCompanyId[field].get(companyId);
+      if (!cur || key > cur.key) byCompanyId[field].set(companyId, { key, value });
+    }
+    if (uen) {
+      const cur = byUen[field].get(uen);
+      if (!cur || key > cur.key) byUen[field].set(uen, { key, value });
+    }
+  };
+
+  for (const row of (data ?? []) as { company_id: number | null; uen: string | null; acc_pic: string | null; tax_pic: string | null; fye_year: number; fye_month: string }[]) {
+    const key = cycleKey(row.fye_year, row.fye_month);
+    const uen = normalizeUen(row.uen);
+    consider('acc', row.company_id, uen, key, row.acc_pic);
+    consider('tax', row.company_id, uen, key, row.tax_pic);
+  }
+
+  const lookup = (field: 'acc' | 'tax'): CarryForwardLookup => (companyId, uen) => {
+    const u = normalizeUen(uen);
+    return (companyId ? byCompanyId[field].get(companyId)?.value : undefined) ?? byUen[field].get(u)?.value ?? null;
+  };
+
+  return { accFor: lookup('acc'), taxFor: lookup('tax') };
+}
+
 // AR Reminder's acc_pic/tax_pic was just edited -> mirror it onto the
 // matching Active Client row's override field. master_list has no DB-level
 // audit trigger (unlike ar_reminder), so this logs through the shared

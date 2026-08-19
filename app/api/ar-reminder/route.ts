@@ -5,7 +5,7 @@ import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { getRequestAccount } from '@/lib/request-account';
-import { syncPicToActiveClient, type PicField } from '@/lib/pic-sync';
+import { syncPicToActiveClient, loadCarriedForwardPics, type PicField } from '@/lib/pic-sync';
 
 const EDITABLE_FIELDS = new Set([
   'reminder_note', 'prepared_date', 'date_of_agm', 'agm_held_date',
@@ -344,6 +344,15 @@ export async function POST(req: NextRequest) {
       if (body[field] && !value) return NextResponse.json({ error: `Invalid date for ${field}` }, { status: 400 });
       record[field] = value;
     }
+  }
+  // No upstream system tracks Accounts/Tax PIC — carry forward this
+  // company's own most recent prior acc_pic/tax_pic as a starting
+  // suggestion when the caller didn't already supply one (see pic-sync.ts).
+  if (record.acc_pic === undefined || record.tax_pic === undefined) {
+    const { accFor, taxFor } = await loadCarriedForwardPics(supabase);
+    const uen = (record.uen as string | undefined) ?? null;
+    if (record.acc_pic === undefined) record.acc_pic = accFor(null, uen);
+    if (record.tax_pic === undefined) record.tax_pic = taxFor(null, uen);
   }
 
   const { data, error } = await supabase.from('ar_reminder').insert(record).select().single();

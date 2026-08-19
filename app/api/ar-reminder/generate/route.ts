@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
+import { loadCarriedForwardPics } from '@/lib/pic-sync';
 import { withAutomationRun, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { getSessionCookie, fetchAgmList, parseDmy, toIsoDate } from '@/lib/teamwork-agm';
 
@@ -85,6 +86,11 @@ async function generateArRows() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // No upstream system tracks Accounts/Tax PIC assignment (unlike Secretary,
+  // sourced from companies.pic above) — carry forward each company's own
+  // most recent prior acc_pic/tax_pic as a starting suggestion on new rows.
+  const { accFor, taxFor } = await loadCarriedForwardPics(supabase);
+
   const summary: { month: string; year: number; matched: number; inserted: number; error?: string }[] = [];
   let totalInserted = 0;
   const errors: string[] = [];
@@ -122,6 +128,8 @@ async function generateArRows() {
         fye_date: toDateStr(fyeDate),
         due_date: toDateStr(dueDate),
         pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
+        acc_pic: accFor(c.id, c.registration_no),
+        tax_pic: taxFor(c.id, c.registration_no),
         };
       });
 
@@ -224,7 +232,7 @@ async function generateArRows() {
       if (neverGenerated.length) {
         try {
           const cookie = await getSessionCookie();
-          const catchUpRows: { entity_name: string; company_id: number; uen: string; fye_month: string; fye_year: number; fye_date: string; due_date: string; pic: string | null }[] = [];
+          const catchUpRows: { entity_name: string; company_id: number; uen: string; fye_month: string; fye_year: number; fye_date: string; due_date: string; pic: string | null; acc_pic: string | null; tax_pic: string | null }[] = [];
           const skippedCompanies: { id: number; company_name: string; fye_month: string }[] = [];
           let nextIndex = 0;
           const worker = async () => {
@@ -266,6 +274,8 @@ async function generateArRows() {
                     fye_date: openFyeDate,
                     due_date: toDateStr(addMonths(new Date(`${openFyeDate}T00:00:00Z`), 7)),
                     pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
+                    acc_pic: accFor(c.id, c.registration_no),
+                    tax_pic: taxFor(c.id, c.registration_no),
                   });
                 } else {
                   catchUpSkipped++;
