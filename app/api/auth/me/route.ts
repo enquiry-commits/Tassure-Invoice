@@ -18,6 +18,7 @@ export async function GET() {
       email: account.email,
       name: account.name,
       restrictedTo: account.restrictedTo ?? null,
+      admin: account.admin ?? false,
     },
   });
 }

@@ -2,6 +2,9 @@ export type ApprovedAccount = {
   name: string;
   email: string;
   qbLocations?: Partial<Record<'TAB' | 'TAC', string>>;
+  // Gates the Appearance Settings editor (app/admin/appearance) and its
+  // PATCH route. Vincent only, per his own explicit scoping.
+  admin?: boolean;
   // When set, this account is confined to exactly this one page (path +
   // required query params, e.g. AR Reminder is the 'ar' tab on /billing —
   // see components/Sidebar.tsx's tree for the canonical href). Enforced in
@@ -12,7 +15,7 @@ export type ApprovedAccount = {
 };
 
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
-  { name: 'Vincent Seow', email: 'vincent@tassure.com' },
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true },
   { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com' },
   { name: 'Samuell Ng', email: 'samuell@tassure.com' },
   { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', qbLocations: { TAB: 'Lim Hoe Chyi', TAC: 'Lim Hoe Chyi' } },

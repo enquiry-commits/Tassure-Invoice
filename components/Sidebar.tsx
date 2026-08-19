@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, Palette } from 'lucide-react';
 
 // `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
 // yet (see NavImg below) — currently just Proposal Generator, a link out to
@@ -60,6 +60,11 @@ const tree: Node[] = [
   // Generator can log them in itself without a second Google screen.
   { label: 'Proposal Generator', href: '/sso/proposal-generator', img: '/nav/proposal-generator.png', external: true },
 ];
+
+// Appended only for the one account with admin:true (lib/approved-accounts.ts)
+// — not part of `tree` itself, so groupIds()/level1For() (used by every
+// other account) stay untouched.
+const ADMIN_NODE: Node = { label: 'Appearance Settings', href: '/admin/appearance', icon: Palette };
 
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
@@ -288,9 +293,10 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
   );
 }
 
-export default function Sidebar({ restrictedTo }: { restrictedTo?: string | null }) {
+export default function Sidebar({ restrictedTo, isAdmin }: { restrictedTo?: string | null; isAdmin?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
-  const level1 = level1For(restrictedTo);
+  const baseLevel1 = level1For(restrictedTo);
+  const level1 = isAdmin && !restrictedTo ? [...baseLevel1, ADMIN_NODE] : baseLevel1;
 
   useEffect(() => {
     if (localStorage.getItem('sidebar-collapsed') === 'true') setCollapsed(true);

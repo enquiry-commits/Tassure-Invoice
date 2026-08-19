@@ -12,7 +12,7 @@
   --accent-blue: #1d4ed8;
   --card-header-bg: #1e3a8a;
   --company-name-color: #1e3a5f;
-  --company-registration-color: #94a3b8;
+  --company-registration-color: var(--text-muted);
   --list-surface: #ffffff;
   --list-header: #203d5f;
   --list-header-border: #183451;
@@ -24,6 +24,26 @@
   --list-row-selected: #edf4fa;
   --list-text: #475569;
   --list-muted: #8a9aad;
+
+  /* Appearance Settings tokens (app/admin/appearance) — defaults below
+     match today's literals exactly; components/AppShell.tsx overrides
+     these inline from app_theme_tokens on load, so a fetch failure just
+     leaves this default look in place. See lib/theme-tokens.ts. */
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --surface: #ffffff;
+  --surface-page: #f1f5f9;
+  --surface-subtle: #f8fafc;
+  --border-default: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --status-success: #16a34a;
+  --status-success-tint: #f0fdf4;
+  --status-warning: #b45309;
+  --status-warning-tint: #fff7ed;
+  --status-danger: #dc2626;
+  --status-danger-tint: #fef2f2;
+  --status-info-tint: #eff6ff;
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
 * {
@@ -32,8 +52,8 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #f1f5f9;
+  font-family: var(--font-family);
+  background: var(--surface-page);
 }
 
 .company-name-text {
