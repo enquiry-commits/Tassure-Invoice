@@ -19,6 +19,7 @@ export function normalize(name: string): string {
     .replace(/\(fka\b[^)]*\)/gi, '')
     .replace(/\(f\.k\.a\.[^)]*\)/gi, '')
     .replace(/\bpte\.?\s*ltd\.?\b/gi, '')
+    .replace(/\bsdn\.?\s*bhd\.?\b/gi, '')
     .replace(/\bprivate\s+limited\b/gi, '')
     .replace(/\blimited\b/gi, '')
     .replace(/\bllp\b/gi, '')
@@ -39,13 +40,29 @@ function wordsOf(normalized: string): Set<string> {
   return s;
 }
 
-/** 100 = exact (normalised), 85 = one contains the other, else word overlap × 100. */
+/**
+ * 100 = exact (normalised); 85 = one contains the other AND the shorter name
+ * is at least half the longer one's word count; else word overlap × 100.
+ *
+ * The length-ratio guard on the containment bonus matters because QB has no
+ * UEN to disambiguate: without it, a short/generic real company name (e.g.
+ * "Blockchain Pte Ltd") sitting as a literal substring inside an unrelated,
+ * longer company's name (e.g. "CWIOS International Blockchain Technology
+ * Pte Ltd") would score 85 and get treated as the same company. Verified
+ * against the live company registry — every such case found was two
+ * genuinely different registered entities (different registration numbers),
+ * often sibling companies sharing a brand word.
+ */
 export function matchScore(a: string, b: string): number {
   const na = normalize(a), nb = normalize(b);
   if (na === nb) return 100;
-  if (na.includes(nb) || nb.includes(na)) return 85;
   const wa = wordsOf(na), wb = wordsOf(nb);
   if (!wa.size || !wb.size) return 0;
+  if (na.includes(nb) || nb.includes(na)) {
+    const shorter = Math.min(wa.size, wb.size);
+    const longer = Math.max(wa.size, wb.size);
+    if (shorter / longer >= 0.5) return 85;
+  }
   let common = 0;
   for (const w of wa) if (wb.has(w)) common++;
   return Math.round((common / Math.max(wa.size, wb.size)) * 100);
