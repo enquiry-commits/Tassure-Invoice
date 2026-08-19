@@ -3971,24 +3971,28 @@ function CombinedPage() {
       {/* Page header with tab switcher */}
       <div style={{ marginBottom: 20 }}>
         {/* Tabs */}
-        <div style={{ display: 'flex', gap: 0, marginTop: 16, borderBottom: '2px solid #e2e8f0' }}>
+        <div style={{
+          display: 'inline-flex', marginTop: 16, borderRadius: 10, overflow: 'hidden',
+          border: '1px solid #dbe3ec', boxShadow: '0 1px 3px rgba(15,35,60,.06)',
+        }}>
           {([
             { key: 'billing', label: 'Billing Drafts',  desc: 'Renewals & annual obligations' },
             { key: 'ar',      label: 'AR Reminder',      desc: 'Annual Return filing tracker'  },
-          ] as const).map(({ key, label, desc }) => {
+          ] as const).map(({ key, label, desc }, i) => {
             const active = tab === key;
             return (
               <button key={key} onClick={() => switchTab(key)} style={{
-                padding: '10px 22px', border: 'none', cursor: 'pointer', background: 'transparent',
-                borderBottom: active ? '2px solid #2563eb' : '2px solid transparent',
-                marginBottom: -2,
-                color: active ? '#203d5f' : '#64748b',
-                fontWeight: active ? 700 : 500,
+                padding: '10px 22px', border: 'none', cursor: 'pointer',
+                background: active ? '#1d3a5c' : '#fff',
+                borderLeft: i > 0 ? `1px solid ${active ? '#1d3a5c' : '#dbe3ec'}` : 'none',
+                color: active ? '#fff' : '#1d3a5c',
+                fontWeight: 700,
                 fontSize: 13,
-                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1,
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2,
+                transition: 'background .15s ease',
               }}>
                 <span>{label}</span>
-                <span style={{ fontSize: 10, color: active ? '#93c5fd' : '#94a3b8', fontWeight: 400 }}>{desc}</span>
+                <span style={{ fontSize: 10.5, color: active ? 'rgba(255,255,255,.7)' : '#7c8ba1', fontWeight: 500 }}>{desc}</span>
               </button>
             );
           })}
