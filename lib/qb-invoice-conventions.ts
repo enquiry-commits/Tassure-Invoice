@@ -179,14 +179,21 @@ export async function resolveParentBillAddr(
   if (!parent) {
     return { kind: 'error', error: `Cannot generate invoice: parent company "${parentRow.company_name}" (linked to "${companyName}") was not found in QuickBooks ${company}. Set up its QuickBooks customer record first, or check the parent company link.` };
   }
-  if (!parent.billAddr) {
-    return { kind: 'error', error: `Cannot generate invoice: parent company "${parentRow.company_name}"'s QuickBooks customer record has no Billing Address configured. Add one in QuickBooks before generating invoices for "${companyName}".` };
-  }
   // PhysicalAddress.Id identifies that address as it exists under the
   // PARENT's own customer record — carrying it onto a different entity (this
   // invoice, under a different CustomerRef) risks QBO rejecting it or
   // misreading it as a reference rather than inline address data.
-  const { Id: _unused, ...billAddrFields } = parent.billAddr;
+  const { Id: _unused, ...billAddrFields } = parent.billAddr ?? {};
+  // A customer's BillAddr can come back as a bare {Id} with no Line1/City/etc
+  // — confirmed for real on a Tassure customer whose invoices use
+  // FreeFormAddress:true, where the API exposes no address text at all even
+  // though the customer clearly has address text pinned somewhere QB's own
+  // PDF renderer can see. Never write that empty shell onto another invoice
+  // (QBO would either reject it or silently blank out the Bill-To block) —
+  // treat "no usable line" the same as "no address configured".
+  if (!billAddrFields.Line1) {
+    return { kind: 'error', error: `Cannot generate invoice: parent company "${parentRow.company_name}"'s QuickBooks customer record has no Billing Address configured (or QuickBooks isn't exposing one via the API for it). Add one in QuickBooks before generating invoices for "${companyName}".` };
+  }
   return { kind: 'ok', billAddr: billAddrFields };
 }
 
