@@ -2973,9 +2973,12 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                                   placeholder="recipient@email.com" autoFocus
                                   style={{ width: '100%', border: `1px solid ${manualToEmail && !isValidEmail(manualToEmail) ? '#fecaca' : '#e2e8f0'}`, borderRadius: 6, padding: '6px 8px', fontSize: 12, marginTop: 3, marginBottom: 8, boxSizing: 'border-box' }} />
                                 <label style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.4px' }}>Cc <span style={{ fontWeight: 500, textTransform: 'none' }}>(optional)</span></label>
-                                <input type="text" value={manualCcEmail} onChange={e => setManualCcEmail(e.target.value)}
-                                  placeholder="cc@email.com"
-                                  style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginTop: 3, marginBottom: 8, boxSizing: 'border-box' }} />
+                                {/* The resolved default Cc list is newline-joined (recipientLines
+                                    in lib/campaign-recipients.ts) — a single-line <input> collapsed
+                                    those onto one unreadable line (Vincent, 2026-08-19). */}
+                                <textarea value={manualCcEmail} onChange={e => setManualCcEmail(e.target.value)}
+                                  placeholder="cc@email.com" rows={2}
+                                  style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginTop: 3, marginBottom: 8, boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }} />
                               </>
                             )}
                             <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8 }}>
