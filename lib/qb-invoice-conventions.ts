@@ -1,5 +1,6 @@
 import type { QbCompany } from './quickbooks';
 import { findUniqueBestMatch } from './company-name';
+import { createAdminClient } from './supabase';
 
 // Invoice conventions learned from Tassure's real QB invoices (verified by
 // inspecting manual invoices 02610732 (TAB) and 02680230 (TAC)):
@@ -136,6 +137,57 @@ export async function findCustomer(token: string, realmId: string, name: string)
   return match.value
     ? { id: match.value.Id as string, name: match.value.DisplayName as string, billAddr: (match.value.BillAddr as Record<string, unknown>) ?? null }
     : null;
+}
+
+// ── Parent-company Bill-To override ────────────────────────────────────────
+// Vincent: a subsidiary's invoice should record against the SUBSIDIARY's own
+// QB customer (CustomerRef, unchanged) but show the PARENT's name+address on
+// the "Bill To" block the client actually sees. companies.parent_company_id
+// is the persistent staff-set link (app/api/companies/parent/route.ts).
+// Shared by create-invoice (new invoices) and update-invoice (editing an
+// already-created draft) so a parent link set AFTER an invoice already
+// exists still takes effect the next time that invoice is saved — re-derived
+// fresh from Supabase + QuickBooks every call, never trusted from the client.
+export type ParentBillAddrResult =
+  | { kind: 'none' }
+  | { kind: 'error'; error: string }
+  | { kind: 'ok'; billAddr: Record<string, unknown> };
+
+export async function resolveParentBillAddr(
+  token: string, realmId: string, company: QbCompany,
+  companyId: number | null, companyName: string,
+): Promise<ParentBillAddrResult> {
+  const supabase = createAdminClient();
+  let parentCompanyId: number | null = null;
+  if (companyId) {
+    const { data } = await supabase.from('companies').select('parent_company_id').eq('id', companyId).maybeSingle();
+    parentCompanyId = data?.parent_company_id ?? null;
+  }
+  // Fallback for an AR row that never resolved a real companies.id — exact
+  // name match, same string already trusted for the QB customer lookup above.
+  if (!parentCompanyId) {
+    const { data } = await supabase.from('companies').select('parent_company_id').eq('company_name', companyName).maybeSingle();
+    parentCompanyId = data?.parent_company_id ?? null;
+  }
+  if (!parentCompanyId) return { kind: 'none' }; // no parent linked — normal invoice, unchanged
+
+  const { data: parentRow } = await supabase.from('companies').select('company_name').eq('id', parentCompanyId).maybeSingle();
+  if (!parentRow?.company_name) {
+    return { kind: 'error', error: `Parent company link is broken for "${companyName}" — the linked parent record no longer exists. Fix the parent link before generating this invoice.` };
+  }
+  const parent = await findCustomer(token, realmId, parentRow.company_name);
+  if (!parent) {
+    return { kind: 'error', error: `Cannot generate invoice: parent company "${parentRow.company_name}" (linked to "${companyName}") was not found in QuickBooks ${company}. Set up its QuickBooks customer record first, or check the parent company link.` };
+  }
+  if (!parent.billAddr) {
+    return { kind: 'error', error: `Cannot generate invoice: parent company "${parentRow.company_name}"'s QuickBooks customer record has no Billing Address configured. Add one in QuickBooks before generating invoices for "${companyName}".` };
+  }
+  // PhysicalAddress.Id identifies that address as it exists under the
+  // PARENT's own customer record — carrying it onto a different entity (this
+  // invoice, under a different CustomerRef) risks QBO rejecting it or
+  // misreading it as a reference rather than inline address data.
+  const { Id: _unused, ...billAddrFields } = parent.billAddr;
+  return { kind: 'ok', billAddr: billAddrFields };
 }
 
 // ── Look up QB Items to get ItemRef for each service ─────────────────────────

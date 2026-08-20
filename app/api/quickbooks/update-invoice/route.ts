@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount } from '@/lib/approved-accounts';
 import { createAdminClient } from '@/lib/supabase';
 import { getValidToken, qbQuery, type QbCompany } from '@/lib/quickbooks';
-import { getItemMap, findPicClass, buildInvoiceLineArray, type DraftLineItem } from '@/lib/qb-invoice-conventions';
+import { getItemMap, findPicClass, buildInvoiceLineArray, resolveParentBillAddr, type DraftLineItem } from '@/lib/qb-invoice-conventions';
 import { normalize } from '@/lib/company-name';
 import { syncQuickBooksInvoiceChanges } from '@/lib/quickbooks-invoice-incremental';
 import type { InvoiceRef } from '@/lib/email-merge';
@@ -122,22 +122,34 @@ export async function PATCH(req: NextRequest) {
     }, { status: 409 });
   }
 
-  const [itemMap, picClass] = await Promise.all([
+  const [itemMap, picClass, parentBillAddr] = await Promise.all([
     getItemMap(token, realmId),
     qbCompany === 'TAB' && pic ? findPicClass(token, realmId, pic) : Promise.resolve(null),
+    // Vincent, 2026-08-20: a parent-company Bill-To link set AFTER this
+    // invoice was already created never took effect — create-invoice only
+    // writes BillAddr at creation time, and this route's sparse update never
+    // touched it. Re-resolved fresh here too, so saving an edit also brings
+    // BillAddr up to date with whatever's currently linked.
+    resolveParentBillAddr(token, realmId, qbCompany, null, genInv.company_name),
   ]);
+  if (parentBillAddr.kind === 'error') return NextResponse.json({ error: parentBillAddr.error }, { status: 409 });
   const invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass);
 
   // Sparse update — CustomerRef/TxnDate/DocNumber are deliberately never
   // included, so QB can't change them regardless of what's sent here;
   // sparse:true keeps every other field at its current QB value. Line is
-  // always fully replaced (QB's own behavior, not a merge).
+  // always fully replaced (QB's own behavior, not a merge). BillAddr is only
+  // included when a parent is linked, so editing a normal (non-linked)
+  // invoice never touches it.
   const updateUrl = new URL(`${QB_BASE}/v3/company/${realmId}/invoice`);
   updateUrl.searchParams.set('minorversion', '75');
   const updateRes = await fetch(updateUrl, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ Id: qbInvoiceId, SyncToken: syncToken, sparse: true, Line: invoiceLines }),
+    body: JSON.stringify({
+      Id: qbInvoiceId, SyncToken: syncToken, sparse: true, Line: invoiceLines,
+      ...(parentBillAddr.kind === 'ok' ? { BillAddr: parentBillAddr.billAddr } : {}),
+    }),
   });
   if (!updateRes.ok) {
     const errText = await updateRes.text();
