@@ -3517,7 +3517,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             <TH w={200} stickyLeft={30}>Company Name</TH>
             <TH w={80} stickyLeft={230} lastSticky>UEN / ROC</TH>
             <TH w={100}>{HF('reminder_note', 'Reminder')}</TH>
-            <TH w={100}>{HF('prepared_date', 'Report Ready')}</TH>
+            <TH w={110}>{HF('prepared_date', 'Report Ready')}</TH>
             <TH w={100}>{HF('date_of_agm', 'AGM')}</TH>
             <TH w={100}>{HF('sent_date', 'To Client')}</TH>
             <TH w={100}>{HF('received_date', 'Signed')}</TH>
