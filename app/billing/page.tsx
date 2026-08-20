@@ -240,6 +240,7 @@ interface ServicePeriods { secretary: PeriodInfo | null; address: PeriodInfo | n
 interface ARRecord {
   id: number; entity_name: string; uen: string;
   fye_date: string | null; due_date: string | null; daysUntilDue: number | null;
+  fye_month: string; fye_year: number; isStaleOverdue?: boolean;
   pic: string | null; acc_pic: string | null; tax_pic: string | null;
   prepared_date: string | null; sent_date: string | null; received_date: string | null;
   date_of_agm: string | null; agm_held_date: string | null; filling_date: string | null;
@@ -901,6 +902,23 @@ function LateFilingBadge({ remarks }: { remarks: string | null | undefined }) {
       whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0,
     }}>
       <AlertTriangle size={9} />LATE
+    </span>
+  );
+}
+
+// A company genuinely overdue right now but still filed under an earlier
+// fye_year (AR/AGM due dates are FYE + 9 months, so the due date can roll
+// into the next calendar year) — surfaced in the current cycle's Overdue
+// view (see staleOverdueRecords in ARTab) so staff can catch it up this
+// cycle. Colors match late-filing/page.tsx's own "Late FY" pill.
+function StaleFyeBadge({ fyeYear }: { fyeYear: number }) {
+  return (
+    <span title={`Still unfiled from FYE ${fyeYear} — overdue, not this cycle's own`} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3, background: '#fff7ed', color: '#c2410c',
+      border: '1px solid #fed7aa', borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700,
+      whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0,
+    }}>
+      Late FY {fyeYear}
     </span>
   );
 }
@@ -3559,6 +3577,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <div className="company-name-text">{r.entity_name}</div>
                     <LateFilingBadge remarks={r.remarks} />
+                    {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
                   </div>
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                 </TD>
@@ -3691,6 +3710,12 @@ function AddManualDateField({ label, value, onChange }: { label: string; value: 
 // ─────────────────────────────────────────────────────────────────────────────
 function ARTab({ month, year, setMonth, setYear }: { month: string; year: string; setMonth: (v: string) => void; setYear: (v: string) => void }) {
   const [records,     setRecords]     = useState<ARRecord[]>([]);
+  // Companies genuinely overdue right now but filed under an earlier
+  // fye_year (AR/AGM due dates are FYE + 9 months, so a due date can roll
+  // into the next calendar year) — kept separate from `records` so only
+  // the Overdue view merges them in; see app/api/ar-reminder/route.ts's
+  // `staleOverdue` field.
+  const [staleOverdueRecords, setStaleOverdueRecords] = useState<ARRecord[]>([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState<string | null>(null);
   const [exporting,   setExporting]   = useState(false);
@@ -3714,6 +3739,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       const json = await res.json();
       if (json.error) { setError(json.error); return; }
       setRecords(json.companies ?? []);
+      setStaleOverdueRecords(json.staleOverdue ?? []);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Network error'); }
     finally { setLoading(false); }
   }, [month, year]);
@@ -3807,12 +3833,18 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       ? { [`${field}_manual`]: !!value } : {};
     const updated = (r: ARRecord) => r.id === id ? recomputeArRecord({ ...r, [field]: value || null, ...extra }) : r;
     setRecords(prev => prev.map(updated));
+    // A backlog row's id never exists in `records` — without this, editing
+    // one (e.g. filling in filling_date to mark it caught up) would
+    // silently no-op until the next full reload.
+    setStaleOverdueRecords(prev => prev.map(updated));
     setModalRecord(prev => prev && prev.id === id ? recomputeArRecord({ ...prev, [field]: value || null, ...extra }) : prev);
   }, []);
 
   // Optimistic local sync after a service-override cycle in the modal.
   const handleServices = useCallback((id: number, services: Services, manual: Partial<Record<string, boolean>>) => {
-    setRecords(prev => prev.map(r => r.id === id ? { ...r, services, servicesManual: manual } : r));
+    const updated = (r: ARRecord) => r.id === id ? { ...r, services, servicesManual: manual } : r;
+    setRecords(prev => prev.map(updated));
+    setStaleOverdueRecords(prev => prev.map(updated));
     setModalRecord(prev => prev && prev.id === id ? { ...prev, services, servicesManual: manual } : prev);
   }, []);
 
@@ -3852,18 +3884,24 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     } finally { setAdding(false); }
   };
 
-  const filtered = useMemo(() => records.filter(r => {
-    if (search && !r.entity_name.toLowerCase().includes(search.toLowerCase()) && !(r.uen ?? '').toLowerCase().includes(search.toLowerCase())) return false;
-    if (filter === 'filed'       && !r.stages.arFiled) return false;
-    if (filter === 'in_progress' && !(r.stagesDone > 0 && !r.stages.arFiled)) return false;
-    if (filter === 'pending'     && r.stagesDone !== 0) return false;
-    if (filter === 'overdue'     && !(!r.stages.arFiled && r.daysUntilDue !== null && r.daysUntilDue < 0)) return false;
-    for (const [field, allowed] of Object.entries(columnFilters) as [ARColumnKey, Set<string>][]) {
-      const raw = arColumnValue(r, field).trim();
-      if (!allowed.has(raw === '' ? '(Blank)' : raw)) return false;
-    }
-    return true;
-  }), [records, search, filter, columnFilters]);
+  const filtered = useMemo(() => {
+    // Backlog (prior-fye_year, still unfiled) companies only ever appear
+    // in the Overdue view — every other filter stays scoped to this
+    // cycle's own `records`, unchanged.
+    const source = filter === 'overdue' ? [...records, ...staleOverdueRecords] : records;
+    return source.filter(r => {
+      if (search && !r.entity_name.toLowerCase().includes(search.toLowerCase()) && !(r.uen ?? '').toLowerCase().includes(search.toLowerCase())) return false;
+      if (filter === 'filed'       && !r.stages.arFiled) return false;
+      if (filter === 'in_progress' && !(r.stagesDone > 0 && !r.stages.arFiled)) return false;
+      if (filter === 'pending'     && r.stagesDone !== 0) return false;
+      if (filter === 'overdue'     && !(!r.stages.arFiled && r.daysUntilDue !== null && r.daysUntilDue < 0)) return false;
+      for (const [field, allowed] of Object.entries(columnFilters) as [ARColumnKey, Set<string>][]) {
+        const raw = arColumnValue(r, field).trim();
+        if (!allowed.has(raw === '' ? '(Blank)' : raw)) return false;
+      }
+      return true;
+    });
+  }, [records, staleOverdueRecords, search, filter, columnFilters]);
 
   // See useCrossCycleSearch's own comment (defined above BillingTab) — same
   // cross-cycle escalation, but searching ar_reminder itself (not the
@@ -3884,8 +3922,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     filed:      records.filter(r => r.stages.arFiled).length,
     inProgress: records.filter(r => r.stagesDone > 0 && !r.stages.arFiled).length,
     pending:    records.filter(r => r.stagesDone === 0).length,
-    overdue:    records.filter(r => !r.stages.arFiled && r.daysUntilDue !== null && r.daysUntilDue < 0).length,
-  }), [records]);
+    // Includes backlog from prior fye_years still unfiled and past due —
+    // see staleOverdueRecords above.
+    overdue:    records.filter(r => !r.stages.arFiled && r.daysUntilDue !== null && r.daysUntilDue < 0).length + staleOverdueRecords.length,
+  }), [records, staleOverdueRecords]);
 
   // Paginate AFTER search/filter — shared by both List and Table views.
   const { page, setPage, totalPages, pageItems, startIndex, total: pagedTotal } =
@@ -4048,6 +4088,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
                         <div className="company-name-text">{r.entity_name}</div>
                         <LateFilingBadge remarks={r.remarks} />
+                        {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
                       </div>
                       <div className="company-registration-text" style={{ marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${fmtDate(r.fye_date)}` : ''}</div>
                     </div>
@@ -4077,6 +4118,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <div className="company-name-text"><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
                       <LateFilingBadge remarks={r.remarks} />
+                      {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
                     </div>
                     {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                   </div>

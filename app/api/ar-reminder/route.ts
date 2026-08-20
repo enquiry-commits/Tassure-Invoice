@@ -122,7 +122,28 @@ export async function GET(req: NextRequest) {
     .order('entity_name');
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!arRows?.length) return NextResponse.json({ month, year, total: 0, companies: [] });
+
+  // Vincent, 2026-08-20: AR/AGM due dates are FYE + 9 months, so a company
+  // overdue RIGHT NOW can still carry a PAST fye_year (e.g. fye_month
+  // December, fye_year 2025 → due date July 2026) — meaning it never shows
+  // up while staff browse the current year, even though it's still
+  // unfiled backlog they might catch up on this cycle. Surfaced separately
+  // (never merged into `companies` below) so it stays purely a display/
+  // reminder concern for this route's own AR Reminder tab — Billing
+  // Drafts' invoice-generation flow reads this same endpoint's `companies`
+  // field and must not see stale-year rows mixed in.
+  const { data: staleRows, error: staleError } = await supabase
+    .from('ar_reminder')
+    .select('*')
+    .eq('fye_month', month)
+    .lt('fye_year', year)
+    .is('filling_date', null)
+    .lte('due_date', todaySGT())
+    .or('status.is.null,status.neq.Excluded')
+    .order('fye_year', { ascending: false });
+  if (staleError) return NextResponse.json({ error: staleError.message }, { status: 500 });
+
+  if (!arRows?.length && !staleRows?.length) return NextResponse.json({ month, year, total: 0, companies: [], staleOverdue: [] });
 
   const [
     { data: companies, error: companiesError },
@@ -210,7 +231,8 @@ export async function GET(req: NextRequest) {
   }
 
   const today = todaySGT();
-  const enriched = arRows.map(row => {
+  const staleIds = new Set((staleRows ?? []).map(row => row.id));
+  const enriched = [...(arRows ?? []), ...(staleRows ?? [])].map(row => {
     const normName = normalize(row.entity_name);
     const compMatch = (row.company_id ? companyById.get(row.company_id) : null)
       ?? companyMap.get(normName)
@@ -288,11 +310,15 @@ export async function GET(req: NextRequest) {
       daysUntilDue: row.due_date
         ? Math.ceil((new Date(`${row.due_date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000)
         : null,
+      isStaleOverdue: staleIds.has(row.id),
     };
   });
 
+  const companiesOut = enriched.filter(row => !row.isStaleOverdue);
+  const staleOverdueOut = enriched.filter(row => row.isStaleOverdue);
+
   return NextResponse.json(
-    { month, year, total: enriched.length, companies: enriched },
+    { month, year, total: companiesOut.length, companies: companiesOut, staleOverdue: staleOverdueOut },
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }
