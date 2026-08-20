@@ -3574,11 +3574,13 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
               <tr key={r.id} className="system-list-row">
                 <TD stickyLeft={0} tint={rowTint} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
                 <TD stickyLeft={30} tint={rowTint}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <div className="company-name-text">{r.entity_name}</div>
-                    <LateFilingBadge remarks={r.remarks} />
-                    {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
-                  </div>
+                  <div className="company-name-text">{r.entity_name}</div>
+                  {(lateFilingReason(r.remarks) || r.isStaleOverdue) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                      <LateFilingBadge remarks={r.remarks} />
+                      {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
+                    </div>
+                  )}
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                 </TD>
                 <TD stickyLeft={230} lastSticky tint={rowTint}><span className="company-registration-text">{r.uen || '—'}</span></TD>
@@ -4085,11 +4087,13 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                     <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-                        <div className="company-name-text">{r.entity_name}</div>
-                        <LateFilingBadge remarks={r.remarks} />
-                        {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
-                      </div>
+                      <div className="company-name-text">{r.entity_name}</div>
+                      {(lateFilingReason(r.remarks) || r.isStaleOverdue) && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 2 }}>
+                          <LateFilingBadge remarks={r.remarks} />
+                          {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
+                        </div>
+                      )}
                       <div className="company-registration-text" style={{ marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${fmtDate(r.fye_date)}` : ''}</div>
                     </div>
                     <DueBadge days={r.daysUntilDue} filed={r.stages.arFiled} />
@@ -4115,11 +4119,13 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                 >
                   <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></div>
                   <div style={{ padding: '0 6px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <div className="company-name-text"><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
-                      <LateFilingBadge remarks={r.remarks} />
-                      {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
-                    </div>
+                    <div className="company-name-text"><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
+                    {(lateFilingReason(r.remarks) || r.isStaleOverdue) && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                        <LateFilingBadge remarks={r.remarks} />
+                        {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
+                      </div>
+                    )}
                     {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
                   </div>
                   <div className="company-registration-text" style={{ padding: '0 6px' }}>{r.uen || <span style={{ color: '#e2e8f0' }}>—</span>}</div>
