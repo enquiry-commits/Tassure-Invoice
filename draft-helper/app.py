@@ -55,7 +55,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.5.7"
+VERSION = "1.5.8"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -212,6 +212,21 @@ def _reconcile_sent_items(outlook):
     since single-account setups (or any account sharing a store with the
     primary) would otherwise have their Sent Items scanned twice per cycle
     for no benefit.
+
+    Vincent, 2026-08-20: a real staff report (still yellow, immediate send,
+    latest Helper version, real PDF attached — so neither the listener nor
+    the account/folder scan itself was the gap) traced back to the old
+    version of this function, which filtered with
+    Items.Restrict(f"[SentOn] >= '{cutoff:%m/%d/%Y %I:%M %p}'"). Restrict's
+    date literal is parsed against the CURRENT USER'S Windows short-date
+    format, not a fixed one — confirmed live on a Singapore-locale machine
+    (d/M/yyyy, day-first), which silently misreads a US-style m/d/Y string
+    whenever the cutoff's day-of-month is ambiguous with the month (≤12),
+    and produces an outright invalid date (silently caught, folder skipped
+    for that whole cycle) whenever it isn't. Every Tassure staff machine is
+    Singapore-locale, so this wasn't an edge case. Sorting and breaking on a
+    real comparable datetime sidesteps Restrict's date-string parsing
+    entirely — no locale dependency left to break on a different machine.
     """
     try:
         seen_store_ids = set()
@@ -226,15 +241,22 @@ def _reconcile_sent_items(outlook):
             seen_store_ids.add(folder.StoreID)
             folders.append(folder)
 
-        cutoff = (
-            datetime.datetime.now() - datetime.timedelta(days=RECONCILE_LOOKBACK_DAYS)
-        ).strftime("%m/%d/%Y %I:%M %p")
+        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+            days=RECONCILE_LOOKBACK_DAYS,
+        )
         for sent_folder in folders:
             try:
-                items = sent_folder.Items.Restrict(f"[SentOn] >= '{cutoff}'")
+                items = sent_folder.Items
+                items.Sort("[SentOn]", True)  # newest first
             except Exception:  # noqa: BLE001 - this one folder failed, try the rest
                 continue
             for item in items:
+                try:
+                    sent_on = item.SentOn
+                except Exception:  # noqa: BLE001 - not a mail item / no SentOn
+                    continue
+                if sent_on < cutoff:
+                    break  # sorted newest-first — nothing further is in range
                 try:
                     draft_id = item.PropertyAccessor.GetProperty(DRAFT_ID_PROP)
                 except Exception:  # noqa: BLE001 - not one of ours, or property unset
