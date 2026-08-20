@@ -185,14 +185,15 @@ export async function resolveParentBillAddr(
   // misreading it as a reference rather than inline address data.
   const { Id: _unused, ...billAddrFields } = parent.billAddr ?? {};
   // A customer's BillAddr can come back as a bare {Id} with no Line1/City/etc
-  // — confirmed for real on a Tassure customer whose invoices use
-  // FreeFormAddress:true, where the API exposes no address text at all even
-  // though the customer clearly has address text pinned somewhere QB's own
-  // PDF renderer can see. Never write that empty shell onto another invoice
-  // (QBO would either reject it or silently blank out the Bill-To block) —
-  // treat "no usable line" the same as "no address configured".
+  // — confirmed for real on Beltroad, whose invoices use FreeFormAddress:true
+  // and expose no address text via the API at all. Vincent confirmed this
+  // is genuinely correct, not missing data: Beltroad's own real invoices
+  // have never carried a street address either, just the company name under
+  // "BILL TO:". So this is not an error case — fall back to a name-only
+  // BillAddr (still overrides the printed Bill-To name away from the
+  // subsidiary) rather than blocking generation.
   if (!billAddrFields.Line1) {
-    return { kind: 'error', error: `Cannot generate invoice: parent company "${parentRow.company_name}"'s QuickBooks customer record has no Billing Address configured (or QuickBooks isn't exposing one via the API for it). Add one in QuickBooks before generating invoices for "${companyName}".` };
+    return { kind: 'ok', billAddr: { Line1: parent.name } };
   }
   return { kind: 'ok', billAddr: billAddrFields };
 }
