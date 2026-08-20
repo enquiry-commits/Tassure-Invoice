@@ -2796,7 +2796,14 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
           <span className="system-list-title">Billing Drafts</span>
           <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Driven by the AR Reminder cycle (TeamWork + staff review) · fees from QB history · invoices generated only after manual review</span>
         </div>
-        <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)' }}>
+        {/* minHeight keeps this from shrinking to just a few rows' worth of
+            height when the filtered result set is small — the Email Drafts
+            popover opened from a row near the bottom needs room to render
+            below it, and a too-short container clips it via overflowY.
+            Same fix already applied to MasterListTable.tsx and the AR Tab's
+            own table further down this file — this is a third, separate
+            table implementation that never got it (Vincent, 2026-08-19). */}
+        <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
           <div style={{ minWidth: isMobile ? undefined : 1320 }}>
           {!isMobile && <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: billingListColumns, columnGap: 10, padding: '10px 14px', borderLeft: '3px solid transparent', alignItems: 'center' }}>
             {['', 'Company Name', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC', 'Remarks', ''].map((h, i) => (
