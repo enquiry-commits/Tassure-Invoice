@@ -309,6 +309,13 @@ async function syncLateFiling(run: AutomationRun) {
       // row to — earliestOutstandingDue/newestAgmDue could still be a FUTURE
       // due date, which would misleadingly badge a not-yet-due cycle "late".
       const outstandingDue = earliestOverdueDue;
+      // Which ar_reminder row this company's marker was mirrored into
+      // this run, if any — persisted onto its own late_filing_companies
+      // row below (mirrored_ar_reminder_id) so the reconciliation pass
+      // further down can keep that row's marker line in sync going
+      // forward, independent of re-deriving cycle/date logic that stops
+      // making sense once the company is later resolved.
+      let mirroredArReminderId: number | null = null;
       if (outstandingDue && latestFyeMonth) {
         const fyeMonthIdx0 = MONTH_ABBR.indexOf(latestFyeMonth);
         const dueYear = outstandingDue.getFullYear();
@@ -339,9 +346,13 @@ async function syncLateFiling(run: AutomationRun) {
           ?? arByKey.get(`name:${normalize(c.company_name)}|${cycleKey}`);
 
         if (arMatch) {
-          // Write the note once; if staff has since edited it away, that's
-          // a manual decision this sync must not fight (same "manual wins"
-          // rule as the AGM/AR date columns).
+          mirroredArReminderId = arMatch.id;
+          // First-write only here; the reconciliation pass further down
+          // is what keeps this line in sync afterward (updated as Late
+          // Filing's own remarks change, removed once Resolved) — see
+          // that pass's own comment for why it's allowed to keep
+          // re-asserting over a staff edit, unlike every other AR
+          // Reminder field this sync touches.
           if (!arMatch.remarks?.includes(LATE_FILING_MARKER)) {
             const nextRemarks = arMatch.remarks ? `${lateNote}\n${arMatch.remarks}` : lateNote;
             const { error: noteError } = await supabase.from('ar_reminder').update({
@@ -352,7 +363,7 @@ async function syncLateFiling(run: AutomationRun) {
             if (noteError) errors++; else arNoted++;
           }
         } else {
-          const { error: insertError } = await supabase.from('ar_reminder').insert({
+          const { data: insertedAr, error: insertError } = await supabase.from('ar_reminder').insert({
             entity_name: c.company_name,
             company_id: c.id,
             uen: c.registration_no,
@@ -363,8 +374,8 @@ async function syncLateFiling(run: AutomationRun) {
             remarks: lateNote,
             updated_by_email: 'system:late-filing',
             updated_by_name: 'Late Filing Sync',
-          });
-          if (insertError) errors++; else arInserted++;
+          }).select('id').single();
+          if (insertError) errors++; else { arInserted++; mirroredArReminderId = insertedAr?.id ?? null; }
         }
       }
 
@@ -376,6 +387,7 @@ async function syncLateFiling(run: AutomationRun) {
         last_agm_date: toIso(lastAgmHeld),
         last_annual_return_date: toIso(lastArFiled),
         next_agm_due_date: toIso(earliestOutstandingDue) || toIso(newestAgmDue),
+        mirrored_ar_reminder_id: mirroredArReminderId,
         remarks: `AUTO: ${reasons.join('; ')}`,
         updated_at: new Date().toISOString(),
       };
@@ -442,7 +454,9 @@ async function syncLateFiling(run: AutomationRun) {
       const arMatch = (uenKey ? arByKey.get(`uen:${uenKey}|${cycleKey}`) : null)
         ?? arByKey.get(`name:${normalize(m.company_name)}|${cycleKey}`);
 
+      let mirroredArReminderId: number | null = null;
       if (arMatch) {
+        mirroredArReminderId = arMatch.id;
         if (!arMatch.remarks?.includes(LATE_FILING_MARKER)) {
           const nextRemarks = arMatch.remarks ? `${lateNote}\n${arMatch.remarks}` : lateNote;
           const { error: noteError } = await supabase.from('ar_reminder').update({
@@ -453,7 +467,7 @@ async function syncLateFiling(run: AutomationRun) {
           if (noteError) errors++; else arNoted++;
         }
       } else {
-        const { error: insertError } = await supabase.from('ar_reminder').insert({
+        const { data: insertedAr, error: insertError } = await supabase.from('ar_reminder').insert({
           entity_name: m.company_name,
           uen: m.uen,
           fye_month: fyeMonthFull,
@@ -463,8 +477,14 @@ async function syncLateFiling(run: AutomationRun) {
           remarks: lateNote,
           updated_by_email: 'system:late-filing',
           updated_by_name: 'Late Filing Sync',
-        });
-        if (insertError) errors++; else arInserted++;
+        }).select('id').single();
+        if (insertError) errors++; else { arInserted++; mirroredArReminderId = insertedAr?.id ?? null; }
+      }
+
+      if (mirroredArReminderId !== null) {
+        await supabase.from('late_filing_companies')
+          .update({ mirrored_ar_reminder_id: mirroredArReminderId })
+          .eq('id', m.id);
       }
     }
 
@@ -501,6 +521,58 @@ async function syncLateFiling(run: AutomationRun) {
       else movedToReview++;
     }
 
+    // Vincent, 2026-08-20: late_filing_companies.remarks is authoritative
+    // over ar_reminder's mirrored "⚠ LATE FILING:" line, continuously —
+    // not just at first-write time. Runs over EVERY row ever mirrored
+    // (mirrored_ar_reminder_id set), not only ones this run evaluated, so
+    // a staff "Resolved" click made directly on the Late Filing page
+    // (outside a sync run) and a staff edit that wiped the marker line on
+    // the AR Reminder side both get corrected on the next run. Only the
+    // marker LINE is ever touched — whatever else staff wrote in that
+    // remarks field is preserved.
+    let reconciled = 0;
+    const { data: mirroredRows, error: mirroredError } = await supabase
+      .from('late_filing_companies')
+      .select('id, remarks, mirrored_ar_reminder_id')
+      .not('mirrored_ar_reminder_id', 'is', null);
+    if (mirroredError) errors++;
+    for (const lf of mirroredRows ?? []) {
+      if (controller.signal.aborted) throw abortError(controller.signal);
+      const { data: arRow } = await supabase.from('ar_reminder')
+        .select('id, remarks').eq('id', lf.mirrored_ar_reminder_id).maybeSingle();
+      if (!arRow) continue; // mirrored row deleted since — nothing to reconcile
+
+      const lfRemarks = lf.remarks ?? '';
+      const resolved = /^Resolved:/i.test(lfRemarks);
+      // AUTO:/Review: both keep the marker showing — Review means "looks
+      // clear but not yet confirmed," so stay cautious and keep it
+      // visible until a human actually resolves it. Strip whichever
+      // label prefix is present so the marker's trailing text always
+      // reflects Late Filing's OWN current wording.
+      const desired = resolved ? null
+        : `${LATE_FILING_MARKER} ${lfRemarks.replace(/^(AUTO|Review):\s*/i, '')}`;
+
+      const lines = (arRow.remarks ?? '').split('\n');
+      const hasMarker = lines[0]?.startsWith(LATE_FILING_MARKER);
+      const rest = hasMarker ? lines.slice(1) : lines;
+
+      let next: string | null;
+      if (desired === null) {
+        if (!hasMarker) continue; // already absent
+        next = rest.join('\n') || null;
+      } else {
+        if (hasMarker && lines[0] === desired) continue; // already in sync
+        next = [desired, ...rest].join('\n');
+      }
+
+      const { error: reconcileError } = await supabase.from('ar_reminder').update({
+        remarks: next,
+        updated_by_email: 'system:late-filing',
+        updated_by_name: 'Late Filing Sync',
+      }).eq('id', arRow.id);
+      if (reconcileError) errors++; else reconciled++;
+    }
+
     const result = {
       ok: errors === 0,
       checked: targets.length,
@@ -510,6 +582,7 @@ async function syncLateFiling(run: AutomationRun) {
       inserted,
       refreshed,
       movedToReview,
+      reconciled,
       insertedNames,
       ar_reminder_rows_inserted: arInserted,
       ar_reminder_rows_noted: arNoted,
