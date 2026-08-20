@@ -2845,9 +2845,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                   <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {c.companyName}<ParentCompanyBadge name={c.parentCompanyName} />
-                    </div>
+                    <div className="company-name-text">{c.companyName}</div>
+                    {c.parentCompanyName && <div style={{ marginTop: 2 }}><ParentCompanyBadge name={c.parentCompanyName} /></div>}
                     {c.uen && <div className="company-registration-text">{c.uen} · FYE {c.fyeMonth ?? '—'}</div>}
                   </div>
                   {notInvoicedYet(c)
@@ -2877,8 +2876,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   <div style={{ color: '#94a3b8' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
                     <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName}<ParentCompanyBadge name={c.parentCompanyName} />
+                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName}
                     </div>
+                    {c.parentCompanyName && <div style={{ marginTop: 2 }}><ParentCompanyBadge name={c.parentCompanyName} /></div>}
                     {c.uen && <div className="company-registration-text">{c.uen}</div>}
                   </div>
                   <div style={{ width: '100%', padding: '0 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
