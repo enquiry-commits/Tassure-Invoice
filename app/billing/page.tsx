@@ -2526,9 +2526,15 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   const [draftNotice, setDraftNotice] = useState<string | null>(null);
   // No email on file (e.g. TeamWork never captured one) — offer a one-off
   // manual entry instead of just blocking (Vincent, 2026-08-19). Not saved
-  // back to the company record, only used for this one draft.
+  // back to the company record, only used for this one draft. Cc is shown
+  // alongside To (not just To alone) because the resolved default Cc list
+  // (buildDefaultCcList — always includes hoechyi@tassure.com plus any
+  // resolved PIC emails, see lib/client-comms-resolve.ts) already exists
+  // even when To is missing — staff should see and be able to adjust it,
+  // not send blind to whatever was silently pre-filled.
   const [needsManualEmail, setNeedsManualEmail] = useState(false);
   const [manualToEmail, setManualToEmail] = useState('');
+  const [manualCcEmail, setManualCcEmail] = useState('');
   // Resolved as soon as the popover opens (Vincent, 2026-08-19: "不需要我按
   // DRAFT了才写email，而是你一开始就应该知道") — reused for the actual draft
   // rather than re-fetched, so opening early costs one lookup, not two.
@@ -2548,6 +2554,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       setPreviewRow(previewJson.row);
       if (!previewJson.row.toEmail) {
         setNeedsManualEmail(true);
+        setManualCcEmail(previewJson.row.ccEmail ?? '');
         setDraftError('No valid recipient email on file — resolve this in Campaign Centre, or type one below to draft anyway.');
       }
     } catch {
@@ -2557,7 +2564,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     }
   };
 
-  const quickEmailDraft = async (c: CompanyBilling, overrideEmail?: string) => {
+  const quickEmailDraft = async (c: CompanyBilling, override?: { to?: string; cc?: string }) => {
     const templateId = selectedTemplateId;
     if (!templateId) { setDraftError('No AR template found — add one in Client Communications › Templates.'); return; }
     if (!previewRow) { setDraftError('Still resolving this company — try again in a moment.'); return; }
@@ -2565,7 +2572,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     setDraftError(null);
     try {
       const row = { ...previewRow };
-      if (!row.toEmail && overrideEmail && isValidEmail(overrideEmail)) row.toEmail = overrideEmail;
+      if (!row.toEmail && override?.to && isValidEmail(override.to)) row.toEmail = override.to;
+      if (override?.cc !== undefined) row.ccEmail = override.cc || null;
       if (!row.toEmail) {
         setNeedsManualEmail(true);
         setDraftError('No valid recipient email on file — resolve this in Campaign Centre, or type one below to draft anyway.');
@@ -2920,7 +2928,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
                     <button title="Email Drafts" onClick={e => {
                         e.stopPropagation();
-                        setDraftError(null); setDraftNotice(null); setNeedsManualEmail(false); setManualToEmail(''); setPreviewRow(null);
+                        setDraftError(null); setDraftNotice(null); setNeedsManualEmail(false); setManualToEmail(''); setManualCcEmail(''); setPreviewRow(null);
                         const opening = draftPopoverFor !== c.companyId;
                         setDraftPopoverFor(opening ? c.companyId : null);
                         if (opening) void resolveDraftPreview(c);
@@ -2959,9 +2967,16 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                             {previewLoading && <div style={{ fontSize: 10.5, color: '#94a3b8', marginBottom: 8 }}>Checking recipient…</div>}
                             {draftError && <div style={{ fontSize: 10.5, color: '#b91c1c', marginBottom: 8 }}>{draftError}</div>}
                             {needsManualEmail && (
-                              <input type="email" value={manualToEmail} onChange={e => setManualToEmail(e.target.value)}
-                                placeholder="recipient@email.com" autoFocus
-                                style={{ width: '100%', border: `1px solid ${manualToEmail && !isValidEmail(manualToEmail) ? '#fecaca' : '#e2e8f0'}`, borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }} />
+                              <>
+                                <label style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.4px' }}>To</label>
+                                <input type="email" value={manualToEmail} onChange={e => setManualToEmail(e.target.value)}
+                                  placeholder="recipient@email.com" autoFocus
+                                  style={{ width: '100%', border: `1px solid ${manualToEmail && !isValidEmail(manualToEmail) ? '#fecaca' : '#e2e8f0'}`, borderRadius: 6, padding: '6px 8px', fontSize: 12, marginTop: 3, marginBottom: 8, boxSizing: 'border-box' }} />
+                                <label style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.4px' }}>Cc <span style={{ fontWeight: 500, textTransform: 'none' }}>(optional)</span></label>
+                                <input type="text" value={manualCcEmail} onChange={e => setManualCcEmail(e.target.value)}
+                                  placeholder="cc@email.com"
+                                  style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginTop: 3, marginBottom: 8, boxSizing: 'border-box' }} />
+                              </>
                             )}
                             <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8 }}>
                               {helperAvailable ? 'Opens directly in Outlook with the invoice attached.' : 'Draft Helper not detected — opens a blank Outlook draft (no attachment) instead.'}
@@ -2974,7 +2989,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                             )}
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                               <button onClick={() => setDraftPopoverFor(null)} style={{ fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '5px 8px' }}>Cancel</button>
-                              <button onClick={() => quickEmailDraft(c, needsManualEmail ? manualToEmail : undefined)}
+                              <button onClick={() => quickEmailDraft(c, needsManualEmail ? { to: manualToEmail, cc: manualCcEmail } : undefined)}
                                 disabled={drafting || previewLoading || !selectedTemplateId || (needsManualEmail && !isValidEmail(manualToEmail))}
                                 style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: drafting ? 'wait' : 'pointer', padding: '6px 12px', opacity: (previewLoading || !selectedTemplateId || (needsManualEmail && !isValidEmail(manualToEmail))) ? 0.6 : 1 }}>
                                 {drafting ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
