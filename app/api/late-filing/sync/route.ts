@@ -478,9 +478,21 @@ async function syncLateFiling(run: AutomationRun) {
     for (const row of existingManual ?? []) {
       if (controller.signal.aborted) throw abortError(controller.signal);
       const manual = (row as { manual_fields?: Record<string, boolean> | null }).manual_fields ?? {};
+      // Vincent, 2026-08-20: this used to re-stamp a fresh "Review: ...
+      // Previous: {remarks}" note EVERY run the condition stayed cleared —
+      // with no staff action needed to stop it, a company that stayed
+      // cleared for two weeks grew an 11-layer nested "Previous: Previous:
+      // ..." chain (confirmed live: 12 companies affected, chain depth up
+      // to 12). Only stamp it once, on the actual flagged->cleared
+      // transition — a remarks value that already starts with "Review:"
+      // or "Resolved:" means that already happened; leave it alone
+      // (whether still under Review or since promoted to Resolved by
+      // staff editing the text) until a real re-flag clears manual.remarks
+      // or the row leaves this loop via stillFlaggedIds.
       if (!evaluatedIds.has(row.id)
         || stillFlaggedIds.has(row.id)
-        || manual.remarks) continue;
+        || manual.remarks
+        || /^(Review|Resolved):/.test(row.remarks ?? '')) continue;
       const { error } = await supabase.from('late_filing_companies').update({
         remarks: `Review: Auto condition cleared on ${reviewDate} — verify before resolving. Previous: ${row.remarks}`,
         updated_at: new Date().toISOString(),
