@@ -55,7 +55,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.5.8"
+VERSION = "1.5.9"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -343,10 +343,23 @@ def _assign_sender(outlook, mail, sender_email: str):
     SendUsingAccount alone is documented as the AppointmentItem pattern —
     a MailItem needs its Sender property set to the account's own
     AddressEntry, "otherwise the MailItem is created for the primary
-    account" (word for word what was observed). Keeping SendUsingAccount
-    too — it's still the documented way to control which account actually
-    transmits the message; Sender is what makes the compose window's own
-    From selector agree with it.
+    account" (word for word what was observed).
+
+    Vincent, 2026-08-20: REVERTED the Sender assignment above — confirmed
+    live (real Outlook, real send attempt) that it breaks sending outright
+    on an Exchange/Microsoft 365-backed account ("Something went wrong",
+    the compose window's From field showing a raw LegacyExchangeDN string
+    instead of an address). account.CurrentUser.AddressEntry.Type is "EX"
+    for this kind of account — every business/M365 mailbox, i.e. exactly
+    the accounts this tool is used with — and assigning an EX-type
+    AddressEntry to .Sender embeds that unresolvable DN into the message.
+    Tried the documented alternative (Session.CreateRecipient(smtp)
+    .Resolve().AddressEntry) too — same EX type, same broken DN, no
+    escape via a different lookup path. A wrong-looking From dropdown is a
+    cosmetic annoyance; a hard send failure is not — SendUsingAccount
+    alone (below) still reliably controls which account actually
+    transmits the message even though the compose window's own From text
+    may not reflect it.
     """
     requested = (sender_email or "").strip().lower()
     if not requested:
@@ -358,10 +371,6 @@ def _assign_sender(outlook, mail, sender_email: str):
         if requested not in (smtp_address, display_name):
             continue
 
-        try:
-            mail.Sender = account.CurrentUser.AddressEntry
-        except Exception:  # noqa: BLE001
-            pass
         # SendUsingAccount is not exposed as a normal writable attribute in
         # every Outlook/pywin32 combination. DISPID 64209 is Outlook's
         # documented MailItem.SendUsingAccount property.
