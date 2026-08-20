@@ -923,6 +923,24 @@ function StaleFyeBadge({ fyeYear }: { fyeYear: number }) {
   );
 }
 
+// Shown on a company's CURRENT-cycle row (never on the backlog row itself
+// — see backlogYearsFor in ARTab) when that same company also has one or
+// more still-unfiled prior-year rows, so the notice is visible whichever
+// row search/browsing happens to surface, not only via the Overdue filter.
+function BacklogNoticeBadge({ years }: { years: number[] }) {
+  if (!years.length) return null;
+  const label = years.slice().sort((a, b) => b - a).join(', ');
+  return (
+    <span title={`Also has an unfiled AR still outstanding from FYE ${label}`} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3, background: '#fff7ed', color: '#c2410c',
+      border: '1px solid #fed7aa', borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700,
+      whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0,
+    }}>
+      <AlertTriangle size={9} />Owes FY {label}
+    </span>
+  );
+}
+
 // Vincent: some clients have a parent/subsidiary structure — invoices for
 // the subsidiary should still be created under the subsidiary's own QB
 // customer (revenue tracking stays correct), but the "Bill To" name/address
@@ -3374,12 +3392,13 @@ function ARColumnFilterMenu({ field, label, records, selected, onApply }: {
   );
 }
 
-function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave, onDelete, onOpenDetail, startIndex = 0 }: {
+function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave, onDelete, onOpenDetail, startIndex = 0, backlogYearsFor }: {
   records: ARRecord[]; allRecords: ARRecord[];
   columnFilters: Partial<Record<ARColumnKey, Set<string>>>;
   onApplyFilter: (field: ARColumnKey, next: Set<string> | null) => void;
   onSave: (id: number, field: string, val: string) => void; onDelete: (id: number) => void;
   onOpenDetail: (r: ARRecord) => void; startIndex?: number;
+  backlogYearsFor: (r: ARRecord) => number[];
 }) {
   // A very light neutral grouping keeps finance columns legible without
   // introducing another competing accent colour into the list.
@@ -3575,10 +3594,11 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                 <TD stickyLeft={0} tint={rowTint} style={{ textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600, borderLeft: `3px solid ${accent}` }}>{startIndex + i + 1}</TD>
                 <TD stickyLeft={30} tint={rowTint}>
                   <div className="company-name-text">{r.entity_name}</div>
-                  {(lateFilingReason(r.remarks) || r.isStaleOverdue) && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                  {(lateFilingReason(r.remarks) || r.isStaleOverdue || backlogYearsFor(r).length > 0) && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
                       <LateFilingBadge remarks={r.remarks} />
                       {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
+                      <BacklogNoticeBadge years={backlogYearsFor(r)} />
                     </div>
                   )}
                   {r.fye_date && <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
@@ -3905,6 +3925,30 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     });
   }, [records, staleOverdueRecords, search, filter, columnFilters]);
 
+  // Vincent, 2026-08-20: a company can have BOTH a normal current-cycle row
+  // and a still-open backlog row from an earlier fye_year (e.g. MITRADE
+  // GROUP has a clean June 2026 row and a separate, still-unfiled June
+  // 2021 row) — searching/browsing outside the Overdue filter only ever
+  // shows the current row, with nothing hinting the backlog exists. This
+  // looks up, per company, which prior years are still owed, so the
+  // current row can carry its own small notice regardless of which filter
+  // is active.
+  const backlogYearsByCompany = useMemo(() => {
+    const m = new Map<string, number[]>();
+    for (const s of staleOverdueRecords) {
+      const key = s.uen?.trim() ? `uen:${s.uen.trim().toUpperCase()}` : `name:${normName(s.entity_name)}`;
+      const list = m.get(key) ?? [];
+      list.push(s.fye_year);
+      m.set(key, list);
+    }
+    return m;
+  }, [staleOverdueRecords]);
+  const backlogYearsFor = useCallback((r: ARRecord): number[] => {
+    if (r.isStaleOverdue) return []; // never point a backlog row at itself/siblings
+    const key = r.uen?.trim() ? `uen:${r.uen.trim().toUpperCase()}` : `name:${normName(r.entity_name)}`;
+    return backlogYearsByCompany.get(key) ?? [];
+  }, [backlogYearsByCompany]);
+
   // See useCrossCycleSearch's own comment (defined above BillingTab) — same
   // cross-cycle escalation, but searching ar_reminder itself (not the
   // TeamWork roster) so it can find rows that only exist here, such as
@@ -4088,10 +4132,11 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                     <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div className="company-name-text">{r.entity_name}</div>
-                      {(lateFilingReason(r.remarks) || r.isStaleOverdue) && (
+                      {(lateFilingReason(r.remarks) || r.isStaleOverdue || backlogYearsFor(r).length > 0) && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginTop: 2 }}>
                           <LateFilingBadge remarks={r.remarks} />
                           {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
+                          <BacklogNoticeBadge years={backlogYearsFor(r)} />
                         </div>
                       )}
                       <div className="company-registration-text" style={{ marginTop: 1 }}>{r.uen || '—'}{r.fye_date ? ` · FYE ${fmtDate(r.fye_date)}` : ''}</div>
@@ -4120,10 +4165,11 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                   <div style={{ color: '#94a3b8', display: 'flex', alignItems: 'center' }}><ChevronRight size={14} /></div>
                   <div style={{ padding: '0 6px' }}>
                     <div className="company-name-text"><span style={{ color: '#cbd5e1', marginRight: 5, fontSize: 11 }}>{startIndex + i + 1}</span>{r.entity_name}</div>
-                    {(lateFilingReason(r.remarks) || r.isStaleOverdue) && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                    {(lateFilingReason(r.remarks) || r.isStaleOverdue || backlogYearsFor(r).length > 0) && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
                         <LateFilingBadge remarks={r.remarks} />
                         {r.isStaleOverdue && <StaleFyeBadge fyeYear={r.fye_year} />}
+                        <BacklogNoticeBadge years={backlogYearsFor(r)} />
                       </div>
                     )}
                     {r.fye_date && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 1 }}>FYE {fmtDate(r.fye_date)}</div>}
@@ -4169,7 +4215,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           </div>
           {loading && records.length === 0
             ? <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>
-            : <ARTableView records={pageItems} allRecords={records} columnFilters={columnFilters} onApplyFilter={applyColumnFilter} onSave={handleSave} onDelete={handleDelete} onOpenDetail={setModalRecord} startIndex={startIndex} />
+            : <ARTableView records={pageItems} allRecords={records} columnFilters={columnFilters} onApplyFilter={applyColumnFilter} onSave={handleSave} onDelete={handleDelete} onOpenDetail={setModalRecord} startIndex={startIndex} backlogYearsFor={backlogYearsFor} />
           }
         </>
       )}
