@@ -55,7 +55,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.5.9"
+VERSION = "1.6.0"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -106,6 +106,15 @@ DRAFT_ID_PROP = (
     "http://schemas.microsoft.com/mapi/string/"
     "{5C43E92B-15C3-4EA1-A019-0432EEA178AD}/TassureDraftId/0x001F"
 )
+
+# Standard MAPI proptags (not Tassure-specific, unlike DRAFT_ID_PROP above) —
+# set directly in _assign_sender so the sender identity is written as a
+# plain SMTP-type entity, bypassing Outlook's automatic GAL/Exchange
+# resolution (see that function's own docstring for why that resolution
+# breaks sending for a same-org Microsoft 365 account).
+_PR_SENT_REPRESENTING_NAME = "http://schemas.microsoft.com/mapi/proptag/0x0042001F"
+_PR_SENT_REPRESENTING_ADDRTYPE = "http://schemas.microsoft.com/mapi/proptag/0x0064001F"
+_PR_SENT_REPRESENTING_EMAIL_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x0065001F"
 
 
 def _report_sent(draft_id, sender_email):
@@ -345,7 +354,7 @@ def _assign_sender(outlook, mail, sender_email: str):
     AddressEntry, "otherwise the MailItem is created for the primary
     account" (word for word what was observed).
 
-    Vincent, 2026-08-20: REVERTED the Sender assignment above — confirmed
+    Vincent, 2026-08-20: REMOVED the Sender assignment above — confirmed
     live (real Outlook, real send attempt) that it breaks sending outright
     on an Exchange/Microsoft 365-backed account ("Something went wrong",
     the compose window's From field showing a raw LegacyExchangeDN string
@@ -354,12 +363,20 @@ def _assign_sender(outlook, mail, sender_email: str):
     the accounts this tool is used with — and assigning an EX-type
     AddressEntry to .Sender embeds that unresolvable DN into the message.
     Tried the documented alternative (Session.CreateRecipient(smtp)
-    .Resolve().AddressEntry) too — same EX type, same broken DN, no
-    escape via a different lookup path. A wrong-looking From dropdown is a
-    cosmetic annoyance; a hard send failure is not — SendUsingAccount
-    alone (below) still reliably controls which account actually
-    transmits the message even though the compose window's own From text
-    may not reflect it.
+    .Resolve().AddressEntry) too — same EX type, same broken DN: any
+    lookup path that lets Outlook resolve the address against its own
+    directory (the GAL) lands on the same broken EX identity, because
+    finance@/contact@/every other Tassure account lives in the same
+    Microsoft 365 org.
+
+    Fixed for real by setting the PR_SENT_REPRESENTING_* MAPI properties
+    directly as an explicit SMTP-type identity, bypassing GAL resolution
+    entirely — confirmed live: From displays the plain address (no DN),
+    and it does not break sending. Both this and SendUsingAccount are
+    still needed: this affects only how the message identifies its
+    sender (the visible From, and this SMTP-type write happens to be
+    exactly what unblocked it), SendUsingAccount is what actually
+    controls which account transmits the message.
     """
     requested = (sender_email or "").strip().lower()
     if not requested:
@@ -371,6 +388,12 @@ def _assign_sender(outlook, mail, sender_email: str):
         if requested not in (smtp_address, display_name):
             continue
 
+        try:
+            mail.PropertyAccessor.SetProperty(_PR_SENT_REPRESENTING_NAME, account.SmtpAddress)
+            mail.PropertyAccessor.SetProperty(_PR_SENT_REPRESENTING_ADDRTYPE, "SMTP")
+            mail.PropertyAccessor.SetProperty(_PR_SENT_REPRESENTING_EMAIL_ADDRESS, account.SmtpAddress)
+        except Exception:  # noqa: BLE001 - best-effort; SendUsingAccount below still routes correctly
+            pass
         # SendUsingAccount is not exposed as a normal writable attribute in
         # every Outlook/pywin32 combination. DISPID 64209 is Outlook's
         # documented MailItem.SendUsingAccount property.
