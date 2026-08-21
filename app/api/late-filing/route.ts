@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { todaySGT, thisYearSGT } from '@/lib/date';
+import { normalize } from '@/lib/company-name';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const MONTH_IDX: Record<string, number> = {
@@ -90,8 +91,20 @@ export async function GET(req: NextRequest) {
     .from('late_filing_companies')
     .select('*');
   const manualByUen = new Map<string, typeof manualRows extends (infer T)[] | null ? T : never>();
+  // Vincent, 2026-08-20: a company fully struck off and removed from
+  // `companies` entirely (not just tw_status='Terminated' while still
+  // present — confirmed live for ADVANCE BRIGHT GLOBAL / FULLRICH
+  // INTERNATIONAL, both absent from `companies`) has no entry in uenMap
+  // below, so the UEN-only lookup silently resolved to '' and never found
+  // its real late_filing_companies row — meaning a staff "Resolved" note
+  // on that row was completely invisible to the main detection loop,
+  // which instead derived a fresh (and wrong) "seriously overdue" status
+  // straight from stale ar_reminder dates. Name-keyed fallback catches
+  // exactly this case.
+  const manualByName = new Map<string, typeof manualRows extends (infer T)[] | null ? T : never>();
   for (const r of manualRows ?? []) {
     if (r.uen) manualByUen.set(r.uen, r);
+    manualByName.set(normalize(r.company_name), r);
   }
 
   // 4. Group ar_reminder by entity
@@ -165,7 +178,7 @@ export async function GET(req: NextRequest) {
     if (!lateFy) continue; // not late
 
     const uen = uenMap.get(entityName.toLowerCase()) ?? '';
-    const manual = manualByUen.get(uen);
+    const manual = (uen ? manualByUen.get(uen) : undefined) ?? manualByName.get(normalize(entityName));
 
     // Last AR/AGM dates from last completed year
     const lastArDate  = lastCompleted?.filling_date  ?? null;
