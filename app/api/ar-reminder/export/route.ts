@@ -21,9 +21,11 @@ export async function GET(req: NextRequest) {
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
 
   const { searchParams } = req.nextUrl;
-  const month = searchParams.get('month') ?? '';
+  // Vincent, 2026-08-20: comma-separated, matching GET /api/ar-reminder's
+  // own multi-month support — export always matches whatever's on screen.
+  const months = (searchParams.get('month') ?? '').split(',').map(m => m.trim()).filter(Boolean);
   const year = parseInt(searchParams.get('year') ?? '', 10);
-  if (!month || !Number.isInteger(year)) {
+  if (!months.length || !Number.isInteger(year)) {
     return NextResponse.json({ error: 'month and year are required' }, { status: 400 });
   }
 
@@ -32,13 +34,15 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from('ar_reminder')
       .select('*')
-      .eq('fye_month', month)
+      .in('fye_month', months)
       .eq('fye_year', year)
       .or('status.is.null,status.neq.Excluded')
       .order('entity_name');
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    const fyeLabel = `${MONTH_ABBR[month] ?? month.slice(0, 3).toUpperCase()} ${year}`;
+    const monthAbbrs = months.map(m => MONTH_ABBR[m] ?? m.slice(0, 3).toUpperCase());
+    const fyeLabel = `${monthAbbrs.join('/')} ${year}`;
+    const monthsForName = months.length <= 3 ? months.join('-') : `${months.length}months`;
     const file = await buildWorkbook(
       [{
         name: 'AR Reminder',
@@ -46,12 +50,12 @@ export async function GET(req: NextRequest) {
         columns: AR_REMINDER_EXPORT_COLUMNS,
         titleRow: `ANNUAL RETURN REMINDER (FYE: ${fyeLabel})`,
       }],
-      { title: `Tassure AR Reminder — ${month} ${year}`, subject: 'AR Reminder' },
+      { title: `Tassure AR Reminder — ${months.join(', ')} ${year}`, subject: 'AR Reminder' },
     );
     return new Response(new Uint8Array(file), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="AR-Reminder-${month}-${year}.xlsx"`,
+        'Content-Disposition': `attachment; filename="AR-Reminder-${monthsForName}-${year}.xlsx"`,
         'Cache-Control': 'no-store',
       },
     });

@@ -105,7 +105,11 @@ export async function GET(req: NextRequest) {
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const month = searchParams.get('month') ?? 'April';
+  // Vincent, 2026-08-20: month accepts a comma-separated list so AR
+  // Reminder can show several FYE months at once (year-end consolidation)
+  // — a single-month caller (Billing Drafts) just sends one value, which
+  // round-trips through .in() identically to the old .eq().
+  const months = (searchParams.get('month') ?? 'April').split(',').map(m => m.trim()).filter(Boolean);
   const year = parseInt(searchParams.get('year') ?? '2026', 10);
   if (!Number.isInteger(year)) return NextResponse.json({ error: 'Invalid year' }, { status: 400 });
 
@@ -116,7 +120,7 @@ export async function GET(req: NextRequest) {
   const { data: arRows, error } = await supabase
     .from('ar_reminder')
     .select('*')
-    .eq('fye_month', month)
+    .in('fye_month', months)
     .eq('fye_year', year)
     .or('status.is.null,status.neq.Excluded')
     .order('entity_name');
@@ -135,7 +139,7 @@ export async function GET(req: NextRequest) {
   const { data: staleRows, error: staleError } = await supabase
     .from('ar_reminder')
     .select('*')
-    .eq('fye_month', month)
+    .in('fye_month', months)
     .lt('fye_year', year)
     .is('filling_date', null)
     .lte('due_date', todaySGT())
@@ -143,7 +147,7 @@ export async function GET(req: NextRequest) {
     .order('fye_year', { ascending: false });
   if (staleError) return NextResponse.json({ error: staleError.message }, { status: 500 });
 
-  if (!arRows?.length && !staleRows?.length) return NextResponse.json({ month, year, total: 0, companies: [], staleOverdue: [] });
+  if (!arRows?.length && !staleRows?.length) return NextResponse.json({ months, year, total: 0, companies: [], staleOverdue: [] });
 
   const [
     { data: companies, error: companiesError },
@@ -318,7 +322,7 @@ export async function GET(req: NextRequest) {
   const staleOverdueOut = enriched.filter(row => row.isStaleOverdue);
 
   return NextResponse.json(
-    { month, year, total: companiesOut.length, companies: companiesOut, staleOverdue: staleOverdueOut },
+    { months, year, total: companiesOut.length, companies: companiesOut, staleOverdue: staleOverdueOut },
     { headers: { 'Cache-Control': 'private, no-store' } },
   );
 }

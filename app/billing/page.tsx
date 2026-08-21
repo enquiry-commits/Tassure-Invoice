@@ -2415,7 +2415,7 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
 // an unrelated filter.
 function useCrossCycleSearch(
   items: { companyName: string; uen: string | null }[],
-  month: string,
+  months: string[],
   year: string,
   setMonth: (v: string) => void,
   setYear: (v: string) => void,
@@ -2426,8 +2426,8 @@ function useCrossCycleSearch(
   const [notice, setNotice] = useState<string | null>(null);
   const itemsRef = useRef(items);
   useEffect(() => { itemsRef.current = items; }, [items]);
-  const monthRef = useRef(month);
-  useEffect(() => { monthRef.current = month; }, [month]);
+  const monthsRef = useRef(months);
+  useEffect(() => { monthsRef.current = months; }, [months]);
   const yearRef = useRef(year);
   useEffect(() => { yearRef.current = year; }, [year]);
   const onSwitchRef = useRef(onSwitch);
@@ -2446,7 +2446,7 @@ function useCrossCycleSearch(
         const match = await fetchMatchRef.current(term);
         if (!match) { setNotice(`No company found matching "${term}".`); return; }
         if (!match.fyeMonth) { setNotice(`${match.companyName} has no FYE month on file — can't switch automatically.`); return; }
-        const monthChanged = match.fyeMonth !== monthRef.current;
+        const monthChanged = !monthsRef.current.includes(match.fyeMonth);
         const yearChanged  = match.fyeYear != null && String(match.fyeYear) !== yearRef.current;
         if (monthChanged || yearChanged) {
           setNotice(`Switched to ${match.fyeMonth}${yearChanged ? ` ${match.fyeYear}` : ''} — ${match.companyName}'s FYE cycle.`);
@@ -2732,7 +2732,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     const matches: { companyName: string; fyeMonth: string | null }[] = json.data ?? [];
     return matches[0] ? { companyName: matches[0].companyName, fyeMonth: matches[0].fyeMonth, fyeYear: null } : null;
   }, []);
-  const crossMonthNotice = useCrossCycleSearch(monthCompanies, month, year, setMonth, setYear, search, useCallback(() => { setFilter('all'); }, []), fetchBillingMatch);
+  const crossMonthNotice = useCrossCycleSearch(monthCompanies, [month], year, setMonth, setYear, search, useCallback(() => { setFilter('all'); }, []), fetchBillingMatch);
 
   // "Needs billing" for month-driven invoicing = this FYE cycle hasn't been
   // invoiced yet. Prefer our own generated_invoices record (exact — we made
@@ -3392,6 +3392,65 @@ function ARColumnFilterMenu({ field, label, records, selected, onApply }: {
   );
 }
 
+// Vincent, 2026-08-20: AR Reminder's own month picker — replaces a plain
+// single <select> so staff can pick several FYE months at once for
+// year-end consolidation. Same trigger-button + click-outside-close
+// popover pattern as ARColumnFilterMenu above, checkboxes over a fixed
+// month list instead of dynamic value-counts (no staged draft needed for
+// a list this small — each click applies immediately).
+function MonthMultiSelect({ months, allMonths, onChange, triggerStyle }: {
+  months: string[]; allMonths: readonly string[];
+  onChange: (next: string[]) => void; triggerStyle: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClickOutside = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onClickOutside);
+    return () => document.removeEventListener('mousedown', onClickOutside);
+  }, [open]);
+
+  const toggle = (m: string) => {
+    const has = months.includes(m);
+    if (has && months.length === 1) return; // keep at least one month selected always
+    onChange(has ? months.filter(x => x !== m) : allMonths.filter(x => months.includes(x) || x === m));
+  };
+
+  const label = months.length === 1 ? months[0]
+    : months.length === 2 ? months.join(', ')
+    : `${months.length} months`;
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button onClick={() => setOpen(v => !v)} style={{ ...triggerStyle, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+        {label}
+        <ChevronDown size={13} />
+      </button>
+      {open && (
+        <div onClick={e => e.stopPropagation()} style={{
+          position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 30, background: '#fff',
+          border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 170, padding: 8,
+        }}>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 6 }}>
+            <button onClick={() => onChange([...allMonths])} style={{ fontSize: 10, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 700 }}>Select All</button>
+            <button onClick={() => onChange([months[0]])} style={{ fontSize: 10, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: 700 }}>Reset</button>
+          </div>
+          <div style={{ maxHeight: 260, overflowY: 'auto', borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9', padding: '4px 0' }}>
+            {allMonths.map(m => (
+              <label key={m} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 2px', fontSize: 12, cursor: 'pointer' }}>
+                <input type="checkbox" checked={months.includes(m)} onChange={() => toggle(m)} style={{ width: 12, height: 12, cursor: 'pointer', flexShrink: 0 }} />
+                <span>{m}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave, onDelete, onOpenDetail, startIndex = 0, backlogYearsFor }: {
   records: ARRecord[]; allRecords: ARRecord[];
   columnFilters: Partial<Record<ARColumnKey, Set<string>>>;
@@ -3731,6 +3790,14 @@ function AddManualDateField({ label, value, onChange }: { label: string; value: 
 // AR TAB
 // ─────────────────────────────────────────────────────────────────────────────
 function ARTab({ month, year, setMonth, setYear }: { month: string; year: string; setMonth: (v: string) => void; setYear: (v: string) => void }) {
+  // Vincent, 2026-08-20: AR Reminder gets its own multi-month selection,
+  // decoupled from the single month/year Billing Drafts shares with this
+  // tab (CombinedPage's own state, still used for the year and as this
+  // state's one-time seed) — so picking several months here for a
+  // year-end consolidation never touches Billing Drafts' single-cycle
+  // invoice-generation flow.
+  const [months, setMonths] = useState<string[]>(() => [month]);
+  const monthsLabel = months.length === 1 ? months[0].toUpperCase() : `${months.length} MONTHS`;
   const [records,     setRecords]     = useState<ARRecord[]>([]);
   // Companies genuinely overdue right now but filed under an earlier
   // fye_year (AR/AGM due dates are FYE + 9 months, so a due date can roll
@@ -3754,29 +3821,30 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   const [view,        setView]        = useState<'list' | 'table'>('list');
 
   const load = useCallback(async () => {
-    if (!month || !year) return;
+    if (!months.length || !year) return;
     setLoading(true); setError(null);
     try {
-      const res  = await fetch(`/api/ar-reminder?month=${month}&year=${year}`);
+      const res  = await fetch(`/api/ar-reminder?month=${months.join(',')}&year=${year}`);
       const json = await res.json();
       if (json.error) { setError(json.error); return; }
       setRecords(json.companies ?? []);
       setStaleOverdueRecords(json.staleOverdue ?? []);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Network error'); }
     finally { setLoading(false); }
-  }, [month, year]);
+  }, [months, year]);
 
   const exportAr = useCallback(async () => {
-    if (!month || !year) return;
+    if (!months.length || !year) return;
     setExporting(true); setExportError('');
     try {
-      const response = await fetch(`/api/ar-reminder/export?month=${month}&year=${year}`);
+      const response = await fetch(`/api/ar-reminder/export?month=${months.join(',')}&year=${year}`);
       if (!response.ok) throw new Error('Export failed');
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `AR-Reminder-${month}-${year}.xlsx`;
+      const monthsForName = months.length <= 3 ? months.join('-') : `${months.length}months`;
+      link.download = `AR-Reminder-${monthsForName}-${year}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -3786,7 +3854,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     } finally {
       setExporting(false);
     }
-  }, [month, year]);
+  }, [months, year]);
 
   useEffect(() => {
     const timer = setTimeout(() => void load(), 0);
@@ -3794,7 +3862,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   }, [load]);
 
   useEffect(() => {
-    if (!month || !year) return;
+    if (!months.length || !year) return;
     const supabase = getSupabaseBrowserClient();
     let reloadTimer: ReturnType<typeof setTimeout> | null = null;
     // No visible notice for this (Vincent: doesn't want a toast on every
@@ -3806,13 +3874,13 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     };
 
     const channel = supabase
-      .channel(`ar-reminder-${year}-${month}`)
+      .channel(`ar-reminder-${year}-${months.join('-')}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ar_reminder', filter: `fye_year=eq.${year}` }, payload => {
         const next = payload.new as Partial<ARRecord> & { id?: number; fye_month?: string; fye_year?: number; status?: string };
         const previous = payload.old as Partial<ARRecord> & { id?: number };
         const id = next.id ?? previous.id;
         if (!id) return;
-        if (payload.eventType !== 'DELETE' && (next.fye_month !== month || Number(next.fye_year) !== Number(year))) return;
+        if (payload.eventType !== 'DELETE' && (!next.fye_month || !months.includes(next.fye_month) || Number(next.fye_year) !== Number(year))) return;
 
         if (payload.eventType === 'DELETE' || next.status === 'Excluded') {
           setRecords(current => current.filter(record => record.id !== id));
@@ -3844,7 +3912,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       if (reloadTimer) clearTimeout(reloadTimer);
       void supabase.removeChannel(channel);
     };
-  }, [load, month, year]);
+  }, [load, months, year]);
 
   const handleSave = useCallback((id: number, field: string, value: string) => {
     // date_of_agm/filling_date/reminder_note/acc_pic/tax_pic flip their own
@@ -3897,7 +3965,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       const res = await fetch('/api/ar-reminder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entity_name: newEntity.trim(), fye_month: month, fye_year: year, uen: newUen || null, pic: newPic || null, due_date: newDueDate || null }),
+        body: JSON.stringify({ entity_name: newEntity.trim(), fye_month: months[0], fye_year: year, uen: newUen || null, pic: newPic || null, due_date: newDueDate || null }),
       });
       const json = await res.json();
       if (json.error) { alert(json.error); return; }
@@ -3961,7 +4029,10 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     const matches: { entity_name: string; fye_month: string | null; fye_year: number | null }[] = json.data ?? [];
     return matches[0] ? { companyName: matches[0].entity_name, fyeMonth: matches[0].fye_month, fyeYear: matches[0].fye_year } : null;
   }, []);
-  const crossMonthNotice = useCrossCycleSearch(arRecordsForSearch, month, year, setMonth, setYear, search, useCallback(() => { setFilter('all'); setColumnFilters({}); }, []), fetchArMatch);
+  // A cross-cycle match should land on that one specific cycle, not
+  // silently widen whatever multi-month selection is already active.
+  const collapseToMonth = useCallback((m: string) => setMonths([m]), []);
+  const crossMonthNotice = useCrossCycleSearch(arRecordsForSearch, months, year, collapseToMonth, setYear, search, useCallback(() => { setFilter('all'); setColumnFilters({}); }, []), fetchArMatch);
 
   const stats = useMemo(() => ({
     total:      records.length,
@@ -3975,7 +4046,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
 
   // Paginate AFTER search/filter — shared by both List and Table views.
   const { page, setPage, totalPages, pageItems, startIndex, total: pagedTotal } =
-    usePagination(filtered, `${search}|${filter}|${month}|${year}|${columnFilterKey}`, 40);
+    usePagination(filtered, `${search}|${filter}|${months.join(',')}|${year}|${columnFilterKey}`, 40);
   const isMobile = useIsMobile();
 
   const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 13, color: '#1e3a5f', background: '#fff', cursor: 'pointer', outline: 'none' };
@@ -3998,9 +4069,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           {exportError && <span style={{ fontSize: 9.5, color: '#b91c1c' }}>{exportError}</span>}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: isMobile ? 'wrap' : undefined }}>
-          <select value={month} onChange={e => setMonth(e.target.value)} style={S}>
-            {FYE_MONTHS.map(m => <option key={m}>{m}</option>)}
-          </select>
+          <MonthMultiSelect months={months} allMonths={FYE_MONTHS} onChange={setMonths} triggerStyle={S} />
           <select value={year} onChange={e => setYear(e.target.value)} style={S}>
             {YEAR_OPTIONS.map(y => <option key={y}>{y}</option>)}
           </select>
@@ -4019,7 +4088,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
         <div onClick={() => setShowAddForm(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
             <div style={{ background: '#1d3a5c', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add Manual Entry — FYE {month} {year}</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add Manual Entry — FYE {months[0]} {year}</div>
               <button onClick={() => setShowAddForm(false)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
@@ -4105,7 +4174,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
         <div className="system-list-shell">
           <div className="system-list-title-bar" style={{ padding: '8px 16px' }}>
             <Calendar size={13} style={{ color: '#fff' }} />
-            <span className="system-list-title">FYE {month.toUpperCase()} {year}</span>
+            <span className="system-list-title">FYE {monthsLabel} {year}</span>
             <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Click a company to open full details and edit</span>
           </div>
           {!isMobile && <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: '32px minmax(310px,1.45fr) 120px minmax(300px,1fr) 110px 120px', columnGap: 12, padding: '10px 16px' }}>
@@ -4121,7 +4190,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           </div>}
           <div style={{ maxHeight: 'calc(100vh - 420px)', overflowY: 'auto', background: '#fff' }}>
             {loading && records.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>Loading…</div>}
-            {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>{records.length > 0 ? 'No matching records' : `No records for FYE ${month} ${year}`}</div>}
+            {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8', fontSize: 13 }}>{records.length > 0 ? 'No matching records' : `No records for FYE ${monthsLabel} ${year}`}</div>}
             {pageItems.map((r, i) => {
               const filed     = r.stages.arFiled;
               const activeSvc = Object.entries(r.services).filter(([, v]) => v).map(([k]) => k);
@@ -4210,7 +4279,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
         <>
           <div className="system-list-title-bar" style={{ borderRadius: '10px 10px 0 0', padding: '8px 16px' }}>
             <Calendar size={13} style={{ color: '#fff' }} />
-            <span className="system-list-title">FYE {month.toUpperCase()} {year}</span>
+            <span className="system-list-title">FYE {monthsLabel} {year}</span>
             <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Click any cell to edit · Data syncs with List view in real time</span>
           </div>
           {loading && records.length === 0
