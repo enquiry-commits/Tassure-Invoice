@@ -291,8 +291,14 @@ async function syncLateFiling(run: AutomationRun) {
       const avgGap = gaps.length
         ? Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length)
         : 0;
-      const isLate = currentOverdueDays > OVERDUE_THRESHOLD_DAYS
-        || avgGap > HISTORICAL_AVG_THRESHOLD_DAYS;
+      // Vincent, 2026-08-20: a bad historical average used to be enough to
+      // flag a company on its own, even with no cycle actually overdue
+      // right now ("habitual" — pre-emptive). Too easy to confuse with
+      // companies genuinely late today, so it's no longer a standalone
+      // trigger — only a currently-overdue cycle flags a company. Still
+      // recorded as supplementary context in `reasons` below when a
+      // company IS currently overdue and also has a bad average.
+      const isLate = currentOverdueDays > OVERDUE_THRESHOLD_DAYS;
       if (!isLate) continue;
       flagged++;
 

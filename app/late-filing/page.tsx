@@ -45,17 +45,20 @@ const REMARKS_OPTIONS = [
 // remark plus (for manual/strike-off rows) the outstanding due date:
 //   serious  — genuinely, badly overdue (> 1 year) or actively being struck off
 //   recent   — overdue, but only recently (<= 1 year past due)
-//   habitual — a chronic late-filer by history, but its current cycle is NOT
-//              overdue yet (flagged pre-emptively)
 //   review   — manually flagged as possibly-resolved, pending human check
-type LateCategory = 'serious' | 'recent' | 'habitual' | 'review' | 'resolved';
+// Vincent, 2026-08-20: dropped the old "habitual" bucket (a bad historical
+// average alone, with no cycle actually overdue right now) — too easy to
+// confuse with companies genuinely late today. A bad average is still
+// shown as supplementary text on a row that IS currently overdue; it's
+// just never the reason a row gets flagged at all on its own anymore
+// (see app/api/late-filing/sync/route.ts's isLate).
+type LateCategory = 'serious' | 'recent' | 'review' | 'resolved';
 function categorize(row: LateRow): LateCategory {
   const r = row.remarks ?? '';
   if (/^Resolved:/i.test(r)) return 'resolved';
   if (/^Review:/i.test(r)) return 'review';
 
   const overdueMatch = r.match(/Overdue (\d+) days/);
-  const hasAvg = /Avg \d+ days late/.test(r);
   const isStrikeOff = /STRIKE OFF/i.test(r);
 
   let overdueDays: number | null = overdueMatch ? parseInt(overdueMatch[1], 10) : null;
@@ -66,8 +69,6 @@ function categorize(row: LateRow): LateCategory {
 
   if (isStrikeOff) return 'serious';
   if (overdueDays !== null && overdueDays > 365) return 'serious';
-  if (overdueDays !== null && overdueDays > 0) return 'recent';
-  if (hasAvg) return 'habitual';
   return 'recent';
 }
 
@@ -313,7 +314,7 @@ export default function LateFilingPage() {
   }
 
   // Category counts for the breakdown cards
-  const cats = { serious: 0, recent: 0, habitual: 0, review: 0, resolved: 0 } as Record<LateCategory, number>;
+  const cats = { serious: 0, recent: 0, review: 0, resolved: 0 } as Record<LateCategory, number>;
   const catOf = new Map<string, LateCategory>();
   for (const r of rows) { const c = categorize(r); cats[c]++; catOf.set(r.id, c); }
 
@@ -356,12 +357,11 @@ export default function LateFilingPage() {
       </div>
 
       {/* Stats — total + risk breakdown (click a card to filter) */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(6,minmax(0,1fr))', gap:12, marginBottom:24 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(5,minmax(0,1fr))', gap:12, marginBottom:24 }}>
         {([
           { key: 'ALL',      label: 'Total Late Filers', sub: 'outstanding, excludes resolved', count: rows.length - cats.resolved, color: '#1e3a5f', Icon: Building2 },
           { key: 'serious',  label: 'Seriously Overdue', sub: 'over 1 year late / strike-off',   count: cats.serious,  color: '#dc2626', Icon: AlertTriangle },
           { key: 'recent',   label: 'Recently Overdue',  sub: 'past due within the last year',   count: cats.recent,   color: '#ea580c', Icon: Clock },
-          { key: 'habitual', label: 'Habitual Risk',     sub: 'chronic late-filer, not yet due', count: cats.habitual, color: '#ca8a04', Icon: RefreshCw },
           { key: 'review',   label: 'Under Review',      sub: 'possibly resolved — verify',      count: cats.review,   color: '#64748b', Icon: Calendar },
           { key: 'resolved', label: 'Resolved',          sub: 'reviewed and retained',           count: cats.resolved, color: '#0f766e', Icon: Check },
         ] as const).map(c => {
