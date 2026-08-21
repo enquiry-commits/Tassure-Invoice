@@ -3792,11 +3792,25 @@ function AddManualDateField({ label, value, onChange }: { label: string; value: 
 function ARTab({ month, year, setMonth, setYear }: { month: string; year: string; setMonth: (v: string) => void; setYear: (v: string) => void }) {
   // Vincent, 2026-08-20: AR Reminder gets its own multi-month selection,
   // decoupled from the single month/year Billing Drafts shares with this
-  // tab (CombinedPage's own state, still used for the year and as this
-  // state's one-time seed) — so picking several months here for a
+  // tab (CombinedPage's own state) — so picking several months here for a
   // year-end consolidation never touches Billing Drafts' single-cycle
-  // invoice-generation flow.
-  const [months, setMonths] = useState<string[]>(() => [month]);
+  // invoice-generation flow. Vincent, 2026-08-20 (follow-up): keep
+  // auto-syncing to whatever month Billing Drafts is currently on — the
+  // shared `month` only resolves AFTER an async fetch on mount, so a
+  // one-time seed missed it entirely and left this tab stuck empty. Sync
+  // reactively until the user actually picks something themselves; a
+  // manual choice (including a cross-cycle search jump) then sticks even
+  // if Billing Drafts' own month later changes underneath it.
+  const [months, setMonths] = useState<string[]>(() => (month ? [month] : []));
+  const userChangedMonthsRef = useRef(false);
+  useEffect(() => {
+    if (userChangedMonthsRef.current || !month) return;
+    setMonths([month]);
+  }, [month]);
+  const setMonthsManually = useCallback((next: string[]) => {
+    userChangedMonthsRef.current = true;
+    setMonths(next);
+  }, []);
   const monthsLabel = months.length === 1 ? months[0].toUpperCase() : `${months.length} MONTHS`;
   const [records,     setRecords]     = useState<ARRecord[]>([]);
   // Companies genuinely overdue right now but filed under an earlier
@@ -4031,7 +4045,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
   }, []);
   // A cross-cycle match should land on that one specific cycle, not
   // silently widen whatever multi-month selection is already active.
-  const collapseToMonth = useCallback((m: string) => setMonths([m]), []);
+  const collapseToMonth = useCallback((m: string) => setMonthsManually([m]), [setMonthsManually]);
   const crossMonthNotice = useCrossCycleSearch(arRecordsForSearch, months, year, collapseToMonth, setYear, search, useCallback(() => { setFilter('all'); setColumnFilters({}); }, []), fetchArMatch);
 
   const stats = useMemo(() => ({
@@ -4069,7 +4083,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
           {exportError && <span style={{ fontSize: 9.5, color: '#b91c1c' }}>{exportError}</span>}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: isMobile ? 'wrap' : undefined }}>
-          <MonthMultiSelect months={months} allMonths={FYE_MONTHS} onChange={setMonths} triggerStyle={S} />
+          <MonthMultiSelect months={months} allMonths={FYE_MONTHS} onChange={setMonthsManually} triggerStyle={S} />
           <select value={year} onChange={e => setYear(e.target.value)} style={S}>
             {YEAR_OPTIONS.map(y => <option key={y}>{y}</option>)}
           </select>
