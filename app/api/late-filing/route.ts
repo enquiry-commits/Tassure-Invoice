@@ -246,10 +246,23 @@ export async function GET(req: NextRequest) {
     return a.company_name.localeCompare(b.company_name);
   });
 
+  // Vincent, 2026-08-20: a row whose next_agm_due_date has since rolled
+  // forward to the future isn't overdue by definition — nothing left to
+  // review regardless of category (serious/recent/review/even resolved,
+  // e.g. the 12 retired "habitual"-only rows, whose due date keeps
+  // refreshing to their next real cycle on every sync run even though
+  // remarks says Resolved). A genuinely currently-overdue row's due date
+  // is always in the past by construction, so this can never hide a real
+  // problem — only ever a row that's already moved on.
+  // ISO YYYY-MM-DD strings sort lexicographically the same as
+  // chronologically — plain string comparison, matching this file's own
+  // convention elsewhere (e.g. `fyeDate > today` above).
+  const stillRelevant = detected.filter(r => !r.next_agm_due_date || r.next_agm_due_date <= today);
+
   // Apply FYE filter
   const out = fyeFilter === 'ALL'
-    ? detected
-    : detected.filter(r => r.financial_year_end === fyeFilter.toUpperCase());
+    ? stillRelevant
+    : stillRelevant.filter(r => r.financial_year_end === fyeFilter.toUpperCase());
 
   return NextResponse.json({ companies: out, total: out.length });
 }
