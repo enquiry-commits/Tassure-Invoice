@@ -3619,7 +3619,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
             <TH w={100}>{HF('sent_date', 'To Client')}</TH>
             <TH w={100}>{HF('received_date', 'Signed')}</TH>
             <TH w={100}>{HF('filling_date', 'AR')}</TH>
-            <TH w={100}>{HF('xbrl', 'XBRL')}</TH>
+            <TH w={110}>{HF('xbrl', 'XBRL')}</TH>
             <TH w={100}>{HF('software_update', 'TW Update')}</TH>
             <TH w={100}>{HF('dpo', 'DPO')}</TH>
             <TH w={100}>{HF('ond_ron', 'ROND RONS')}</TH>
