@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { parseDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
 import { AutomationRun, withAutomationRun } from '@/lib/automation-sync';
 import { normalize } from '@/lib/company-name';
+import { todaySGT } from '@/lib/date';
 
 /**
  * Detects late filers from TeamWork's per-company AGM/AR history.
@@ -149,7 +150,7 @@ async function syncLateFiling(run: AutomationRun) {
 
     const { data: existingManual, error: existingError } = await supabase
       .from('late_filing_companies')
-      .select('id, uen, company_name, remarks, financial_year_end, next_agm_due_date, manual_fields');
+      .select('id, uen, company_name, remarks, financial_year_end, next_agm_due_date, manual_fields, resolved_but_still_overdue_since');
     if (existingError) throw new Error(`Unable to load Late Filing records: ${existingError.message}`);
 
     const byUen = new Map((existingManual ?? [])
@@ -299,6 +300,30 @@ async function syncLateFiling(run: AutomationRun) {
       // recorded as supplementary context in `reasons` below when a
       // company IS currently overdue and also has a bad average.
       const isLate = currentOverdueDays > OVERDUE_THRESHOLD_DAYS;
+
+      // Vincent, 2026-08-24: a Resolved row is trusted forever by the rest
+      // of this sync (remarks stays frozen via manual_fields.remarks) —
+      // nothing ever re-checked whether that trust was actually correct
+      // (confirmed live: CO-OPERATE ASSOCIATES was Resolved while still
+      // genuinely overdue). Quietly re-verify every run regardless of
+      // isLate's outcome below — set the flag once on first detection
+      // (never re-stamp a new date every run the same way the old
+      // Review-chain bug did), clear it the moment it's no longer overdue.
+      if (existing && /^Resolved:/i.test(existing.remarks ?? '')) {
+        const alreadyFlagged = !!existing.resolved_but_still_overdue_since;
+        if (isLate && !alreadyFlagged) {
+          const { error: flagError } = await supabase.from('late_filing_companies')
+            .update({ resolved_but_still_overdue_since: todaySGT() })
+            .eq('id', existing.id);
+          if (flagError) errors++;
+        } else if (!isLate && alreadyFlagged) {
+          const { error: clearError } = await supabase.from('late_filing_companies')
+            .update({ resolved_but_still_overdue_since: null })
+            .eq('id', existing.id);
+          if (clearError) errors++;
+        }
+      }
+
       if (!isLate) continue;
       flagged++;
 

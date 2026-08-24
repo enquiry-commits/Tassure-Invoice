@@ -162,6 +162,11 @@ export async function GET(req: NextRequest) {
     // real late_filing_companies row, same as manual_fields above.
     updated_by_email: string | null;
     updated_by_name: string | null;
+    // Vincent, 2026-08-24: set by the sync when a Resolved row's company is
+    // STILL genuinely overdue per fresh TeamWork data — see
+    // scripts/add-late-filing-resolved-still-overdue.sql and
+    // app/api/late-filing/sync/route.ts's own check.
+    resolved_but_still_overdue_since: string | null;
   };
 
   const detected: LateRow[] = [];
@@ -217,6 +222,7 @@ export async function GET(req: NextRequest) {
       manual_fields:           manual?.manual_fields ?? null,
       updated_by_email:        manual?.updated_by_email ?? null,
       updated_by_name:         manual?.updated_by_name ?? null,
+      resolved_but_still_overdue_since: manual?.resolved_but_still_overdue_since ?? null,
     });
   }
 
@@ -244,6 +250,7 @@ export async function GET(req: NextRequest) {
         manual_fields:           m.manual_fields ?? null,
         updated_by_email:        m.updated_by_email ?? null,
         updated_by_name:         m.updated_by_name ?? null,
+        resolved_but_still_overdue_since: m.resolved_but_still_overdue_since ?? null,
       });
     }
   }

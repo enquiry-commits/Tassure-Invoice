@@ -33,6 +33,7 @@ type LateRow = {
   manual_fields: Record<string, boolean> | null;
   updated_by_email: string | null;
   updated_by_name: string | null;
+  resolved_but_still_overdue_since: string | null;
 };
 
 const REMARKS_OPTIONS = [
@@ -153,6 +154,23 @@ function RemarksBadge({ remarks }: { remarks: string | null }) {
     <span style={{ display:'inline-block', fontSize:11, fontWeight:700,
       padding:'2px 7px', borderRadius:4, background:'#fff', color:col, border:'1px solid #dbe3ec' }}>
       {remarks}
+    </span>
+  );
+}
+
+// Vincent, 2026-08-24: a company staff Resolved is trusted forever by the
+// sync (remarks stays frozen) — this shows up when the sync's own quiet
+// re-check found it's STILL genuinely overdue per fresh TeamWork data
+// (see resolved_but_still_overdue_since), so a wrongly-Resolved row like
+// CO-OPERATE ASSOCIATES doesn't just silently sit there unnoticed.
+function StillOverdueWarning({ since }: { since: string | null }) {
+  if (!since) return null;
+  return (
+    <span title={`Resolved, but still appears overdue as of ${since} — please verify (Recall if it genuinely isn't resolved)`}
+      style={{ display:'inline-flex', alignItems:'center', gap:3, fontSize:9, fontWeight:700,
+        padding:'1px 5px', borderRadius:4, background:'#fff7ed', color:'#c2410c', border:'1px solid #fed7aa',
+        whiteSpace:'nowrap', cursor:'help', flexShrink:0 }}>
+      <AlertTriangle size={9} />verify
     </span>
   );
 }
@@ -322,7 +340,10 @@ export default function LateFilingPage() {
     const res = await fetch('/api/late-filing', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ uen: row.uen, company_name: row.company_name, remarks: null }),
+      // Also clear resolved_but_still_overdue_since — the row is no longer
+      // "Resolved" at all after this, so a stale verify badge left over
+      // from before would be a confusing, orphaned signal.
+      body: JSON.stringify({ uen: row.uen, company_name: row.company_name, remarks: null, resolved_but_still_overdue_since: null }),
     });
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
@@ -607,9 +628,10 @@ export default function LateFilingPage() {
                       </span>
                     </td>
                     <td>
-                      <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:5, flexWrap:'wrap' }}>
                         {isAutoFilled(row, 'remarks', row.remarks) && <AutoFillDot />}
                         <RemarksBadge remarks={row.remarks} />
+                        <StillOverdueWarning since={row.resolved_but_still_overdue_since} />
                       </span>
                     </td>
                     <td style={{ whiteSpace:'nowrap' }} onClick={e => e.stopPropagation()}>
