@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { AlertTriangle, Plus, Check, X, RefreshCw, Zap, Calendar, Building2, Clock, ChevronRight, Trash2 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { fmtDate as fmtDateStr, toDisplayDate, toIsoDateValue } from '@/lib/date';
 
@@ -306,9 +307,15 @@ export default function LateFilingPage() {
     load();
   }
 
-  async function removeRow(row: LateRow) {
+  const [pendingDelete, setPendingDelete] = useState<LateRow | null>(null);
+  const handleDelete = useCallback((row: LateRow) => {
     if (!row.uen) { alert('This record has no UEN on file — cannot remove it.'); return; }
-    if (!confirm(`Permanently remove ${row.company_name} from Late Filing? This can't be undone.`)) return;
+    setPendingDelete(row);
+  }, []);
+  const confirmDelete = useCallback(async () => {
+    const row = pendingDelete;
+    if (!row) return;
+    setPendingDelete(null);
     const res = await fetch('/api/late-filing', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -320,7 +327,7 @@ export default function LateFilingPage() {
       return;
     }
     load();
-  }
+  }, [pendingDelete, load]);
 
   function dateField(key: keyof EditState, label: string) {
     return (
@@ -591,7 +598,7 @@ export default function LateFilingPage() {
                               title={isResolved ? 'Already marked resolved — click to re-confirm' : 'Mark as resolved and retain this record'}>
                               <Check size={12} />
                             </button>
-                            <button onClick={()=>removeRow(row)}
+                            <button onClick={()=>handleDelete(row)}
                               className="system-list-action"
                               style={{ color: '#b91c1c' }}
                               title="Permanently remove this record">
@@ -647,6 +654,14 @@ export default function LateFilingPage() {
           <span style={{ color:'#dc2626', fontWeight:700, fontSize:11 }}>OVERDUE</span> = Next AGM due date has passed
         </div>
       </div>
+
+      {pendingDelete && (
+        <ConfirmDeleteModal
+          label={pendingDelete.company_name}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={confirmDelete}
+        />
+      )}
     </div>
   );
 }
