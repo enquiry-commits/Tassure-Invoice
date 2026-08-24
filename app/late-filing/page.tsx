@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { AlertTriangle, Plus, Check, X, RefreshCw, Zap, Calendar, Building2, Clock, ChevronRight, Trash2 } from 'lucide-react';
+import { AlertTriangle, Plus, Check, X, RefreshCw, Zap, Calendar, Building2, Clock, ChevronRight, Trash2, Undo2 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
@@ -309,6 +309,29 @@ export default function LateFilingPage() {
     load();
   }
 
+  // Vincent, 2026-08-24: undo a wrong/accidental Resolve — clears remarks
+  // entirely (not just stripping the "Resolved:" label) so manual_fields.
+  // remarks gets un-protected too (see nextManualFields: clearing a field
+  // to null/'' deletes its manual flag), letting the automated sync freely
+  // recompute fresh "AUTO: ..." text again on its next run. categorize()
+  // already falls back to deriving overdue status straight from
+  // next_agm_due_date when remarks is empty, so the row lands back under
+  // the correct category (e.g. Seriously Overdue) immediately, not just
+  // after that next sync run.
+  async function recall(row: LateRow) {
+    const res = await fetch('/api/late-filing', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uen: row.uen, company_name: row.company_name, remarks: null }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      alert(json.error ?? 'Unable to recall this record.');
+      return;
+    }
+    load();
+  }
+
   const [pendingDelete, setPendingDelete] = useState<LateRow | null>(null);
   const handleDelete = useCallback((row: LateRow) => {
     if (!row.uen) { alert('This record has no UEN on file — cannot remove it.'); return; }
@@ -602,6 +625,14 @@ export default function LateFilingPage() {
                               title={(isResolved ? 'Already marked resolved — click to re-confirm' : 'Mark as resolved and retain this record') + whoSuffix}>
                               <Check size={12} />
                             </button>
+                            {isResolved && (
+                              <button onClick={()=>recall(row)}
+                                className="system-list-action"
+                                style={{ color: '#b45309' }}
+                                title="Recall back to Total Late Filers — clears the Resolved note">
+                                <Undo2 size={12} />
+                              </button>
+                            )}
                             <button onClick={()=>handleDelete(row)}
                               className="system-list-action"
                               style={{ color: '#b91c1c' }}
