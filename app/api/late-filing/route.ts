@@ -60,9 +60,20 @@ export async function GET(req: NextRequest) {
   const thisYear = thisYearSGT();
 
   // 1. All ar_reminder records — group by entity_name
+  // Vincent, 2026-08-24: this never respected status='Excluded' — every
+  // other query touching ar_reminder in this app does (AR Reminder's own
+  // GET, and this sync's own arRows query), so a row explicitly excluded
+  // there (staff-set, permanent — not a deletable late_filing_companies
+  // side-note) still got freshly re-detected here regardless. Confirmed
+  // live: ADVANCE BRIGHT GLOBAL and FULLRICH INTERNATIONAL — both fully
+  // absent from `companies` (likely genuinely deregistered), so
+  // inactiveNames below can never catch them either — reappeared under
+  // Total the moment their late_filing_companies "Resolved" row (the only
+  // thing suppressing them) got deleted.
   const { data: arRows } = await sb
     .from('ar_reminder')
     .select('entity_name, fye_month, fye_year, filling_date, agm_held_date, date_of_agm, prepared_date, due_date')
+    .or('status.is.null,status.neq.Excluded')
     .order('fye_year', { ascending: false });
 
   // 2. Companies master (for UEN + Strike Off status)
