@@ -618,9 +618,10 @@ const DPO_OPTIONS: SelectOption[] = [
 ];
 
 const XBRL_OPTIONS: SelectOption[] = [
-  { label: 'Date', ...C.green, type: 'date' },
-  { label: 'NO',   ...C.red   },
-  { label: 'FULL', ...C.green },
+  { label: 'Date',       ...C.green, type: 'date' },
+  { label: 'NO',         ...C.red   },
+  { label: 'SIMPLIFIED', ...C.amber },
+  { label: 'FULL',       ...C.green },
 ];
 
 // SEC/ACC/TAX PIC dropdowns (Vincent, 2026-08-17) — every option uses the
