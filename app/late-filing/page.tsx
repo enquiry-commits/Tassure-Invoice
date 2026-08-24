@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { AlertTriangle, Plus, Check, X, RefreshCw, Zap, Calendar, Building2, Clock, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Plus, Check, X, RefreshCw, Zap, Calendar, Building2, Clock, ChevronRight, Trash2 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { fmtDate as fmtDateStr, toDisplayDate, toIsoDateValue } from '@/lib/date';
@@ -306,6 +306,22 @@ export default function LateFilingPage() {
     load();
   }
 
+  async function removeRow(row: LateRow) {
+    if (!row.uen) { alert('This record has no UEN on file — cannot remove it.'); return; }
+    if (!confirm(`Permanently remove ${row.company_name} from Late Filing? This can't be undone.`)) return;
+    const res = await fetch('/api/late-filing', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uen: row.uen }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      alert(json.error ?? 'Unable to remove this record.');
+      return;
+    }
+    load();
+  }
+
   function dateField(key: keyof EditState, label: string) {
     return (
       <DateField label={label} value={editForm[key] as string | null | undefined}
@@ -568,12 +584,20 @@ export default function LateFilingPage() {
                       {(() => {
                         const isResolved = catOf.get(row.id) === 'resolved';
                         return (
-                          <button onClick={()=>resolve(row)}
-                            className="system-list-action"
-                            style={isResolved ? { color: '#15803d', background: '#f0fdf4' } : undefined}
-                            title={isResolved ? 'Already marked resolved — click to re-confirm' : 'Mark as resolved and retain this record'}>
-                            <Check size={12} />
-                          </button>
+                          <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
+                            <button onClick={()=>resolve(row)}
+                              className="system-list-action"
+                              style={isResolved ? { color: '#15803d', background: '#f0fdf4' } : undefined}
+                              title={isResolved ? 'Already marked resolved — click to re-confirm' : 'Mark as resolved and retain this record'}>
+                              <Check size={12} />
+                            </button>
+                            <button onClick={()=>removeRow(row)}
+                              className="system-list-action"
+                              style={{ color: '#b91c1c' }}
+                              title="Permanently remove this record">
+                              <Trash2 size={12} />
+                            </button>
+                          </span>
                         );
                       })()}
                     </td>
