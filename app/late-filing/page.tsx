@@ -31,6 +31,8 @@ type LateRow = {
   source: 'auto' | 'manual';
   updated_at: string | null;
   manual_fields: Record<string, boolean> | null;
+  updated_by_email: string | null;
+  updated_by_name: string | null;
 };
 
 const REMARKS_OPTIONS = [
@@ -590,12 +592,14 @@ export default function LateFilingPage() {
                     <td style={{ whiteSpace:'nowrap' }} onClick={e => e.stopPropagation()}>
                       {(() => {
                         const isResolved = catOf.get(row.id) === 'resolved';
+                        const who = row.updated_by_name ?? row.updated_by_email;
+                        const whoSuffix = who ? ` — last saved by ${who}${row.updated_at ? ` on ${fmtDateStr(row.updated_at.slice(0,10))}` : ''}` : '';
                         return (
                           <span style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
                             <button onClick={()=>resolve(row)}
                               className="system-list-action"
                               style={isResolved ? { color: '#15803d', background: '#f0fdf4' } : undefined}
-                              title={isResolved ? 'Already marked resolved — click to re-confirm' : 'Mark as resolved and retain this record'}>
+                              title={(isResolved ? 'Already marked resolved — click to re-confirm' : 'Mark as resolved and retain this record') + whoSuffix}>
                               <Check size={12} />
                             </button>
                             <button onClick={()=>handleDelete(row)}

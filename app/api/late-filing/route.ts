@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { todaySGT, thisYearSGT } from '@/lib/date';
 import { normalize } from '@/lib/company-name';
+import { getRequestAccount } from '@/lib/request-account';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const MONTH_IDX: Record<string, number> = {
@@ -156,6 +157,11 @@ export async function GET(req: NextRequest) {
     // with a real late_filing_companies row; a pure ar_reminder-derived
     // 'auto' row (no manual row at all) is never manual for any field.
     manual_fields: Record<string, boolean> | null;
+    // Vincent, 2026-08-24: who last saved this row (e.g. clicked Resolve) —
+    // scripts/add-late-filing-updated-by.sql. Only ever set on rows with a
+    // real late_filing_companies row, same as manual_fields above.
+    updated_by_email: string | null;
+    updated_by_name: string | null;
   };
 
   const detected: LateRow[] = [];
@@ -209,6 +215,8 @@ export async function GET(req: NextRequest) {
       source:                  manual ? 'manual' : 'auto',
       updated_at:              manual?.updated_at ?? null,
       manual_fields:           manual?.manual_fields ?? null,
+      updated_by_email:        manual?.updated_by_email ?? null,
+      updated_by_name:         manual?.updated_by_name ?? null,
     });
   }
 
@@ -234,6 +242,8 @@ export async function GET(req: NextRequest) {
         source:                  'manual',
         updated_at:              m.updated_at ?? null,
         manual_fields:           m.manual_fields ?? null,
+        updated_by_email:        m.updated_by_email ?? null,
+        updated_by_name:         m.updated_by_name ?? null,
       });
     }
   }
@@ -269,11 +279,12 @@ export async function GET(req: NextRequest) {
 
 // ── POST — add manual entry ───────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  const account = await getRequestAccount(req);
   const body = await req.json();
   const sb = createAdminClient();
   const { data, error } = await sb
     .from('late_filing_companies')
-    .insert({ ...body, updated_at: new Date().toISOString() })
+    .insert({ ...body, updated_at: new Date().toISOString(), updated_by_email: account?.email ?? null, updated_by_name: account?.name ?? null })
     .select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ company: data });
@@ -281,12 +292,17 @@ export async function POST(req: NextRequest) {
 
 // ── PATCH — update manual override (remarks, dates, etc.) ────────────────────
 export async function PATCH(req: NextRequest) {
+  // Vincent, 2026-08-24: this table had no record of who made a change —
+  // "Resolved: AUTO: Overdue 1847 days" showed up with no way to tell who
+  // clicked Resolve or when, unlike ar_reminder which already tracks this.
+  const account = await getRequestAccount(req);
   const { uen, company_name, previousUpdatedAt, ...fields } = await req.json();
   if (!uen && !company_name) return NextResponse.json({ error: 'uen or company_name required' }, { status: 400 });
 
   const sb = createAdminClient();
 
   const updated_at = new Date().toISOString();
+  const updatedBy = { updated_by_email: account?.email ?? null, updated_by_name: account?.name ?? null };
   let error;
   let conflict = false;
 
@@ -303,13 +319,13 @@ export async function PATCH(req: NextRequest) {
       .select('id, updated_at, financial_year_end, last_agm_date, last_annual_return_date, next_agm_due_date, remarks, manual_fields')
       .eq('uen', uen).maybeSingle();
     if (!existingByUen) {
-      ({ error } = await sb.from('late_filing_companies').insert({ uen, company_name, ...fields, updated_at, manual_fields: nextManualFields(null, null, fields) ?? {} }));
+      ({ error } = await sb.from('late_filing_companies').insert({ uen, company_name, ...fields, updated_at, ...updatedBy, manual_fields: nextManualFields(null, null, fields) ?? {} }));
     } else if (previousUpdatedAt && existingByUen.updated_at !== previousUpdatedAt) {
       conflict = true;
     } else {
       const manualFields = nextManualFields(existingByUen.manual_fields, existingByUen, fields);
       ({ error } = await sb.from('late_filing_companies').update({
-        company_name, ...fields, updated_at, ...(manualFields ? { manual_fields: manualFields } : {}),
+        company_name, ...fields, updated_at, ...updatedBy, ...(manualFields ? { manual_fields: manualFields } : {}),
       }).eq('id', existingByUen.id));
     }
   } else {
@@ -322,13 +338,13 @@ export async function PATCH(req: NextRequest) {
     if (lookupError) return NextResponse.json({ error: lookupError.message }, { status: 500 });
 
     if (!existing) {
-      ({ error } = await sb.from('late_filing_companies').insert({ company_name, ...fields, updated_at, manual_fields: nextManualFields(null, null, fields) ?? {} }));
+      ({ error } = await sb.from('late_filing_companies').insert({ company_name, ...fields, updated_at, ...updatedBy, manual_fields: nextManualFields(null, null, fields) ?? {} }));
     } else if (previousUpdatedAt && existing.updated_at !== previousUpdatedAt) {
       conflict = true;
     } else {
       const manualFields = nextManualFields(existing.manual_fields, existing, fields);
       ({ error } = await sb.from('late_filing_companies').update({
-        company_name, ...fields, updated_at, ...(manualFields ? { manual_fields: manualFields } : {}),
+        company_name, ...fields, updated_at, ...updatedBy, ...(manualFields ? { manual_fields: manualFields } : {}),
       }).eq('id', existing.id));
     }
   }
