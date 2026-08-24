@@ -179,6 +179,12 @@ export async function GET(req: NextRequest) {
 
     const uen = uenMap.get(entityName.toLowerCase()) ?? '';
     const manual = (uen ? manualByUen.get(uen) : undefined) ?? manualByName.get(normalize(entityName));
+    // Vincent, 2026-08-20: a company staff has already tagged as being
+    // struck off (any of REMARKS_OPTIONS' "STRIKE OFF" variants — ACRA is
+    // striking it off, with or without a client objection) has nothing
+    // left to chase an AR filing for — same reasoning as inactiveNames
+    // above, just sourced from the manual remark instead of tw_status.
+    if (/STRIKE OFF/i.test(manual?.remarks ?? '')) continue;
 
     // Last AR/AGM dates from last completed year
     const lastArDate  = lastCompleted?.filling_date  ?? null;
@@ -209,6 +215,7 @@ export async function GET(req: NextRequest) {
   // 6. Also include manually-added entries not found in ar_reminder
   for (const m of manualRows ?? []) {
     if (inactiveNames.has(m.company_name.toLowerCase())) continue;
+    if (/STRIKE OFF/i.test(m.remarks ?? '')) continue;
     const alreadyIn = detected.some(d =>
       d.uen === m.uen || d.company_name.toLowerCase() === m.company_name.toLowerCase()
     );
