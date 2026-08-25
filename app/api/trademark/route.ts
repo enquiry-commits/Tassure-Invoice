@@ -33,7 +33,6 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { category, company_name } = body;
   if (!CATEGORIES.has(category)) return NextResponse.json({ error: 'Invalid category' }, { status: 400 });
-  if (!company_name) return NextResponse.json({ error: 'company_name required' }, { status: 400 });
 
   const supabase = createAdminClient();
   const account = await getRequestAccount(req);
@@ -47,12 +46,18 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   const nextOrder = (maxRow?.row_order ?? 0) + 1;
 
+  // Nothing is mandatory here (Vincent: staff should be able to add a blank
+  // row and fill it in later) — company_name only needs a value because the
+  // column itself is NOT NULL, so an empty string stands in for "not typed
+  // yet" rather than blocking the add outright.
   const record: Record<string, unknown> = {
     category, row_order: nextOrder,
+    company_name: (company_name ?? '').toString(),
     updated_by_email: account?.email ?? null, updated_by_name: account?.name ?? null,
   };
   for (const field of EDITABLE_FIELDS) {
-    if (body[field] !== undefined) record[field] = body[field] || null;
+    if (field === 'company_name' || body[field] === undefined) continue;
+    record[field] = field === 'sn' ? (body[field] ? parseInt(String(body[field]), 10) || null : null) : (body[field] || null);
   }
 
   const { data, error } = await supabase.from('trademark_records').insert(record).select().single();

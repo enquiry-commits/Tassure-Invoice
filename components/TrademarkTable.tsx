@@ -54,7 +54,7 @@ export default function TrademarkTable({ category, title }: { category: Trademar
   const [editValue, setEditValue] = useState('');
   const [pendingDelete, setPendingDelete] = useState<TrademarkRow | null>(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState('');
+  const [newRow, setNewRow] = useState<Partial<Record<ColKey, string>>>({});
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
@@ -68,6 +68,13 @@ export default function TrademarkTable({ category, title }: { category: Trademar
 
   const columns = CATEGORY_COLUMNS[category];
   const today = todaySGT();
+  // Anything expiring within a year (this also naturally covers ones already
+  // past due — they're just "less than a year" from further in the past).
+  const oneYearOut = useMemo(() => {
+    const d = new Date(`${today}T00:00:00Z`);
+    d.setUTCFullYear(d.getUTCFullYear() + 1);
+    return d.toISOString().slice(0, 10);
+  }, [today]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return rows;
@@ -106,18 +113,23 @@ export default function TrademarkTable({ category, title }: { category: Trademar
     }
   };
 
+  // Every field is optional — Vincent doesn't want anything forced here, so
+  // this posts whatever's filled in (even nothing but S/N, or nothing at
+  // all) rather than requiring company_name up front.
   const addRow = async () => {
-    if (!newName.trim() || saving) return;
+    if (saving) return;
     setSaving(true);
     const res = await fetch('/api/trademark', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category, company_name: newName.trim() }),
+      body: JSON.stringify({ category, ...newRow }),
     });
     setSaving(false);
-    if (res.ok) { setNewName(''); setShowAdd(false); load(); }
+    if (res.ok) { setNewRow({}); setShowAdd(false); load(); }
     else { const json = await res.json().catch(() => ({})); alert(json.error ?? 'Failed to add.'); }
   };
+
+  const closeAdd = () => { setShowAdd(false); setNewRow({}); };
 
   const confirmDelete = async () => {
     if (!pendingDelete) return;
@@ -150,6 +162,12 @@ export default function TrademarkTable({ category, title }: { category: Trademar
         >
           <Plus size={14} />Add Record
         </button>
+        {category === 'master' && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#a16207' }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: '#fef08a', border: '1px solid #fde047', flexShrink: 0 }} />
+            expiring within 1 year
+          </span>
+        )}
         <span className="text-sm text-slate-400 ml-auto">{filtered.length} shown{search.trim() ? ` of ${rows.length}` : ''}</span>
       </div>
 
@@ -167,8 +185,10 @@ export default function TrademarkTable({ category, title }: { category: Trademar
               <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>Loading…</div>
             ) : filtered.length === 0 ? (
               <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No records.</div>
-            ) : filtered.map(row => (
-              <div key={row.id} style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', padding: '9px 14px', gap: 8, borderTop: '1px solid #f1f5f9' }}>
+            ) : filtered.map(row => {
+              const expiringSoon = category === 'master' && !!row.mark_expired_date && row.mark_expired_date < oneYearOut;
+              return (
+              <div key={row.id} style={{ display: 'grid', gridTemplateColumns: gridTemplate, alignItems: 'center', padding: '9px 14px', gap: 8, borderTop: '1px solid #f1f5f9', background: expiringSoon ? '#fef9c3' : undefined }}>
                 {columns.map(c => {
                   const def = COLUMN_DEFS[c];
                   const isEditing = editing?.id === row.id && editing.field === c;
@@ -210,28 +230,39 @@ export default function TrademarkTable({ category, title }: { category: Trademar
                   <Trash2 size={14} />
                 </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
 
       {showAdd && (
-        <div onClick={() => setShowAdd(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+        <div onClick={closeAdd} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
             <div style={{ background: ACCENT, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add Record — {title}</div>
-              <button onClick={() => setShowAdd(false)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+              <button onClick={closeAdd} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <label style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Company Name *</label>
-              <input value={newName} onChange={e => setNewName(e.target.value)} autoFocus
-                onKeyDown={e => { if (e.key === 'Enter') addRow(); }}
-                placeholder="Company name" style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none' }} />
-              <div style={{ fontSize: 11, color: '#94a3b8' }}>Other fields can be filled in after adding — click any cell in the table to edit it.</div>
+              {columns.map(c => (
+                <div key={c}>
+                  <label style={{ fontSize: 11, color: '#64748b', fontWeight: 600, display: 'block', marginBottom: 3 }}>{COLUMN_DEFS[c].label}</label>
+                  <input
+                    type={COLUMN_DEFS[c].type}
+                    value={newRow[c] ?? ''}
+                    autoFocus={c === columns[0]}
+                    onChange={e => setNewRow(prev => ({ ...prev, [c]: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') addRow(); }}
+                    placeholder={COLUMN_DEFS[c].label}
+                    style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none' }}
+                  />
+                </div>
+              ))}
+              <div style={{ fontSize: 11, color: '#94a3b8' }}>Nothing here is required — fill in what you have now, leave the rest blank and fill it in later by clicking the cell in the table.</div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-                <button onClick={() => setShowAdd(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-                <button onClick={addRow} disabled={!newName.trim() || saving}
-                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: ACCENT, color: '#fff', fontWeight: 700, fontSize: 13, cursor: newName.trim() ? 'pointer' : 'not-allowed', opacity: newName.trim() ? 1 : 0.5 }}>
+                <button onClick={closeAdd} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={addRow} disabled={saving}
+                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: ACCENT, color: '#fff', fontWeight: 700, fontSize: 13, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
                   {saving ? 'Adding…' : 'Add'}
                 </button>
               </div>
