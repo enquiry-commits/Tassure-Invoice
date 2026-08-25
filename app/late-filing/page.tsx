@@ -540,7 +540,16 @@ export default function LateFilingPage() {
           effect below binds to a real, stable DOM node on first render,
           same as components/MasterListTable.tsx. Loading/empty states
           render as a single spanning row inside <tbody> instead. */}
-        <div ref={outerRef} className="system-list-shell" style={{ maxHeight:'calc(100vh - 260px)', overflowX:'hidden', overflowY:'auto' }}>
+        {/* The rounded-corner clip has to live on a wrapper that never
+            scrolls itself — a position:sticky header cell inside the SAME
+            element that also has overflow:hidden+border-radius (as this
+            div was before) doesn't reliably get clipped by that radius in
+            Chrome/Edge, since the sticky cell paints in its own layer and
+            can escape the corner mask, leaving a square notch cut into the
+            rounded corner. Splitting scroll (inner) from clip (outer) is
+            the same fix already used by companies/page.tsx's shell. */}
+        <div className="system-list-shell">
+        <div ref={outerRef} style={{ maxHeight:'calc(100vh - 260px)', overflowX:'hidden', overflowY:'auto' }}>
           <table className="system-list-table" style={{ minWidth: 1320 }}>
             <colgroup>
               <col style={{ width: 32 }} />
@@ -670,6 +679,7 @@ export default function LateFilingPage() {
               )}
             </tbody>
           </table>
+        </div>
         </div>
 
       {/* Mirrored scrollbar — stays reachable at the bottom of the viewport */}
