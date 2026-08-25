@@ -1961,30 +1961,42 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     const value = invoiceNumbers[company];
     const suggested = suggestedNumbers[company];
     const manuallyChanged = !!value && !!suggested && value !== suggested;
+    // TAC gets the same amber chrome as the rest of its section (badge/PIC
+    // pill/table header) instead of the neutral blue-grey shared with TAB —
+    // that neutral box was the one piece of "still grey" chrome left sitting
+    // inside an otherwise amber-themed block.
+    const isTac = company === 'TAC';
+    const bg = manuallyChanged ? '#fffbeb' : isTac ? 'var(--status-warning-tint)' : '#f8fafc';
+    const border = manuallyChanged ? '#fcd34d' : isTac ? '#fed7aa' : '#dbe5ee';
+    const numberColor = manuallyChanged ? '#92400e' : isTac ? '#9a3412' : '#1e3a5f';
     return (
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 9px', borderRadius: 8, background: manuallyChanged ? '#fffbeb' : '#f8fafc', border: `1px solid ${manuallyChanged ? '#fcd34d' : '#dbe5ee'}` }}>
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 9px', borderRadius: 8, background: bg, border: `1px solid ${border}` }}>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-          <span style={{ fontSize: 8, fontWeight: 800, color: manuallyChanged ? 'var(--status-warning)' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
-          <span style={{ fontSize: 8.5, color: '#94a3b8' }}>{numberLoading ? 'Checking live…' : 'QB confirms when created'}</span>
+          <span style={{ fontSize: 8, fontWeight: 800, color: manuallyChanged ? 'var(--status-warning)' : isTac ? '#9a3412' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
+          <span style={{ fontSize: 8.5, color: isTac ? '#c2703d' : '#94a3b8' }}>{numberLoading ? 'Checking live…' : 'QB confirms when created'}</span>
         </div>
         <input
           value={value}
           onChange={event => { setInvoiceNumbers(current => ({ ...current, [company]: event.target.value.trim() })); setNumberWarning(''); }}
           placeholder={numberLoading ? 'Loading…' : 'Unavailable'}
           aria-label={`${company} invoice number`}
-          style={{ width: 92, border: 0, borderBottom: `1px solid ${manuallyChanged ? '#f59e0b' : '#94a3b8'}`, outline: 'none', background: 'transparent', color: manuallyChanged ? '#92400e' : '#1e3a5f', fontFamily: 'monospace', fontSize: 11.5, fontWeight: 800, padding: '2px 1px', textAlign: 'center' }}
+          style={{ width: 92, border: 0, borderBottom: `1px solid ${manuallyChanged ? '#f59e0b' : isTac ? '#fdba74' : '#94a3b8'}`, outline: 'none', background: 'transparent', color: numberColor, fontFamily: 'monospace', fontSize: 11.5, fontWeight: 800, padding: '2px 1px', textAlign: 'center' }}
         />
-        <button type="button" onClick={() => setNumberRefreshKey(key => key + 1)} title="Refresh from QuickBooks" style={{ border: 0, background: 'transparent', color: '#64748b', padding: 2, cursor: 'pointer', display: 'flex' }}>
+        <button type="button" onClick={() => setNumberRefreshKey(key => key + 1)} title="Refresh from QuickBooks" style={{ border: 0, background: 'transparent', color: isTac ? '#c2703d' : '#64748b', padding: 2, cursor: 'pointer', display: 'flex' }}>
           <RefreshCw size={12} style={{ animation: numberLoading ? 'spin 1s linear infinite' : 'none' }} />
         </button>
       </div>
     );
   };
 
-  // Shared table renderer for both the TAB and TAC sections.
-  const renderTable = (rows: { l: EditableLine; i: number }[], emptyMsg: string) => (
+  // Shared table renderer for both the TAB and TAC sections. TAC passes
+  // accent='amber' so its header strip matches the amber chrome the rest of
+  // that section already uses (badge/PIC pill/provenance note/footer bar) —
+  // previously this stayed flat grey regardless of company, which is what
+  // read as uncoordinated sitting inside an otherwise-amber TAC block.
+  const renderTable = (rows: { l: EditableLine; i: number }[], emptyMsg: string, accent?: 'amber') => (
     <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 110px 44px 90px 100px 26px', gap: 0, background: '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 110px 44px 90px 100px 26px', gap: 0, background: accent === 'amber' ? 'var(--status-warning-tint)' : '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: accent === 'amber' ? '#9a3412' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
         <div></div><div>Service</div><div>Description</div>
         <div style={{ textAlign: 'center', padding: '0 8px' }}>Status</div>
         <div style={{ textAlign: 'center', padding: '0 8px' }}>Qty</div>
@@ -2197,7 +2209,7 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
               <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>Loading live invoice lines from QuickBooks…</div>
             ) : editLoadError.TAC ? (
               <div style={{ padding: 12, borderRadius: 8, border: '1px solid #fecaca', background: 'var(--status-danger-tint)', color: 'var(--status-danger)', fontSize: 12, fontWeight: 600 }}>{editLoadError.TAC}</div>
-            ) : renderTable(tacRows, 'No Nominee Director line.')}
+            ) : renderTable(tacRows, 'No Nominee Director line.', 'amber')}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: 'var(--status-warning-tint)' }}>
               <Plus size={13} style={{ color: '#9a3412' }} />
               <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add ND line</span>
