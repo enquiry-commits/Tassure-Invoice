@@ -40,9 +40,43 @@ function wordsOf(normalized: string): Set<string> {
   return s;
 }
 
+function coreScore(na: string, nb: string): number {
+  if (!na || !nb) return 0;
+  if (na === nb) return 100;
+  const wa = wordsOf(na), wb = wordsOf(nb);
+  if (!wa.size || !wb.size) return 0;
+  if (na.includes(nb) || nb.includes(na)) {
+    const shorter = Math.min(wa.size, wb.size);
+    const longer = Math.max(wa.size, wb.size);
+    if (shorter / longer >= 0.5) return 85;
+  }
+  let common = 0;
+  for (const w of wa) if (wb.has(w)) common++;
+  return Math.round((common / Math.max(wa.size, wb.size)) * 100);
+}
+
+// A freshly renamed company's `(F.K.A. Old Name)` clause is stripped by
+// normalize() (so the current name matches cleanly on its own) — but that
+// throws away the one piece of information that lets a rename-in-progress
+// still find its OWN prior invoices, which QB keeps filed under whatever
+// name was current when they were raised. A full rebrand (e.g. "Huakai
+// Technology" -> "Huako Portrait") shares zero words with its old name, so
+// without this the match silently returns 0 and billing thinks the company
+// has no history at all. Confirmed live: HUAKO PORTRAIT PTE. LTD. (UEN
+// 202416638M) — real Secretary/Address/AR invoices sit under "Huakai
+// Technology Pte. Ltd." in quickbooks_invoice_items, invisible to
+// getPriorInvoice()/getAnnualFeeRecord() until this alias was added.
+function extractFkaAlias(name: string): string | null {
+  const m = (name ?? '').match(/\(f\.?k\.?a\.?\s*([^)]+)\)/i);
+  return m ? m[1].trim() : null;
+}
+
 /**
  * 100 = exact (normalised); 85 = one contains the other AND the shorter name
  * is at least half the longer one's word count; else word overlap × 100.
+ * Also tries each side's `(F.K.A. …)` alias (see extractFkaAlias) and keeps
+ * the best score across all combinations, so a rename-in-progress matches
+ * either its current or its pre-rename name.
  *
  * The length-ratio guard on the containment bonus matters because QB has no
  * UEN to disambiguate: without it, a short/generic real company name (e.g.
@@ -55,17 +89,14 @@ function wordsOf(normalized: string): Set<string> {
  */
 export function matchScore(a: string, b: string): number {
   const na = normalize(a), nb = normalize(b);
-  if (na === nb) return 100;
-  const wa = wordsOf(na), wb = wordsOf(nb);
-  if (!wa.size || !wb.size) return 0;
-  if (na.includes(nb) || nb.includes(na)) {
-    const shorter = Math.min(wa.size, wb.size);
-    const longer = Math.max(wa.size, wb.size);
-    if (shorter / longer >= 0.5) return 85;
-  }
-  let common = 0;
-  for (const w of wa) if (wb.has(w)) common++;
-  return Math.round((common / Math.max(wa.size, wb.size)) * 100);
+  let best = coreScore(na, nb);
+  if (best === 100) return best;
+  const aliasA = extractFkaAlias(a);
+  const aliasB = extractFkaAlias(b);
+  if (aliasA) best = Math.max(best, coreScore(normalize(aliasA), nb));
+  if (aliasB) best = Math.max(best, coreScore(na, normalize(aliasB)));
+  if (aliasA && aliasB) best = Math.max(best, coreScore(normalize(aliasA), normalize(aliasB)));
+  return best;
 }
 
 /**
