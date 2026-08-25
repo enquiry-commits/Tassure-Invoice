@@ -21,6 +21,8 @@ const LINKS: { group: string; items: { label: string; href: string }[] }[] = [
     { label: 'Strike Off',          href: '/master-list/strike-off' },
     { label: 'Terminated Services', href: '/master-list/terminated' },
     { label: 'Change Co Name',      href: '/master-list/name-change' },
+    { label: 'Trademark: Master Records', href: '/master-list/trademark/master-records' },
+    { label: 'Trademark: In Progress',    href: '/master-list/trademark/in-progress' },
   ]},
   { group: 'Billing System', items: [
     { label: 'Nominee Directors', href: '/nominee-directors' },

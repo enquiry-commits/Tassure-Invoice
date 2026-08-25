@@ -34,6 +34,13 @@ const tree: Node[] = [
           { label: 'Change Co Name',      href: '/master-list/name-change' },
         ],
       },
+      {
+        id: 'trademark', label: 'Trademark',
+        children: [
+          { label: 'Master Records', href: '/master-list/trademark/master-records' },
+          { label: 'In Progress',    href: '/master-list/trademark/in-progress' },
+        ],
+      },
     ],
   },
   {
