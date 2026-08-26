@@ -15,7 +15,14 @@ async function getData() {
     .select('company_name, registration_no, company_type, pic, best_email, primary_contact')
     .eq('uses_address', true)
     .eq('is_active', true)
-    .order('company_name');
+    // Secondary key on id: two rows can share the same company_name (e.g.
+    // a genuine TeamWork-side duplicate — same UEN, two internal_id's, see
+    // GOLDEN BRIDGE MARTEC, 2026-08-27), and Postgres doesn't guarantee a
+    // stable relative order between tied sort keys across repeated queries
+    // — without this, which row lands in position 109 vs 110 (and thus
+    // which "No." each shows) could silently swap between page loads.
+    .order('company_name')
+    .order('id');
   return (data ?? []).map(c => ({
     companyName: c.company_name,
     registrationNo: c.registration_no ?? '',

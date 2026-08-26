@@ -41,7 +41,14 @@ export default function AddressServiceTable({ companies }: { companies: Row[] })
           </thead>
           <tbody>
             {pageItems.map((c, i) => (
-              <tr key={c.registrationNo || i} className="system-list-row border-b">
+              // registrationNo alone isn't guaranteed unique — a genuine
+              // TeamWork-side duplicate (two internal_id's, same UEN; see
+              // GOLDEN BRIDGE MARTEC, 2026-08-27) produces two rows sharing
+              // it, and a duplicate React key is exactly what made the
+              // company look like it was "jumping around" between renders
+              // (React can't stably tell the two <tr>s apart). Position is
+              // always unique within a page.
+              <tr key={`${c.registrationNo || 'row'}-${startIndex + i}`} className="system-list-row border-b">
                 <td className="system-list-number">{startIndex + i + 1}</td>
                 <td>
                   <span className="company-name-text truncate block" title={c.companyName}>{c.companyName}</span>
