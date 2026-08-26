@@ -55,7 +55,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.6.1"
+VERSION = "1.6.2"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -106,15 +106,6 @@ DRAFT_ID_PROP = (
     "http://schemas.microsoft.com/mapi/string/"
     "{5C43E92B-15C3-4EA1-A019-0432EEA178AD}/TassureDraftId/0x001F"
 )
-
-# Standard MAPI proptags (not Tassure-specific, unlike DRAFT_ID_PROP above) —
-# set directly in _assign_sender so the sender identity is written as a
-# plain SMTP-type entity, bypassing Outlook's automatic GAL/Exchange
-# resolution (see that function's own docstring for why that resolution
-# breaks sending for a same-org Microsoft 365 account).
-_PR_SENT_REPRESENTING_NAME = "http://schemas.microsoft.com/mapi/proptag/0x0042001F"
-_PR_SENT_REPRESENTING_ADDRTYPE = "http://schemas.microsoft.com/mapi/proptag/0x0064001F"
-_PR_SENT_REPRESENTING_EMAIL_ADDRESS = "http://schemas.microsoft.com/mapi/proptag/0x0065001F"
 
 
 def _report_sent(draft_id, sender_email):
@@ -342,41 +333,32 @@ def _is_classic_outlook_path(path: str | None) -> bool:
 
 def _assign_sender(outlook, mail, sender_email: str):
     """
-    Assign the exact Outlook account selected in the web workbench.
+    Assign the exact Outlook account selected in the web workbench —
+    SendUsingAccount only, same technique the legacy BULK.xlsm macro always
+    used (Session.Accounts, matched by DisplayName, .SendUsingAccount = acc,
+    nothing else).
 
-    Vincent, 2026-08-19: staff-observed proof (screenshot of the compose
-    window's From dropdown) that the account requested here wasn't what
-    actually showed — it always fell back to the profile's primary account.
-    Per Microsoft's own docs ("Create a Sendable Item for a Specific
-    Account Based on the Current Folder"): for a MailItem specifically,
-    SendUsingAccount alone is documented as the AppointmentItem pattern —
-    a MailItem needs its Sender property set to the account's own
-    AddressEntry, "otherwise the MailItem is created for the primary
-    account" (word for word what was observed).
+    History, so the next person doesn't re-add what this deliberately
+    removed: 2026-08-19 found SendUsingAccount alone displaying the
+    profile's primary account instead of the one requested, and tried
+    fixing it by also assigning .Sender to the account's own AddressEntry —
+    2026-08-20 confirmed live that this broke sending outright on the
+    Exchange/M365-backed accounts this tool actually targets ("Something
+    went wrong", From showing a raw LegacyExchangeDN string). The fix at
+    the time was writing the PR_SENT_REPRESENTING_* MAPI properties
+    directly as an explicit SMTP identity instead of touching .Sender.
 
-    Vincent, 2026-08-20: REMOVED the Sender assignment above — confirmed
-    live (real Outlook, real send attempt) that it breaks sending outright
-    on an Exchange/Microsoft 365-backed account ("Something went wrong",
-    the compose window's From field showing a raw LegacyExchangeDN string
-    instead of an address). account.CurrentUser.AddressEntry.Type is "EX"
-    for this kind of account — every business/M365 mailbox, i.e. exactly
-    the accounts this tool is used with — and assigning an EX-type
-    AddressEntry to .Sender embeds that unresolvable DN into the message.
-    Tried the documented alternative (Session.CreateRecipient(smtp)
-    .Resolve().AddressEntry) too — same EX type, same broken DN: any
-    lookup path that lets Outlook resolve the address against its own
-    directory (the GAL) lands on the same broken EX identity, because
-    finance@/contact@/every other Tassure account lives in the same
-    Microsoft 365 org.
-
-    Fixed for real by setting the PR_SENT_REPRESENTING_* MAPI properties
-    directly as an explicit SMTP-type identity, bypassing GAL resolution
-    entirely — confirmed live: From displays the plain address (no DN),
-    and it does not break sending. Both this and SendUsingAccount are
-    still needed: this affects only how the message identifies its
-    sender (the visible From, and this SMTP-type write happens to be
-    exactly what unblocked it), SendUsingAccount is what actually
-    controls which account transmits the message.
+    Vincent, 2026-08-26: pointed out the legacy macro never needed any of
+    that — it only ever set SendUsingAccount, on the very same kind of
+    account, and it worked. The missing piece was never the sender
+    identity itself: _open_one_draft now calls mail.Save() once, right
+    before Display(), which gives the item a real EntryID before Outlook's
+    Inspector ever renders it — see that function's own comment for why an
+    unsaved item doesn't reliably carry a COM-assigned account through to
+    what the UI (and the actual send) treat as bound. With Save() in place,
+    the PR_SENT_REPRESENTING_* write is no longer carrying any weight and
+    is one more thing that can silently disagree with reality — removed,
+    back to exactly the legacy macro's approach.
     """
     requested = (sender_email or "").strip().lower()
     if not requested:
@@ -388,12 +370,6 @@ def _assign_sender(outlook, mail, sender_email: str):
         if requested not in (smtp_address, display_name):
             continue
 
-        try:
-            mail.PropertyAccessor.SetProperty(_PR_SENT_REPRESENTING_NAME, account.SmtpAddress)
-            mail.PropertyAccessor.SetProperty(_PR_SENT_REPRESENTING_ADDRTYPE, "SMTP")
-            mail.PropertyAccessor.SetProperty(_PR_SENT_REPRESENTING_EMAIL_ADDRESS, account.SmtpAddress)
-        except Exception:  # noqa: BLE001 - best-effort; SendUsingAccount below still routes correctly
-            pass
         # SendUsingAccount is not exposed as a normal writable attribute in
         # every Outlook/pywin32 combination. DISPID 64209 is Outlook's
         # documented MailItem.SendUsingAccount property.
