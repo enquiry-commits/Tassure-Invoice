@@ -1,5 +1,10 @@
 // Browser client for the local Tassure Draft Helper. The helper is bound to
-// localhost and creates Outlook MailItems with .Display() only — never Send().
+// localhost. Two modes: openDraftsInOutlook (.Display() only — a human
+// reviews and sends manually in Outlook) and sendDraftsInOutlook (.Save()
+// then .Send() directly — used by the web app's own Outlook-style review
+// screen, where the human already reviewed and clicked Send there; the
+// synchronous HTTP response is the only "did it send" signal needed, no
+// separate detection step).
 import { invoicePdfFileName } from './invoice-filename';
 
 export const DRAFT_HELPER_URL = 'http://127.0.0.1:51820';
@@ -8,7 +13,7 @@ export const DRAFT_HELPER_URL = 'http://127.0.0.1:51820';
 // exe is built and copied to public/downloads/TassureDraftHelper.exe — this
 // is what lets the web app tell staff their locally-installed Helper is
 // stale instead of silently running old behaviour with no signal at all.
-export const LATEST_HELPER_VERSION = '1.6.2';
+export const LATEST_HELPER_VERSION = '1.7.0';
 
 export interface HelperHealth {
   ok: boolean;
@@ -62,6 +67,13 @@ export interface DraftLike {
   sender_email?: string | null;
   to_email: string | null;
   cc_email: string | null;
+  // Not backed by a database column anywhere today (email_drafts has no
+  // bcc_email) — purely a local, per-send value staff can optionally type
+  // into the Outlook-style review screen's Bcc row before sending, passed
+  // straight through to Draft Helper. openDraftsInOutlook never reads this
+  // (its /drafts/open payload builder maps named fields one by one, not an
+  // object spread, so adding this field here has zero effect on that path).
+  bcc_email?: string | null;
   subject: string;
   body: string;
   invoice_refs: DraftInvoiceRef[];
@@ -107,17 +119,28 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
   return btoa(binary);
 }
 
-async function fileToAttachment(file: File) {
-  return { fileName: file.name, base64: arrayBufferToBase64(await file.arrayBuffer()) };
+export interface PreparedAttachment {
+  fileName: string;
+  base64: string;
+  byteSize: number;
 }
 
-async function fetchAttachments(d: DraftLike): Promise<{ fileName: string; base64: string }[]> {
+async function fileToAttachment(file: File): Promise<PreparedAttachment> {
+  const buf = await file.arrayBuffer();
+  return { fileName: file.name, base64: arrayBufferToBase64(buf), byteSize: buf.byteLength };
+}
+
+// System attachments only — the invoice PDF(s) resolved live from
+// QuickBooks. Manual/additional attachments never need "preparing": a
+// File's size is already known instantly in the browser, nothing to fetch.
+async function fetchSystemAttachments(d: DraftLike): Promise<PreparedAttachment[]> {
   const downloadableRefs = (d.invoice_refs ?? []).filter(
     r => r.qbInvoiceId && (r.qbCompany === 'TAB' || r.qbCompany === 'TAC'),
   );
-  const systemAttachments = await Promise.all(downloadableRefs.map(async r => {
+  return Promise.all(downloadableRefs.map(async r => {
     const res = await fetch(`/api/quickbooks/invoice-pdf?company=${r.qbCompany}&id=${encodeURIComponent(r.qbInvoiceId!)}`);
     if (!res.ok) throw new Error(`Unable to download ${r.qbCompany} ${r.invoiceNo}.`);
+    const buf = await res.arrayBuffer();
     return {
       fileName: invoicePdfFileName(
         r.qbCompany as 'TAB' | 'TAC',
@@ -125,19 +148,18 @@ async function fetchAttachments(d: DraftLike): Promise<{ fileName: string; base6
         d.company_name,
         r.amount,
       ),
-      base64: arrayBufferToBase64(await res.arrayBuffer()),
+      base64: arrayBufferToBase64(buf),
+      byteSize: buf.byteLength,
     };
   }));
-  const manualAttachments = await Promise.all((d.additional_attachments ?? []).map(fileToAttachment));
-  return [...systemAttachments, ...manualAttachments];
 }
 
-// Right before a draft opens in Outlook, re-verify its invoice amount(s)
-// against live QuickBooks data — catches the case where an invoice was
-// corrected directly in QuickBooks after the draft text was prepared here,
-// so the email body never shows a stale total while the attached PDF (always
+// Right before a draft opens/sends, re-verify its invoice amount(s) against
+// live QuickBooks data — catches the case where an invoice was corrected
+// directly in QuickBooks after the draft text was prepared here, so the
+// email body never shows a stale total while the attached PDF (always
 // fetched live) shows the corrected one. Fails open: any error here just
-// keeps the draft as originally passed in, never blocks it from opening.
+// keeps the draft as originally passed in, never blocks it.
 async function refreshAmount(draft: DraftLike): Promise<{ draft: DraftLike; corrected: boolean; previousTotal?: number; newTotal?: number }> {
   if (!draft.id) return { draft, corrected: false };
   try {
@@ -164,6 +186,34 @@ async function refreshAmount(draft: DraftLike): Promise<{ draft: DraftLike; corr
   } catch {
     return { draft, corrected: false };
   }
+}
+
+export interface PreparedDraft {
+  draft: DraftLike;
+  systemAttachments: PreparedAttachment[];
+  amountCorrected: boolean;
+  previousTotal?: number;
+  newTotal?: number;
+}
+
+// Shared prep step for both open and send: refresh the amount, then fetch
+// whatever the (possibly amount-corrected) draft's own system attachments
+// are. Exported so a review screen can call this once, show the result,
+// and hand the same PreparedDraft to sendDraftsInOutlook when the user
+// actually clicks Send — never re-fetching/re-verifying a second time
+// right after the first, which would be slower and reopens (however
+// narrowly) the chance of what's sent silently differing from what was
+// reviewed.
+export async function prepareDraftForSend(draft: DraftLike): Promise<PreparedDraft> {
+  const refreshed = await refreshAmount(draft);
+  const systemAttachments = await fetchSystemAttachments(refreshed.draft);
+  return {
+    draft: refreshed.draft,
+    systemAttachments,
+    amountCorrected: refreshed.corrected,
+    previousTotal: refreshed.previousTotal,
+    newTotal: refreshed.newTotal,
+  };
 }
 
 async function mapWithConcurrency<T, R>(
@@ -194,19 +244,14 @@ export async function openDraftsInOutlook(
   const common = await Promise.all(commonAttachments.map(fileToAttachment));
   const prepared = await mapWithConcurrency(drafts, 4, async (draft, index) => {
     try {
-      // Sequential, not Promise.all: fetchAttachments builds the PDF's
-      // filename from invoice_refs[].amount, so it must run AFTER
-      // refreshAmount, using its corrected invoice_refs — otherwise the
-      // filename embeds the stale amount even though the PDF's own
-      // content (always fetched live from QB) is already correct.
-      const refreshed = await refreshAmount(draft);
-      const attachments = await fetchAttachments(refreshed.draft);
+      const result = await prepareDraftForSend(draft);
+      const manualAttachments = await Promise.all((draft.additional_attachments ?? []).map(fileToAttachment));
       corrections[index] = {
-        corrected: refreshed.corrected,
-        previousTotal: refreshed.previousTotal,
-        newTotal: refreshed.newTotal,
+        corrected: result.amountCorrected,
+        previousTotal: result.previousTotal,
+        newTotal: result.newTotal,
       };
-      return { index, draft: refreshed.draft, attachments };
+      return { index, draft: result.draft, attachments: [...result.systemAttachments, ...manualAttachments] };
     } catch (e: unknown) {
       results[index] = {
         ok: false,
@@ -217,13 +262,12 @@ export async function openDraftsInOutlook(
   });
 
   const payload: {
-    id: number | null;
     senderEmail: string;
     to: string;
     cc: string;
     subject: string;
     body: string;
-    attachments: { fileName: string; base64: string }[];
+    attachments: PreparedAttachment[];
   }[] = [];
   const payloadIndex: number[] = [];
 
@@ -231,11 +275,6 @@ export async function openDraftsInOutlook(
     if (!item) continue;
     const draft = item.draft;
     payload.push({
-      // Tagged onto the Outlook item as a hidden property so the Helper can
-      // report back here automatically once the item is actually sent (not
-      // just displayed) — see app.py's ItemSend listener. null for anything
-      // opened without a persisted draft row; the Helper just skips tagging.
-      id: draft.id ?? null,
       senderEmail: draft.sender_email ?? '',
       to: draft.to_email ?? '',
       cc: draft.cc_email ?? '',
@@ -283,5 +322,83 @@ export async function openDraftsInOutlook(
     }
   }
 
+  return results;
+}
+
+// Takes already-PREPARED drafts (see prepareDraftForSend) rather than raw
+// DraftLike[] — the review screen calls prepareDraftForSend once when it
+// opens, the user reviews exactly that, and this sends exactly that, with
+// no second fetch/refresh in between. Calls /drafts/send (.Save() then
+// .Send() — a real, immediate send), not /drafts/open.
+export async function sendDraftsInOutlook(
+  prepared: PreparedDraft[],
+  commonAttachments: File[] = [],
+): Promise<DraftOpenResult[]> {
+  const common = await Promise.all(commonAttachments.map(fileToAttachment));
+  const payload: {
+    senderEmail: string;
+    to: string;
+    cc: string;
+    bcc: string;
+    subject: string;
+    body: string;
+    attachments: PreparedAttachment[];
+  }[] = [];
+
+  for (const item of prepared) {
+    const draft = item.draft;
+    const manualAttachments = await Promise.all((draft.additional_attachments ?? []).map(fileToAttachment));
+    payload.push({
+      senderEmail: draft.sender_email ?? '',
+      to: draft.to_email ?? '',
+      cc: draft.cc_email ?? '',
+      bcc: draft.bcc_email ?? '',
+      subject: draft.subject,
+      body: draft.body,
+      attachments: [...item.systemAttachments, ...manualAttachments, ...common],
+    });
+  }
+
+  const results: DraftOpenResult[] = new Array(prepared.length);
+  for (let start = 0; start < payload.length; start += 10) {
+    const payloadChunk = payload.slice(start, start + 10);
+    try {
+      // Bounded timeout, unlike /drafts/open above: this is the one call in
+      // this file that can make Outlook actually transmit mail, which is
+      // exactly the scenario Outlook's "a program is sending mail on your
+      // behalf" security prompt exists for. If that prompt appears with no
+      // one there to click it, the COM call blocks rather than throwing —
+      // this timeout turns an indefinite hang into a clear, actionable error.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 45000);
+      let res: Response;
+      try {
+        res = await fetch(`${DRAFT_HELPER_URL}/drafts/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ drafts: payloadChunk }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        const message = j.error ?? `Helper returned HTTP ${res.status}`;
+        for (let k = 0; k < payloadChunk.length; k++) results[start + k] = { ok: false, error: message };
+      } else {
+        const j = await res.json();
+        const helperResults: DraftOpenResult[] = j.results ?? [];
+        for (let k = 0; k < payloadChunk.length; k++) {
+          results[start + k] = helperResults[k] ?? { ok: false, error: 'No result returned.' };
+        }
+      }
+    } catch (e: unknown) {
+      const message = e instanceof Error && e.name === 'AbortError'
+        ? 'Draft Helper did not respond in time — check the computer for a stuck Outlook prompt, then try again.'
+        : e instanceof Error ? e.message : 'Unable to reach Tassure Draft Helper.';
+      for (let k = 0; k < payloadChunk.length; k++) results[start + k] = { ok: false, error: message };
+    }
+  }
   return results;
 }

@@ -1,47 +1,43 @@
 """
 Tassure Draft Helper — local HTTP service that lets the Client Communications
-page in the tassure-invoice web app open real Outlook compose windows (with
-invoice PDFs already attached) via COM automation. Only `.Display()` is ever
-called — never `.Send()` — so a human still reviews and sends every email
-manually, matching the legacy BULK.xlsm macro's behaviour.
+page in the tassure-invoice web app drive real Outlook via COM automation.
+Two modes: POST /drafts/open calls .Display() only, for a human to review
+and send manually (matching the legacy BULK.xlsm macro's behaviour). POST
+/drafts/send calls .Save() then .Send() directly — used by the web app's own
+Outlook-style review screen, where the human already reviewed and clicked
+Send there; the synchronous HTTP response (success or a thrown error) is the
+web app's only source of truth for whether the email actually went out, no
+separate "did it send" detection needed.
 
 Bound to 127.0.0.1 only; never reachable from the network.
 """
 import base64
-import datetime
 import html
 import os
 import shutil
 import sys
 import tempfile
 import threading
-import time
 import winreg
 
 import pythoncom
-import requests
 import win32com
 import win32com.client
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-# DispatchWithEvents (used below to catch Outlook's ItemSend) needs a
-# generated wrapper module for Outlook's COM type library. Generating one
-# fresh at runtime works fine unpackaged, but fails inside a frozen
-# PyInstaller onefile build — its import system can't pick up a module
-# written to disk mid-run the way a normal Python process can (confirmed by
-# reproducing it: ModuleNotFoundError right after a successful-looking
-# generate). The fix, and the standard one for this exact pywin32+PyInstaller
-# combination: pre-generate it once at build time (see BUILD.md) and ship it
-# as bundled data — outlook_gen_py_cache/, alongside assets/ — so the frozen
-# exe only ever *reads* an already-existing module, never generates one.
-# Only covers whatever Outlook typelib version was installed at build time;
-# a real mismatch on a staff machine just means this one feature quietly
-# doesn't activate (see start_outlook_event_listener) — Display() itself
-# never depends on any of this.
-# Same base-path resolution as _asset_path below (defined inline since this
-# needs to run before DispatchWithEvents is ever called, well above that
-# function's own definition).
+# Historical note, kept because the gen_py rerouting below is otherwise
+# unexplained: this originally existed for DispatchWithEvents, which caught
+# Outlook's ItemSend event as part of the auto-detected "sent" mechanism
+# removed 2026-08-26 (see /drafts/send's docstring on _send_one_draft for
+# why detection was replaced by a synchronous .Send() call instead). Nothing
+# left in this file calls DispatchWithEvents — every Outlook.Application
+# dispatch here is the plain, late-bound win32com.client.Dispatch, which
+# never needed a pre-generated typelib cache. Left in place rather than
+# torn out: harmless if inert, and removing it means also touching
+# TassureDraftHelper.spec/build.ps1/BUILD.md's bundled-data wiring for a
+# cleanup that isn't blocking anything.
+# Same base-path resolution as _asset_path below.
 #
 # Setting win32com.__gen_path__ alone is not enough: `import win32com`
 # already materialized `sys.modules["win32com.gen_py"].__path__` from
@@ -55,15 +51,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.6.2"
-
-WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
-# Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
-# route — the web app requires a Tassure login session on every other
-# route, which this background COM event thread has no way to carry.
-# Shared across every staff install (baked into the exe, not per-user); a
-# leaked copy can only mark drafts as sent, nothing more sensitive.
-DRAFT_HELPER_SECRET = "q7X9NyxHSIux_m7p3V7Jtvg4x-oimxzFKv6c2wp24iM"
+VERSION = "1.7.0"
 
 # Every AR template's body ends with this line ("PAYMENT METHOD付款方式:"),
 # right where the original Word templates had the payment-options graphic
@@ -94,212 +82,6 @@ CORS(app, origins=ALLOWED_ORIGINS)
 # Flask dev server handles requests on separate threads — serialize with a
 # lock rather than letting two /drafts/open requests race each other.
 _outlook_lock = threading.Lock()
-
-# Custom MAPI property used to tag every MailItem we create with the web
-# app's own draft id, so the ItemSend listener below can report back which
-# draft was actually sent — Outlook's ItemSend event carries no such link on
-# its own, and Display() only opens a window with no further callback.
-# GUID is arbitrary but must stay fixed once shipped, since an in-flight
-# draft opened by an older Helper version still needs to match after an
-# update. PT_UNICODE (0x001F): stored as a plain string.
-DRAFT_ID_PROP = (
-    "http://schemas.microsoft.com/mapi/string/"
-    "{5C43E92B-15C3-4EA1-A019-0432EEA178AD}/TassureDraftId/0x001F"
-)
-
-
-def _report_sent(draft_id, sender_email):
-    # Best-effort, fire-and-forget: a missed report (network blip, laptop
-    # asleep, etc.) just leaves the draft for a human to click "Mark as
-    # Sent" in Delivery History, exactly like before this feature existed —
-    # never something worth surfacing to the user or retrying aggressively.
-    try:
-        requests.post(
-            f"{WEB_APP_URL}/api/client-communications/drafts/mark-sent",
-            json={"id": int(draft_id), "senderEmail": sender_email},
-            headers={"Authorization": f"Bearer {DRAFT_HELPER_SECRET}"},
-            timeout=10,
-        )
-    except Exception:  # noqa: BLE001
-        pass
-
-
-class _OutlookEvents:
-    """
-    Event sink for Outlook.Application, bound in a dedicated long-lived
-    background thread (see start_outlook_event_listener) rather than the
-    short-lived Application object /drafts/open creates per-request — staff
-    often sit on a draft for hours before actually sending it, well after
-    that request has finished. Both COM objects drive the same one running
-    Outlook.exe, so events fire regardless of which object created the item.
-    """
-
-    def OnItemSend(self, item, cancel):
-        try:
-            draft_id = item.PropertyAccessor.GetProperty(DRAFT_ID_PROP)
-        except Exception:  # noqa: BLE001 - not one of ours, or property unset
-            draft_id = None
-        if draft_id:
-            try:
-                sender_email = item.SendUsingAccount.SmtpAddress
-            except Exception:  # noqa: BLE001
-                sender_email = None
-            threading.Thread(
-                target=_report_sent, args=(draft_id, sender_email), daemon=True,
-            ).start()
-        return cancel  # never intercept the send — purely observing
-
-
-_event_listener_started = False
-
-
-def start_outlook_event_listener():
-    """
-    Best-effort: if COM event registration fails for any reason (Outlook not
-    installed yet, a locked-down environment, missing typelib cache), the
-    Helper's core open-draft feature must keep working regardless — auto-
-    detected "sent" status simply won't fire this session, and the manual
-    "Mark as Sent" fallback in Delivery History still covers it.
-    """
-    global _event_listener_started
-    if _event_listener_started:
-        return
-    _event_listener_started = True
-
-    def _run():
-        try:
-            pythoncom.CoInitialize()
-            # Must stay referenced for the life of this thread — the event
-            # connection is tied to this object; letting it get garbage
-            # collected would silently stop delivering ItemSend.
-            outlook = win32com.client.DispatchWithEvents("Outlook.Application", _OutlookEvents)
-            while True:
-                pythoncom.PumpWaitingMessages()
-                time.sleep(0.2)
-        except Exception:  # noqa: BLE001
-            pass
-
-    threading.Thread(target=_run, daemon=True, name="outlook-event-listener").start()
-
-
-# olFolderSentMail — Outlook's own constant, not worth pulling in the full
-# win32com MAPI constants module for just this one value.
-_OL_FOLDER_SENT_MAIL = 5
-RECONCILE_INTERVAL_SECONDS = 300
-RECONCILE_LOOKBACK_DAYS = 3
-
-
-def _reconcile_sent_items(outlook):
-    """
-    Safety net for OnItemSend above: live COM event delivery is best-effort
-    (see that function's own docstring) and can occasionally miss a real
-    send with no visible sign to the user — Vincent, 2026-08-19, confirmed
-    a real miss with the computer and Helper both running the whole time,
-    so this isn't only the already-known "listener wasn't running" case.
-    Re-scans Sent Items on a fixed interval for anything carrying our
-    DRAFT_ID_PROP and reports it. /mark-sent is idempotent (a draft already
-    'sent'/'skipped' is left untouched), so re-reporting one OnItemSend
-    already caught is harmless — this never needs to know what the live
-    listener did or didn't see.
-
-    Scans EVERY configured account's own Sent Items folder, not just
-    GetNamespace("MAPI").GetDefaultFolder() — that call only ever returns
-    the PRIMARY account's folder. Vincent, 2026-08-19: staff send AR drafts
-    from finance@tassure.com, which is a secondary account on a profile
-    whose primary is contact@tassure.com — this system's whole reason for
-    existing (a secondary sending account) is exactly the case the old
-    single-folder scan could never see. Deduplicates by StoreID first
-    since single-account setups (or any account sharing a store with the
-    primary) would otherwise have their Sent Items scanned twice per cycle
-    for no benefit.
-
-    Vincent, 2026-08-20: a real staff report (still yellow, immediate send,
-    latest Helper version, real PDF attached — so neither the listener nor
-    the account/folder scan itself was the gap) traced back to the old
-    version of this function, which filtered with
-    Items.Restrict(f"[SentOn] >= '{cutoff:%m/%d/%Y %I:%M %p}'"). Restrict's
-    date literal is parsed against the CURRENT USER'S Windows short-date
-    format, not a fixed one — confirmed live on a Singapore-locale machine
-    (d/M/yyyy, day-first), which silently misreads a US-style m/d/Y string
-    whenever the cutoff's day-of-month is ambiguous with the month (≤12),
-    and produces an outright invalid date (silently caught, folder skipped
-    for that whole cycle) whenever it isn't. Every Tassure staff machine is
-    Singapore-locale, so this wasn't an edge case. Sorting and breaking on a
-    real comparable datetime sidesteps Restrict's date-string parsing
-    entirely — no locale dependency left to break on a different machine.
-    """
-    try:
-        seen_store_ids = set()
-        folders = []
-        for account in outlook.Session.Accounts:
-            try:
-                folder = account.DeliveryStore.GetDefaultFolder(_OL_FOLDER_SENT_MAIL)
-            except Exception:  # noqa: BLE001 - this one account's store unavailable
-                continue
-            if folder.StoreID in seen_store_ids:
-                continue
-            seen_store_ids.add(folder.StoreID)
-            folders.append(folder)
-
-        cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
-            days=RECONCILE_LOOKBACK_DAYS,
-        )
-        for sent_folder in folders:
-            try:
-                items = sent_folder.Items
-                items.Sort("[SentOn]", True)  # newest first
-            except Exception:  # noqa: BLE001 - this one folder failed, try the rest
-                continue
-            for item in items:
-                try:
-                    sent_on = item.SentOn
-                except Exception:  # noqa: BLE001 - not a mail item / no SentOn
-                    continue
-                if sent_on < cutoff:
-                    break  # sorted newest-first — nothing further is in range
-                try:
-                    draft_id = item.PropertyAccessor.GetProperty(DRAFT_ID_PROP)
-                except Exception:  # noqa: BLE001 - not one of ours, or property unset
-                    continue
-                if not draft_id:
-                    continue
-                try:
-                    sender_email = item.SendUsingAccount.SmtpAddress
-                except Exception:  # noqa: BLE001
-                    sender_email = None
-                _report_sent(draft_id, sender_email)
-    except Exception:  # noqa: BLE001 - best-effort, the next cycle tries again
-        pass
-
-
-_reconciler_started = False
-
-
-def start_sent_items_reconciler():
-    """
-    Independent of the live OnItemSend listener above — its own thread, own
-    Outlook.Application dispatch (same one-apartment-per-thread pattern
-    that listener already uses), own fixed polling interval. If COM access
-    fails here for any reason, the loop below just tries again next cycle;
-    the Helper's core features are unaffected either way.
-    """
-    global _reconciler_started
-    if _reconciler_started:
-        return
-    _reconciler_started = True
-
-    def _run():
-        try:
-            pythoncom.CoInitialize()
-            outlook = win32com.client.Dispatch("Outlook.Application")
-        except Exception:  # noqa: BLE001
-            return
-        while True:
-            time.sleep(RECONCILE_INTERVAL_SECONDS)
-            _reconcile_sent_items(outlook)
-
-    threading.Thread(target=_run, daemon=True, name="sent-items-reconciler").start()
-
 
 def _resolve_outlook_exe_path() -> str | None:
     """
@@ -458,10 +240,6 @@ def _open_one_draft(outlook, draft: dict) -> dict:
         mail.Subject = draft.get("subject") or ""
         _set_body(mail, draft.get("body"))
 
-        draft_id = draft.get("id")
-        if draft_id:
-            mail.PropertyAccessor.SetProperty(DRAFT_ID_PROP, str(draft_id))
-
         for att in draft.get("attachments") or []:
             file_name = att.get("fileName") or "attachment.pdf"
             # Attachment filenames come from company/invoice data — strip
@@ -499,6 +277,66 @@ def _open_one_draft(outlook, draft: dict) -> dict:
         # to attach to before the user ever sees the compose window.
         mail.Save()
         mail.Display()
+        return {"ok": True}
+    except Exception as e:  # noqa: BLE001 - report per-draft, never crash the batch
+        return {"ok": False, "error": str(e)}
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _send_one_draft(outlook, draft: dict) -> dict:
+    """
+    Same as _open_one_draft, except it calls .Send() directly instead of
+    .Display() — used by the web app's own Outlook-style review screen,
+    where a human already reviewed and clicked Send there. No DRAFT_ID_PROP
+    tagging: this response IS the confirmation, synchronously — the caller
+    already knows the draft's own id locally and doesn't need it echoed
+    back through the MailItem the way the old event-listener/reconciler
+    mechanism (removed 2026-08-26) needed to identify what got sent later.
+
+    Keeps the same mail.Save() call _open_one_draft added — not redundant
+    here. The exact "From shows one account, sends from another" bug that
+    fix exists for (see _assign_sender's docstring) happens at the moment
+    Send() actually fires, which is identical whether a human clicks Send
+    in a Displayed window or this code calls .Send() directly; dropping
+    Save() would silently reintroduce that bug with nobody left watching
+    the From field to notice.
+
+    Untested territory, flagged rather than assumed safe: nothing in this
+    codebase (nor the legacy BULK.xlsm macro before it) has ever called
+    .Send() programmatically before — only Display(), for a human to send
+    manually. The main unknown is whether Outlook's Object Model Guard ("a
+    program is trying to send mail on your behalf") fires for a
+    COM-initiated Send() the way it can for some Outlook security
+    configurations — if it does, this call blocks on a modal dialog nobody
+    is there to click, rather than raising. Needs a real test against the
+    actual finance@/contact@ Microsoft 365 accounts this targets.
+    """
+    tmp_dir = tempfile.mkdtemp(prefix="tassure-draft-")
+    try:
+        mail = outlook.CreateItem(0)  # olMailItem
+        _assign_sender(outlook, mail, draft.get("senderEmail") or "")
+        mail.To = draft.get("to") or ""
+        mail.CC = draft.get("cc") or ""
+        mail.BCC = draft.get("bcc") or ""
+        mail.Subject = draft.get("subject") or ""
+        _set_body(mail, draft.get("body"))
+
+        for att in draft.get("attachments") or []:
+            file_name = att.get("fileName") or "attachment.pdf"
+            safe_name = os.path.basename(file_name).replace("\\", "_").replace("/", "_")
+            file_path = os.path.join(tmp_dir, safe_name)
+            with open(file_path, "wb") as f:
+                f.write(base64.b64decode(att["base64"]))
+            mail.Attachments.Add(file_path)
+
+        for name in STANDING_ATTACHMENTS:
+            path = _asset_path(name)
+            if os.path.isfile(path):
+                mail.Attachments.Add(path)
+
+        mail.Save()
+        mail.Send()
         return {"ok": True}
     except Exception as e:  # noqa: BLE001 - report per-draft, never crash the batch
         return {"ok": False, "error": str(e)}
@@ -548,7 +386,36 @@ def open_drafts():
     return jsonify({"results": results})
 
 
+@app.post("/drafts/send")
+def send_drafts():
+    payload = request.get_json(silent=True) or {}
+    drafts = payload.get("drafts")
+    if not isinstance(drafts, list) or not drafts:
+        return jsonify({"error": "drafts must be a non-empty array"}), 400
+
+    outlook_path = _resolve_outlook_exe_path()
+    if not _is_classic_outlook_path(outlook_path):
+        return jsonify({
+            "error": (
+                "Windows is not currently routing Outlook automation to Classic "
+                "Outlook (resolved: " + (outlook_path or "not found") + "). "
+                'In Outlook, turn OFF "Try the new Outlook" (top-right toggle), '
+                "then try again."
+            )
+        }), 409
+
+    results = []
+    pythoncom.CoInitialize()
+    try:
+        with _outlook_lock:
+            outlook = win32com.client.Dispatch("Outlook.Application")
+            for draft in drafts:
+                results.append(_send_one_draft(outlook, draft))
+    finally:
+        pythoncom.CoUninitialize()
+
+    return jsonify({"results": results})
+
+
 if __name__ == "__main__":
-    start_outlook_event_listener()
-    start_sent_items_reconciler()
     app.run(host="127.0.0.1", port=PORT, threaded=True)

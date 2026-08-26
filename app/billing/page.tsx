@@ -12,6 +12,7 @@ import {
 import type { RenewalStatus, AnnualStatus, CompanyBilling, GeneratedInvoice } from '@/app/api/billing/renewals/route';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import MetricCard from '@/components/MetricCard';
+import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { fmtDate, fmtMonth, toDisplayDate, toIsoDateValue, todaySGT } from '@/lib/date';
@@ -20,7 +21,7 @@ import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { formatStaffName } from '@/lib/staff-directory';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
-import { getHelperHealth, isHelperOutdated, openDraftsInOutlook, buildMailtoLink } from '@/lib/draft-helper-client';
+import { getHelperHealth, isHelperOutdated, buildMailtoLink, type DraftLike } from '@/lib/draft-helper-client';
 import { isValidEmail } from '@/lib/campaign-recipients';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2572,7 +2573,9 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   const [draftPopoverFor, setDraftPopoverFor] = useState<number | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
-  const [draftNotice, setDraftNotice] = useState<string | null>(null);
+  // Set once quickEmailDraft has created the draft row and Draft Helper is
+  // available — opens the Outlook-style review screen for the actual send.
+  const [sendModalDraft, setSendModalDraft] = useState<DraftLike | null>(null);
   // No email on file (e.g. TeamWork never captured one) — offer a one-off
   // manual entry instead of just blocking (Vincent, 2026-08-19). Not saved
   // back to the company record, only used for this one draft. Cc is shown
@@ -2639,28 +2642,23 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       const createJson = await createRes.json();
       if (!createRes.ok || !createJson.ok) throw new Error(createJson.error ?? 'Unable to save this draft.');
       // Use the server-persisted draft (with a real id) rather than a
-      // client-merged copy — this is what lets openDraftsInOutlook re-verify
-      // the amount against QuickBooks right before opening (see
-      // refreshAmount in lib/draft-helper-client.ts).
+      // client-merged copy — this is what lets the review screen re-verify
+      // the amount against QuickBooks right before sending (see
+      // prepareDraftForSend in lib/draft-helper-client.ts).
       const createdDraft = createJson.drafts?.[0];
       if (!createdDraft) throw new Error('Draft was not created.');
 
-      const draftForOutlook = {
+      const draftForOutlook: DraftLike = {
         id: createdDraft.id, version: createdDraft.version,
         company_name: createdDraft.company_name, to_email: createdDraft.to_email, cc_email: createdDraft.cc_email,
         subject: createdDraft.subject, body: createdDraft.body, invoice_refs: createdDraft.invoice_refs,
         sender_email: selectedSender?.email ?? 'finance@tassure.com',
       };
       if (helperAvailable) {
-        const [result] = await openDraftsInOutlook([draftForOutlook]);
-        if (!result.ok) throw new Error(result.error ?? 'Helper failed to open the draft.');
-        if (result.amountCorrected) {
-          // Keep the popover open so this doesn't flash and vanish — the
-          // amount genuinely changed from what was reviewed a moment ago,
-          // worth a deliberate look before it's dismissed.
-          setDraftNotice(`Amount corrected from S$${result.previousTotal?.toLocaleString()} to S$${result.newTotal?.toLocaleString()} using the latest QuickBooks total. The Outlook draft already reflects the corrected amount.`);
-          return;
-        }
+        // Amount re-verification, attachment resolution and the actual send
+        // all now happen in the Outlook-style review screen itself — see
+        // OutlookStyleSendModal, which calls prepareDraftForSend on open.
+        setSendModalDraft(draftForOutlook);
       } else {
         window.location.href = buildMailtoLink(draftForOutlook);
       }
@@ -2977,7 +2975,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
                     <button title="Email Drafts" onClick={e => {
                         e.stopPropagation();
-                        setDraftError(null); setDraftNotice(null); setNeedsManualEmail(false); setManualToEmail(''); setManualCcEmail(''); setPreviewRow(null);
+                        setDraftError(null); setNeedsManualEmail(false); setManualToEmail(''); setManualCcEmail(''); setPreviewRow(null);
                         const opening = draftPopoverFor !== c.companyId;
                         setDraftPopoverFor(opening ? c.companyId : null);
                         if (opening) void resolveDraftPreview(c);
@@ -2991,18 +2989,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                         border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 260, padding: 12,
                       }}>
                         <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>Email Drafts — {c.companyName}</div>
-                        {draftNotice ? (
-                          <>
-                            <div style={{ fontSize: 10.5, color: 'var(--status-warning)', marginBottom: 10, lineHeight: 1.5 }}>{draftNotice}</div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                              <button onClick={() => { setDraftNotice(null); setDraftPopoverFor(null); }}
-                                style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '6px 12px' }}>
-                                Close
-                              </button>
-                            </div>
-                          </>
-                        ) : (
-                          <>
+                        <>
                             <select value={senderId ?? ''} onChange={e => setSenderId(Number(e.target.value))}
                               style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
                               {senders.length === 0 && <option value="">No senders found</option>}
@@ -3031,7 +3018,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                               </>
                             )}
                             <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8 }}>
-                              {helperAvailable ? 'Opens directly in Outlook with the invoice attached.' : 'Draft Helper not detected — opens a blank Outlook draft (no attachment) instead.'}
+                              {helperAvailable ? 'Opens a review screen with the invoice attached — you send it from there.' : 'Draft Helper not detected — opens a blank Outlook draft (no attachment) instead.'}
                             </div>
                             {helperAvailable && helperOutdated && (
                               <div style={{ fontSize: 10, color: 'var(--status-warning)', marginBottom: 8 }}>
@@ -3049,7 +3036,6 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                               </button>
                             </div>
                           </>
-                        )}
                       </div>
                     )}
                   </div>
@@ -3062,6 +3048,16 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       </div>
 
       <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
+
+      {sendModalDraft && (
+        <OutlookStyleSendModal
+          draft={sendModalDraft}
+          sender={selectedSender}
+          me={me}
+          onClose={() => setSendModalDraft(null)}
+          onSent={() => loadDraftStatus()}
+        />
+      )}
 
       {/* Draft builder modal */}
       {expanded !== null && (() => {

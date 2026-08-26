@@ -15,12 +15,6 @@ const CRON_PATHS = new Set([
   '/api/ar-reminder/sync-workflow',
   '/api/late-filing/sync',
 ]);
-// The local Draft Helper (draft-helper/app.py) reports a real Outlook send
-// from a background COM event thread with no browser session to carry a
-// Tassure login — same reasoning as CRON_PATHS above, just POST and its own
-// secret since it's a different caller (a desktop tool shipped to every
-// staff machine, not a scheduled job) baked into app.py at build time.
-const HELPER_PATHS = new Set(['/api/client-communications/drafts/mark-sent']);
 
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
@@ -36,13 +30,6 @@ export async function proxy(req: NextRequest) {
     && req.method === 'GET'
     && CRON_PATHS.has(path)
     && req.headers.get('authorization') === `Bearer ${cronSecret}`
-  ) return NextResponse.next();
-  const helperSecret = process.env.DRAFT_HELPER_SECRET;
-  if (
-    helperSecret
-    && req.method === 'POST'
-    && HELPER_PATHS.has(path)
-    && req.headers.get('authorization') === `Bearer ${helperSecret}`
   ) return NextResponse.next();
 
   let response = NextResponse.next({ request: req });
