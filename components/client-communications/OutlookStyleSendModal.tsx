@@ -60,6 +60,7 @@ export default function OutlookStyleSendModal({
   const [manualFiles, setManualFiles] = useState<File[]>([]);
   const [standingSize, setStandingSize] = useState<number | null>(null);
   const [working, setWorking] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
 
@@ -118,13 +119,20 @@ export default function OutlookStyleSendModal({
       // bookkeeping — a failure below must never be reported as a send
       // failure (it wasn't one), same distinct-warning pattern
       // history/page.tsx's reopenInOutlook already establishes.
-      if (draft.id !== undefined && draft.version !== undefined) {
+      //
+      // Uses prepared.draft's id/version, not the raw draft prop's — if
+      // prepareDraftForSend's own amount refresh already bumped the row's
+      // version (it PATCHes independently when the total changed), the
+      // prop's original version is stale and this compare-and-swap would
+      // 409 against a row that, from the server's side, was never actually
+      // out of date.
+      if (prepared.draft.id !== undefined && prepared.draft.version !== undefined) {
         try {
           const patchRes = await fetch('/api/client-communications/drafts', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              id: draft.id, version: draft.version,
+              id: prepared.draft.id, version: prepared.draft.version,
               patch: { status: 'sent', body: editedBody },
               sentByEmail: me?.email, sentByName: me?.name,
             }),
@@ -150,6 +158,44 @@ export default function OutlookStyleSendModal({
     }
   };
 
+  // Vincent, 2026-08-27: closing without sending used to lose whatever was
+  // typed — nothing persisted anywhere until Send actually fired. Now, if
+  // the body was genuinely edited, save it back to the draft row before
+  // closing, so reopening it later (via Draft again, or Delivery History's
+  // existing "Open Again in Outlook") shows the edit instead of the
+  // original merged template. Only fires on a real change — comparing
+  // against prepared.draft.body (what the textarea was actually seeded
+  // with, post amount-refresh), not the raw draft prop.
+  const handleClose = async () => {
+    if (working || closing) return;
+    if (!prepared || editedBody === prepared.draft.body || prepared.draft.id === undefined || prepared.draft.version === undefined) {
+      onClose();
+      return;
+    }
+    setClosing(true);
+    setSendError(null);
+    try {
+      const patchRes = await fetch('/api/client-communications/drafts', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: prepared.draft.id, version: prepared.draft.version,
+          patch: { body: editedBody },
+        }),
+      });
+      if (!patchRes.ok) {
+        const j = await patchRes.json().catch(() => ({}));
+        setSendError(`Could not save your edit before closing: ${j.error ?? 'unknown error'}. Click Close again to retry, or your edit will be lost.`);
+        return;
+      }
+      onClose();
+    } catch {
+      setSendError('Could not save your edit before closing (network error). Click Close again to retry, or your edit will be lost.');
+    } finally {
+      setClosing(false);
+    }
+  };
+
   const attachmentEntries: { key: string; fileName: string; byteSize: number | null; onRemove?: () => void }[] = [
     ...(prepared?.systemAttachments ?? []).map((a: PreparedAttachment, i: number) => ({ key: `sys-${i}`, fileName: a.fileName, byteSize: a.byteSize })),
     ...manualFiles.map((f, i) => ({ key: `manual-${i}`, fileName: f.name, byteSize: f.size, onRemove: () => setManualFiles(prev => prev.filter((_, idx) => idx !== i)) })),
@@ -157,11 +203,11 @@ export default function OutlookStyleSendModal({
   ];
 
   return (
-    <div onClick={working ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
+    <div onClick={(working || closing) ? undefined : handleClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
       <div onClick={e => e.stopPropagation()} style={{ width: 'min(860px, 100%)', background: '#fff', borderRadius: 12, boxShadow: '0 24px 70px rgba(15,23,42,0.28)', overflow: 'hidden' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
-          <button type="button" onClick={onClose} disabled={working} title="Close" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: working ? 'not-allowed' : 'pointer', padding: 4, display: 'flex' }}>
-            <X size={16} />
+          <button type="button" onClick={handleClose} disabled={working || closing} title="Close" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: (working || closing) ? 'not-allowed' : 'pointer', padding: 4, display: 'flex' }}>
+            {closing ? <Loader2 size={16} className="spin" /> : <X size={16} />}
           </button>
         </div>
 
@@ -265,8 +311,8 @@ export default function OutlookStyleSendModal({
         )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '0 20px 18px' }}>
-          <button type="button" onClick={onClose} disabled={working} style={{ border: '1px solid #cbd5e1', borderRadius: 7, padding: '8px 14px', background: '#fff', color: '#526b85', fontSize: 12, fontWeight: 700, cursor: working ? 'not-allowed' : 'pointer' }}>
-            Close
+          <button type="button" onClick={handleClose} disabled={working || closing} style={{ border: '1px solid #cbd5e1', borderRadius: 7, padding: '8px 14px', background: '#fff', color: '#526b85', fontSize: 12, fontWeight: 700, cursor: (working || closing) ? 'not-allowed' : 'pointer' }}>
+            {closing ? 'Saving…' : 'Close'}
           </button>
         </div>
       </div>
