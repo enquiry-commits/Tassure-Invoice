@@ -55,7 +55,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.6.0"
+VERSION = "1.6.1"
 
 WEB_APP_URL = "https://tassure-corporate-services.vercel.app"
 # Matches the DRAFT_HELPER_SECRET env var proxy.ts checks for on this one
@@ -501,6 +501,27 @@ def _open_one_draft(outlook, draft: dict) -> dict:
             if os.path.isfile(path):
                 mail.Attachments.Add(path)
 
+        # Vincent, 2026-08-26: real report — the compose window showed
+        # finance@tassure.com (a genuinely configured account on that exact
+        # machine, no cross-machine variable at all), but the message that
+        # actually went out was sent from contact@tassure.com instead; a
+        # second report on the same machine showed the From dropdown
+        # displaying finance@tassure.com as plain text while the dropdown's
+        # own entry for it carried an "X" (Outlook's marker for a freeform/
+        # MRU address, not a bound account) — staff had to manually retype
+        # it into the From box themselves to get a real, selectable
+        # connection. Both point at the same mechanism: _assign_sender's
+        # SendUsingAccount/PR_SENT_REPRESENTING_* writes land on a MailItem
+        # that has never been persisted (CreateItem() alone gives it no
+        # EntryID yet) — Outlook's Inspector appears to only treat an
+        # account as a *bound* From selection once the item has a real
+        # store identity, otherwise it's held as inert property values that
+        # LOOK right in text but never get wired into the actual send path
+        # or the dropdown's own bound-entry list. One Save() here, after
+        # every field is set and right before Display(), gives the item a
+        # real EntryID first, so the sender assignment has something solid
+        # to attach to before the user ever sees the compose window.
+        mail.Save()
         mail.Display()
         return {"ok": True}
     except Exception as e:  # noqa: BLE001 - report per-draft, never crash the batch
