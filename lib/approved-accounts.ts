@@ -27,6 +27,7 @@ export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   { name: 'Tan Min Quan', email: 'minquan@tassure.com' },
   { name: 'Esther Loo', email: 'esther@tassure.com', qbLocations: { TAB: 'Esther Loo', TAC: 'Esther Loo' } },
   { name: 'Chelsea Ang', email: 'chelsea@tassure.com', qbLocations: { TAB: 'Chelsea Ang', TAC: 'Chelsea Ang' } },
+  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com' },
   // Vincent, 2026-08-17: these 5 only see AR Reminder — everything else in
   // the system is hidden/blocked for them.
   { name: 'Jay Tay', email: 'jaytay@tassure.com', restrictedTo: '/billing?tab=ar' },
