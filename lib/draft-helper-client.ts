@@ -13,7 +13,7 @@ export const DRAFT_HELPER_URL = 'http://127.0.0.1:51820';
 // exe is built and copied to public/downloads/TassureDraftHelper.exe — this
 // is what lets the web app tell staff their locally-installed Helper is
 // stale instead of silently running old behaviour with no signal at all.
-export const LATEST_HELPER_VERSION = '1.7.0';
+export const LATEST_HELPER_VERSION = '1.7.1';
 
 export interface HelperHealth {
   ok: boolean;
@@ -78,6 +78,11 @@ export interface DraftLike {
   body: string;
   invoice_refs: DraftInvoiceRef[];
   additional_attachments?: File[];
+  // Draft Helper always attaches STANDING_ATTACHMENTS (the company-wide
+  // bank details PDF) from its own bundled assets — this is the one way to
+  // opt a single send out of it, for the rare case someone removes it in
+  // the review screen. Only meaningful to sendDraftsInOutlook.
+  skip_standing_attachments?: boolean;
 }
 
 export interface DraftOpenResult {
@@ -343,6 +348,7 @@ export async function sendDraftsInOutlook(
     subject: string;
     body: string;
     attachments: PreparedAttachment[];
+    skipStandingAttachments: boolean;
   }[] = [];
 
   for (const item of prepared) {
@@ -356,6 +362,7 @@ export async function sendDraftsInOutlook(
       subject: draft.subject,
       body: draft.body,
       attachments: [...item.systemAttachments, ...manualAttachments, ...common],
+      skipStandingAttachments: draft.skip_standing_attachments ?? false,
     });
   }
 

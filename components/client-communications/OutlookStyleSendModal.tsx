@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Send, FileText, X, Loader2, Paperclip, AlertTriangle } from 'lucide-react';
 import {
   checkHelperHealth, prepareDraftForSend, sendDraftsInOutlook,
@@ -22,16 +22,31 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function AttachmentCard({ fileName, byteSize, onRemove }: { fileName: string; byteSize: number | null; onRemove?: () => void }) {
+function base64ToBlobUrl(base64: string, mime = 'application/pdf'): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: mime }));
+}
+
+function AttachmentCard({ fileName, byteSize, previewUrl, onRemove }: { fileName: string; byteSize: number | null; previewUrl: string | null; onRemove?: () => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', minWidth: 210, maxWidth: 260, background: '#fff' }}>
+      <button
+        type="button"
+        onClick={() => previewUrl && window.open(previewUrl, '_blank', 'noopener,noreferrer')}
+        disabled={!previewUrl}
+        title={previewUrl ? 'Open in a new tab to review' : undefined}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, border: 'none', background: 'transparent', padding: 0, minWidth: 0, flex: 1, textAlign: 'left', cursor: previewUrl ? 'pointer' : 'default' }}
+      >
       <FileText size={22} style={{ color: '#dc2626', flexShrink: 0 }} />
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={fileName}>{fileName}</div>
+        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: previewUrl ? 'underline' : 'none', textDecorationColor: '#cbd5e1' }} title={fileName}>{fileName}</div>
         <div style={{ fontSize: 10, color: '#94a3b8' }}>{byteSize == null ? ' ' : formatSize(byteSize)}</div>
       </div>
+      </button>
       {onRemove && (
-        <button type="button" onClick={onRemove} title="Remove" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: 2, display: 'flex' }}>
+        <button type="button" onClick={onRemove} title="Remove — won't be sent" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#94a3b8', padding: 2, display: 'flex', flexShrink: 0 }}>
           <X size={13} />
         </button>
       )}
@@ -59,6 +74,8 @@ export default function OutlookStyleSendModal({
   const [bcc, setBcc] = useState('');
   const [manualFiles, setManualFiles] = useState<File[]>([]);
   const [standingSize, setStandingSize] = useState<number | null>(null);
+  const [excludedSystemIndices, setExcludedSystemIndices] = useState<Set<number>>(new Set());
+  const [includeStanding, setIncludeStanding] = useState(true);
   const [working, setWorking] = useState(false);
   const [closing, setClosing] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -81,6 +98,18 @@ export default function OutlookStyleSendModal({
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Blob URLs for "open in a new tab to review" — memoized so they're only
+  // (re)created when their source actually changes, with the matching
+  // revoke on cleanup so a long-open modal doesn't leak memory.
+  const systemPreviewUrls = useMemo(
+    () => (prepared?.systemAttachments ?? []).map(a => base64ToBlobUrl(a.base64)),
+    [prepared],
+  );
+  useEffect(() => () => systemPreviewUrls.forEach(u => URL.revokeObjectURL(u)), [systemPreviewUrls]);
+
+  const manualPreviewUrls = useMemo(() => manualFiles.map(f => URL.createObjectURL(f)), [manualFiles]);
+  useEffect(() => () => manualPreviewUrls.forEach(u => URL.revokeObjectURL(u)), [manualPreviewUrls]);
 
   // Real size for the standing attachment card, not a hardcoded number that
   // could go stale if the file's ever replaced — a HEAD request is enough.
@@ -111,8 +140,10 @@ export default function OutlookStyleSendModal({
         body: editedBody,
         bcc_email: bcc || null,
         additional_attachments: manualFiles,
+        skip_standing_attachments: !includeStanding,
       };
-      const [result] = await sendDraftsInOutlook([{ ...prepared, draft: draftToSend }]);
+      const includedSystemAttachments = prepared.systemAttachments.filter((_, i) => !excludedSystemIndices.has(i));
+      const [result] = await sendDraftsInOutlook([{ ...prepared, draft: draftToSend, systemAttachments: includedSystemAttachments }]);
       if (!result.ok) throw new Error(result.error ?? 'Outlook did not send this email.');
 
       // The email is now genuinely, actually sent. Everything from here is
@@ -196,10 +227,12 @@ export default function OutlookStyleSendModal({
     }
   };
 
-  const attachmentEntries: { key: string; fileName: string; byteSize: number | null; onRemove?: () => void }[] = [
-    ...(prepared?.systemAttachments ?? []).map((a: PreparedAttachment, i: number) => ({ key: `sys-${i}`, fileName: a.fileName, byteSize: a.byteSize })),
-    ...manualFiles.map((f, i) => ({ key: `manual-${i}`, fileName: f.name, byteSize: f.size, onRemove: () => setManualFiles(prev => prev.filter((_, idx) => idx !== i)) })),
-    { key: 'standing', fileName: STANDING_ATTACHMENT_NAME, byteSize: standingSize },
+  const attachmentEntries: { key: string; fileName: string; byteSize: number | null; previewUrl: string | null; onRemove?: () => void }[] = [
+    ...(prepared?.systemAttachments ?? [])
+      .map((a: PreparedAttachment, i: number) => ({ key: `sys-${i}`, fileName: a.fileName, byteSize: a.byteSize, previewUrl: systemPreviewUrls[i] ?? null, onRemove: () => setExcludedSystemIndices(prev => new Set(prev).add(i)) }))
+      .filter((_, i) => !excludedSystemIndices.has(i)),
+    ...manualFiles.map((f, i) => ({ key: `manual-${i}`, fileName: f.name, byteSize: f.size, previewUrl: manualPreviewUrls[i] ?? null, onRemove: () => setManualFiles(prev => prev.filter((_, idx) => idx !== i)) })),
+    ...(includeStanding ? [{ key: 'standing', fileName: STANDING_ATTACHMENT_NAME, byteSize: standingSize, previewUrl: STANDING_ATTACHMENT_SRC, onRemove: () => setIncludeStanding(false) }] : []),
   ];
 
   return (
@@ -267,7 +300,7 @@ export default function OutlookStyleSendModal({
           {preparing ? (
             <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Resolving attachments…</span>
           ) : (
-            attachmentEntries.map(a => <AttachmentCard key={a.key} fileName={a.fileName} byteSize={a.byteSize} onRemove={a.onRemove} />)
+            attachmentEntries.map(a => <AttachmentCard key={a.key} fileName={a.fileName} byteSize={a.byteSize} previewUrl={a.previewUrl} onRemove={a.onRemove} />)
           )}
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#173b63', fontSize: 11.5, fontWeight: 700, border: '1px dashed #cbd5e1', borderRadius: 6, padding: '8px 12px' }}>
             <Paperclip size={14} />

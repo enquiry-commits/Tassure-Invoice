@@ -51,7 +51,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 
 # Every AR template's body ends with this line ("PAYMENT METHOD付款方式:"),
 # right where the original Word templates had the payment-options graphic
@@ -330,10 +330,11 @@ def _send_one_draft(outlook, draft: dict) -> dict:
                 f.write(base64.b64decode(att["base64"]))
             mail.Attachments.Add(file_path)
 
-        for name in STANDING_ATTACHMENTS:
-            path = _asset_path(name)
-            if os.path.isfile(path):
-                mail.Attachments.Add(path)
+        if not draft.get("skipStandingAttachments"):
+            for name in STANDING_ATTACHMENTS:
+                path = _asset_path(name)
+                if os.path.isfile(path):
+                    mail.Attachments.Add(path)
 
         mail.Save()
         mail.Send()
