@@ -83,6 +83,20 @@ export interface DraftLike {
   // opt a single send out of it, for the rare case someone removes it in
   // the review screen. Only meaningful to sendDraftsInOutlook.
   skip_standing_attachments?: boolean;
+  // Only set by quickEmailDraft (app/billing/page.tsx), right after IT just
+  // created this exact draft from a live generated_invoices lookup seconds
+  // earlier — refreshAmount's live QuickBooks re-check exists for the
+  // opposite case, a draft that's sat around and might have drifted since
+  // (Delivery History's reopen flow, which never sets this). Vincent,
+  // 2026-08-27: measured the QB amount-check itself at ~1.7s, real Intuit
+  // API latency this can't optimize away — skipping it for a draft that is
+  // provably seconds old removes one of two ~1.8s round-trips from the
+  // common "Draft, review, Send" path. Low-stakes even in the near-zero
+  // chance someone hand-edits the SAME invoice in QuickBooks in that exact
+  // window: the attached PDF is always fetched live regardless of this flag
+  // and is what actually matters for payment — this only affects whether
+  // the email BODY's dollar figure gets a second, redundant verification.
+  skip_amount_refresh?: boolean;
 }
 
 export interface DraftOpenResult {
@@ -166,7 +180,7 @@ async function fetchSystemAttachments(d: DraftLike): Promise<PreparedAttachment[
 // fetched live) shows the corrected one. Fails open: any error here just
 // keeps the draft as originally passed in, never blocks it.
 async function refreshAmount(draft: DraftLike): Promise<{ draft: DraftLike; corrected: boolean; previousTotal?: number; newTotal?: number }> {
-  if (!draft.id) return { draft, corrected: false };
+  if (!draft.id || draft.skip_amount_refresh) return { draft, corrected: false };
   try {
     const res = await fetch('/api/client-communications/drafts/refresh-amounts', {
       method: 'POST',

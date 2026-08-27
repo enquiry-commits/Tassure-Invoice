@@ -2667,9 +2667,8 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
       const createJson = await createRes.json();
       if (!createRes.ok || !createJson.ok) throw new Error(createJson.error ?? 'Unable to save this draft.');
       // Use the server-persisted draft (with a real id) rather than a
-      // client-merged copy — this is what lets the review screen re-verify
-      // the amount against QuickBooks right before sending (see
-      // prepareDraftForSend in lib/draft-helper-client.ts).
+      // client-merged copy — needed for the review screen's later PATCHes
+      // (mark-sent, save-on-close), which require a real id/version.
       const createdDraft = createJson.drafts?.[0];
       if (!createdDraft) throw new Error('Draft was not created.');
 
@@ -2678,6 +2677,11 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
         company_name: createdDraft.company_name, to_email: createdDraft.to_email, cc_email: createdDraft.cc_email,
         subject: createdDraft.subject, body: createdDraft.body, invoice_refs: createdDraft.invoice_refs,
         sender_email: selectedSender?.email ?? 'finance@tassure.com',
+        // This draft's amount came from generated_invoices moments ago (the
+        // POST above) — skip prepareDraftForSend's live QuickBooks re-check,
+        // which exists for a draft that's sat around since (see
+        // skip_amount_refresh's own comment in draft-helper-client.ts).
+        skip_amount_refresh: true,
       };
       if (helperAvailable) {
         // Amount re-verification, attachment resolution and the actual send
