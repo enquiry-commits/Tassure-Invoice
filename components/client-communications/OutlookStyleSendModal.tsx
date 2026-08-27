@@ -29,6 +29,36 @@ function base64ToBlobUrl(base64: string, mime = 'application/pdf'): string {
   return URL.createObjectURL(new Blob([bytes], { type: mime }));
 }
 
+// Vincent, 2026-08-27: reformats a To/Cc/Bcc field so more than one address
+// on the same line always ends up one-per-line, matching how the app
+// already stores a multi-recipient field (recipientLines() in
+// lib/campaign-recipients.ts joins with '\n') and how Draft Helper now
+// normalizes it right before Send() (_normalize_recipients in
+// draft-helper/app.py). Only reformats on blur, not every keystroke — mid-
+// typing a second address would otherwise get split prematurely.
+function splitToLines(raw: string): string {
+  return raw.split(/[,;\n\r]+/).map(s => s.trim()).filter(Boolean).join('\n');
+}
+
+// Auto-grows like the body textarea below (no internal scroll — the
+// modal's own single scrollbar covers it), and reformats to one-address-
+// per-line on blur via splitToLines.
+function RecipientField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const resize = () => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } };
+  useEffect(() => { resize(); }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      onChange={e => { onChange(e.target.value); resize(); }}
+      onBlur={() => onChange(splitToLines(value))}
+      rows={1}
+      style={{ width: '100%', border: 'none', outline: 'none', resize: 'none', overflow: 'hidden', fontFamily: 'inherit', fontSize: 12.5, color: '#1e3a5f', padding: '8px 2px', lineHeight: 1.6, boxSizing: 'border-box' }}
+    />
+  );
+}
+
 function AttachmentCard({ fileName, byteSize, previewUrl, onRemove }: { fileName: string; byteSize: number | null; previewUrl: string | null; onRemove?: () => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', minWidth: 210, maxWidth: 260, background: '#fff' }}>
@@ -71,7 +101,9 @@ export default function OutlookStyleSendModal({
   const [prepareError, setPrepareError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(true);
   const [editedBody, setEditedBody] = useState(draft.body);
-  const [bcc, setBcc] = useState('');
+  const [editedTo, setEditedTo] = useState(draft.to_email ?? '');
+  const [editedCc, setEditedCc] = useState(draft.cc_email ?? '');
+  const [editedBcc, setEditedBcc] = useState('');
   const [manualFiles, setManualFiles] = useState<File[]>([]);
   const [standingSize, setStandingSize] = useState<number | null>(null);
   const [excludedSystemIndices, setExcludedSystemIndices] = useState<Set<number>>(new Set());
@@ -149,8 +181,10 @@ export default function OutlookStyleSendModal({
 
       const draftToSend: DraftLike = {
         ...prepared.draft,
+        to_email: editedTo || null,
+        cc_email: editedCc || null,
         body: editedBody,
-        bcc_email: bcc || null,
+        bcc_email: editedBcc || null,
         additional_attachments: manualFiles,
         skip_standing_attachments: !includeStanding,
       };
@@ -203,15 +237,21 @@ export default function OutlookStyleSendModal({
 
   // Vincent, 2026-08-27: closing without sending used to lose whatever was
   // typed — nothing persisted anywhere until Send actually fired. Now, if
-  // the body was genuinely edited, save it back to the draft row before
-  // closing, so reopening it later (via Draft again, or Delivery History's
-  // existing "Open Again in Outlook") shows the edit instead of the
-  // original merged template. Only fires on a real change — comparing
-  // against prepared.draft.body (what the textarea was actually seeded
-  // with, post amount-refresh), not the raw draft prop.
+  // the body (or, since To/Cc became editable, either of those) was
+  // genuinely edited, save it back to the draft row before closing, so
+  // reopening it later (via Draft again, or Delivery History's existing
+  // "Open Again in Outlook") shows the edit instead of the original merged
+  // template. Only fires on a real change — comparing against
+  // prepared.draft's own fields (what the fields were actually seeded
+  // with, post amount-refresh), not the raw draft prop. Bcc is excluded on
+  // purpose: it has no database column to save into at all (see its own
+  // comment on DraftLike) — genuinely per-send, not persistable.
   const handleClose = async () => {
     if (working || closing) return;
-    if (!prepared || editedBody === prepared.draft.body || prepared.draft.id === undefined || prepared.draft.version === undefined) {
+    const bodyChanged = !!prepared && editedBody !== prepared.draft.body;
+    const toChanged = !!prepared && editedTo !== (prepared.draft.to_email ?? '');
+    const ccChanged = !!prepared && editedCc !== (prepared.draft.cc_email ?? '');
+    if (!prepared || (!bodyChanged && !toChanged && !ccChanged) || prepared.draft.id === undefined || prepared.draft.version === undefined) {
       onClose();
       return;
     }
@@ -223,7 +263,7 @@ export default function OutlookStyleSendModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: prepared.draft.id, version: prepared.draft.version,
-          patch: { body: editedBody },
+          patch: { body: editedBody, to_email: editedTo || null, cc_email: editedCc || null },
         }),
       });
       if (!patchRes.ok) {
@@ -343,20 +383,15 @@ export default function OutlookStyleSendModal({
             </div>
             <div style={rowStyle}>
               <div style={labelBoxStyle}>To</div>
-              <div style={valueStyle}>{draft.to_email || '—'}</div>
+              <RecipientField value={editedTo} onChange={setEditedTo} />
             </div>
             <div style={rowStyle}>
               <div style={labelBoxStyle}>Cc</div>
-              <div style={valueStyle}>{draft.cc_email || ''}</div>
+              <RecipientField value={editedCc} onChange={setEditedCc} />
             </div>
             <div style={rowStyle}>
               <div style={labelBoxStyle}>Bcc</div>
-              <input
-                value={bcc}
-                onChange={e => setBcc(e.target.value)}
-                placeholder=""
-                style={{ ...valueStyle, border: 'none', outline: 'none', width: '100%', fontFamily: 'inherit' }}
-              />
+              <RecipientField value={editedBcc} onChange={setEditedBcc} />
             </div>
             <div style={{ ...rowStyle, borderBottom: 'none' }}>
               <div style={{ ...labelBoxStyle, background: 'transparent', border: 'none', color: '#94a3b8', fontWeight: 500 }}>Subject</div>
