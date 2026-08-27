@@ -252,18 +252,33 @@ export default function OutlookStyleSendModal({
   // avoids the highlight flickering off while the pointer crosses child
   // elements: dragenter/dragleave fire per-element, not just for the panel
   // itself, so only going back to zero really means "left the panel."
+  //
+  // Every handler bails out first for anything that isn't a real file drag
+  // (checked via dataTransfer.types, the one thing readable during drag —
+  // .files itself is empty until drop). Vincent, 2026-08-27: this used to
+  // call preventDefault() unconditionally, which also hijacked the body
+  // textarea's own native drag-to-reposition-selected-text — a completely
+  // ordinary editing gesture — since a bubbled dragover/drop still lets an
+  // ancestor's preventDefault() block the original target's default action.
+  const isFileDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
   const handleDragEnter = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
-    if (!e.dataTransfer.types.includes('Files')) return;
     dragCounter.current += 1;
     setIsDraggingOver(true);
   };
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+  };
   const handleDragLeave = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     dragCounter.current = Math.max(0, dragCounter.current - 1);
     if (dragCounter.current === 0) setIsDraggingOver(false);
   };
   const handleDrop = (e: React.DragEvent) => {
+    if (!isFileDrag(e)) return;
     e.preventDefault();
     dragCounter.current = 0;
     setIsDraggingOver(false);
@@ -272,11 +287,19 @@ export default function OutlookStyleSendModal({
   };
 
   return (
-    <div onClick={(working || closing) ? undefined : handleClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
+    // Vincent, 2026-08-27: Chelsea was mid-edit and the whole review screen
+    // suddenly closed on her, forcing her to click Draft all over again —
+    // this modal's own backdrop used to close-on-click like a normal
+    // dismissable popover, but with save-on-close wired up (see handleClose)
+    // that made any stray click near the edge — now easier to land given
+    // the modal grew wider/taller today — silently save-and-close instead
+    // of just doing nothing. A screen reviewing a real outgoing email is
+    // not a casual popover: closing it should take a deliberate click on X
+    // or Close, never an accidental one on the backdrop.
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
       <div
-        onClick={e => e.stopPropagation()}
         onDragEnter={handleDragEnter}
-        onDragOver={e => { e.preventDefault(); }}
+        onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         style={{ width: 'min(1500px, 95vw)', background: '#fff', borderRadius: 12, boxShadow: '0 24px 70px rgba(15,23,42,0.28)', overflow: 'hidden', position: 'relative' }}
