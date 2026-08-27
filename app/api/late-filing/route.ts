@@ -201,12 +201,19 @@ export async function GET(req: NextRequest) {
 
     const uen = uenMap.get(entityName.toLowerCase()) ?? '';
     const manual = (uen ? manualByUen.get(uen) : undefined) ?? manualByName.get(normalize(entityName));
-    // Vincent, 2026-08-20: a company staff has already tagged as being
-    // struck off (any of REMARKS_OPTIONS' "STRIKE OFF" variants — ACRA is
-    // striking it off, with or without a client objection) has nothing
-    // left to chase an AR filing for — same reasoning as inactiveNames
-    // above, just sourced from the manual remark instead of tw_status.
-    if (/STRIKE OFF/i.test(manual?.remarks ?? '')) continue;
+    // Vincent, 2026-08-20 (narrowed 2026-08-27): a company tagged as struck
+    // off with nothing contested has nothing left to chase an AR filing for
+    // — same reasoning as inactiveNames above, just sourced from the manual
+    // remark instead of tw_status. Originally skipped "with or without a
+    // client objection" too, but Vincent flagged a real miss: SILVER RIVER
+    // TECHNOLOGY ("STRIKE OFF - CLIENT LODGED OBJECTION") wasn't showing up
+    // despite two genuinely unfiled, years-overdue cycles per its own
+    // TeamWork history. An objection means the outcome isn't settled — the
+    // client is actively contesting the strike-off, and getting the overdue
+    // AR filed can be part of what resolving that needs — so this is no
+    // longer "nothing left to chase" the way an uncontested strike-off is.
+    const remarks = manual?.remarks ?? '';
+    if (/STRIKE OFF/i.test(remarks) && !/CLIENT LODGED OBJECTION/i.test(remarks)) continue;
 
     // Last AR/AGM dates from last completed year
     const lastArDate  = lastCompleted?.filling_date  ?? null;
