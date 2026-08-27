@@ -230,6 +230,30 @@ function BillingInvoiceReference({ company, invoiceNo, title, muted = false }: {
   );
 }
 
+// AR Reminder's "Invoice" column — Vincent, 2026-08-27: show the same real
+// TAB/TAC invoice numbers Billing Drafts already tracks (tab_invoice_no /
+// tac_invoice_no, resolved server-side in app/api/ar-reminder/route.ts from
+// generated_invoices, scoped to this row's own FYE cycle), stacked when both
+// exist — instead of relying on someone re-typing the number into ar_status
+// by hand. Falls back to the original free-text ar_status EditField only
+// when no system invoice exists yet for this cycle (invoice not generated
+// through this system, or not yet raised at all) — same "system record when
+// we have one, manual fallback when we don't" pattern notInvoicedYet() below
+// already uses for the Billing tab.
+function ArInvoiceCell({ r, onSave, placeholder }: {
+  r: ARRecord; onSave: (id: number, field: string, val: string) => void; placeholder?: string;
+}) {
+  if (!r.tab_invoice_no && !r.tac_invoice_no) {
+    return <EditField id={r.id} field="ar_status" value={r.ar_status} onSave={onSave} placeholder={placeholder} />;
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
+      {r.tab_invoice_no && <BillingInvoiceReference company="TAB" invoiceNo={r.tab_invoice_no} />}
+      {r.tac_invoice_no && <BillingInvoiceReference company="TAC" invoiceNo={r.tac_invoice_no} />}
+    </div>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AR TAB — types & components
 // ─────────────────────────────────────────────────────────────────────────────
@@ -248,6 +272,7 @@ interface ARRecord {
   date_of_agm_manual?: boolean | null; filling_date_manual?: boolean | null; reminder_note_manual?: boolean | null;
   acc_pic_manual?: boolean | null; tax_pic_manual?: boolean | null;
   ar_status: string | null; xbrl: string | null; software_update: string | null;
+  tab_invoice_no: string | null; tac_invoice_no: string | null;
   dpo: string | null; ond_ron: string | null; dormant: string | null;
   accounts_status: string | null; fin_stmt_status: string | null;
   audited_fs: string | null; agm_documents: string | null;
@@ -1383,7 +1408,7 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #e2e8f0', padding: '8px 12px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Invoice</div>
-            <EditField id={r.id} field="ar_status" value={r.ar_status} onSave={onSave} placeholder="Invoice no. / notes…" />
+            <ArInvoiceCell r={r} onSave={onSave} placeholder="Invoice no. / notes…" />
           </div>
           <div style={{ background: '#fff', borderRadius: 6, border: '1px solid #e2e8f0', padding: '8px 12px' }}>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 4 }}>Email Sent</div>
@@ -3711,7 +3736,7 @@ function ARTableView({ records, allRecords, columnFilters, onApplyFilter, onSave
                   </div>
                 )}</TD>
                 <TD tint={rowTint}><SelectField id={r.id} field="remarks" value={r.remarks} onSave={onSave} options={REMARKS_OPTIONS} customLabel="Custom…" dateHelper={false} /></TD>
-                <TD finance tint={rowTint}><EditField id={r.id} field="ar_status"       value={r.ar_status}       onSave={onSave} placeholder="—" /></TD>
+                <TD finance tint={rowTint}><ArInvoiceCell r={r} onSave={onSave} placeholder="—" /></TD>
                 <TD finance tint={rowTint}><EditField id={r.id} field="accounts_status" value={r.accounts_status} onSave={onSave} placeholder="—" isDate looseDate /></TD>
                 <TD tint={rowTint} style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
                   <button onClick={() => onOpenDetail(r)} title="Open full details & edit history"

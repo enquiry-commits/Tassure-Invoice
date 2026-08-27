@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { todaySGT, toIsoDateValue } from '@/lib/date';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
+import { fyeDateString } from '@/lib/invoice-templates';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { getRequestAccount } from '@/lib/request-account';
 import { syncPicToActiveClient, loadCarriedForwardPics, type PicField } from '@/lib/pic-sync';
@@ -153,16 +154,36 @@ export async function GET(req: NextRequest) {
     { data: companies, error: companiesError },
     { data: activeNDs, error: ndError },
     { data: qbInvoices, error: invoiceError },
+    { data: generatedRows, error: generatedError },
     qbItems,
   ] = await Promise.all([
     supabase.from('companies').select('id, company_name, has_xbrl, has_nd, uses_address, has_accounts, has_tax, services_manual'),
     supabase.from('nd_appointments').select('company_name, appointment_date, nd_id').eq('sub_role', 'Nominee Director').not('appointment_date', 'is', null).is('cessation_date', null).order('appointment_date', { ascending: false }),
     supabase.from('quickbooks_invoices').select('invoice_no, txn_date, customer_name, total_amt, balance, status').gte('txn_date', `${year}-01-01`).lte('txn_date', `${year}-12-31`),
+    // Our own generated_invoices record (exact — Billing Drafts made it) —
+    // same source Billing Drafts' own TAB/TAC Invoice columns read, so AR
+    // Reminder's "Invoice" column can show the identical number instead of
+    // relying on someone typing it into ar_status by hand. Unscoped by year:
+    // a stale-overdue row can carry a past fye_year (see staleRows above),
+    // and this table only ever holds one row per (company, cycle, qb_company)
+    // — not the full QB history — so it's cheap to fetch in full.
+    supabase.from('generated_invoices').select('company_name, qb_company, invoice_no, fye_cycle, created_at'),
     getQbItems(supabase, year),
   ]);
 
-  const relatedError = companiesError ?? ndError ?? invoiceError;
+  const relatedError = companiesError ?? ndError ?? invoiceError ?? generatedError;
   if (relatedError) return NextResponse.json({ error: relatedError.message }, { status: 500 });
+
+  // Same shape/keying Billing Drafts' own renewals route uses for this table
+  // (see app/api/billing/renewals/route.ts) — exact normalized-name match,
+  // not the fuzzy wordMatch() below, since we wrote this row ourselves under
+  // the company's own canonical name.
+  const generatedMap = new Map<string, { qbCompany: string; invoiceNo: string; fyeCycle: string | null; createdAt: string }[]>();
+  for (const g of generatedRows ?? []) {
+    const key = normalize(g.company_name);
+    if (!generatedMap.has(key)) generatedMap.set(key, []);
+    generatedMap.get(key)!.push({ qbCompany: g.qb_company, invoiceNo: g.invoice_no, fyeCycle: g.fye_cycle, createdAt: g.created_at });
+  }
 
   const ndActiveSet = new Set((activeNDs ?? []).map(appointment => normalize(appointment.company_name)));
   const ndIds = [...new Set((activeNDs ?? []).map(appointment => appointment.nd_id).filter(Boolean))];
@@ -242,6 +263,17 @@ export async function GET(req: NextRequest) {
       ?? companyMap.get(normName)
       ?? findUniqueBestMatch(row.entity_name, companies ?? [], company => company.company_name, 70).value;
 
+    // This row's own cycle (not the currently-browsed month/year — a stale-
+    // overdue row carries a past fye_year) — matched against generated_invoices
+    // the same way Billing Drafts' own latestInvoiceNo() scopes to a cycle.
+    const rowFyeCycle = fyeDateString(row.fye_month, row.fye_year);
+    const genKey = normalize(compMatch?.company_name ?? row.entity_name);
+    const genMatches = (generatedMap.get(genKey) ?? generatedMap.get(normName) ?? []).filter(g => g.fyeCycle === rowFyeCycle);
+    const latestGenInvoice = (qbCompany: 'TAB' | 'TAC') => {
+      const ms = genMatches.filter(g => g.qbCompany === qbCompany);
+      return ms.length ? ms.reduce((a, b) => (a.createdAt > b.createdAt ? a : b)).invoiceNo : null;
+    };
+
     const qbSvcsRaw = wordMatch(normName, qbServiceMap);
     const qbSvcs = qbSvcsRaw instanceof Set ? qbSvcsRaw : new Set<string>();
     const matchedPeriods = wordMatch(normName, qbPeriodMap);
@@ -309,6 +341,8 @@ export async function GET(req: NextRequest) {
       servicesManual,
       servicePeriods: qbPeriods,
       invoices: wordMatch(normName, invoiceMap) ?? [],
+      tab_invoice_no: latestGenInvoice('TAB'),
+      tac_invoice_no: latestGenInvoice('TAC'),
       stages,
       stagesDone: Object.values(stages).filter(Boolean).length,
       daysUntilDue: row.due_date
