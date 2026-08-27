@@ -244,7 +244,7 @@ function PicCell({ name, active, onToggleActive, onSaveName }: {
       <CheckSquare checked={active} onToggle={onToggleActive} />
       <input value={val} onChange={e => setVal(e.target.value)}
         onBlur={() => { const next = val.trim(); if (next !== formatStaffName(name).trim()) onSaveName(next); }}
-        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) (e.target as HTMLInputElement).blur(); }}
         onClick={e => e.stopPropagation()}
         placeholder="—" style={{ flex: 1, minWidth: 0, border: '1px solid transparent', borderRadius: 4, padding: '1px 3px', fontSize: 11, outline: 'none', background: 'transparent', color: '#374151' }}
         onFocus={e => (e.currentTarget.style.border = '1px solid #2563eb')}
@@ -286,7 +286,7 @@ function ServiceChip({ name, active, onToggleActive, onSaveName }: {
       <div style={{ flex: 1, minWidth: 0 }}>
         <input value={val} onChange={e => setVal(e.target.value)}
           onBlur={() => { const next = val.trim(); if (next !== formatStaffName(name).trim()) onSaveName(next); }}
-          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) (e.target as HTMLInputElement).blur(); }}
           placeholder="Not assigned"
           style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', padding: 0, fontSize: 13, fontWeight: 650, color: val ? '#1e293b' : '#94a3b8', boxSizing: 'border-box' }} />
       </div>
@@ -548,7 +548,11 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
           // Enter commits (matches every other single-line cell in this
           // table); Shift+Enter inserts a real line break instead, for
           // fields like Remark/addresses that read better multi-line.
-          if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commit(); }
+          // isComposing excludes the Enter used mid-typing to confirm an
+          // IME candidate (e.g. a Chinese company name) — without this,
+          // that Enter committed/closed the field before the real text
+          // ever landed in it.
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); commit(); }
           if (e.key === 'Escape') { setVal(value ?? ''); setEditing(false); }
         }}
         style={{ flex: 1, minWidth: 0, border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 5px', fontSize: 11, outline: 'none', background: '#eff6ff', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, display: 'block' }}
@@ -797,7 +801,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
         <input ref={inputRef} type="text" value={val}
           onChange={e => setVal(e.target.value)}
           onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) { setEditing(false); commit(); } }}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setEditing(false); commit(); } if (e.key === 'Escape') { setVal(inputValue(value)); setEditing(false); } }}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); setEditing(false); commit(); } if (e.key === 'Escape') { setVal(inputValue(value)); setEditing(false); } }}
           placeholder={isDateField ? 'e.g. 03 Apr 2026' : ''}
           style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#eff6ff', minWidth: 0 }}
         />
@@ -849,7 +853,7 @@ const ModalField = memo(function ModalField({ id, field, label, value, onSave, c
         )}
       </div>
       <textarea ref={taRef} value={val} rows={1} onChange={e => setVal(e.target.value)} onBlur={commit}
-        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur(); } }}
         style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', fontSize: 12, outline: 'none', boxSizing: 'border-box', background: '#fff', color: '#1e293b', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4 }} />
     </div>
   );

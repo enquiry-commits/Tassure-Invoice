@@ -543,7 +543,7 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
       <input ref={inputRef} type="text" value={val}
         onChange={e => setVal(e.target.value)}
         onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) save(); }}
-        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') { setVal(inputValue(value)); setEditing(false); } }}
+        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); save(); } if (e.key === 'Escape') { setVal(inputValue(value)); setEditing(false); } }}
         placeholder={isDate ? (looseDate ? 'Date or note…' : 'e.g. 03 Apr 2026') : ''}
         style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: 'var(--status-info-tint)', minWidth: 0 }}
       />
@@ -811,7 +811,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
           <input ref={inputRef} type="text" value={val}
             onChange={e => setVal(e.target.value)}
             onBlur={e => { if (!(e.relatedTarget as HTMLElement | null)?.dataset?.calBtn) commit(val); }}
-            onKeyDown={e => { if (e.key === 'Enter') commit(val); if (e.key === 'Escape') { setVal(value ?? ''); setCustom(false); } }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) commit(val); if (e.key === 'Escape') { setVal(value ?? ''); setCustom(false); } }}
             placeholder={dateHelper ? 'e.g. 03 Apr 2026' : 'Type your own remarks…'}
             style={{ flex: '1 1 200px', border: '1.5px solid #2563eb', borderRadius: 4, padding: '2px 6px', fontSize: 12, outline: 'none', background: 'var(--status-info-tint)', minWidth: 0 }}
           />
@@ -3807,7 +3807,7 @@ function AddManualDateField({ label, value, onChange }: { label: string; value: 
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: '1 1 200px', minWidth: 0 }}>
         <input type="text" value={text} onChange={e => setText(e.target.value)}
           onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } if (e.key === 'Escape') { setText(toDisplayDate(value) ?? ''); } }}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.blur(); } if (e.key === 'Escape') { setText(toDisplayDate(value) ?? ''); } }}
           placeholder="e.g. 03 Apr 2026"
           style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
         <div style={{ position: 'relative', flexShrink: 0 }}>

@@ -203,7 +203,14 @@ export default function TrademarkTable({ category, title }: { category: Trademar
                         value={editValue}
                         onChange={e => setEditValue(e.target.value)}
                         onBlur={() => saveEdit(row, c)}
-                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(null); }}
+                        // Vincent, 2026-08-27: couldn't type a Chinese company
+                        // name into this cell — Enter, unguarded, blurred (and
+                        // so saved/closed) the field on EVERY press, including
+                        // the Enter used mid-composition to confirm an IME
+                        // candidate before the Chinese text ever actually
+                        // lands in the input. isComposing is true for that
+                        // one; only blur on a real, final Enter.
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(null); }}
                         style={{ border: '1px solid #93c5fd', borderRadius: 5, padding: '4px 6px', fontSize: 12.5, outline: 'none', width: '100%' }}
                       />
                     );
@@ -252,7 +259,7 @@ export default function TrademarkTable({ category, title }: { category: Trademar
                     value={newRow[c] ?? ''}
                     autoFocus={c === columns[0]}
                     onChange={e => setNewRow(prev => ({ ...prev, [c]: e.target.value }))}
-                    onKeyDown={e => { if (e.key === 'Enter') addRow(); }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) addRow(); }}
                     placeholder={COLUMN_DEFS[c].label}
                     style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 10px', fontSize: 13, outline: 'none' }}
                   />

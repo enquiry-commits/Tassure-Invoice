@@ -102,7 +102,7 @@ function DateField({ label, value, onChange }: { label: string; value: string | 
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: '1 1 200px', minWidth: 0 }}>
         <input type="text" value={text} onChange={e => setText(e.target.value)}
           onBlur={commit}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); } if (e.key === 'Escape') { setText(toDisplayDate(value ?? null) ?? ''); } }}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); e.currentTarget.blur(); } if (e.key === 'Escape') { setText(toDisplayDate(value ?? null) ?? ''); } }}
           placeholder="e.g. 03 Apr 2026"
           style={{ flex: 1, minWidth: 0, border: 'none', outline: 'none', background: 'transparent', padding: '3px 0', fontSize: 13, fontWeight: 500, color: '#1e293b', boxSizing: 'border-box' }} />
         <div style={{ position: 'relative', flexShrink: 0 }}>
