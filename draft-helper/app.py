@@ -14,6 +14,7 @@ Bound to 127.0.0.1 only; never reachable from the network.
 import base64
 import html
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -51,7 +52,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 
 # Every AR template's body ends with this line ("PAYMENT METHOD付款方式:"),
 # right where the original Word templates had the payment-options graphic
@@ -166,6 +167,34 @@ def _assign_sender(outlook, mail, sender_email: str):
     )
 
 
+def _normalize_recipients(raw: str) -> str:
+    """
+    Chelsea, 2026-08-27: first real Send() call with a multi-recipient CC
+    failed outright — 'Outlook does not recognize one or more names.'
+    (-2147352567 / DISP_E_EXCEPTION). Root cause: the web app stores a
+    multiple-recipient To/CC as NEWLINE-joined text (recipientLines() in
+    lib/campaign-recipients.ts), and this file assigned that raw string
+    straight to mail.To/mail.CC/mail.BCC — but Outlook's own convention for
+    those properties is a SEMICOLON-separated list; a literal embedded
+    newline isn't a recognized separator at all. This never surfaced
+    through .Display() (_open_one_draft has the exact same raw assignment,
+    unfixed until now) because Display() doesn't force name resolution —
+    a human sees the compose window and Outlook only resolves/validates
+    names lazily, often not erroring even when a field is malformed, and a
+    person could always retype a garbled field before manually clicking
+    Send. .Send() resolves immediately and hard-fails the instant it hits
+    one — no human left to notice or fix it first. Splits on any separator
+    that has turned up in practice (newline, comma, semicolon) and rejoins
+    with '; ', matching lib/draft-helper-client.ts's own normalizeRecipients
+    (used today only for the mailto: fallback link — this is the same fix,
+    applied where it was actually missing).
+    """
+    if not raw:
+        return raw
+    parts = re.split(r"[;,\n\r]+", raw)
+    return "; ".join(p.strip() for p in parts if p.strip())
+
+
 def _asset_path(name: str) -> str:
     return os.path.join(_BASE_DIR, "assets", name)
 
@@ -235,8 +264,8 @@ def _open_one_draft(outlook, draft: dict) -> dict:
     try:
         mail = outlook.CreateItem(0)  # olMailItem
         _assign_sender(outlook, mail, draft.get("senderEmail") or "")
-        mail.To = draft.get("to") or ""
-        mail.CC = draft.get("cc") or ""
+        mail.To = _normalize_recipients(draft.get("to") or "")
+        mail.CC = _normalize_recipients(draft.get("cc") or "")
         mail.Subject = draft.get("subject") or ""
         _set_body(mail, draft.get("body"))
 
@@ -316,9 +345,9 @@ def _send_one_draft(outlook, draft: dict) -> dict:
     try:
         mail = outlook.CreateItem(0)  # olMailItem
         _assign_sender(outlook, mail, draft.get("senderEmail") or "")
-        mail.To = draft.get("to") or ""
-        mail.CC = draft.get("cc") or ""
-        mail.BCC = draft.get("bcc") or ""
+        mail.To = _normalize_recipients(draft.get("to") or "")
+        mail.CC = _normalize_recipients(draft.get("cc") or "")
+        mail.BCC = _normalize_recipients(draft.get("bcc") or "")
         mail.Subject = draft.get("subject") or ""
         _set_body(mail, draft.get("body"))
 
