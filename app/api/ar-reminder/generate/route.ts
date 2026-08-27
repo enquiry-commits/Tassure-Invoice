@@ -31,9 +31,42 @@ import { getSessionCookie, fetchAgmList, parseDmy, toIsoDate } from '@/lib/teamw
  * (scripts/generate-ar-reminder-month.js, run 2026-07-07) that inserted 86
  * "June 2026" rows the same way — 31 of those 141 rows turned out wrong
  * when audited against real TeamWork data). This pass instead fetches each
- * never-generated company's real AGM/AR history and only inserts when a
+ * catch-up-eligible company's real AGM/AR history and only inserts when a
  * genuinely open (not yet held/filed) cycle is found, using TeamWork's own
  * year/date for that cycle — never a computed guess.
+ *
+ * Eligible for catch-up: a company with NO live row at all under its
+ * current fye_month — unchanged. Vincent, 2026-08-27, surfaced a related,
+ * real gap this does NOT cover: once the forward-window loop above creates
+ * a company's upcoming cycle, that month counts as "generated" forever,
+ * even if an OLDER cycle was never backfilled — found this way in 20
+ * companies, all sharing one FYE (December 2025, genuinely unfiled per
+ * TeamWork, overdue since 2026-07-31) sitting invisibly behind an
+ * already-tracked 2026 row. Deliberately NOT folded into this route's own
+ * eligibility condition as "every live row under this month is still
+ * future-dated" — that matches most healthy companies most of the time
+ * (897 eligible companies system-wide; December alone had 359/369 with
+ * only a future row), so as a DAILY cron re-check against live TeamWork
+ * it would be an unbounded, near-full-company-base scan every single day
+ * forever, not a one-time catch-up, and risks blowing this route's own
+ * 300s budget. The 20 found this way were backfilled once by hand instead
+ * — a similar one-time sweep across the other months, not a permanent
+ * change here, is the safer way to close this for good. (An open cycle
+ * already covered by an existing fye_year for that company is still never
+ * re-inserted regardless — see coveredYears below — this just protects
+ * against the narrower case where that could still matter.)
+ *
+ * "Open" cycle detection groups TeamWork's AGM and AR event rows by their
+ * shared Actual FYE date before deciding — NOT per-event-row in isolation.
+ * Caught live on SCIENCE IN SPORT SINGAPORE: its FYE-2025-10-31 AR event
+ * row had no held/filing date of its own, but the sibling AGM event row
+ * for the SAME FYE did (27/03/2026) — TeamWork's own consolidated report
+ * treats that as the whole cycle being done. Reading only the AR event's
+ * own two columns (this route's original behaviour) reached the opposite,
+ * wrong conclusion — inserted once as a "missing overdue AR", caught by
+ * Vincent showing the real consolidated TeamWork view, deleted. A cycle
+ * only counts as open now if NEITHER its AGM nor its AR event shows a
+ * held/filing date.
  *
  * Triggered by a daily Vercel Cron (see vercel.json) and can also be
  * called manually.
@@ -168,14 +201,16 @@ async function generateArRows() {
   // MEMORIAL CENTRE/SFS CARE all had an Excluded row from a past FYE
   // correction and nothing live since).
   //
-  // Runs once per company with no live row under its current fye_month. For
-  // each, fetches its REAL TeamWork AGM/AR event history and only inserts
-  // when a genuinely open cycle is found (an AGM or AR row with no
-  // held/filing date yet — the earliest one, if more than one is open) —
-  // using TeamWork's own year and FYE date for that cycle, never a
-  // computed guess. A company with no open cycle at all (e.g. its only
-  // history is years-old and already completed) is left alone and counted
-  // in `catchUpSkipped` rather than guessing at a fabricated cycle.
+  // Runs for each catchUpTargets company (see this file's own top docstring
+  // for the exact eligibility condition). For each, fetches its REAL
+  // TeamWork AGM/AR event history and only inserts when a genuinely open
+  // cycle is found (neither its AGM nor its AR event shows a held/filing
+  // date — the earliest such cycle, if more than one is open, and not one
+  // some existing row already covers) — using TeamWork's own year and FYE
+  // date for that cycle, never a computed guess. A company with no open
+  // cycle at all (e.g. its only history is years-old and already
+  // completed) is left alone and counted in `catchUpSkipped` rather than
+  // guessing at a fabricated cycle.
   const eligibleForCatchUp = (companies ?? []).filter(c => c.fye_month && MONTH_NAMES.includes(c.fye_month) && c.internal_id);
   let catchUpInserted = 0;
   let catchUpSkipped = 0;
@@ -201,20 +236,29 @@ async function generateArRows() {
     // to it. All 22 were cleaned up by hand (linked the real row's
     // company_id, deleted the empty duplicate) once found.
     const [{ data: byId, error: byIdError }, { data: byUen, error: byUenError }] = await Promise.all([
-      supabase.from('ar_reminder').select('id, company_id, uen, fye_month, status').in('company_id', eligibleIds),
+      supabase.from('ar_reminder').select('id, company_id, uen, fye_month, fye_year, due_date, status').in('company_id', eligibleIds),
       eligibleUens.length
-        ? supabase.from('ar_reminder').select('id, company_id, uen, fye_month, status').is('company_id', null).in('uen', eligibleUens)
+        ? supabase.from('ar_reminder').select('id, company_id, uen, fye_month, fye_year, due_date, status').is('company_id', null).in('uen', eligibleUens)
         : Promise.resolve({ data: [], error: null }),
     ]);
     const anyExistingError = byIdError || byUenError;
     if (anyExistingError) {
       catchUpErrors.push(anyExistingError.message);
     } else {
-      const liveMonthsByCompany = new Map<number, Set<string>>();
+      // Every live row per company (not just which months have one) — needed
+      // for the "no row at all" catch-up-eligibility check below, and so a
+      // found-open cycle can be checked against coveredYears before insert
+      // (belt-and-braces: eligibility already guarantees zero rows under
+      // this fye_month, so coveredYears is always empty in practice today —
+      // kept anyway so this stays correct if eligibility ever widens again).
+      const liveRowsByCompany = new Map<number, { fye_month: string; fye_year: number; due_date: string | null }[]>();
+      const addLiveRow = (companyId: number, r: { fye_month: string; fye_year: number; due_date: string | null }) => {
+        if (!liveRowsByCompany.has(companyId)) liveRowsByCompany.set(companyId, []);
+        liveRowsByCompany.get(companyId)!.push(r);
+      };
       for (const r of byId ?? []) {
         if (!r.company_id || r.status === 'Excluded') continue;
-        if (!liveMonthsByCompany.has(r.company_id)) liveMonthsByCompany.set(r.company_id, new Set());
-        liveMonthsByCompany.get(r.company_id)!.add(r.fye_month);
+        addLiveRow(r.company_id, { fye_month: r.fye_month, fye_year: r.fye_year, due_date: r.due_date });
       }
       // Orphaned rows matched by UEN: link company_id now (self-heals the
       // legacy gap instead of leaving it for the next person to rediscover)
@@ -223,46 +267,69 @@ async function generateArRows() {
         const uen = r.uen ? String(r.uen).trim().toUpperCase() : null;
         const company = uen ? eligibleUenMap.get(uen) : undefined;
         if (!company) continue;
-        if (r.status !== 'Excluded') {
-          if (!liveMonthsByCompany.has(company.id)) liveMonthsByCompany.set(company.id, new Set());
-          liveMonthsByCompany.get(company.id)!.add(r.fye_month);
-        }
+        if (r.status !== 'Excluded') addLiveRow(company.id, { fye_month: r.fye_month, fye_year: r.fye_year, due_date: r.due_date });
         const { error: linkErr } = await supabase.from('ar_reminder').update({ company_id: company.id }).eq('id', r.id);
         if (!linkErr) catchUpLinked++;
       }
-      const neverGenerated = eligibleForCatchUp.filter(c => !liveMonthsByCompany.get(c.id)?.has(c.fye_month as string));
-      if (neverGenerated.length) {
+      // Catch-up eligible: no live row under the company's current fye_month
+      // at all. Vincent, 2026-08-27: considered ALSO widening this to
+      // "every live row under that month is still future-dated" (closes a
+      // real gap — see this file's own docstring — where an older,
+      // already-overdue cycle can sit invisibly behind an already-tracked
+      // future one), but that condition matches most healthy companies most
+      // of the time (897 eligible companies system-wide; a sample of just
+      // the December ones alone had 359/369 with only a future row) — as a
+      // DAILY cron re-check against live TeamWork, that's an unbounded,
+      // near-full-company-base scan forever, not a one-time catch-up, and
+      // risks blowing this route's own 300s budget. Left the eligibility
+      // condition as-is; the real December gap it surfaced (20 companies)
+      // was instead swept once by hand, same shape as the one-off
+      // catch-up scripts this docstring already references — a similar
+      // one-time sweep across the other months is the safer way to close
+      // this for good, not a permanent daily behaviour change.
+      const catchUpTargets = eligibleForCatchUp.filter(c => {
+        const rowsUnderMonth = (liveRowsByCompany.get(c.id) ?? []).filter(r => r.fye_month === c.fye_month);
+        return !rowsUnderMonth.length;
+      });
+      if (catchUpTargets.length) {
         try {
           const cookie = await getSessionCookie();
           const catchUpRows: { entity_name: string; company_id: number; uen: string; fye_month: string; fye_year: number; fye_date: string; due_date: string; pic: string | null; acc_pic: string | null; tax_pic: string | null; acc_pic_manual: boolean; tax_pic_manual: boolean }[] = [];
           const skippedCompanies: { id: number; company_name: string; fye_month: string }[] = [];
           let nextIndex = 0;
           const worker = async () => {
-            while (nextIndex < neverGenerated.length) {
-              const c = neverGenerated[nextIndex++];
+            while (nextIndex < catchUpTargets.length) {
+              const c = catchUpTargets[nextIndex++];
               try {
                 const result = await fetchAgmList(cookie, c.internal_id as string);
-                let openYear: string | null = null;
-                let openFyeDate: string | null = null;
+                // Group by shared Actual FYE date FIRST — an AGM and an AR
+                // event for the same cycle are two separate TeamWork rows,
+                // and only one of them may end up carrying the real
+                // completion date (see this file's own docstring: SCIENCE IN
+                // SPORT SINGAPORE's AR event row was blank while its sibling
+                // AGM event for the identical FYE showed 27/03/2026 — reading
+                // either event in isolation reaches the wrong answer for the
+                // other). A cycle counts as open only if NEITHER shows one.
+                const cycles = new Map<string, { yearLabel: string; agmDone: boolean; arDone: boolean }>();
                 for (const ev of result.data ?? []) {
                   const [event, yearLabel, fyeRaw, , , heldRaw, filingRaw] = ev;
                   if (event !== 'AGM' && event !== 'AR') continue;
-                  if (toIsoDate(parseDmy(heldRaw)) || toIsoDate(parseDmy(filingRaw))) continue; // already completed
                   const fyeDate = toIsoDate(parseDmy(fyeRaw));
                   if (!fyeDate) continue;
-                  // Deliberately NOT using this event's own "due date" column —
-                  // AGM due is FYE+6mo, AR due is FYE+7mo, and TeamWork's
-                  // scraped column reflects whichever event this row is, not
-                  // this system's own due_date convention (always FYE+7,
-                  // per this file's own docstring). due_date below is always
-                  // computed from the confirmed real fyeDate instead, so it
-                  // can never inherit the wrong one depending on which event
-                  // (AGM vs AR) happened to be scanned. Caught after an
-                  // earlier one-off fix script (fix-ar-mismatch-years.js)
-                  // used the scraped due date directly and got 27/27 rows
-                  // wrong by exactly one month.
+                  if (!cycles.has(fyeDate)) cycles.set(fyeDate, { yearLabel, agmDone: false, arDone: false });
+                  const done = !!(toIsoDate(parseDmy(heldRaw)) || toIsoDate(parseDmy(filingRaw)));
+                  const g = cycles.get(fyeDate)!;
+                  if (event === 'AGM') g.agmDone = g.agmDone || done; else g.arDone = g.arDone || done;
+                }
+                const coveredYears = new Set((liveRowsByCompany.get(c.id) ?? [])
+                  .filter(r => r.fye_month === c.fye_month).map(r => r.fye_year));
+                let openYear: string | null = null;
+                let openFyeDate: string | null = null;
+                for (const [fyeDate, g] of cycles) {
+                  if (g.agmDone || g.arDone) continue; // already completed
+                  if (coveredYears.has(Number(g.yearLabel))) continue; // some row already tracks this one
                   if (!openFyeDate || fyeDate < openFyeDate) {
-                    openYear = yearLabel;
+                    openYear = g.yearLabel;
                     openFyeDate = fyeDate;
                   }
                 }
@@ -273,6 +340,15 @@ async function generateArRows() {
                     uen: c.registration_no || '',
                     fye_month: c.fye_month as string,
                     fye_year: Number(openYear),
+                    // Deliberately NOT using either event's own "due date"
+                    // column — AGM due is FYE+6mo, AR due is FYE+7mo, and
+                    // TeamWork's scraped column reflects whichever event
+                    // happened to carry it, not this system's own due_date
+                    // convention (always FYE+7). Computed from the confirmed
+                    // real fyeDate instead, so it can never inherit the
+                    // wrong one. Caught after an earlier one-off fix script
+                    // (fix-ar-mismatch-years.js) used the scraped due date
+                    // directly and got 27/27 rows wrong by exactly one month.
                     fye_date: openFyeDate,
                     due_date: toDateStr(addMonths(new Date(`${openFyeDate}T00:00:00Z`), 7)),
                     pic: resolveTeamworkPic(c.sec_pic ?? c.pic),
@@ -290,7 +366,7 @@ async function generateArRows() {
               }
             }
           };
-          await Promise.all(Array.from({ length: Math.min(CATCH_UP_CONCURRENCY, neverGenerated.length) }, worker));
+          await Promise.all(Array.from({ length: Math.min(CATCH_UP_CONCURRENCY, catchUpTargets.length) }, worker));
           if (catchUpRows.length) {
             const { error: catchUpInsErr } = await supabase.from('ar_reminder').insert(catchUpRows);
             if (catchUpInsErr) catchUpErrors.push(catchUpInsErr.message);
