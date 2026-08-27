@@ -52,7 +52,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.7.2"
+VERSION = "1.7.3"
 
 # Every AR template's body ends with this line ("PAYMENT METHOD付款方式:"),
 # right where the original Word templates had the payment-options graphic
@@ -134,14 +134,26 @@ def _assign_sender(outlook, mail, sender_email: str):
     Vincent, 2026-08-26: pointed out the legacy macro never needed any of
     that — it only ever set SendUsingAccount, on the very same kind of
     account, and it worked. The missing piece was never the sender
-    identity itself: _open_one_draft now calls mail.Save() once, right
-    before Display(), which gives the item a real EntryID before Outlook's
-    Inspector ever renders it — see that function's own comment for why an
-    unsaved item doesn't reliably carry a COM-assigned account through to
-    what the UI (and the actual send) treat as bound. With Save() in place,
-    the PR_SENT_REPRESENTING_* write is no longer carrying any weight and
-    is one more thing that can silently disagree with reality — removed,
-    back to exactly the legacy macro's approach.
+    identity itself — removed PR_SENT_REPRESENTING_*, back to exactly the
+    legacy macro's approach, and theorized _open_one_draft's new mail.Save()
+    call (giving the item a real EntryID before Display()) was what made an
+    unsaved item's COM-assigned account carry through to what the UI (and
+    the actual send) treat as bound.
+
+    2026-08-27: that theory was wrong, or at least incomplete — a real
+    Chelsea test after it shipped still sent from the wrong account. Only
+    truly resolved by going back to BULK.xlsm's actual VBA source (extracted
+    with olevba, since this machine's Excel has "trust access to the VBA
+    project" off) and diffing it line by line against this file, rather
+    than continuing to theorize: the macro calls .GetInspector — a side
+    effect of how it pastes its Word-built body in, not a deliberate
+    fix — immediately after SendUsingAccount, before anything else is set.
+    This file never did that; see _open_one_draft's and _send_one_draft's
+    own comments for the actual fix now in place. Save() is left in, not
+    because it's confirmed load-bearing, but because nothing here
+    contradicts it and removing an unconfirmed-harmless line just to tidy
+    up isn't worth the risk of reintroducing whatever it may still help
+    with.
     """
     requested = (sender_email or "").strip().lower()
     if not requested:
@@ -264,6 +276,31 @@ def _open_one_draft(outlook, draft: dict) -> dict:
     try:
         mail = outlook.CreateItem(0)  # olMailItem
         _assign_sender(outlook, mail, draft.get("senderEmail") or "")
+        # Vincent, 2026-08-27: Save() below was never actually the fix — a
+        # real Chelsea test after it shipped still sent from the wrong
+        # account. Extracted BULK.xlsm's real VBA source (olevba, since this
+        # machine's Excel has "trust access to the VBA project" off) and
+        # diffed it against this function line by line: the macro calls
+        # .GetInspector — as an incidental side effect of how it pastes the
+        # Word-built body into the item, not a deliberate fix — immediately
+        # after SendUsingAccount, before To/CC/Subject/body/attachments are
+        # ever touched. This file never did that at all; .HTMLBody is a
+        # plain property write with no Inspector involved, and the only
+        # GetInspector-triggering call was Display() at the very end, after
+        # everything else was already set. Realizing the Inspector this
+        # early appears to be what actually binds the compose window's From
+        # selection to the account just assigned, before Outlook's own later
+        # property writes get a chance to silently re-default it — matching
+        # the macro's own working order exactly, not guessing at a new one.
+        #
+        # Closed again immediately (discarding — nothing to lose, nothing
+        # past the sender is set on it yet) rather than left open: tested
+        # directly, an Inspector still attached to this MailItem when .Send()
+        # later runs makes .Send() itself throw "(-2147024809, 'The
+        # parameter is incorrect.')" — Display() at the bottom of this
+        # function re-opens a real window regardless, and closing here first
+        # doesn't lose the binding effect (verified directly too, both ways).
+        mail.GetInspector().Close(1)  # 1 = olDiscard
         mail.To = _normalize_recipients(draft.get("to") or "")
         mail.CC = _normalize_recipients(draft.get("cc") or "")
         mail.Subject = draft.get("subject") or ""
@@ -284,26 +321,10 @@ def _open_one_draft(outlook, draft: dict) -> dict:
             if os.path.isfile(path):
                 mail.Attachments.Add(path)
 
-        # Vincent, 2026-08-26: real report — the compose window showed
-        # finance@tassure.com (a genuinely configured account on that exact
-        # machine, no cross-machine variable at all), but the message that
-        # actually went out was sent from contact@tassure.com instead; a
-        # second report on the same machine showed the From dropdown
-        # displaying finance@tassure.com as plain text while the dropdown's
-        # own entry for it carried an "X" (Outlook's marker for a freeform/
-        # MRU address, not a bound account) — staff had to manually retype
-        # it into the From box themselves to get a real, selectable
-        # connection. Both point at the same mechanism: _assign_sender's
-        # SendUsingAccount/PR_SENT_REPRESENTING_* writes land on a MailItem
-        # that has never been persisted (CreateItem() alone gives it no
-        # EntryID yet) — Outlook's Inspector appears to only treat an
-        # account as a *bound* From selection once the item has a real
-        # store identity, otherwise it's held as inert property values that
-        # LOOK right in text but never get wired into the actual send path
-        # or the dropdown's own bound-entry list. One Save() here, after
-        # every field is set and right before Display(), gives the item a
-        # real EntryID first, so the sender assignment has something solid
-        # to attach to before the user ever sees the compose window.
+        # Kept alongside GetInspector above, not replaced by it — harmless
+        # either way, and Save() giving the item a real EntryID before
+        # Display() may still matter for reasons unrelated to the sender
+        # binding specifically.
         mail.Save()
         mail.Display()
         return {"ok": True}
@@ -323,13 +344,20 @@ def _send_one_draft(outlook, draft: dict) -> dict:
     back through the MailItem the way the old event-listener/reconciler
     mechanism (removed 2026-08-26) needed to identify what got sent later.
 
-    Keeps the same mail.Save() call _open_one_draft added — not redundant
-    here. The exact "From shows one account, sends from another" bug that
-    fix exists for (see _assign_sender's docstring) happens at the moment
-    Send() actually fires, which is identical whether a human clicks Send
-    in a Displayed window or this code calls .Send() directly; dropping
-    Save() would silently reintroduce that bug with nobody left watching
-    the From field to notice.
+    Calls mail.GetInspector().Close(1) right after _assign_sender, same as
+    _open_one_draft now does (see that function's own comment for the full
+    story: diffed against BULK.xlsm's real VBA source after Save() alone
+    proved insufficient on a real Chelsea test — sent from the wrong account
+    despite it). Closing immediately isn't just tidiness here — it's
+    required: tested directly, an Inspector still attached when .Send()
+    later runs makes .Send() itself throw "(-2147024809, 'The parameter is
+    incorrect.')" (first tried leaving it open with Visible = False, to
+    avoid flashing a compose window open on a path with no human meant to
+    see one — that hit exactly this error). Closing it immediately still
+    keeps the realize/bind effect the fix depends on (verified directly,
+    both with and without the immediate close) while leaving Send() able to
+    run — and as a side benefit, means nothing ever flashes on screen here
+    at all, not even best-effort.
 
     Untested territory, flagged rather than assumed safe: nothing in this
     codebase (nor the legacy BULK.xlsm macro before it) has ever called
@@ -345,6 +373,7 @@ def _send_one_draft(outlook, draft: dict) -> dict:
     try:
         mail = outlook.CreateItem(0)  # olMailItem
         _assign_sender(outlook, mail, draft.get("senderEmail") or "")
+        mail.GetInspector().Close(1)  # 1 = olDiscard
         mail.To = _normalize_recipients(draft.get("to") or "")
         mail.CC = _normalize_recipients(draft.get("cc") or "")
         mail.BCC = _normalize_recipients(draft.get("bcc") or "")

@@ -13,7 +13,7 @@ export const DRAFT_HELPER_URL = 'http://127.0.0.1:51820';
 // exe is built and copied to public/downloads/TassureDraftHelper.exe — this
 // is what lets the web app tell staff their locally-installed Helper is
 // stale instead of silently running old behaviour with no signal at all.
-export const LATEST_HELPER_VERSION = '1.7.2';
+export const LATEST_HELPER_VERSION = '1.7.3';
 
 export interface HelperHealth {
   ok: boolean;
