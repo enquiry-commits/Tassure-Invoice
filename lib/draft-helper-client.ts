@@ -210,8 +210,24 @@ export interface PreparedDraft {
 // narrowly) the chance of what's sent silently differing from what was
 // reviewed.
 export async function prepareDraftForSend(draft: DraftLike): Promise<PreparedDraft> {
-  const refreshed = await refreshAmount(draft);
-  const systemAttachments = await fetchSystemAttachments(refreshed.draft);
+  // Vincent, 2026-08-27: these used to run one after the other — both are
+  // real network round-trips to QuickBooks (a live amount check, then a live
+  // PDF render), so waiting for the first before even starting the second
+  // roughly doubled the real wait ("文件的自动导入也是很慢"). The PDF fetch
+  // only needs qbInvoiceId/qbCompany, which refreshAmount can never change
+  // (refresh-amounts/route.ts only ever updates .amount on an existing ref —
+  // same refs, same ids, same length) — so fetching against the ORIGINAL
+  // draft is exactly as correct as waiting for the refresh first. The one
+  // thing this trades away: if the amount really was stale and gets
+  // corrected, the attachment's own suggested filename (which embeds the
+  // total, e.g. "...S$660.pdf") can show the pre-correction figure —
+  // cosmetic only, since the PDF itself is always QuickBooks' live render
+  // regardless of what our filename says, and the email body (from
+  // refreshed.draft) always shows the corrected total either way.
+  const [refreshed, systemAttachments] = await Promise.all([
+    refreshAmount(draft),
+    fetchSystemAttachments(draft),
+  ]);
   return {
     draft: refreshed.draft,
     systemAttachments,

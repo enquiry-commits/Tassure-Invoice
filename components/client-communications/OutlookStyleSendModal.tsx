@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Send, FileText, X, Loader2, Paperclip, AlertTriangle } from 'lucide-react';
 import {
   checkHelperHealth, prepareDraftForSend, sendDraftsInOutlook,
@@ -80,6 +80,18 @@ export default function OutlookStyleSendModal({
   const [closing, setClosing] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const dragCounter = useRef(0);
+
+  // Vincent, 2026-08-27: the body used to be a fixed-height textarea with
+  // its own internal scrollbar, and the payment image sat below it as a
+  // separate block — cramped, and scrolling the text didn't carry the image
+  // along with it. Auto-growing this to fit its full content removes the
+  // textarea's own scroll entirely, so the ONE scrollbar (the modal's own)
+  // carries text and image together, same as scrolling a real email.
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const resizeBody = () => { const el = bodyRef.current; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } };
+  useEffect(() => { resizeBody(); }, [editedBody]);
 
   // Resolve as soon as this opens, not when Send is clicked — same rule the
   // billing popover's own previewRow already follows.
@@ -235,9 +247,49 @@ export default function OutlookStyleSendModal({
     ...(includeStanding ? [{ key: 'standing', fileName: STANDING_ATTACHMENT_NAME, byteSize: standingSize, previewUrl: STANDING_ATTACHMENT_SRC, onRemove: () => setIncludeStanding(false) }] : []),
   ];
 
+  // Drop files anywhere on the panel to attach them — the same list
+  // "Add attachment" already appends to. A counter (not a plain boolean)
+  // avoids the highlight flickering off while the pointer crosses child
+  // elements: dragenter/dragleave fire per-element, not just for the panel
+  // itself, so only going back to zero really means "left the panel."
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragCounter.current += 1;
+    setIsDraggingOver(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current = Math.max(0, dragCounter.current - 1);
+    if (dragCounter.current === 0) setIsDraggingOver(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounter.current = 0;
+    setIsDraggingOver(false);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length) setManualFiles(prev => [...prev, ...files]);
+  };
+
   return (
     <div onClick={(working || closing) ? undefined : handleClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 'min(860px, 100%)', background: '#fff', borderRadius: 12, boxShadow: '0 24px 70px rgba(15,23,42,0.28)', overflow: 'hidden' }}>
+      <div
+        onClick={e => e.stopPropagation()}
+        onDragEnter={handleDragEnter}
+        onDragOver={e => { e.preventDefault(); }}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        style={{ width: 'min(1500px, 95vw)', background: '#fff', borderRadius: 12, boxShadow: '0 24px 70px rgba(15,23,42,0.28)', overflow: 'hidden', position: 'relative' }}
+      >
+        {isDraggingOver && (
+          <div style={{
+            position: 'absolute', inset: 8, zIndex: 10, border: '2px dashed #397f78', borderRadius: 8,
+            background: 'rgba(57,127,120,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, fontWeight: 700, color: '#397f78', pointerEvents: 'none',
+          }}>
+            Drop to attach
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '8px 12px', borderBottom: '1px solid #f1f5f9' }}>
           <button type="button" onClick={handleClose} disabled={working || closing} title="Close" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: (working || closing) ? 'not-allowed' : 'pointer', padding: 4, display: 'flex' }}>
             {closing ? <Loader2 size={16} className="spin" /> : <X size={16} />}
@@ -318,10 +370,11 @@ export default function OutlookStyleSendModal({
 
         <div style={{ borderTop: '1px solid #f1f5f9', padding: '16px 20px' }}>
           <textarea
+            ref={bodyRef}
             value={editedBody}
-            onChange={e => setEditedBody(e.target.value)}
-            rows={14}
-            style={{ width: '100%', border: 'none', outline: 'none', resize: 'vertical', fontFamily: 'Arial, sans-serif', fontSize: 13, lineHeight: 1.7, color: '#0f172a', boxSizing: 'border-box' }}
+            onChange={e => { setEditedBody(e.target.value); resizeBody(); }}
+            rows={1}
+            style={{ width: '100%', border: 'none', outline: 'none', resize: 'none', overflow: 'hidden', fontFamily: 'Arial, sans-serif', fontSize: 13, lineHeight: 1.7, color: '#0f172a', boxSizing: 'border-box' }}
           />
           {showsPaymentImage && (
             <div style={{ marginTop: 8 }}>
