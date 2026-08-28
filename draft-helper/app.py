@@ -52,7 +52,7 @@ win32com.__gen_path__ = os.path.join(_BASE_DIR, "outlook_gen_py_cache")
 sys.modules["win32com.gen_py"].__path__ = [win32com.__gen_path__]
 
 PORT = 51820
-VERSION = "1.7.3"
+VERSION = "1.7.4"
 
 # Every AR template's body ends with this line ("PAYMENT METHOD付款方式:"),
 # right where the original Word templates had the payment-options graphic
@@ -293,14 +293,26 @@ def _open_one_draft(outlook, draft: dict) -> dict:
         # property writes get a chance to silently re-default it — matching
         # the macro's own working order exactly, not guessing at a new one.
         #
-        # Closed again immediately (discarding — nothing to lose, nothing
-        # past the sender is set on it yet) rather than left open: tested
-        # directly, an Inspector still attached to this MailItem when .Send()
-        # later runs makes .Send() itself throw "(-2147024809, 'The
-        # parameter is incorrect.')" — Display() at the bottom of this
-        # function re-opens a real window regardless, and closing here first
-        # doesn't lose the binding effect (verified directly too, both ways).
-        mail.GetInspector().Close(1)  # 1 = olDiscard
+        # 2026-08-28: shipped 1.7.3 closed this Inspector immediately
+        # (`.Close(1)` right here) — broke outright for Chelsea on her real
+        # M365 machine: "Property 'CreateItem.To' can not be set" the moment
+        # `mail.To =` ran next. Reproduced directly: on a freshly COM-launched
+        # Outlook, `Close()` right after `GetInspector()` — before the
+        # Inspector has actually finished initializing — doesn't just close
+        # the window, it can tear down the whole not-yet-saved item (or, in
+        # one isolated repro, the whole Outlook process: "RPC server is
+        # unavailable"). It only ever looked safe here because this
+        # machine's one personal account initializes fast enough to win the
+        # race; a slower Exchange/M365 profile (exactly what this targets)
+        # loses it. Fix: keep the Inspector reference and defer the actual
+        # Close() until right before Save() — the same real ordering the
+        # macro itself has (it never closes the Inspector at all until the
+        # window is dismissed at the very end), and it gives Outlook the
+        # entire To/CC/Subject/body/attachments-setting time to finish
+        # initializing before anything touches it again. Verified directly:
+        # this ordering survives a real end-to-end .Send() with no exception
+        # and no crash, immediate-close does not.
+        inspector = mail.GetInspector
         mail.To = _normalize_recipients(draft.get("to") or "")
         mail.CC = _normalize_recipients(draft.get("cc") or "")
         mail.Subject = draft.get("subject") or ""
@@ -321,10 +333,13 @@ def _open_one_draft(outlook, draft: dict) -> dict:
             if os.path.isfile(path):
                 mail.Attachments.Add(path)
 
-        # Kept alongside GetInspector above, not replaced by it — harmless
-        # either way, and Save() giving the item a real EntryID before
-        # Display() may still matter for reasons unrelated to the sender
-        # binding specifically.
+        # Close the Inspector we've been holding since right after
+        # _assign_sender, now that every field is set (see the long comment
+        # above) — an Inspector still attached to this MailItem when .Send()
+        # later runs makes .Send() itself throw "(-2147024809, 'The
+        # parameter is incorrect.')" (tested directly). Display() below
+        # opens a real window regardless.
+        inspector.Close(1)  # 1 = olDiscard
         mail.Save()
         mail.Display()
         return {"ok": True}
@@ -344,20 +359,28 @@ def _send_one_draft(outlook, draft: dict) -> dict:
     back through the MailItem the way the old event-listener/reconciler
     mechanism (removed 2026-08-26) needed to identify what got sent later.
 
-    Calls mail.GetInspector().Close(1) right after _assign_sender, same as
+    Calls mail.GetInspector right after _assign_sender, same as
     _open_one_draft now does (see that function's own comment for the full
     story: diffed against BULK.xlsm's real VBA source after Save() alone
     proved insufficient on a real Chelsea test — sent from the wrong account
-    despite it). Closing immediately isn't just tidiness here — it's
-    required: tested directly, an Inspector still attached when .Send()
-    later runs makes .Send() itself throw "(-2147024809, 'The parameter is
-    incorrect.')" (first tried leaving it open with Visible = False, to
-    avoid flashing a compose window open on a path with no human meant to
-    see one — that hit exactly this error). Closing it immediately still
-    keeps the realize/bind effect the fix depends on (verified directly,
-    both with and without the immediate close) while leaving Send() able to
-    run — and as a side benefit, means nothing ever flashes on screen here
-    at all, not even best-effort.
+    despite it). The Inspector's actual .Close() is DEFERRED until right
+    before Save()/Send() (2026-08-28, see _open_one_draft's own comment) —
+    1.7.3 closed it immediately here and broke outright on Chelsea's real
+    M365 machine ("Property 'CreateItem.To' can not be set" the instant
+    mail.To ran next), reproduced directly on this machine too: closing an
+    Inspector before it's finished initializing can tear down the whole
+    not-yet-saved item, not just the window — a race this machine's single
+    fast-initializing personal account never lost, but a real Exchange/M365
+    profile does. Leaving it open through the whole field-setting sequence
+    and closing it only right before Send() still keeps the realize/bind
+    effect the fix depends on (verified directly, end to end, with a real
+    .Send() landing in Sent Items) while avoiding both failure modes: an
+    Inspector still attached when .Send() runs throws "(-2147024809, 'The
+    parameter is incorrect.')" (tested directly — this is why it's closed
+    before Send(), not left open entirely), and closing it too early tears
+    down the item outright (this is why the close is deferred, not
+    immediate). Nothing ever flashes on screen here either way — GetInspector
+    alone doesn't show a window, only Display()/Activate() would.
 
     Untested territory, flagged rather than assumed safe: nothing in this
     codebase (nor the legacy BULK.xlsm macro before it) has ever called
@@ -373,7 +396,7 @@ def _send_one_draft(outlook, draft: dict) -> dict:
     try:
         mail = outlook.CreateItem(0)  # olMailItem
         _assign_sender(outlook, mail, draft.get("senderEmail") or "")
-        mail.GetInspector().Close(1)  # 1 = olDiscard
+        inspector = mail.GetInspector
         mail.To = _normalize_recipients(draft.get("to") or "")
         mail.CC = _normalize_recipients(draft.get("cc") or "")
         mail.BCC = _normalize_recipients(draft.get("bcc") or "")
@@ -394,6 +417,7 @@ def _send_one_draft(outlook, draft: dict) -> dict:
                 if os.path.isfile(path):
                     mail.Attachments.Add(path)
 
+        inspector.Close(1)  # 1 = olDiscard — see the long comment above
         mail.Save()
         mail.Send()
         return {"ok": True}
