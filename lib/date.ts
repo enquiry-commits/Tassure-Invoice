@@ -5,6 +5,23 @@ export function todaySGT(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: SGT });
 }
 
+export function toDateStr(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+// Moved here 2026-08-27 from app/api/ar-reminder/generate/route.ts (its own
+// original home) so app/api/ar-reminder/sync-workflow/route.ts's new FYE-
+// correction catch-up could reuse the EXACT same due_date formula (FYE + 7
+// months, this system's own AR-filing-deadline convention) instead of a
+// second, independently-typed copy that could quietly drift from it.
+export function addMonths(date: Date, n: number): Date {
+  const d = new Date(date);
+  const day = d.getUTCDate();
+  d.setUTCMonth(d.getUTCMonth() + n);
+  if (d.getUTCDate() !== day) d.setUTCDate(0);
+  return d;
+}
+
 /** Returns current year in Singapore timezone */
 export function thisYearSGT(): number {
   return parseInt(new Date().toLocaleDateString('en-CA', { timeZone: SGT }).slice(0, 4), 10);

@@ -4,6 +4,9 @@ import { parseDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamw
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { withAutomationRun } from '@/lib/automation-sync';
 import { logFieldChange } from '@/lib/audit-log';
+import { resolveTeamworkPic } from '@/lib/teamwork-pic';
+import { loadCarriedForwardPics } from '@/lib/pic-sync';
+import { toDateStr, addMonths } from '@/lib/date';
 
 /**
  * Daily AR-workflow sync: fill ar_reminder rows' AGM/filing dates from
@@ -74,6 +77,33 @@ import { logFieldChange } from '@/lib/audit-log';
  * directly by Vincent from a real company that had already self-corrected
  * JUN→DEC but still showed under JUN too: "明明DEC才是最新的，JUN不应该再
  * 出现了."
+ *
+ * Whenever fye_month actually changes, ALSO checks (2026-08-27) for a
+ * genuinely still-open OLDER cycle under the new month that isn't covered
+ * by any live ar_reminder row, and backfills it if found — closing a
+ * related, narrower version of the gap /generate's own catch-up pass has:
+ * that pass only ever runs for a company with ZERO rows under its current
+ * fye_month, so once /generate's plain forward-window loop creates a row
+ * for this company's upcoming cycle under the newly-corrected month (now,
+ * or on an earlier run), that pass will never look at this company again —
+ * even if an older cycle under that same month was never itself resolved.
+ * Confirmed real: 20 companies found this way in December 2025 alone, all
+ * sharing this exact shape (found via a one-off manual audit script, not
+ * this mechanism — see /generate's own docstring for that full story and
+ * the 20-company backfill it describes). Deliberately scoped to fire ONLY
+ * at the moment fye_month changes, not as a standing daily check across
+ * every company — Vincent, 2026-08-27: a full daily re-scan would cover
+ * most companies most of the time (897 eligible system-wide; the December
+ * sample alone had 359/369 with only a future row), which risked this
+ * route's own time budget for no ongoing benefit once the historical
+ * backlog is cleared. "Is this cycle open" uses the SAME cross-referenced
+ * AGM+AR grouping /generate's own catch-up now uses (its own docstring
+ * has the full story of the mistake that fix corrects) — reuses
+ * result.data, this company's TeamWork history already fetched this same
+ * iteration for the work above, so no extra TeamWork call. Wrapped in its
+ * own try/catch so a failure here can never block the FYE
+ * correction/stale-row-exclusion work above it, which has already
+ * succeeded by the time this runs.
  *
  * Also fills Master List's Active Client "Last AGM Date"/"Last AR Date"/
  * "Last Accts Date"/"Next AGM Due" columns (master_list.last_agm_date/
@@ -172,13 +202,22 @@ async function syncArWorkflow(req: NextRequest) {
 
   const { data: companies } = await supabase
     .from('companies')
-    .select('id, company_name, internal_id, registration_no, fye_month')
+    .select('id, company_name, internal_id, registration_no, fye_month, pic, sec_pic')
     .not('internal_id', 'is', null);
 
   // entity_name → TeamWork company_id. Fuzzy matching is allowed only when
   // there is one unique best candidate; ties are sent to the exception count.
   const companyCandidates = companies ?? [];
   const internalByCompanyId = new Map(companyCandidates.map(company => [company.id, company.internal_id as string]));
+  // Full company record by companies.id — the FYE-correction catch-up below
+  // (2026-08-27) needs pic/sec_pic/registration_no to build a complete new
+  // ar_reminder row, which companyByInternalId's own {id, fye_month} pair
+  // doesn't carry.
+  const companyById = new Map(companyCandidates.map(company => [company.id, company]));
+  // Same carry-forward suggestion /generate's own catch-up pass uses for a
+  // freshly-inserted row's acc_pic/tax_pic — loaded once here, not per
+  // company, for the same reason /generate loads it once.
+  const { accFor, taxFor } = await loadCarriedForwardPics(supabase);
 
   // TeamWork company_id -> UEN, so the per-company event fetch below can also
   // patch the matching Active Client row (master_list keys its own rows by
@@ -268,6 +307,7 @@ async function syncArWorkflow(req: NextRequest) {
   let activeClientUpdated = 0, activeClientErrors = 0;
   let fyeMonthCorrected = 0, fyeMonthErrors = 0;
   let staleArRowsExcluded = 0, staleArRowsErrors = 0;
+  let fyeCorrectionBackfilled = 0, fyeCorrectionBackfillErrors = 0;
   const changes: { entity: string; patch: Record<string, string | null> }[] = [];
 
   // Concurrency 15 — same proven range as late-filing/sync's worker pool
@@ -460,6 +500,106 @@ async function syncArWorkflow(req: NextRequest) {
                 });
               }
             }
+
+            // New 2026-08-27, closing a related gap Vincent found: once
+            // /generate's plain forward-window loop creates (now, or on an
+            // earlier run) a row for this company's CURRENT/upcoming cycle
+            // under correctMonth, /generate's OWN catch-up pass will never
+            // look at this company again — that pass only ever fires for a
+            // company with ZERO rows under its current fye_month, and this
+            // one now has (or is about to have) exactly one. Meanwhile an
+            // OLDER, genuinely still-open cycle under correctMonth — one
+            // TeamWork shows as never held/filed, that predates this
+            // correction — would sit invisible forever. Confirmed real: 20
+            // companies found this way in December 2025 alone, all sharing
+            // this exact shape (see /generate's own docstring for the full
+            // story and the manual sweep that closed that specific batch).
+            // This closes the same class of gap right when it can first
+            // arise — the moment fye_month actually changes — instead of
+            // requiring another manual sweep later. Reuses result.data
+            // (this company's TeamWork history), already fetched this
+            // iteration — no extra TeamWork call.
+            try {
+              // Same cross-referenced "is this cycle open" grouping
+              // /generate's own catch-up now uses (2026-08-27 fix, after
+              // the wrong conclusion it used to reach reading an AGM or AR
+              // event's own two columns in isolation — see SCIENCE IN
+              // SPORT SINGAPORE in that file's docstring): open only if
+              // NEITHER the AGM nor the AR event for a cycle shows a
+              // held/filing date.
+              const openCycles = new Map<string, { yearLabel: string; agmDone: boolean; arDone: boolean }>();
+              for (const ev of result.data ?? []) {
+                const [ev0, ev1, ev2, , , ev5, ev6] = ev;
+                if (ev0 !== 'AGM' && ev0 !== 'AR') continue;
+                const evFyeIso = toIsoDate(parseDmy(ev2));
+                if (!evFyeIso) continue;
+                if (!openCycles.has(evFyeIso)) openCycles.set(evFyeIso, { yearLabel: ev1, agmDone: false, arDone: false });
+                const evDone = !!(toIsoDate(parseDmy(ev5)) || toIsoDate(parseDmy(ev6)));
+                const g = openCycles.get(evFyeIso)!;
+                if (ev0 === 'AGM') g.agmDone = g.agmDone || evDone; else g.arDone = g.arDone || evDone;
+              }
+
+              // Fresh, targeted query — NOT companyRows (this run's own
+              // OWN ar_reminder fetch at the top, scoped to whatever
+              // ?month=/&year= this specific call used, which could
+              // silently miss a live row under correctMonth if this run
+              // wasn't scoped to it) — correct regardless of how this
+              // route was invoked.
+              const { data: liveUnderNewMonth, error: liveErr } = await supabase
+                .from('ar_reminder')
+                .select('fye_year')
+                .eq('company_id', companyInfo.id)
+                .eq('fye_month', correctMonth)
+                .or('status.is.null,status.neq.Excluded');
+              if (liveErr) {
+                fyeCorrectionBackfillErrors++;
+              } else {
+                const coveredYears = new Set((liveUnderNewMonth ?? []).map(r => r.fye_year));
+                let openYearLabel: string | null = null;
+                let openFyeIso: string | null = null;
+                for (const [fyeIso, g] of openCycles) {
+                  if (g.agmDone || g.arDone) continue; // already completed
+                  if (coveredYears.has(Number(g.yearLabel))) continue; // some row already tracks this one
+                  if (!openFyeIso || fyeIso < openFyeIso) { openYearLabel = g.yearLabel; openFyeIso = fyeIso; }
+                }
+                if (openYearLabel && openFyeIso) {
+                  const fullCompany = companyById.get(companyInfo.id);
+                  // Same source as companyByInternalId, so this should
+                  // always resolve — guarded anyway (an if/else, not an
+                  // early return: this whole block runs inside a while
+                  // loop processing many companies, and a bare return here
+                  // would abort the rest of THIS WORKER'S queue, not just
+                  // skip this one company) rather than ever inserting a
+                  // row with a blank entity_name.
+                  if (!fullCompany) {
+                    fyeCorrectionBackfillErrors++;
+                  } else {
+                    const { error: backfillErr } = await supabase.from('ar_reminder').insert({
+                      entity_name: fullCompany.company_name,
+                      company_id: companyInfo.id,
+                      uen: fullCompany.registration_no || '',
+                      fye_month: correctMonth,
+                      fye_year: Number(openYearLabel),
+                      fye_date: openFyeIso,
+                      due_date: toDateStr(addMonths(new Date(`${openFyeIso}T00:00:00Z`), 7)),
+                      pic: resolveTeamworkPic(fullCompany.sec_pic ?? fullCompany.pic ?? null),
+                      acc_pic: accFor(companyInfo.id, fullCompany.registration_no ?? null),
+                      tax_pic: taxFor(companyInfo.id, fullCompany.registration_no ?? null),
+                      acc_pic_manual: false,
+                      tax_pic_manual: false,
+                      status: 'Pending',
+                    });
+                    if (backfillErr) fyeCorrectionBackfillErrors++;
+                    else fyeCorrectionBackfilled++;
+                  }
+                }
+              }
+            } catch {
+              // Never let this new, narrower catch-up block the FYE
+              // correction and stale-row-exclusion work above it, which
+              // already succeeded by this point — just count it and move on.
+              fyeCorrectionBackfillErrors++;
+            }
           }
         }
 
@@ -548,7 +688,7 @@ async function syncArWorkflow(req: NextRequest) {
   await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
   const result = {
-    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0 && staleArRowsErrors === 0,
+    ok: fetchErrors === 0 && updateErrors === 0 && activeClientErrors === 0 && fyeMonthErrors === 0 && staleArRowsErrors === 0 && fyeCorrectionBackfillErrors === 0,
     rows: rows.length,
     companies_checked: checked,
     extra_companies_added: extraCompaniesAdded,
@@ -564,6 +704,8 @@ async function syncArWorkflow(req: NextRequest) {
     fye_month_errors: fyeMonthErrors,
     stale_ar_rows_excluded: staleArRowsExcluded,
     stale_ar_rows_errors: staleArRowsErrors,
+    fye_correction_backfilled: fyeCorrectionBackfilled,
+    fye_correction_backfill_errors: fyeCorrectionBackfillErrors,
     changes: changes.slice(0, 30),
   };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });

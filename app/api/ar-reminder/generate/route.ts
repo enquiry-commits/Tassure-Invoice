@@ -4,6 +4,7 @@ import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { loadCarriedForwardPics } from '@/lib/pic-sync';
 import { withAutomationRun, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { getSessionCookie, fetchAgmList, parseDmy, toIsoDate } from '@/lib/teamwork-agm';
+import { toDateStr, addMonths } from '@/lib/date';
 
 /**
  * Auto-generates ar_reminder rows for a rolling 6-month window (current
@@ -84,18 +85,6 @@ export const preferredRegion = 'sin1';
 function fyeDateFor(year: number, monthIndex0: number, preferredDay: number | null) {
   const lastDay = new Date(Date.UTC(year, monthIndex0 + 1, 0)).getUTCDate();
   return new Date(Date.UTC(year, monthIndex0, Math.min(preferredDay ?? lastDay, lastDay)));
-}
-
-function toDateStr(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-function addMonths(date: Date, n: number) {
-  const d = new Date(date);
-  const day = d.getUTCDate();
-  d.setUTCMonth(d.getUTCMonth() + n);
-  if (d.getUTCDate() !== day) d.setUTCDate(0);
-  return d;
 }
 
 async function generateArRows() {
