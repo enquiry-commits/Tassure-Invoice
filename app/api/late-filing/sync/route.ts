@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { parseDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
+import { parseDmy, parseLatestDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
 import { AutomationRun, withAutomationRun } from '@/lib/automation-sync';
 import { normalize } from '@/lib/company-name';
 import { todaySGT } from '@/lib/date';
@@ -178,6 +178,27 @@ async function syncLateFiling(run: AutomationRun) {
     let arInserted = 0;
     let arNoted = 0;
 
+    // Preload existing EOT (Extension of Time) rows once — same pattern as
+    // byUen/byName above, just against master_list's list_type='eot' slice.
+    // Auto-detected from the SAME per-company TeamWork data this loop
+    // already fetches for the overdue check below (see Pass 3 inside the
+    // main loop) — Vincent, 2026-08-28: TeamWork renders a Due Date as
+    // "<strike>ORIGINAL</strike> <br> REVISED" once staff grant an
+    // extension (confirmed live: FOMO PAY PTE. LTD.), so this needs zero
+    // extra TeamWork calls, only reading a field this loop already has.
+    const { data: existingEot, error: existingEotError } = await supabase
+      .from('master_list')
+      .select('id, roc_no, company_name, eot_event, eot_fye_year, remark, manual_fields')
+      .eq('list_type', 'eot');
+    if (existingEotError) throw new Error(`Unable to load EOT records: ${existingEotError.message}`);
+    const eotByKey = new Map((existingEot ?? []).map(row => [
+      `${row.roc_no ? String(row.roc_no).trim().toUpperCase() : normalize(row.company_name)}|${row.eot_event}|${row.eot_fye_year}`,
+      row,
+    ]));
+    let eotInserted = 0;
+    let eotRefreshed = 0;
+    let eotErrors = 0;
+
     const today = new Date();
     let flagged = 0;
     let inserted = 0;
@@ -267,7 +288,10 @@ async function syncLateFiling(run: AutomationRun) {
       for (const row of rows) {
         const [event, , fyeDateRaw, , dueDateRaw, heldDateRaw, filingDateRaw] = row;
         if (!['AGM', 'AR'].includes(event)) continue;
-        const dueDate = parseDmy(dueDateRaw);
+        // parseLatestDmy, not parseDmy: an EOT (Extension of Time) renders
+        // this raw field as "<strike>ORIGINAL</strike> <br> REVISED" — see
+        // lib/teamwork-agm.ts's own comment (2026-08-28, FOMO PAY PTE. LTD.).
+        const dueDate = parseLatestDmy(dueDateRaw);
         if (!dueDate) continue;
         const heldDate = parseDmy(heldDateRaw);
         const filingDate = parseDmy(filingDateRaw);
@@ -286,6 +310,59 @@ async function syncLateFiling(run: AutomationRun) {
             if (overdueDays > currentOverdueDays) currentOverdueDays = overdueDays;
             if (!earliestOverdueDue || dueDate < earliestOverdueDue) earliestOverdueDue = dueDate;
           }
+        }
+      }
+
+      // Pass 3 (2026-08-28): auto-detect and record EOT (Extension of Time)
+      // rows into master_list (list_type='eot') — reuses the SAME `rows`
+      // this company's loop already fetched above for the overdue check,
+      // zero extra TeamWork calls. Runs regardless of isLate below — an
+      // active EOT is exactly what can make a company NOT late despite an
+      // old due date having already passed, so gating this on isLate would
+      // skip the very companies it exists to track. Only tracked while the
+      // cycle is still open (no held/filing date yet): once actually filed,
+      // this row's EOT history stops being operationally relevant (Late
+      // Filing/AR Reminder/Active Client's own due-date reads already use
+      // the revised date correctly via parseLatestDmy regardless of whether
+      // it's tracked here — this list is for staff visibility, not itself
+      // the mechanism those other pages depend on). Never touches `remark`
+      // — that field is left entirely for staff notes (e.g. marking one
+      // "Resolved" once genuinely filed), the same way this sync never
+      // touches late_filing_companies.remarks once staff has written one.
+      for (const row of rows) {
+        const [eotEventRaw, , eotFyeDateRaw, , eotDueDateRaw, eotHeldDateRaw, eotFilingDateRaw] = row;
+        if (!['AGM', 'AR'].includes(eotEventRaw)) continue;
+        if (!/<strike>|<s>|<del>/i.test(eotDueDateRaw)) continue;
+        if (parseDmy(eotHeldDateRaw) || parseDmy(eotFilingDateRaw)) continue;
+        const eotFyeDate = parseDmy(eotFyeDateRaw);
+        const eotOriginalDue = parseDmy(eotDueDateRaw);
+        const eotRevisedDue = parseLatestDmy(eotDueDateRaw);
+        if (!eotFyeDate || !eotOriginalDue || !eotRevisedDue) continue;
+        const eotFyeYear = eotFyeDate.getFullYear();
+
+        const eotUenKey = c.registration_no ? String(c.registration_no).trim().toUpperCase() : normalize(c.company_name);
+        const existingEotRow = eotByKey.get(`${eotUenKey}|${eotEventRaw}|${eotFyeYear}`);
+        if (existingEotRow) {
+          const { error } = await supabase.from('master_list').update({
+            company_name: c.company_name,
+            roc_no: c.registration_no,
+            eot_original_due_date: toIsoDate(eotOriginalDue),
+            eot_revised_due_date: toIsoDate(eotRevisedDue),
+            update_date: todaySGT(),
+          }).eq('id', existingEotRow.id);
+          if (error) eotErrors++; else eotRefreshed++;
+        } else {
+          const { error } = await supabase.from('master_list').insert({
+            list_type: 'eot',
+            company_name: c.company_name,
+            roc_no: c.registration_no,
+            eot_event: eotEventRaw,
+            eot_fye_year: String(eotFyeYear),
+            eot_original_due_date: toIsoDate(eotOriginalDue),
+            eot_revised_due_date: toIsoDate(eotRevisedDue),
+            update_date: todaySGT(),
+          });
+          if (error) eotErrors++; else eotInserted++;
         }
       }
 
@@ -605,7 +682,7 @@ async function syncLateFiling(run: AutomationRun) {
     }
 
     const result = {
-      ok: errors === 0,
+      ok: errors === 0 && eotErrors === 0,
       checked: targets.length,
       evaluated: successfullyEvaluated,
       concurrency: configuredConcurrency(),
@@ -617,6 +694,9 @@ async function syncLateFiling(run: AutomationRun) {
       insertedNames,
       ar_reminder_rows_inserted: arInserted,
       ar_reminder_rows_noted: arNoted,
+      eot_inserted: eotInserted,
+      eot_refreshed: eotRefreshed,
+      eot_errors: eotErrors,
       errors,
       fetchErrors,
     };

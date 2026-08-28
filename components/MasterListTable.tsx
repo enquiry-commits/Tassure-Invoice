@@ -20,6 +20,11 @@ export interface MasterListRow {
   internal_code: string | null;
   company_name: string | null;
   new_company_name: string | null; // list_type=name_change only — see lib/company-rename.ts
+  // list_type=eot only — see scripts/add-master-list-eot-fields.sql.
+  eot_event: string | null;
+  eot_fye_year: string | null;
+  eot_original_due_date: string | null;
+  eot_revised_due_date: string | null;
   roc_no: string | null;
   status: string | null;
   join_date: string | null;
@@ -194,6 +199,10 @@ const EXTRA_COLUMNS: { field: ColumnField; label: string; w: number }[] = [
   { field: 'acc_pic', label: 'ACC', w: 120 },
   { field: 'tax_pic', label: 'TAX', w: 120 },
   { field: 'new_company_name', label: 'New Name', w: 220 },
+  { field: 'eot_event', label: 'Event', w: 100 },
+  { field: 'eot_fye_year', label: 'FYE Year', w: 100 },
+  { field: 'eot_original_due_date', label: 'Original Due', w: 140 },
+  { field: 'eot_revised_due_date', label: 'Revised Due', w: 140 },
 ];
 
 const STICKY_WIDTHS = [240, 110, 110]; // company_name, roc_no, status
@@ -203,7 +212,7 @@ const STICKY_WIDTHS = [240, 110, 110]; // company_name, roc_no, status
 // annual_return etc. hold YES/NO). These get a calendar-picker button in
 // both the table's inline editor and the modal, like AR Reminder's date
 // fields.
-const DATE_FIELDS = new Set<ColumnField>(['update_date', 'join_date', 'inc_date', 'last_ar_date', 'last_agm_date', 'last_accounts_date', 'next_agm_due_date', 'kyc_year']);
+const DATE_FIELDS = new Set<ColumnField>(['update_date', 'join_date', 'inc_date', 'last_ar_date', 'last_agm_date', 'last_accounts_date', 'next_agm_due_date', 'kyc_year', 'eot_original_due_date', 'eot_revised_due_date']);
 
 // On/off indicator for Active Client's Nominee Dir./Secretary/ACC/TAX
 // checkboxes — green+check when active. Freely toggleable (independent of

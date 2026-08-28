@@ -56,6 +56,31 @@ export function toIsoDate(d: Date | null): string | null {
   return d ? d.toISOString().slice(0, 10) : null;
 }
 
+// Some TeamWork date fields — confirmed so far only AGM/AR "Due Date" —
+// render as "<strike>ORIGINAL</strike> <br> REVISED" once staff grant an
+// EOT (Extension of Time): the raw value genuinely carries BOTH dates, not
+// just a UI decoration (confirmed live against the real API response for
+// FOMO PAY PTE. LTD., 2026-08-28: dueDateRaw was literally
+// "<strike>30/06/2026</strike> <br> 29/08/2026"). `parseDmy` strips all
+// HTML tags and returns the FIRST dd/mm/yyyy found — for a due date this
+// silently picks the ORIGINAL, now-superseded date, not the one actually
+// in effect. Every caller reading a Due Date field should use this instead:
+// finds every dd/mm/yyyy substring in the raw value (regardless of how many,
+// or what HTML wraps them) and returns the latest one — a plain, never-
+// revised single date still parses identically to parseDmy since there's
+// only one match.
+export function parseLatestDmy(s: string): Date | null {
+  const clean = (s || '').replace(/<[^>]+>/g, ' ');
+  const matches = clean.match(/\d{2}\/\d{2}\/\d{4}/g);
+  if (!matches) return null;
+  let latest: Date | null = null;
+  for (const raw of matches) {
+    const d = parseDmy(raw);
+    if (d && (!latest || d > latest)) latest = d;
+  }
+  return latest;
+}
+
 async function getBrowser(): Promise<Browser> {
   if (process.env.VERCEL) {
     await removeStalePlaywrightTempDirs();

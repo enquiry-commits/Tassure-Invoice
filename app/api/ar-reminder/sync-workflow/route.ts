@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { parseDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
+import { parseDmy, parseLatestDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { withAutomationRun } from '@/lib/automation-sync';
 import { logFieldChange } from '@/lib/audit-log';
@@ -377,7 +377,10 @@ async function syncArWorkflow(req: NextRequest) {
               if (!latestAgmHeld || held > latestAgmHeld) latestAgmHeld = held;
               if (fyeDate && (!latestHeldAgmFye || fyeDate > latestHeldAgmFye)) latestHeldAgmFye = fyeDate;
             } else {
-              const due = toIsoDate(parseDmy(dueRaw));
+              // parseLatestDmy: an EOT renders this raw field as
+              // "<strike>ORIGINAL</strike> <br> REVISED" — see
+              // lib/teamwork-agm.ts's own comment (2026-08-28).
+              const due = toIsoDate(parseLatestDmy(dueRaw));
               if (due && fyeDate) unheldAgmCandidates.push({ fyeDate, due });
             }
           } else if (event === 'AR') {
@@ -644,7 +647,10 @@ async function syncArWorkflow(req: NextRequest) {
         // a previously-synced value the same way a new one gets written.
         if (event === 'AR') {
           const filing = toIsoDate(parseDmy(filingRaw));
-          const due = toIsoDate(parseDmy(dueRaw));
+          // parseLatestDmy: an EOT renders this raw field as
+          // "<strike>ORIGINAL</strike> <br> REVISED" — see
+          // lib/teamwork-agm.ts's own comment (2026-08-28).
+          const due = toIsoDate(parseLatestDmy(dueRaw));
           if (!r.filling_date_manual) {
             if (filing && filing !== r.filling_date) patch.filling_date = filing;
             else if (!filing && r.filling_date !== null) patch.filling_date = null;

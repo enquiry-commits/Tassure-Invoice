@@ -20,6 +20,8 @@ const EDITABLE_FIELDS = new Set([
   // Change Co Name only: the new legal name after the rename — see
   // lib/company-rename.ts for how other pages surface this by UEN.
   'new_company_name',
+  // EOT only: see scripts/add-master-list-eot-fields.sql.
+  'eot_event', 'eot_fye_year', 'eot_original_due_date', 'eot_revised_due_date',
   // Active Client Services section — the ND/Secretary/ACC/TAX checkboxes are
   // manually toggleable, independent of whether a name is on file; ACC/TAX's
   // name is a manual override that takes precedence over AR Reminder's
@@ -125,7 +127,7 @@ export async function GET(req: NextRequest) {
   // ambiguous dd/mm-vs-mm/dd conventions (lib/date.ts's toIsoDateValue,
   // shared with the display formatter). Unparseable/missing dates sort last
   // rather than being silently dropped or crashing the page.
-  if (type === 'strike_off' || type === 'terminated') {
+  if (type === 'strike_off' || type === 'terminated' || type === 'eot') {
     (data ?? []).sort((a, b) => {
       const isoA = toIsoDateValue(a.update_date);
       const isoB = toIsoDateValue(b.update_date);

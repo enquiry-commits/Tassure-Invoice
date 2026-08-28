@@ -31,6 +31,7 @@ const tree: Node[] = [
         children: [
           { label: 'Strike Off',          href: '/master-list/strike-off' },
           { label: 'Terminated Services', href: '/master-list/terminated' },
+          { label: 'EOT',                 href: '/master-list/eot' },
           { label: 'Change Co Name',      href: '/master-list/name-change' },
         ],
       },

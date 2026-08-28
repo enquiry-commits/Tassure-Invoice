@@ -20,6 +20,7 @@ const LINKS: { group: string; items: { label: string; href: string }[] }[] = [
     { label: 'MAS',                 href: '/master-list/mas' },
     { label: 'Strike Off',          href: '/master-list/strike-off' },
     { label: 'Terminated Services', href: '/master-list/terminated' },
+    { label: 'EOT',                 href: '/master-list/eot' },
     { label: 'Change Co Name',      href: '/master-list/name-change' },
     { label: 'Trademark: Master Records', href: '/master-list/trademark/master-records' },
     { label: 'Trademark: In Progress',    href: '/master-list/trademark/in-progress' },
