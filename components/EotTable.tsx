@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   EditField, SelectField, AutoFillDot,
   REPORT_READY_OPTIONS, XBRL_OPTIONS, DPO_OPTIONS, ROND_OPTIONS,
@@ -8,6 +8,7 @@ import {
 } from '@/app/billing/page';
 import { fmtDate } from '@/lib/date';
 import { formatStaffName } from '@/lib/staff-directory';
+import { useIsMobile } from '@/lib/use-is-mobile';
 
 // EOT (Extension of Time) — a filtered view of ar_reminder, not a separate
 // list (see app/api/ar-reminder/eot/route.ts's own docstring for why).
@@ -71,6 +72,7 @@ export default function EotTable() {
   const [rows, setRows] = useState<EotRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,6 +101,65 @@ export default function EotTable() {
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value || null, ...extra } : r));
   }, []);
 
+  // Mirrored horizontal scrollbar — same drag-to-scroll bar every other
+  // wide table in the app has (MasterListTable.tsx, ARTableView in
+  // app/billing/page.tsx), fixed to the bottom of the viewport instead of
+  // the native browser scrollbar at the bottom of the (possibly tall)
+  // table itself, which would need scrolling the page down first to reach.
+  const outerRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
+  const sbRef    = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const dragRef  = useRef({ startX: 0, startScroll: 0 });
+  const metaRef  = useRef({ tw: 0, sbW: 0 });
+
+  const updateSb = useCallback(() => {
+    const el = outerRef.current, thumb = thumbRef.current, sb = sbRef.current;
+    if (!el || !thumb || !sb) return;
+    const rect = el.getBoundingClientRect();
+    sb.style.left = `${rect.left}px`;
+    sb.style.width = `${rect.width}px`;
+    if (el.scrollWidth <= el.clientWidth) { sb.style.display = 'none'; return; }
+    sb.style.display = 'block';
+    const tw = Math.max(rect.width * (el.clientWidth / el.scrollWidth), 40);
+    metaRef.current = { tw, sbW: rect.width };
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    const tl = maxScroll > 0 ? (el.scrollLeft / maxScroll) * (rect.width - tw) : 0;
+    thumb.style.width = `${tw}px`;
+    thumb.style.left = `${tl}px`;
+  }, []);
+
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', updateSb, { passive: true });
+    window.addEventListener('resize', updateSb, { passive: true });
+    const ro = new ResizeObserver(updateSb);
+    ro.observe(el);
+    updateSb();
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current || !el) return;
+      const { tw, sbW } = metaRef.current;
+      const dx = e.clientX - dragRef.current.startX;
+      const scrollable = el.scrollWidth - el.clientWidth;
+      const thumbRange = sbW - tw;
+      if (thumbRange <= 0) return;
+      el.scrollLeft = Math.max(0, Math.min(dragRef.current.startScroll + dx * (scrollable / thumbRange), scrollable));
+    };
+    const onUp = () => { dragging.current = false; };
+    document.addEventListener('mousemove', onMove, { passive: true });
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      el.removeEventListener('scroll', updateSb);
+      window.removeEventListener('resize', updateSb);
+      ro.disconnect();
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, [updateSb]);
+
+  useEffect(() => { updateSb(); }, [rows, updateSb]);
+
   return (
     <div style={{ padding: 20 }}>
       <div className="system-list-shell">
@@ -107,7 +168,7 @@ export default function EotTable() {
           <span className="system-list-title-hint">{rows.length} compan{rows.length === 1 ? 'y' : 'ies'} with an active extension</span>
         </div>
 
-        <div style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 280px)', minHeight: 300, overflowY: 'auto' }}>
+        <div ref={outerRef} style={{ overflowX: isMobile ? 'auto' : 'hidden', maxHeight: 'calc(100vh - 280px)', minHeight: 300, overflowY: 'auto' }}>
           <table className="system-list-table" style={{ width: 'max-content' }}>
             <thead>
               <tr className="list-column-header-gray">
@@ -173,6 +234,31 @@ export default function EotTable() {
           </table>
         </div>
       </div>
+
+      {/* Mirrored scrollbar — desktop only, same pattern as MasterListTable/ARTableView */}
+      {!isMobile && <div
+        ref={sbRef}
+        style={{ position: 'fixed', bottom: 0, display: 'none', height: 23, zIndex: 50, cursor: 'pointer' }}
+        onClick={e => {
+          const el = outerRef.current;
+          if (!el) return;
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          el.scrollLeft = ((e.clientX - rect.left) / metaRef.current.sbW) * (el.scrollWidth - el.clientWidth);
+        }}
+      >
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 8, background: '#e1e7ef' }} />
+        <div
+          ref={thumbRef}
+          style={{ position: 'absolute', top: 0, left: 0, width: 0, height: 15, background: '#94a3b8', borderRadius: 8, userSelect: 'none', cursor: 'grab' }}
+          onMouseDown={e => {
+            dragging.current = true;
+            dragRef.current = { startX: e.clientX, startScroll: outerRef.current?.scrollLeft ?? 0 };
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onClick={e => e.stopPropagation()}
+        />
+      </div>}
     </div>
   );
 }
