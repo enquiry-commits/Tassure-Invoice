@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Calendar, Building2, Clock, CalendarClock, RefreshCw } from 'lucide-react';
 import {
   EditField, SelectField, AutoFillDot,
   REPORT_READY_OPTIONS, XBRL_OPTIONS, DPO_OPTIONS, ROND_OPTIONS,
   SEC_PIC_OPTIONS, ACC_PIC_OPTIONS, TAX_PIC_OPTIONS,
 } from '@/app/billing/page';
+import MetricCard from '@/components/MetricCard';
 import { fmtDate } from '@/lib/date';
 import { formatStaffName } from '@/lib/staff-directory';
 import { useIsMobile } from '@/lib/use-is-mobile';
@@ -68,10 +70,13 @@ const TD_BASE: React.CSSProperties = {
   wordBreak: 'break-word', overflowWrap: 'break-word',
 };
 
+type EotCategory = 'ALL' | 'ar' | 'agm' | 'both';
+
 export default function EotTable() {
   const [rows, setRows] = useState<EotRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [catFilter, setCatFilter] = useState<EotCategory>('ALL');
   const isMobile = useIsMobile();
 
   const load = useCallback(async () => {
@@ -160,15 +165,61 @@ export default function EotTable() {
 
   useEffect(() => { updateSb(); }, [rows, updateSb]);
 
+  // Risk/category breakdown, same "click a card to filter" pattern Late
+  // Filing's own metric cards use (app/late-filing/page.tsx).
+  const hasAr = (r: EotRow) => !!(r.ar_original_due_date || r.ar_revised_due_date);
+  const hasAgm = (r: EotRow) => !!(r.agm_original_due_date || r.agm_revised_due_date);
+  const catOf = (r: EotRow): EotCategory => hasAr(r) && hasAgm(r) ? 'both' : hasAr(r) ? 'ar' : 'agm';
+  const cats = {
+    ar: rows.filter(r => catOf(r) === 'ar').length,
+    agm: rows.filter(r => catOf(r) === 'agm').length,
+    both: rows.filter(r => catOf(r) === 'both').length,
+  };
+  const displayRows = catFilter === 'ALL' ? rows : rows.filter(r => catOf(r) === catFilter);
+
   return (
     <div style={{ padding: 20 }}>
-      <div className="system-list-shell">
-        <div className="system-list-title-bar px-4 py-3" style={{ background: '#b45309' }}>
-          <h2 className="system-list-title">EOT</h2>
-          <span className="system-list-title-hint">{rows.length} compan{rows.length === 1 ? 'y' : 'ies'} with an active extension</span>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 26 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Calendar size={22} style={{ color: '#b45309' }} />
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#1e3a5f', margin: 0 }}>EOT</h1>
+          <span style={{ fontSize: 12, color: '#64748b', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px' }}>
+            Auto-detected from TeamWork records
+          </span>
         </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={load}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+            <RefreshCw size={14} />Refresh
+          </button>
+        </div>
+      </div>
 
-        <div ref={outerRef} style={{ overflowX: isMobile ? 'auto' : 'hidden', maxHeight: 'calc(100vh - 280px)', minHeight: 300, overflowY: 'auto' }}>
+      {/* Stats — total + AR/AGM/Both breakdown (click a card to filter) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,minmax(0,1fr))', gap: 12, marginBottom: 24 }}>
+        {([
+          { key: 'ALL',  label: 'Total EOT Companies', sub: 'with an active extension',   count: rows.length, color: '#b45309', Icon: Building2 },
+          { key: 'ar',   label: 'AR Extended',         sub: 'AR due date only',            count: cats.ar,     color: '#2563eb', Icon: Clock },
+          { key: 'agm',  label: 'AGM Extended',         sub: 'AGM due date only',           count: cats.agm,    color: '#7c3aed', Icon: Calendar },
+          { key: 'both', label: 'AR & AGM Extended',    sub: 'both due dates extended',     count: cats.both,   color: '#0f766e', Icon: CalendarClock },
+        ] as const).map(c => (
+          <MetricCard
+            key={c.key}
+            onClick={() => setCatFilter(c.key as EotCategory)}
+            active={catFilter === c.key}
+            value={c.count}
+            label={c.label}
+            sub={c.sub}
+            icon={<c.Icon size={16} />}
+            color={c.color}
+            ariaLabel={`Filter EOT records by ${c.label}`}
+          />
+        ))}
+      </div>
+
+      <div className="system-list-shell">
+        <div ref={outerRef} style={{ overflowX: isMobile ? 'auto' : 'hidden', maxHeight: 'calc(100vh - 400px)', minHeight: 300, overflowY: 'auto' }}>
           <table className="system-list-table" style={{ width: 'max-content' }}>
             <thead>
               <tr className="list-column-header-gray">
@@ -185,9 +236,9 @@ export default function EotTable() {
                 <tr><td colSpan={COLUMNS.length + 3} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</td></tr>
               ) : error ? (
                 <tr><td colSpan={COLUMNS.length + 3} style={{ textAlign: 'center', padding: 40, color: '#dc2626' }}>{error}</td></tr>
-              ) : !rows.length ? (
+              ) : !displayRows.length ? (
                 <tr><td colSpan={COLUMNS.length + 3} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No companies currently have an active extension.</td></tr>
-              ) : rows.map((r, i) => (
+              ) : displayRows.map((r, i) => (
                 <tr key={r.id} className="system-list-row">
                   <td style={{ ...TD_BASE, position: 'sticky', left: 0, zIndex: 1, background: '#fff', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600 }}>{i + 1}</td>
                   <td style={{ ...TD_BASE, position: 'sticky', left: NO_W, zIndex: 1, background: '#fff' }}>
