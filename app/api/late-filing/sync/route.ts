@@ -178,23 +178,13 @@ async function syncLateFiling(run: AutomationRun) {
     let arInserted = 0;
     let arNoted = 0;
 
-    // Preload existing EOT (Extension of Time) rows once — same pattern as
-    // byUen/byName above, just against master_list's list_type='eot' slice.
-    // Auto-detected from the SAME per-company TeamWork data this loop
-    // already fetches for the overdue check below (see Pass 3 inside the
-    // main loop) — Vincent, 2026-08-28: TeamWork renders a Due Date as
+    // EOT (Extension of Time) auto-detection (Pass 3 inside the main loop
+    // below) reuses arByKey directly — TeamWork renders a Due Date as
     // "<strike>ORIGINAL</strike> <br> REVISED" once staff grant an
-    // extension (confirmed live: FOMO PAY PTE. LTD.), so this needs zero
-    // extra TeamWork calls, only reading a field this loop already has.
-    const { data: existingEot, error: existingEotError } = await supabase
-      .from('master_list')
-      .select('id, roc_no, company_name, eot_event, eot_fye_year, remark, manual_fields')
-      .eq('list_type', 'eot');
-    if (existingEotError) throw new Error(`Unable to load EOT records: ${existingEotError.message}`);
-    const eotByKey = new Map((existingEot ?? []).map(row => [
-      `${row.roc_no ? String(row.roc_no).trim().toUpperCase() : normalize(row.company_name)}|${row.eot_event}|${row.eot_fye_year}`,
-      row,
-    ]));
+    // extension (confirmed live: FOMO PAY PTE. LTD.), and the four eot_*
+    // columns it writes live on ar_reminder itself (see that block's own
+    // comment for why), so no separate preload is needed here — zero
+    // extra TeamWork calls either way.
     let eotInserted = 0;
     let eotRefreshed = 0;
     let eotErrors = 0;
@@ -313,22 +303,29 @@ async function syncLateFiling(run: AutomationRun) {
         }
       }
 
-      // Pass 3 (2026-08-28): auto-detect and record EOT (Extension of Time)
-      // rows into master_list (list_type='eot') — reuses the SAME `rows`
-      // this company's loop already fetched above for the overdue check,
-      // zero extra TeamWork calls. Runs regardless of isLate below — an
-      // active EOT is exactly what can make a company NOT late despite an
-      // old due date having already passed, so gating this on isLate would
-      // skip the very companies it exists to track. Only tracked while the
-      // cycle is still open (no held/filing date yet): once actually filed,
-      // this row's EOT history stops being operationally relevant (Late
-      // Filing/AR Reminder/Active Client's own due-date reads already use
-      // the revised date correctly via parseLatestDmy regardless of whether
-      // it's tracked here — this list is for staff visibility, not itself
-      // the mechanism those other pages depend on). Never touches `remark`
-      // — that field is left entirely for staff notes (e.g. marking one
-      // "Resolved" once genuinely filed), the same way this sync never
-      // touches late_filing_companies.remarks once staff has written one.
+      // Pass 3 (2026-08-28, reworked same day): auto-detect EOT (Extension
+      // of Time) and record it directly on the matching ar_reminder row,
+      // not a separate list — first built as a standalone master_list
+      // category, reconsidered once Vincent's own EOT column list turned
+      // out to be ~60% identical to ar_reminder's EXISTING columns
+      // (Reminder/Report Ready/To Client/Signed/XBRL/DPO/ROND RONS/SEC-
+      // ACC-TAX PIC/Remarks): an EOT company is fundamentally an ALREADY-
+      // tracked ar_reminder cycle whose due date TeamWork shows as
+      // extended, not a new set of companies — writing the four eot_*
+      // date columns onto that SAME row (scripts/add-ar-reminder-eot-
+      // fields.sql) keeps Reminder/PIC/Remarks the one copy AR Reminder
+      // already maintains, not a second, disconnected one that drifts.
+      // Reuses the SAME `rows` this company's loop already fetched above
+      // for the overdue check (zero extra TeamWork calls) and the SAME
+      // arByKey map built for the late-filing mirror below. Runs
+      // independent of isLate — an active EOT is exactly what can make a
+      // company NOT late despite an old due date having already passed,
+      // so gating this on isLate would skip the very companies it exists
+      // to track. Only tracked while the cycle is still open (no held/
+      // filing date yet): once actually filed, this history stops being
+      // operationally relevant — Late Filing/AR Reminder/Active Client's
+      // own due-date reads already use the revised date correctly via
+      // parseLatestDmy regardless of whether it's tracked here.
       for (const row of rows) {
         const [eotEventRaw, , eotFyeDateRaw, , eotDueDateRaw, eotHeldDateRaw, eotFilingDateRaw] = row;
         if (!['AGM', 'AR'].includes(eotEventRaw)) continue;
@@ -338,29 +335,42 @@ async function syncLateFiling(run: AutomationRun) {
         const eotOriginalDue = parseDmy(eotDueDateRaw);
         const eotRevisedDue = parseLatestDmy(eotDueDateRaw);
         if (!eotFyeDate || !eotOriginalDue || !eotRevisedDue) continue;
+        const eotFyeMonthIdx0 = eotFyeDate.getMonth();
         const eotFyeYear = eotFyeDate.getFullYear();
+        const eotFyeMonthFull = FULL_MONTH_NAMES[eotFyeMonthIdx0];
 
-        const eotUenKey = c.registration_no ? String(c.registration_no).trim().toUpperCase() : normalize(c.company_name);
-        const existingEotRow = eotByKey.get(`${eotUenKey}|${eotEventRaw}|${eotFyeYear}`);
-        if (existingEotRow) {
-          const { error } = await supabase.from('master_list').update({
-            company_name: c.company_name,
-            roc_no: c.registration_no,
-            eot_original_due_date: toIsoDate(eotOriginalDue),
-            eot_revised_due_date: toIsoDate(eotRevisedDue),
-            update_date: todaySGT(),
-          }).eq('id', existingEotRow.id);
+        const originalField = eotEventRaw === 'AR' ? 'ar_original_due_date' : 'agm_original_due_date';
+        const revisedField = eotEventRaw === 'AR' ? 'ar_revised_due_date' : 'agm_revised_due_date';
+        const eotCycleKey = `${eotFyeMonthFull}|${eotFyeYear}`;
+        const eotUenKey = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
+        const arMatchForEot = (eotUenKey ? arByKey.get(`uen:${eotUenKey}|${eotCycleKey}`) : null)
+          ?? arByKey.get(`name:${normalize(c.company_name)}|${eotCycleKey}`);
+
+        if (arMatchForEot) {
+          const { error } = await supabase.from('ar_reminder').update({
+            [originalField]: toIsoDate(eotOriginalDue),
+            [revisedField]: toIsoDate(eotRevisedDue),
+          }).eq('id', arMatchForEot.id);
           if (error) eotErrors++; else eotRefreshed++;
         } else {
-          const { error } = await supabase.from('master_list').insert({
-            list_type: 'eot',
-            company_name: c.company_name,
-            roc_no: c.registration_no,
-            eot_event: eotEventRaw,
-            eot_fye_year: String(eotFyeYear),
-            eot_original_due_date: toIsoDate(eotOriginalDue),
-            eot_revised_due_date: toIsoDate(eotRevisedDue),
-            update_date: todaySGT(),
+          // No live ar_reminder row exists for this exact cycle yet (rare
+          // — most companies already have one via /generate's rolling
+          // window). Same minimal insert shape the late-filing mirror
+          // below already uses for the identical situation — no PIC
+          // resolution here either, matching that existing precedent.
+          const eotFyeDateIso = new Date(eotFyeYear, eotFyeMonthIdx0 + 1, 0).toISOString().slice(0, 10);
+          const { error } = await supabase.from('ar_reminder').insert({
+            entity_name: c.company_name,
+            company_id: c.id,
+            uen: c.registration_no,
+            fye_month: eotFyeMonthFull,
+            fye_year: eotFyeYear,
+            fye_date: eotFyeDateIso,
+            due_date: toIsoDate(eotRevisedDue),
+            [originalField]: toIsoDate(eotOriginalDue),
+            [revisedField]: toIsoDate(eotRevisedDue),
+            updated_by_email: 'system:late-filing',
+            updated_by_name: 'Late Filing Sync',
           });
           if (error) eotErrors++; else eotInserted++;
         }

@@ -421,7 +421,7 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
   );
 }
 
-const EditField = memo(function EditField({ id, field, value, onSave, placeholder = '—', isDate = false, multiline = false, looseDate = false }:
+export const EditField = memo(function EditField({ id, field, value, onSave, placeholder = '—', isDate = false, multiline = false, looseDate = false }:
   { id: number; field: string; value: string | null; onSave: (id: number, field: string, val: string) => void; placeholder?: string; isDate?: boolean; multiline?: boolean; looseDate?: boolean }) {
   const inputValue = useCallback((raw: string | null) => isDate ? (toDisplayDate(raw) ?? raw ?? '') : (raw ?? ''), [isDate]);
   // multiline fields (Vincent, 2026-08-17: Billing Drafts Remarks — "可以做
@@ -602,10 +602,10 @@ const EditField = memo(function EditField({ id, field, value, onSave, placeholde
   );
 });
 
-type SelectOption = { label: string; bg: string; color: string; type?: 'date' };
+export type SelectOption = { label: string; bg: string; color: string; type?: 'date' };
 
 // Unified chip palette
-const C = {
+export const C = {
   green:  { bg: '#dcfce7', color: '#15803d' },
   blue:   { bg: '#dbeafe', color: 'var(--accent-blue)' },
   amber:  { bg: '#fef3c7', color: 'var(--status-warning)' },
@@ -629,21 +629,21 @@ function remarksRowState(remarks: string | null | undefined): 'closed' | 'done' 
   return null;
 }
 
-const ROND_OPTIONS: SelectOption[] = [
+export const ROND_OPTIONS: SelectOption[] = [
   { label: 'DONE',         ...C.green  },
   { label: 'FILED',        ...C.blue   },
   { label: 'ACRA DONE',    ...C.blue   },
   { label: 'SENT & FILED', ...C.purple },
 ];
 
-const DPO_OPTIONS: SelectOption[] = [
+export const DPO_OPTIONS: SelectOption[] = [
   { label: 'YES',    ...C.green  },
   { label: 'INFORM', ...C.blue   },
   { label: 'DONE',   ...C.green  },
   { label: 'CLIENT', ...C.purple },
 ];
 
-const XBRL_OPTIONS: SelectOption[] = [
+export const XBRL_OPTIONS: SelectOption[] = [
   { label: 'Date',       ...C.green, type: 'date' },
   { label: 'NO',         ...C.red   },
   { label: 'SIMPLIFIED', ...C.amber },
@@ -654,27 +654,27 @@ const XBRL_OPTIONS: SelectOption[] = [
 // same neutral grey ("不需要有什么特别颜色处理", unlike Remarks/XBRL/DPO/ROND
 // which carry semantic color). Names match lib/staff-directory.ts's own
 // Corporate-Secretarial+Malaysia / Accounting / Tax groupings.
-const SEC_PIC_OPTIONS: SelectOption[] = [
+export const SEC_PIC_OPTIONS: SelectOption[] = [
   'Lim Hoe Chyi', 'Hoo Seng Xin', 'Jenny Lai', 'Chin Kah Ye',
   'Ang Shi Ming', 'Tey Shemin', 'Tan Min Quan', 'Client',
 ].map(label => ({ label, ...C.grey }));
 
-const ACC_PIC_OPTIONS: SelectOption[] = [
+export const ACC_PIC_OPTIONS: SelectOption[] = [
   'Jay Tay', 'Lee Jing Fei', 'Tee Yu Heng', 'Vernice Chai', 'Chee Wei En', 'Client',
 ].map(label => ({ label, ...C.grey }));
 
-const TAX_PIC_OPTIONS: SelectOption[] = [
+export const TAX_PIC_OPTIONS: SelectOption[] = [
   'Clarence Saw', 'Quinnie Tan', 'Victoria Yap', 'Client',
 ].map(label => ({ label, ...C.grey }));
 
 // Report Ready dropdown (Vincent, 2026-08-17): a date -> plain text (no
 // chip, see plainDates on SelectField), DORMANT -> colored, anything else
 // typed -> the existing plain-text fallback every custom value already got.
-const REPORT_READY_OPTIONS: SelectOption[] = [
+export const REPORT_READY_OPTIONS: SelectOption[] = [
   { label: 'DORMANT', ...C.amber },
 ];
 
-const SelectField = memo(function SelectField({ id, field, value, onSave, options, customLabel = 'Date / custom…', dateHelper = true, formatDisplay, plainDisplay = false, plainDates = false }: {
+export const SelectField = memo(function SelectField({ id, field, value, onSave, options, customLabel = 'Date / custom…', dateHelper = true, formatDisplay, plainDisplay = false, plainDates = false }: {
   id: number; field: string; value: string | null;
   onSave: (id: number, field: string, val: string) => void;
   options: SelectOption[];
@@ -880,7 +880,7 @@ const SelectField = memo(function SelectField({ id, field, value, onSave, option
 // Marks a date as filled by the TeamWork sync rather than typed in by a
 // staff member — only shown in the AR Table view (Vincent: distinguish
 // automated vs. manual so it's obvious which cells automation still owns).
-function AutoFillDot({ show, title = 'Auto-filled from TeamWork — clear the cell to hand this back to automation, or type a date to override it.' }: { show: boolean; title?: string }) {
+export function AutoFillDot({ show, title = 'Auto-filled from TeamWork — clear the cell to hand this back to automation, or type a date to override it.' }: { show: boolean; title?: string }) {
   if (!show) return null;
   return <span title={title} style={{ width: 6, height: 6, borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }} />;
 }
