@@ -401,6 +401,32 @@ async function syncLateFiling(run: AutomationRun) {
         }
       }
 
+      // Vincent, 2026-08-28: a row that stops being isLate was never
+      // touched again by anything below — next_agm_due_date froze at
+      // whatever it was on the day it left isLate, even as the real due
+      // date kept moving (e.g. a newly-recognized EOT, or simply rolling
+      // into the next cycle). Confirmed live: EASYBOOK PAY/EASYBOOK.COM
+      // PTE. LTD. both cleared isLate on 2026-08-21 (an unrelated change,
+      // the historical-average-only trigger's removal that day) and had
+      // shown a stale "30 Jun 2026 · OVERDUE" ever since, with no way for
+      // a human to fix it short of manually re-typing the field — now
+      // both have a confirmed EOT (see the Pass 3 block above) revising
+      // that same due date to 29 Aug 2026, but the row never got a chance
+      // to reflect it. Keep this ONE field fresh regardless of isLate/
+      // Review/Resolved state — unlike remarks, which stays fully gated
+      // behind the Review/Resolved workflow below; only the due date
+      // display itself needs to never go stale.
+      if (existing && !isLate) {
+        const freshDue = (earliestOutstandingDue ?? newestAgmDue)?.toISOString().slice(0, 10) ?? null;
+        const manual = (existing as { manual_fields?: Record<string, boolean> | null }).manual_fields ?? {};
+        if (freshDue && freshDue !== existing.next_agm_due_date && !manual.next_agm_due_date) {
+          const { error: dueError } = await supabase.from('late_filing_companies')
+            .update({ next_agm_due_date: freshDue })
+            .eq('id', existing.id);
+          if (dueError) errors++;
+        }
+      }
+
       if (!isLate) continue;
       flagged++;
 
