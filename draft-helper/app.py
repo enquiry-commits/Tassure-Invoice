@@ -304,15 +304,22 @@ def _open_one_draft(outlook, draft: dict) -> dict:
         # unavailable"). It only ever looked safe here because this
         # machine's one personal account initializes fast enough to win the
         # race; a slower Exchange/M365 profile (exactly what this targets)
-        # loses it. Fix: keep the Inspector reference and defer the actual
-        # Close() until right before Save() — the same real ordering the
-        # macro itself has (it never closes the Inspector at all until the
-        # window is dismissed at the very end), and it gives Outlook the
-        # entire To/CC/Subject/body/attachments-setting time to finish
-        # initializing before anything touches it again. Verified directly:
-        # this ordering survives a real end-to-end .Send() with no exception
-        # and no crash, immediate-close does not.
-        inspector = mail.GetInspector
+        # loses it.
+        #
+        # Fix here (Display() path only — see _send_one_draft for why
+        # .Send() needs a different fix): don't call .Close() on it at all,
+        # ever. Vincent asked directly why not fully match the macro instead
+        # of a partial fix — checked, and this path actually CAN: the macro
+        # never proactively closes the Inspector either; it stays open until
+        # the human dismisses the window themselves. Verified directly that
+        # Display() below correctly reuses this same still-open Inspector
+        # (real window opens, right content, no exception) rather than
+        # needing a fresh one — so there was never a real need to close and
+        # reopen here, only an unexamined habit carried over from the
+        # .Send() path, where closing first actually is required (that path
+        # never had a macro equivalent to match in the first place — the
+        # macro never calls .Send() programmatically at all).
+        mail.GetInspector
         mail.To = _normalize_recipients(draft.get("to") or "")
         mail.CC = _normalize_recipients(draft.get("cc") or "")
         mail.Subject = draft.get("subject") or ""
@@ -333,13 +340,6 @@ def _open_one_draft(outlook, draft: dict) -> dict:
             if os.path.isfile(path):
                 mail.Attachments.Add(path)
 
-        # Close the Inspector we've been holding since right after
-        # _assign_sender, now that every field is set (see the long comment
-        # above) — an Inspector still attached to this MailItem when .Send()
-        # later runs makes .Send() itself throw "(-2147024809, 'The
-        # parameter is incorrect.')" (tested directly). Display() below
-        # opens a real window regardless.
-        inspector.Close(1)  # 1 = olDiscard
         mail.Save()
         mail.Display()
         return {"ok": True}
