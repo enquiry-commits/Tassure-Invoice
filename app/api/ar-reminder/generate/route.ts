@@ -77,6 +77,18 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 const EXCLUDED_STATUSES = ['Striking Off', 'Terminated'];
 const WINDOW_MONTHS = 6;
 const CATCH_UP_CONCURRENCY = 10;
+// Vincent, 2026-08-28: the catch-up pass below (real per-company TeamWork
+// fetches, no bound on how long that can take) had no self-imposed deadline
+// at all, unlike late-filing/sync's own WORK_DEADLINE_MS — found while
+// investigating a DIFFERENT route (teamwork/sync-nd) stuck "running" forever
+// on the Automation Health dashboard: Vercel's hard maxDuration kill doesn't
+// let this route's own cleanup/error-handling code run at all, so the
+// automation_sync_locks row never gets released and the NEXT day's run
+// reports "Previous run lease expired" instead of the real cause. Stops the
+// catch-up pass gracefully (not the whole route — the main forward-window
+// loop above has already fully committed by this point regardless) well
+// before the 300s maxDuration, same margin late-filing/sync already uses.
+const CATCH_UP_DEADLINE_MS = 230_000;
 
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -158,7 +170,26 @@ async function generateArRows() {
       });
 
     if (toInsert.length) {
-      const { error: insErr } = await supabase.from('ar_reminder').insert(toInsert);
+      // Vincent, 2026-08-28: this route has failed EVERY day for at least a
+      // week straight with "duplicate key value violates unique constraint
+      // ar_reminder_entity_month_year_uniq" — confirmed live this is not a
+      // duplicate company_name within `companies` (checked directly, none
+      // found) nor a duplicate within toInsert itself; by the time the
+      // failure is investigated hours later, whatever row conflicted has
+      // always already been filled in by some other path, so the exact
+      // trigger keeps escaping direct capture. Regardless of the precise
+      // cause, a plain .insert() has the wrong failure mode for it: ONE
+      // stray row that slips past the existingNames/existingCompanyIds
+      // check above aborts the ENTIRE batch, silently losing every other
+      // genuinely-new row in the same target month too (Vincent's
+      // Automation Health dashboard showing "AR Generate: never" despite
+      // this running every single night). Upsert with ignoreDuplicates
+      // makes a stray duplicate a silent no-op instead — matches this
+      // route's own stated intent ("never overwrites existing rows") more
+      // precisely than a failing insert did, and stops one collision from
+      // costing every other legitimate row in the run.
+      const { error: insErr } = await supabase.from('ar_reminder')
+        .upsert(toInsert, { onConflict: 'entity_name,fye_month,fye_year', ignoreDuplicates: true });
       if (insErr) {
         errors.push(`${target.monthName} ${target.year}: ${insErr.message}`);
         summary.push({ month: target.monthName, year: target.year, matched: matching.length, inserted: 0, error: insErr.message });
@@ -204,6 +235,7 @@ async function generateArRows() {
   let catchUpInserted = 0;
   let catchUpSkipped = 0;
   let catchUpLinked = 0;
+  let catchUpDeadlineHit = false;
   const catchUpErrors: string[] = [];
   if (eligibleForCatchUp.length) {
     const eligibleIds = eligibleForCatchUp.map(c => c.id);
@@ -281,6 +313,12 @@ async function generateArRows() {
         return !rowsUnderMonth.length;
       });
       if (catchUpTargets.length) {
+        const catchUpController = new AbortController();
+        const catchUpDeadline = setTimeout(() => {
+          catchUpController.abort(new Error(
+            `AR Generate's catch-up pass stopped safely before the Vercel timeout because TeamWork did not finish within ${CATCH_UP_DEADLINE_MS / 1000} seconds.`,
+          ));
+        }, CATCH_UP_DEADLINE_MS);
         try {
           const cookie = await getSessionCookie();
           const catchUpRows: { entity_name: string; company_id: number; uen: string; fye_month: string; fye_year: number; fye_date: string; due_date: string; pic: string | null; acc_pic: string | null; tax_pic: string | null; acc_pic_manual: boolean; tax_pic_manual: boolean }[] = [];
@@ -288,9 +326,10 @@ async function generateArRows() {
           let nextIndex = 0;
           const worker = async () => {
             while (nextIndex < catchUpTargets.length) {
+              if (catchUpController.signal.aborted) return;
               const c = catchUpTargets[nextIndex++];
               try {
-                const result = await fetchAgmList(cookie, c.internal_id as string);
+                const result = await fetchAgmList(cookie, c.internal_id as string, catchUpController.signal);
                 // Group by shared Actual FYE date FIRST — an AGM and an AR
                 // event for the same cycle are two separate TeamWork rows,
                 // and only one of them may end up carrying the real
@@ -351,13 +390,26 @@ async function generateArRows() {
                   skippedCompanies.push({ id: c.id, company_name: c.company_name, fye_month: c.fye_month as string });
                 }
               } catch (e) {
-                catchUpErrors.push(`${c.company_name}: ${e instanceof Error ? e.message : String(e)}`);
+                // A company whose in-flight fetch got aborted BY the
+                // deadline (not a genuine per-company failure) shouldn't
+                // count as an error — that would make the whole route
+                // report ok:false for expected, graceful degradation.
+                // It's simply left for a future run, same as one the
+                // deadline check above never even started.
+                if (!catchUpController.signal.aborted) {
+                  catchUpErrors.push(`${c.company_name}: ${e instanceof Error ? e.message : String(e)}`);
+                }
               }
             }
           };
           await Promise.all(Array.from({ length: Math.min(CATCH_UP_CONCURRENCY, catchUpTargets.length) }, worker));
+          catchUpDeadlineHit = catchUpController.signal.aborted;
           if (catchUpRows.length) {
-            const { error: catchUpInsErr } = await supabase.from('ar_reminder').insert(catchUpRows);
+            // Same reasoning as the main loop's own insert above: upsert
+            // with ignoreDuplicates so a stray collision here can't cost
+            // every other genuinely-new catch-up row in the same run.
+            const { error: catchUpInsErr } = await supabase.from('ar_reminder')
+              .upsert(catchUpRows, { onConflict: 'entity_name,fye_month,fye_year', ignoreDuplicates: true });
             if (catchUpInsErr) catchUpErrors.push(catchUpInsErr.message);
             else catchUpInserted = catchUpRows.length;
           }
@@ -378,6 +430,8 @@ async function generateArRows() {
           })));
         } catch (e) {
           catchUpErrors.push(`TeamWork login failed: ${e instanceof Error ? e.message : String(e)}`);
+        } finally {
+          clearTimeout(catchUpDeadline);
         }
       }
     }
@@ -385,7 +439,7 @@ async function generateArRows() {
   totalInserted += catchUpInserted;
   errors.push(...catchUpErrors);
 
-  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, catchUpSkipped, catchUpLinked, summary, errors };
+  const result = { ok: errors.length === 0, window: targets.map(t => `${t.monthName} ${t.year}`), totalInserted, catchUpInserted, catchUpSkipped, catchUpLinked, catchUpDeadlineHit, summary, errors };
   return NextResponse.json(result, { status: result.ok ? 200 : 500 });
 }
 

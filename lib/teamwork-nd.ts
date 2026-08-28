@@ -221,7 +221,23 @@ export async function scrapeTeamworkNdAppointments(people: TeamworkNdPerson[]) {
   // appears to throttle concurrent requests from the same session, not just
   // rate-limit per request.
   const concurrency = Math.min(3, Math.max(1, people.length));
-  const overallTimeoutMs = 290_000;
+  // Vincent, 2026-08-28: was 290_000 — only a 10-second margin before the
+  // route's own maxDuration=300 hard kill (app/api/teamwork/sync-nd/route.ts).
+  // Confirmed live on the Automation Health dashboard: teamwork_nd kept
+  // showing "Previous run lease expired before completion" and a run stuck
+  // in status='running' forever, even though this Promise.race SHOULD have
+  // let withAutomationRun's own catch block mark the run failed and release
+  // its lock cleanly. The remaining work after the race settles — the
+  // `finally` block's browser.close() below, propagating the error back up
+  // through this function's caller, then withAutomationRun's own DB writes —
+  // all still has to happen within whatever's left of the 300s budget. 10
+  // seconds was never enough of a margin for that (closing a real headless
+  // Chromium process alone can take several seconds), so on a slow day
+  // Vercel's hard kill was winning that race before cleanup ever finished —
+  // silently, with no chance for this function's own error handling to run
+  // at all. Widened to a real 60-second buffer instead of guessing at a
+  // smaller nudge.
+  const overallTimeoutMs = 240_000;
 
   try {
     browser = await launchBrowser();
