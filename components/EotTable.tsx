@@ -15,7 +15,10 @@ import { formatStaffName } from '@/lib/staff-directory';
 // PIC/Remarks reuse AR Reminder's own EditField/SelectField components
 // unchanged — same PATCH endpoint, same manual-flag/auto-fill-dot
 // conventions, so an edit made here is the exact same edit AR Reminder
-// itself would show, not a second copy that could drift.
+// itself would show, not a second copy that could drift. Visual chrome
+// (system-list-shell/title-bar/list-column-header-gray/system-list-row)
+// matches every other data-grid page (AR Reminder, Billing Drafts,
+// Address Service, ND, Master List) — see app/globals.css.
 type EotRow = {
   id: number; entity_name: string; uen: string | null; fye_month: string; fye_year: number;
   reminder_note: string | null; reminder_note_manual: boolean;
@@ -31,17 +34,38 @@ type EotRow = {
   internal_code: string | null;
 };
 
-const TH_STYLE: React.CSSProperties = {
-  padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#64748b',
-  textAlign: 'left', whiteSpace: 'nowrap', borderBottom: '2px solid #e2e8f0', background: '#f8fafc',
-};
-const TD_STYLE: React.CSSProperties = {
-  padding: '4px 10px', fontSize: 12.5, borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle',
-};
+const NO_W = 36;
+const NAME_W = 230;
+const UEN_W = 110;
+
+const COLUMNS: { label: string; w: number }[] = [
+  { label: 'Code', w: 80 },
+  { label: 'Reminder', w: 120 },
+  { label: 'Report Ready', w: 130 },
+  { label: 'AR Original Due', w: 130 },
+  { label: 'AR Revised Due', w: 130 },
+  { label: 'To Client', w: 110 },
+  { label: 'Signed', w: 110 },
+  { label: 'AGM Original Due', w: 140 },
+  { label: 'AGM Revised Due', w: 140 },
+  { label: 'XBRL', w: 100 },
+  { label: 'DPO', w: 100 },
+  { label: 'ROND RONS', w: 110 },
+  { label: 'SEC PIC', w: 130 },
+  { label: 'ACC PIC', w: 130 },
+  { label: 'TAX PIC', w: 130 },
+  { label: 'Remarks', w: 220 },
+];
 
 function ReadOnlyDate({ value }: { value: string | null }) {
-  return <span style={{ color: value ? '#1e293b' : '#cbd5e1', fontSize: 12.5 }}>{fmtDate(value)}</span>;
+  return <span style={{ color: value ? '#1e293b' : '#cbd5e1', fontSize: 11.5 }}>{value ? fmtDate(value) : '—'}</span>;
 }
+
+const TD_BASE: React.CSSProperties = {
+  padding: '3px 6px', verticalAlign: 'top',
+  borderRight: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9',
+  wordBreak: 'break-word', overflowWrap: 'break-word',
+};
 
 export default function EotTable() {
   const [rows, setRows] = useState<EotRow[]>([]);
@@ -75,87 +99,79 @@ export default function EotTable() {
     setRows(prev => prev.map(r => r.id === id ? { ...r, [field]: value || null, ...extra } : r));
   }, []);
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8' }}>Loading…</div>;
-  if (error) return <div style={{ padding: 40, textAlign: 'center', color: '#dc2626' }}>{error}</div>;
-
   return (
     <div style={{ padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', margin: 0 }}>EOT</h1>
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>{rows.length} compan{rows.length === 1 ? 'y' : 'ies'} with an active extension</span>
-      </div>
-      <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 10 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
-          <thead>
-            <tr>
-              <th style={TH_STYLE}>No.</th>
-              <th style={TH_STYLE}>Company Name</th>
-              <th style={TH_STYLE}>UEN</th>
-              <th style={TH_STYLE}>Code</th>
-              <th style={TH_STYLE}>Reminder</th>
-              <th style={TH_STYLE}>Report Ready</th>
-              <th style={TH_STYLE}>AR Original Due</th>
-              <th style={TH_STYLE}>AR Revised Due</th>
-              <th style={TH_STYLE}>To Client</th>
-              <th style={TH_STYLE}>Signed</th>
-              <th style={TH_STYLE}>AGM Original Due</th>
-              <th style={TH_STYLE}>AGM Revised Due</th>
-              <th style={TH_STYLE}>XBRL</th>
-              <th style={TH_STYLE}>DPO</th>
-              <th style={TH_STYLE}>ROND RONS</th>
-              <th style={TH_STYLE}>SEC PIC</th>
-              <th style={TH_STYLE}>ACC PIC</th>
-              <th style={TH_STYLE}>TAX PIC</th>
-              <th style={TH_STYLE}>Remarks</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={r.id}>
-                <td style={{ ...TD_STYLE, color: '#94a3b8' }}>{i + 1}</td>
-                <td style={{ ...TD_STYLE, fontWeight: 600, color: '#1e293b' }}>
-                  {r.entity_name}
-                  <div style={{ fontSize: 9.5, color: '#94a3b8' }}>{r.fye_month} {r.fye_year}</div>
-                </td>
-                <td style={TD_STYLE}>{r.uen || '—'}</td>
-                <td style={TD_STYLE}>{r.internal_code || '—'}</td>
-                <td style={TD_STYLE}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <AutoFillDot show={!!r.reminder_note && !r.reminder_note_manual} />
-                    <EditField id={r.id} field="reminder_note" value={r.reminder_note} onSave={handleSave} placeholder="—" isDate />
-                  </div>
-                </td>
-                <td style={TD_STYLE}><SelectField id={r.id} field="prepared_date" value={r.prepared_date} onSave={handleSave} options={REPORT_READY_OPTIONS} plainDates /></td>
-                <td style={TD_STYLE}><ReadOnlyDate value={r.ar_original_due_date} /></td>
-                <td style={TD_STYLE}><ReadOnlyDate value={r.ar_revised_due_date} /></td>
-                <td style={TD_STYLE}><EditField id={r.id} field="sent_date" value={r.sent_date} onSave={handleSave} placeholder="—" isDate /></td>
-                <td style={TD_STYLE}><EditField id={r.id} field="received_date" value={r.received_date} onSave={handleSave} placeholder="—" isDate /></td>
-                <td style={TD_STYLE}><ReadOnlyDate value={r.agm_original_due_date} /></td>
-                <td style={TD_STYLE}><ReadOnlyDate value={r.agm_revised_due_date} /></td>
-                <td style={TD_STYLE}><SelectField id={r.id} field="xbrl" value={r.xbrl} onSave={handleSave} options={XBRL_OPTIONS} /></td>
-                <td style={TD_STYLE}><SelectField id={r.id} field="dpo" value={r.dpo} onSave={handleSave} options={DPO_OPTIONS} /></td>
-                <td style={TD_STYLE}><SelectField id={r.id} field="ond_ron" value={r.ond_ron} onSave={handleSave} options={ROND_OPTIONS} /></td>
-                <td style={TD_STYLE}><SelectField id={r.id} field="pic" value={r.pic} onSave={handleSave} options={SEC_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay /></td>
-                <td style={TD_STYLE}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <AutoFillDot show={!!r.acc_pic && !r.acc_pic_manual} title="Carried forward from this company's last cycle — pick someone to override it, or clear it to leave blank." />
-                    <SelectField id={r.id} field="acc_pic" value={r.acc_pic} onSave={handleSave} options={ACC_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay />
-                  </div>
-                </td>
-                <td style={TD_STYLE}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                    <AutoFillDot show={!!r.tax_pic && !r.tax_pic_manual} title="Carried forward from this company's last cycle — pick someone to override it, or clear it to leave blank." />
-                    <SelectField id={r.id} field="tax_pic" value={r.tax_pic} onSave={handleSave} options={TAX_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay />
-                  </div>
-                </td>
-                <td style={TD_STYLE}><EditField id={r.id} field="remarks" value={r.remarks} onSave={handleSave} placeholder="Add remarks…" /></td>
+      <div className="system-list-shell">
+        <div className="system-list-title-bar px-4 py-3" style={{ background: '#b45309' }}>
+          <h2 className="system-list-title">EOT</h2>
+          <span className="system-list-title-hint">{rows.length} compan{rows.length === 1 ? 'y' : 'ies'} with an active extension</span>
+        </div>
+
+        <div style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 280px)', minHeight: 300, overflowY: 'auto' }}>
+          <table className="system-list-table" style={{ width: 'max-content' }}>
+            <thead>
+              <tr className="list-column-header-gray">
+                <th style={{ position: 'sticky', top: 0, left: 0, zIndex: 3, minWidth: NO_W, width: NO_W, textAlign: 'center' }}>No.</th>
+                <th style={{ position: 'sticky', top: 0, left: NO_W, zIndex: 3, minWidth: NAME_W, width: NAME_W, boxShadow: '3px 0 8px -2px rgba(0,0,0,0.1)' }}>Company Name</th>
+                <th style={{ position: 'sticky', top: 0, left: NO_W + NAME_W, zIndex: 3, minWidth: UEN_W, width: UEN_W, boxShadow: '3px 0 8px -2px rgba(0,0,0,0.1)' }}>UEN</th>
+                {COLUMNS.map(c => (
+                  <th key={c.label} style={{ position: 'sticky', top: 0, zIndex: 2, minWidth: c.w, width: c.w }}>{c.label}</th>
+                ))}
               </tr>
-            ))}
-            {!rows.length && (
-              <tr><td colSpan={19} style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No companies currently have an active extension.</td></tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={COLUMNS.length + 3} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</td></tr>
+              ) : error ? (
+                <tr><td colSpan={COLUMNS.length + 3} style={{ textAlign: 'center', padding: 40, color: '#dc2626' }}>{error}</td></tr>
+              ) : !rows.length ? (
+                <tr><td colSpan={COLUMNS.length + 3} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No companies currently have an active extension.</td></tr>
+              ) : rows.map((r, i) => (
+                <tr key={r.id} className="system-list-row">
+                  <td style={{ ...TD_BASE, position: 'sticky', left: 0, zIndex: 1, background: '#fff', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600 }}>{i + 1}</td>
+                  <td style={{ ...TD_BASE, position: 'sticky', left: NO_W, zIndex: 1, background: '#fff' }}>
+                    <span className="company-name-text">{r.entity_name}</span>
+                    <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 1 }}>{r.fye_month} {r.fye_year}</div>
+                  </td>
+                  <td style={{ ...TD_BASE, position: 'sticky', left: NO_W + NAME_W, zIndex: 1, background: '#fff', boxShadow: '3px 0 8px -2px rgba(0,0,0,0.1)' }}>
+                    <span className="company-registration-text">{r.uen || '—'}</span>
+                  </td>
+                  <td style={TD_BASE}>{r.internal_code || '—'}</td>
+                  <td style={TD_BASE}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <AutoFillDot show={!!r.reminder_note && !r.reminder_note_manual} />
+                      <EditField id={r.id} field="reminder_note" value={r.reminder_note} onSave={handleSave} placeholder="—" isDate />
+                    </div>
+                  </td>
+                  <td style={TD_BASE}><SelectField id={r.id} field="prepared_date" value={r.prepared_date} onSave={handleSave} options={REPORT_READY_OPTIONS} plainDates /></td>
+                  <td style={TD_BASE}><ReadOnlyDate value={r.ar_original_due_date} /></td>
+                  <td style={TD_BASE}><ReadOnlyDate value={r.ar_revised_due_date} /></td>
+                  <td style={TD_BASE}><EditField id={r.id} field="sent_date" value={r.sent_date} onSave={handleSave} placeholder="—" isDate /></td>
+                  <td style={TD_BASE}><EditField id={r.id} field="received_date" value={r.received_date} onSave={handleSave} placeholder="—" isDate /></td>
+                  <td style={TD_BASE}><ReadOnlyDate value={r.agm_original_due_date} /></td>
+                  <td style={TD_BASE}><ReadOnlyDate value={r.agm_revised_due_date} /></td>
+                  <td style={TD_BASE}><SelectField id={r.id} field="xbrl" value={r.xbrl} onSave={handleSave} options={XBRL_OPTIONS} /></td>
+                  <td style={TD_BASE}><SelectField id={r.id} field="dpo" value={r.dpo} onSave={handleSave} options={DPO_OPTIONS} /></td>
+                  <td style={TD_BASE}><SelectField id={r.id} field="ond_ron" value={r.ond_ron} onSave={handleSave} options={ROND_OPTIONS} /></td>
+                  <td style={TD_BASE}><SelectField id={r.id} field="pic" value={r.pic} onSave={handleSave} options={SEC_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay /></td>
+                  <td style={TD_BASE}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <AutoFillDot show={!!r.acc_pic && !r.acc_pic_manual} title="Carried forward from this company's last cycle — pick someone to override it, or clear it to leave blank." />
+                      <SelectField id={r.id} field="acc_pic" value={r.acc_pic} onSave={handleSave} options={ACC_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay />
+                    </div>
+                  </td>
+                  <td style={TD_BASE}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <AutoFillDot show={!!r.tax_pic && !r.tax_pic_manual} title="Carried forward from this company's last cycle — pick someone to override it, or clear it to leave blank." />
+                      <SelectField id={r.id} field="tax_pic" value={r.tax_pic} onSave={handleSave} options={TAX_PIC_OPTIONS} customLabel="Custom…" dateHelper={false} formatDisplay={formatStaffName} plainDisplay />
+                    </div>
+                  </td>
+                  <td style={TD_BASE}><EditField id={r.id} field="remarks" value={r.remarks} onSave={handleSave} placeholder="Add remarks…" /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
