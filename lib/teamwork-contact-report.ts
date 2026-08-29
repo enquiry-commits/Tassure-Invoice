@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import https from 'https';
 import { normalize, findUniqueBestMatch } from './company-name';
-import { getSessionCookie } from './teamwork-agm';
 
 // TeamWork's "Company Contact Person" report (Report_module/comp_contact_default_report)
 // — one row per contact person, not per company, and covers every company on
@@ -141,8 +140,12 @@ async function fetchAllContactRows(cookie: string): Promise<ContactReportRow[]> 
   return rows;
 }
 
-export async function syncTeamworkContactPersons(supabase: SupabaseClient) {
-  const rows = await fetchAllContactRows(await getSessionCookie());
+// Vincent, 2026-08-29: takes an already-obtained session cookie instead of
+// calling getSessionCookie() itself — see lib/teamwork-recipients.ts's own
+// syncTeamworkCampaignRecipients for the full reasoning (same fix, same
+// same-invocation double-Chromium-launch bug this closes).
+export async function syncTeamworkContactPersons(supabase: SupabaseClient, cookie: string) {
+  const rows = await fetchAllContactRows(cookie);
 
   // Every contact row with an email, grouped per company — a company can
   // legitimately have more than one contact person (e.g. two directors),

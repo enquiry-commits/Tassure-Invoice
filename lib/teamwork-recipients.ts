@@ -1,7 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalize, findUniqueBestMatch } from './company-name';
 import { applyCampaignRecipientRules } from './campaign-recipients';
-import { getSessionCookie } from './teamwork-agm';
 
 const REPORT_URL = 'https://apps.teamworkcss.com/tassure_asia/report_module/remainder_upcoming_event_report';
 const REPORT_PAGE_URL = 'https://apps.teamworkcss.com/tassure_asia/report_module/remainder_upcoming_event_report_list';
@@ -100,8 +99,15 @@ function sameEmails(a: string[] | null, b: string[]): boolean {
   return JSON.stringify([...(a ?? [])].sort()) === JSON.stringify([...b].sort());
 }
 
-export async function syncTeamworkCampaignRecipients(supabase: SupabaseClient) {
-  const reportRows = await fetchAllReportRows(await getSessionCookie());
+// Vincent, 2026-08-29: takes an already-obtained session cookie instead of
+// calling getSessionCookie() itself — this used to independently log in,
+// which combined with syncTeamworkContactPersons's own independent login
+// (both called from app/api/teamwork/sync/route.ts in the same invocation)
+// launched Chromium twice in one run, exhausting Vercel's reused-container
+// /tmp space and breaking the SECOND login. The caller now fetches one
+// cookie and passes it to both.
+export async function syncTeamworkCampaignRecipients(supabase: SupabaseClient, cookie: string) {
+  const reportRows = await fetchAllReportRows(cookie);
   const directory = new Map<string, { companyName: string; emails: Set<string> }>();
 
   for (const row of reportRows) {

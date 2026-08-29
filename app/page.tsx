@@ -159,6 +159,16 @@ function SectionLabel({ eyebrow, title, description }: { eyebrow: string; title:
 
 const AUTOMATION_LABELS: Record<string, string> = {
   teamwork_nd: 'TeamWork ND',
+  // Vincent, 2026-08-29: the daily ND roster now runs as 4 smaller batches
+  // (see app/api/teamwork/sync-nd/route.ts) so no invocation's real work
+  // lands near Vercel's 300s hard kill — this dashboard now shows four ND
+  // tiles instead of one. The plain 'teamwork_nd' entry above stays for
+  // ad-hoc/manual full-roster runs, never wired to SOURCES in
+  // app/api/automation/health/route.ts on a daily basis.
+  teamwork_nd_1: 'TeamWork ND (Batch 1)',
+  teamwork_nd_2: 'TeamWork ND (Batch 2)',
+  teamwork_nd_3: 'TeamWork ND (Batch 3)',
+  teamwork_nd_4: 'TeamWork ND (Batch 4)',
   teamwork_companies: 'TeamWork Companies',
   ar_generate: 'AR Generate',
   quickbooks: 'QuickBooks',

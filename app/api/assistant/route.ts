@@ -169,7 +169,10 @@ async function arBatch(month: string, year: number) {
 }
 
 const AUTOMATION_SOURCES = [
-  ['teamwork_nd', 'TeamWork ND'],
+  ['teamwork_nd_1', 'TeamWork ND (Batch 1)'],
+  ['teamwork_nd_2', 'TeamWork ND (Batch 2)'],
+  ['teamwork_nd_3', 'TeamWork ND (Batch 3)'],
+  ['teamwork_nd_4', 'TeamWork ND (Batch 4)'],
   ['teamwork_companies', 'TeamWork Companies'],
   ['ar_generate', 'AR Generate'],
   ['quickbooks', 'QuickBooks'],

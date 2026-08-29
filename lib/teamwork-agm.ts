@@ -1,8 +1,6 @@
 import type { Browser } from 'playwright-core';
 import https from 'https';
-import { readdir, rm, stat } from 'fs/promises';
-import { tmpdir } from 'os';
-import path from 'path';
+import { removeStalePlaywrightTempDirs } from './playwright-tmp-cleanup';
 
 // Shared TeamWork web-session helpers — used by BOTH the late-filing sync and
 // the AR-reminder workflow sync. TeamWork's login page runs reCAPTCHA v3, so
@@ -10,40 +8,6 @@ import path from 'path';
 // per-company call is a plain HTTP POST with the extracted PHPSESSID cookie.
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
-
-const PLAYWRIGHT_TEMP_PREFIXES = [
-  'playwright_chromiumdev_profile-',
-  'playwright-artifacts-',
-];
-
-async function removeStalePlaywrightTempDirs() {
-  // Vercel reuses Fluid compute instances between cron invocations. Chromium
-  // can leave sizable profiles in /tmp after a terminated invocation; once
-  // free space drops below 64 MB, the next browser closes during login.
-  // Only remove profiles old enough that they cannot belong to a concurrently
-  // starting request. Scheduled browser jobs are separated by at least 1 hour.
-  const root = tmpdir();
-  const cutoff = Date.now() - 2 * 60_000;
-  let entries: string[];
-  try {
-    entries = await readdir(root);
-  } catch {
-    return;
-  }
-
-  await Promise.all(entries
-    .filter(name => PLAYWRIGHT_TEMP_PREFIXES.some(prefix => name.startsWith(prefix)))
-    .map(async name => {
-      const target = path.join(root, name);
-      try {
-        if ((await stat(target)).mtimeMs < cutoff) {
-          await rm(target, { recursive: true, force: true });
-        }
-      } catch {
-        // Cleanup is best-effort; login should still report the real failure.
-      }
-    }));
-}
 
 export function parseDmy(s: string): Date | null {
   const clean = (s || '').replace(/<[^>]+>/g, '').trim();

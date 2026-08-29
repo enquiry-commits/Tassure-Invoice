@@ -1,4 +1,5 @@
 import type { Browser, BrowserContext, Page } from 'playwright-core';
+import { removeStalePlaywrightTempDirs } from './playwright-tmp-cleanup';
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
 
@@ -31,6 +32,12 @@ function appointmentStatus(value: string): TeamworkNdSubroleReview['appointment_
 
 async function launchBrowser(): Promise<Browser> {
   if (process.env.VERCEL) {
+    // Vincent, 2026-08-29: this launch never swept its own leftover /tmp
+    // profiles the way lib/teamwork-agm.ts's getBrowser() already does —
+    // sync-nd now runs a full browser session twice a day (see this
+    // route's own batching), silently contributing to the same shared
+    // /tmp pool that was found causing teamwork_companies' real failures.
+    await removeStalePlaywrightTempDirs();
     const chromium = (await import('@sparticuz/chromium')).default;
     const { chromium: playwrightChromium } = await import('playwright-core');
     return playwrightChromium.launch({

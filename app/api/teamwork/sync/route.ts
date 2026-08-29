@@ -4,9 +4,34 @@ import { normalize } from '@/lib/company-name';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { todaySGT } from '@/lib/date';
+import { getSessionCookie } from '@/lib/teamwork-agm';
 import { syncTeamworkCampaignRecipients } from '@/lib/teamwork-recipients';
 import { syncTeamworkContactPersons } from '@/lib/teamwork-contact-report';
 import { logFieldChange } from '@/lib/audit-log';
+
+// Vincent, 2026-08-29: this route used to call getSessionCookie() twice —
+// once independently inside syncTeamworkCampaignRecipients, once inside
+// syncTeamworkContactPersons — launching a fresh Chromium browser each
+// time, seconds apart, in the same invocation. Real failed-run error
+// payloads showed the exact Chromium warning "Less than 64MB of free
+// space in temporary directory for shared memory files": Vercel reuses
+// Fluid Compute containers between cron invocations, and the existing
+// stale-profile cleanup (lib/playwright-tmp-cleanup.ts) is deliberately
+// age-gated (2 minutes) so it can never be confused with a still-running
+// concurrent invocation — which structurally means it can't clean up a
+// browser THIS SAME invocation just closed seconds ago either. Fetching
+// one cookie and passing it to both syncs removes the double launch
+// entirely, rather than trying to clean up faster. One retry preserves
+// the resilience the old independent-per-sync logins had against a
+// one-off login blip.
+async function getSessionCookieWithOneRetry(): Promise<string> {
+  try {
+    return await getSessionCookie();
+  } catch (firstError) {
+    console.error('TeamWork login failed once, retrying:', firstError);
+    return await getSessionCookie();
+  }
+}
 
 // Daily TeamWork -> companies sync (see vercel.json cron, 18:30 UTC / SGT
 // 02:30 — before the 19:00 UTC ar-reminder generator so new clients enter
@@ -443,21 +468,33 @@ async function syncTeamworkCompanies() {
 
   let recipientSync: Awaited<ReturnType<typeof syncTeamworkCampaignRecipients>> | null = null;
   let recipientSyncError: string | null = null;
-  try {
-    recipientSync = await syncTeamworkCampaignRecipients(supabase);
-  } catch (error) {
-    recipientSyncError = error instanceof Error ? error.message : String(error);
-  }
-
-  // Fill-in only — covers companies the "upcoming events" report above
-  // structurally can't reach (it only lists companies with a scheduled
-  // reminder). Runs after, so it never overwrites what that sync just set.
   let contactPersonFillIn: Awaited<ReturnType<typeof syncTeamworkContactPersons>> | null = null;
   let contactPersonFillInError: string | null = null;
+
+  let sessionCookie: string | null = null;
   try {
-    contactPersonFillIn = await syncTeamworkContactPersons(supabase);
+    sessionCookie = await getSessionCookieWithOneRetry();
   } catch (error) {
-    contactPersonFillInError = error instanceof Error ? error.message : String(error);
+    const message = error instanceof Error ? error.message : String(error);
+    recipientSyncError = `TeamWork login failed: ${message}`;
+    contactPersonFillInError = `TeamWork login failed: ${message}`;
+  }
+
+  if (sessionCookie) {
+    try {
+      recipientSync = await syncTeamworkCampaignRecipients(supabase, sessionCookie);
+    } catch (error) {
+      recipientSyncError = error instanceof Error ? error.message : String(error);
+    }
+
+    // Fill-in only — covers companies the "upcoming events" report above
+    // structurally can't reach (it only lists companies with a scheduled
+    // reminder). Runs after, so it never overwrites what that sync just set.
+    try {
+      contactPersonFillIn = await syncTeamworkContactPersons(supabase, sessionCookie);
+    } catch (error) {
+      contactPersonFillInError = error instanceof Error ? error.message : String(error);
+    }
   }
 
   // ── Active Client "Email" — mirrors companies.tw_to_emails/best_email,
@@ -508,8 +545,22 @@ async function syncTeamworkCompanies() {
     }
   }
 
+  // Vincent, 2026-08-29: the dashboard's exception register only ever
+  // shows this top-level `error` field (run.fail() below falls back to a
+  // generic "TeamWork company sync failed." whenever this is undefined,
+  // which it always was before this change) — the real cause was only
+  // ever visible in the nested *_error fields already being set below,
+  // requiring a direct Supabase query to actually see what went wrong.
+  const errorParts = [
+    insertError ? `Insert failed: ${insertError}` : null,
+    updateErrors.length ? `${updateErrors.length} company update(s) failed: ${updateErrors[0]}` : null,
+    recipientSyncError ? `Campaign recipient sync failed: ${recipientSyncError}` : null,
+    contactPersonFillInError ? `Contact person fill-in failed: ${contactPersonFillInError}` : null,
+  ].filter((part): part is string => part !== null);
+
   return NextResponse.json({
     ok: !insertError && !updateErrors.length && !recipientSyncError && !contactPersonFillInError,
+    ...(errorParts.length ? { error: errorParts.join(' | ') } : {}),
     tw_total: twList.length,
     matched,
     internal_id_backfilled: backfilled,

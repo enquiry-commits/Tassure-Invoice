@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 
 const SOURCES = [
-  'teamwork_nd',
+  'teamwork_nd_1',
+  'teamwork_nd_2',
+  'teamwork_nd_3',
+  'teamwork_nd_4',
   'teamwork_companies',
   'ar_generate',
   'quickbooks',

@@ -18,9 +18,13 @@ async function getData() {
       .eq('exception_type', 'missing_nominee_subrole')
       .eq('status', 'open')
       .order('last_seen_at', { ascending: false }),
+    // Vincent, 2026-08-29: the daily ND scrape now runs as 4 batches
+    // (teamwork_nd_1..4 — see app/api/teamwork/sync-nd/route.ts) — without
+    // this, this card would silently show "Pending" forever post-deploy
+    // since nothing writes source='teamwork_nd' on a daily cron anymore.
     supabase.from('automation_sync_runs')
       .select('summary')
-      .eq('source', 'teamwork_nd')
+      .in('source', ['teamwork_nd', 'teamwork_nd_1', 'teamwork_nd_2', 'teamwork_nd_3', 'teamwork_nd_4'])
       .eq('status', 'success')
       .order('started_at', { ascending: false })
       .limit(1),

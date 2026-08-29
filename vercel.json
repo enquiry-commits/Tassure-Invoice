@@ -6,6 +6,18 @@
   "crons": [
     {
       "path": "/api/teamwork/sync-nd",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/teamwork/sync-nd",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/teamwork/sync-nd",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/teamwork/sync-nd",
       "schedule": "0 18 * * *"
     },
     {
