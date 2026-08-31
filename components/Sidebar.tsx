@@ -3,17 +3,18 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText, Palette } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, ListChecks, Palette } from 'lucide-react';
 
 // `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
-// yet (see NavImg below) — currently just Proposal Generator, a link out to
-// a separate Vercel app rather than an internal route, hence `external`.
+// yet (see NavImg below) — currently Proposal Generator (a link out to a
+// separate Vercel app, hence `external`) and My Tasks.
 type Node = { label: string; href?: string; img?: string; icon?: typeof FileText; external?: boolean; id?: string; children?: Node[] };
 
 // One tree. Level 1 nodes carry a 3D image icon; everything nested is icon-free
 // and indented with curved connector rails (see reference design).
 const tree: Node[] = [
   { label: 'Dashboard', href: '/',          img: '/nav/dashboard.png' },
+  { label: 'My Tasks',  href: '/my-tasks',  icon: ListChecks },
   { label: 'Companies', href: '/companies', img: '/nav/companies.png' },
   {
     id: 'master-list', label: 'Master List', img: '/nav/master-list.png',
@@ -90,13 +91,19 @@ function findNode(nodes: Node[], href: string): Node | null {
 }
 
 // An account with `restrictedTo` set (lib/approved-accounts.ts) sees only
-// that one page — a single flat nav item, not the full tree with everything
-// else hidden. Falls back to the full tree if the href can't be found (a
-// stale value shouldn't lock someone out of the whole nav).
+// that one page plus My Tasks (2026-08-31 — every restricted account gets
+// a personalized My Tasks view too, scoped server-side to just what their
+// account already has access to; proxy.ts carries the matching routing
+// exception) — never the full tree with everything else hidden. Falls back
+// to the full tree if the href can't be found (a stale value shouldn't
+// lock someone out of the whole nav).
 function level1For(restrictedTo: string | null | undefined): Node[] {
   if (!restrictedTo) return tree;
   const node = findNode(tree, restrictedTo);
-  return node ? [{ label: node.label, href: node.href, img: '/nav/billing.png' }] : tree;
+  if (!node) return tree;
+  const myTasks = findNode(tree, '/my-tasks');
+  const restrictedNode = { label: node.label, href: node.href, img: '/nav/billing.png' };
+  return myTasks ? [restrictedNode, myTasks] : [restrictedNode];
 }
 
 const RAIL = 'rgba(255,255,255,0.18)';

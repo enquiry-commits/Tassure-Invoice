@@ -59,7 +59,12 @@ export async function proxy(req: NextRequest) {
   // group confined to AR Reminder). Page navigation only, same as the rest of
   // this file: API routes stay reachable so the allowed page's own fetches
   // (and shared ones like /api/auth/me) keep working.
-  if (!isApi && account.restrictedTo && !isWithinRestriction(account.restrictedTo, path, req.nextUrl.searchParams)) {
+  // /my-tasks is an explicit, deliberate exception (2026-08-31): every
+  // restricted account still gets a personalized My Tasks view, scoped by
+  // app/api/my-tasks/route.ts itself (not by this file) to only the areas
+  // their account already has access to — this widens which PAGE they can
+  // reach, never which DATA they can see.
+  if (!isApi && account.restrictedTo && path !== '/my-tasks' && !isWithinRestriction(account.restrictedTo, path, req.nextUrl.searchParams)) {
     return NextResponse.redirect(new URL(account.restrictedTo, req.url));
   }
   return response;

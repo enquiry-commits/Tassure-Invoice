@@ -98,6 +98,30 @@ Confirm a mid-composition Enter (used by the IME to confirm a candidate)
 does not prematurely commit/close the cell before the full name lands.
 **Guards:** INV-DATA-010.
 
+### REG-013 — Company 360 multi-source accuracy
+Open Company 360 (`/companies/[id]`) for a company with multiple AR/AGM
+cycles across years, at least one generated invoice, and ND history
+(active or ceased). Confirm every section shows the correct rows, each
+AR/AGM cycle's `matchedVia` correctly reflects company_id vs uen vs fuzzy,
+and a company with none of the above renders clean empty states rather
+than errors. Also confirm a company whose `ar_reminder` row has
+`company_id IS NULL` (the legacy-row class from INV-AR-003) still surfaces
+via the `uen` fallback.
+**Guards:** INV-DOC-004, INV-TW-005, INV-DATA-012, INV-AR-003.
+
+### REG-014 — My Tasks PIC attribution and restricted-account scope
+Log in as a staff member with `pic`/`acc_pic`/`tax_pic` assignments
+including at least one alias/initial value (e.g. "YH", "Kah Ye"). Confirm
+`/my-tasks` shows exactly their rows (all three PIC fields checked) and
+excludes `late_filing_companies` rows with no `mirrored_ar_reminder_id`.
+Log in as one of the 6 AR-Reminder-restricted accounts — confirm
+`/my-tasks` is reachable, the sidebar shows exactly two items, the
+response's `lateFiling` is `null` (not empty), and `/companies/[id]`
+stays unreachable (redirects to `/billing?tab=ar`, unchanged).
+**Guards:** none yet in `docs/INVARIANTS.md` — this is the first feature
+built on PIC-based task attribution; add an INV-PIC entry here if a real
+attribution bug is ever found.
+
 ---
 
 ## Automation priority

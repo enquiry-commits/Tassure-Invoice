@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Building2, BriefcaseBusiness, MapPin, UserCheck, Users, UserX, RotateCcw } from 'lucide-react';
+import Link from 'next/link';
+import { Building2, BriefcaseBusiness, MapPin, UserCheck, Users, UserX, RotateCcw, ArrowUpRight } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
 
 interface Company {
+  id: number;
   companyName: string;
   registrationNo: string;
   companyType: string;
@@ -172,7 +174,7 @@ export default function CompaniesPage() {
           ) : pageItems.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No companies found</div>
           ) : pageItems.map((c, i) => (
-            <div key={c.registrationNo || i} className="system-list-row" style={{ background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '14px 15px', marginBottom: 9 }}>
+            <Link key={c.registrationNo || i} href={`/companies/${c.id}`} className="system-list-row" style={{ display: 'block', background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', padding: '14px 15px', marginBottom: 9, textDecoration: 'none', color: 'inherit' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 <span style={{ fontSize: 10, color: '#cbd5e1', fontWeight: 600, paddingTop: 2 }}>{startIndex + i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -190,7 +192,7 @@ export default function CompaniesPage() {
                 {(c.primaryContact?.contactName || c.bestEmail) && <span>{c.primaryContact?.contactName || c.bestEmail}</span>}
                 {c.pic && <span>PIC: {c.pic}</span>}
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       ) : (
@@ -211,10 +213,11 @@ export default function CompaniesPage() {
               <col style={{ width: 132 }} />
               <col style={{ width: 180 }} />
               <col style={{ width: 110 }} />
+              <col style={{ width: 84 }} />
             </colgroup>
             <thead>
               <tr className="list-column-header-gray">
-                {['No.','Company Name','Internal CSS Status','UEN / ROC','Company Type','Nominee Director','Address Service','Contact','PIC'].map(h => (
+                {['No.','Company Name','Internal CSS Status','UEN / ROC','Company Type','Nominee Director','Address Service','Contact','PIC',''].map(h => (
                   <th key={h}
                     style={{ position: 'sticky', top: 0, zIndex: 2, boxShadow: 'inset 0 -1px 0 rgba(15,23,42,0.08)' }}>
                     {h}
@@ -224,9 +227,9 @@ export default function CompaniesPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="text-center py-12 text-slate-400">Loading...</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-slate-400">Loading...</td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-slate-400">No companies found</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-slate-400">No companies found</td></tr>
               ) : pageItems.map((c, i) => (
                 <tr key={c.registrationNo || i} className="system-list-row border-b">
                   <td className="px-4 py-2.5 text-slate-400 text-xs">{startIndex + i + 1}</td>
@@ -260,6 +263,11 @@ export default function CompaniesPage() {
                     {c.primaryContact?.contactName || c.bestEmail || '—'}
                   </td>
                   <td className="px-4 py-2.5 text-xs text-slate-500">{c.pic || '—'}</td>
+                  <td className="px-4 py-2.5">
+                    <Link href={`/companies/${c.id}`} className="company-360-link">
+                      View 360<ArrowUpRight size={11} />
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>

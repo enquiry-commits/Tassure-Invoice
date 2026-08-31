@@ -17,7 +17,7 @@ export type ApprovedAccount = {
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true },
   { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com' },
-  { name: 'Samuell Ng', email: 'samuell@tassure.com' },
+  { name: 'Samuell Ng', email: 'samuellng@tassure.com' },
   { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', qbLocations: { TAB: 'Lim Hoe Chyi', TAC: 'Lim Hoe Chyi' } },
   { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', qbLocations: { TAB: 'Hoo Seng Xin', TAC: 'Seng Xin' } },
   { name: 'Jenny Lai', email: 'jennylai@tassure.com', qbLocations: { TAB: 'Jenny Lai', TAC: 'Jenny Lai' } },

@@ -52,10 +52,16 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
   Draft Helper (separate desktop app) for the real Outlook send
 - Post Incorporate document generation (1 of 13 planned document types —
   see Pending Improvements)
+- Company 360 (`/companies/[id]`) and My Tasks (`/my-tasks`) — shipped
+  2026-08-31, `npx tsc --noEmit`/`npm run build` clean; not yet exercised
+  against real production data by a real login (see Pending Improvements).
 
 ## Active issues
 
-None open as of this writing.
+None open as of this writing. Company 360 / My Tasks are freshly shipped
+(2026-08-31) and haven't had a real post-deploy login check yet — see
+Pending Improvements, not listed as an issue since nothing is known wrong,
+just not yet confirmed right.
 
 ## Known risks (not bugs — things worth remembering before relying on data)
 
@@ -86,8 +92,16 @@ None open as of this writing.
   standalone) — only Post Incorporate is live so far. This note is based
   on an older record; confirm the current count with Vincent before
   treating it as exact.
-- `C:\Users\vincent\.claude\plans\atomic-wandering-locket.md` still
-  describes the original 2-batch TeamWork ND cron design; the
-  actually-shipped design is 4 batches (`PROJECT_STATUS.md`, 2026-08-29).
-  Cosmetic inconsistency only — `PROJECT_STATUS.md` and this file are both
-  accurate.
+- Have a real staff member (ideally one of the 6 AR-Reminder-restricted
+  accounts, and separately Samuell Ng specifically) actually log in and
+  use Company 360 / My Tasks post-deploy — this can't be confirmed by
+  reading code (auth flow, real PIC data, real restricted-account routing)
+  and hasn't happened yet as of this writing.
+- Run `scripts/fix-samuell-ng-realtime-rls-email.sql` against Supabase
+  (Vincent, per this repo's established migration pattern) — without it,
+  Samuell logs in fine but silently misses realtime updates on AR
+  Reminder/Master List.
+- `C:\Users\vincent\.claude\plans\atomic-wandering-locket.md` currently
+  holds the Company 360 / My Tasks plan (2026-08-31) — it gets overwritten
+  by whatever real feature is planned next; it is not a permanent record,
+  `PROJECT_STATUS.md` is.

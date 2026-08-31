@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
     const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
     const rename = uen ? renameByUen.get(uen) : undefined;
     return {
+      id:                 c.id,
       companyName:        c.company_name,
       registrationNo:     c.registration_no,
       internalCode:       c.internal_code,

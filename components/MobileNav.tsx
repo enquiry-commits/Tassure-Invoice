@@ -12,6 +12,7 @@ import { Menu, X } from 'lucide-react';
 const LINKS: { group: string; items: { label: string; href: string }[] }[] = [
   { group: '', items: [
     { label: 'Dashboard', href: '/' },
+    { label: 'My Tasks',  href: '/my-tasks' },
     { label: 'Companies', href: '/companies' },
   ]},
   { group: 'Master List', items: [
