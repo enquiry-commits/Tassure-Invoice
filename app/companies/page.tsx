@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Building2, BriefcaseBusiness, MapPin, UserCheck, Users, UserX, RotateCcw, ArrowUpRight } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Building2, BriefcaseBusiness, ChevronRight, MapPin, UserCheck, Users, UserX, RotateCcw } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
@@ -92,6 +93,7 @@ export default function CompaniesPage() {
   const [cat, setCat]         = useState<CompanyCat>('all');
   const [loading, setLoading] = useState(false);
   const isMobile = useIsMobile();
+  const router = useRouter();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -204,6 +206,7 @@ export default function CompaniesPage() {
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 260px)' }}>
           <table className="system-list-table" style={{ minWidth: 1180 }}>
             <colgroup>
+              <col style={{ width: 28 }} />
               <col style={{ width: 58 }} />
               <col style={{ width: 250 }} />
               <col style={{ width: 128 }} />
@@ -213,12 +216,11 @@ export default function CompaniesPage() {
               <col style={{ width: 132 }} />
               <col style={{ width: 180 }} />
               <col style={{ width: 110 }} />
-              <col style={{ width: 84 }} />
             </colgroup>
             <thead>
               <tr className="list-column-header-gray">
-                {['No.','Company Name','Internal CSS Status','UEN / ROC','Company Type','Nominee Director','Address Service','Contact','PIC',''].map(h => (
-                  <th key={h}
+                {['','No.','Company Name','Internal CSS Status','UEN / ROC','Company Type','Nominee Director','Address Service','Contact','PIC'].map((h, i) => (
+                  <th key={i}
                     style={{ position: 'sticky', top: 0, zIndex: 2, boxShadow: 'inset 0 -1px 0 rgba(15,23,42,0.08)' }}>
                     {h}
                   </th>
@@ -231,7 +233,17 @@ export default function CompaniesPage() {
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={10} className="text-center py-12 text-slate-400">No companies found</td></tr>
               ) : pageItems.map((c, i) => (
-                <tr key={c.registrationNo || i} className="system-list-row border-b">
+                <tr
+                  key={c.registrationNo || i}
+                  className="system-list-row border-b"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open full details for ${c.companyName}`}
+                  onClick={() => router.push(`/companies/${c.id}`)}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); router.push(`/companies/${c.id}`); } }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <td className="px-4 py-2.5 text-slate-300"><ChevronRight size={14} /></td>
                   <td className="px-4 py-2.5 text-slate-400 text-xs">{startIndex + i + 1}</td>
                   <td className="px-4 py-2.5">
                     <div className="company-name-text max-w-56 truncate" title={c.companyName}>
@@ -263,11 +275,6 @@ export default function CompaniesPage() {
                     {c.primaryContact?.contactName || c.bestEmail || '—'}
                   </td>
                   <td className="px-4 py-2.5 text-xs text-slate-500">{c.pic || '—'}</td>
-                  <td className="px-4 py-2.5">
-                    <Link href={`/companies/${c.id}`} className="company-360-link">
-                      View 360<ArrowUpRight size={11} />
-                    </Link>
-                  </td>
                 </tr>
               ))}
             </tbody>
