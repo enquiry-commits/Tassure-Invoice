@@ -97,10 +97,6 @@ just not yet confirmed right.
   use Company 360 / My Tasks post-deploy — this can't be confirmed by
   reading code (auth flow, real PIC data, real restricted-account routing)
   and hasn't happened yet as of this writing.
-- Run `scripts/fix-samuell-ng-realtime-rls-email.sql` against Supabase
-  (Vincent, per this repo's established migration pattern) — without it,
-  Samuell logs in fine but silently misses realtime updates on AR
-  Reminder/Master List.
 - `C:\Users\vincent\.claude\plans\atomic-wandering-locket.md` currently
   holds the Company 360 / My Tasks plan (2026-08-31) — it gets overwritten
   by whatever real feature is planned next; it is not a permanent record,
