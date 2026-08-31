@@ -257,11 +257,11 @@ export default function EotTable() {
                   </td>
                   <td style={TD_BASE}><SelectField id={r.id} field="prepared_date" value={r.prepared_date} onSave={handleSave} options={REPORT_READY_OPTIONS} plainDates /></td>
                   <td style={TD_BASE}><ReadOnlyDate value={r.ar_original_due_date} /></td>
-                  <td style={TD_BASE}><ReadOnlyDate value={r.ar_revised_due_date} /></td>
+                  <td style={{ ...TD_BASE, background: '#fef3c7' }}><ReadOnlyDate value={r.ar_revised_due_date} /></td>
                   <td style={TD_BASE}><EditField id={r.id} field="sent_date" value={r.sent_date} onSave={handleSave} placeholder="—" isDate /></td>
                   <td style={TD_BASE}><EditField id={r.id} field="received_date" value={r.received_date} onSave={handleSave} placeholder="—" isDate /></td>
                   <td style={TD_BASE}><ReadOnlyDate value={r.agm_original_due_date} /></td>
-                  <td style={TD_BASE}><ReadOnlyDate value={r.agm_revised_due_date} /></td>
+                  <td style={{ ...TD_BASE, background: '#fef3c7' }}><ReadOnlyDate value={r.agm_revised_due_date} /></td>
                   <td style={TD_BASE}><SelectField id={r.id} field="xbrl" value={r.xbrl} onSave={handleSave} options={XBRL_OPTIONS} /></td>
                   <td style={TD_BASE}><SelectField id={r.id} field="dpo" value={r.dpo} onSave={handleSave} options={DPO_OPTIONS} /></td>
                   <td style={TD_BASE}><SelectField id={r.id} field="ond_ron" value={r.ond_ron} onSave={handleSave} options={ROND_OPTIONS} /></td>
