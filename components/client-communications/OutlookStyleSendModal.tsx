@@ -101,6 +101,7 @@ export default function OutlookStyleSendModal({
   const [prepareError, setPrepareError] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(true);
   const [editedBody, setEditedBody] = useState(draft.body);
+  const [editedSubject, setEditedSubject] = useState(draft.subject);
   const [editedTo, setEditedTo] = useState(draft.to_email ?? '');
   const [editedCc, setEditedCc] = useState(draft.cc_email ?? '');
   const [editedBcc, setEditedBcc] = useState('');
@@ -133,6 +134,7 @@ export default function OutlookStyleSendModal({
       if (cancelled) return;
       setPrepared(result);
       setEditedBody(result.draft.body);
+      setEditedSubject(result.draft.subject);
       setPreparing(false);
     }).catch((e: unknown) => {
       if (cancelled) return;
@@ -183,6 +185,7 @@ export default function OutlookStyleSendModal({
         ...prepared.draft,
         to_email: editedTo || null,
         cc_email: editedCc || null,
+        subject: editedSubject,
         body: editedBody,
         bcc_email: editedBcc || null,
         additional_attachments: manualFiles,
@@ -210,7 +213,7 @@ export default function OutlookStyleSendModal({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               id: prepared.draft.id, version: prepared.draft.version,
-              patch: { status: 'sent', body: editedBody },
+              patch: { status: 'sent', subject: editedSubject, body: editedBody },
               sentByEmail: me?.email, sentByName: me?.name,
             }),
           });
@@ -235,9 +238,9 @@ export default function OutlookStyleSendModal({
     }
   };
 
-  // Vincent, 2026-08-27: closing without sending used to lose whatever was
-  // typed — nothing persisted anywhere until Send actually fired. Now, if
-  // the body (or, since To/Cc became editable, either of those) was
+  // Vincent, 2026-08-27 (Subject made editable 2026-08-31): closing without
+  // sending used to lose whatever was typed — nothing persisted anywhere
+  // until Send actually fired. Now, if the body, subject, To, or Cc was
   // genuinely edited, save it back to the draft row before closing, so
   // reopening it later (via Draft again, or Delivery History's existing
   // "Open Again in Outlook") shows the edit instead of the original merged
@@ -249,9 +252,10 @@ export default function OutlookStyleSendModal({
   const handleClose = async () => {
     if (working || closing) return;
     const bodyChanged = !!prepared && editedBody !== prepared.draft.body;
+    const subjectChanged = !!prepared && editedSubject !== prepared.draft.subject;
     const toChanged = !!prepared && editedTo !== (prepared.draft.to_email ?? '');
     const ccChanged = !!prepared && editedCc !== (prepared.draft.cc_email ?? '');
-    if (!prepared || (!bodyChanged && !toChanged && !ccChanged) || prepared.draft.id === undefined || prepared.draft.version === undefined) {
+    if (!prepared || (!bodyChanged && !subjectChanged && !toChanged && !ccChanged) || prepared.draft.id === undefined || prepared.draft.version === undefined) {
       onClose();
       return;
     }
@@ -263,7 +267,7 @@ export default function OutlookStyleSendModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: prepared.draft.id, version: prepared.draft.version,
-          patch: { body: editedBody, to_email: editedTo || null, cc_email: editedCc || null },
+          patch: { body: editedBody, subject: editedSubject, to_email: editedTo || null, cc_email: editedCc || null },
         }),
       });
       if (!patchRes.ok) {
@@ -395,7 +399,12 @@ export default function OutlookStyleSendModal({
             </div>
             <div style={{ ...rowStyle, borderBottom: 'none' }}>
               <div style={{ ...labelBoxStyle, background: 'transparent', border: 'none', color: '#94a3b8', fontWeight: 500 }}>Subject</div>
-              <div style={{ ...valueStyle, whiteSpace: 'normal' }}>{draft.subject}</div>
+              <input
+                type="text"
+                value={editedSubject}
+                onChange={e => setEditedSubject(e.target.value)}
+                style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600, color: '#1e3a5f', padding: '8px 2px', boxSizing: 'border-box' }}
+              />
             </div>
           </div>
         </div>
