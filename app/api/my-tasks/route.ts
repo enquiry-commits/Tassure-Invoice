@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
+import { getApprovedAccount, APPROVED_ACCOUNTS } from '@/lib/approved-accounts';
 import { todaySGT, thisYearSGT } from '@/lib/date';
 import { findStaffEmails } from '@/lib/staff-directory';
 
@@ -44,8 +45,32 @@ function matchedAs(row: { pic: string | null; acc_pic: string | null; tax_pic: s
 }
 
 export async function GET(req: NextRequest) {
-  const account = await getRequestAccount(req);
-  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+  const realAccount = await getRequestAccount(req);
+  if (!realAccount) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+
+  // 2026-09-02: "View as" — Vincent asked to see what My Tasks looks like
+  // for a different staff member ("我希望可以从这边看到不同权限的人看到的内容
+  // 是什么...方便我优化调整"). Gated on the existing `admin` flag
+  // (lib/approved-accounts.ts) rather than hardcoding his specific email —
+  // `admin` currently belongs to Vincent alone, so this has the exact
+  // effect he asked for ("只开放给我一个人"), but stays correct if that
+  // ever changes, matching how `admin` already gates Appearance Settings
+  // elsewhere in this app. Enforced server-side, not just hidden in the
+  // UI — a non-admin account passing ?viewAs= gets a real 403, since this
+  // is a genuine permission boundary (seeing another named person's PIC
+  // assignments), not just a display preference.
+  const viewAsParam = req.nextUrl.searchParams.get('viewAs');
+  let account = realAccount;
+  let viewingAs: { email: string; name: string } | null = null;
+  if (viewAsParam) {
+    if (!realAccount.admin) {
+      return NextResponse.json({ error: 'Only an admin account can view another staff member’s tasks.' }, { status: 403 });
+    }
+    const target = getApprovedAccount(viewAsParam);
+    if (!target) return NextResponse.json({ error: 'No approved account matches that email.' }, { status: 404 });
+    account = target;
+    viewingAs = { email: target.email, name: target.name };
+  }
 
   const arOnly = account.restrictedTo === AR_ONLY_RESTRICTION;
   const supabase = createAdminClient();
@@ -132,11 +157,20 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     scope: arOnly ? 'ar-only' : 'full',
     scopeNote: arOnly
-      ? 'Your account has access to AR Reminder only — showing your AR Reminder tasks.'
+      ? (viewingAs
+          ? `${viewingAs.name}'s account has access to AR Reminder only — showing their AR Reminder tasks.`
+          : 'Your account has access to AR Reminder only — showing your AR Reminder tasks.')
       : "My Tasks currently covers AR Reminder and Late Filing only — Nominee Director reviews, Client Communications drafts and Trademark renewals aren't aggregated here yet.",
     generatedAt: today,
     arReminder: { overdue, staleOverdue, dueSoon },
     lateFiling,
     counts,
+    viewingAs,
+    // Only ever sent to an admin viewer, regardless of whose tasks are
+    // currently being shown — a restricted account passing ?viewAs= never
+    // gets this list back (403 above, before this point).
+    viewableAccounts: realAccount.admin
+      ? APPROVED_ACCOUNTS.map(a => ({ email: a.email, name: a.name, restrictedTo: a.restrictedTo ?? null }))
+      : undefined,
   });
 }

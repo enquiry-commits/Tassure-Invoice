@@ -23,6 +23,11 @@ type MyTasksResponse = {
   arReminder: { overdue: ArTask[]; staleOverdue: ArTask[]; dueSoon: ArTask[] };
   lateFiling: { needsAttention: LateFilingTask[] } | null;
   counts: { arOverdue: number; arStaleOverdue: number; arDueSoon: number; lateFiling: number; total: number };
+  viewingAs: { email: string; name: string } | null;
+  // Only ever present when the REAL logged-in account is admin — see
+  // app/api/my-tasks/route.ts's own comment. Absent (not just empty) for
+  // everyone else, so its mere presence is what gates the picker below.
+  viewableAccounts?: { email: string; name: string; restrictedTo: string | null }[];
 };
 
 type Category = 'ALL' | 'overdue' | 'dueSoon' | 'lateFiling';
@@ -96,14 +101,22 @@ export default function MyTasksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cat, setCat] = useState<Category>('ALL');
+  // "View as" — admin-only debug/demo tool (Vincent: "希望可以从这边看到不同
+  // 权限的人看到的内容是什么...方便我优化调整"). Empty string = viewing your
+  // own real tasks. Deliberately NOT persisted anywhere (no localStorage,
+  // resets on reload) — this is a one-off inspection tool, not a real
+  // account switch, and shouldn't silently leave the page "stuck" showing
+  // someone else's view after navigating away and back.
+  const [viewAsEmail, setViewAsEmail] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const tasksUrl = viewAsEmail ? `/api/my-tasks?viewAs=${encodeURIComponent(viewAsEmail)}` : '/api/my-tasks';
       const [meRes, tasksRes] = await Promise.all([
         fetch('/api/auth/me'),
-        fetch('/api/my-tasks'),
+        fetch(tasksUrl),
       ]);
       const meJson = meRes.ok ? await meRes.json() : { user: null };
       setUser(meJson.user ?? null);
@@ -117,7 +130,7 @@ export default function MyTasksPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [viewAsEmail]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -137,10 +150,31 @@ export default function MyTasksPage() {
         <ListChecks size={20} color="#1e3a5f" />
         <h1 style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', margin: 0 }}>My Tasks</h1>
         {user && <span style={{ fontSize: 12, color: '#94a3b8' }}>{user.name}</span>}
+        {data?.viewableAccounts && (
+          <select
+            value={viewAsEmail}
+            onChange={e => setViewAsEmail(e.target.value)}
+            title="Admin-only: preview what My Tasks looks like for another staff member"
+            style={{ marginLeft: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 12.5, color: '#475569', background: '#fff' }}
+          >
+            <option value="">View as: Me ({user?.name})</option>
+            {data.viewableAccounts.filter(a => a.email !== user?.email).map(a => (
+              <option key={a.email} value={a.email}>
+                View as: {a.name}{a.restrictedTo ? ' (AR Reminder only)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
         <button onClick={load} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
           <RefreshCw size={14} />Refresh
         </button>
       </div>
+      {data?.viewingAs && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
+          <AlertTriangle size={14} />
+          Viewing as {data.viewingAs.name} ({data.viewingAs.email}) — this is a preview for tuning My Tasks, not your own tasks.
+        </div>
+      )}
       {data && <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 20 }}>{data.scopeNote}</div>}
 
       {loading && !data ? (
@@ -159,7 +193,9 @@ export default function MyTasksPage() {
           </div>
 
           {counts?.total === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Nothing outstanding — you're all caught up.</div>
+            <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+              {data?.viewingAs ? `Nothing outstanding for ${data.viewingAs.name}.` : "Nothing outstanding — you're all caught up."}
+            </div>
           ) : (
             <>
               {showOverdue && arRows && (arRows.overdue.length > 0 || arRows.staleOverdue.length > 0) && (
