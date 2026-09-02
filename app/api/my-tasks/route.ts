@@ -50,21 +50,22 @@ export async function GET(req: NextRequest) {
 
   // 2026-09-02: "View as" — Vincent asked to see what My Tasks looks like
   // for a different staff member ("我希望可以从这边看到不同权限的人看到的内容
-  // 是什么...方便我优化调整"). Gated on the existing `admin` flag
-  // (lib/approved-accounts.ts) rather than hardcoding his specific email —
-  // `admin` currently belongs to Vincent alone, so this has the exact
-  // effect he asked for ("只开放给我一个人"), but stays correct if that
-  // ever changes, matching how `admin` already gates Appearance Settings
-  // elsewhere in this app. Enforced server-side, not just hidden in the
-  // UI — a non-admin account passing ?viewAs= gets a real 403, since this
+  // 是什么...方便我优化调整"). Gated on its own `canViewAsOthers` flag
+  // (lib/approved-accounts.ts), not `admin` — `admin` also gates
+  // Appearance Settings editing, explicitly scoped to Vincent only by an
+  // earlier decision; reusing it here would have silently handed
+  // Appearance Settings access to whoever gets View-As next (Vincent
+  // extended this same day to Cindy/Samuell — see that file's own
+  // comment). Enforced server-side, not just hidden in the UI — an
+  // account without the flag passing ?viewAs= gets a real 403, since this
   // is a genuine permission boundary (seeing another named person's PIC
   // assignments), not just a display preference.
   const viewAsParam = req.nextUrl.searchParams.get('viewAs');
   let account = realAccount;
   let viewingAs: { email: string; name: string } | null = null;
   if (viewAsParam) {
-    if (!realAccount.admin) {
-      return NextResponse.json({ error: 'Only an admin account can view another staff member’s tasks.' }, { status: 403 });
+    if (!realAccount.canViewAsOthers) {
+      return NextResponse.json({ error: 'Your account cannot view another staff member’s tasks.' }, { status: 403 });
     }
     const target = getApprovedAccount(viewAsParam);
     if (!target) return NextResponse.json({ error: 'No approved account matches that email.' }, { status: 404 });
@@ -166,10 +167,11 @@ export async function GET(req: NextRequest) {
     lateFiling,
     counts,
     viewingAs,
-    // Only ever sent to an admin viewer, regardless of whose tasks are
-    // currently being shown — a restricted account passing ?viewAs= never
-    // gets this list back (403 above, before this point).
-    viewableAccounts: realAccount.admin
+    // Only ever sent to a viewer with canViewAsOthers, regardless of whose
+    // tasks are currently being shown — an account without the flag
+    // passing ?viewAs= never gets this list back (403 above, before this
+    // point).
+    viewableAccounts: realAccount.canViewAsOthers
       ? APPROVED_ACCOUNTS.map(a => ({ email: a.email, name: a.name, restrictedTo: a.restrictedTo ?? null }))
       : undefined,
   });

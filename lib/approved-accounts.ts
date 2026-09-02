@@ -5,6 +5,15 @@ export type ApprovedAccount = {
   // Gates the Appearance Settings editor (app/admin/appearance) and its
   // PATCH route. Vincent only, per his own explicit scoping.
   admin?: boolean;
+  // Gates the "View as" picker on My Tasks (app/my-tasks/page.tsx,
+  // app/api/my-tasks/route.ts's own ?viewAs= check) — a separate flag from
+  // `admin` on purpose, added 2026-09-02 when Vincent asked to extend just
+  // this one permission to Cindy/Samuell/Yee Soon: reusing `admin` for it
+  // would have also silently handed them Appearance Settings editing,
+  // which was explicitly scoped to Vincent only. Never conflate two
+  // unrelated permissions under one flag just because they both happen to
+  // be "admin-ish" — grant exactly what was asked, nothing implied.
+  canViewAsOthers?: boolean;
   // When set, this account is confined to exactly this one page (path +
   // required query params, e.g. AR Reminder is the 'ar' tab on /billing —
   // see components/Sidebar.tsx's tree for the canonical href). Enforced in
@@ -16,8 +25,14 @@ export type ApprovedAccount = {
 
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true },
-  { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com' },
-  { name: 'Samuell Ng', email: 'samuellng@tassure.com' },
+  { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', canViewAsOthers: true },
+  { name: 'Samuell Ng', email: 'samuellng@tassure.com', canViewAsOthers: true },
+  // New login account, added 2026-09-02 specifically to grant this
+  // permission (Vincent confirmed the real login email directly: "准确是
+  // Tan Yee Soon (yeesoon@tassure.com)") — previously only existed in
+  // lib/staff-directory.ts (used for PIC-matching text, not login) with no
+  // way to actually sign in at all.
+  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', canViewAsOthers: true },
   { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', qbLocations: { TAB: 'Lim Hoe Chyi', TAC: 'Lim Hoe Chyi' } },
   { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', qbLocations: { TAB: 'Hoo Seng Xin', TAC: 'Seng Xin' } },
   { name: 'Jenny Lai', email: 'jennylai@tassure.com', qbLocations: { TAB: 'Jenny Lai', TAC: 'Jenny Lai' } },

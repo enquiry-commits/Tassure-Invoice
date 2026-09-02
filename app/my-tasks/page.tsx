@@ -24,9 +24,10 @@ type MyTasksResponse = {
   lateFiling: { needsAttention: LateFilingTask[] } | null;
   counts: { arOverdue: number; arStaleOverdue: number; arDueSoon: number; lateFiling: number; total: number };
   viewingAs: { email: string; name: string } | null;
-  // Only ever present when the REAL logged-in account is admin — see
-  // app/api/my-tasks/route.ts's own comment. Absent (not just empty) for
-  // everyone else, so its mere presence is what gates the picker below.
+  // Only ever present when the REAL logged-in account has
+  // canViewAsOthers — see app/api/my-tasks/route.ts's own comment. Absent
+  // (not just empty) for everyone else, so its mere presence is what
+  // gates the picker below.
   viewableAccounts?: { email: string; name: string; restrictedTo: string | null }[];
 };
 
@@ -101,8 +102,9 @@ export default function MyTasksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cat, setCat] = useState<Category>('ALL');
-  // "View as" — admin-only debug/demo tool (Vincent: "希望可以从这边看到不同
-  // 权限的人看到的内容是什么...方便我优化调整"). Empty string = viewing your
+  // "View as" — debug/demo tool for accounts with canViewAsOthers
+  // (Vincent: "希望可以从这边看到不同权限的人看到的内容是什么...方便我优化调整").
+  // Empty string = viewing your
   // own real tasks. Deliberately NOT persisted anywhere (no localStorage,
   // resets on reload) — this is a one-off inspection tool, not a real
   // account switch, and shouldn't silently leave the page "stuck" showing
