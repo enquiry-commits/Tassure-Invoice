@@ -1,5 +1,5 @@
 import type { Browser, BrowserContext, Page } from 'playwright-core';
-import { removeStalePlaywrightTempDirs } from './playwright-tmp-cleanup';
+import { removeStalePlaywrightTempDirs, withPlaywrightRetry } from './playwright-tmp-cleanup';
 
 const BASE = 'https://apps.teamworkcss.com/tassure_asia';
 
@@ -69,6 +69,26 @@ async function login(context: BrowserContext) {
     }
   } finally {
     await page.close().catch(() => undefined);
+  }
+}
+
+// 2026-08-31: the launch+context+login unit, wrapped by withPlaywrightRetry
+// below (lib/playwright-tmp-cleanup.ts) — real evidence
+// (docs/INVARIANTS.md INV-CRON-013) that two different Playwright-launching
+// cron invocations can genuinely collide despite every cron entry sitting
+// on its own distinct hour. Self-contained: closes its OWN browser on any
+// failure before the retry wrapper tries again, so a failed attempt never
+// leaks a browser process while the caller's outer `browser` variable is
+// still null.
+async function acquireNdSession(): Promise<{ browser: Browser; context: BrowserContext }> {
+  const browser = await launchBrowser();
+  try {
+    const context = await browser.newContext();
+    await login(context);
+    return { browser, context };
+  } catch (error) {
+    await browser.close().catch(() => undefined);
+    throw error;
   }
 }
 
@@ -247,9 +267,9 @@ export async function scrapeTeamworkNdAppointments(people: TeamworkNdPerson[]) {
   const overallTimeoutMs = 240_000;
 
   try {
-    browser = await launchBrowser();
-    const context = await browser.newContext();
-    await login(context);
+    const session = await withPlaywrightRetry(acquireNdSession);
+    browser = session.browser;
+    const context = session.context;
 
     let nextIndex = 0;
     const worker = async () => {

@@ -34,17 +34,32 @@ export const preferredRegion = 'sin1';
 // containing 2 of the historically-slow individuals still finished
 // comfortably under budget, run in parallel rather than stacked.
 //
-// vercel.json now fires this route FOUR times a day, at four non-adjacent
-// hours (each pair at least 1 hour apart, well within Vercel's own
-// documented Hobby-tier jitter window, so no two batches can overlap).
-// Vercel identifies which invocation is which via the officially documented
-// `x-vercel-cron-schedule` header (exact schedule string that triggered
-// it) — NOT a query string in the cron path, since Vercel's docs don't
-// confirm query strings in a cron `path` survive into the request, only
-// that this header does, by name, for this exact "same path, different
+// vercel.json now fires this route FIVE times a day, at five distinct
+// hours, well within Vercel's own documented Hobby-tier jitter window (which
+// is confined to the cron expression's hour value), so no two batches can
+// overlap. Vercel identifies which invocation is which via the officially
+// documented `x-vercel-cron-schedule` header (exact schedule string that
+// triggered it) — NOT a query string in the cron path, since Vercel's docs
+// don't confirm query strings in a cron `path` survive into the request,
+// only that this header does, by name, for this exact "same path, different
 // schedule" scenario (confirmed directly against Vercel's current docs).
 //
-// ?batch=N&of=4 query params are ALSO accepted, for manual testing
+// Rebalanced from 4 to 5 batches 2026-08-31: the real ND roster grew to 14
+// people since the 4-batch design was built around 13 — with of=4 and only
+// 3 concurrent workers (see lib/teamwork-nd.ts), the interleave gave
+// batches 1-2 FOUR people each, exceeding the 3-worker capacity this whole
+// split exists to match one-to-one. Confirmed live: teamwork_nd_1 failed
+// with TeamWork API timeouts on 2 of its 4 people, consistent with 2 of
+// them stacking sequentially on one worker (the exact INV-CRON-003 risk).
+// of=5 against 14 people gives batches of 3,3,3,3,2 — every batch at or
+// under the 3-worker concurrency again. Also found and fixed the same day:
+// teamwork/sync (Companies) and teamwork/sync-secretary's first daily run
+// had drifted into this route's own hour 18 (see vercel.json/PROJECT_STATUS.md
+// 2026-08-31 entry) — a real collision this route's own non-adjacent-hour
+// design never checked against OTHER routes' schedules, only its own
+// batches. See docs/INVARIANTS.md INV-CRON-013/014.
+//
+// ?batch=N&of=5 query params are ALSO accepted, for manual testing
 // (mirroring the existing ?member_id= precedent below) — a plain
 // browser/curl hit has no x-vercel-cron-schedule header, so this is the
 // only way to manually exercise one batch in isolation before trusting it.
@@ -55,24 +70,28 @@ export const preferredRegion = 'sin1';
 // Do NOT put this unscoped form back on a daily cron — it reintroduces the
 // exact near-300s risk this split exists to remove.
 //
-// If the roster keeps growing and a 5th batch is ever needed: add a 5th
-// cron entry + schedule string below, a 5th CRON_SCHEDULE_BATCH entry, a
-// 5th case in batchSource(), a 5th AutomationSource literal in
-// lib/automation-sync.ts, and a 5th label in the dashboard files listed in
-// this repo's PROJECT_STATUS.md entry for this change.
+// If the roster keeps growing and a 6th batch is ever needed: add a 6th
+// cron entry + schedule string below (checked against EVERY other
+// Playwright-launching route's hour, not just this route's own batches —
+// see INV-CRON-014), a 6th CRON_SCHEDULE_BATCH entry, a 6th case in
+// batchSource(), a 6th AutomationSource literal in lib/automation-sync.ts,
+// and a 6th label in the dashboard files listed in this repo's
+// PROJECT_STATUS.md entry for this change.
 const CRON_SCHEDULE_BATCH: Record<string, { batch: number; of: number }> = {
-  '0 12 * * *': { batch: 1, of: 4 },
-  '0 14 * * *': { batch: 2, of: 4 },
-  '0 16 * * *': { batch: 3, of: 4 },
-  '0 18 * * *': { batch: 4, of: 4 },
+  '0 12 * * *': { batch: 1, of: 5 },
+  '0 14 * * *': { batch: 2, of: 5 },
+  '0 16 * * *': { batch: 3, of: 5 },
+  '0 18 * * *': { batch: 4, of: 5 },
+  '0 17 * * *': { batch: 5, of: 5 },
 };
 
 function batchSource(batch: number, of: number): AutomationSource | null {
-  if (of !== 4) return null;
+  if (of !== 5) return null;
   if (batch === 1) return 'teamwork_nd_1';
   if (batch === 2) return 'teamwork_nd_2';
   if (batch === 3) return 'teamwork_nd_3';
   if (batch === 4) return 'teamwork_nd_4';
+  if (batch === 5) return 'teamwork_nd_5';
   return null;
 }
 

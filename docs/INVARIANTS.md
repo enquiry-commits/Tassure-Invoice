@@ -323,6 +323,43 @@ again.
   deployed before the corresponding SQL migration is confirmed run in
   Supabase — deploying first 500s the **entire route** on its next cron
   firing, not just the new feature.
+- **INV-CRON-013** — Any new or moved Playwright-launching cron entry must
+  be checked for hour-collision against **every** other Playwright-
+  launching entry project-wide (grep callers of `getSessionCookie`/
+  `getBrowser`/`launchBrowser`), not just siblings within the same route
+  family — a same-hour or genuinely-overlapping pair of DIFFERENT
+  invocations can exhaust shared `/tmp` exactly like the same-invocation
+  double-launch INV-CRON-004 already covers, but INV-CRON-004's fix
+  (single login per invocation) and the stale-profile cleanup's age gate
+  cannot prevent it, since neither mechanism can distinguish a still-live
+  sibling invocation from garbage. Confirmed live, 2026-08-31: ND batch 4
+  (`0 18`), `teamwork/sync` (`30 18`), and `teamwork/sync-secretary`'s
+  first daily run (`45 18`) had all drifted into sharing hour 18 — two days
+  after this exact ND-batch redesign shipped, only checked against its own
+  4 batches, never against the other 2 routes already sitting in that
+  hour. Real evidence also shows a cron's actual `started_at` can fall
+  **outside its own documented jitter hour** (Companies fired at 19:08
+  despite a `30 18` schedule) — so hour-separation reduces but does not
+  fully eliminate this risk; pair it with INV-CRON-014's retry, not
+  instead of spacing. *(source: 2026-08-31, `vercel.json`,
+  `lib/playwright-tmp-cleanup.ts`.)*
+- **INV-CRON-014** — A Playwright acquire-retry helper's timeout/elapsed-
+  time math must be derived from the caller's own real `maxDuration` (300s
+  on Vercel Hobby) and any self-imposed deadline it has, never from an
+  assumption about cron schedule spacing — that assumption already failed
+  once (INV-CRON-013). Retry the **whole** "acquire a working
+  browser/session" unit (launch through context/page creation and login),
+  not just the `launch()` call — the disk-exhaustion failure can plausibly
+  surface at `newContext()`/`newPage()` too, since both allocate shared-
+  memory-backed resources the same way. Each retry attempt must close its
+  own partially-created browser before retrying (self-contained, leak-
+  safe) rather than relying on an outer `finally` that only knows about a
+  successfully-returned browser. Only one such retry wrapper should exist
+  per invocation path — stacking an outer ad hoc retry on top of an inner
+  one multiplies worst-case attempts (found live: `teamwork/sync` had its
+  own one-off retry on top of what should have been the shared helper).
+  *(source: 2026-08-31, `lib/playwright-tmp-cleanup.ts`'s
+  `withPlaywrightRetry`.)*
 
 ## QuickBooks / invoice (INV-QB)
 

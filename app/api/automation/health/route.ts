@@ -6,7 +6,14 @@ const SOURCES = [
   'teamwork_nd_2',
   'teamwork_nd_3',
   'teamwork_nd_4',
+  'teamwork_nd_5',
   'teamwork_companies',
+  // Added 2026-08-31 — was a real dashboard blind spot: teamwork_secretary
+  // is a valid AutomationSource with real daily cron runs, but was never
+  // surfaced here, so a real collision involving this exact source was
+  // invisible to "the early-warning system for every other automation"
+  // (see docs/FEATURE_MAP.md) until found by a direct DB query.
+  'teamwork_secretary',
   'ar_generate',
   'quickbooks',
   'ar_workflow',

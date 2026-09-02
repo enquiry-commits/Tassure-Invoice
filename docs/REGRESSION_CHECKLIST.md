@@ -122,6 +122,21 @@ stays unreachable (redirects to `/billing?tab=ar`, unchanged).
 built on PIC-based task attribution; add an INV-PIC entry here if a real
 attribution bug is ever found.
 
+### REG-015 — No Playwright-launching cron collision
+Query `automation_sync_runs` for every Playwright-launching source
+(`teamwork_companies`, `teamwork_secretary`, `teamwork_nd_1..5`,
+`ar_generate`, `ar_workflow`, `late_filing`) over the prior 5-7 days.
+Programmatically check every pair for wall-clock overlap between
+`started_at`/`finished_at` — not just `status`/`error` text, since a run
+can succeed while still having overlapped another. Confirm zero runs show
+the disk-space signature ("Less than 64MB of free space...") in `error`.
+Confirm `teamwork_nd` batch sizes stay ≤3 people and no batch shows a
+multi-person timeout failure. Confirm the Automation Health dashboard UI
+shows tiles for `teamwork_secretary` and `teamwork_nd_5`, not just the raw
+DB rows. Run this after any future change to `vercel.json`'s cron times
+too, not only after this specific fix.
+**Guards:** INV-CRON-013, INV-CRON-014.
+
 ---
 
 ## Automation priority

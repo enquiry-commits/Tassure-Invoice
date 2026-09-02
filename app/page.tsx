@@ -169,7 +169,15 @@ const AUTOMATION_LABELS: Record<string, string> = {
   teamwork_nd_2: 'TeamWork ND (Batch 2)',
   teamwork_nd_3: 'TeamWork ND (Batch 3)',
   teamwork_nd_4: 'TeamWork ND (Batch 4)',
+  // 2026-08-31: rebalanced from 4 to 5 batches — the real roster (14 people)
+  // outgrew 4 batches' 3-worker-concurrency assumption (see
+  // app/api/teamwork/sync-nd/route.ts's own comment).
+  teamwork_nd_5: 'TeamWork ND (Batch 5)',
   teamwork_companies: 'TeamWork Companies',
+  // Added 2026-08-31 — a real dashboard blind spot: this source already had
+  // real daily cron runs but was never surfaced here (see
+  // app/api/automation/health/route.ts's SOURCES comment for the full story).
+  teamwork_secretary: 'TeamWork Secretary',
   ar_generate: 'AR Generate',
   quickbooks: 'QuickBooks',
   ar_workflow: 'AR Workflow',

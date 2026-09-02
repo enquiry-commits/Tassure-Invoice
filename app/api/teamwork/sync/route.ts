@@ -14,27 +14,19 @@ import { logFieldChange } from '@/lib/audit-log';
 // syncTeamworkContactPersons — launching a fresh Chromium browser each
 // time, seconds apart, in the same invocation. Real failed-run error
 // payloads showed the exact Chromium warning "Less than 64MB of free
-// space in temporary directory for shared memory files": Vercel reuses
-// Fluid Compute containers between cron invocations, and the existing
-// stale-profile cleanup (lib/playwright-tmp-cleanup.ts) is deliberately
-// age-gated (2 minutes) so it can never be confused with a still-running
-// concurrent invocation — which structurally means it can't clean up a
-// browser THIS SAME invocation just closed seconds ago either. Fetching
-// one cookie and passing it to both syncs removes the double launch
-// entirely, rather than trying to clean up faster. One retry preserves
-// the resilience the old independent-per-sync logins had against a
-// one-off login blip.
-async function getSessionCookieWithOneRetry(): Promise<string> {
-  try {
-    return await getSessionCookie();
-  } catch (firstError) {
-    console.error('TeamWork login failed once, retrying:', firstError);
-    return await getSessionCookie();
-  }
-}
-
-// Daily TeamWork -> companies sync (see vercel.json cron, 18:30 UTC / SGT
-// 02:30 — before the 19:00 UTC ar-reminder generator so new clients enter
+// space in temporary directory for shared memory files". Fetching one
+// cookie and passing it to both syncs removes the double launch entirely,
+// rather than trying to clean up faster.
+//
+// 2026-08-31: this route used to also wrap the call below in its own
+// one-off retry (getSessionCookieWithOneRetry) — removed, since
+// getSessionCookie() itself now retries internally via withPlaywrightRetry
+// (lib/teamwork-agm.ts), applied uniformly to every caller instead of just
+// this one. Keeping both would have meant up to 3×2=6 real launch attempts
+// on a hard failure for this route alone.
+//
+// Daily TeamWork -> companies sync (see vercel.json cron, 13:00 UTC / SGT
+// 21:00 — before the 19:00 UTC ar-reminder generator so new clients enter
 // that day's AR window; the whole nightly chain targets finishing by SGT
 // 05:00, before business hours).
 //
@@ -473,7 +465,7 @@ async function syncTeamworkCompanies() {
 
   let sessionCookie: string | null = null;
   try {
-    sessionCookie = await getSessionCookieWithOneRetry();
+    sessionCookie = await getSessionCookie();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     recipientSyncError = `TeamWork login failed: ${message}`;

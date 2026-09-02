@@ -54,14 +54,22 @@ What actually runs daily and what depends on what completing first. See
 `docs/INVARIANTS.md` INV-CRON-010, this table can drift from it).
 
 ```text
-12:00–18:00  teamwork/sync-nd  (4 batches: teamwork_nd_1..4)
-18:30        teamwork/sync              → refreshes companies, PIC, campaign recipients, contact persons
-18:45,22:45,02:45  teamwork/sync-secretary
-19:00        ar-reminder/generate        → depends on companies being current (runs after 18:30 sync)
+12:00,14:00,16:00,17:00,18:00  teamwork/sync-nd  (5 batches: teamwork_nd_1..5)
+13:00        teamwork/sync              → refreshes companies, PIC, campaign recipients, contact persons
+15:00,22:45,02:45  teamwork/sync-secretary
+19:00        ar-reminder/generate        → depends on companies being current (runs after 13:00 sync)
 19:30        quickbooks/sync
 20:00        ar-reminder/sync-workflow   → depends on ar_reminder rows existing (runs after 19:00 generate)
 21:00        late-filing/sync            → depends on ar_reminder + sync-workflow's date corrections (runs after 20:00)
 ```
+
+Re-spaced 2026-08-31: ND batch 4 (18:00), Companies (was 18:30), and
+Secretary's first run (was 18:45) had all drifted into the same nominal
+Hobby-tier jitter hour (18) — a real, confirmed collision (see
+`docs/INVARIANTS.md` INV-CRON-013). Every Playwright-launching entry above
+now sits on its own distinct hour. ND was also rebalanced from 4 to 5
+batches the same day — the real roster (14 people) had outgrown 4 batches'
+3-worker-concurrency assumption.
 
 The 19:00 → 20:00 → 21:00 ordering is load-bearing, not incidental — each
 step reads data the previous step is expected to have already refreshed

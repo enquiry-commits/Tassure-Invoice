@@ -18,15 +18,19 @@
     },
     {
       "path": "/api/teamwork/sync-nd",
+      "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/teamwork/sync-nd",
       "schedule": "0 18 * * *"
     },
     {
       "path": "/api/teamwork/sync",
-      "schedule": "30 18 * * *"
+      "schedule": "0 13 * * *"
     },
     {
       "path": "/api/teamwork/sync-secretary",
-      "schedule": "45 18 * * *"
+      "schedule": "0 15 * * *"
     },
     {
       "path": "/api/teamwork/sync-secretary",

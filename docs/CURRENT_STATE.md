@@ -14,23 +14,36 @@ Last verified against real production data: **2026-08-31**.
 
 ## Automation health
 
-All 10 daily cron sources landed green on their most recent run as of this
-writing (checked directly against `automation_sync_runs`, not assumed):
+**Schedule as of 2026-08-31** (re-spaced the same day — see
+`docs/INVARIANTS.md` INV-CRON-013 and `PROJECT_STATUS.md`'s 2026-08-31
+entry: `teamwork_companies`, `teamwork_secretary`'s first run, and ND batch
+4 had drifted into sharing hour 18, causing a real, confirmed collision):
 
-| Source | Schedule (UTC) | Last run status |
+| Source | Schedule (UTC) | Status as of last check |
 |---|---|---|
-| `teamwork_nd_1..4` | 12:00 / 14:00 / 16:00 / 18:00 | success (all 4) |
-| `teamwork_companies` | 18:30 | success |
-| `teamwork_secretary` | 18:45 / 22:45 / 02:45 | success |
-| `ar_generate` | 19:00 | success |
-| `ar_workflow` | 20:00 | success |
-| `late_filing` | 21:00 | success |
-| `quickbooks` | 19:30 | success |
+| `teamwork_nd_1..5` | 12:00 / 14:00 / 16:00 / 17:00 / 18:00 | `teamwork_nd_1` failed 08-31 (TeamWork API timeouts, 4-person batch — fixed same day by rebalancing to 5 batches, not yet re-verified over real days) |
+| `teamwork_companies` | 13:00 (was 18:30) | failed 08-31 (the confirmed collision — see INV-CRON-013); schedule fix + retry safety net shipped same day, not yet re-verified over real days |
+| `teamwork_secretary` | 15:00 / 22:45 / 02:45 (1st was 18:45) | now surfaced on the Automation Health dashboard for the first time (was a real blind spot — see INV-CRON-013) |
+| `ar_generate` | 19:00 | success as of last check |
+| `ar_workflow` | 20:00 | success as of last check |
+| `late_filing` | 21:00 | success as of last check |
+| `quickbooks` | 19:30 | success as of last check |
 
-Open `automation_exceptions`: **3**, all `teamwork_nd` /
-`missing_nominee_subrole` — a real TeamWork data-content gap staff should
-review (visible on the Nominee Directors page's "TeamWork Review" panel),
-not an automation failure. Zero exceptions on any other source.
+**Do not treat the fix above as "considered fixed" from this table alone**
+— this exact class of problem was declared fixed once already (2026-08-29)
+and recurred 2 days later via a different mechanism. Real confirmation
+needs 5-7 consecutive clean days checked directly against
+`automation_sync_runs` for wall-clock overlap between any pair of
+Playwright-launching sources, not just `status`/`error` text (a run can
+succeed while still having overlapped another — confirmed this is exactly
+what happened to `teamwork_secretary` on 08-31). Update this section once
+that window has actually been observed.
+
+Open `automation_exceptions`: **3** as of the last full check, all
+`teamwork_nd` / `missing_nominee_subrole` — a real TeamWork data-content gap
+staff should review (visible on the Nominee Directors page's "TeamWork
+Review" panel), not an automation failure. Re-check this count too, it may
+have drifted.
 
 If this table looks stale, re-check directly:
 `GET automation_sync_runs?order=started_at.desc&limit=30` and
@@ -58,10 +71,15 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
 
 ## Active issues
 
-None open as of this writing. Company 360 / My Tasks are freshly shipped
-(2026-08-31) and haven't had a real post-deploy login check yet — see
-Pending Improvements, not listed as an issue since nothing is known wrong,
-just not yet confirmed right.
+None currently known-broken as of this writing, but the TeamWork
+automation collision (see Automation health above) is a real, recent
+recurrence of a previously-"fixed" problem — treat its fix as
+**unconfirmed until 5-7 real clean days are observed**, not resolved. See
+`docs/INVARIANTS.md` INV-CRON-013.
+
+Company 360 / My Tasks are freshly shipped (2026-08-31) and haven't had a
+real post-deploy login check yet — see Pending Improvements, not listed as
+an issue since nothing is known wrong, just not yet confirmed right.
 
 ## Known risks (not bugs — things worth remembering before relying on data)
 
@@ -97,7 +115,13 @@ just not yet confirmed right.
   use Company 360 / My Tasks post-deploy — this can't be confirmed by
   reading code (auth flow, real PIC data, real restricted-account routing)
   and hasn't happened yet as of this writing.
+- Monitor real `automation_sync_runs` for the TeamWork collision fix
+  (INV-CRON-013) over the next 5-7 days — check wall-clock overlap between
+  every Playwright-launching source, not just status/error text — before
+  treating it as actually confirmed, per the bar set in Automation health
+  above.
 - `C:\Users\vincent\.claude\plans\atomic-wandering-locket.md` currently
-  holds the Company 360 / My Tasks plan (2026-08-31) — it gets overwritten
-  by whatever real feature is planned next; it is not a permanent record,
-  `PROJECT_STATUS.md` is.
+  holds the TeamWork automation collision fix plan (2026-08-31, same day it
+  was written over the earlier Company 360 / My Tasks plan) — it gets
+  overwritten by whatever real feature/fix is planned next; it is not a
+  permanent record, `PROJECT_STATUS.md` is.

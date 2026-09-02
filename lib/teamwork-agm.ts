@@ -1,6 +1,6 @@
 import type { Browser } from 'playwright-core';
 import https from 'https';
-import { removeStalePlaywrightTempDirs } from './playwright-tmp-cleanup';
+import { removeStalePlaywrightTempDirs, withPlaywrightRetry } from './playwright-tmp-cleanup';
 
 // Shared TeamWork web-session helpers — used by BOTH the late-filing sync and
 // the AR-reminder workflow sync. TeamWork's login page runs reCAPTCHA v3, so
@@ -66,12 +66,28 @@ async function getBrowser(): Promise<Browser> {
   return localChromium.launch({ headless: true }) as unknown as Browser;
 }
 
+// 2026-08-31: wrapped in withPlaywrightRetry (lib/playwright-tmp-cleanup.ts)
+// — real evidence (docs/INVARIANTS.md INV-CRON-013) that two different
+// Playwright-launching cron invocations can genuinely collide despite every
+// cron entry sitting on its own distinct hour. Retries the WHOLE unit
+// (browser launch through cookie extraction), not just the launch — the
+// confirmed disk-exhaustion failure can plausibly surface at
+// newContext()/newPage() too. Previously this codebase had one ad hoc,
+// inconsistent retry (app/api/teamwork/sync/route.ts's now-removed
+// getSessionCookieWithOneRetry, used only by that one caller) — this
+// replaces it, applied uniformly to every caller of getSessionCookie().
 export async function getSessionCookie(): Promise<string> {
   const username = process.env.TEAMWORK_USERNAME;
   const password = process.env.TEAMWORK_PASSWORD;
   if (!username || !password) {
+    // Deterministic config error — retrying can never succeed, so this
+    // check stays outside withPlaywrightRetry below.
     throw new Error('TEAMWORK_USERNAME and TEAMWORK_PASSWORD are required.');
   }
+  return withPlaywrightRetry(() => getSessionCookieOnce(username, password));
+}
+
+async function getSessionCookieOnce(username: string, password: string): Promise<string> {
   const browser = await getBrowser();
   try {
     const context = await browser.newContext();

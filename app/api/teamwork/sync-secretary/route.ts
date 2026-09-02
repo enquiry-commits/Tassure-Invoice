@@ -6,7 +6,7 @@ import { withAutomationRun } from '@/lib/automation-sync';
 import { logFieldChange } from '@/lib/audit-log';
 
 /**
- * Active Client "Secretary" auto-sync — two runs per night now cover every
+ * Active Client "Secretary" auto-sync — three runs per day now cover every
  * company within the same day, not a multi-night rotation. ALSO writes the
  * full officials list and shareholder share register to teamwork_company_
  * officials/teamwork_shareholder_shares for every company fetched this run
@@ -33,11 +33,14 @@ import { logFieldChange } from '@/lib/audit-log';
  * caps maxDuration at 300 regardless of Fluid Compute (confirmed by a real
  * failed deployment: "Serverless Functions must have a maxDuration between 1
  * and 300 for plan hobby"). A single run genuinely cannot fit all ~783
- * companies under that ceiling, so instead: two cron-triggered runs per
- * night (18:45 and 22:45 UTC — both still within Singapore's overnight quiet
- * window, ~4h apart so the second always starts well after the first
- * finishes), each comfortably within 300s, together covering the full
- * roster with real headroom for it to keep growing.
+ * companies under that ceiling, so instead: three cron-triggered runs per
+ * day (originally 18:45, 22:45, 02:45 UTC; the first moved to 15:00 UTC on
+ * 2026-08-31 — a real collision was found with teamwork/sync (Companies)
+ * and teamwork/sync-nd both also sitting in hour 18, see
+ * docs/INVARIANTS.md INV-CRON-013 — still comfortably within Singapore's
+ * overnight-into-morning window, each run well-separated from the others),
+ * each comfortably within 300s, together covering the full roster with
+ * real headroom for it to keep growing.
  *
  * This run now ALSO fetches TeamWork's own Shares module (shares/
  * share_list/<id> — the real, current share register; see lib/teamwork-
@@ -59,7 +62,7 @@ import { logFieldChange } from '@/lib/audit-log';
  * after the first few real nightly runs and tighten or loosen from there
  * rather than trusting this estimate indefinitely.
  *
- * Cron: 18:45, 22:45, and 02:45 UTC / SGT 02:45, 06:45, and 10:45 daily.
+ * Cron: 15:00, 22:45, and 02:45 UTC / SGT 23:00, 06:45, and 10:45 daily.
  */
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';

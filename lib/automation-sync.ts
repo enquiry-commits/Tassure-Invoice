@@ -22,6 +22,10 @@ export type AutomationSource =
   | 'teamwork_nd_2'
   | 'teamwork_nd_3'
   | 'teamwork_nd_4'
+  // Added 2026-08-31 when the ND roster's growth to 14 people forced a
+  // rebalance from 4 to 5 batches (see app/api/teamwork/sync-nd/route.ts's
+  // own top comment for the full story).
+  | 'teamwork_nd_5'
   | 'teamwork_secretary'
   | 'ar_generate'
   | 'ar_workflow'
