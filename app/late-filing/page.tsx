@@ -6,6 +6,7 @@ import MetricCard from '@/components/MetricCard';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { fmtDate as fmtDateStr, toDisplayDate, toIsoDateValue } from '@/lib/date';
+import { formatStaffName } from '@/lib/staff-directory';
 
 const FYE_MONTHS = ['ALL','JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
@@ -28,6 +29,10 @@ type LateRow = {
   next_agm_due_date: string | null;
   remarks: string | null;
   late_fy: number;
+  // Secretary PIC for the outstanding cycle — read live from ar_reminder,
+  // not editable here (see app/api/late-filing/route.ts's own comment;
+  // edit it from AR Reminder, the one place it's actually owned).
+  pic: string | null;
   source: 'auto' | 'manual';
   updated_at: string | null;
   manual_fields: Record<string, boolean> | null;
@@ -557,6 +562,7 @@ export default function LateFilingPage() {
               <col style={{ width: 120 }} />
               <col style={{ width: 100 }} />
               <col style={{ width: 95 }} />
+              <col style={{ width: 110 }} />
               <col style={{ width: 130 }} />
               <col style={{ width: 130 }} />
               <col style={{ width: 145 }} />
@@ -566,7 +572,7 @@ export default function LateFilingPage() {
             </colgroup>
             <thead>
               <tr className="list-column-header-gray">
-                {['','Company Name','UEN / ROC','FYE','Late FY','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map((h,i)=>{
+                {['','Company Name','UEN / ROC','FYE','Late FY','PIC','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map((h,i)=>{
                   const sl = i === 0 ? 0 : i === 1 ? STICKY_WIDTHS[0] : i === 2 ? STICKY_WIDTHS[0] + STICKY_WIDTHS[1] : undefined;
                   return (
                     <th key={i} style={{ textAlign:'left', whiteSpace:'nowrap',
@@ -579,9 +585,9 @@ export default function LateFilingPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={11} style={{ textAlign:'center', padding:60, color:'#94a3b8' }}>Detecting late filers…</td></tr>
+                <tr><td colSpan={12} style={{ textAlign:'center', padding:60, color:'#94a3b8' }}>Detecting late filers…</td></tr>
               ) : displayRows.length === 0 ? (
-                <tr><td colSpan={11} style={{ textAlign:'center', padding:60, color:'#16a34a', fontWeight:600 }}>No late filing companies found for this year</td></tr>
+                <tr><td colSpan={12} style={{ textAlign:'center', padding:60, color:'#16a34a', fontWeight:600 }}>No late filing companies found for this year</td></tr>
               ) : pageItems.map((row, idx) => (
                   <tr key={row.id} className="system-list-row" onClick={() => startEdit(row)}
                     style={{ cursor: 'pointer' }}>
@@ -609,6 +615,7 @@ export default function LateFilingPage() {
                           : '—';
                       })()}
                     </td>
+                    <td style={{ color:'#475569', fontSize:12 }}>{formatStaffName(row.pic) || '—'}</td>
                     <td style={{ color:'#475569' }}>
                       <span style={{ display:'inline-flex', alignItems:'center', gap:5 }}>
                         {isAutoFilled(row, 'last_annual_return_date', row.last_annual_return_date) && <AutoFillDot />}

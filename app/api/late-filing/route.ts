@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
   // thing suppressing them) got deleted.
   const { data: arRows } = await sb
     .from('ar_reminder')
-    .select('entity_name, fye_month, fye_year, filling_date, agm_held_date, date_of_agm, prepared_date, due_date')
+    .select('entity_name, fye_month, fye_year, filling_date, agm_held_date, date_of_agm, prepared_date, due_date, pic')
     .or('status.is.null,status.neq.Excluded')
     .order('fye_year', { ascending: false });
 
@@ -129,6 +129,7 @@ export async function GET(req: NextRequest) {
       date_of_agm: string | null;
       prepared_date: string | null;
       due_date: string | null;
+      pic: string | null;
     }>;
   };
   const byEntity = new Map<string, ArGroup>();
@@ -142,6 +143,7 @@ export async function GET(req: NextRequest) {
       date_of_agm:   row.date_of_agm,
       prepared_date: row.prepared_date,
       due_date:      row.due_date,
+      pic:           row.pic,
     });
   }
 
@@ -157,6 +159,17 @@ export async function GET(req: NextRequest) {
     next_agm_due_date: string | null;
     remarks: string | null;
     late_fy: number;         // the year that is outstanding
+    // Secretary PIC for the outstanding cycle (ar_reminder.pic — same field
+    // AR Reminder's own "SEC PIC" column edits), added 2026-09-03 per
+    // Vincent: "秘书部门的PIC" for a quick "who's responsible" glance. Read
+    // live from ar_reminder, same as every other date field on this row —
+    // not stored on late_filing_companies, not editable here. Editing PIC
+    // still happens on AR Reminder itself, the one place it's actually
+    // owned, so this can never drift into a second source of truth for the
+    // same value. Null for a pure manual-only late_filing_companies row
+    // (source: 'manual' with no matching ar_reminder entity) — there's no
+    // cycle to read a PIC from.
+    pic: string | null;
     source: 'auto' | 'manual';
     // Only set for rows that already have a real late_filing_companies row
     // (source: 'manual') — used as an optimistic-concurrency token by
@@ -235,6 +248,7 @@ export async function GET(req: NextRequest) {
       next_agm_due_date:       manual?.next_agm_due_date       ?? nextAgm,
       remarks:                 manual?.remarks                  ?? null,
       late_fy:                 lateFy.year,
+      pic:                     lateFy.pic ?? null,
       source:                  manual ? 'manual' : 'auto',
       updated_at:              manual?.updated_at ?? null,
       manual_fields:           manual?.manual_fields ?? null,
@@ -263,6 +277,7 @@ export async function GET(req: NextRequest) {
         next_agm_due_date:       m.next_agm_due_date,
         remarks:                 m.remarks,
         late_fy:                 0,
+        pic:                     null,
         source:                  'manual',
         updated_at:              m.updated_at ?? null,
         manual_fields:           m.manual_fields ?? null,
