@@ -114,10 +114,23 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
   if (!uen) warnings.push('This company has no UEN on file — exact-match sections (Master List, Post Incorporate documents) could not be looked up.');
   if (!word) warnings.push('Company name has no distinguishing word to search on — fuzzy-matched sections (invoices, Nominee Director, Trademark) may be incomplete.');
 
+  // 2026-09-02: every real fetch this function needs runs in ONE parallel
+  // batch now, including the AR fuzzy-fallback candidates (arFuzzyCandidates
+  // below) — Vincent reported the page felt slow to open ("点进点的速度可以
+  // 提升吗"), and this query used to be a separate, sequential `await` AFTER
+  // this whole batch resolved, adding one full extra Supabase round-trip on
+  // top of the parallel batch's own latency for every single page load.
+  // Folding it in here costs nothing extra when there's nothing to find
+  // (ar_reminder is a small table, ~900 rows) and removes a guaranteed
+  // sequential hop. See also preferredRegion='sin1' on the page/route
+  // (this function has no region of its own — Vercel functions default to
+  // a US region unless pinned, and Supabase is Tokyo-hosted, so every one
+  // of these round-trips was crossing the Pacific twice for no reason).
   const [
     { data: masterListRows },
     { data: arById },
     { data: arByUen },
+    { data: arFuzzyCandidates },
     { data: generatedInvoiceRows },
     { data: qbCandidateRows },
     { data: ndCandidateRows },
@@ -131,6 +144,9 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
     supabase.from('ar_reminder').select('*').eq('company_id', id).or('status.is.null,status.neq.Excluded'),
     uen
       ? supabase.from('ar_reminder').select('*').is('company_id', null).eq('uen', uen).or('status.is.null,status.neq.Excluded')
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    word
+      ? supabase.from('ar_reminder').select('*').ilike('entity_name', `%${word}%`).or('status.is.null,status.neq.Excluded')
       : Promise.resolve({ data: [] as Record<string, unknown>[] }),
     // Cheap to fetch in full and match by exact normalize() key — this
     // table only ever holds one row per (company, cycle, qb_company), not
@@ -160,16 +176,10 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
   const idMatched = arById ?? [];
   const uenMatched = arByUen ?? [];
   const exactIds = new Set([...idMatched, ...uenMatched].map(r => r.id as number));
-  let fuzzyArRows: Record<string, unknown>[] = [];
-  if (word) {
-    const { data: arCandidates } = await supabase
-      .from('ar_reminder')
-      .select('*')
-      .ilike('entity_name', `%${word}%`)
-      .or('status.is.null,status.neq.Excluded');
-    fuzzyArRows = fuzzyMatch(companyName, (arCandidates ?? []).filter(r => !exactIds.has(r.id as number)), r => r.entity_name as string);
-    if (fuzzyArRows.length) warnings.push(`${fuzzyArRows.length} AR/AGM cycle row(s) matched only by company name, not company_id/UEN — verify these belong to this company.`);
-  }
+  const fuzzyArRows = word
+    ? fuzzyMatch(companyName, (arFuzzyCandidates ?? []).filter(r => !exactIds.has(r.id as number)), r => r.entity_name as string)
+    : [];
+  if (fuzzyArRows.length) warnings.push(`${fuzzyArRows.length} AR/AGM cycle row(s) matched only by company name, not company_id/UEN — verify these belong to this company.`);
 
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
   const shapeArRow = (row: Record<string, unknown>, matchedVia: 'company_id' | 'uen' | 'fuzzy'): Record<string, unknown> & { daysUntilDue: number | null; matchedVia: 'company_id' | 'uen' | 'fuzzy' } => {

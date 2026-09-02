@@ -521,3 +521,38 @@ again.
   before explicit save — closing an already-saved item's window only
   closes the window, not the saved copy; this safety net does not apply
   to a genuinely never-saved item.
+
+## Performance (INV-PERF)
+
+- **INV-PERF-001** — Any route/page issuing several (roughly 5+) Supabase
+  queries — especially in parallel, where total latency is bounded by the
+  slowest one, not summed — should set `export const preferredRegion =
+  'sin1'`. Supabase is Tokyo-hosted; a Vercel function with no region pin
+  runs in Vercel's default region, meaning every one of those round-trips
+  crosses the Pacific for no reason. Confirmed real: Company 360
+  (`lib/company-360.ts`, ~11 queries) had no pin at all — only the 5
+  TeamWork-scraping cron routes in this codebase set `preferredRegion`
+  anywhere, and those pin for latency to TeamWork's own servers, not
+  Supabase; every regular user-facing data route, including this one,
+  defaulted to the non-Asia region until fixed. *(source: 2026-09-02,
+  Vincent: "点进点的速度可以提升吗".)*
+- **INV-PERF-002** — Never fire a dependent Supabase query as a separate
+  sequential `await` **after** a `Promise.all` batch when it could run
+  **inside** that same batch instead — even a query whose filtering logic
+  needs another query's result (e.g. "exclude ids already matched
+  exactly") can usually still fetch its raw candidate rows in the same
+  parallel batch, with the ids-based filtering done afterward as pure
+  in-memory computation on already-fetched data. A sequential follow-up
+  query adds one full extra network round-trip to every single page load,
+  not just the slow path. Confirmed real: `lib/company-360.ts`'s AR/AGM
+  fuzzy-match fallback used to fetch its candidates only after the main
+  batch resolved — folded into the same `Promise.all` instead. *(source:
+  2026-09-02.)*
+- **INV-PERF-003** — A server-rendered page (no client-side fetch, so no
+  natural "Loading…" state) needs its own `loading.tsx`
+  (Next.js App Router's automatic Suspense-boundary convention) or the
+  browser shows nothing at all — not even a spinner — for however long
+  the server-side data fetch takes. Every other page in this app is
+  `'use client'` + `useEffect`, which gets a loading state for free; the
+  one server-rendered exception (Company 360) didn't, until this was
+  found live. *(source: 2026-09-02, `app/companies/[id]/loading.tsx`.)*

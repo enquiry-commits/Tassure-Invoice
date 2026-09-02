@@ -16,6 +16,17 @@ import {
 // this is a deliberate departure, not an accident). Everything about this
 // company lives on one page instead of scattered across 7+ separate
 // pages with no single "look up this company" view.
+//
+// preferredRegion added 2026-09-02: Vincent reported this page felt slow
+// to open. Unlike this app's normal pages, this one issues ~11 Supabase
+// queries (lib/company-360.ts) before it can render anything at all — with
+// no region pinned, Vercel runs the function in its default region while
+// Supabase is Tokyo-hosted, so every one of those round-trips was crossing
+// the Pacific. Matches the same 'sin1' pin already used by every
+// TeamWork-scraping cron route in this codebase (those pin for latency to
+// TeamWork's own Singapore servers; this pins for latency to Supabase).
+export const preferredRegion = 'sin1';
+
 export default async function CompanyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: idParam } = await params;
   const id = parseInt(idParam, 10);

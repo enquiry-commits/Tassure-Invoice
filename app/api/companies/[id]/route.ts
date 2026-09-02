@@ -8,6 +8,12 @@ import { getCompany360 } from '@/lib/company-360';
 // component, no HTTP hop needed); this route exists for any future
 // non-page consumer (e.g. the assistant, an export) that needs the same
 // aggregation over HTTP.
+//
+// preferredRegion: same reasoning as the page's own pin — getCompany360
+// issues ~11 Supabase queries; Supabase is Tokyo-hosted, so keep this
+// route in Singapore rather than Vercel's default region.
+export const preferredRegion = 'sin1';
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const account = await getRequestAccount(req);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
