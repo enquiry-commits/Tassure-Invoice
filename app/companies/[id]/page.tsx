@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { getCompany360 } from '@/lib/company-360';
 import { formatStaffName } from '@/lib/staff-directory';
 import CopyUenButton from './CopyUenButton';
+import CustomerSourceField from './CustomerSourceField';
 import {
   StatusBadge, MatchQualityNote,
   ArAgmSection, InvoicesSection, NdSection, CommsSection, DocsGeneratedSection, TrademarkSection,
@@ -86,6 +87,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Contact</div>
             <div style={{ fontSize: 12 }}>{company.primaryContact?.contactName || company.bestEmail || '—'}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Customer Source</div>
+            <CustomerSourceField companyId={company.id} initialValue={company.customerSource} />
           </div>
           {company.parentCompanyName && (
             <div>

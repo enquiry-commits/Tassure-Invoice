@@ -137,6 +137,23 @@ DB rows. Run this after any future change to `vercel.json`'s cron times
 too, not only after this specific fix.
 **Guards:** INV-CRON-013, INV-CRON-014.
 
+### REG-016 — Reports access gate and permission-flag independence
+Log in as an approved account WITHOUT `canViewReports` — confirm the
+Reports sidebar item never renders, `/reports` redirects to `/`, and a
+direct `GET /api/reports` returns 403 (not just a client-side redirect —
+this is a real permission boundary, same bar as My Tasks' View-As). Log in
+as one of the 4 `canViewReports` accounts and confirm `/reports` loads.
+Separately: after ANY future change to `ApprovedAccount` gating logic in
+`lib/approved-accounts.ts` or its consumers, re-check every existing flag
+(`admin`, `canViewAsOthers`, `canViewReports`) still resolves correctly for
+every account that should have it — this exact class of regression shipped
+once already (2026-09-02: switching My Tasks' View-As gate from `admin` to
+the new `canViewAsOthers` silently dropped Vincent's own access, since his
+account only had `admin: true` at the time).
+**Guards:** none yet in `docs/INVARIANTS.md` — Reports is new; the
+permission-flag-independence lesson above is currently only recorded here
+and in `PROJECT_STATUS.md`'s 2026-09-02 entry.
+
 ---
 
 ## Automation priority

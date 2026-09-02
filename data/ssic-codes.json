@@ -1,0 +1,4942 @@
+[
+ {
+  "code": "01111",
+  "en": "Growing of leafy and fruit vegetables (non-hydroponics)",
+  "zh": "叶菜及果菜种植（非水耕）"
+ },
+ {
+  "code": "01112",
+  "en": "Growing of mushrooms (non-hydroponics)",
+  "zh": "蘑菇种植（非水耕）"
+ },
+ {
+  "code": "01119",
+  "en": "Growing of food crops (non-hydroponics) n.e.c.",
+  "zh": "其他未列明的粮食作物种植（非水耕）"
+ },
+ {
+  "code": "01120",
+  "en": "Growing of leafy and fruit vegetables (hydroponics)",
+  "zh": "叶菜及果菜种植（水耕）"
+ },
+ {
+  "code": "01130",
+  "en": "Growing of fruits and nuts (except legumes)",
+  "zh": "水果及坚果种植（不包括豆科作物）"
+ },
+ {
+  "code": "01141",
+  "en": "Growing of orchids",
+  "zh": "兰花种植"
+ },
+ {
+  "code": "01142",
+  "en": "Growing of ornamental plants",
+  "zh": "观赏植物种植"
+ },
+ {
+  "code": "01149",
+  "en": "Growing of nursery products n.e.c.",
+  "zh": "苗圃产品种植（未另作分类）"
+ },
+ {
+  "code": "01190",
+  "en": "Growing of other crops",
+  "zh": "其他作物的种植"
+ },
+ {
+  "code": "01410",
+  "en": "Cattle and goat farms (for livestock and milk production)",
+  "zh": "牛及羊养殖场（用于牲畜及乳制品生产）"
+ },
+ {
+  "code": "01421",
+  "en": "Rearing of poultry (except layer farms)",
+  "zh": "家禽饲养（不包括蛋鸡养殖场）"
+ },
+ {
+  "code": "01422",
+  "en": "Layer farms (chickens reared for eggs)",
+  "zh": "蛋鸡养殖场（为产蛋而饲养的鸡）"
+ },
+ {
+  "code": "01491",
+  "en": "Dog breeding",
+  "zh": "犬类繁殖"
+ },
+ {
+  "code": "01492",
+  "en": "Bird breeding",
+  "zh": "鸟类繁殖"
+ },
+ {
+  "code": "01499",
+  "en": "Other animal production n.e.c.",
+  "zh": "其他未列明的动物生产"
+ },
+ {
+  "code": "01500",
+  "en": "Growing of crops combined with animal production (mixed farming)",
+  "zh": "作物种植与动物养殖结合的混合农业"
+ },
+ {
+  "code": "01600",
+  "en": "Agricultural and animal husbandry service activities (except veterinary activities)",
+  "zh": "农业和畜牧业服务活动（不包括兽医服务）"
+ },
+ {
+  "code": "02000",
+  "en": "Forestry, logging and related service activities",
+  "zh": "林业、伐木及相关服务活动"
+ },
+ {
+  "code": "03101",
+  "en": "Ocean, coastal and kelong fishing",
+  "zh": "海洋、沿海及渔排捕鱼"
+ },
+ {
+  "code": "03109",
+  "en": "Fishing n.e.c.",
+  "zh": "其他未列明的捕鱼活动"
+ },
+ {
+  "code": "03201",
+  "en": "Food fish farms and food fish hatcheries",
+  "zh": "食用鱼养殖场及食用鱼孵化场"
+ },
+ {
+  "code": "03202",
+  "en": "Ornamental fish farms and ornamental fish hatcheries",
+  "zh": "观赏鱼养殖场及观赏鱼孵化场"
+ },
+ {
+  "code": "03209",
+  "en": "Aquaculture n.e.c.",
+  "zh": "其他未列明的水产养殖"
+ },
+ {
+  "code": "08101",
+  "en": "Stone quarrying",
+  "zh": "石材采石"
+ },
+ {
+  "code": "08102",
+  "en": "Quarrying of sand and clay",
+  "zh": "沙和黏土采掘"
+ },
+ {
+  "code": "08900",
+  "en": "Other mining and quarrying",
+  "zh": "其他采矿和采石活动"
+ },
+ {
+  "code": "09001",
+  "en": "Crude petroleum and natural gas production",
+  "zh": "原油与天然气开采"
+ },
+ {
+  "code": "09002",
+  "en": "Service activities incidental to oil and gas extraction (except surveying and engineering design and consultancy services supporting mining, oil and gas extraction and offshore exploration activities)",
+  "zh": "油气开采相关服务活动（不包括支持采矿、油气开采及海上勘探的测量、工程设计和咨询服务）"
+ },
+ {
+  "code": "10101",
+  "en": "Slaughtering of livestock and poultry",
+  "zh": "畜禽屠宰"
+ },
+ {
+  "code": "10102",
+  "en": "Manufacture of sausage",
+  "zh": "香肠制造"
+ },
+ {
+  "code": "10103",
+  "en": "Preparing, canning and preserving of livestock and livestock products",
+  "zh": "畜类及其制品的准备、罐装与保藏"
+ },
+ {
+  "code": "10104",
+  "en": "Preparing, canning and preserving of poultry and poultry products",
+  "zh": "家禽及其制品的准备、罐装与保藏"
+ },
+ {
+  "code": "10109",
+  "en": "Processing and preserving of meat and meat products n.e.c.",
+  "zh": "其他未列明的肉类及肉制品加工与保藏"
+ },
+ {
+  "code": "10200",
+  "en": "Processing and preserving of seafood",
+  "zh": "海鲜的加工与保藏"
+ },
+ {
+  "code": "10301",
+  "en": "Manufacture of jams",
+  "zh": "果酱制造"
+ },
+ {
+  "code": "10302",
+  "en": "Other canning and preserving of fruits and fruit juices",
+  "zh": "其他水果及果汁罐装与保藏"
+ },
+ {
+  "code": "10303",
+  "en": "Other canning and preserving of vegetables and vegetable juices",
+  "zh": "其他蔬菜及蔬菜汁罐装与保藏"
+ },
+ {
+  "code": "10401",
+  "en": "Manufacture of edible vegetable and animal oils and fats",
+  "zh": "可食用植物和动物油脂制造"
+ },
+ {
+  "code": "10402",
+  "en": "Manufacture of inedible vegetable and animal oils and fats",
+  "zh": "不可食用植物和动物油脂制造"
+ },
+ {
+  "code": "10409",
+  "en": "Manufacture of vegetable and animal oils and fats n.e.c.",
+  "zh": "其他未列明的植物与动物油脂制造"
+ },
+ {
+  "code": "10501",
+  "en": "Manufacture of condensed and evaporated milk; pasteurising and bottling of fluid milk",
+  "zh": "炼乳及淡奶制造；液态奶巴氏杀菌及装瓶"
+ },
+ {
+  "code": "10502",
+  "en": "Manufacture of milk powder",
+  "zh": "奶粉制造"
+ },
+ {
+  "code": "10503",
+  "en": "Manufacture of ice-cream",
+  "zh": "冰淇淋制造"
+ },
+ {
+  "code": "10509",
+  "en": "Manufacture of dairy products n.e.c.",
+  "zh": "未另作分类的乳制品制造"
+ },
+ {
+  "code": "10611",
+  "en": "Rice milling",
+  "zh": "稻米碾磨"
+ },
+ {
+  "code": "10612",
+  "en": "Wheat milling",
+  "zh": "小麦碾磨"
+ },
+ {
+  "code": "10619",
+  "en": "Manufacture of grain mill products n.e.c.",
+  "zh": "未另作分类的谷物制粉产品制造"
+ },
+ {
+  "code": "10620",
+  "en": "Manufacture of starches and starch products",
+  "zh": "淀粉及淀粉制品制造"
+ },
+ {
+  "code": "10711",
+  "en": "Manufacture of biscuits",
+  "zh": "饼干制造"
+ },
+ {
+  "code": "10712",
+  "en": "Manufacture of bread, cakes and confectionery (except frozen bakery products)",
+  "zh": "面包、蛋糕及糖果制造（不包括冷冻烘焙产品）"
+ },
+ {
+  "code": "10719",
+  "en": "Manufacture of bakery products n.e.c.",
+  "zh": "其他未列明的烘焙食品制造"
+ },
+ {
+  "code": "10720",
+  "en": "Manufacture of sugar and sugar products",
+  "zh": "糖和糖制品制造"
+ },
+ {
+  "code": "10731",
+  "en": "Manufacture of cocoa and chocolate powder from beans",
+  "zh": "可可豆制成的可可粉与巧克力粉制造"
+ },
+ {
+  "code": "10732",
+  "en": "Manufacture of chocolate and chocolate products",
+  "zh": "巧克力及巧克力制品制造"
+ },
+ {
+  "code": "10733",
+  "en": "Manufacture of non-chocolate confectionery",
+  "zh": "非巧克力类糖果制造"
+ },
+ {
+  "code": "10740",
+  "en": "Manufacture of macaroni, noodles, vermicelli and other related products",
+  "zh": "通心粉、面条、米粉及相关产品制造"
+ },
+ {
+  "code": "10750",
+  "en": "Manufacture of prepared meals and dishes",
+  "zh": "预制餐食及菜肴制造"
+ },
+ {
+  "code": "10761",
+  "en": "Manufacture of instant beverages",
+  "zh": "即溶饮料制造"
+ },
+ {
+  "code": "10762",
+  "en": "Processing of coffee seeds",
+  "zh": "咖啡豆加工"
+ },
+ {
+  "code": "10763",
+  "en": "Manufacture of coffee powder",
+  "zh": "咖啡粉制造"
+ },
+ {
+  "code": "10764",
+  "en": "Manufacture of tea; processing of tea leaves",
+  "zh": "茶叶制造；茶叶加工"
+ },
+ {
+  "code": "10791",
+  "en": "Manufacture of sauces",
+  "zh": "酱料制造"
+ },
+ {
+  "code": "10792",
+  "en": "Manufacture of soya bean products (except soy-based meat alternatives, sauce and milk)",
+  "zh": "豆制品制造（不包括植物肉替代品、酱料和豆奶）"
+ },
+ {
+  "code": "10793",
+  "en": "Manufacture and processing of spices",
+  "zh": "香料的制造与加工"
+ },
+ {
+  "code": "10794",
+  "en": "Manufacture of chips, crackers and other titbits (except biscuits and confectionery)",
+  "zh": "薯片、饼干及其他零食的制造"
+ },
+ {
+  "code": "10795",
+  "en": "Manufacture of plant-based/microbial-fermented/cell-cultivated food products",
+  "zh": "植物基、微生物发酵及细胞培养食品制造"
+ },
+ {
+  "code": "10799",
+  "en": "Manufacture of other food products n.e.c. (except food chemicals and additives)",
+  "zh": "未另作分类的其他食品制造"
+ },
+ {
+  "code": "10800",
+  "en": "Manufacture of prepared animal feeds",
+  "zh": "预制动物饲料制造（包括动物饲料添加剂）"
+ },
+ {
+  "code": "11010",
+  "en": "Distilling, rectifying and blending of spirits; ethyl alcohol production from fermented materials",
+  "zh": "烈酒蒸馏、精馏及调配；由发酵原料生产乙醇"
+ },
+ {
+  "code": "11020",
+  "en": "Manufacture of wines",
+  "zh": "葡萄酒制造"
+ },
+ {
+  "code": "11030",
+  "en": "Manufacture of malt liquors and malt",
+  "zh": "麦芽酒与麦芽的制造（例如啤酒与黑啤）"
+ },
+ {
+  "code": "11041",
+  "en": "Manufacture of soft drinks and mineral waters",
+  "zh": "软饮料制造、矿泉水生产"
+ },
+ {
+  "code": "11042",
+  "en": "Manufacture of cordials, syrups and composite concentrates for beverages",
+  "zh": "饮料用果味浓缩液、糖浆及复合浓缩物制造"
+ },
+ {
+  "code": "11043",
+  "en": "Manufacture of ice (except dry ice)",
+  "zh": "冰块制造（不包括干冰）"
+ },
+ {
+  "code": "12001",
+  "en": "Manufacture of cigarettes",
+  "zh": "香烟制造"
+ },
+ {
+  "code": "12009",
+  "en": "Manufacture of tobacco products n.e.c.",
+  "zh": "其他未列明的烟草制品制造（例如：雪茄、散装烟草）"
+ },
+ {
+  "code": "13100",
+  "en": "Spinning, weaving and finishing of textiles",
+  "zh": "纺纱、织布及纺织品整理"
+ },
+ {
+  "code": "13910",
+  "en": "Manufacture of knitted and crocheted fabrics and laces",
+  "zh": "针织与钩编面料及花边制造"
+ },
+ {
+  "code": "13921",
+  "en": "Manufacture of made-up household textile articles",
+  "zh": "窗帘、枕套、床单及床罩制造"
+ },
+ {
+  "code": "13929",
+  "en": "Manufacture of made-up textile articles n.e.c. (except apparel)",
+  "zh": "未另作分类的纺织制成品（不包括服装）制造"
+ },
+ {
+  "code": "13930",
+  "en": "Manufacture of carpets and rugs",
+  "zh": "地毯与地垫制造"
+ },
+ {
+  "code": "13940",
+  "en": "Manufacture of cordage, rope, twine and netting",
+  "zh": "绳索、绳缆、线和网的制造"
+ },
+ {
+  "code": "13990",
+  "en": "Manufacture of other textiles n.e.c.",
+  "zh": "其他未列明的纺织品制造（例如：家具填充物）"
+ },
+ {
+  "code": "14101",
+  "en": "Manufacture of outer garments",
+  "zh": "外衣制造"
+ },
+ {
+  "code": "14102",
+  "en": "Manufacture of brassieres and other undergarments",
+  "zh": "胸罩及其他内衣制造"
+ },
+ {
+  "code": "14103",
+  "en": "Tailoring and dressmaking to individual order",
+  "zh": "裁缝与服装定制（按个人订单）"
+ },
+ {
+  "code": "14109",
+  "en": "Manufacture of wearing apparel n.e.c. (except fur apparel)",
+  "zh": "未另作分类的服装制造（不包括皮草服装）"
+ },
+ {
+  "code": "14200",
+  "en": "Manufacture of fur apparel and articles of fur",
+  "zh": "毛皮服装及制品制造（如：毛皮地毯、坐垫）"
+ },
+ {
+  "code": "15110",
+  "en": "Tanning and dressing of leather; dressing and dyeing of fur",
+  "zh": "皮革鞣制与整理；毛皮整理与染色"
+ },
+ {
+  "code": "15121",
+  "en": "Manufacture of luggage, bags, brief cases and the like",
+  "zh": "行李箱、包袋、公文包等制造"
+ },
+ {
+  "code": "15122",
+  "en": "Manufacture of handbags",
+  "zh": "手提包制造"
+ },
+ {
+  "code": "15129",
+  "en": "Manufacture of saddlery, harness and articles of leather n.e.c.",
+  "zh": "未另作分类的马具、挽具及皮革制品制造"
+ },
+ {
+  "code": "15200",
+  "en": "Manufacture of footwear",
+  "zh": "鞋类制造"
+ },
+ {
+  "code": "16101",
+  "en": "Sawmilling",
+  "zh": "锯木加工"
+ },
+ {
+  "code": "16102",
+  "en": "Preservation of wood",
+  "zh": "木材防腐处理"
+ },
+ {
+  "code": "16109",
+  "en": "Sawmilling and planing of wood n.e.c.",
+  "zh": "其他未列明的锯木及木材刨光加工"
+ },
+ {
+  "code": "16211",
+  "en": "Manufacture of plywood and veneer",
+  "zh": "胶合板及单板制造"
+ },
+ {
+  "code": "16219",
+  "en": "Manufacture of laminboard, particle board and other panels and boards n.e.c.",
+  "zh": "胶合板、刨花板及其他板材和板类产品制造（未另分类）"
+ },
+ {
+  "code": "16291",
+  "en": "Manufacture of wooden window, door and other millwork (except prefabricated wooden building structures)",
+  "zh": "木质门窗及其他木制品加工（不包括预制木建筑结构）"
+ },
+ {
+  "code": "16292",
+  "en": "Manufacture of household and kitchen wooden ware (except wooden footwear)",
+  "zh": "除木制品外的家庭和厨房用木制器皿制造"
+ },
+ {
+  "code": "16293",
+  "en": "Manufacture of wooden containers",
+  "zh": "木制容器制造"
+ },
+ {
+  "code": "16294",
+  "en": "Rattan processing",
+  "zh": "藤材加工"
+ },
+ {
+  "code": "16299",
+  "en": "Manufacture of other products of wood and articles of cork, straw and plaiting materials n.e.c.",
+  "zh": "其他木制品、软木制品、稻草制品等制造（未另分类）"
+ },
+ {
+  "code": "17010",
+  "en": "Manufacture of pulp, paper and paperboard",
+  "zh": "纸浆、纸及纸板制造"
+ },
+ {
+  "code": "17021",
+  "en": "Manufacture of corrugated paper and paperboard",
+  "zh": "瓦楞纸和瓦楞纸板制造"
+ },
+ {
+  "code": "17022",
+  "en": "Manufacture of containers and boxes of paper and paperboard",
+  "zh": "纸及纸板制容器和盒子的制造"
+ },
+ {
+  "code": "17091",
+  "en": "Manufacture of joss paper and other related ceremonial paper products",
+  "zh": "金纸和其他相关祭祀用纸制品制造"
+ },
+ {
+  "code": "17092",
+  "en": "Manufacture of sanitary towels, toilet paper, paper towels, disposable diapers and related paper products",
+  "zh": "卫生巾、厕纸、纸巾、一次性纸制品制造"
+ },
+ {
+  "code": "17093",
+  "en": "Manufacture of paper cups, plates and utensils",
+  "zh": "纸杯、纸盘及纸质餐具制造"
+ },
+ {
+  "code": "17094",
+  "en": "Manufacture of unprinted cards, envelopes and stationery",
+  "zh": "卡片、信封及未印刷文具制造"
+ },
+ {
+  "code": "17099",
+  "en": "Manufacture of other articles of paper and paperboard n.e.c.",
+  "zh": "未另作分类的纸和纸板制品制造"
+ },
+ {
+  "code": "18111",
+  "en": "Printing of periodicals, books and magazines",
+  "zh": "期刊、图书与杂志印刷"
+ },
+ {
+  "code": "18112",
+  "en": "Commercial printing",
+  "zh": "商业印刷"
+ },
+ {
+  "code": "18113",
+  "en": "Silk screen/metal printing",
+  "zh": "商业印刷"
+ },
+ {
+  "code": "18121",
+  "en": "Bookbinding",
+  "zh": "装订服务（例如图书装订）"
+ },
+ {
+  "code": "18122",
+  "en": "Colour separation",
+  "zh": "彩色分色处理"
+ },
+ {
+  "code": "18129",
+  "en": "Service activities related to printing n.e.c.",
+  "zh": "与印刷相关的服务（未另作分类，包括制版）"
+ },
+ {
+  "code": "18200",
+  "en": "Reproduction of recorded media/phonograph records/magnetic tapes/compact discs/non-customised software",
+  "zh": "录制媒体复制"
+ },
+ {
+  "code": "19100",
+  "en": "Manufacture of coke oven products",
+  "zh": "焦炉产品制造"
+ },
+ {
+  "code": "19201",
+  "en": "Petroleum refineries",
+  "zh": "石油炼制厂"
+ },
+ {
+  "code": "19202",
+  "en": "Manufacture of petroleum lubricating oil",
+  "zh": "石油润滑油制造"
+ },
+ {
+  "code": "19209",
+  "en": "Manufacture of refined petroleum products n.e.c.",
+  "zh": "其他未列明的精炼石油产品制造"
+ },
+ {
+  "code": "20111",
+  "en": "Manufacture of industrial gases and dry ice",
+  "zh": "工业气体与干冰制造"
+ },
+ {
+  "code": "20112",
+  "en": "Manufacture of basic industrial acids and alkalis",
+  "zh": "基本工业酸和碱的制造"
+ },
+ {
+  "code": "20113",
+  "en": "Manufacture of basic chemicals (except fertilisers and nitrogen)",
+  "zh": "基本化学品制造（不包括肥料和含氮化合物）"
+ },
+ {
+  "code": "20114",
+  "en": "Manufacture of solvents",
+  "zh": "溶剂制造"
+ },
+ {
+  "code": "20119",
+  "en": "Manufacture of basic chemicals n.e.c.",
+  "zh": "其他未列明的基本化学品制造"
+ },
+ {
+  "code": "20120",
+  "en": "Manufacture of fertilisers and nitrogen compounds",
+  "zh": "肥料及含氮化合物制造"
+ },
+ {
+  "code": "20131",
+  "en": "Manufacture of petrochemical primary products",
+  "zh": "石化初级产品制造"
+ },
+ {
+  "code": "20132",
+  "en": "Manufacture of derivatives and intermediates produced from basic building blocks",
+  "zh": "基础化学原料衍生物及中间体制造"
+ },
+ {
+  "code": "20133",
+  "en": "Manufacture of synthetic rubber",
+  "zh": "合成橡胶制造"
+ },
+ {
+  "code": "20210",
+  "en": "Manufacture of pesticides and other agro-chemical products",
+  "zh": "农药及其他农业化学品制造"
+ },
+ {
+  "code": "20221",
+  "en": "Manufacture of paints",
+  "zh": "涂料制造"
+ },
+ {
+  "code": "20222",
+  "en": "Manufacture of varnishes and lacquers",
+  "zh": "清漆和亮光漆制造（包括瓷漆）"
+ },
+ {
+  "code": "20223",
+  "en": "Manufacture of printing ink, prepared pigments and dyes",
+  "zh": "印刷油墨、配制颜料及染料制造"
+ },
+ {
+  "code": "20229",
+  "en": "Manufacture of paints, varnishes and similar coatings, printing ink and mastics n.e.c.",
+  "zh": "其他未列明的涂料、清漆及类似涂层与密封胶制造"
+ },
+ {
+  "code": "20231",
+  "en": "Manufacture of soap, detergents, washing and other cleaning preparations",
+  "zh": "肥皂、洗涤剂、洗涤及其他清洁用品制造"
+ },
+ {
+  "code": "20232",
+  "en": "Manufacture of perfumes and fragrances",
+  "zh": "香水与香精制造"
+ },
+ {
+  "code": "20233",
+  "en": "Manufacture of cosmetics and toiletries",
+  "zh": "化妆品及盥洗用品制造"
+ },
+ {
+  "code": "20234",
+  "en": "Manufacture of waxes and polishes and deodorising preparations",
+  "zh": "蜡类、抛光剂及除臭制剂制造"
+ },
+ {
+  "code": "20241",
+  "en": "Manufacture of food chemicals and additives",
+  "zh": "食品化学品和添加剂制造"
+ },
+ {
+  "code": "20242",
+  "en": "Manufacture of additives for mineral oil",
+  "zh": "矿物油添加剂制造（例如润滑油及燃油添加剂）"
+ },
+ {
+  "code": "20249",
+  "en": "Manufacture of additives n.e.c.",
+  "zh": "其他未列明的添加剂制造"
+ },
+ {
+  "code": "20291",
+  "en": "Manufacture of epoxy moulding compounds and phenolic moulding compounds",
+  "zh": "环氧树脂模塑料与酚醛模塑料制造"
+ },
+ {
+  "code": "20292",
+  "en": "Manufacture of ultrapure electronic chemicals, materials and laminates",
+  "zh": "超纯电子化学品、材料及覆铜板制造"
+ },
+ {
+  "code": "20293",
+  "en": "Manufacture of water treatment, waste treatment and oilfield chemicals",
+  "zh": "水处理、废物处理及油田化学品制造"
+ },
+ {
+  "code": "20294",
+  "en": "Manufacture of writing and drawing inks",
+  "zh": "墨水、染料、颜料及炭黑制造"
+ },
+ {
+  "code": "20295",
+  "en": "Manufacture of photographic film, paper, plate and chemicals",
+  "zh": "照相胶片、相纸、感光板及摄影用化学品制造"
+ },
+ {
+  "code": "20296",
+  "en": "Manufacture of adhesives and sealants",
+  "zh": "胶粘剂及密封剂制造"
+ },
+ {
+  "code": "20297",
+  "en": "Manufacture of catalysts and catalyst regeneration",
+  "zh": "催化剂制造与催化剂再生"
+ },
+ {
+  "code": "20298",
+  "en": "Manufacture of biofuels",
+  "zh": "生物燃料制造"
+ },
+ {
+  "code": "20299",
+  "en": "Manufacture of other chemical products n.e.c.",
+  "zh": "未另作分类的其他化学产品制造"
+ },
+ {
+  "code": "20300",
+  "en": "Manufacture of man-made fibres (except glass)",
+  "zh": "人造纤维制造（不包括玻璃纤维）"
+ },
+ {
+  "code": "21011",
+  "en": "Manufacture of pharmaceutical intermediates and fine chemicals for human use",
+  "zh": "人用药品中间体与精细化学品制造"
+ },
+ {
+  "code": "21012",
+  "en": "Manufacture of pharmaceutical products and preparations for human use",
+  "zh": "人用药品及制剂制造"
+ },
+ {
+  "code": "21013",
+  "en": "Manufacture of pharmaceutical products for veterinary use",
+  "zh": "兽用药品的制造"
+ },
+ {
+  "code": "21021",
+  "en": "Manufacture of vaccines for human use",
+  "zh": "人用疫苗制造"
+ },
+ {
+  "code": "21022",
+  "en": "Manufacture of other biological products and preparations for human use",
+  "zh": "其他人用生物制品及制剂制造"
+ },
+ {
+  "code": "21023",
+  "en": "Manufacture of biological products and preparations for veterinary use",
+  "zh": "兽用生物制品及制剂制造"
+ },
+ {
+  "code": "21030",
+  "en": "Manufacture of Traditional Chinese Medicine",
+  "zh": "中药制造"
+ },
+ {
+  "code": "22111",
+  "en": "Processing, grading and packing of rubber; processing of rubber latex",
+  "zh": "橡胶加工（包括乳胶加工）"
+ },
+ {
+  "code": "22119",
+  "en": "Processing of natural gums n.e.c.",
+  "zh": "其他天然树胶加工（未另分类，例如：达玛树脂、热带乳胶）"
+ },
+ {
+  "code": "22121",
+  "en": "Manufacture of tyres and tubes",
+  "zh": "轮胎与内胎制造"
+ },
+ {
+  "code": "22122",
+  "en": "Retreading and vulcanising of tyres",
+  "zh": "轮胎翻新与硫化"
+ },
+ {
+  "code": "22191",
+  "en": "Manufacture of foam rubber products (except foam rubber mattresses)",
+  "zh": "泡沫橡胶制品制造（不包括泡沫橡胶床垫）"
+ },
+ {
+  "code": "22192",
+  "en": "Manufacture of rubber automotive parts",
+  "zh": "橡胶汽车零件制造"
+ },
+ {
+  "code": "22193",
+  "en": "Manufacture of industrial and mechanical rubber goods",
+  "zh": "工业及机械用橡胶制品制造"
+ },
+ {
+  "code": "22194",
+  "en": "Manufacture of rubber floorings",
+  "zh": "橡胶地板制造"
+ },
+ {
+  "code": "22199",
+  "en": "Manufacture of other rubber products n.e.c. (except rubber footwear and toys)",
+  "zh": "其他未列明的橡胶制品制造（不包括橡胶鞋类和玩具）"
+ },
+ {
+  "code": "22211",
+  "en": "Manufacture of plastic tableware, household and kitchen ware (except disposable utensils)",
+  "zh": "塑料餐具、家用品和厨房用品制造"
+ },
+ {
+  "code": "22212",
+  "en": "Manufacture of styrofoam and plastic disposable utensils",
+  "zh": "泡沫塑料和一次性塑料餐具制造"
+ },
+ {
+  "code": "22213",
+  "en": "Manufacture of plastic sheet, film and articles thereof",
+  "zh": "塑料薄膜、薄片及相关制品制造"
+ },
+ {
+  "code": "22214",
+  "en": "Manufacture of plastic bottles, boxes and containers (except for household use)",
+  "zh": "塑料瓶、盒及容器制造"
+ },
+ {
+  "code": "22215",
+  "en": "Manufacture of plastic pipes and tubes",
+  "zh": "塑料管道和软管制造"
+ },
+ {
+  "code": "22216",
+  "en": "Manufacture of plastic precision engineering parts",
+  "zh": "塑料精密工程零件制造"
+ },
+ {
+  "code": "22217",
+  "en": "Manufacture of PVC files, holders and albums",
+  "zh": "聚氯乙烯文件夹、资料夹与相册的制造"
+ },
+ {
+  "code": "22218",
+  "en": "Manufacture of plastic cable ties",
+  "zh": "塑料束线带的制造"
+ },
+ {
+  "code": "22219",
+  "en": "Manufacture of plastic products n.e.c. (except plastic footwear and toys)",
+  "zh": "其他塑料制品制造（不包括塑料鞋类与玩具）"
+ },
+ {
+  "code": "22220",
+  "en": "Plastic product services",
+  "zh": "塑料制品服务"
+ },
+ {
+  "code": "23100",
+  "en": "Manufacture of glass and glass products",
+  "zh": "玻璃及玻璃制品制造（包括玻璃纤维纱）"
+ },
+ {
+  "code": "23910",
+  "en": "Manufacture of clay products",
+  "zh": "黏土制品制造"
+ },
+ {
+  "code": "23930",
+  "en": "Manufacture of other porcelain and ceramic products",
+  "zh": "其他瓷器及陶瓷制品制造"
+ },
+ {
+  "code": "23940",
+  "en": "Manufacture of cement, lime and plaster",
+  "zh": "水泥、石灰和石膏的制造"
+ },
+ {
+  "code": "23951",
+  "en": "Manufacture of ready-mix concrete",
+  "zh": "预拌混凝土制造"
+ },
+ {
+  "code": "23959",
+  "en": "Manufacture of articles of concrete, cement and plaster n.e.c. (except precast concrete components)",
+  "zh": "未另作分类的混凝土、水泥及石膏制品制造"
+ },
+ {
+  "code": "23960",
+  "en": "Cutting, shaping and finishing of stone",
+  "zh": "石材切割、造型与加工"
+ },
+ {
+  "code": "23991",
+  "en": "Manufacture of fibreglass and fibreglass products",
+  "zh": "玻璃纤维及其制品的制造"
+ },
+ {
+  "code": "23992",
+  "en": "Manufacture of other insulation products",
+  "zh": "其他绝缘产品制造"
+ },
+ {
+  "code": "23993",
+  "en": "Manufacture of non-structural pre-cast components",
+  "zh": "非结构性预制构件制造"
+ },
+ {
+  "code": "23994",
+  "en": "Manufacture of asphalt premix",
+  "zh": "沥青预拌料制造"
+ },
+ {
+  "code": "23999",
+  "en": "Manufacture of other non-metallic mineral products n.e.c.",
+  "zh": "未另作分类的其他非金属矿物制品制造"
+ },
+ {
+  "code": "24101",
+  "en": "Iron and steel rolling mills",
+  "zh": "钢铁轧钢厂"
+ },
+ {
+  "code": "24102",
+  "en": "Manufacture of ferrous metal alloys",
+  "zh": "黑色金属合金制造"
+ },
+ {
+  "code": "24109",
+  "en": "Manufacture of basic iron and steel n.e.c.",
+  "zh": "其他未列明的基本铁和钢制造（包括冶炼）"
+ },
+ {
+  "code": "24201",
+  "en": "Manufacture of non-ferrous metal alloys",
+  "zh": "有色金属合金制造"
+ },
+ {
+  "code": "24209",
+  "en": "Manufacture of basic precious and non-ferrous metals n.e.c.",
+  "zh": "其他未列明的贵金属及有色金属基础制造"
+ },
+ {
+  "code": "24310",
+  "en": "Iron and steel foundries",
+  "zh": "铸铁与铸钢厂"
+ },
+ {
+  "code": "24320",
+  "en": "Non-ferrous metal foundries",
+  "zh": "有色金属铸造"
+ },
+ {
+  "code": "25111",
+  "en": "Manufacture of metal doors, window and door frames, grilles and gratings",
+  "zh": "金属门、窗、门框、防盗窗和格栅制造"
+ },
+ {
+  "code": "25112",
+  "en": "Manufacture of metal strips and slabs",
+  "zh": "金属条和金属板制造（例如遮阳棚）"
+ },
+ {
+  "code": "25113",
+  "en": "Manufacture of metal pipes and tubes",
+  "zh": "金属管道制造"
+ },
+ {
+  "code": "25114",
+  "en": "Manufacture of steel structural component",
+  "zh": "钢结构部件制造"
+ },
+ {
+  "code": "25119",
+  "en": "Manufacture of structural metal products n.e.c.",
+  "zh": "未另作分类的结构金属制品制造"
+ },
+ {
+  "code": "25120",
+  "en": "Manufacture/repair of tanks, reservoirs and containers of metal",
+  "zh": "金属储罐、水箱及容器的制造与修理"
+ },
+ {
+  "code": "25131",
+  "en": "Manufacture/repair of heating boilers, radiators and correctors",
+  "zh": "供暖锅炉、散热器及其校正器的制造与修理"
+ },
+ {
+  "code": "25139",
+  "en": "Manufacture/repair of steam generators n.e.c. (except central heating hot water boilers)",
+  "zh": "未另作分类的蒸汽发生器制造与修理"
+ },
+ {
+  "code": "25200",
+  "en": "Manufacture/repair of weapons and ammunition",
+  "zh": "武器与弹药制造与修理"
+ },
+ {
+  "code": "25911",
+  "en": "Iron and steel and non-ferrous forgings",
+  "zh": "铁、钢及有色金属锻造"
+ },
+ {
+  "code": "25912",
+  "en": "Manufacture of leadframe",
+  "zh": "引线框制造"
+ },
+ {
+  "code": "25913",
+  "en": "Metal stampings (except metal caps)",
+  "zh": "引线框制造"
+ },
+ {
+  "code": "25919",
+  "en": "Pressing and roll-forming of metal and powder metallurgy n.e.c.",
+  "zh": "其他未列明的金属压制、轧制成型及粉末冶金加工"
+ },
+ {
+  "code": "25921",
+  "en": "Electroplating and plating of metals and formed products",
+  "zh": "金属及其成品的电镀和涂层加工"
+ },
+ {
+  "code": "25922",
+  "en": "Polishing of metals and formed products",
+  "zh": "金属及其成品的抛光"
+ },
+ {
+  "code": "25923",
+  "en": "Rustproofing of metals and formed products",
+  "zh": "金属及其成品的防锈处理"
+ },
+ {
+  "code": "25924",
+  "en": "Heat treatment for metals",
+  "zh": "金属热处理"
+ },
+ {
+  "code": "25929",
+  "en": "Metal product services n.e.c.",
+  "zh": "其他未列明的金属制品服务"
+ },
+ {
+  "code": "25931",
+  "en": "Manufacture of table, kitchen and other cutlery",
+  "zh": "餐具、厨具及其他刀具制造"
+ },
+ {
+  "code": "25932",
+  "en": "Manufacture of hand and edge tools",
+  "zh": "手工具及刃具制造"
+ },
+ {
+  "code": "25939",
+  "en": "Manufacture of general hardware n.e.c.",
+  "zh": "其他未列明的一般五金制品制造（包括铁匠铺）"
+ },
+ {
+  "code": "25941",
+  "en": "Manufacture of uninsulated wire",
+  "zh": "非绝缘金属线材制造"
+ },
+ {
+  "code": "25949",
+  "en": "Manufacture of metal wire and cable products n.e.c.",
+  "zh": "其他未列明的金属线缆制品制造"
+ },
+ {
+  "code": "25951",
+  "en": "Manufacture of tinplate cans",
+  "zh": "镀锡罐制造"
+ },
+ {
+  "code": "25952",
+  "en": "Manufacture of other tinplate and zinc articles",
+  "zh": "其他镀锡及锌制品制造（例如水桶、垃圾桶）"
+ },
+ {
+  "code": "25959",
+  "en": "Manufacture of metal cans, containers and related products n.e.c.",
+  "zh": "其他未列明的金属罐、容器及相关制品制造"
+ },
+ {
+  "code": "25991",
+  "en": "Manufacture of sanitary ware of enamelled iron and metal and plumbers' ware of brass",
+  "zh": "搪瓷铁制或金属卫生洁具及管道装置制造"
+ },
+ {
+  "code": "25992",
+  "en": "Manufacture of plumbing, heating and related products (except electric)",
+  "zh": "管道、供暖及相关产品制造（包括零件）"
+ },
+ {
+  "code": "25993",
+  "en": "Manufacture of bolts, nuts, rivets, fasteners and screw machine products",
+  "zh": "螺栓、螺母、铆钉、紧固件及螺丝机产品制造"
+ },
+ {
+  "code": "25994",
+  "en": "Manufacture of pipe fittings",
+  "zh": "管道配件制造"
+ },
+ {
+  "code": "25995",
+  "en": "Manufacture of springs",
+  "zh": "弹簧制造"
+ },
+ {
+  "code": "25996",
+  "en": "Manufacture of kitchen and household utensils",
+  "zh": "厨房与家用器皿制造"
+ },
+ {
+  "code": "25997",
+  "en": "Manufacture of metal precision components",
+  "zh": "金属精密零部件制造"
+ },
+ {
+  "code": "25998",
+  "en": "Slitting, shearing and pasting of metal sheeting",
+  "zh": "金属片材的分条、剪切和粘贴加工"
+ },
+ {
+  "code": "25999",
+  "en": "Manufacture of other fabricated metal products n.e.c.",
+  "zh": "未另作分类的其他金属制品制造"
+ },
+ {
+  "code": "26111",
+  "en": "Manufacture of discrete devices",
+  "zh": "分立器件制造"
+ },
+ {
+  "code": "26112",
+  "en": "Semiconductor wafer fabrication",
+  "zh": "半导体晶圆制造"
+ },
+ {
+  "code": "26113",
+  "en": "Assembly and testing of semiconductors",
+  "zh": "半导体的组装与测试"
+ },
+ {
+  "code": "26114",
+  "en": "Manufacture of solar wafers",
+  "zh": "太阳能晶圆制造"
+ },
+ {
+  "code": "26115",
+  "en": "Manufacture of solar cells",
+  "zh": "太阳能电池制造"
+ },
+ {
+  "code": "26119",
+  "en": "Manufacture of semiconductor devices n.e.c.",
+  "zh": "其他未分类的半导体器件制造"
+ },
+ {
+  "code": "26121",
+  "en": "Manufacture of capacitors",
+  "zh": "电容器制造"
+ },
+ {
+  "code": "26122",
+  "en": "Manufacture of printed circuit boards without electronic parts",
+  "zh": "印刷电路板制造（无电子零件）"
+ },
+ {
+  "code": "26123",
+  "en": "Manufacture of printed circuit boards with electronic parts",
+  "zh": "印刷电路板制造（含电子零件）"
+ },
+ {
+  "code": "26124",
+  "en": "Manufacture of piezo-electric devices",
+  "zh": "压电装置制造（例如石英晶体、晶体滤波器、延迟线）"
+ },
+ {
+  "code": "26125",
+  "en": "Manufacture of electronic display devices (except light emitting diodes)",
+  "zh": "除发光二极管外的电子显示器设备制造"
+ },
+ {
+  "code": "26126",
+  "en": "Manufacture of electronic connectors",
+  "zh": "电子连接器制造"
+ },
+ {
+  "code": "26129",
+  "en": "Manufacture of other electronic components and boards n.e.c.",
+  "zh": "其他未列明的电子元件及电路板制造"
+ },
+ {
+  "code": "26201",
+  "en": "Manufacture of computers and data processing equipment (except computer peripheral equipment)",
+  "zh": "计算机及数据处理设备制造（不包括便携式计算机）"
+ },
+ {
+  "code": "26202",
+  "en": "Manufacture of disk drives",
+  "zh": "磁盘驱动器制造"
+ },
+ {
+  "code": "26203",
+  "en": "Manufacture of printers",
+  "zh": "打印机制造"
+ },
+ {
+  "code": "26204",
+  "en": "Manufacture of smart cards and related products",
+  "zh": "智能卡及相关产品制造（例如：智能卡读卡器）"
+ },
+ {
+  "code": "26209",
+  "en": "Manufacture of computers and peripheral equipment n.e.c.",
+  "zh": "其他未列明的计算机及外围设备制造"
+ },
+ {
+  "code": "26301",
+  "en": "Manufacture of telecommunications apparatus",
+  "zh": "电信设备制造"
+ },
+ {
+  "code": "26302",
+  "en": "Manufacture of networking products",
+  "zh": "网络产品制造（例如：路由器、交换机）"
+ },
+ {
+  "code": "26303",
+  "en": "Manufacture of wireless communications equipment",
+  "zh": "无线通信设备制造（例如：手机）"
+ },
+ {
+  "code": "26304",
+  "en": "Manufacture of electronic security systems",
+  "zh": "电子安防系统制造"
+ },
+ {
+  "code": "26309",
+  "en": "Manufacture of communications equipment n.e.c.",
+  "zh": "其他未列明的通信设备制造"
+ },
+ {
+  "code": "26400",
+  "en": "Manufacture of consumer electronics",
+  "zh": "消费电子产品制造"
+ },
+ {
+  "code": "26511",
+  "en": "Manufacture/repair of engineering and scientific instruments",
+  "zh": "工程与科学仪器的制造与修理"
+ },
+ {
+  "code": "26512",
+  "en": "Manufacture/repair of measuring devices",
+  "zh": "测量设备的制造与修理（例如：计量器）"
+ },
+ {
+  "code": "26513",
+  "en": "Manufacture/repair of process control equipment and related products",
+  "zh": "工艺控制设备及相关产品的制造与修理"
+ },
+ {
+  "code": "26520",
+  "en": "Manufacture of watches and clocks",
+  "zh": "手表及钟表制造"
+ },
+ {
+  "code": "26601",
+  "en": "Manufacture/repair of electrotherapeutic devices",
+  "zh": "电疗设备的制造与修理"
+ },
+ {
+  "code": "26602",
+  "en": "Manufacture/repair of irradiation and electromedical equipment and instruments",
+  "zh": "放射和电医学设备的制造与修理"
+ },
+ {
+  "code": "26701",
+  "en": "Manufacture of photographic equipment and parts",
+  "zh": "摄影器材及零件制造（包括镜头）"
+ },
+ {
+  "code": "26709",
+  "en": "Manufacture of optical instruments and photographic equipment n.e.c.",
+  "zh": "其他未列明的光学仪器和摄影设备制造"
+ },
+ {
+  "code": "26801",
+  "en": "Manufacture of disk media",
+  "zh": "磁盘媒体制造"
+ },
+ {
+  "code": "26802",
+  "en": "Manufacture of blank magnetic tapes, diskettes, Blu-ray technology discs, CDs, DVDs and VCDs",
+  "zh": "空白磁带、磁盘、蓝光技术光盘等制造"
+ },
+ {
+  "code": "27101",
+  "en": "Manufacture/repair of electric motors",
+  "zh": "电动机制造与修理"
+ },
+ {
+  "code": "27102",
+  "en": "Manufacture/repair of electric generators",
+  "zh": "发电机制造与修理"
+ },
+ {
+  "code": "27103",
+  "en": "Manufacture/repair of transformers",
+  "zh": "变压器制造与修理"
+ },
+ {
+  "code": "27104",
+  "en": "Manufacture/repair of switchgear and switchboard apparatus",
+  "zh": "开关设备和配电板设备制造与修理"
+ },
+ {
+  "code": "27109",
+  "en": "Manufacture/repair of electric motors, generators, transformers and electricity distribution and control apparatus n.e.c.",
+  "zh": "其他电动机、发电机和变压器制造与修理"
+ },
+ {
+  "code": "27201",
+  "en": "Manufacture of primary batteries",
+  "zh": "一次电池制造"
+ },
+ {
+  "code": "27202",
+  "en": "Manufacture of secondary batteries",
+  "zh": "二次电池（可充电电池）制造"
+ },
+ {
+  "code": "27321",
+  "en": "Manufacture of telecommunications cables and wires",
+  "zh": "通信电缆与电线制造"
+ },
+ {
+  "code": "27322",
+  "en": "Manufacture of electric power cables and wires",
+  "zh": "电力电缆与电线制造"
+ },
+ {
+  "code": "27323",
+  "en": "Manufacture of wire and cable assemblies and harnesses",
+  "zh": "线缆组件与线束制造"
+ },
+ {
+  "code": "27329",
+  "en": "Manufacture of electronic and electric wires and cables n.e.c.",
+  "zh": "其他未列明的电子与电力电线电缆制造"
+ },
+ {
+  "code": "27330",
+  "en": "Manufacture/repair of wiring devices",
+  "zh": "接线设备的制造与修理"
+ },
+ {
+  "code": "27400",
+  "en": "Manufacture/repair of electric lamps and lighting equipment",
+  "zh": "电灯和照明设备的制造与修理"
+ },
+ {
+  "code": "27501",
+  "en": "Manufacture of electrical household appliances",
+  "zh": "家用电器制造"
+ },
+ {
+  "code": "27509",
+  "en": "Manufacture of domestic appliances n.e.c.",
+  "zh": "未另作分类的家用设备制造"
+ },
+ {
+  "code": "27900",
+  "en": "Manufacture of other electrical equipment, apparatus, appliances and supplies",
+  "zh": "其他电气设备、器具、装置及用品制造"
+ },
+ {
+  "code": "28111",
+  "en": "Manufacture/repair of engines and turbines (except aircraft, vehicle, cycle and marine engines)",
+  "zh": "发动机与涡轮机制造与修理（不包括飞机与车辆用）"
+ },
+ {
+  "code": "28112",
+  "en": "Manufacture/repair of marine engine",
+  "zh": "船用发动机的制造与修理"
+ },
+ {
+  "code": "28121",
+  "en": "Manufacture/repair of pumps",
+  "zh": "泵的制造与修理（例如液压泵、排水泵）"
+ },
+ {
+  "code": "28122",
+  "en": "Manufacture/repair of taps, cocks and valves",
+  "zh": "水龙头、旋塞和阀门的制造与修理"
+ },
+ {
+  "code": "28129",
+  "en": "Manufacture/repair of pumps, compressors, taps and valves n.e.c.",
+  "zh": "其他未列明的泵、压缩机、水龙头和阀门的制造与修理"
+ },
+ {
+  "code": "28141",
+  "en": "Manufacture of bearings",
+  "zh": "轴承制造（包括盘状和球状轴承）"
+ },
+ {
+  "code": "28142",
+  "en": "Manufacture/repair of gears, gearing and driving elements",
+  "zh": "齿轮、传动装置及其零件的制造与修理"
+ },
+ {
+  "code": "28150",
+  "en": "Manufacture/repair of ovens, furnaces and furnace burners",
+  "zh": "炉灶、熔炉及燃烧器的制造与修理"
+ },
+ {
+  "code": "28161",
+  "en": "Manufacture/repair of lifting and hoisting machinery (except electrical)",
+  "zh": "起重和吊运机械的制造与修理（不包括电动设备）"
+ },
+ {
+  "code": "28162",
+  "en": "Manufacture/repair of lifts and escalators",
+  "zh": "电梯和自动扶梯的制造与修理"
+ },
+ {
+  "code": "28169",
+  "en": "Manufacture/repair of lifting and handling equipment n.e.c.",
+  "zh": "未另作分类的起重与搬运设备制造与维修"
+ },
+ {
+  "code": "28171",
+  "en": "Manufacture of office machinery and equipment (except computers and peripheral equipment)",
+  "zh": "办公机械和设备的制造"
+ },
+ {
+  "code": "28172",
+  "en": "Repair and maintenance of office machinery and equipment",
+  "zh": "办公机械和设备的维修与保养"
+ },
+ {
+  "code": "28181",
+  "en": "Manufacture/repair of industrial robots",
+  "zh": "工业机器人制造与维修"
+ },
+ {
+  "code": "28182",
+  "en": "Manufacture/repair of service robots",
+  "zh": "服务型机器人的制造与维修"
+ },
+ {
+  "code": "28189",
+  "en": "Manufacture/repair of robots n.e.c.",
+  "zh": "其他未分类机器人的制造与维修"
+ },
+ {
+  "code": "28191",
+  "en": "Manufacture/repair of refrigerating, air-conditioning and ventilating machinery and equipment (except household refrigerators)",
+  "zh": "制冷、空调及通风设备的制造与维修"
+ },
+ {
+  "code": "28192",
+  "en": "Manufacture/repair of separation/mixing equipment",
+  "zh": "分离/混合设备（如过滤器、分离器、搅拌器）的制造与维修"
+ },
+ {
+  "code": "28193",
+  "en": "Manufacture/repair of solar modules and panels",
+  "zh": "太阳能组件与面板的制造与维修"
+ },
+ {
+  "code": "28194",
+  "en": "Manufacture/repair of welding and soldering equipment",
+  "zh": "焊接及钎焊设备制造与修理（包括电弧焊条）"
+ },
+ {
+  "code": "28195",
+  "en": "Manufacture/repair of packaging machinery",
+  "zh": "包装机械的制造与维修"
+ },
+ {
+  "code": "28199",
+  "en": "Manufacture/repair of other general purpose machinery and equipment n.e.c. (except electrical and electronic)",
+  "zh": "其他通用机械设备的制造与维修（未另作分类）"
+ },
+ {
+  "code": "28210",
+  "en": "Manufacture/repair of agricultural and forestry machinery",
+  "zh": "农业和林业机械的制造与维修"
+ },
+ {
+  "code": "28221",
+  "en": "Manufacture/repair of machinery and machine-tools - metal cutting types",
+  "zh": "金属切削类机械及机床的制造与维修"
+ },
+ {
+  "code": "28222",
+  "en": "Manufacture/repair of machinery and machine-tools - metal forming types",
+  "zh": "金属成形类机械及机床的制造与维修"
+ },
+ {
+  "code": "28223",
+  "en": "Manufacture/repair of dies, moulds, tools, jigs and fixtures",
+  "zh": "模具、工具、夹具和治具的制造"
+ },
+ {
+  "code": "28224",
+  "en": "Manufacture/repair of machine tool accessories",
+  "zh": "机床附件制造"
+ },
+ {
+  "code": "28229",
+  "en": "Manufacture/repair of metal-forming machinery and machine tools n.e.c.",
+  "zh": "其他未列明的金属成形机械与机床的制造与修理"
+ },
+ {
+  "code": "28241",
+  "en": "Manufacture/repair of oil rigs",
+  "zh": "石油钻机的制造与修理"
+ },
+ {
+  "code": "28242",
+  "en": "Manufacture/repair of other oilfield and gasfield machinery and equipment",
+  "zh": "其他油田与气田设备的制造与修理"
+ },
+ {
+  "code": "28243",
+  "en": "Manufacture/repair of construction machinery and parts",
+  "zh": "建筑工程机械及零部件的制造与修理"
+ },
+ {
+  "code": "28249",
+  "en": "Manufacture/repair of machinery for mining, quarrying and construction n.e.c.",
+  "zh": "采矿、采石及建筑业用机械的制造与修理"
+ },
+ {
+  "code": "28251",
+  "en": "Manufacture/repair of machinery for food products processing",
+  "zh": "食品加工机械的制造与修理"
+ },
+ {
+  "code": "28252",
+  "en": "Manufacture/repair of machinery for beverage production",
+  "zh": "饮料生产机械的制造与修理"
+ },
+ {
+  "code": "28253",
+  "en": "Manufacture/repair of machinery for tobacco processing",
+  "zh": "烟草加工机械的制造与修理"
+ },
+ {
+  "code": "28260",
+  "en": "Manufacture/repair of machinery for textile, apparel and leather production",
+  "zh": "纺织、服装与皮革行业机械的制造与修理"
+ },
+ {
+  "code": "28271",
+  "en": "Manufacture of probe cards",
+  "zh": "探针卡的制造"
+ },
+ {
+  "code": "28272",
+  "en": "Manufacture of bonding tools",
+  "zh": "键合工具的制造"
+ },
+ {
+  "code": "28273",
+  "en": "Manufacture/repair of semiconductor assembly and testing equipment",
+  "zh": "半导体封装与测试设备的制造与修理"
+ },
+ {
+  "code": "28274",
+  "en": "Manufacture/repair of semiconductor foundry equipment",
+  "zh": "半导体晶圆制造设备的制造与修理"
+ },
+ {
+  "code": "28291",
+  "en": "Manufacture/repair of water/waste water treatment equipment",
+  "zh": "水/废水处理设备的制造与修理"
+ },
+ {
+  "code": "28292",
+  "en": "Manufacture/repair of plastic processing machinery",
+  "zh": "塑料加工机械的制造与修理"
+ },
+ {
+  "code": "28293",
+  "en": "Manufacture/repair of additive manufacturing (AM) equipment",
+  "zh": "木工机械的制造与修理"
+ },
+ {
+  "code": "28299",
+  "en": "Manufacture/repair of other special purpose machinery n.e.c.",
+  "zh": "其他未列明的专用机械设备的制造与修理"
+ },
+ {
+  "code": "28300",
+  "en": "Installation of industrial machinery and equipment, mechanical engineering works",
+  "zh": "工业机械和设备的安装，机械工程服务"
+ },
+ {
+  "code": "29100",
+  "en": "Manufacture and assembly of motor vehicles (except motorcycles and scooters)",
+  "zh": "汽车的制造与组装"
+ },
+ {
+  "code": "29200",
+  "en": "Manufacture of motor vehicle bodies (coachwork), trailers and semi-trailers",
+  "zh": "汽车车身（车厢）、拖,车与半挂车的制造"
+ },
+ {
+  "code": "29300",
+  "en": "Manufacture of parts and accessories for motor vehicles",
+  "zh": "汽车零部件及附件制造"
+ },
+ {
+  "code": "30110",
+  "en": "Building and repairing of ships, tankers, off-shore structures and other ocean-going vessels",
+  "zh": "船舶、油轮及其他远洋船只的建造与修理"
+ },
+ {
+  "code": "30120",
+  "en": "Building and repair of pleasure crafts, lighters and boats",
+  "zh": "游艇、驳船与小型船只的建造与修理"
+ },
+ {
+  "code": "30200",
+  "en": "Manufacture/repair of railway and tramway locomotives and rolling stock",
+  "zh": "铁路和电车机车车辆的制造与修理"
+ },
+ {
+  "code": "30301",
+  "en": "Manufacture and assembly of aircraft and spacecraft",
+  "zh": "飞机与航天器的制造与组装"
+ },
+ {
+  "code": "30302",
+  "en": "Repair and servicing of aircraft and spacecraft",
+  "zh": "飞机与航天器的维修与服务"
+ },
+ {
+  "code": "30400",
+  "en": "Manufacture/repair of military fighting vehicles",
+  "zh": "军用战斗车辆的制造"
+ },
+ {
+  "code": "30910",
+  "en": "Manufacture and assembly of motorcycles and scooters",
+  "zh": "摩托车与电单车的制造与组装"
+ },
+ {
+  "code": "30920",
+  "en": "Manufacture and assembly of bicycles, tricycles, trishaws and invalid carriages",
+  "zh": "自行车、三轮车、人力车和残障人士使用车辆的制造与组装"
+ },
+ {
+  "code": "30990",
+  "en": "Manufacture/repair of other transport equipment n.e.c.",
+  "zh": "其他未列明运输设备的制造（例如手推车、货车）"
+ },
+ {
+  "code": "31001",
+  "en": "Manufacture of furniture and fixtures of wood",
+  "zh": "木质家具和配件的制造（包括软垫家具）"
+ },
+ {
+  "code": "31002",
+  "en": "Manufacture of furniture of rattan and cane",
+  "zh": "藤制和藤条家具的制造"
+ },
+ {
+  "code": "31003",
+  "en": "Manufacture of furniture and fixtures primarily of metal",
+  "zh": "金属为主的家具和配件的制造"
+ },
+ {
+  "code": "31004",
+  "en": "Manufacture of furniture of other materials (except primarily of stone, ceramic or concrete)",
+  "zh": "其他材料为主（非石材为主）的家具制造"
+ },
+ {
+  "code": "31005",
+  "en": "Manufacture of window and door screens and shades",
+  "zh": "窗户和门的纱窗、遮阳帘的制造"
+ },
+ {
+  "code": "31006",
+  "en": "Manufacture of mattresses",
+  "zh": "床垫的制造（包括海绵床垫）"
+ },
+ {
+  "code": "31009",
+  "en": "Manufacture of furniture n.e.c.",
+  "zh": "其他未列明的家具制造"
+ },
+ {
+  "code": "32111",
+  "en": "Manufacture of jewellery (except costume jewellery)",
+  "zh": "珠宝的制造（不包括饰品类珠宝）"
+ },
+ {
+  "code": "32119",
+  "en": "Manufacture of jewellery and related articles n.e.c. (except costume jewellery)",
+  "zh": "未另作分类的珠宝及相关制品制造"
+ },
+ {
+  "code": "32120",
+  "en": "Manufacture of costume jewellery and related articles",
+  "zh": "侠䙐"
+ },
+ {
+  "code": "32200",
+  "en": "Manufacture of musical instruments",
+  "zh": "乐器制造"
+ },
+ {
+  "code": "32300",
+  "en": "Manufacture of sporting and athletic goods",
+  "zh": "体育与运动器材制造"
+ },
+ {
+  "code": "32400",
+  "en": "Manufacture of games and toys",
+  "zh": "游戏与玩具的制造"
+ },
+ {
+  "code": "32501",
+  "en": "Manufacture of medical research and clinical diagnostic instruments and supplies",
+  "zh": "医学研究与临床诊断仪器的制造"
+ },
+ {
+  "code": "32502",
+  "en": "Manufacture of medical disposables and surgical supplies",
+  "zh": "医疗一次性用品与外科用品制造"
+ },
+ {
+  "code": "32503",
+  "en": "Manufacture of implantables and artificial limbs",
+  "zh": "植入式医疗器械与义肢制造"
+ },
+ {
+  "code": "32504",
+  "en": "Manufacture of ophthalmic goods",
+  "zh": "光学产品制造（如眼镜、隐形眼镜及其零件）"
+ },
+ {
+  "code": "32509",
+  "en": "Manufacture of medical and dental instruments and supplies n.e.c.",
+  "zh": "其他未分类的医疗与牙科用工具、仪器及用品制造"
+ },
+ {
+  "code": "32901",
+  "en": "Manufacture of signs and advertising displays",
+  "zh": "招牌与广告展示品的制造（包括霓虹灯广告牌）"
+ },
+ {
+  "code": "32909",
+  "en": "Other manufacturing industries n.e.c.",
+  "zh": "其他未列明的制造业"
+ },
+ {
+  "code": "35101",
+  "en": "Generation of electricity from non-renewable sources",
+  "zh": "燃"
+ },
+ {
+  "code": "35102",
+  "en": "Generation of electricity from renewable sources",
+  "zh": "其他能源发电（如太阳能、生物燃料等）"
+ },
+ {
+  "code": "35103",
+  "en": "Transmission, distribution and sale of electricity",
+  "zh": "电力的输送、分配和销售"
+ },
+ {
+  "code": "35200",
+  "en": "Manufacture of gas; distribution of gaseous fuels through mains; processing of natural gas",
+  "zh": "燃气制造；通过管道配送气体燃料；天然气加工"
+ },
+ {
+  "code": "35300",
+  "en": "Supply of air or water for cooling or heating purposes",
+  "zh": "提供冷却或加热用的空气或水（例如集中供冷/供热）"
+ },
+ {
+  "code": "35400",
+  "en": "Activities of brokers and agents for electric power and natural gas",
+  "zh": "电力及天然气经纪人与代理活动"
+ },
+ {
+  "code": "36000",
+  "en": "Collection, purification and distribution of water",
+  "zh": "水的收集、净化与分配"
+ },
+ {
+  "code": "37000",
+  "en": "Operation of sewer systems",
+  "zh": "污水系统的运营（包括污水处理设施）"
+ },
+ {
+  "code": "38100",
+  "en": "Collection of waste",
+  "zh": "废物收集"
+ },
+ {
+  "code": "38200",
+  "en": "Treatment and disposal of waste",
+  "zh": "废物处理与处置（包括修复活动）"
+ },
+ {
+  "code": "38301",
+  "en": "Recycling of metal waste and scrap",
+  "zh": "金属废料和废铁的回收"
+ },
+ {
+  "code": "38309",
+  "en": "Recycling of non-metal waste n.e.c.",
+  "zh": "非金属废物的回收（例如海黏土和油泥等）"
+ },
+ {
+  "code": "39000",
+  "en": "Carbon capture activities",
+  "zh": "碳捕集活动"
+ },
+ {
+  "code": "41001",
+  "en": "General contractors for building construction and major upgrading works",
+  "zh": "总承包商（建筑工程，包括大型翻新工程）"
+ },
+ {
+  "code": "41002",
+  "en": "Structural repair contractors",
+  "zh": "结构修复承包商"
+ },
+ {
+  "code": "41009",
+  "en": "Construction of buildings n.e.c.",
+  "zh": "施工"
+ },
+ {
+  "code": "42100",
+  "en": "Civil engineering general contractors",
+  "zh": "土木工程总承包商"
+ },
+ {
+  "code": "42200",
+  "en": "Road, railway and associated viaduct, bridge and tunnel construction",
+  "zh": "道路、铁路及相关高架桥、桥梁和隧道建设"
+ },
+ {
+  "code": "42301",
+  "en": "Water and gas pipe-line and sewer construction",
+  "zh": "水管、燃气管道及污水管道建设"
+ },
+ {
+  "code": "42302",
+  "en": "Communications and power line construction",
+  "zh": "通信线路及电力线路建设"
+ },
+ {
+  "code": "42901",
+  "en": "Land reclamation works",
+  "zh": "填海工程"
+ },
+ {
+  "code": "42902",
+  "en": "Dam and drainage construction",
+  "zh": "大坝与排水工程施工"
+ },
+ {
+  "code": "42903",
+  "en": "Marine construction",
+  "zh": "海事工程（例如港口、码头、船坞、栈桥）"
+ },
+ {
+  "code": "42909",
+  "en": "Construction of other civil engineering projects n.e.c.",
+  "zh": "其他未列明的土木工程项目施工（例如游乐场设施）"
+ },
+ {
+  "code": "43110",
+  "en": "Wrecking and demolition works",
+  "zh": "拆除工程"
+ },
+ {
+  "code": "43121",
+  "en": "Soil investigation, treatment and stabilisation",
+  "zh": "土壤调查、处理与稳定工程"
+ },
+ {
+  "code": "43122",
+  "en": "Excavation and earthmoving works",
+  "zh": "挖掘与土方工程"
+ },
+ {
+  "code": "43129",
+  "en": "Site preparation n.e.c.",
+  "zh": "其他场地准备工程"
+ },
+ {
+  "code": "43210",
+  "en": "Electrical works",
+  "zh": "电气工程"
+ },
+ {
+  "code": "43220",
+  "en": "Installation of plumbing, heating (non-electric) and air-conditioning systems",
+  "zh": "管道、非电加热系统与空调系统的安装"
+ },
+ {
+  "code": "43291",
+  "en": "Installation and erection of building equipment",
+  "zh": "建筑设备的安装与架设"
+ },
+ {
+  "code": "43292",
+  "en": "Installation of building automated systems for remote monitoring",
+  "zh": "建筑自动化系统安装（用于远程监控）"
+ },
+ {
+  "code": "43293",
+  "en": "Installation of awning and window shades",
+  "zh": "雨篷与窗帘安装"
+ },
+ {
+  "code": "43294",
+  "en": "Installation of thermal and sound insulation",
+  "zh": "雨篷与窗帘安装"
+ },
+ {
+  "code": "43295",
+  "en": "Signcraft installation",
+  "zh": "广告牌与标识安装"
+ },
+ {
+  "code": "43299",
+  "en": "Other construction installation n.e.c.",
+  "zh": "其他未列明的建筑安装工程"
+ },
+ {
+  "code": "43301",
+  "en": "Renovation contractors",
+  "zh": "装修承包商"
+ },
+ {
+  "code": "43302",
+  "en": "Tile setting and plastering",
+  "zh": "铺砖与抹灰工程"
+ },
+ {
+  "code": "43303",
+  "en": "Joinery and other woodworks",
+  "zh": "木工与细木制作（例如复合地板或拼花地板）"
+ },
+ {
+  "code": "43304",
+  "en": "Painting and decorating",
+  "zh": "油漆与装饰工程"
+ },
+ {
+  "code": "43305",
+  "en": "Glass and glazing works; mirror and shower screen installation",
+  "zh": "玻璃与玻璃装配工程（包括镜子和淋浴屏安装）"
+ },
+ {
+  "code": "43306",
+  "en": "Curtain walling/cladding works",
+  "zh": "幕墙/覆层工程"
+ },
+ {
+  "code": "43307",
+  "en": "Installation of doors, gates, grilles and windows",
+  "zh": "门、闸门、防护栏与窗户安装"
+ },
+ {
+  "code": "43309",
+  "en": "Building completion and finishing n.e.c.",
+  "zh": "其他未列明的建筑竣工与修饰工程"
+ },
+ {
+  "code": "43901",
+  "en": "Foundation works; micropiling, conventional piling and underpinning",
+  "zh": "地基工程"
+ },
+ {
+  "code": "43902",
+  "en": "Brick laying, stone setting and cement works",
+  "zh": "砌砖、石材安装与水泥施工"
+ },
+ {
+  "code": "43903",
+  "en": "Roofing works; timber carcassing",
+  "zh": "屋顶工程（包括木结构架设）"
+ },
+ {
+  "code": "43904",
+  "en": "Production of pre-cast components",
+  "zh": "预制构件生产"
+ },
+ {
+  "code": "43905",
+  "en": "Scaffolding works",
+  "zh": "脚手架工程"
+ },
+ {
+  "code": "43906",
+  "en": "Sandblasting/shotblasting works (except ships)",
+  "zh": "喷砂/抛丸工程（船舶除外）"
+ },
+ {
+  "code": "43907",
+  "en": "Production of Prefabricated Prefinished Volumetric Construction (PPVC) modules",
+  "zh": "预制预装体积式建筑模块（模块）的生产"
+ },
+ {
+  "code": "43909",
+  "en": "Other specialised construction activities n.e.c.",
+  "zh": "其他专门建筑及相关活动（未另分类，不包括线上市场平台）"
+ },
+ {
+  "code": "46100",
+  "en": "Wholesale on a fee or commission basis",
+  "zh": "按佣金或手续费进行的批发业务（不包括线上市场）"
+ },
+ {
+  "code": "46211",
+  "en": "Wholesale of cut flowers and plants",
+  "zh": "鲜花与植物的批发"
+ },
+ {
+  "code": "46212",
+  "en": "Wholesale of aquarium fishes and related accessories/products",
+  "zh": "水族鱼类的批发（包括鱼粮和配件）"
+ },
+ {
+  "code": "46213",
+  "en": "Wholesale of pet birds and animals and related accessories/products",
+  "zh": "宠物鸟类和动物的批发（包括饲料与配件）"
+ },
+ {
+  "code": "46219",
+  "en": "Wholesale of agricultural raw materials and live animals n.e.c. (except tropical produce)",
+  "zh": "未另作分类的农业原材料与活体动物批发（不包括热带农产品）"
+ },
+ {
+  "code": "46221",
+  "en": "Wholesale of rubber",
+  "zh": "橡胶的批发（包括橡胶经纪人）"
+ },
+ {
+  "code": "46222",
+  "en": "Wholesale of pepper and other spices",
+  "zh": "胡椒与其他香料的批发"
+ },
+ {
+  "code": "46223",
+  "en": "Wholesale of coffee, cocoa and tea",
+  "zh": "咖啡、可可与茶叶的批发"
+ },
+ {
+  "code": "46224",
+  "en": "Wholesale of coconut",
+  "zh": "椰子的批发"
+ },
+ {
+  "code": "46225",
+  "en": "Wholesale of palm oil",
+  "zh": "棕榈油的批发"
+ },
+ {
+  "code": "46229",
+  "en": "Wholesale of tropical produce n.e.c.",
+  "zh": "其他热带农产品的批发（未另作分类）"
+ },
+ {
+  "code": "46301",
+  "en": "Wholesale of fruits and vegetables",
+  "zh": "水果与蔬菜的批发（包括新鲜和冷冻）"
+ },
+ {
+  "code": "46302",
+  "en": "Wholesale of livestock, meat, poultry, eggs and seafood",
+  "zh": "畜牧、肉类、家禽、蛋类与海产批发"
+ },
+ {
+  "code": "46303",
+  "en": "Wholesale of a general line of groceries",
+  "zh": "综合杂货（种类广泛）批发"
+ },
+ {
+  "code": "46304",
+  "en": "Wholesale of confectionery and bakery products",
+  "zh": "糖果与烘焙产品批发"
+ },
+ {
+  "code": "46305",
+  "en": "Wholesale of ice-cream",
+  "zh": "冰淇淋批发"
+ },
+ {
+  "code": "46306",
+  "en": "Wholesale of health supplements",
+  "zh": "保健品批发"
+ },
+ {
+  "code": "46307",
+  "en": "Wholesale of liquor, soft drinks and beverages",
+  "zh": "酒类、软饮料与其他饮料批发"
+ },
+ {
+  "code": "46308",
+  "en": "Wholesale of tobacco products",
+  "zh": "烟草制品批发"
+ },
+ {
+  "code": "46309",
+  "en": "Wholesale of food, beverages and tobacco n.e.c.",
+  "zh": "其他食品、饮料与烟草制品批发（包括干货或罐头食品）"
+ },
+ {
+  "code": "46411",
+  "en": "Wholesale of textiles and leathers",
+  "zh": "纺织品与皮革制品批发"
+ },
+ {
+  "code": "46412",
+  "en": "Wholesale of adults' clothing",
+  "zh": "成人服装批发"
+ },
+ {
+  "code": "46413",
+  "en": "Wholesale of children and infants' clothing",
+  "zh": "儿童与婴儿服装批发"
+ },
+ {
+  "code": "46414",
+  "en": "Wholesale of footwear",
+  "zh": "鞋类批发"
+ },
+ {
+  "code": "46415",
+  "en": "Wholesale of bags, luggage and travel accessories",
+  "zh": "包包、行李箱与旅行配件批发"
+ },
+ {
+  "code": "46416",
+  "en": "Wholesale of sewing and clothing accessories",
+  "zh": "缝纫与服装配件批发"
+ },
+ {
+  "code": "46421",
+  "en": "Wholesale of jewellery made from precious metals and stones",
+  "zh": "贵金属与宝石首饰批发"
+ },
+ {
+  "code": "46422",
+  "en": "Wholesale of costume jewellery",
+  "zh": "饰品（仿制首饰）批发"
+ },
+ {
+  "code": "46423",
+  "en": "Wholesale of watches and clocks",
+  "zh": "钟表批发"
+ },
+ {
+  "code": "46424",
+  "en": "Wholesale of personal care products",
+  "zh": "化妆品与个人护理用品批发"
+ },
+ {
+  "code": "46429",
+  "en": "Wholesale of personal effects n.e.c.",
+  "zh": "其他未列明的个人用品批发"
+ },
+ {
+  "code": "46431",
+  "en": "Wholesale of furniture",
+  "zh": "家具批发（包括床垫、靠垫）"
+ },
+ {
+  "code": "46432",
+  "en": "Wholesale of furnishings",
+  "zh": "家居装饰用品批发（包括窗帘、地毯、墙纸）"
+ },
+ {
+  "code": "46433",
+  "en": "Wholesale of lighting and lighting accessories",
+  "zh": "灯具与照明配件批发"
+ },
+ {
+  "code": "46434",
+  "en": "Wholesale of crockery, cutlery and kitchen utensils",
+  "zh": "陶器、餐具与厨房器皿批发"
+ },
+ {
+  "code": "46435",
+  "en": "Wholesale of household electrical appliances and equipment",
+  "zh": "家用电器及设备批发"
+ },
+ {
+  "code": "46436",
+  "en": "Wholesale of audio and video equipment (except electrical and electronic components)",
+  "zh": "音响和视频设备批发（不包括电气与电子产品）"
+ },
+ {
+  "code": "46439",
+  "en": "Wholesale of furniture, home furnishings and other household equipment n.e.c.",
+  "zh": "家具、家居装饰品与其他家用设备批发（未另分类）"
+ },
+ {
+  "code": "46441",
+  "en": "Wholesale of sporting goods and equipment",
+  "zh": "体育用品与器材批发"
+ },
+ {
+  "code": "46442",
+  "en": "Wholesale of music and video recordings",
+  "zh": "音乐与视频录制品批发（如、蓝光光碟）"
+ },
+ {
+  "code": "46443",
+  "en": "Wholesale of toys and games",
+  "zh": "玩具与游戏批发"
+ },
+ {
+  "code": "46444",
+  "en": "Wholesale of computer games",
+  "zh": "电脑游戏批发"
+ },
+ {
+  "code": "46445",
+  "en": "Wholesale of musical instruments and scores",
+  "zh": "乐器及乐谱批发"
+ },
+ {
+  "code": "46449",
+  "en": "Wholesale of sporting and other recreational goods n.e.c.",
+  "zh": "体育用品与其他娱乐用品批发（未另分类）"
+ },
+ {
+  "code": "46451",
+  "en": "Wholesale of antiques and works of art",
+  "zh": "古董与艺术品批发"
+ },
+ {
+  "code": "46452",
+  "en": "Wholesale of handicrafts and gifts",
+  "zh": "手工艺品与礼品批发"
+ },
+ {
+  "code": "46453",
+  "en": "Wholesale of artificial flowers and plants",
+  "zh": "人造花卉与植物批发"
+ },
+ {
+  "code": "46459",
+  "en": "Wholesale of handicrafts and fancy goods n.e.c.",
+  "zh": "其他手工艺品与精品杂货批发（未另分类）"
+ },
+ {
+  "code": "46461",
+  "en": "Wholesale of medicinal and pharmaceutical products (Western)",
+  "zh": "西药与药品批发"
+ },
+ {
+  "code": "46462",
+  "en": "Wholesale of medicine and herbs (except Western)",
+  "zh": "非西药与草药批发（中药等）"
+ },
+ {
+  "code": "46471",
+  "en": "Wholesale of paper and paper products",
+  "zh": "纸张与纸制品批发"
+ },
+ {
+  "code": "46472",
+  "en": "Wholesale of packaging materials",
+  "zh": "包装材料批发"
+ },
+ {
+  "code": "46473",
+  "en": "Wholesale of stationery",
+  "zh": "文具批发"
+ },
+ {
+  "code": "46474",
+  "en": "Wholesale of books and magazines",
+  "zh": "图书与杂志批发"
+ },
+ {
+  "code": "46479",
+  "en": "Wholesale of paper, paper-related products, stationery, cellophane products and packaging materials n.e.c.",
+  "zh": "其他纸类、玻璃纸制品与文具批发（未另分类）"
+ },
+ {
+  "code": "46491",
+  "en": "Wholesale of optical equipment and supplies (except binoculars)",
+  "zh": "光学设备与用品批发（不包括望远镜）"
+ },
+ {
+  "code": "46492",
+  "en": "Wholesale of photographic equipment and supplies",
+  "zh": "摄影器材与用品批发（包括望远镜）"
+ },
+ {
+  "code": "46499",
+  "en": "Wholesale of other household goods n.e.c.",
+  "zh": "其他家庭用品批发（未另分类）"
+ },
+ {
+  "code": "46511",
+  "en": "Wholesale of computer hardware and peripheral equipment (except cybersecurity related hardware and peripheral equipment)",
+  "zh": "计算机硬件与外部设备批发"
+ },
+ {
+  "code": "46512",
+  "en": "Wholesale of computer software (except games and cybersecurity software)",
+  "zh": "电脑软件批发（不包括游戏及网络安全软件）"
+ },
+ {
+  "code": "46513",
+  "en": "Wholesale of computer accessories",
+  "zh": "电脑配件批发（如记忆卡、电脑线缆）"
+ },
+ {
+  "code": "46514",
+  "en": "Wholesale of cybersecurity software, hardware and peripheral equipment",
+  "zh": "网络安全软件、硬件及外围设备批发"
+ },
+ {
+  "code": "46521",
+  "en": "Wholesale of telecommunications equipment (except handphones)",
+  "zh": "电信设备批发（不包括手机）"
+ },
+ {
+  "code": "46522",
+  "en": "Wholesale of electronic components",
+  "zh": "电子零件批发"
+ },
+ {
+  "code": "46523",
+  "en": "Wholesale of handphones and related telecommunications and peripheral equipment",
+  "zh": "手机、手机配件与其他电信设备批发"
+ },
+ {
+  "code": "46530",
+  "en": "Wholesale of agricultural machinery, equipment and supplies",
+  "zh": "农业机械、设备与用品批发"
+ },
+ {
+  "code": "46541",
+  "en": "Wholesale of industrial machinery and equipment",
+  "zh": "工业机械与设备批发（如工业起重机）"
+ },
+ {
+  "code": "46542",
+  "en": "Wholesale of construction equipment",
+  "zh": "建筑设备批发（例如混凝土搅拌机）"
+ },
+ {
+  "code": "46543",
+  "en": "Wholesale of lifts, escalators and industrial and office air-conditioning equipment",
+  "zh": "电梯、自动扶梯和工业及办公用空调设备的批发"
+ },
+ {
+  "code": "46544",
+  "en": "Wholesale of electrical and wiring accessories",
+  "zh": "电器与布线配件的批发"
+ },
+ {
+  "code": "46549",
+  "en": "Wholesale of industrial, construction and related machinery and equipment n.e.c.",
+  "zh": "工业、建筑及相关机械设备的其他批发（未另作分类）"
+ },
+ {
+  "code": "46551",
+  "en": "Wholesale of marine equipment and accessories",
+  "zh": "船舶设备与配件批发"
+ },
+ {
+  "code": "46552",
+  "en": "Wholesale of aircraft equipment and supplies",
+  "zh": "飞机设备与用品批发"
+ },
+ {
+  "code": "46559",
+  "en": "Wholesale of transport equipment n.e.c. (except motor vehicles and motorcycles)",
+  "zh": "除机动车与摩托车外的运输设备批发"
+ },
+ {
+  "code": "46561",
+  "en": "Wholesale of motor vehicles (except motorcycles and scooters)",
+  "zh": "机动车的批发（不包括摩托车与电单车）"
+ },
+ {
+  "code": "46562",
+  "en": "Wholesale of motorcycles and scooters",
+  "zh": "摩托车与电单车的批发"
+ },
+ {
+  "code": "46563",
+  "en": "Wholesale of parts and accessories for motor vehicles",
+  "zh": "机动车配件与附件的批发"
+ },
+ {
+  "code": "46591",
+  "en": "Wholesale of office machines and equipment",
+  "zh": "办公设备与器械的批发（包括配件）"
+ },
+ {
+  "code": "46592",
+  "en": "Wholesale of medical, professional, scientific and precision equipment",
+  "zh": "医疗、专业、科研与精密设备批发"
+ },
+ {
+  "code": "46593",
+  "en": "Wholesale of commercial food service equipment",
+  "zh": "商业餐饮设备批发"
+ },
+ {
+  "code": "46594",
+  "en": "Wholesale of service establishment equipment and supplies",
+  "zh": "服务机构设备与用品批发"
+ },
+ {
+  "code": "46595",
+  "en": "Wholesale of security and safety equipment",
+  "zh": "安防与安全设备批发"
+ },
+ {
+  "code": "46599",
+  "en": "Wholesale of other machinery and equipment n.e.c.",
+  "zh": "其他未分类的机械与设备批发"
+ },
+ {
+  "code": "46610",
+  "en": "Wholesale of fuels and related products",
+  "zh": "燃料及相关产品的批发"
+ },
+ {
+  "code": "46620",
+  "en": "Wholesale of metals and metal ores (except general hardware)",
+  "zh": "金属与金属矿石批发（如钢管），不包括一般五金"
+ },
+ {
+  "code": "46631",
+  "en": "Wholesale of logs, sawn timber, plywood and related products",
+  "zh": "原木、锯材、胶合板及相关产品批发"
+ },
+ {
+  "code": "46632",
+  "en": "Wholesale of general hardware",
+  "zh": "一般五金批发（如锁、合页）"
+ },
+ {
+  "code": "46633",
+  "en": "Wholesale of structural clay and concrete products",
+  "zh": "结构用黏土和混凝土产品批发（如马赛克砖、砖块）"
+ },
+ {
+  "code": "46634",
+  "en": "Wholesale of paints",
+  "zh": "油漆类产品批发（包括清漆及相关用品）"
+ },
+ {
+  "code": "46635",
+  "en": "Wholesale of glass",
+  "zh": "玻璃批发"
+ },
+ {
+  "code": "46639",
+  "en": "Wholesale of construction materials, hardware, plumbing and heating equipment and supplies n.e.c.",
+  "zh": "建筑材料、五金、水暖与供热设备批发"
+ },
+ {
+  "code": "46641",
+  "en": "Wholesale of basic industrial chemicals (except fertilisers)",
+  "zh": "基础工业化学品批发（不包括肥料）"
+ },
+ {
+  "code": "46642",
+  "en": "Wholesale of chemical fertilisers",
+  "zh": "化学肥料批发"
+ },
+ {
+  "code": "46643",
+  "en": "Wholesale of petrochemical products",
+  "zh": "石化产品批发"
+ },
+ {
+  "code": "46649",
+  "en": "Wholesale of chemicals and chemical products n.e.c.",
+  "zh": "其他未分类的化学品与化学制品批发"
+ },
+ {
+  "code": "46651",
+  "en": "Wholesale of scrap, junk and waste dealers",
+  "zh": "废料、废旧物品及回收物批发商"
+ },
+ {
+  "code": "46659",
+  "en": "Wholesale of other intermediate products, waste and scrap n.e.c.",
+  "zh": "其他中间产品、废料及回收物批发（未另分类）"
+ },
+ {
+  "code": "46661",
+  "en": "Ship chandlers",
+  "zh": "船舶供货商（船用杂货供应）"
+ },
+ {
+  "code": "46662",
+  "en": "Ship bunkering",
+  "zh": "船舶加油服务"
+ },
+ {
+  "code": "46900",
+  "en": "Wholesale trade of a variety of goods without a dominant product",
+  "zh": "各类商品的批发贸易（无主导产品）"
+ },
+ {
+  "code": "47101",
+  "en": "Supermarkets and hypermarkets",
+  "zh": "超级市场与大型商场"
+ },
+ {
+  "code": "47102",
+  "en": "Mini-marts, convenience stores and provision shops",
+  "zh": "小型超市、便利店与杂货店"
+ },
+ {
+  "code": "47103",
+  "en": "Department stores",
+  "zh": "未另作分类的五金、油漆与玻璃零售"
+ },
+ {
+  "code": "47109",
+  "en": "Retail sale in non-specialised stores n.e.c.",
+  "zh": "未另作分类的其他非专门店的零售"
+ },
+ {
+  "code": "47211",
+  "en": "Retail sale of fruits and vegetables",
+  "zh": "水果与蔬菜零售"
+ },
+ {
+  "code": "47212",
+  "en": "Retail sale of meat, poultry, eggs and seafood",
+  "zh": "肉类、家禽、鸡蛋与海鲜零售"
+ },
+ {
+  "code": "47213",
+  "en": "Retail sale of confectionery and bakery products (not manufactured on site)",
+  "zh": "糖果与烘焙食品零售（现场不生产）"
+ },
+ {
+  "code": "47214",
+  "en": "Retail sale of health supplements",
+  "zh": "保健补品零售"
+ },
+ {
+  "code": "47219",
+  "en": "Retail sale of food n.e.c.",
+  "zh": "其他食品零售（未另分类）"
+ },
+ {
+  "code": "47220",
+  "en": "Retail sale of beverages",
+  "zh": "饮料零售"
+ },
+ {
+  "code": "47230",
+  "en": "Retail sale of tobacco products",
+  "zh": "烟草产品零售"
+ },
+ {
+  "code": "47311",
+  "en": "Retail sale of motor vehicles (except motorcycles and scooters)",
+  "zh": "汽车零售（不包括摩托车与电动车）"
+ },
+ {
+  "code": "47312",
+  "en": "Retail sale of motorcycles and scooters",
+  "zh": "摩托车与电动车零售"
+ },
+ {
+  "code": "47313",
+  "en": "Retail sale of tyres and batteries for motor vehicles",
+  "zh": "轮胎与电池零售"
+ },
+ {
+  "code": "47314",
+  "en": "Retail sale of parts and accessories for motor vehicles",
+  "zh": "汽车零配件与配饰零售"
+ },
+ {
+  "code": "47320",
+  "en": "Retail sale of automotive fuel",
+  "zh": "汽车燃油零售（如加油站、压缩天然气站）"
+ },
+ {
+  "code": "47411",
+  "en": "Retail sale of handphones and related telecommunications and peripheral equipment",
+  "zh": "手机及其配件零售"
+ },
+ {
+  "code": "47412",
+  "en": "Retail sale of computer hardware and peripheral equipment, and computer software (except games and cybersecurity hardware and software)",
+  "zh": "电脑硬件零售（包括掌上电脑）"
+ },
+ {
+  "code": "47413",
+  "en": "Retail sale of computer games",
+  "zh": "电脑游戏零售"
+ },
+ {
+  "code": "47414",
+  "en": "Retail sale of computer and office equipment consumables",
+  "zh": "计算机及办公设备耗材零售"
+ },
+ {
+  "code": "47415",
+  "en": "Retail sale of cybersecurity software, hardware and peripheral equipment",
+  "zh": "网络安全软件、硬件及外围设备零售"
+ },
+ {
+  "code": "47510",
+  "en": "Retail sale of textiles",
+  "zh": "纺织品零售"
+ },
+ {
+  "code": "47521",
+  "en": "Retail sale of paints",
+  "zh": "油漆零售"
+ },
+ {
+  "code": "47522",
+  "en": "Retail sale of hardware",
+  "zh": "五金零售（如铁链、锄头、斧头）"
+ },
+ {
+  "code": "47529",
+  "en": "Retail sale of hardware, paint and glass n.e.c.",
+  "zh": "未另作分类的五金、油漆与玻璃零售"
+ },
+ {
+  "code": "47531",
+  "en": "Retail sale of furniture",
+  "zh": "家具零售（包括床垫、坐垫）"
+ },
+ {
+  "code": "47532",
+  "en": "Retail sale of furnishings",
+  "zh": "家居装饰品零售（如窗帘、地毯、枕套）"
+ },
+ {
+  "code": "47533",
+  "en": "Retail sale of lighting and lighting accessories",
+  "zh": "灯具与照明配件零售"
+ },
+ {
+  "code": "47534",
+  "en": "Retail sale of crockery, cutlery and kitchen utensils",
+  "zh": "餐具、炊具及厨房用具零售"
+ },
+ {
+  "code": "47535",
+  "en": "Retail sale of household electrical appliances and equipment",
+  "zh": "家用电器及设备零售"
+ },
+ {
+  "code": "47536",
+  "en": "Retail sale of security and safety equipment",
+  "zh": "安全与防护设备的零售"
+ },
+ {
+  "code": "47539",
+  "en": "Retail sale of electrical household appliances, furniture, lighting equipment and other household articles n.e.c.",
+  "zh": "家用电器、家具与照明设备的零售"
+ },
+ {
+  "code": "47610",
+  "en": "Retail sale of books, newspapers and stationery",
+  "zh": "图书、报纸与文具的零售（包括报摊）"
+ },
+ {
+  "code": "47620",
+  "en": "Retail sale of music and video recordings",
+  "zh": "音乐与视频制品的零售（如、蓝光光碟）"
+ },
+ {
+  "code": "47630",
+  "en": "Retail sale of sports apparel and equipment",
+  "zh": "体育服饰与器材零售"
+ },
+ {
+  "code": "47640",
+  "en": "Retail sale of games and toys",
+  "zh": "游戏与玩具的零售"
+ },
+ {
+  "code": "47650",
+  "en": "Retail sale of musical instruments and scores",
+  "zh": "乐器及乐谱零售"
+ },
+ {
+  "code": "47711",
+  "en": "Retail sale of clothing for adults",
+  "zh": "成人服装的零售"
+ },
+ {
+  "code": "47712",
+  "en": "Retail sale of children and infants' clothing",
+  "zh": "儿童与婴儿服装零售"
+ },
+ {
+  "code": "47713",
+  "en": "Retail sale of footwear",
+  "zh": "鞋类零售"
+ },
+ {
+  "code": "47714",
+  "en": "Retail sale of bags, luggage and travel accessories",
+  "zh": "手袋、行李箱和旅行用品的零售"
+ },
+ {
+  "code": "47715",
+  "en": "Retail sale of sewing and clothing accessories",
+  "zh": "缝纫与服装配件零售"
+ },
+ {
+  "code": "47719",
+  "en": "Retail sale of clothing, footwear and leather articles n.e.c.",
+  "zh": "其他服装、鞋类与皮革制品的零售（未另作分类）"
+ },
+ {
+  "code": "47721",
+  "en": "Retail sale of personal care products",
+  "zh": "化妆品与盥洗用品零售（包括护肤产品）"
+ },
+ {
+  "code": "47722",
+  "en": "Pharmacies and drug stores (Western)",
+  "zh": "药房和西药店"
+ },
+ {
+  "code": "47723",
+  "en": "Chinese medicine shops",
+  "zh": "中药店"
+ },
+ {
+  "code": "47729",
+  "en": "Retail sale of pharmaceutical and medical goods n.e.c.",
+  "zh": "其他药品和医疗用品零售（未另分类）"
+ },
+ {
+  "code": "47731",
+  "en": "Retail sale of jewellery made from precious metals and stones",
+  "zh": "贵金属与宝石制成的珠宝零售"
+ },
+ {
+  "code": "47732",
+  "en": "Retail sale of costume jewellery",
+  "zh": "饰品（如流行饰品）零售"
+ },
+ {
+  "code": "47733",
+  "en": "Retail sale of watches and clocks",
+  "zh": "手表和时钟零售"
+ },
+ {
+  "code": "47739",
+  "en": "Retail sale of personal effects n.e.c.",
+  "zh": "其他个人用品零售（未另分类）"
+ },
+ {
+  "code": "47741",
+  "en": "Retail sale of antiques and works of art",
+  "zh": "古董和艺术品零售"
+ },
+ {
+  "code": "47742",
+  "en": "Retail sale of handicrafts, collectibles and gifts",
+  "zh": "手工艺品、收藏品和礼品零售"
+ },
+ {
+  "code": "47743",
+  "en": "Retail sale of cut flowers",
+  "zh": "鲜花零售（包括花圈）"
+ },
+ {
+  "code": "47744",
+  "en": "Retail sale of artificial flowers and plants",
+  "zh": "仿真花卉和植物零售"
+ },
+ {
+  "code": "47745",
+  "en": "Retail sale of aquarium fishes and related accessories/products",
+  "zh": "水族鱼类零售（包括饲料与配件）"
+ },
+ {
+  "code": "47746",
+  "en": "Retail sale of pet birds and animals and related accessories/products",
+  "zh": "宠物鸟类和动物零售（包括饲料与配件）"
+ },
+ {
+  "code": "47749",
+  "en": "Retail sale of handicrafts and fancy goods, flowers, plants and pet animals n.e.c.",
+  "zh": "手工艺品、花卉、植物和宠物相关产品零售（未另分类）"
+ },
+ {
+  "code": "47751",
+  "en": "Retail sale of spectacles and other optical goods",
+  "zh": "眼镜及其他光学产品零售"
+ },
+ {
+  "code": "47752",
+  "en": "Retail sale of cameras and other photographic goods",
+  "zh": "照相机及摄影器材零售"
+ },
+ {
+  "code": "47759",
+  "en": "Retail sale of optical and photographic goods n.e.c.",
+  "zh": "其他光学与摄影用品零售（未另分类）"
+ },
+ {
+  "code": "47761",
+  "en": "Retail sale of joss paper and other ceremonial products",
+  "zh": "金纸香烛及其他祭祀用品零售"
+ },
+ {
+  "code": "47762",
+  "en": "Retail sale of liquefied petroleum gas (LPG)",
+  "zh": "液化石油气零售"
+ },
+ {
+  "code": "47769",
+  "en": "Retail sale of other goods n.e.c.",
+  "zh": "特定商品零售（未另分类）"
+ },
+ {
+  "code": "47770",
+  "en": "Retail sale of second-hand goods in stores",
+  "zh": "二手商品店零售"
+ },
+ {
+  "code": "47801",
+  "en": "Stalls selling uncooked food",
+  "zh": "销售生鲜食品的摊位（包括推车）"
+ },
+ {
+  "code": "47802",
+  "en": "Stalls selling other goods (except uncooked food)",
+  "zh": "售卖其他商品的摊位（包括手推车）"
+ },
+ {
+  "code": "49101",
+  "en": "Railroad services",
+  "zh": "铁路运输服务"
+ },
+ {
+  "code": "49102",
+  "en": "Mass rapid transit systems",
+  "zh": "大众捷运系统（包括轻轨）"
+ },
+ {
+  "code": "49211",
+  "en": "Public bus services (scheduled services)",
+  "zh": "公共巴士服务（定时班次）"
+ },
+ {
+  "code": "49212",
+  "en": "Chartered bus services",
+  "zh": "包车巴士服务（包括校车）"
+ },
+ {
+  "code": "49213",
+  "en": "Inter-country bus services",
+  "zh": "跨国长途巴士服务"
+ },
+ {
+  "code": "49214",
+  "en": "Street-hail and ride-hail service providers",
+  "zh": "街招与网约车服务提供商"
+ },
+ {
+  "code": "49215",
+  "en": "Rental and leasing of cars with driver (except street-hail and ride-hail service providers)",
+  "zh": "带司机的汽车租赁（不包括街招与网约车服务）"
+ },
+ {
+  "code": "49220",
+  "en": "Aerial cableways",
+  "zh": "空中缆车服务（包括缆车）"
+ },
+ {
+  "code": "49231",
+  "en": "Freight transport by road",
+  "zh": "道路货运服务"
+ },
+ {
+  "code": "49232",
+  "en": "Moving services",
+  "zh": "搬运服务"
+ },
+ {
+  "code": "49233",
+  "en": "Rental and leasing of freight land transport vehicle with driver",
+  "zh": "带司机的货运陆路运输车辆（如卡车与货车）租赁"
+ },
+ {
+  "code": "49300",
+  "en": "Transport via pipelines",
+  "zh": "管道运输"
+ },
+ {
+  "code": "50011",
+  "en": "International cruise services",
+  "zh": "国际邮轮服务"
+ },
+ {
+  "code": "50012",
+  "en": "Other sight-seeing cruise services",
+  "zh": "其他观光游轮服务（如海港及河川游船）"
+ },
+ {
+  "code": "50013",
+  "en": "Passenger ferry services",
+  "zh": "客运渡轮服务"
+ },
+ {
+  "code": "50014",
+  "en": "Chartering of ships and boats with crew (passenger)",
+  "zh": "租船服务（含船员，用于载客）"
+ },
+ {
+  "code": "50021",
+  "en": "Shipping companies and chartering of ships/boats with crew (freight)",
+  "zh": "航运公司，包括附船员船舶租赁（货运）"
+ },
+ {
+  "code": "50022",
+  "en": "Operators and charterers of barges, tugboats and bumboats (freight)",
+  "zh": "驳船、拖船和舢板的运营与租赁（货运）"
+ },
+ {
+  "code": "50023",
+  "en": "Branches of foreign shipping lines",
+  "zh": "外国航运公司的分支机构"
+ },
+ {
+  "code": "51001",
+  "en": "Airlines (passenger)",
+  "zh": "航空公司（客运）"
+ },
+ {
+  "code": "51002",
+  "en": "Airlines (freight)",
+  "zh": "航空公司（货运）"
+ },
+ {
+  "code": "51003",
+  "en": "Branches of foreign airlines (passenger)",
+  "zh": "外国航空公司分支机构（客运）"
+ },
+ {
+  "code": "51004",
+  "en": "Branches of foreign airlines (freight)",
+  "zh": "外国航空公司分支机构（货运）"
+ },
+ {
+  "code": "51005",
+  "en": "Aircraft chartering with operator",
+  "zh": "飞机包机服务（含运营方）"
+ },
+ {
+  "code": "52101",
+  "en": "General warehousing",
+  "zh": "一般仓储服务"
+ },
+ {
+  "code": "52102",
+  "en": "Refrigerated warehousing and storage",
+  "zh": "冷藏仓储和储存服务"
+ },
+ {
+  "code": "52103",
+  "en": "Storage for dangerous goods",
+  "zh": "危险品储存服务"
+ },
+ {
+  "code": "52109",
+  "en": "Specialised storage n.e.c.",
+  "zh": "其他专门储存活动（未另分类）"
+ },
+ {
+  "code": "52211",
+  "en": "Carpark management and operation services",
+  "zh": "停车场管理与运营服务"
+ },
+ {
+  "code": "52212",
+  "en": "Motor vehicle towing services",
+  "zh": "汽车拖吊服务"
+ },
+ {
+  "code": "52219",
+  "en": "Supporting services to land transport n.e.c.",
+  "zh": "其他陆路运输相关服务（未另作分类）"
+ },
+ {
+  "code": "52221",
+  "en": "Representative offices of foreign shipping lines",
+  "zh": "外国航运公司的代表处"
+ },
+ {
+  "code": "52222",
+  "en": "Shipping agencies (freight)",
+  "zh": "航运代理（货运）"
+ },
+ {
+  "code": "52223",
+  "en": "Port operators",
+  "zh": "港口营运商"
+ },
+ {
+  "code": "52224",
+  "en": "Lighterage services",
+  "zh": "驳船运输服务"
+ },
+ {
+  "code": "52225",
+  "en": "Salvaging of distressed vessels and cargos",
+  "zh": "遇险船舶与货物的打捞服务"
+ },
+ {
+  "code": "52226",
+  "en": "Ship management services",
+  "zh": "船舶管理服务"
+ },
+ {
+  "code": "52227",
+  "en": "Ship brokering services",
+  "zh": "船舶经纪服务"
+ },
+ {
+  "code": "52229",
+  "en": "Supporting services to water transport n.e.c.",
+  "zh": "其他水上运输辅助服务（未另分类）"
+ },
+ {
+  "code": "52231",
+  "en": "Representative offices of foreign airlines",
+  "zh": "外国航空公司代表处"
+ },
+ {
+  "code": "52232",
+  "en": "Airline agencies (freight)",
+  "zh": "航空货运代理服务"
+ },
+ {
+  "code": "52233",
+  "en": "Airport operation services",
+  "zh": "机场运营服务"
+ },
+ {
+  "code": "52234",
+  "en": "Airport terminal services",
+  "zh": "机场航站楼服务（如地勤服务活动）"
+ },
+ {
+  "code": "52239",
+  "en": "Supporting services to air transport n.e.c.",
+  "zh": "其他航空运输辅助服务（未另分类）"
+ },
+ {
+  "code": "52241",
+  "en": "Container depot services",
+  "zh": "集装箱堆场服务"
+ },
+ {
+  "code": "52242",
+  "en": "Industrial cargo lifting and moving services (except for use in construction industry)",
+  "zh": "非建筑行业的起重机服务"
+ },
+ {
+  "code": "52243",
+  "en": "Stevedoring services",
+  "zh": "装卸服务"
+ },
+ {
+  "code": "52251",
+  "en": "Classification societies",
+  "zh": "船级社"
+ },
+ {
+  "code": "52252",
+  "en": "Marine surveying services (except classification societies)",
+  "zh": "非船级社的海事检验服务"
+ },
+ {
+  "code": "52291",
+  "en": "Cargo surveying services",
+  "zh": "货物检验服务"
+ },
+ {
+  "code": "52292",
+  "en": "Freight transport arrangement",
+  "zh": "货运代理服务"
+ },
+ {
+  "code": "53100",
+  "en": "National post activities",
+  "zh": "国家邮政服务（如新加坡邮政）"
+ },
+ {
+  "code": "53200",
+  "en": "Courier activities (except national post activities)",
+  "zh": "除国家邮政以外的快递服务"
+ },
+ {
+  "code": "55101",
+  "en": "Hotels",
+  "zh": "酒店"
+ },
+ {
+  "code": "55109",
+  "en": "Short term accommodation activities n.e.c.",
+  "zh": "其他未列明的短期住宿活动"
+ },
+ {
+  "code": "55900",
+  "en": "Hostels and dormitories for students, workers and other individuals",
+  "zh": "学生、工人及其他个人的宿舍和员工宿舍"
+ },
+ {
+  "code": "56111",
+  "en": "Restaurants",
+  "zh": "餐馆"
+ },
+ {
+  "code": "56112",
+  "en": "Cafes",
+  "zh": "咖啡馆"
+ },
+ {
+  "code": "56121",
+  "en": "Fast food outlets",
+  "zh": "快餐店"
+ },
+ {
+  "code": "56122",
+  "en": "Operators of food courts, hawker centres, coffee shops and canteens (with mainly food and beverage income)",
+  "zh": "美食广场、咖啡店与食堂（主要收入来自食品与饮料）"
+ },
+ {
+  "code": "56123",
+  "en": "Food and drinks kiosks mainly for takeaway and delivery",
+  "zh": "主要提供外带与外送的食品摊位主要提供外带与外送的食品摊位"
+ },
+ {
+  "code": "56130",
+  "en": "Pubs",
+  "zh": "酒吧"
+ },
+ {
+  "code": "56140",
+  "en": "Stalls selling cooked food and prepared drinks",
+  "zh": "售卖熟食与饮料的摊位"
+ },
+ {
+  "code": "56200",
+  "en": "Food caterers",
+  "zh": "餐饮承包服务"
+ },
+ {
+  "code": "58110",
+  "en": "Publishing of books, brochures, musical books and other publications",
+  "zh": "图书、小册子、乐谱及其他出版物出版"
+ },
+ {
+  "code": "58120",
+  "en": "Publishing of directories and mailing lists",
+  "zh": "名录和邮寄名单出版（包括金融数据库）"
+ },
+ {
+  "code": "58131",
+  "en": "Publishing of news",
+  "zh": "新闻出版"
+ },
+ {
+  "code": "58132",
+  "en": "Publishing of journals, periodicals and magazines",
+  "zh": "期刊、杂志出版"
+ },
+ {
+  "code": "58190",
+  "en": "Other publishing activities",
+  "zh": "其他出版活动（不包括在线市场）"
+ },
+ {
+  "code": "58201",
+  "en": "Publishing of games software/applications",
+  "zh": "游戏软件／应用程序出版"
+ },
+ {
+  "code": "58202",
+  "en": "Publishing of software/applications (non-games)",
+  "zh": "非游戏软件／应用程序出版"
+ },
+ {
+  "code": "59111",
+  "en": "Movie production",
+  "zh": "电影制作"
+ },
+ {
+  "code": "59112",
+  "en": "Production of advertisements, corporate videos and event videos",
+  "zh": "广告、企业宣传片和活动影片制作"
+ },
+ {
+  "code": "59113",
+  "en": "Production of dramas, variety shows and documentaries",
+  "zh": "电视剧、综艺节目和纪录片的制作"
+ },
+ {
+  "code": "59114",
+  "en": "Animation production",
+  "zh": "动画制作"
+ },
+ {
+  "code": "59119",
+  "en": "Movie, video, television and other programme production activities n.e.c.",
+  "zh": "电影、视频、电视及其他节目制作活动（未另分类）"
+ },
+ {
+  "code": "59120",
+  "en": "Movie, video, television and other programme post-production activities",
+  "zh": "电影、视频、电视及其他节目的后期制作（包括复刻）"
+ },
+ {
+  "code": "59131",
+  "en": "Movie distribution",
+  "zh": "电影发行"
+ },
+ {
+  "code": "59132",
+  "en": "Distribution of television programmes",
+  "zh": "电视剧、综艺节目和纪录片的发行"
+ },
+ {
+  "code": "59139",
+  "en": "Movie, video, television and other programme distribution activities n.e.c.",
+  "zh": "电影、视频、电视及其他节目发行活动（未另分类）"
+ },
+ {
+  "code": "59140",
+  "en": "Movie projection activities",
+  "zh": "电影放映活动（包括电影院）"
+ },
+ {
+  "code": "59201",
+  "en": "Sound recording production",
+  "zh": "音频录音制作"
+ },
+ {
+  "code": "59202",
+  "en": "Music publishing and distribution activities",
+  "zh": "音乐出版及发行活动"
+ },
+ {
+  "code": "60100",
+  "en": "Radio programme production and broadcasting",
+  "zh": "电台节目制作与广播"
+ },
+ {
+  "code": "60200",
+  "en": "Television programming and broadcasting",
+  "zh": "电视节目编排与广播"
+ },
+ {
+  "code": "60301",
+  "en": "News agency activities",
+  "zh": "新闻通讯社活动"
+ },
+ {
+  "code": "60302",
+  "en": "Operation of social network sites and other content distribution activities (except publishing)",
+  "zh": "社交网络网站及其他内容分发活动（不包括出版）"
+ },
+ {
+  "code": "61010",
+  "en": "Telecommunications network operation",
+  "zh": "电信网络运营"
+ },
+ {
+  "code": "61020",
+  "en": "Telecommunications resellers/third party telecommunications providers",
+  "zh": "电信转售商/第三方电信服务提供商"
+ },
+ {
+  "code": "61090",
+  "en": "Other telecommunication services",
+  "zh": "其他电信服务"
+ },
+ {
+  "code": "62011",
+  "en": "Development of software and applications (except games and cybersecurity)",
+  "zh": "软件与应用程序开发（不包括游戏与网络安全）"
+ },
+ {
+  "code": "62012",
+  "en": "Development of computer games",
+  "zh": "电脑游戏开发"
+ },
+ {
+  "code": "62013",
+  "en": "Development of software for cybersecurity",
+  "zh": "网络安全软件开发"
+ },
+ {
+  "code": "62021",
+  "en": "Information technology consultancy (except cybersecurity)",
+  "zh": "信息技术咨询服务（不包括网络安全）"
+ },
+ {
+  "code": "62022",
+  "en": "Information technology cybersecurity consultancy",
+  "zh": "信息技术网络安全咨询服务"
+ },
+ {
+  "code": "62023",
+  "en": "Computer facilities management activities",
+  "zh": "电脑设施管理服务"
+ },
+ {
+  "code": "62090",
+  "en": "Other information technology and computer service activities",
+  "zh": "其他信息技术与计算机服务活动"
+ },
+ {
+  "code": "63111",
+  "en": "Data centres",
+  "zh": "数据中心"
+ },
+ {
+  "code": "63112",
+  "en": "Hosting services by non-data centres",
+  "zh": "非数据中心提供的托管服务"
+ },
+ {
+  "code": "63119",
+  "en": "Data analytics processing, hosting and related activities n.e.c.",
+  "zh": "数据分析、处理及相关活动（未另作分类）"
+ },
+ {
+  "code": "63201",
+  "en": "Online marketplaces operating on a fee or commission basis for goods and food sold by third-party; Online marketplaces operating on a fee or commission basis for food delivery services",
+  "zh": "商品线上市场（包括食品）"
+ },
+ {
+  "code": "63202",
+  "en": "Online marketplaces operating on a fee or commission basis for health services provided by third-party",
+  "zh": "健康服务的线上市场"
+ },
+ {
+  "code": "63203",
+  "en": "Online marketplaces operating on a fee or commission basis for education services provided by third-party",
+  "zh": "教育服务的线上市场"
+ },
+ {
+  "code": "63204",
+  "en": "Online marketplaces operating on a fee or commission basis for travel and accommodation services provided by third-party",
+  "zh": "旅游服务的线上市场"
+ },
+ {
+  "code": "63205",
+  "en": "Online marketplaces operating on a fee or commission basis for real estate services provided by third-party",
+  "zh": "房地产服务的线上市场"
+ },
+ {
+  "code": "63209",
+  "en": "Online marketplaces operating on a fee or commission basis for other services provided by third-party",
+  "zh": "未另作分类的线上服务市场"
+ },
+ {
+  "code": "63901",
+  "en": "Internet search engines",
+  "zh": "网络搜索引擎服务"
+ },
+ {
+  "code": "63909",
+  "en": "Other information service activities n.e.c.",
+  "zh": "其他信息服务活动（未另作分类）"
+ },
+ {
+  "code": "64110",
+  "en": "Central bank",
+  "zh": "中央银行"
+ },
+ {
+  "code": "64120",
+  "en": "Full banks",
+  "zh": "综合银行"
+ },
+ {
+  "code": "64130",
+  "en": "Wholesale banks",
+  "zh": "批发银行"
+ },
+ {
+  "code": "64140",
+  "en": "Merchant banks",
+  "zh": "商业银行"
+ },
+ {
+  "code": "64150",
+  "en": "Finance companies (with deposit taking functions)",
+  "zh": "具有吸收存款功能的金融公司"
+ },
+ {
+  "code": "64201",
+  "en": "Holding companies of firms engaged in financial and insurance activities",
+  "zh": "银行/金融控股公司（包括保险控股公司）"
+ },
+ {
+  "code": "64202",
+  "en": "Holding companies of firms engaged in non-financial and insurance activities",
+  "zh": "其他控股公司"
+ },
+ {
+  "code": "64300",
+  "en": "Trusts, funds and similar financial entities (except those with rental income)",
+  "zh": "信托、基金及类似金融实体"
+ },
+ {
+  "code": "64910",
+  "en": "Financial leasing companies",
+  "zh": "融资租赁公司"
+ },
+ {
+  "code": "64921",
+  "en": "Thrift and loan societies and credit associations",
+  "zh": "储蓄贷款社和信用合作社"
+ },
+ {
+  "code": "64922",
+  "en": "Credit card services",
+  "zh": "信用卡服务"
+ },
+ {
+  "code": "64923",
+  "en": "Mutual benefits organisations",
+  "zh": "互助组织"
+ },
+ {
+  "code": "64924",
+  "en": "Money-lending",
+  "zh": "放债服务"
+ },
+ {
+  "code": "64925",
+  "en": "Pawnbrokerage",
+  "zh": "当铺服务"
+ },
+ {
+  "code": "64929",
+  "en": "Other credit granting n.e.c.",
+  "zh": "其他未另作分类的信贷机构（例如汽车金融）"
+ },
+ {
+  "code": "64991",
+  "en": "Factoring companies",
+  "zh": "保理公司"
+ },
+ {
+  "code": "64992",
+  "en": "Representative offices of foreign banks",
+  "zh": "外资银行代表处"
+ },
+ {
+  "code": "64993",
+  "en": "Remittance services",
+  "zh": "汇款服务"
+ },
+ {
+  "code": "64994",
+  "en": "Treasury centres",
+  "zh": "财资中心"
+ },
+ {
+  "code": "64999",
+  "en": "Other financial service activities n.e.c. (except insurance and pension funding activities)",
+  "zh": "除保险和养老金以外的其他金融服务活动"
+ },
+ {
+  "code": "65110",
+  "en": "Life insurance",
+  "zh": "人寿保险"
+ },
+ {
+  "code": "65121",
+  "en": "Marine insurance",
+  "zh": "海上保险"
+ },
+ {
+  "code": "65122",
+  "en": "Captive insurance",
+  "zh": "自保保险"
+ },
+ {
+  "code": "65123",
+  "en": "Import, export and credit insurance",
+  "zh": "进出口及信用保险"
+ },
+ {
+  "code": "65124",
+  "en": "General insurance (except marine and import, export and credit insurance)",
+  "zh": "一般保险（不包括海上保险和进出口及信用保险）"
+ },
+ {
+  "code": "65201",
+  "en": "Life reinsurance",
+  "zh": "人寿再保险"
+ },
+ {
+  "code": "65202",
+  "en": "General reinsurance",
+  "zh": "一般再保险"
+ },
+ {
+  "code": "65300",
+  "en": "Provident funding and pension funding",
+  "zh": "公积金及养老金基金管理"
+ },
+ {
+  "code": "66110",
+  "en": "Securities and commodities exchange",
+  "zh": "证券与商品交易所"
+ },
+ {
+  "code": "66121",
+  "en": "Stock, share and bond brokers and dealers",
+  "zh": "股票、股份及债券经纪与交易商"
+ },
+ {
+  "code": "66122",
+  "en": "Foreign exchange brokers and dealers",
+  "zh": "外汇经纪与交易商"
+ },
+ {
+  "code": "66123",
+  "en": "Gold bullion brokers and dealers",
+  "zh": "黄金条经纪与交易商"
+ },
+ {
+  "code": "66124",
+  "en": "Commodity and futures brokers and dealers (except gold)",
+  "zh": "商品（不包括黄金）及期货经纪与交易商"
+ },
+ {
+  "code": "66125",
+  "en": "Carbon credit brokers/traders",
+  "zh": "碳信用额度经纪/交易商"
+ },
+ {
+  "code": "66126",
+  "en": "Money-changing services",
+  "zh": "货币兑换服务"
+ },
+ {
+  "code": "66129",
+  "en": "Security dealings and commodity contracts brokerage activities n.e.c.",
+  "zh": "未另作分类的证券交易与商品合约经纪活动"
+ },
+ {
+  "code": "66191",
+  "en": "Trustee, fiduciary and custody services",
+  "zh": "受托、信托与托管服务公司"
+ },
+ {
+  "code": "66192",
+  "en": "Corporate finance advisory services",
+  "zh": "企业融资顾问服务"
+ },
+ {
+  "code": "66193",
+  "en": "Clearing and settlement of financial instruments",
+  "zh": "金融工具的清算与结算"
+ },
+ {
+  "code": "66194",
+  "en": "Activities auxiliary to fund management activities",
+  "zh": "辅助基金管理活动"
+ },
+ {
+  "code": "66195",
+  "en": "Transaction/payment processing services",
+  "zh": "交易/支付处理服务"
+ },
+ {
+  "code": "66199",
+  "en": "Other activities auxiliary to financial service activities n.e.c.",
+  "zh": "其他金融服务辅助活动（未另作分类）"
+ },
+ {
+  "code": "66210",
+  "en": "Risk and damage evaluation",
+  "zh": "风险与损失评估（如：理赔调整、损失调整）"
+ },
+ {
+  "code": "66221",
+  "en": "Insurance agencies and agents",
+  "zh": "保险代理与代理人（包括财务规划服务）"
+ },
+ {
+  "code": "66222",
+  "en": "Insurance brokers",
+  "zh": "保险经纪"
+ },
+ {
+  "code": "66291",
+  "en": "Representative offices of foreign insurers and professional reinsurers",
+  "zh": "外国保险公司和专业再保险公司代表处"
+ },
+ {
+  "code": "66292",
+  "en": "Captive managers",
+  "zh": "自保公司管理服务"
+ },
+ {
+  "code": "66299",
+  "en": "Other activities auxiliary to insurance and pension funding n.e.c.",
+  "zh": "未另作分类的保险与养老金附属活动"
+ },
+ {
+  "code": "66301",
+  "en": "Traditional/long-only asset/portfolio management",
+  "zh": "传统/长期资产/投资组合管理"
+ },
+ {
+  "code": "66302",
+  "en": "Hedge fund management",
+  "zh": "对冲基金管理"
+ },
+ {
+  "code": "66303",
+  "en": "Property fund/REIT management",
+  "zh": "房地产基金管理"
+ },
+ {
+  "code": "66304",
+  "en": "Private equity firms",
+  "zh": "私募股权公司"
+ },
+ {
+  "code": "66305",
+  "en": "Venture capital activities",
+  "zh": "风险投资活动"
+ },
+ {
+  "code": "66306",
+  "en": "Single/multiple family offices activities",
+  "zh": "单一家族/多家族办公室活动"
+ },
+ {
+  "code": "66307",
+  "en": "Private debt funds",
+  "zh": "私人债务基金"
+ },
+ {
+  "code": "66309",
+  "en": "Fund management activities n.e.c.",
+  "zh": "其他未另分类的基金管理活动"
+ },
+ {
+  "code": "68101",
+  "en": "Real estate developers",
+  "zh": "房地产开发商"
+ },
+ {
+  "code": "68102",
+  "en": "Operating of serviced apartments",
+  "zh": "服务式公寓的经营"
+ },
+ {
+  "code": "68103",
+  "en": "Letting and operating of self-owned or leased real estate property (except food courts, hawker centres, coffee shops and canteens)",
+  "zh": "自有或租赁不动产的出租（不包括食阁、咖啡店和食堂）（如办公/展览空间、购物中心、自助仓储设施）"
+ },
+ {
+  "code": "68104",
+  "en": "Letting and operating of self-owned or leased food courts, hawker centres, coffee shops and canteens (with mainly rental income)",
+  "zh": "自有或租赁的食阁、咖啡店和食堂的出租与经营（以租金收入为主）"
+ },
+ {
+  "code": "68105",
+  "en": "Collective portfolio investment funds with rental income",
+  "zh": "具有租金收入的集合投资房地产基金"
+ },
+ {
+  "code": "68106",
+  "en": "Management of self-owned strata titled property",
+  "zh": "自有分层地契物业的管理"
+ },
+ {
+  "code": "68201",
+  "en": "Real estate agencies and valuation services",
+  "zh": "房地产代理与估价服务"
+ },
+ {
+  "code": "68202",
+  "en": "Town councils",
+  "zh": "市镇理事会"
+ },
+ {
+  "code": "68203",
+  "en": "Residential, commercial and industrial real estate management (except town councils)",
+  "zh": "住宅（不包括市镇理事会）、商业和工业房地产管理"
+ },
+ {
+  "code": "68209",
+  "en": "Real estate activities on a fee or commission basis n.e.c.",
+  "zh": "佣金或费用基础上的房地产活动，未另作分类（不包括线上市场）"
+ },
+ {
+  "code": "69101",
+  "en": "Legal activities",
+  "zh": "法律活动（不包括线上市场）"
+ },
+ {
+  "code": "69102",
+  "en": "Arbitration and mediation services",
+  "zh": "仲裁与调解服务（不包括线上市场）"
+ },
+ {
+  "code": "69201",
+  "en": "Accounting, auditing and tax consultancy services",
+  "zh": "会计与审计服务（不包括线上市场）"
+ },
+ {
+  "code": "69202",
+  "en": "Book-keeping services",
+  "zh": "簿记服务（不包括线上市场）"
+ },
+ {
+  "code": "70101",
+  "en": "Activities of head and regional head offices; Centralised administrative offices and subsidiary management offices",
+  "zh": "总部及地区总部的活动；集中管理服务"
+ },
+ {
+  "code": "70102",
+  "en": "Business representative offices",
+  "zh": "商业代表处"
+ },
+ {
+  "code": "70201",
+  "en": "Management consultancy services",
+  "zh": "管理咨询服务"
+ },
+ {
+  "code": "70202",
+  "en": "Management consultancy services for healthcare organisations",
+  "zh": "医疗机构管理咨询服务"
+ },
+ {
+  "code": "70203",
+  "en": "Management consultancy services for hotels",
+  "zh": "酒店管理咨询服务"
+ },
+ {
+  "code": "70204",
+  "en": "Human resource consultancy services",
+  "zh": "人力资源咨询服务"
+ },
+ {
+  "code": "70205",
+  "en": "Public relations, marketing and brand consultancy services",
+  "zh": "公共关系、市场营销与品牌咨询服务"
+ },
+ {
+  "code": "70206",
+  "en": "Port, shipping and maritime-related consultancy services",
+  "zh": "港口、航运与海事相关咨询服务"
+ },
+ {
+  "code": "70209",
+  "en": "Management consultancy services n.e.c.",
+  "zh": "未另作分类的管理咨询服务"
+ },
+ {
+  "code": "71111",
+  "en": "Architectural services",
+  "zh": "建筑服务"
+ },
+ {
+  "code": "71112",
+  "en": "Landscape design and landscape architecture",
+  "zh": "景观设计与景观建筑"
+ },
+ {
+  "code": "71113",
+  "en": "Quantity surveying services",
+  "zh": "工料测量服务"
+ },
+ {
+  "code": "71114",
+  "en": "Land surveying services",
+  "zh": "土地测量服务"
+ },
+ {
+  "code": "71119",
+  "en": "Other surveying services n.e.c.",
+  "zh": "其他测量服务（未另作分类）"
+ },
+ {
+  "code": "71121",
+  "en": "General building engineering design and consultancy services",
+  "zh": "一般建筑工程设计与咨询服务"
+ },
+ {
+  "code": "71122",
+  "en": "Process and industrial plant engineering design and consultancy services",
+  "zh": "工艺与工业工厂工程设计与咨询服务"
+ },
+ {
+  "code": "71123",
+  "en": "Engineering design and consultancy services in energy management and clean energy systems",
+  "zh": "能源管理方面的工程设计与咨询服务"
+ },
+ {
+  "code": "71124",
+  "en": "Environmental engineering design and consultancy services (except clean energy)",
+  "zh": "环境工程设计与咨询服务"
+ },
+ {
+  "code": "71125",
+  "en": "Infrastructure engineering design and consultancy services",
+  "zh": "基础设施工程设计与咨询服务"
+ },
+ {
+  "code": "71126",
+  "en": "Engineering design and consultancy services supporting mining, oil and gas extraction and offshore exploration activities",
+  "zh": "支持采矿、石油与天然气的工程设计与咨询服务"
+ },
+ {
+  "code": "71129",
+  "en": "Engineering design and consultancy activities n.e.c.",
+  "zh": "未另作分类的工程设计与咨询活动"
+ },
+ {
+  "code": "71200",
+  "en": "Technical testing and analysis services; certification of products and services",
+  "zh": "技术检测与分析服务"
+ },
+ {
+  "code": "72101",
+  "en": "Research and experimental development on biotechnology (except medical and veterinary science)",
+  "zh": "生物技术的研究与实验发展（不包括医学科学）"
+ },
+ {
+  "code": "72102",
+  "en": "Research and experimental development on electronics (except medical and veterinary science)",
+  "zh": "电子学的研究与实验发展（不包括医学科学）"
+ },
+ {
+  "code": "72103",
+  "en": "Research and experimental development on chemicals (except medical and veterinary science)",
+  "zh": "化学的研究与实验发展（不包括医学科学）"
+ },
+ {
+  "code": "72104",
+  "en": "Research and experimental development on engineering",
+  "zh": "工程领域的研究与实验发展"
+ },
+ {
+  "code": "72105",
+  "en": "Research and experimental development on environment and clean technologies (except biotechnology)",
+  "zh": "环境与清洁技术的研究与实验发展（不包括生物技术）"
+ },
+ {
+  "code": "72106",
+  "en": "Research and experimental development on medical and veterinary sciences",
+  "zh": "医学科学的研究与实验发展"
+ },
+ {
+  "code": "72109",
+  "en": "Research and experimental development on natural sciences n.e.c.",
+  "zh": "未另作分类的自然科学研究与实验发展"
+ },
+ {
+  "code": "72200",
+  "en": "Research and experimental development on social sciences and humanities",
+  "zh": "社会科学研究与实验发展"
+ },
+ {
+  "code": "73100",
+  "en": "Advertising activities",
+  "zh": "广告活动"
+ },
+ {
+  "code": "73200",
+  "en": "Market research and public opinion polling",
+  "zh": "市场调研与公众舆论调查"
+ },
+ {
+  "code": "74111",
+  "en": "Electronics-related industrial design services",
+  "zh": "与电子相关的工业设计服务"
+ },
+ {
+  "code": "74112",
+  "en": "Transport-related industrial design services",
+  "zh": "与交通运输相关的工业设计服务"
+ },
+ {
+  "code": "74113",
+  "en": "Furniture design services",
+  "zh": "家具设计服务"
+ },
+ {
+  "code": "74119",
+  "en": "Industrial design activities n.e.c.",
+  "zh": "未另作分类的工业设计活动"
+ },
+ {
+  "code": "74191",
+  "en": "Interior design services",
+  "zh": "室内设计服务"
+ },
+ {
+  "code": "74192",
+  "en": "Art and graphic design services",
+  "zh": "艺术与平面设计服务"
+ },
+ {
+  "code": "74193",
+  "en": "Fashion and accessories design services",
+  "zh": "时尚（包括配饰）设计服务"
+ },
+ {
+  "code": "74194",
+  "en": "Exhibition stand design services",
+  "zh": "展览展台设计服务"
+ },
+ {
+  "code": "74199",
+  "en": "Other specialised design activities n.e.c.",
+  "zh": "未另作分类的其他专业设计活动"
+ },
+ {
+  "code": "74200",
+  "en": "Photographic activities",
+  "zh": "摄影活动"
+ },
+ {
+  "code": "74901",
+  "en": "Translation services",
+  "zh": "翻译服务"
+ },
+ {
+  "code": "74902",
+  "en": "Brokerage and consultancy services of intellectual property assets",
+  "zh": "知识产权资产的经纪与咨询服务"
+ },
+ {
+  "code": "74903",
+  "en": "Agrotechnology consultancy services",
+  "zh": "农业科技咨询服务"
+ },
+ {
+  "code": "74904",
+  "en": "Sustainability consultancy services",
+  "zh": "碳排放咨询服务"
+ },
+ {
+  "code": "74905",
+  "en": "Agents for artistes, athletes, models and other performers",
+  "zh": "艺人、运动员、模特和其他表演者经纪服务"
+ },
+ {
+  "code": "74909",
+  "en": "Other professional, scientific and technical activities n.e.c.",
+  "zh": "未另作分类的其他专业、科学与技术活动"
+ },
+ {
+  "code": "75000",
+  "en": "Veterinary activities",
+  "zh": "兽医服务"
+ },
+ {
+  "code": "77101",
+  "en": "Renting and leasing of private cars without driver",
+  "zh": "不带司机的私家车租赁（不包括在线平台）"
+ },
+ {
+  "code": "77102",
+  "en": "Renting and leasing of bicycles and inline/roller skates",
+  "zh": "自行车和轮滑/旱冰鞋的租赁"
+ },
+ {
+  "code": "77109",
+  "en": "Renting and leasing of land transport equipment without driver n.e.c. (except cars)",
+  "zh": "不带司机的其他陆路交通设备租赁（不包括私家车和在线平台）"
+ },
+ {
+  "code": "77210",
+  "en": "Renting and leasing of recreational and sports goods",
+  "zh": "娱乐和体育用品的租赁与出租"
+ },
+ {
+  "code": "77291",
+  "en": "Renting and leasing of furniture, utensils and electronic equipment for household use",
+  "zh": "家具、器具和电子设备的租赁与出租"
+ },
+ {
+  "code": "77292",
+  "en": "Renting of costumes and other attire",
+  "zh": "服装租赁（例如：戏服）"
+ },
+ {
+  "code": "77299",
+  "en": "Renting and leasing of other personal and household goods n.e.c.",
+  "zh": "其他个人和家庭用品的租赁与出租（未另作分类，不包括在线平台）"
+ },
+ {
+  "code": "77310",
+  "en": "Renting of water transport equipment and floating structures without operator",
+  "zh": "无操作员的水上交通设备租赁"
+ },
+ {
+  "code": "77320",
+  "en": "Renting of air transport equipment without operator",
+  "zh": "无操作员的航空运输设备租赁"
+ },
+ {
+  "code": "77330",
+  "en": "Renting of construction and civil engineering machinery and equipment without operator",
+  "zh": "建筑与土木工程机械设备的租赁"
+ },
+ {
+  "code": "77341",
+  "en": "Renting of computers and peripheral equipment without operator",
+  "zh": "电脑及周边设备的租赁"
+ },
+ {
+  "code": "77342",
+  "en": "Renting of office machinery and equipment without operator",
+  "zh": "办公设备的租赁"
+ },
+ {
+  "code": "77391",
+  "en": "Renting and leasing of professional radio and television sets and sound reproducing and recording equipment without operator",
+  "zh": "专业广播电视设备及音响设备的租赁与出租"
+ },
+ {
+  "code": "77392",
+  "en": "Renting of industrial machinery and equipment without operator",
+  "zh": "工业机械设备的租赁"
+ },
+ {
+  "code": "77399",
+  "en": "Renting of other machinery, equipment and tangible goods without operator n.e.c.",
+  "zh": "其他机械、设备和有形资产的租赁（未另作分类，不包括在线平台）"
+ },
+ {
+  "code": "77400",
+  "en": "Leasing of non-financial intangible assets",
+  "zh": "非金融无形资产的租赁"
+ },
+ {
+  "code": "78101",
+  "en": "IT manpower contracting services",
+  "zh": "信息技术人力外包服务"
+ },
+ {
+  "code": "78102",
+  "en": "Manpower contracting services (except IT manpower)",
+  "zh": "劳务外包服务（不包括信息技术人力）"
+ },
+ {
+  "code": "78103",
+  "en": "Domestic worker employment placement agencies",
+  "zh": "家政服务人员介绍所（不包括在线平台）"
+ },
+ {
+  "code": "78104",
+  "en": "Employment agencies (except domestic worker employment placement agencies)",
+  "zh": "职业介绍所（不包括家政服务人员介绍所和在线平台）"
+ },
+ {
+  "code": "78300",
+  "en": "Management of human resource functions",
+  "zh": "人力资源管理服务"
+ },
+ {
+  "code": "79101",
+  "en": "Travel agencies and tour operators (mainly inbound)",
+  "zh": "旅行社与旅游运营商（以入境旅游为主）"
+ },
+ {
+  "code": "79102",
+  "en": "Travel agencies and tour operators (mainly outbound)",
+  "zh": "旅行社与旅游运营商（以出境旅游为主）"
+ },
+ {
+  "code": "80100",
+  "en": "Private security activities",
+  "zh": "私人保安活动"
+ },
+ {
+  "code": "80200",
+  "en": "Detective and investigation activities",
+  "zh": "侦探和调查活动"
+ },
+ {
+  "code": "81211",
+  "en": "General cleaning services (except household cleaning)",
+  "zh": "一般清洁服务（包括公共区域、办公室和工厂的清洁），不包括家庭清洁和线上市场"
+ },
+ {
+  "code": "81212",
+  "en": "Domestic/household cleaning services",
+  "zh": "家政/家庭清洁服务（不包括线上市场）"
+ },
+ {
+  "code": "81291",
+  "en": "Pest control services not in connection with agriculture",
+  "zh": "与农业无关的害虫防治服务"
+ },
+ {
+  "code": "81292",
+  "en": "Cleaning, maintenance and/or treatment of swimming pools, spa pools, water playgrounds and fountains",
+  "zh": "游泳池、水疗与喷泉的清洁服务"
+ },
+ {
+  "code": "81299",
+  "en": "Other cleaning services n.e.c.",
+  "zh": "未另作分类的其他清洁服务（不包括线上市场）"
+ },
+ {
+  "code": "81300",
+  "en": "Landscape service activities (except landscape design and architecture)",
+  "zh": "园林绿化、养护与维护服务活动"
+ },
+ {
+  "code": "82110",
+  "en": "Office administrative services on a fee or contract basis",
+  "zh": "按费用或合同提供的办公室行政服务"
+ },
+ {
+  "code": "82191",
+  "en": "Stenographic and secretarial services",
+  "zh": "速记与秘书服务"
+ },
+ {
+  "code": "82192",
+  "en": "Duplicating and photo-copying services",
+  "zh": "复印与影印服务"
+ },
+ {
+  "code": "82199",
+  "en": "Other specialised office support activities n.e.c.",
+  "zh": "未另作分类的其他专门办公支持活动"
+ },
+ {
+  "code": "82200",
+  "en": "Call centres",
+  "zh": "呼叫中心"
+ },
+ {
+  "code": "82301",
+  "en": "Exhibition organisers",
+  "zh": "展览组织者"
+ },
+ {
+  "code": "82302",
+  "en": "Convention/conference/corporate meeting organisers",
+  "zh": "大会/会议组织者"
+ },
+ {
+  "code": "82303",
+  "en": "Event organisers (except concerts, sports/fitness event organisers and wedding planners)",
+  "zh": "活动/演唱会组织者"
+ },
+ {
+  "code": "82304",
+  "en": "Exhibition stand contractors",
+  "zh": "展览摊位承包商"
+ },
+ {
+  "code": "82305",
+  "en": "Concert organisers",
+  "zh": "演唱会/音乐会组织者"
+ },
+ {
+  "code": "82911",
+  "en": "Debt collection services",
+  "zh": "催收服务"
+ },
+ {
+  "code": "82912",
+  "en": "Credit rating agencies",
+  "zh": "信用评级机构"
+ },
+ {
+  "code": "82920",
+  "en": "Packaging activities",
+  "zh": "包装活动"
+ },
+ {
+  "code": "82991",
+  "en": "Activities of auction houses",
+  "zh": "拍卖行的活动"
+ },
+ {
+  "code": "82999",
+  "en": "Other business support service activities",
+  "zh": "其他商业支持服务活动（例如忠诚计划的管理）"
+ },
+ {
+  "code": "84110",
+  "en": "Executive, legislative and other general public administration",
+  "zh": "行政、立法及其他一般公共行政管理"
+ },
+ {
+  "code": "84120",
+  "en": "Public administration of economic, social and environmental programmes",
+  "zh": "经济与社会项目的公共管理"
+ },
+ {
+  "code": "84210",
+  "en": "Foreign affairs",
+  "zh": "外交事务"
+ },
+ {
+  "code": "84221",
+  "en": "Armed forces",
+  "zh": "武装部队"
+ },
+ {
+  "code": "84229",
+  "en": "Defence activities n.e.c.",
+  "zh": "未另作分类的国防活动"
+ },
+ {
+  "code": "84231",
+  "en": "Judiciary and related services",
+  "zh": "司法与相关服务"
+ },
+ {
+  "code": "84232",
+  "en": "Police",
+  "zh": "警察"
+ },
+ {
+  "code": "84233",
+  "en": "Prisons",
+  "zh": "监狱"
+ },
+ {
+  "code": "84234",
+  "en": "Other places of detention, correction and rehabilitation",
+  "zh": "其他拘留、改造与康复场所"
+ },
+ {
+  "code": "84235",
+  "en": "Civil defence",
+  "zh": "民防"
+ },
+ {
+  "code": "84239",
+  "en": "Public order and safety activities n.e.c.",
+  "zh": "未另作分类的公共秩序与安全活动"
+ },
+ {
+  "code": "85100",
+  "en": "Pre-primary education; child care with pre-primary education services",
+  "zh": "学前教育；附带学前教育服务的儿童看护"
+ },
+ {
+  "code": "85200",
+  "en": "Primary education",
+  "zh": "小学教育"
+ },
+ {
+  "code": "85310",
+  "en": "Secondary schools; combined primary and secondary schools",
+  "zh": "中学；小学与中学合并学校"
+ },
+ {
+  "code": "85320",
+  "en": "Technical and vocational (secondary and post-secondary non-tertiary) education",
+  "zh": "技术与职业教育（中学及中学后非高等教育）"
+ },
+ {
+  "code": "85331",
+  "en": "Junior colleges and centralised pre-university institutes (post-secondary non- tertiary); combined secondary schools and post-secondary non-tertiary schools",
+  "zh": "初级学院及集中式大学预科机构（中学后非高等教育）；中学与中学后非高等教育合并学校"
+ },
+ {
+  "code": "85332",
+  "en": "Commercial schools offering general secondary and post-secondary non-tertiary education programmes",
+  "zh": "提供普通中学及中学后非高等教育课程的商业学校"
+ },
+ {
+  "code": "85340",
+  "en": "International and foreign system schools",
+  "zh": "国际学校及外国教育体系学校"
+ },
+ {
+  "code": "85350",
+  "en": "Schools for special needs",
+  "zh": "特殊需求学校"
+ },
+ {
+  "code": "85360",
+  "en": "Specialised education schools",
+  "zh": "专业教育学校"
+ },
+ {
+  "code": "85401",
+  "en": "Polytechnics",
+  "zh": "理工学院"
+ },
+ {
+  "code": "85402",
+  "en": "Universities",
+  "zh": "大学"
+ },
+ {
+  "code": "85403",
+  "en": "Teachers' training institute",
+  "zh": "师范学院"
+ },
+ {
+  "code": "85404",
+  "en": "Commercial schools offering tertiary education programmes",
+  "zh": "制造业培训课程"
+ },
+ {
+  "code": "85501",
+  "en": "Training courses for construction, real estate, security and investigation services, cleaning, landscaping, waste management and pest management",
+  "zh": "建筑、不动产、保安与调查服务、清洁、园艺、废物管理与病虫害管理类培训课程"
+ },
+ {
+  "code": "85502",
+  "en": "Training courses for healthcare, education, community and social services",
+  "zh": "医疗、教育、社区与社会服务类培训课程"
+ },
+ {
+  "code": "85503",
+  "en": "Training courses for food and beverage, retail and accommodation, tour operators, travel agencies and travel-related reservation services",
+  "zh": "餐饮、零售、住宿、旅游经营者、旅行社及旅游相关预订服务培训课程"
+ },
+ {
+  "code": "85504",
+  "en": "Training courses for manufacturing",
+  "zh": "制造业培训课程"
+ },
+ {
+  "code": "85505",
+  "en": "Training courses for information and communications, finance and professional services",
+  "zh": "信息与通信、金融及专业服务培训课程"
+ },
+ {
+  "code": "85506",
+  "en": "Training courses for wholesale trade, logistics and transport",
+  "zh": "批发贸易、物流及运输培训课程"
+ },
+ {
+  "code": "85507",
+  "en": "Training courses for sports and games",
+  "zh": "体育及游戏培训课程"
+ },
+ {
+  "code": "85508",
+  "en": "Training courses for music, dancing, art, speech and drama",
+  "zh": "音乐、舞蹈、艺术、演讲及戏剧培训课程"
+ },
+ {
+  "code": "85509",
+  "en": "Training courses n.e.c.",
+  "zh": "餐饮、零售与住宿、旅行社、旅游相关预订服务培训课程"
+ },
+ {
+  "code": "85601",
+  "en": "Student recruitment agencies",
+  "zh": "学生招生代理机构"
+ },
+ {
+  "code": "85602",
+  "en": "Examination and accreditation agencies for education services",
+  "zh": "教育服务考试及认证机构"
+ },
+ {
+  "code": "85609",
+  "en": "Educational support services n.e.c.",
+  "zh": "其他未列明的教育支持服务"
+ },
+ {
+  "code": "86101",
+  "en": "Acute hospitals",
+  "zh": "急性护理医院"
+ },
+ {
+  "code": "86102",
+  "en": "Community hospitals",
+  "zh": "社区医院"
+ },
+ {
+  "code": "86109",
+  "en": "Hospital activities n.e.c.",
+  "zh": "其他未另作分类的医院（如：精神病院）"
+ },
+ {
+  "code": "86201",
+  "en": "Clinics and other general medical services (Western)",
+  "zh": "诊所及其他普通医疗服务（西医）"
+ },
+ {
+  "code": "86202",
+  "en": "Clinics and other general medical services (Non-Western)",
+  "zh": "诊所及其他普通医疗服务（非西医）"
+ },
+ {
+  "code": "86203",
+  "en": "Specialised medical services",
+  "zh": "专科医疗服务（包括日间手术中心）"
+ },
+ {
+  "code": "86204",
+  "en": "Dental services",
+  "zh": "牙科服务"
+ },
+ {
+  "code": "86901",
+  "en": "Medical laboratories",
+  "zh": "医学实验室（如：血液分析实验室）"
+ },
+ {
+  "code": "86902",
+  "en": "Medical diagnostic imaging centres",
+  "zh": "医学影像诊断中心（如：X光服务）"
+ },
+ {
+  "code": "86903",
+  "en": "Ambulance and medical evacuation services",
+  "zh": "救护车与医疗撤离服务"
+ },
+ {
+  "code": "86904",
+  "en": "Home healthcare services",
+  "zh": "居家医疗服务"
+ },
+ {
+  "code": "86905",
+  "en": "Dialysis services",
+  "zh": "洗肾服务"
+ },
+ {
+  "code": "86909",
+  "en": "Other health services n.e.c.",
+  "zh": "未另作分类的其他健康服务（不包括线上市场）"
+ },
+ {
+  "code": "87010",
+  "en": "Nursing and personal care facilities",
+  "zh": "护理与个人照护设施（包括疗养院与临终关怀中心）"
+ },
+ {
+  "code": "87021",
+  "en": "Residential care services for the elderly",
+  "zh": "老年人住宿照护服务（如：老人院）"
+ },
+ {
+  "code": "87022",
+  "en": "Residential care services for children",
+  "zh": "儿童住宿照护服务（如：儿童之家、孤儿院）"
+ },
+ {
+  "code": "87029",
+  "en": "Other residential care services n.e.c.",
+  "zh": "未另作分类的其他住宿护理服务"
+ },
+ {
+  "code": "88101",
+  "en": "Social services for the elderly",
+  "zh": "老年人社会服务"
+ },
+ {
+  "code": "88102",
+  "en": "Social services for persons with disabilities",
+  "zh": "残疾人士的社会服务（例如为残疾人士设立的日间活动中心）"
+ },
+ {
+  "code": "88911",
+  "en": "Infant care services; child minding services for pre-school children",
+  "zh": "学前儿童照护服务（包括婴儿照护服务）"
+ },
+ {
+  "code": "88912",
+  "en": "Student care services; child minding services for school-going children",
+  "zh": "学龄儿童的托儿/学生照护服务"
+ },
+ {
+  "code": "88913",
+  "en": "Social services for children and youths",
+  "zh": "儿童与青少年的社会服务"
+ },
+ {
+  "code": "88919",
+  "en": "Social services without accommodation for children, youth and families n.e.c.",
+  "zh": "未提供住宿的儿童、青少年与家庭社会服务（未另作分类）"
+ },
+ {
+  "code": "88920",
+  "en": "Community development councils",
+  "zh": "社区发展理事会与基层组织"
+ },
+ {
+  "code": "88991",
+  "en": "Job training and vocational rehabilitation services",
+  "zh": "就业培训与职业康复服务"
+ },
+ {
+  "code": "88992",
+  "en": "Charitable and other supporting activities aimed at humanitarian work",
+  "zh": "面向人道工作的慈善及其他支持性活动"
+ },
+ {
+  "code": "88999",
+  "en": "Other social services without accommodation n.e.c.",
+  "zh": "未提供住宿的其他社会服务（未另作分类）"
+ },
+ {
+  "code": "90110",
+  "en": "Literary creation and musical composition activities",
+  "zh": "文学创作及音乐作曲活动"
+ },
+ {
+  "code": "90120",
+  "en": "Visual arts creation activities",
+  "zh": "视觉艺术创作活动"
+ },
+ {
+  "code": "90190",
+  "en": "Other arts creation activities",
+  "zh": "其他艺术创作活动"
+ },
+ {
+  "code": "90201",
+  "en": "Production of live theatrical presentations",
+  "zh": "现场戏剧演出制作"
+ },
+ {
+  "code": "90202",
+  "en": "Orchestras, musical bands, choirs and dance performance activities",
+  "zh": "管弦乐队、乐队、合唱团及舞蹈表演活动"
+ },
+ {
+  "code": "90209",
+  "en": "Activities of performing arts n.e.c.",
+  "zh": "其他未列明的表演艺术活动"
+ },
+ {
+  "code": "90310",
+  "en": "Arts facilities/venue operation",
+  "zh": "艺术设施/场地运营"
+ },
+ {
+  "code": "90390",
+  "en": "Other support activities to arts and performing arts",
+  "zh": "其他艺术及表演艺术支持活动"
+ },
+ {
+  "code": "91100",
+  "en": "Libraries and archives activities",
+  "zh": "图书馆及档案馆活动"
+ },
+ {
+  "code": "91201",
+  "en": "Museums",
+  "zh": "博物馆"
+ },
+ {
+  "code": "91209",
+  "en": "Operation of historical sites and buildings n.e.c.",
+  "zh": "其他未列明的历史遗址及建筑物运营"
+ },
+ {
+  "code": "91300",
+  "en": "Conservation, restoration and other support activities for cultural heritage",
+  "zh": "文化遗产保护、修复及其他支持活动"
+ },
+ {
+  "code": "91400",
+  "en": "Botanical and zoological gardens and nature reserves activities (except landscaping and nature tours)",
+  "zh": "植物园、动物园及自然保护区活动（不包括园景美化及自然导览）"
+ },
+ {
+  "code": "92001",
+  "en": "Horse-racing and other betting activities",
+  "zh": "赛马与其他博彩活动"
+ },
+ {
+  "code": "92002",
+  "en": "Casinos",
+  "zh": "赌场"
+ },
+ {
+  "code": "93111",
+  "en": "Fitness centres and gymnasiums",
+  "zh": "健身中心与健身房"
+ },
+ {
+  "code": "93112",
+  "en": "Sports/fitness event organisers",
+  "zh": "体育/健身活动组织者"
+ },
+ {
+  "code": "93119",
+  "en": "Operation of sports facilities n.e.c.",
+  "zh": "未另作分类的体育设施运营"
+ },
+ {
+  "code": "93120",
+  "en": "Activities of sports clubs/associations and related activities",
+  "zh": "体育俱乐部/协会及相关活动"
+ },
+ {
+  "code": "93201",
+  "en": "Amusement theme parks, adventure and family attractions",
+  "zh": "游乐主题公园"
+ },
+ {
+  "code": "93202",
+  "en": "Game arcade, online game aggregator, LAN game operators and gaming centres",
+  "zh": "电子游戏游乐场、网络游戏平台聚合商、局域网游戏运营商与电子竞技活动"
+ },
+ {
+  "code": "93203",
+  "en": "Night clubs, discotheques, dance clubs and karaoke lounges",
+  "zh": "夜总会、迪斯科舞厅、舞厅及卡拉酒廊"
+ },
+ {
+  "code": "93204",
+  "en": "Recreation clubs",
+  "zh": "娱乐俱乐部（包括高尔夫乡村俱乐部）"
+ },
+ {
+  "code": "93209",
+  "en": "Other amusement and recreation activities n.e.c.",
+  "zh": "未另作分类的其他娱乐与休闲活动"
+ },
+ {
+  "code": "94110",
+  "en": "Activities of business and employers' membership organisations",
+  "zh": "商业与雇主会员组织的活动"
+ },
+ {
+  "code": "94120",
+  "en": "Activities of professional membership organisations",
+  "zh": "专业会员组织的活动"
+ },
+ {
+  "code": "94200",
+  "en": "Activities of trade unions and platform work associations",
+  "zh": "工会活动"
+ },
+ {
+  "code": "94911",
+  "en": "Churches",
+  "zh": "基督教教会"
+ },
+ {
+  "code": "94912",
+  "en": "Mosques",
+  "zh": "清真寺"
+ },
+ {
+  "code": "94913",
+  "en": "Buddhist/Taoist temples",
+  "zh": "佛教/道教庙宇"
+ },
+ {
+  "code": "94914",
+  "en": "Hindu/Sikh temples",
+  "zh": "印度教/锡克教庙宇"
+ },
+ {
+  "code": "94919",
+  "en": "Activities of religious organisations n.e.c.",
+  "zh": "其他宗教组织活动（未另作分类）"
+ },
+ {
+  "code": "94920",
+  "en": "Activities of political organisations",
+  "zh": "政治组织的活动"
+ },
+ {
+  "code": "94991",
+  "en": "Philanthropic trusts, foundations and related activities",
+  "zh": "慈善信托、基金会及相关活动"
+ },
+ {
+  "code": "94992",
+  "en": "Ethnic associations",
+  "zh": "族群协会（包括宗亲会、华族会馆）"
+ },
+ {
+  "code": "94993",
+  "en": "Associations for hobbies, recreational, cultural and extra-curricular activities",
+  "zh": "兴趣、娱乐、文化及课外活动协会"
+ },
+ {
+  "code": "94994",
+  "en": "Student/alumni bodies and related associations",
+  "zh": "学生/校友团体及相关协会"
+ },
+ {
+  "code": "94995",
+  "en": "Organisations for the protection of the environment and animals",
+  "zh": "环境与动物保护组织"
+ },
+ {
+  "code": "94996",
+  "en": "Community and grassroots organisations",
+  "zh": "社区及基层组织"
+ },
+ {
+  "code": "94999",
+  "en": "Activities of other membership organisations n.e.c.",
+  "zh": "未另作分类的其他会员组织活动"
+ },
+ {
+  "code": "95110",
+  "en": "Repair and maintenance of computer hardware, data processing equipment and computer peripherals",
+  "zh": "计算机硬件及数据处理设备的维修与保养"
+ },
+ {
+  "code": "95120",
+  "en": "Repair of communications equipment",
+  "zh": "通讯设备维修（如：手机和传真机）"
+ },
+ {
+  "code": "95210",
+  "en": "Repair of audio and video equipment",
+  "zh": "音响与视频设备的维修"
+ },
+ {
+  "code": "95220",
+  "en": "Repair of domestic electrical/electronic appliances (except audio and video equipment)",
+  "zh": "家用电器/电子产品（不包括音响和电视）的维修"
+ },
+ {
+  "code": "95230",
+  "en": "Repair of footwear and leather goods",
+  "zh": "鞋类与皮革制品维修"
+ },
+ {
+  "code": "95240",
+  "en": "Repair and restoration of cabinets, furniture, upholstery, window shades and other fixtures",
+  "zh": "橱柜、家具、软装、窗帘等的维修与修复"
+ },
+ {
+  "code": "95291",
+  "en": "Repair of bicycles and tricycles",
+  "zh": "自行车与三轮车维修"
+ },
+ {
+  "code": "95292",
+  "en": "Repair of watches and clocks",
+  "zh": "手表与时钟维修"
+ },
+ {
+  "code": "95293",
+  "en": "Repair of jewellery",
+  "zh": "珠宝维修"
+ },
+ {
+  "code": "95299",
+  "en": "Repair of other personal and household goods n.e.c.",
+  "zh": "未另作分类的其他个人和家庭用品维修（不包括线上市场）"
+ },
+ {
+  "code": "95301",
+  "en": "Repair and maintenance of motor vehicles",
+  "zh": "机动车的维修与保养"
+ },
+ {
+  "code": "95302",
+  "en": "Car washing and related services",
+  "zh": "洗车及相关服务"
+ },
+ {
+  "code": "95303",
+  "en": "Motor vehicles inspection and valuation services",
+  "zh": "车辆检测与估价服务"
+ },
+ {
+  "code": "96011",
+  "en": "Laundry and dry cleaning services (except self-operated laundries)",
+  "zh": "洗衣与干洗服务（不包括自助洗衣）"
+ },
+ {
+  "code": "96012",
+  "en": "Self-operated laundries",
+  "zh": "自助洗衣服务"
+ },
+ {
+  "code": "96021",
+  "en": "Hairdressing salons/shops",
+  "zh": "美发沙龙/店（包括理发店）"
+ },
+ {
+  "code": "96022",
+  "en": "Beauty salons and spas",
+  "zh": "美容院与水疗中心（包括瘦身、护肤与美发中心）"
+ },
+ {
+  "code": "96023",
+  "en": "Manicure and pedicure services",
+  "zh": "美甲与足部护理服务"
+ },
+ {
+  "code": "96024",
+  "en": "Massage parlours and foot reflexology",
+  "zh": "按摩院与足部反射疗法服务"
+ },
+ {
+  "code": "96029",
+  "en": "Beauty and other personal care services n.e.c.",
+  "zh": "未另作分类的美容与其他个人护理服务（不包括线上市场）"
+ },
+ {
+  "code": "96030",
+  "en": "Funeral and related activities",
+  "zh": "殡葬及相关活动"
+ },
+ {
+  "code": "96040",
+  "en": "Wedding and related activities",
+  "zh": "婚礼及相关活动"
+ },
+ {
+  "code": "96091",
+  "en": "Friendship, match-making and dating services",
+  "zh": "交友、媒人和约会服务"
+ },
+ {
+  "code": "96092",
+  "en": "Social escort services",
+  "zh": "社交陪伴服务"
+ },
+ {
+  "code": "96093",
+  "en": "Astrology, palmistry and other fortune telling services",
+  "zh": "占星、看手相及其他算命服务"
+ },
+ {
+  "code": "96094",
+  "en": "Training of pets",
+  "zh": "宠物与动物训练服务"
+ },
+ {
+  "code": "96095",
+  "en": "Care services for pets and animals",
+  "zh": "宠物与动物照护服务"
+ },
+ {
+  "code": "96099",
+  "en": "Other personal service activities n.e.c.",
+  "zh": "未另作分类的其他个人服务活动（不包括线上市场）"
+ },
+ {
+  "code": "97001",
+  "en": "Activities of households as employers of domestic workers",
+  "zh": "家庭作为家政工人雇主的活动"
+ },
+ {
+  "code": "97002",
+  "en": "Activities of households as employers of other domestic personnel",
+  "zh": "家庭作为其他家庭人员雇主的活动"
+ },
+ {
+  "code": "99010",
+  "en": "Foreign embassies and trade representative offices",
+  "zh": "外国大使馆和贸易代表机构的活动"
+ },
+ {
+  "code": "99020",
+  "en": "Foreign armed forces",
+  "zh": "外国军队的活动"
+ },
+ {
+  "code": "99090",
+  "en": "Other extra-territorial organisations and bodies",
+  "zh": "其他治外法权组织与机构的活动"
+ }
+]

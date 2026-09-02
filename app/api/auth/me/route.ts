@@ -19,6 +19,7 @@ export async function GET() {
       name: account.name,
       restrictedTo: account.restrictedTo ?? null,
       admin: account.admin ?? false,
+      canViewReports: account.canViewReports ?? false,
     },
   });
 }

@@ -73,6 +73,10 @@ export type Company360 = {
     parentCompanyId: number | null;
     parentCompanyName: string | null;
     syncedAt: string | null;
+    // Reports' customer-source breakdown reads this directly (see
+    // lib/customer-source.ts, app/api/companies/customer-source/route.ts) —
+    // null means untagged, shown as "Unknown" everywhere.
+    customerSource: string | null;
   };
   masterList: Record<string, unknown>[];
   arReminderCycles: (Record<string, unknown> & {
@@ -256,6 +260,7 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
       contactPersons: (companyRow.contact_persons as unknown[] | null) ?? null,
       parentCompanyId: companyRow.parent_company_id ?? null,
       parentCompanyName: parentRow?.company_name ?? null,
+      customerSource: (companyRow.customer_source as string | null) ?? null,
       syncedAt: companyRow.synced_at ?? null,
     },
     masterList: masterListRows ?? [],

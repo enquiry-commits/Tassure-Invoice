@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText, ListChecks, Palette } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, ListChecks, Palette, BarChart3 } from 'lucide-react';
 
 // `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
 // yet (see NavImg below) — currently Proposal Generator (a link out to a
@@ -74,6 +74,12 @@ const tree: Node[] = [
 // — not part of `tree` itself, so groupIds()/level1For() (used by every
 // other account) stay untouched.
 const ADMIN_NODE: Node = { label: 'Appearance Settings', href: '/admin/appearance', icon: Palette };
+
+// Spliced in right after My Tasks (2026-09-03) for accounts with
+// `canViewReports` (lib/approved-accounts.ts) — customer-profile analytics
+// for leadership, deliberately not part of `tree` for the same reason as
+// ADMIN_NODE above (only a handful of accounts ever see it).
+const REPORTS_NODE: Node = { label: 'Reports', href: '/reports', icon: BarChart3 };
 
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
@@ -312,10 +318,16 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
   );
 }
 
-export default function Sidebar({ restrictedTo, isAdmin }: { restrictedTo?: string | null; isAdmin?: boolean }) {
+export default function Sidebar({ restrictedTo, isAdmin, canViewReports }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
-  const baseLevel1 = level1For(restrictedTo);
-  const level1 = isAdmin && !restrictedTo ? [...baseLevel1, ADMIN_NODE] : baseLevel1;
+  let level1 = level1For(restrictedTo);
+  if (canViewReports && !restrictedTo) {
+    const myTasksIdx = level1.findIndex(n => n.href === '/my-tasks');
+    level1 = myTasksIdx >= 0
+      ? [...level1.slice(0, myTasksIdx + 1), REPORTS_NODE, ...level1.slice(myTasksIdx + 1)]
+      : [...level1, REPORTS_NODE];
+  }
+  if (isAdmin && !restrictedTo) level1 = [...level1, ADMIN_NODE];
 
   useEffect(() => {
     if (localStorage.getItem('sidebar-collapsed') === 'true') setCollapsed(true);
