@@ -77,6 +77,14 @@ export type Company360 = {
     // lib/customer-source.ts, app/api/companies/customer-source/route.ts) —
     // null means untagged, shown as "Unknown" everywhere.
     customerSource: string | null;
+    // SSIC (added 2026-09-03) — synced by teamwork/sync-secretary from
+    // TeamWork's own "Principal Activities" table (lib/teamwork-company-
+    // profile.ts). Activity 2 fields are null for a company with only one
+    // registered activity, not an error.
+    ssicCode1: string | null;
+    ssicDescription1: string | null;
+    ssicCode2: string | null;
+    ssicDescription2: string | null;
   };
   masterList: Record<string, unknown>[];
   arReminderCycles: (Record<string, unknown> & {
@@ -279,6 +287,10 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
       parentCompanyId: companyRow.parent_company_id ?? null,
       parentCompanyName: parentRow?.company_name ?? null,
       customerSource: (companyRow.customer_source as string | null) ?? null,
+      ssicCode1: (companyRow.ssic_code_1 as string | null) ?? null,
+      ssicDescription1: (companyRow.ssic_description_1 as string | null) ?? null,
+      ssicCode2: (companyRow.ssic_code_2 as string | null) ?? null,
+      ssicDescription2: (companyRow.ssic_description_2 as string | null) ?? null,
       syncedAt: companyRow.synced_at ?? null,
     },
     masterList: masterListRows ?? [],

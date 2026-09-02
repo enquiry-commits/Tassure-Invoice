@@ -108,6 +108,27 @@ again.
   TeamWork's `non_client` field, not `client` — `client` is unreliable and
   reads `"0"` even for confirmed active clients with a valid `client_id` (an
   entire onboarding batch, CBxxx-prefixed, was affected).
+- **INV-TW-016** — A `class="..."` CSS selector on a TeamWork company
+  profile page is not guaranteed unique to the section it visually looks
+  like it belongs to — TeamWork's own template reuses `tble
+  principal_activities` for BOTH the real Principal Activities/SSIC table
+  and an unrelated PIC/Group/Holding Company/Team info table elsewhere on
+  the same page (confirmed: 3 occurrences of that exact class string on one
+  real company's page). Any new extractor on this page must anchor its
+  table search to start after the section's own visible heading text (the
+  pattern `extractOfficials` already used for its own `tble
+  articles_constitution` class collision), never trust a class name alone.
+  *(source: 2026-09-03, `lib/teamwork-company-profile.ts`'s `extractSsic` —
+  caught by verifying against real HTML from 15 live companies before
+  shipping, not assumed from a 3-company spot check.)*
+- **INV-TW-017** — SSIC Activity I's own `code` field can be blank on a real
+  company that genuinely has SSIC data on file (Activity II populated, or
+  Activity I's own `remarks` field non-empty even with `code` blank) —
+  confirmed on a real company during the 15-company spot check above. A
+  "does this company have SSIC data worth writing" check must test
+  `code1 OR code2`, never `code1` alone, or it will silently discard a
+  company that does have real classification data.
+  *(source: 2026-09-03, same investigation as INV-TW-016.)*
 
 ## AR/AGM cycle & ar_reminder data lifecycle (INV-AR)
 

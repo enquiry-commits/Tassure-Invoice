@@ -63,6 +63,18 @@ import { logFieldChange } from '@/lib/audit-log';
  * rather than trusting this estimate indefinitely.
  *
  * Cron: 15:00, 22:45, and 02:45 UTC / SGT 23:00, 06:45, and 10:45 daily.
+ *
+ * Also writes SSIC (added 2026-09-03, per Vincent, after confirming
+ * director/shareholder data was already being captured this same way and
+ * asking for the same treatment: "这个SSIC也可以加到 360里面") — the company
+ * profile page's "Principal Activities" table (lib/teamwork-company-
+ * profile.ts's extractSsic, verified against real HTML from 3 live
+ * companies before writing, not guessed from a screenshot), written
+ * straight onto companies.ssic_code_1/description_1/remarks_1 (and _2 for
+ * the optional second activity) — plain scalar fields, not a side table
+ * like officials/shares, since it's a handful of fixed columns per
+ * company. Same page visit already being fetched for Secretary/Officials/
+ * Shareholders — no new TeamWork request, no new cron.
  */
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
@@ -94,7 +106,7 @@ async function syncSecretaries(req: NextRequest) {
 
   const { data: companies } = await supabase
     .from('companies')
-    .select('internal_id, registration_no')
+    .select('id, internal_id, registration_no')
     .not('internal_id', 'is', null)
     .not('registration_no', 'is', null);
   const internalIdByUen = new Map((companies ?? []).map(c => [String(c.registration_no).trim().toUpperCase(), c.internal_id as string]));
@@ -122,6 +134,7 @@ async function syncSecretaries(req: NextRequest) {
   // insert), so each company's rows are always a full, current snapshot as
   // of this sync, not a partial merge with whatever was there before.
   const uenByInternalId = new Map((companies ?? []).map(c => [c.internal_id as string, String(c.registration_no).trim().toUpperCase()]));
+  const companyIdByInternalId = new Map((companies ?? []).map(c => [c.internal_id as string, c.id as number]));
   const fetchedInternalIds = results.map(p => p.companyId);
   if (fetchedInternalIds.length) {
     await supabase.from('teamwork_company_officials').delete().in('internal_id', fetchedInternalIds);
@@ -197,6 +210,37 @@ async function syncSecretaries(req: NextRequest) {
     }
   }
 
+  // SSIC — plain columns on companies (2026-09-03, Vincent: "这个SSIC也可以
+  // 加到 360里面"), not a side table like officials/shares, since it's a
+  // handful of fixed scalar fields per company, same shape as has_xbrl/
+  // has_agm etc. already living directly on companies. Same non-destructive
+  // principle teamwork/sync (Companies) already documents for this table:
+  // skip the write when the scrape found nothing at all — a fetch that came
+  // back empty (page hiccup, HTML shape drift, or a genuinely
+  // unclassified entity like an offshore L.P. — confirmed real via a
+  // 15-company spot check, e.g. "500 DURIANS II, L.P" has no SSIC on
+  // TeamWork at all) must never blank out a previously-good value. Gated
+  // on code1 OR code2 (not code1 alone) — that same spot check also turned
+  // up a real company with Activity I's code blank but Activity II's
+  // populated (and Activity I's own remarks field non-empty); requiring
+  // code1 specifically would have silently discarded a company that
+  // clearly does have real SSIC data on file.
+  let ssicUpdated = 0, ssicSkippedEmpty = 0;
+  for (let i = 0; i < results.length; i += 10) {
+    const batch = results.slice(i, i + 10);
+    await Promise.all(batch.map(async profile => {
+      const companyId = companyIdByInternalId.get(profile.companyId);
+      if (!companyId || !profile.ssic || (!profile.ssic.code1 && !profile.ssic.code2)) { ssicSkippedEmpty++; return; }
+      const s = profile.ssic;
+      await supabase.from('companies').update({
+        ssic_code_1: s.code1 || null, ssic_description_1: s.description1 || null, ssic_remarks_1: s.remarks1 || null,
+        ssic_code_2: s.code2 || null, ssic_description_2: s.description2 || null, ssic_remarks_2: s.remarks2 || null,
+        ssic_synced_at: now,
+      }).eq('id', companyId);
+      ssicUpdated++;
+    }));
+  }
+
   let updated = 0, unchanged = 0, updateErrors = 0;
   for (let i = 0; i < results.length; i += 10) {
     const batchResults = await Promise.all(results.slice(i, i + 10).map(async profile => {
@@ -257,6 +301,8 @@ async function syncSecretaries(req: NextRequest) {
     officials_synced: results.reduce((n, p) => n + p.officials.filter(o => o.name).length, 0),
     individual_shareholders_synced: results.reduce((n, p) => n + p.officerDetails.filter(d => d.cardType === 'Individual' && d.name).length, 0),
     shareholders_synced: results.reduce((n, p) => n + p.shareholderShares.filter(s => s.name).length, 0),
+    ssic_updated: ssicUpdated,
+    ssic_skipped_empty: ssicSkippedEmpty,
   });
 }
 

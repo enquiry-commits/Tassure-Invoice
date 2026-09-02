@@ -68,7 +68,20 @@ export type OfficerDetail = {
   roles: { role: string; period: string }[];
 };
 
-export type CompanyProfileFull = CompanyProfile & { officials: CompanyOfficial[]; shareholderShares: ShareRegisterHolding[]; officerDetails: OfficerDetail[] };
+// The company profile page's own "Principal Activities" table — up to two
+// SSIC (Singapore Standard Industrial Classification) codes per company,
+// each with TeamWork's own human-readable description and a remarks field
+// (which in every real company checked so far duplicates the description,
+// but is captured separately since nothing guarantees that). Activity (II)
+// is genuinely optional — TeamWork renders the literal string "NO ACTIVITY"
+// for a company with only one registered activity, normalized to empty
+// here rather than stored as that literal (extractSsic below).
+export type SsicInfo = {
+  code1: string; description1: string; remarks1: string;
+  code2: string; description2: string; remarks2: string;
+};
+
+export type CompanyProfileFull = CompanyProfile & { officials: CompanyOfficial[]; shareholderShares: ShareRegisterHolding[]; officerDetails: OfficerDetail[]; ssic: SsicInfo | null };
 
 // Singapore NRIC/FIN are a fixed 9-character shape (letter + 7 digits +
 // checksum letter); local UENs are 9-10 characters, digits with a trailing
@@ -138,6 +151,56 @@ function extractOfficials(html: string): CompanyOfficial[] {
     officials.push({ name: cells[0], role: cells[1], idNo: cells[2], address: cells[3], dateOfAppointment: cells[4] });
   }
   return officials;
+}
+
+// Real fetches showed a non-breaking space (U+00A0) coming back mangled as
+// "┬á" — a UTF-8 byte pair (0xC2 0xA0) read back as two separate Latin-1
+// characters, most plausibly from fetchProfileHtml's `data += chunk`
+// string concatenation implicitly decoding each Buffer chunk as UTF-8
+// before the bytes are joined, which can split a multi-byte sequence
+// across a chunk boundary. Scoped to just the text this function returns
+// rather than "fixing" the shared fetch — every other extractor in this
+// file has read this same HTML for weeks without anyone flagging it, so
+// widening the fix isn't obviously safe to do blind.
+function cleanSsicText(s: string): string {
+  return s.replace(/ |┬á/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Company profile page's "Principal Activities" table (confirmed against
+// real HTML from live companies, 2026-09-03, not guessed from Vincent's
+// screenshot alone): a `tble principal_activities` table with 3 rows × 2
+// cells (Activity I column, Activity II column), each cell holding a
+// `control-label` (the field name) followed by an `item form-group` label
+// (the value) — SSIC Code, then Default SSIC Description, then Remarks,
+// always in that order. Same "closing </table> tag is real" assumption
+// extractOfficials already relies on for this same page (unlike the
+// separate Shares-module AJAX fragment, which never closes its own table
+// — see parseShareRegisterHtml).
+//
+// The class name alone is NOT unique on the page — a real fetch (company
+// 154) turned up 3 occurrences of `class="tble principal_activities"`; the
+// other two are an unrelated PIC/Group/Holding-Company/Team table TeamWork's
+// own template reuses this exact class for. Same defensive fix
+// extractOfficials already applies for its own class-name collision:
+// anchor the search to start after the real "Principal Activities" section
+// heading, not the bare class name.
+function extractSsic(html: string): SsicInfo | null {
+  const headingIdx = html.indexOf('>Principal Activities<');
+  if (headingIdx === -1) return null;
+  const after = html.slice(headingIdx);
+  const tableMatch = after.match(/<table[^>]*class="tble principal_activities"[^>]*>([\s\S]*?)<\/table>/);
+  if (!tableMatch) return null;
+  const valueRe = /<label\s+class="item form-group[^"]*"[^>]*>([\s\S]*?)<\/label>/g;
+  const values: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = valueRe.exec(tableMatch[1]))) values.push(cleanSsicText(m[1].replace(/<[^>]+>/g, '')));
+  if (values.length < 6) return null;
+  const norm = (s: string) => (s.toUpperCase() === 'NO ACTIVITY' ? '' : s);
+  return {
+    code1: norm(values[0]), code2: norm(values[1]),
+    description1: norm(values[2]), description2: norm(values[3]),
+    remarks1: norm(values[4]), remarks2: norm(values[5]),
+  };
 }
 
 function postForm(cookie: string, path: string, formData: Record<string, string>, signal?: AbortSignal): Promise<string> {
@@ -353,7 +416,8 @@ export async function fetchCompanyProfileFull(cookie: string, companyId: string,
   ]);
   const officials = extractOfficials(html);
   const officerDetails = extractOfficerDetails(html);
-  return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name), officials, shareholderShares, officerDetails };
+  const ssic = extractSsic(html);
+  return { companyId, secretaries: officials.filter(o => o.role === 'Secretary').map(o => o.name), officials, shareholderShares, officerDetails, ssic };
 }
 
 // Bulk variant of fetchCompanyProfileFull, mirroring fetchCompanyProfiles'

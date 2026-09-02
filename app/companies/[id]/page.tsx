@@ -78,6 +78,16 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             <div style={{ fontSize: 12 }}>{company.companyType || '—'}</div>
           </div>
           <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Primary)</div>
+            <div style={{ fontSize: 12 }}>{company.ssicCode1 ? `${company.ssicCode1} — ${company.ssicDescription1 || '—'}` : '—'}</div>
+          </div>
+          {company.ssicCode2 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Secondary)</div>
+              <div style={{ fontSize: 12 }}>{`${company.ssicCode2} — ${company.ssicDescription2 || '—'}`}</div>
+            </div>
+          )}
+          <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>FYE</div>
             <div style={{ fontSize: 12 }}>{company.fyeMonth || '—'}{company.fyeDay ? ` ${company.fyeDay}` : ''}</div>
           </div>
