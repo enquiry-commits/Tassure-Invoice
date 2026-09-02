@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, StickyNote } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import { fmtDate, todaySGT } from '@/lib/date';
 
@@ -18,11 +18,18 @@ interface TrademarkRow {
   logo_classes: string | null;
   status_text: string | null;
   updates_note: string | null;
+  // Free text, both categories (2026-09-03) — Vincent: some manually-added
+  // records aren't actually for a Tassure client, added for reference only;
+  // this is where staff note that. Distinct from updates_note (In Progress
+  // only, a different purpose — filing-progress updates). Shown as a small
+  // marker next to company_name (see NoteMarker below), not just the
+  // Remarks column, so it's visible without scrolling.
+  remarks: string | null;
   updated_at: string | null;
   updated_by_name: string | null;
 }
 
-type ColKey = 'sn' | 'company_name' | 'application_number' | 'application_date' | 'mark_expired_date' | 'logo_classes' | 'status_text' | 'updates_note';
+type ColKey = 'sn' | 'company_name' | 'application_number' | 'application_date' | 'mark_expired_date' | 'logo_classes' | 'status_text' | 'updates_note' | 'remarks';
 
 const COLUMN_DEFS: Record<ColKey, { label: string; type: 'text' | 'date'; width: string }> = {
   sn:                  { label: 'S/N',                type: 'text', width: '60px' },
@@ -33,16 +40,30 @@ const COLUMN_DEFS: Record<ColKey, { label: string; type: 'text' | 'date'; width:
   logo_classes:        { label: 'Logo / Classes',     type: 'text', width: '150px' },
   status_text:         { label: 'Status',             type: 'text', width: '220px' },
   updates_note:        { label: 'Updates',            type: 'text', width: 'minmax(160px,1fr)' },
+  remarks:             { label: 'Remarks',            type: 'text', width: 'minmax(160px,1fr)' },
 };
 
 // Master Records = officially filed (real IPOS application number + dates).
 // In Progress = pre-numbered filings tracked by logo/class count + a
 // free-text status until they graduate to Master Records — see
-// scripts/create-trademark-records.sql for the full rationale.
+// scripts/create-trademark-records.sql for the full rationale. `remarks`
+// is on both — the only column that is.
 const CATEGORY_COLUMNS: Record<TrademarkCategory, ColKey[]> = {
-  master: ['sn', 'company_name', 'application_number', 'application_date', 'mark_expired_date'],
-  in_progress: ['sn', 'company_name', 'logo_classes', 'status_text', 'updates_note'],
+  master: ['sn', 'company_name', 'application_number', 'application_date', 'mark_expired_date', 'remarks'],
+  in_progress: ['sn', 'company_name', 'logo_classes', 'status_text', 'updates_note', 'remarks'],
 };
+
+// Small marker next to company_name when remarks is set (2026-09-03,
+// Vincent: "在master list 那边有一个小标记") — the Remarks column itself can
+// be scrolled past; this makes a flagged row noticeable at a glance.
+function NoteMarker({ remarks }: { remarks: string | null }) {
+  if (!remarks) return null;
+  return (
+    <span title={remarks} style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0, color: '#b45309' }}>
+      <StickyNote size={12} />
+    </span>
+  );
+}
 
 const ACCENT = '#1d3a5c';
 
@@ -219,15 +240,18 @@ export default function TrademarkTable({ category, title }: { category: Trademar
                     <div
                       key={c}
                       onClick={() => startEdit(row, c)}
-                      title="Click to edit"
+                      title={c === 'company_name' ? undefined : 'Click to edit'}
                       style={{
                         fontSize: 12.5, cursor: 'pointer', padding: '4px 6px', borderRadius: 5, minHeight: 20,
                         color: isExpired ? '#dc2626' : raw ? '#334155' : '#cbd5e1',
                         fontWeight: c === 'company_name' ? 600 : isExpired ? 700 : 400,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: c === 'company_name' || c === 'status_text' || c === 'updates_note' ? 'normal' : 'nowrap',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: c === 'company_name' || c === 'status_text' || c === 'updates_note' || c === 'remarks' ? 'normal' : 'nowrap',
+                        display: c === 'company_name' ? 'flex' : undefined, alignItems: c === 'company_name' ? 'center' : undefined, gap: c === 'company_name' ? 5 : undefined,
                       }}
                     >
-                      {def.type === 'date' ? (raw ? fmtDate(String(raw)) : '—') : (raw || '—')}
+                      {c === 'company_name' && <span title="Click to edit" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{raw || '—'}</span>}
+                      {c === 'company_name' && <NoteMarker remarks={row.remarks} />}
+                      {c !== 'company_name' && (def.type === 'date' ? (raw ? fmtDate(String(raw)) : '—') : (raw || '—'))}
                       {isExpired && ' ⚠'}
                     </div>
                   );

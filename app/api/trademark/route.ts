@@ -10,7 +10,7 @@ const CATEGORIES = new Set(['master', 'in_progress']);
 // category-specific rather than one shared shape.
 const EDITABLE_FIELDS = new Set([
   'sn', 'company_name', 'application_number', 'application_date', 'mark_expired_date',
-  'logo_classes', 'status_text', 'updates_note',
+  'logo_classes', 'status_text', 'updates_note', 'remarks',
 ]);
 
 export async function GET(req: NextRequest) {
