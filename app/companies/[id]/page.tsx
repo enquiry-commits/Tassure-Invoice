@@ -9,6 +9,7 @@ import CustomerSourceField from './CustomerSourceField';
 import {
   StatusBadge, MatchQualityNote,
   ArAgmSection, InvoicesSection, NdSection, CommsSection, DocsGeneratedSection, TrademarkSection,
+  OfficialsSection, ShareholdersSection,
 } from './_components';
 
 // Company 360 — the first page-level dynamic route and the first true
@@ -113,6 +114,8 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      <OfficialsSection officials={data.officials} />
+      <ShareholdersSection shareholders={data.shareholders} />
       <ArAgmSection cycles={data.arReminderCycles} />
       <InvoicesSection invoices={data.invoices} />
       <NdSection nd={data.nomineeDirector} />

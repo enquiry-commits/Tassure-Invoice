@@ -1,4 +1,4 @@
-import { AlertTriangle, Calendar, FileText, Mail, ScrollText, Stamp, Users } from 'lucide-react';
+import { AlertTriangle, Calendar, FileText, Mail, ScrollText, Stamp, Users, UserCog, PieChart } from 'lucide-react';
 import { fmtDate } from '@/lib/date';
 import { formatStaffName, nameForEmail } from '@/lib/staff-directory';
 import type { Company360 } from '@/lib/company-360';
@@ -300,6 +300,66 @@ export function TrademarkSection({ trademark }: { trademark: Company360['tradema
               <td style={{ padding: '6px 10px' }}>{t.mark_expired_date ? fmtDate(t.mark_expired_date as string) : '—'}</td>
               <td style={{ padding: '6px 10px', fontSize: 11 }}>{(t.status_text as string) || '—'}</td>
               <td style={{ padding: '6px 10px' }}><MatchBadge via={t.matchScore as number} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </DataCard>
+  );
+}
+
+// Officials (Director/Secretary/Controller/Representative/Contact Person)
+// and the real shareholder register — 2026-09-03, Vincent asked whether
+// this was already captured from TeamWork ("我不确定你之前在读取TW的时候是否
+// 都有记录"). It was: teamwork/sync-secretary has synced both nightly since
+// before Company 360 existed, for Post Incorporate's own UEN lookup
+// (app/api/post-incorporate/enrich/route.ts) — just never shown here.
+// Matched by exact UEN (lib/company-360.ts), not fuzzy name matching, so no
+// MatchBadge needed on these two.
+export function OfficialsSection({ officials }: { officials: Company360['officials'] }) {
+  return (
+    <DataCard title="Officials" icon={<UserCog size={15} color="#fff" />} count={officials.length} empty="No officials on file from TeamWork for this company.">
+      <table className="system-list-table" style={{ width: '100%' }}>
+        <colgroup>
+          <col style={{ width: '22%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} />
+          <col style={{ width: '14%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} />
+        </colgroup>
+        <thead><tr className="list-column-header-gray"><th>Name</th><th>Role</th><th>Sub-role(s)</th><th>Appointed</th><th>ID No.</th><th>Contact</th></tr></thead>
+        <tbody>
+          {officials.map((o, i) => (
+            <tr key={i} className="system-list-row">
+              <td style={{ padding: '6px 10px' }}>{(o.name as string) || '—'}</td>
+              <td style={{ padding: '6px 10px' }}>{(o.role as string) || '—'}</td>
+              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(o.sub_roles as string) || '—'}</td>
+              <td style={{ padding: '6px 10px' }}>{o.date_of_appointment ? fmtDate(o.date_of_appointment as string) : '—'}</td>
+              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(o.id_no as string) || '—'}</td>
+              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(o.email as string) || (o.mobile as string) || (o.telephone as string) || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </DataCard>
+  );
+}
+
+export function ShareholdersSection({ shareholders }: { shareholders: Company360['shareholders'] }) {
+  return (
+    <DataCard title="Shareholders" icon={<PieChart size={15} color="#fff" />} count={shareholders.length} empty="No shareholder share register on file from TeamWork for this company.">
+      <table className="system-list-table" style={{ width: '100%' }}>
+        <colgroup>
+          <col style={{ width: '26%' }} /><col style={{ width: '14%' }} /><col style={{ width: '18%' }} />
+          <col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} />
+        </colgroup>
+        <thead><tr className="list-column-header-gray"><th>Shareholder</th><th>Shares</th><th>Paid-up Capital</th><th>Currency</th><th>Share Type / Class</th><th>Certificate No.</th></tr></thead>
+        <tbody>
+          {shareholders.map((s, i) => (
+            <tr key={i} className="system-list-row">
+              <td style={{ padding: '6px 10px' }}>{(s.shareholder_name as string) || '—'}</td>
+              <td style={{ padding: '6px 10px' }}>{(s.number_of_shares as string) || '—'}</td>
+              <td style={{ padding: '6px 10px' }}>{(s.paid_up_capital as string) || '—'}</td>
+              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(s.currency as string) || '—'}</td>
+              <td style={{ padding: '6px 10px', fontSize: 11 }}>{[s.share_type, s.share_class].filter(Boolean).join(' / ') || '—'}</td>
+              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(s.share_certificate_no as string) || '—'}</td>
             </tr>
           ))}
         </tbody>

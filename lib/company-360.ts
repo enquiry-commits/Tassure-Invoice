@@ -102,6 +102,16 @@ export type Company360 = {
   };
   documentsGenerated: Record<string, unknown>[];
   trademark: (Record<string, unknown> & { matchScore: number })[];
+  // Officials (Director/Secretary/Controller/Representative/Contact
+  // Person) and the real shareholder share register — both already synced
+  // nightly by teamwork/sync-secretary (lib/teamwork-company-profile.ts)
+  // for Post Incorporate's own UEN lookup (app/api/post-incorporate/
+  // enrich/route.ts), just never surfaced on Company 360 before 2026-09-03.
+  // Matched by exact UEN, not fuzzy company-name matching — both tables
+  // store the real registration number directly, a more reliable join than
+  // most of this file's other fuzzy sections.
+  officials: Record<string, unknown>[];
+  shareholders: Record<string, unknown>[];
   matchQuality: {
     warnings: string[];
   };
@@ -143,6 +153,8 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
     { data: trademarkCandidateRows },
     { data: postIncorpRows },
     { data: parentRow },
+    { data: officialRows },
+    { data: shareholderRows },
   ] = await Promise.all([
     uen ? supabase.from('master_list').select('*').ilike('roc_no', uen) : Promise.resolve({ data: [] as Record<string, unknown>[] }),
     supabase.from('ar_reminder').select('*').eq('company_id', id).or('status.is.null,status.neq.Excluded'),
@@ -169,6 +181,12 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
     companyRow.parent_company_id
       ? supabase.from('companies').select('company_name').eq('id', companyRow.parent_company_id).maybeSingle()
       : Promise.resolve({ data: null as { company_name: string } | null }),
+    uen
+      ? supabase.from('teamwork_company_officials').select('name, role, sub_roles, id_no, id_type, address, date_of_appointment, dob, email, mobile, telephone, synced_at').ilike('uen', uen)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    uen
+      ? supabase.from('teamwork_shareholder_shares').select('shareholder_name, number_of_shares, issued_share_capital, paid_up_capital, consideration_paid_up_capital, currency, share_type, share_class, share_certificate_no, synced_at').ilike('uen', uen)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
   ]);
 
   // AR Reminder cycles — company_id + uen dual check (INV-AR-003, the same
@@ -270,6 +288,8 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
     communications: { drafts: draftRows ?? [] },
     documentsGenerated: postIncorpRows ?? [],
     trademark,
+    officials: officialRows ?? [],
+    shareholders: shareholderRows ?? [],
     matchQuality: { warnings },
   };
 }
