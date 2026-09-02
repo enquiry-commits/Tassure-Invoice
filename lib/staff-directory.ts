@@ -143,3 +143,18 @@ export function formatStaffName(rawValue: string | null | undefined): string {
     .map(part => resolveOne(part)?.name ?? titleCase(part));
   return names.join(', ');
 }
+
+const BY_EMAIL = new Map(STAFF_DIRECTORY.map(staff => [staff.email.toLowerCase(), staff.name]));
+
+/**
+ * The reverse of findStaffEmails — given a real staff login email (e.g.
+ * `created_by_email` on a row a staff member actually saved through the
+ * app), resolve their display name. Returns null for an email not in the
+ * directory (an external address, a stale/former staff email, ...) rather
+ * than guessing — callers should fall back to showing the raw email
+ * themselves in that case, not silently drop it.
+ */
+export function nameForEmail(email: string | null | undefined): string | null {
+  if (!email) return null;
+  return BY_EMAIL.get(email.trim().toLowerCase()) ?? null;
+}
