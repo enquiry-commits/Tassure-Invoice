@@ -24,7 +24,7 @@ export type ApprovedAccount = {
 };
 
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
-  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true },
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true, canViewAsOthers: true },
   { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', canViewAsOthers: true },
   { name: 'Samuell Ng', email: 'samuellng@tassure.com', canViewAsOthers: true },
   // New login account, added 2026-09-02 specifically to grant this
