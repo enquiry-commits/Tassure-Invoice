@@ -25,12 +25,22 @@ export function StatusBadge({ status }: { status: string | null }) {
   );
 }
 
+// Flags a row found by fuzzy company-name matching rather than a real
+// company_id/UEN link — see lib/company-360.ts's own module comment for why
+// most of these tables have no reliable FK at all. Deliberately silent
+// (returns null) for a 100/100 exact match — that's as confident as this
+// gets, and showing a badge on every single row (the common case) would be
+// noise, not signal; Vincent flagged exactly this ("看不懂，用户可能也不理解")
+// when every QuickBooks row showed "Paid~100"/"Open~100" concatenated right
+// onto the status text with no separation. Only a genuinely uncertain match
+// (score < 100) is worth a staff member's attention.
 function MatchBadge({ via }: { via: 'company_id' | 'uen' | 'fuzzy' | number }) {
+  const pillStyle = { display: 'inline-flex', alignItems: 'center', marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '1px 6px', whiteSpace: 'nowrap' as const };
   if (typeof via === 'number') {
-    // A quickbooks/trademark row's fuzzy match score.
-    return <span title={`Matched by company name, score ${via}`} style={{ fontSize: 9.5, color: '#b45309', fontWeight: 700 }}>~{via}</span>;
+    if (via >= 100) return null;
+    return <span title={`Matched by company name only, not an exact match — ${via}/100 confidence. Verify this is really the right company before relying on it.`} style={pillStyle}>{via}% match</span>;
   }
-  if (via === 'fuzzy') return <span title="Matched by company name only — verify" style={{ fontSize: 9.5, color: '#b45309', fontWeight: 700 }}>~name</span>;
+  if (via === 'fuzzy') return <span title="Matched by company name only, not a company ID/UEN — verify this is really the right company." style={pillStyle}>name match only</span>;
   return null;
 }
 
