@@ -273,14 +273,22 @@ export default function ReportsPage() {
     }).catch(e => setError(e.message));
   }, [authorized]);
 
+  // usePagination MUST run on every render, before the early returns below
+  // — calling a hook only on renders where authorized/data happen to be
+  // ready (as this was originally written, with the call sitting after
+  // those `if (...) return` guards) is a real Rules-of-Hooks violation:
+  // React sees a different number of hooks called between the "still
+  // loading" renders and the "data arrived" render and hard-crashes with
+  // no error boundary to catch it — this is what actually broke the page
+  // in production ("This page couldn't load"), not a data or auth issue.
+  const thisYear = String(new Date().getFullYear());
+  const flowDrillRows: FlowRow[] = !data ? [] : flowDrilldown === 'new' ? (data.flow.newByYearRows[thisYear] ?? [])
+    : flowDrilldown === 'churned' ? (data.flow.churnedByYearRows[thisYear] ?? []) : [];
+  const flowPagination = usePagination(flowDrillRows, flowDrilldown);
+
   if (authorized === null) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Loading…</div>;
   if (error) return <div style={{ padding: 40, textAlign: 'center', color: '#b45f6b', fontSize: 13 }}>{error}</div>;
   if (!data) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Loading…</div>;
-
-  const thisYear = String(new Date().getFullYear());
-  const flowDrillRows: FlowRow[] = flowDrilldown === 'new' ? (data.flow.newByYearRows[thisYear] ?? [])
-    : flowDrilldown === 'churned' ? (data.flow.churnedByYearRows[thisYear] ?? []) : [];
-  const flowPagination = usePagination(flowDrillRows, flowDrilldown);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
