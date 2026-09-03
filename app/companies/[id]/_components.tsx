@@ -261,7 +261,7 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
                 <td style={{ padding: '6px 10px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.subject as string ?? ''}>{(d.subject as string) || '—'}</td>
                 <td style={{ padding: '6px 10px', fontSize: 11 }}>{(d.to_email as string) || '—'}</td>
                 <td style={{ padding: '6px 10px' }}>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, color: d.status === 'sent' ? '#15803d' : d.status === 'skipped' ? '#94a3b8' : '#b45309' }}>{d.status as string}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: d.status === 'sent' ? '#15803d' : d.status === 'skipped' ? '#94a3b8' : '#b45309' }}>{d.status as string}</span>
                 </td>
                 <td style={{ padding: '6px 10px' }}>{d.sent_at ? fmtDate(d.sent_at as string) : '—'}</td>
               </tr>
