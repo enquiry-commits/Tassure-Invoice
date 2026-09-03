@@ -57,9 +57,9 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           <Building2 size={15} color="#fff" />
           <h2 className="system-list-title">{company.companyName}</h2>
         </div>
-        {/* Three explicit rows (2026-09-03, Vincent's exact spec: row 1
-            UEN/Status/Client Type/Company Type/FYE/Secretary PIC, row 2
-            Customer Source/Contact/Invoice Address, row 3 SSIC Primary/
+        {/* Two explicit rows (2026-09-03, Vincent's revised exact spec:
+            row 1 UEN/Status/Client Type/Company Type/FYE/Secretary PIC/
+            Contact/Customer Source, row 2 Invoice Address/SSIC Primary/
             Secondary) — each its own grid rather than one flat auto-fit
             grid, so the grouping holds regardless of viewport width
             instead of depending on how many items happen to fit per line. */}
@@ -92,27 +92,18 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Secretary PIC</div>
               <div style={{ fontSize: 12 }}>{formatStaffName(company.secPic ?? company.pic) || '—'}</div>
             </div>
-            {company.parentCompanyName && (
-              <div>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Parent Company</div>
-                <div style={{ fontSize: 12 }}>{company.parentCompanyName}</div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Customer Source</div>
-              <CustomerSourceField companyId={company.id} initialValue={company.customerSource} />
-            </div>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Contact</div>
               <div style={{ fontSize: 12 }}>{company.primaryContact?.contactName || company.bestEmail || '—'}</div>
             </div>
-            {ml?.invoice_address != null && (
-              <div style={{ gridColumn: 'span 2' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Invoice Address</div>
-                <div style={{ fontSize: 12 }}>{(ml.invoice_address as string) || '—'}</div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Customer Source</div>
+              <CustomerSourceField companyId={company.id} initialValue={company.customerSource} />
+            </div>
+            {company.parentCompanyName && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Parent Company</div>
+                <div style={{ fontSize: 12 }}>{company.parentCompanyName}</div>
               </div>
             )}
             {ml?.tel != null && (
@@ -124,6 +115,12 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 16 }}>
+            {ml?.invoice_address != null && (
+              <div style={{ gridColumn: 'span 2' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Invoice Address</div>
+                <div style={{ fontSize: 12 }}>{(ml.invoice_address as string) || '—'}</div>
+              </div>
+            )}
             <div style={{ gridColumn: 'span 2' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Primary)</div>
               <div style={{ fontSize: 12 }}>{company.ssicCode1 ? `${company.ssicCode1} — ${company.ssicDescription1 || '—'}` : '—'}</div>
