@@ -225,18 +225,27 @@ async function syncSecretaries(req: NextRequest) {
   // populated (and Activity I's own remarks field non-empty); requiring
   // code1 specifically would have silently discarded a company that
   // clearly does have real SSIC data on file.
-  let ssicUpdated = 0, ssicSkippedEmpty = 0;
+  // Caught live 2026-09-03: this loop originally never checked the
+  // update's own `error` — before the ssic_* columns existed in
+  // production (Vincent hadn't run scripts/add-companies-ssic-fields.sql
+  // yet), every single write here failed with "column companies.ssic_code_1
+  // does not exist", completely silently — `ssicUpdated` kept incrementing
+  // regardless, so this route's own response claimed success while writing
+  // nothing at all. Now tracked and surfaced properly.
+  let ssicUpdated = 0, ssicSkippedEmpty = 0, ssicWriteErrors = 0;
+  let firstSsicError: string | null = null;
   for (let i = 0; i < results.length; i += 10) {
     const batch = results.slice(i, i + 10);
     await Promise.all(batch.map(async profile => {
       const companyId = companyIdByInternalId.get(profile.companyId);
       if (!companyId || !profile.ssic || (!profile.ssic.code1 && !profile.ssic.code2)) { ssicSkippedEmpty++; return; }
       const s = profile.ssic;
-      await supabase.from('companies').update({
+      const { error } = await supabase.from('companies').update({
         ssic_code_1: s.code1 || null, ssic_description_1: s.description1 || null, ssic_remarks_1: s.remarks1 || null,
         ssic_code_2: s.code2 || null, ssic_description_2: s.description2 || null, ssic_remarks_2: s.remarks2 || null,
         ssic_synced_at: now,
       }).eq('id', companyId);
+      if (error) { ssicWriteErrors++; firstSsicError ??= error.message; return; }
       ssicUpdated++;
     }));
   }
@@ -303,6 +312,8 @@ async function syncSecretaries(req: NextRequest) {
     shareholders_synced: results.reduce((n, p) => n + p.shareholderShares.filter(s => s.name).length, 0),
     ssic_updated: ssicUpdated,
     ssic_skipped_empty: ssicSkippedEmpty,
+    ssic_write_errors: ssicWriteErrors,
+    ssic_first_error: firstSsicError,
   });
 }
 
