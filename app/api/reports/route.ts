@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
 import { customerSourceLabel } from '@/lib/customer-source';
+import { buildReportsCompanyRows, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT } from '@/lib/reports-data';
 
 // Reports — customer-profile analytics for leadership (Vincent, Cindy,
 // Samuell, Tan Yee Soon; gated on ApprovedAccount.canViewReports, see
@@ -15,6 +16,22 @@ import { customerSourceLabel } from '@/lib/customer-source';
 // route.ts does: pageAll() to fetch full tables, then plain in-memory
 // grouping — no SQL-side aggregation anywhere in this codebase, this
 // route doesn't introduce a new pattern.
+//
+// Extended same day (2026-09-03) with `companyRows` — a flat, enriched
+// per-company array — after Vincent reviewed the fixed-chart version above
+// and said it "看起来更像是一个摆设" (looks more like a decoration) and
+// asked for something he can genuinely operate himself: filters, a
+// dimension×metric picker, drill-down, export. Rather than a second,
+// parameterized aggregation endpoint, this route just ships the raw
+// per-company dataset once and app/reports/page.tsx's new "Explore" section
+// does all grouping/filtering/pivoting client-side — the same idiom
+// app/companies/page.tsx already uses (fetch the full active roster once,
+// filter in JS), and the only way to make dimension/filter switching
+// instant with zero network round-trip per change. SSIC is now real data
+// (companies.ssic_description_1, backfilled for the whole roster this same
+// day via scripts/backfill-ssic-full-roster.js) so it's a real dimension
+// here, not a placeholder. See lib/reports-data.ts for the join logic
+// shared with app/api/reports/export/route.ts.
 export const preferredRegion = 'sin1';
 
 type Row = Record<string, unknown>;
@@ -77,11 +94,13 @@ export async function GET(req: NextRequest) {
   const years = Array.from({ length: YEARS_BACK }, (_, i) => thisYear - YEARS_BACK + 1 + i);
 
   const [companies, masterList, arRows, qbInvoices] = await Promise.all([
-    pageAll(() => sb.from('companies').select('company_type, has_agm, has_xbrl, has_accounts, has_tax, has_nd, uses_address, is_active, customer_source')),
-    pageAll(() => sb.from('master_list').select('list_type, join_date, update_date')),
+    pageAll(() => sb.from('companies').select(REPORTS_COMPANY_SELECT)),
+    pageAll(() => sb.from('master_list').select(`list_type, update_date, company_name, ${REPORTS_MASTER_LIST_SELECT}`)),
     pageAll(() => sb.from('ar_reminder').select('pic, acc_pic, tax_pic, filling_date').or('status.is.null,status.neq.Excluded')),
     pageAll(() => sb.from('quickbooks_invoices').select('txn_date, total_amt')),
   ]);
+
+  const companyRows = buildReportsCompanyRows(companies, masterList);
 
   const active = companies.filter(c => c.is_active);
 
@@ -120,12 +139,30 @@ export async function GET(req: NextRequest) {
   //    field; see this route's own top comment and parseFlexibleDate's). ──
   const newByYear: Record<number, number> = {};
   const churnedByYear: Record<number, number> = {};
+  // Per-year row lists for the "New This Year"/"Churned This Year" KPI-card
+  // drill-down (2026-09-03) — sourced straight from master_list, never by
+  // joining back to companies, because a struck-off company can be fully
+  // ABSENT from companies (confirmed live in app/api/late-filing/route.ts's
+  // own comment: "a company fully struck off and removed from `companies`
+  // entirely" — e.g. ADVANCE BRIGHT GLOBAL, FULLRICH INTERNATIONAL). Joining
+  // back for company_type/SSIC would silently under-populate exactly the
+  // churned rows most likely to need it.
+  const newRowsByYear: Record<number, { companyName: string; uen: string | null }[]> = {};
+  const churnedRowsByYear: Record<number, { companyName: string; uen: string | null }[]> = {};
   for (const m of masterList) {
     const jd = parseFlexibleDate(m.join_date);
-    if (jd) newByYear[jd.getFullYear()] = (newByYear[jd.getFullYear()] ?? 0) + 1;
+    if (jd) {
+      const y = jd.getFullYear();
+      newByYear[y] = (newByYear[y] ?? 0) + 1;
+      (newRowsByYear[y] ??= []).push({ companyName: m.company_name as string, uen: (m.roc_no as string | null) ?? null });
+    }
     if (m.list_type === 'terminated' || m.list_type === 'strike_off') {
       const ud = parseFlexibleDate(m.update_date);
-      if (ud) churnedByYear[ud.getFullYear()] = (churnedByYear[ud.getFullYear()] ?? 0) + 1;
+      if (ud) {
+        const y = ud.getFullYear();
+        churnedByYear[y] = (churnedByYear[y] ?? 0) + 1;
+        (churnedRowsByYear[y] ??= []).push({ companyName: m.company_name as string, uen: (m.roc_no as string | null) ?? null });
+      }
     }
   }
   const newClientsTrend = years.map(y => ({ label: String(y), value: newByYear[y] ?? 0 }));
@@ -171,13 +208,18 @@ export async function GET(req: NextRequest) {
     clientTypeDonut,
     serviceMix,
     sourceDonut,
-    flow: { years: years.map(String), newClientsTrend, churnedTrend },
+    flow: {
+      years: years.map(String), newClientsTrend, churnedTrend,
+      newByYearRows: newRowsByYear, churnedByYearRows: churnedRowsByYear,
+    },
     revenue: { years: years.map(String), invoiceCountTrend, revenueTrendThousands: revenueTrend },
     picWorkload,
+    companyRows,
     notes: {
-      clientType: 'Legal entity structure (Pte Ltd / Sole Prop / LLP, etc.) — not an industry classification. SSIC-based industry breakdown is a separate, not-yet-built addition.',
+      clientType: 'Legal entity structure (Pte Ltd / Sole Prop / LLP, etc.) — not an industry classification. See the Explore section below for a real SSIC industry breakdown.',
       flow: 'Based on master_list.join_date (client start) and .update_date on Terminated/Strike Off rows (an informal proxy for when status changed, not a guaranteed transition-date field) — dates are staff-typed free text in inconsistent formats, so treat this as directional, not exact.',
       source: '"Unknown" is expected for most of the existing roster — customer_source is a new field staff tag going forward from Company 360, not backfilled from history.',
+      revenue: 'Per-company revenue is not offered as an Explore metric — attributing quickbooks_invoices to a specific company reliably needs the same fuzzy company-name matching lib/company-360.ts uses for one company at a time (docs/FEATURE_MAP.md flags that matching as high-risk shared logic); running it across the whole roster for a leadership-facing aggregate risks misattributed figures in a way a single Company 360 lookup does not. The Revenue/Invoice Volume chart above stays company-agnostic (a plain by-year total) for that reason.',
     },
   });
 }

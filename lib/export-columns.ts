@@ -94,6 +94,28 @@ export const ACTIVE_CLIENT_COLUMNS: ExportColumn[] = [
   { key: 'grade', label: 'Grade', width: 12 },
 ];
 
+// The Reports "Explore" full-roster download (app/api/reports/export) —
+// 2026-09-03. Values are pre-mapped to plain display strings (Yes/blank for
+// the service flags, the customer-source label instead of its raw stored
+// value) before reaching buildWorkbook, so no new ExportColumn.format
+// variant is needed here.
+export const REPORTS_EXPORT_COLUMNS: ExportColumn[] = [
+  { key: 'companyName', label: 'Company Name', width: 42 },
+  { key: 'uen', label: 'UEN', width: 18 },
+  { key: 'companyType', label: 'Company Type', width: 32 },
+  { key: 'ssicDescription1', label: 'SSIC (Primary)', width: 42 },
+  { key: 'customerSource', label: 'Customer Source', width: 20 },
+  { key: 'twStatus', label: 'Status', width: 14 },
+  { key: 'pic', label: 'Secretary PIC', width: 18, format: 'staffName' },
+  { key: 'usesAddress', label: 'Address Service', width: 14 },
+  { key: 'hasNd', label: 'Nominee Director', width: 16 },
+  { key: 'hasAgm', label: 'AGM', width: 10 },
+  { key: 'hasXbrl', label: 'XBRL', width: 10 },
+  { key: 'hasAccounts', label: 'Accounts', width: 10 },
+  { key: 'hasTax', label: 'Tax', width: 10 },
+  { key: 'joinDate', label: 'Join Date', width: 14, format: 'date' },
+];
+
 function formatCell(raw: unknown, format: ExportColumn['format']): string {
   const text = raw == null ? '' : String(raw).trim();
   if (!text) return '';
