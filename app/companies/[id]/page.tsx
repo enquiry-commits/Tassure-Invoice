@@ -78,16 +78,6 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             <div style={{ fontSize: 12 }}>{company.companyType || '—'}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Primary)</div>
-            <div style={{ fontSize: 12 }}>{company.ssicCode1 ? `${company.ssicCode1} — ${company.ssicDescription1 || '—'}` : '—'}</div>
-          </div>
-          {company.ssicCode2 && (
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Secondary)</div>
-              <div style={{ fontSize: 12 }}>{`${company.ssicCode2} — ${company.ssicDescription2 || '—'}`}</div>
-            </div>
-          )}
-          <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>FYE</div>
             <div style={{ fontSize: 12 }}>{company.fyeMonth || '—'}{company.fyeDay ? ` ${company.fyeDay}` : ''}</div>
           </div>
@@ -119,6 +109,24 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Tel</div>
               <div style={{ fontSize: 12 }}>{(ml.tel as string) || '—'}</div>
+            </div>
+          )}
+          {/* SSIC on its own row (2026-09-03, Vincent: "SSIC 可以放在第3行") —
+              descriptions run long ("SHIPPING COMPANIES, INCLUDING
+              CHARTERING OF SHIPS AND BOATS WITH CREW (FREIGHT)"), so mixed
+              in with the short identity fields above it forced that whole
+              row taller and looked cramped. Placed last (not right after
+              Company Type) so it naturally wraps to its own row instead of
+              disrupting the compact fields' row height; spans 2 columns
+              each for the same reason Invoice Address does. */}
+          <div style={{ gridColumn: 'span 2' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Primary)</div>
+            <div style={{ fontSize: 12 }}>{company.ssicCode1 ? `${company.ssicCode1} — ${company.ssicDescription1 || '—'}` : '—'}</div>
+          </div>
+          {company.ssicCode2 && (
+            <div style={{ gridColumn: 'span 2' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Secondary)</div>
+              <div style={{ fontSize: 12 }}>{`${company.ssicCode2} — ${company.ssicDescription2 || '—'}`}</div>
             </div>
           )}
         </div>
