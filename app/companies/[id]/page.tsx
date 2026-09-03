@@ -60,11 +60,20 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         {/* Two explicit rows (2026-09-03, Vincent's revised exact spec:
             row 1 UEN/Status/Client Type/Company Type/FYE/Secretary PIC/
             Contact/Customer Source, row 2 Invoice Address/SSIC Primary/
-            Secondary) — each its own grid rather than one flat auto-fit
-            grid, so the grouping holds regardless of viewport width
-            instead of depending on how many items happen to fit per line. */}
+            Secondary). Fixed column COUNTS (repeat(8,...) / repeat(3,...)),
+            not auto-fit/minmax — auto-fit's column count depends on how
+            many 180px-minimum items actually fit per line, and with 8
+            items that silently dropped to 7-per-line at Vincent's real
+            screen width, leaving Customer Source stranded alone on its own
+            line with a huge empty gap next to it ("有点不整齐"). A fixed
+            count always renders exactly one row, at any width — cells get
+            narrower instead of wrapping unevenly. minmax(0,1fr), not plain
+            1fr, so a long value (an email address, a long SSIC description)
+            can't force a column wider than its fair share and push the
+            layout off (the standard fix for grid's default min-width:auto
+            on children). */}
         <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, minmax(0,1fr))', gap: 16 }}>
             <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>UEN</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -114,19 +123,19 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 16 }}>
             {ml?.invoice_address != null && (
-              <div style={{ gridColumn: 'span 2' }}>
+              <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Invoice Address</div>
                 <div style={{ fontSize: 12 }}>{(ml.invoice_address as string) || '—'}</div>
               </div>
             )}
-            <div style={{ gridColumn: 'span 2' }}>
+            <div>
               <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Primary)</div>
               <div style={{ fontSize: 12 }}>{company.ssicCode1 ? `${company.ssicCode1} — ${company.ssicDescription1 || '—'}` : '—'}</div>
             </div>
             {company.ssicCode2 && (
-              <div style={{ gridColumn: 'span 2' }}>
+              <div>
                 <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Secondary)</div>
                 <div style={{ fontSize: 12 }}>{`${company.ssicCode2} — ${company.ssicDescription2 || '—'}`}</div>
               </div>
