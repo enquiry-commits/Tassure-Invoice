@@ -53,7 +53,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <header className="desktop-only flex items-center justify-between px-8 flex-shrink-0 z-50" style={{ height: 70, background: 'var(--header-bg)', borderBottom: '1px solid rgba(30,58,95,0.08)', boxShadow: '0 2px 12px rgba(0,0,0,0.04)' }}>
         <div className="flex items-center" style={{ gap: 12 }}>
           <Image src="/logo.png" alt="Tassure" height={44} width={44} className="object-contain rounded" priority />
-          <span style={{ fontSize: 18, fontWeight: 800, color: '#1e3a5f', letterSpacing: '-0.3px' }}>Tassure Corporate Services System</span>
+          <span style={{ fontSize: 18, fontWeight: 800, color: '#1e3a5f', letterSpacing: '-0.3px' }}>TCS</span>
         </div>
         <div className="flex items-center" style={{ gap: 20 }}>
           <div style={{ display: 'grid', justifyItems: 'end', lineHeight: 1.25 }}>
