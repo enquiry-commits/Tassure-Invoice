@@ -8,7 +8,7 @@ import CopyUenButton from './CopyUenButton';
 import CustomerSourceField from './CustomerSourceField';
 import {
   StatusBadge, MatchQualityNote,
-  ArAgmSection, InvoicesSection, NdSection, CommsSection, DocsGeneratedSection, TrademarkSection,
+  ArAgmSection, InvoicesSection, NdSection, CommsSection, TrademarkSection,
   OfficialsSection, ShareholdersSection,
 } from './_components';
 
@@ -147,7 +147,13 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
       <InvoicesSection invoices={data.invoices} />
       <NdSection nd={data.nomineeDirector} />
       <CommsSection drafts={data.communications.drafts} />
-      <DocsGeneratedSection docs={data.documentsGenerated} />
+      {/* Documents Generated section removed 2026-09-03 (Vincent: "这个不需
+          要") — Post Incorporate document generation is still early (only
+          1 of 13 planned templates live), so this showed an empty state
+          for nearly every company. The underlying data/component
+          (getCompany360's documentsGenerated, DocsGeneratedSection in
+          _components.tsx) are left in place, not deleted, in case this
+          is worth bringing back once more document types exist. */}
       <TrademarkSection trademark={data.trademark} />
     </div>
   );
