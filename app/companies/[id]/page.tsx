@@ -57,78 +57,84 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           <Building2 size={15} color="#fff" />
           <h2 className="system-list-title">{company.companyName}</h2>
         </div>
-        <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 16 }}>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>UEN</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span className="company-registration-text">{company.registrationNo || '—'}</span>
-              {company.registrationNo && <CopyUenButton uen={company.registrationNo} />}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Status</div>
-            <StatusBadge status={company.twStatus} />
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Client Type</div>
-            <div style={{ fontSize: 12 }}>{company.clientType || '—'}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Company Type</div>
-            <div style={{ fontSize: 12 }}>{company.companyType || '—'}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>FYE</div>
-            <div style={{ fontSize: 12 }}>{company.fyeMonth || '—'}{company.fyeDay ? ` ${company.fyeDay}` : ''}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Secretary PIC</div>
-            <div style={{ fontSize: 12 }}>{formatStaffName(company.secPic ?? company.pic) || '—'}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Contact</div>
-            <div style={{ fontSize: 12 }}>{company.primaryContact?.contactName || company.bestEmail || '—'}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Customer Source</div>
-            <CustomerSourceField companyId={company.id} initialValue={company.customerSource} />
-          </div>
-          {company.parentCompanyName && (
+        {/* Three explicit rows (2026-09-03, Vincent's exact spec: row 1
+            UEN/Status/Client Type/Company Type/FYE/Secretary PIC, row 2
+            Customer Source/Contact/Invoice Address, row 3 SSIC Primary/
+            Secondary) — each its own grid rather than one flat auto-fit
+            grid, so the grouping holds regardless of viewport width
+            instead of depending on how many items happen to fit per line. */}
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 16 }}>
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Parent Company</div>
-              <div style={{ fontSize: 12 }}>{company.parentCompanyName}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>UEN</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span className="company-registration-text">{company.registrationNo || '—'}</span>
+                {company.registrationNo && <CopyUenButton uen={company.registrationNo} />}
+              </div>
             </div>
-          )}
-          {ml?.invoice_address != null && (
-            <div style={{ gridColumn: 'span 2' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Invoice Address</div>
-              <div style={{ fontSize: 12 }}>{(ml.invoice_address as string) || '—'}</div>
-            </div>
-          )}
-          {ml?.tel != null && (
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Tel</div>
-              <div style={{ fontSize: 12 }}>{(ml.tel as string) || '—'}</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Status</div>
+              <StatusBadge status={company.twStatus} />
             </div>
-          )}
-          {/* SSIC on its own row (2026-09-03, Vincent: "SSIC 可以放在第3行") —
-              descriptions run long ("SHIPPING COMPANIES, INCLUDING
-              CHARTERING OF SHIPS AND BOATS WITH CREW (FREIGHT)"), so mixed
-              in with the short identity fields above it forced that whole
-              row taller and looked cramped. Placed last (not right after
-              Company Type) so it naturally wraps to its own row instead of
-              disrupting the compact fields' row height; spans 2 columns
-              each for the same reason Invoice Address does. */}
-          <div style={{ gridColumn: 'span 2' }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Primary)</div>
-            <div style={{ fontSize: 12 }}>{company.ssicCode1 ? `${company.ssicCode1} — ${company.ssicDescription1 || '—'}` : '—'}</div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Client Type</div>
+              <div style={{ fontSize: 12 }}>{company.clientType || '—'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Company Type</div>
+              <div style={{ fontSize: 12 }}>{company.companyType || '—'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>FYE</div>
+              <div style={{ fontSize: 12 }}>{company.fyeMonth || '—'}{company.fyeDay ? ` ${company.fyeDay}` : ''}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Secretary PIC</div>
+              <div style={{ fontSize: 12 }}>{formatStaffName(company.secPic ?? company.pic) || '—'}</div>
+            </div>
+            {company.parentCompanyName && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Parent Company</div>
+                <div style={{ fontSize: 12 }}>{company.parentCompanyName}</div>
+              </div>
+            )}
           </div>
-          {company.ssicCode2 && (
-            <div style={{ gridColumn: 'span 2' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Secondary)</div>
-              <div style={{ fontSize: 12 }}>{`${company.ssicCode2} — ${company.ssicDescription2 || '—'}`}</div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Customer Source</div>
+              <CustomerSourceField companyId={company.id} initialValue={company.customerSource} />
             </div>
-          )}
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Contact</div>
+              <div style={{ fontSize: 12 }}>{company.primaryContact?.contactName || company.bestEmail || '—'}</div>
+            </div>
+            {ml?.invoice_address != null && (
+              <div style={{ gridColumn: 'span 2' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Invoice Address</div>
+                <div style={{ fontSize: 12 }}>{(ml.invoice_address as string) || '—'}</div>
+              </div>
+            )}
+            {ml?.tel != null && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Tel</div>
+                <div style={{ fontSize: 12 }}>{(ml.tel as string) || '—'}</div>
+              </div>
+            )}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 16 }}>
+            <div style={{ gridColumn: 'span 2' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Primary)</div>
+              <div style={{ fontSize: 12 }}>{company.ssicCode1 ? `${company.ssicCode1} — ${company.ssicDescription1 || '—'}` : '—'}</div>
+            </div>
+            {company.ssicCode2 && (
+              <div style={{ gridColumn: 'span 2' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>SSIC (Secondary)</div>
+                <div style={{ fontSize: 12 }}>{`${company.ssicCode2} — ${company.ssicDescription2 || '—'}`}</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
