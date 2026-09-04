@@ -23,6 +23,7 @@ import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescriptio
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
 import { getHelperHealth, isHelperOutdated, buildMailtoLink, type DraftLike } from '@/lib/draft-helper-client';
 import { isValidEmail } from '@/lib/campaign-recipients';
+import { manualInvoiceOverrides } from '@/lib/manual-invoice-marker';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
@@ -212,27 +213,6 @@ function BillingStatusPill({ label, color, background, border, title, muted = fa
   );
 }
 
-// Manual "already invoiced outside the system" marker (2026-09-03, Vincent
-// re: WOLVEZ CAPITAL — Chelsea invoiced two FYE cycles ahead of a client's
-// request, one through this system (generated_invoices has it) and one
-// typed straight into QuickBooks to avoid confusing the two — so
-// billedCyclesMap's own QB-description parsing (app/api/billing/renewals/
-// route.ts) never picked it up, and this cycle kept showing "not invoiced"
-// every time the page loaded. A plain Remarks note alone doesn't stop that
-// — nothing reads remarks for this check — so this is a real, parseable
-// marker in the SAME Remarks field AR Reminder already lets staff free-type
-// into (REMARKS_OPTIONS' presets don't preclude custom text), not a new
-// field/button. Format: "MANUALLY INVOICED: TAB #02611029" (or TAC).
-const MANUAL_INVOICE_MARKER_RE = /MANUALLY INVOICED:\s*(TAB|TAC)\s*#?\s*(\S+)/gi;
-function manualInvoiceOverrides(remarks: string | null | undefined): { company: 'TAB' | 'TAC'; invoiceNo: string }[] {
-  if (!remarks) return [];
-  const out: { company: 'TAB' | 'TAC'; invoiceNo: string }[] = [];
-  const re = new RegExp(MANUAL_INVOICE_MARKER_RE);
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(remarks))) out.push({ company: m[1].toUpperCase() as 'TAB' | 'TAC', invoiceNo: m[2] });
-  return out;
-}
-
 function BillingInvoiceReference({ company, invoiceNo, title, muted = false }: {
   company: 'TAB' | 'TAC'; invoiceNo?: string | null; title?: string; muted?: boolean;
 }) {
@@ -261,16 +241,48 @@ function BillingInvoiceReference({ company, invoiceNo, title, muted = false }: {
 // through this system, or not yet raised at all) — same "system record when
 // we have one, manual fallback when we don't" pattern notInvoicedYet() below
 // already uses for the Billing tab.
+//
+// 2026-09-04: also folds in any MANUALLY INVOICED marker from this row's own
+// remarks — a real, separate bug from the Billing Drafts one fixed earlier
+// the same day: this column's tab_invoice_no/tac_invoice_no come from a
+// completely different computation (app/api/ar-reminder/route.ts's
+// latestGenInvoice(), generated_invoices only) that never looked at the
+// marker at all, so it stayed invisible here even after Billing Drafts was
+// fixed to show it. Computed client-side from r.remarks (already present on
+// every ARRecord) rather than touching the server route, combined with the
+// real invoice(s) and deduped by invoice number — same shape as Billing
+// Drafts' invoiceRefsFor().
+function arInvoiceRefs(r: ARRecord, company: 'TAB' | 'TAC'): { invoiceNo: string; manual: boolean }[] {
+  const real = company === 'TAB' ? r.tab_invoice_no : r.tac_invoice_no;
+  const manual = manualInvoiceOverrides(r.remarks).filter(o => o.company === company);
+  const seen = new Set<string>();
+  const out: { invoiceNo: string; manual: boolean }[] = [];
+  if (real) { out.push({ invoiceNo: real, manual: false }); seen.add(real); }
+  for (const m of manual) {
+    if (seen.has(m.invoiceNo)) continue;
+    seen.add(m.invoiceNo);
+    out.push({ invoiceNo: m.invoiceNo, manual: true });
+  }
+  return out;
+}
 function ArInvoiceCell({ r, onSave, placeholder }: {
   r: ARRecord; onSave: (id: number, field: string, val: string) => void; placeholder?: string;
 }) {
-  if (!r.tab_invoice_no && !r.tac_invoice_no) {
+  const tabRefs = arInvoiceRefs(r, 'TAB');
+  const tacRefs = arInvoiceRefs(r, 'TAC');
+  if (!tabRefs.length && !tacRefs.length) {
     return <EditField id={r.id} field="ar_status" value={r.ar_status} onSave={onSave} placeholder={placeholder} />;
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
-      {r.tab_invoice_no && <BillingInvoiceReference company="TAB" invoiceNo={r.tab_invoice_no} />}
-      {r.tac_invoice_no && <BillingInvoiceReference company="TAC" invoiceNo={r.tac_invoice_no} />}
+      {tabRefs.map(ref => (
+        <BillingInvoiceReference key={`tab-${ref.invoiceNo}`} company="TAB" invoiceNo={ref.invoiceNo} muted={ref.manual}
+          title={ref.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />
+      ))}
+      {tacRefs.map(ref => (
+        <BillingInvoiceReference key={`tac-${ref.invoiceNo}`} company="TAC" invoiceNo={ref.invoiceNo} muted={ref.manual}
+          title={ref.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />
+      ))}
     </div>
   );
 }
