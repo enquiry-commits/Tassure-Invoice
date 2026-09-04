@@ -518,6 +518,24 @@ again.
   `null`) through cellText → saveEdit's request body → the PATCH route's
   `coerce()` and CAS filter — same rule applies to the write side too
   (writing `null` into a NOT NULL column 500s).
+- **INV-DATA-014** — `ar_reminder.remarks` (the AR Reminder tab's own
+  compliance-workflow Remarks column, TERMINATED/STRIKE OFF/AR COMPLETED)
+  and `ar_reminder.billing_remarks` (Billing Drafts' own separate free-typed
+  note, split off 2026-08-17 specifically so the two could never collide)
+  are DIFFERENT columns with similar names and an almost-identical purpose —
+  any feature reading "the Remarks field" on a `CompanyBilling`/`ARCompany`-
+  shaped object must double check which one it actually wants against the
+  live data, not just the field name. The `MANUALLY INVOICED` marker feature
+  was built to read `billingRemarks` (`billing_remarks`) but the marker
+  itself was designed to live in `remarks` — a wrong-field bug that shipped
+  silently: `notInvoicedYet()`'s marker fallback and the invoice-number
+  display both always read the empty field, so the feature could never have
+  worked for any company, not just the one Vincent happened to test with
+  (whose row hid the bug further, since it already had a real invoice
+  satisfying the check through the OTHER path). Caught only because Vincent
+  tested the exact display it was supposed to affect and it didn't show —
+  verify a "reads a remarks-like field" feature against a real row that
+  actually has the target field populated, not just that the code compiles.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

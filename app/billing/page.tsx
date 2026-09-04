@@ -2409,6 +2409,14 @@ type ARCompany = {
   due_date: string | null; pic: string | null; status: string | null;
   acc_pic: string | null; tax_pic: string | null; dormant: string | null;
   billing_remarks: string | null;
+  // The AR Reminder tab's own Remarks column (TERMINATED/STRIKE OFF/AR
+  // COMPLETED dropdown + free text) — a genuinely separate field from
+  // billing_remarks above (Billing Drafts' own free-typed note), kept apart
+  // on purpose since 2026-08-17 to avoid a billing note colliding with that
+  // compliance-workflow status. The MANUALLY INVOICED marker lives HERE
+  // (Vincent chose to reuse this existing field, not billing_remarks) — see
+  // manualInvoiceOverrides()'s callers below.
+  remarks: string | null;
   services: ARServiceFlags;
 };
 
@@ -2451,6 +2459,7 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
     email: matched?.email ?? null,
     contactName: matched?.contactName ?? null,
     billingRemarks: ar.billing_remarks ?? null,
+    arRemarks: ar.remarks ?? null,
     billedCycles: matched?.billedCycles ?? [],
     priorLines: matched?.priorLines ?? [],
     priorInvoiceDate: matched?.priorInvoiceDate ?? null,
@@ -2815,7 +2824,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     const real = generatedThisCycle(c).filter(g => g.qbCompany === company && g.invoiceNo)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map(g => ({ invoiceNo: g.invoiceNo as string, manual: false }));
-    const manual = manualInvoiceOverrides(c.billingRemarks).filter(o => o.company === company)
+    const manual = manualInvoiceOverrides(c.arRemarks).filter(o => o.company === company)
       .map(o => ({ invoiceNo: o.invoiceNo, manual: true }));
     const seen = new Set<string>();
     const out: InvoiceRef[] = [];
@@ -2829,7 +2838,7 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   const notInvoicedYet = (c: CompanyBilling) =>
     !currentFye ? true
     : generatedThisCycle(c).length > 0 ? false
-    : manualInvoiceOverrides(c.billingRemarks).length > 0 ? false
+    : manualInvoiceOverrides(c.arRemarks).length > 0 ? false
     : !(c.billedCycles ?? []).includes(currentFye);
   const needsCount = monthCompanies.filter(notInvoicedYet).length;
   const filtered = monthCompanies.filter(c => {

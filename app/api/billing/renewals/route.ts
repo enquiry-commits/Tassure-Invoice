@@ -67,6 +67,12 @@ export interface CompanyBilling {
   // Sourced only from the matching ar_reminder row (see arToBillingRow in
   // app/billing/page.tsx) -- this endpoint never sets it, only defaults it.
   billingRemarks: string | null;
+  // ar_reminder.remarks (the AR Reminder tab's own Remarks column — distinct
+  // from billing_remarks above) — same sourcing as billingRemarks: only
+  // arToBillingRow ever sets this to a real value, this endpoint defaults it
+  // to null. Carries the MANUALLY INVOICED marker (see app/billing/page.tsx's
+  // manualInvoiceOverrides()).
+  arRemarks: string | null;
   billedCycles: string[]; // FYE dates ("dd.mm.yyyy") this company has already been invoiced for
   priorLines: PriorLine[]; // every line from the most recent renewal invoice (to clone)
   priorInvoiceDate: string | null;
@@ -542,6 +548,7 @@ export async function GET(req: NextRequest) {
       email: isValidEmail(company.best_email) ? company.best_email : isValidEmail(primary?.email) ? primary!.email! : null,
       contactName: primary?.contactName ?? null,
       billingRemarks: null,
+      arRemarks: null,
       billedCycles: [...(billedCyclesMap.get(normName) ?? [])],
       priorLines: carriedLines,
       priorInvoiceDate: prior?.txn_date ?? null,
