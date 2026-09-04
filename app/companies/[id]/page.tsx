@@ -141,12 +141,16 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {/* Order per Vincent, 2026-09-04: "AR/AGM CYCLES 放在第2模块，
+          Communications放在第3模块" — counting the header card itself as
+          module 1, so these two move to right after it; everything else
+          keeps its previous relative order. */}
+      <ArAgmSection cycles={data.arReminderCycles} />
+      <CommsSection drafts={data.communications.drafts} />
       <OfficialsSection officials={data.officials} />
       <ShareholdersSection shareholders={data.shareholders} />
-      <ArAgmSection cycles={data.arReminderCycles} />
       <InvoicesSection invoices={data.invoices} />
       <NdSection nd={data.nomineeDirector} />
-      <CommsSection drafts={data.communications.drafts} />
       {/* Documents Generated section removed 2026-09-03 (Vincent: "这个不需
           要") — Post Incorporate document generation is still early (only
           1 of 13 planned templates live), so this showed an empty state
