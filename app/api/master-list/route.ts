@@ -44,6 +44,12 @@ const BOOLEAN_FIELDS = new Set(['nd_active', 'secretary_active', 'acc_active', '
 const AUTO_SYNCED_FIELDS = new Set([
   'last_agm_date', 'last_ar_date', 'last_accounts_date', 'next_agm_due_date',
   'invoice_address', 'secretary', 'nominee_director', 'nd_active',
+  // "Active" column — mirrors companies.tw_status (TeamWork's own Status:
+  // Active / Striking Off / Terminated / …), across every Master List page,
+  // not just Active Client. Per Vincent: "MASTER LIST 这边的 ACTIVE 就是TW
+  // 里面的 STATUS." See app/api/teamwork/sync/route.ts's master_list status
+  // block for the write side.
+  'status',
   // Added per Vincent: "CODE / EMAIL ... 都要做自动化处理" — internal_code
   // mirrors companies.internal_code (TeamWork's own client_id, already
   // synced there), email mirrors companies.best_email/tw_to_emails (already

@@ -378,9 +378,12 @@ function ColumnFilterMenu({ field, label, rows, selected, onApply }: {
 
 function statusColor(v: string | null) {
   const s = (v ?? '').toUpperCase();
-  if (s.includes('STRUCK OFF'))  return { bg: '#fee2e2', color: '#b91c1c' };
+  // STRIKING OFF added alongside STRUCK OFF: TeamWork's own Status (now
+  // auto-synced into this column, see app/api/teamwork/sync/route.ts) uses
+  // "Striking Off" for a company mid-process, not yet actually struck off.
+  if (s.includes('STRUCK OFF') || s.includes('STRIKING OFF')) return { bg: '#fee2e2', color: '#b91c1c' };
   if (s.includes('TERMINAT'))    return { bg: '#fef3c7', color: '#b45309' };
-  if (s === 'YES')               return { bg: '#dcfce7', color: '#15803d' };
+  if (s === 'YES' || s === 'ACTIVE') return { bg: '#dcfce7', color: '#15803d' };
   if (!s)                        return null;
   return { bg: '#f1f5f9', color: '#64748b' };
 }

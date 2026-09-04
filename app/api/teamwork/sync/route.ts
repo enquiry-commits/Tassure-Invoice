@@ -170,6 +170,11 @@ async function syncTeamworkCompanies() {
   // UEN -> TeamWork's own client code (Vincent: "CODE...都要做自动化处理") —
   // collected alongside regAddrByRegNo, same loop, no extra TeamWork call.
   const codeByRegNo = new Map<string, string>();
+  // UEN -> TeamWork's own Status (Internal CSS Status: Active / Striking Off
+  // / Terminated / …), collected the same way — used below to auto-fill
+  // Master List's "Active" column (Vincent: "MASTER LIST 这边的 ACTIVE 就是
+  // TW里面的 STATUS").
+  const statusByRegNo = new Map<string, string>();
   const updates: { id: number; patch: Record<string, unknown> }[] = [];
   const inserts: Record<string, unknown>[] = [];
   const unknownPicIds: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
@@ -217,6 +222,7 @@ async function syncTeamworkCompanies() {
     }
     if (regNo && regAddr) regAddrByRegNo.set(regNo.toUpperCase(), regAddr);
     if (regNo && clientCode) codeByRegNo.set(regNo.toUpperCase(), clientCode);
+    if (regNo && status) statusByRegNo.set(regNo.toUpperCase(), status);
 
     if (row) {
       matched++;
@@ -537,6 +543,46 @@ async function syncTeamworkCompanies() {
     }
   }
 
+  // ── Master List "Active" (status) — mirrors TeamWork's own company Status
+  // (Internal CSS Status: Active / Striking Off / Terminated / …), across
+  // EVERY Master List page that shows this column (Active Client, Ad-Hoc,
+  // Strike Off, Terminated, Change Co Name), not just Active Client like the
+  // address/code/email blocks above — staff need to see when TeamWork itself
+  // has already moved a company to Striking Off/Terminated even before this
+  // list has been updated to match. Per Vincent: "MASTER LIST 这边的 ACTIVE
+  // 就是TW里面的 STATUS." Same manual_fields protection as every other
+  // auto-synced field: a staff edit locks the row and stops future overwrites
+  // until cleared back to empty.
+  let masterListStatusUpdated = 0, masterListStatusErrors = 0;
+  {
+    const mlStatusRows: { id: number; roc_no: string | null; status: string | null; manual_fields: Record<string, boolean> | null }[] = [];
+    for (let start = 0; ; start += 1000) {
+      const { data: page } = await supabase.from('master_list')
+        .select('id, roc_no, status, manual_fields').range(start, start + 999);
+      mlStatusRows.push(...(page ?? []));
+      if (!page || page.length < 1000) break;
+    }
+    const statusPatches = mlStatusRows.flatMap(r => {
+      if (!r.roc_no || r.manual_fields?.status) return [];
+      const twStat = statusByRegNo.get(String(r.roc_no).trim().toUpperCase());
+      if (!twStat || twStat === r.status) return [];
+      return [{ id: r.id, oldValue: r.status, newValue: twStat }];
+    });
+    for (let i = 0; i < statusPatches.length; i += 10) {
+      const results = await Promise.all(statusPatches.slice(i, i + 10).map(async p => {
+        const { error: err } = await supabase.from('master_list')
+          .update({ status: p.newValue, updated_at: now }).eq('id', p.id);
+        if (err) return err.message;
+        await logFieldChange(supabase, {
+          tableName: 'master_list', rowId: p.id, field: 'status',
+          oldValue: p.oldValue, newValue: p.newValue, changedBy: 'system:teamwork',
+        });
+        return null;
+      }));
+      for (const err of results) err ? masterListStatusErrors++ : masterListStatusUpdated++;
+    }
+  }
+
   // Vincent, 2026-08-29: the dashboard's exception register only ever
   // shows this top-level `error` field (run.fail() below falls back to a
   // generic "TeamWork company sync failed." whenever this is undefined,
@@ -565,6 +611,8 @@ async function syncTeamworkCompanies() {
     active_client_code_errors: activeClientCodeErrors,
     active_client_email_updates: activeClientEmailUpdated,
     active_client_email_errors: activeClientEmailErrors,
+    master_list_status_updates: masterListStatusUpdated,
+    master_list_status_errors: masterListStatusErrors,
     inserted: insertedCount,
     inserted_names: dedupedInserts.map(r => r.company_name),
     skipped_ambiguous_names: skippedAmbiguous,
