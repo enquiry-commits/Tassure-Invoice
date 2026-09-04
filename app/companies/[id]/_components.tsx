@@ -89,40 +89,53 @@ export function MatchQualityNote({ warnings }: { warnings: string[] }) {
   );
 }
 
-// Shared with CommsSection below — must be the exact same formula as the
-// header card's own field grid in page.tsx (repeat(5, minmax(0,1fr)),
-// gap: 16) for the two to align (2026-09-04, Vincent: "上下没有对齐，第2和
-// 第3模块要和 第1模块对齐"). An HTML <table>'s colgroup percentages can
-// never exactly reproduce a CSS grid's gap-based column math (a table has
-// no native concept of a gap between columns, only per-cell padding), so
-// this replaced the previous <table> markup with the same div/grid row
-// pattern MasterListTable.tsx already uses elsewhere in this codebase —
-// not a new technique, just applied here for the first time on this page.
+// Used by CommsSection below — must be the exact same formula as the header
+// card's own field grid in page.tsx (repeat(5, minmax(0,1fr)), gap: 16) for
+// the two to align (2026-09-04, Vincent: "上下没有对齐，第2和第3模块要和
+// 第1模块对齐"). An HTML <table>'s colgroup percentages can never exactly
+// reproduce a CSS grid's gap-based column math (a table has no native
+// concept of a gap between columns, only per-cell padding), so this
+// replaced the previous <table> markup with the same div/grid row pattern
+// MasterListTable.tsx already uses elsewhere in this codebase — not a new
+// technique, just applied here for the first time on this page. NOT used by
+// ArAgmSection below anymore — see AR_AGM_GRID_COLS' own comment for why.
 const CARD_GRID_COLS = 'repeat(5, minmax(0,1fr))';
+
+// AR/AGM Cycles' own SEC PIC (ar_reminder.pic — this specific cycle's real
+// handler) turned out to genuinely diverge from the header card's Secretary
+// PIC (companies.sec_pic — a company-level assignment) for ~20% of real
+// companies, confirmed against production data (2026-09-04) after Vincent
+// asked why a real company's header PIC looked empty right after this
+// column was dropped — not the same field with a display quirk, two
+// legitimately different signals. Vincent: "(AR / AGM Cycles) 中的SEC PIC
+// 还是要保留" — restored as its own column. This makes 6 real columns here
+// (Due Date/Filed/SEC PIC/ACC PIC/TAX PIC/Remarks), one more than the
+// header card's 5-column grid, so per Vincent's own choice this section no
+// longer tries to align column-for-column with the header (CommsSection
+// still does, via CARD_GRID_COLS — this is scoped to ArAgmSection only).
+const AR_AGM_GRID_COLS = 'repeat(6, minmax(0,1fr))';
 
 export function ArAgmSection({ cycles }: { cycles: Company360['arReminderCycles'] }) {
   return (
     <DataCard title="AR / AGM Cycles" icon={<Calendar size={15} color="#fff" />} count={cycles.length} empty="No AR/AGM cycles on file for this company.">
-      {/* FYE and PIC columns dropped (2026-09-04, Vincent: "FYE 和 PIC 这两个
-          不需要在（AR / AGM Cycles）显示" — both already shown in the header
-          card above). The match badge (no header label) sits inline at the
-          end of the Remarks cell instead of being its own 6th grid column —
-          a 6th column would shrink the other 5 relative to the header's own
-          5-column grid and reintroduce the same misalignment this was meant
-          to fix. */}
-      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px' }}>
-        <div>Due Date</div><div>Filed</div><div>ACC PIC</div><div>TAX PIC</div><div>Remarks</div>
+      {/* FYE dropped (2026-09-04, Vincent: "FYE 和 PIC 这两个不需要在（AR /
+          AGM Cycles）显示" — already shown in the header card above). PIC
+          was also dropped then, but restored as SEC PIC — see AR_AGM_GRID_
+          COLS' own comment. */}
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: AR_AGM_GRID_COLS, gap: 16, padding: '10px 16px' }}>
+        <div>Due Date</div><div>Filed</div><div>SEC PIC</div><div>ACC PIC</div><div>TAX PIC</div><div>Remarks</div>
       </div>
       {cycles.map(c => {
         const filed = !!c.filling_date;
         const overdue = !filed && c.daysUntilDue !== null && c.daysUntilDue < 0;
         return (
-          <div key={c.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px', alignItems: 'center' }}>
+          <div key={c.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: AR_AGM_GRID_COLS, gap: 16, padding: '10px 16px', alignItems: 'center' }}>
             <div>
               {fmtDate(c.due_date as string)}
               {overdue && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: '#dc2626' }}>{Math.abs(c.daysUntilDue as number)}d overdue</span>}
             </div>
             <div>{filed ? fmtDate(c.filling_date as string) : <span style={{ color: '#cbd5e1' }}>—</span>}</div>
+            <div style={{ fontSize: 11 }}>{formatStaffName(c.pic as string) || '—'}</div>
             <div style={{ fontSize: 11 }}>{formatStaffName(c.acc_pic as string) || '—'}</div>
             <div style={{ fontSize: 11 }}>{formatStaffName(c.tax_pic as string) || '—'}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
@@ -341,27 +354,27 @@ export function TrademarkSection({ trademark }: { trademark: Company360['tradema
 // Matched by exact UEN (lib/company-360.ts), not fuzzy name matching, so no
 // MatchBadge needed on these two.
 export function OfficialsSection({ officials }: { officials: Company360['officials'] }) {
+  // Converted to the same 6-column grid as AR_AGM_GRID_COLS (2026-09-04,
+  // Vincent: "AR / AGM Cycles 6等分，就变成和Officials模块的6等分可以对齐了"
+  // — these two sections sit back-to-back on the page now, and per the
+  // table-vs-grid lesson already learned earlier the same day, the previous
+  // uneven colgroup percentages (22/16/16/14/16/16) could never genuinely
+  // align with a real grid no matter how close the numbers looked.
   return (
     <DataCard title="Officials" icon={<UserCog size={15} color="#fff" />} count={officials.length} empty="No officials on file from TeamWork for this company." scrollable={false}>
-      <table className="system-list-table" style={{ width: '100%' }}>
-        <colgroup>
-          <col style={{ width: '22%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} />
-          <col style={{ width: '14%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} />
-        </colgroup>
-        <thead><tr className="list-column-header-gray"><th>Name</th><th>Role</th><th>Sub-role(s)</th><th>Appointed</th><th>ID No.</th><th>Contact</th></tr></thead>
-        <tbody>
-          {officials.map((o, i) => (
-            <tr key={i} className="system-list-row">
-              <td style={{ padding: '6px 10px' }}>{(o.name as string) || '—'}</td>
-              <td style={{ padding: '6px 10px' }}>{(o.role as string) || '—'}</td>
-              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(o.sub_roles as string) || '—'}</td>
-              <td style={{ padding: '6px 10px' }}>{o.date_of_appointment ? fmtDate(o.date_of_appointment as string) : '—'}</td>
-              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(o.id_no as string) || '—'}</td>
-              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(o.email as string) || (o.mobile as string) || (o.telephone as string) || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: AR_AGM_GRID_COLS, gap: 16, padding: '10px 16px' }}>
+        <div>Name</div><div>Role</div><div>Sub-role(s)</div><div>Appointed</div><div>ID No.</div><div>Contact</div>
+      </div>
+      {officials.map((o, i) => (
+        <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: AR_AGM_GRID_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+          <div>{(o.name as string) || '—'}</div>
+          <div>{(o.role as string) || '—'}</div>
+          <div style={{ fontSize: 11 }}>{(o.sub_roles as string) || '—'}</div>
+          <div>{o.date_of_appointment ? fmtDate(o.date_of_appointment as string) : '—'}</div>
+          <div style={{ fontSize: 11 }}>{(o.id_no as string) || '—'}</div>
+          <div style={{ fontSize: 11 }}>{(o.email as string) || (o.mobile as string) || (o.telephone as string) || '—'}</div>
+        </div>
+      ))}
     </DataCard>
   );
 }

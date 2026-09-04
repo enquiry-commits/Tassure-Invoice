@@ -141,12 +141,15 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Order per Vincent, 2026-09-04: "AR/AGM CYCLES 放在第2模块，
-          Communications放在第3模块" — counting the header card itself as
-          module 1, so these two move to right after it; everything else
-          keeps its previous relative order. */}
-      <ArAgmSection cycles={data.arReminderCycles} />
+      {/* Order per Vincent, 2026-09-04: originally "AR/AGM CYCLES 放在第2模块，
+          Communications放在第3模块" (counting the header card as module 1),
+          then swapped again the same day: "Communications 变去 第2，AR / AGM
+          Cycles变去第3" — Communications now directly follows the header,
+          AR/AGM Cycles (now 6 equal columns, see AR_AGM_GRID_COLS) sits
+          right before Officials (also converted to the same 6-column grid)
+          so the two visually adjacent sections actually align. */}
       <CommsSection drafts={data.communications.drafts} />
+      <ArAgmSection cycles={data.arReminderCycles} />
       <OfficialsSection officials={data.officials} />
       <ShareholdersSection shareholders={data.shareholders} />
       <InvoicesSection invoices={data.invoices} />
