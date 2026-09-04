@@ -5,7 +5,13 @@ const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
   : 'https://quickbooks.api.intuit.com';
 
-export type QbCompany = 'TAB' | 'TAC';
+// 'TAB' is the default company (all basic services); 'TAC' handles Nominee
+// Director invoicing; 'TAO' (added 2026-09-04, connect-only phase — see
+// PROJECT_STATUS.md) handles Accounts/accounting invoicing. All three share
+// one Intuit OAuth app (QB_CLIENT_ID/QB_CLIENT_SECRET) — they're
+// distinguished purely by which QuickBooks company (realm) was authorized,
+// not by separate app credentials.
+export type QbCompany = 'TAB' | 'TAC' | 'TAO';
 
 interface TokenRow {
   realm_id: string;
@@ -71,8 +77,6 @@ async function safelyClearOAuthFailure(company: QbCompany) {
 }
 
 // Get stored tokens for a specific QB company, auto-refresh if expired.
-// 'TAB' is the default company (all basic services); 'TAC' is the second
-// company used only for Nominee Director invoicing.
 export async function getValidToken(
   company: QbCompany = 'TAB',
   options: GetValidTokenOptions = {},

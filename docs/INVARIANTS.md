@@ -433,6 +433,20 @@ again.
   corrected directly in QuickBooks after generation can otherwise leave
   stale text in the email body while the (always-live) attached PDF shows
   the corrected figure.
+- **INV-QB-011** — A `?company=` (or state/param-derived) value that
+  resolves which QuickBooks company (TAB/TAC/TAO) to act on must be
+  validated against the full known set and rejected outright when it isn't
+  one of them — never a binary `=== 'TAC' ? 'TAC' : 'TAB'`-style ternary,
+  which silently folds *every other value, including a real but not-yet-
+  supported company*, into TAB with no error. Found in `auth`/`callback`/
+  `status`/`invoice-pdf` routes and the sync POST handler when adding TAO
+  as a third company (2026-09-04) — before the fix, `?company=TAO` on any
+  of these would have silently connected/shown/served **TAB's** data,
+  the single most dangerous failure mode for a multi-company QB
+  integration since it looks like success. The text-label sibling of this
+  (invoice PDF filenames, `lib/invoice-filename.ts`) has the same failure
+  shape and needs the same explicit-match treatment, not just the token/
+  data-layer routes.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

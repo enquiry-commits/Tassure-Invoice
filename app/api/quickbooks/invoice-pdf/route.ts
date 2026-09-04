@@ -7,8 +7,17 @@ const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
 
 export const dynamic = 'force-dynamic';
 
+const VALID_COMPANIES = new Set<QbCompany>(['TAB', 'TAC', 'TAO']);
+
 export async function GET(req: NextRequest) {
-  const company: QbCompany = req.nextUrl.searchParams.get('company') === 'TAC' ? 'TAC' : 'TAB';
+  // Was `=== 'TAC' ? 'TAC' : 'TAB'` — a real bug: any other value (including
+  // a future ?company=TAO before this fix) silently fetched TAB's PDF with
+  // no error, rather than the company actually asked for.
+  const companyParam = req.nextUrl.searchParams.get('company');
+  const company: QbCompany = companyParam === null ? 'TAB' : (companyParam as QbCompany);
+  if (!VALID_COMPANIES.has(company)) {
+    return Response.json({ error: 'A valid QuickBooks company (TAB, TAC, or TAO) is required.' }, { status: 400 });
+  }
   const invoiceId = req.nextUrl.searchParams.get('id')?.trim() ?? '';
   if (!/^[A-Za-z0-9-]+$/.test(invoiceId)) {
     return Response.json({ error: 'A valid QuickBooks invoice id is required.' }, { status: 400 });

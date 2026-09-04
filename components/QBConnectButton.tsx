@@ -94,15 +94,18 @@ function CompanyBadge({
   );
 }
 
-// TAB (default company — all basic services) and TAC (Nominee Director
-// invoicing only) are two separate QuickBooks companies. Both connections
-// are shown so staff can see at a glance whether either needs attention.
+// TAB (default company — all basic services), TAC (Nominee Director
+// invoicing), and TAO (Accounts invoicing, added 2026-09-04 — connect-only
+// phase, see PROJECT_STATUS.md) are three separate QuickBooks companies.
+// All three connections are shown so staff can see at a glance whether any
+// of them needs attention.
 export default function QBConnectButton() {
   const [tab, setTab] = useState<QBStatus | null>(null);
   const [tac, setTac] = useState<QBStatus | null>(null);
-  const [verifying, setVerifying] = useState<'TAB' | 'TAC' | null>(null);
+  const [tao, setTao] = useState<QBStatus | null>(null);
+  const [verifying, setVerifying] = useState<'TAB' | 'TAC' | 'TAO' | null>(null);
 
-  const loadStatus = async (company: 'TAB' | 'TAC', verify = false) => {
+  const loadStatus = async (company: 'TAB' | 'TAC' | 'TAO', verify = false) => {
     const response = await fetch(`/api/quickbooks/status?company=${company}${verify ? '&verify=true' : ''}`, {
       cache: 'no-store',
     });
@@ -110,19 +113,21 @@ export default function QBConnectButton() {
     return response.json() as Promise<QBStatus>;
   };
 
-  const verifyExistingConnection = async (company: 'TAB' | 'TAC') => {
+  const verifyExistingConnection = async (company: 'TAB' | 'TAC' | 'TAO') => {
     setVerifying(company);
     try {
       const status = await loadStatus(company, true);
       if (company === 'TAB') setTab(status);
-      else setTac(status);
+      else if (company === 'TAC') setTac(status);
+      else setTao(status);
     } catch {
       const failed: QBStatus = {
         connected: true,
         authError: { code: 'status_check_failed', message: 'QuickBooks connection verification could not be completed.' },
       };
       if (company === 'TAB') setTab(failed);
-      else setTac(failed);
+      else if (company === 'TAC') setTac(failed);
+      else setTao(failed);
     } finally {
       setVerifying(null);
     }
@@ -132,9 +137,11 @@ export default function QBConnectButton() {
     void Promise.all([
       loadStatus('TAB'),
       loadStatus('TAC'),
-    ]).then(([tabStatus, tacStatus]) => {
+      loadStatus('TAO'),
+    ]).then(([tabStatus, tacStatus, taoStatus]) => {
       setTab(tabStatus);
       setTac(tacStatus);
+      setTao(taoStatus);
 
       // Configuration fixes should recover silently. Genuine invalid_grant or
       // expired-token failures remain user-driven because they require the
@@ -145,9 +152,13 @@ export default function QBConnectButton() {
       if (tacStatus.authError && !REAUTHORISATION_ERRORS.has(tacStatus.authError.code)) {
         void verifyExistingConnection('TAC');
       }
+      if (taoStatus.authError && !REAUTHORISATION_ERRORS.has(taoStatus.authError.code)) {
+        void verifyExistingConnection('TAO');
+      }
     }).catch(() => {
       setTab({ connected: false });
       setTac({ connected: false });
+      setTao({ connected: false });
     });
     // Status is checked once when the dashboard mounts. Manual retries are
     // handled by the badge button and do not create a polling refresh loop.
@@ -169,6 +180,13 @@ export default function QBConnectButton() {
         verifying={verifying === 'TAC'}
         onConnect={() => { window.location.href = '/api/quickbooks/auth?company=TAC'; }}
         onVerify={() => { void verifyExistingConnection('TAC'); }}
+      />
+      <CompanyBadge
+        label="TAO"
+        status={tao}
+        verifying={verifying === 'TAO'}
+        onConnect={() => { window.location.href = '/api/quickbooks/auth?company=TAO'; }}
+        onVerify={() => { void verifyExistingConnection('TAO'); }}
       />
     </div>
   );

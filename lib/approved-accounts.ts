@@ -1,7 +1,13 @@
 export type ApprovedAccount = {
   name: string;
   email: string;
-  qbLocations?: Partial<Record<'TAB' | 'TAC', string>>;
+  // TAO added to the key type 2026-09-04 for type-consistency with the
+  // widened QbCompany (lib/quickbooks.ts) — no staff has a TAO Location set
+  // yet (Phase 2: deciding whether TAO invoices even use QB Locations is
+  // Vincent's call, not made yet), this is purely so create-invoice/
+  // route.ts's `account.qbLocations?.[company]` still type-checks now that
+  // `company` can be 'TAO'.
+  qbLocations?: Partial<Record<'TAB' | 'TAC' | 'TAO', string>>;
   // Gates the Appearance Settings editor (app/admin/appearance) and its
   // PATCH route. Vincent only, per his own explicit scoping.
   admin?: boolean;

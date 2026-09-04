@@ -9,8 +9,8 @@ import { mergeTemplate, formatInvoiceList, formatAmount, type InvoiceRef } from 
 // prepared here — without this, the email text would keep showing the old
 // amount while the attached PDF (always fetched live) shows the corrected
 // one, a confusing mismatch sent to a real client. Only re-verifies
-// invoices already referenced (TAB/TAC with a qbInvoiceId); does not
-// re-run recipient/invoice-set resolution.
+// invoices already referenced with a qbInvoiceId; does not re-run
+// recipient/invoice-set resolution.
 export async function POST(req: NextRequest) {
   const { id } = await req.json();
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   const refs = (draft.invoice_refs ?? []) as InvoiceRef[];
   const refreshedRefs = await Promise.all(refs.map(async (ref) => {
-    if (!ref.qbInvoiceId || (ref.qbCompany !== 'TAB' && ref.qbCompany !== 'TAC')) return ref;
+    if (!ref.qbInvoiceId) return ref;
     try {
       const result = await qbQuery(`SELECT Id, TotalAmt FROM Invoice WHERE Id = '${ref.qbInvoiceId}'`, ref.qbCompany as QbCompany);
       const live = result?.rows?.[0]?.TotalAmt;

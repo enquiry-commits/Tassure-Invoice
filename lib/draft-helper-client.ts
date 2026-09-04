@@ -153,16 +153,16 @@ async function fileToAttachment(file: File): Promise<PreparedAttachment> {
 // QuickBooks. Manual/additional attachments never need "preparing": a
 // File's size is already known instantly in the browser, nothing to fetch.
 async function fetchSystemAttachments(d: DraftLike): Promise<PreparedAttachment[]> {
-  const downloadableRefs = (d.invoice_refs ?? []).filter(
-    r => r.qbInvoiceId && (r.qbCompany === 'TAB' || r.qbCompany === 'TAC'),
-  );
+  // TAO included (2026-09-04) — its PDFs download through the same route
+  // as TAB/TAC once connected, see app/api/quickbooks/invoice-pdf/route.ts.
+  const downloadableRefs = (d.invoice_refs ?? []).filter(r => r.qbInvoiceId);
   return Promise.all(downloadableRefs.map(async r => {
     const res = await fetch(`/api/quickbooks/invoice-pdf?company=${r.qbCompany}&id=${encodeURIComponent(r.qbInvoiceId!)}`);
     if (!res.ok) throw new Error(`Unable to download ${r.qbCompany} ${r.invoiceNo}.`);
     const buf = await res.arrayBuffer();
     return {
       fileName: invoicePdfFileName(
-        r.qbCompany as 'TAB' | 'TAC',
+        r.qbCompany as 'TAB' | 'TAC' | 'TAO',
         r.invoiceNo,
         d.company_name,
         r.amount,

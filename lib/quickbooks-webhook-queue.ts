@@ -90,7 +90,7 @@ export async function processQuickBooksWebhookQueue(existingRun?: AutomationRun)
     if (tokenError) throw tokenError;
     const companyByRealm = new Map<string, QbCompany>();
     for (const token of tokens ?? []) {
-      if (token.company_label === 'TAB' || token.company_label === 'TAC') {
+      if (token.company_label === 'TAB' || token.company_label === 'TAC' || token.company_label === 'TAO') {
         companyByRealm.set(String(token.realm_id), token.company_label);
       }
     }
@@ -109,7 +109,7 @@ export async function processQuickBooksWebhookQueue(existingRun?: AutomationRun)
         await markEvents(ids, {
           status: 'failed',
           processing_started_at: null,
-          last_error: `No TAB/TAC connection matches QuickBooks realm ${realmId}.`,
+          last_error: `No TAB/TAC/TAO connection matches QuickBooks realm ${realmId}.`,
         });
         summary.failed += ids.length;
         failures.push({

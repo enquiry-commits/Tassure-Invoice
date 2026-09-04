@@ -136,9 +136,12 @@ function getRowWarnings(
   if (type !== 'letter' && row.invoiceRefs.length === 0 && manualFileCount === 0) {
     warnings.push('No invoice or manual attachment');
   }
-  const unsupported = row.invoiceRefs.filter(
-    ref => ref.qbCompany === 'TAO' || !ref.qbInvoiceId,
-  );
+  // TAO no longer gets special-cased as always-unsupported (2026-09-04) —
+  // once connected, its PDFs download through the same route as TAB/TAC
+  // (see app/api/quickbooks/invoice-pdf/route.ts). Whether a ref actually
+  // needs manual attachment is purely "do we have a qbInvoiceId to fetch a
+  // PDF for," same criterion every company uses.
+  const unsupported = row.invoiceRefs.filter(ref => !ref.qbInvoiceId);
   if (unsupported.length > manualFileCount) {
     warnings.push(`${unsupported.length} invoice file(s) need manual attachment`);
   }
@@ -789,7 +792,7 @@ export default function EmailDraftWorkbenchPage() {
                           {row.invoiceRefs.map((ref, refIndex) => (
                             <span key={`${ref.qbCompany}-${ref.invoiceNo}-${refIndex}`}
                               title={`S$${ref.amount.toLocaleString()}${ref.qbInvoiceId ? ' — PDF available' : ' — add file manually'}`}
-                              style={{ padding: '2px 5px', borderRadius: 4, background: ref.qbInvoiceId && ref.qbCompany !== 'TAO' ? '#f2f6f8' : '#fffaf0', color: ref.qbInvoiceId && ref.qbCompany !== 'TAO' ? '#31506f' : '#9a6700', fontSize: 9.5, fontWeight: 800 }}>
+                              style={{ padding: '2px 5px', borderRadius: 4, background: ref.qbInvoiceId ? '#f2f6f8' : '#fffaf0', color: ref.qbInvoiceId ? '#31506f' : '#9a6700', fontSize: 9.5, fontWeight: 800 }}>
                               {invoiceLabel(ref)}
                             </span>
                           ))}

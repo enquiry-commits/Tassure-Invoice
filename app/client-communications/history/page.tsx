@@ -510,7 +510,10 @@ export default function DeliveryHistoryPage() {
                   {(selected.invoice_refs ?? []).map((invoice, index) => (
                     <span key={`${invoice.qbCompany}-${invoice.invoiceNo}-${index}`} style={{ padding: '5px 8px', border: '1px solid #bfdbfe', borderRadius: 6, background: '#eff6ff', color: '#1d4ed8', fontSize: 10.5, fontWeight: 800 }}>
                       {invoice.qbCompany} {invoice.invoiceNo} · {formatMoney(invoice.amount)}
-                      {(!invoice.qbInvoiceId || invoice.qbCompany === 'TAO') && ' · attach manually'}
+                      {/* TAO no longer special-cased as always-manual (2026-09-04)
+                          — same criterion as TAB/TAC, see campaigns/page.tsx's
+                          matching comment. */}
+                      {!invoice.qbInvoiceId && ' · attach manually'}
                     </span>
                   ))}
                   {!selected.invoice_refs?.length && (

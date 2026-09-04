@@ -108,14 +108,16 @@ export const maxDuration = 300; // full-year sync pages through 1500+ invoices (
 // Keeps invoice history fresh so billing drafts always see the latest "prior
 // invoice" and billed-cycle markers. Syncs the current AND previous year (the
 // prior year still matters to the 18–24-month lookback windows, and December
-// invoices keep being edited into January) for BOTH QB companies — TAB
-// (basic services) and TAC (Nominee Director only). TAC is skipped silently
-// (reported, not fatal) until it's connected.
+// invoices keep being edited into January) for all three QB companies — TAB
+// (basic services), TAC (Nominee Director), TAO (Accounts, added 2026-09-04).
+// Each is skipped silently (reported as a soft error in `results`, not
+// fatal to the run) until it's actually connected — same treatment TAC
+// already got before it was connected, now extended to TAO.
 async function syncRecentYears(run: AutomationRun) {
   const webhookChanges = await processQuickBooksWebhookQueue(run);
   const thisYear = new Date().getFullYear();
   const results: Record<string, unknown>[] = [];
-  for (const company of ['TAB', 'TAC'] as QbCompany[]) {
+  for (const company of ['TAB', 'TAC', 'TAO'] as QbCompany[]) {
     for (const year of [String(thisYear - 2), String(thisYear - 1), String(thisYear)]) {
       const res = await syncYear(year, company, run.id);
       results.push({ company, year, ...res });
@@ -134,7 +136,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return withAutomationRun(req, 'quickbooks', async run => {
     const { year = new Date().getFullYear().toString(), company = 'TAB' } = await req.json().catch(() => ({}));
-    const qbCompany: QbCompany = company === 'TAC' ? 'TAC' : 'TAB';
+    const qbCompany: QbCompany = company === 'TAC' || company === 'TAO' ? company : 'TAB';
     const result = await syncYear(String(year), qbCompany, run.id);
     const ok = !result.error && !result.invoice_error && Number(result.items_error ?? 0) === 0;
     return NextResponse.json({ ok, year, company: qbCompany, ...result }, { status: ok ? 200 : 502 });

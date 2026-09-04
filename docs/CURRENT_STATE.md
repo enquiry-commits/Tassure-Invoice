@@ -94,8 +94,14 @@ an issue since nothing is known wrong, just not yet confirmed right.
   operator, no dedicated QA), not a gap to silently "fix" by bolting on a
   test framework — see `PROJECT_STATUS.md`'s 2026-08-31 entry for why the
   full "Stability Foundation" governance package was not adopted wholesale.
-- **Two separate QuickBooks company files** — TAB (default/basic services)
-  and TAC (专开 ND) — always confirm which one a change or query is meant
+- **Three separate QuickBooks company files** — TAB (default/basic
+  services), TAC (专开 ND), and TAO (专开 Accounts, connect-only as of
+  2026-09-04 — OAuth/sync/webhook/PDF-download support is live, but no
+  invoice-*generation* routing to TAO exists yet: Billing Drafts still only
+  splits new invoices between TAB/TAC, and the DocNumber series digit/
+  PIC-Class policy/per-staff QB Location for TAO are all explicitly
+  undecided, deferred pending Vincent's call — see `PROJECT_STATUS.md`'s
+  2026-09-04 entry) — always confirm which one a change or query is meant
   to touch; see `lib/qb-invoice-conventions.ts`.
 - **`docs/INVARIANTS.md` is a snapshot, not enforced by tests** — reading
   it before touching a risky area is a discipline, not a safety net a

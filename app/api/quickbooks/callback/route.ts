@@ -21,8 +21,19 @@ export async function GET(req: NextRequest) {
   }
 
   // Which company this connection is for — encoded as "TAB:<random>" /
-  // "TAC:<random>" when the auth flow was started (see auth/route.ts).
-  const company: QbCompany = state.startsWith('TAC:') ? 'TAC' : 'TAB';
+  // "TAC:<random>" / "TAO:<random>" when the auth flow was started (see
+  // auth/route.ts). Explicit 3-way match, not a binary ternary that would
+  // silently fold an unrecognized/future prefix into TAB — auth/route.ts
+  // already rejects an invalid `?company=` before a state is ever minted,
+  // so reaching an unrecognized prefix here would mean the state cookie
+  // was tampered with or corrupted, not a legitimate 4th company.
+  const statePrefix = state.split(':', 1)[0];
+  if (statePrefix !== 'TAB' && statePrefix !== 'TAC' && statePrefix !== 'TAO') {
+    const response = NextResponse.redirect(new URL('/?qb_error=invalid_oauth_state', req.url));
+    response.cookies.delete('qb_oauth_state');
+    return response;
+  }
+  const company: QbCompany = statePrefix;
 
   if (error || !code || !realmId) {
     return NextResponse.redirect(

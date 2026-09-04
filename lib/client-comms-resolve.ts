@@ -115,7 +115,10 @@ function fyeCycleString(fyeMonth: string, fyeYear: number) {
   return `${String(lastDay).padStart(2, '0')}.${String(monthNum).padStart(2, '0')}.${fyeYear}`;
 }
 
-/** TAO is not yet connected as a QuickBooks company, so ar/soa invoice lookups only see TAB/TAC for now. */
+// The two queries below never actually filtered by qb_company (they read
+// every row regardless), so TAO invoices already flowed through here once
+// TAO started syncing — the `as 'TAB' | 'TAC'` casts just mistyped them.
+// Widened to the real InvoiceRef['qbCompany'] type below.
 export async function loadInvoicesByCompany(
   supabase: SupabaseClient, type: 'letter' | 'ar' | 'soa', fyeMonth?: string, fyeYear?: number,
 ): Promise<Map<string, InvoiceRef[]>> {
@@ -139,7 +142,7 @@ export async function loadInvoicesByCompany(
     for (const r of latest.values()) {
       const key = normalize(r.company_name);
       if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
-      invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as 'TAB' | 'TAC', invoiceNo: r.invoice_no!, amount: Number(r.total_amt ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
+      invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as InvoiceRef['qbCompany'], invoiceNo: r.invoice_no!, amount: Number(r.total_amt ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
     }
   } else if (type === 'soa') {
     const { data: rows } = await supabase.from('quickbooks_invoices')
@@ -147,7 +150,7 @@ export async function loadInvoicesByCompany(
     for (const r of rows ?? []) {
       const key = normalize(r.customer_name);
       if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
-      invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as 'TAB' | 'TAC', invoiceNo: r.invoice_no, amount: Number(r.balance ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
+      invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as InvoiceRef['qbCompany'], invoiceNo: r.invoice_no, amount: Number(r.balance ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
     }
   }
   return invoicesByCompany;
@@ -218,7 +221,12 @@ export function buildRow(
   let included = true;
   let reason: string | null = null;
   if (alreadySent.has(key)) { included = false; reason = 'Already sent this cycle'; }
-  if (type !== 'letter' && !refs.length) { included = false; reason = 'No invoice found (TAB/TAC only — check TAO manually)'; }
+  // "TAB/TAC only" caveat removed 2026-09-04: TAO invoices now flow through
+  // loadInvoicesByCompany() like any other once TAO is connected (see that
+  // function's own comment) — a stale "check TAO manually" note would be
+  // actively wrong once it is, so this just states the fact with no
+  // company-specific caveat baked in.
+  if (type !== 'letter' && !refs.length) { included = false; reason = 'No invoice found'; }
   if (!contact.email) { included = false; reason = 'No email on file'; }
   else if (contact.reviewRequired) { included = false; reason = 'TeamWork Report recipients unavailable — confirm To/CC manually'; }
 

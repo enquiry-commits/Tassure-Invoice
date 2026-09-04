@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { getValidToken } from '@/lib/quickbooks';
+import { getValidToken, type QbCompany } from '@/lib/quickbooks';
+
+const VALID_COMPANIES = new Set<QbCompany>(['TAB', 'TAC', 'TAO']);
 
 export async function GET(req: NextRequest) {
-  const company = req.nextUrl.searchParams.get('company') === 'TAC' ? 'TAC' : 'TAB';
+  // Same explicit 3-way validation as auth/route.ts — an unrecognized
+  // `?company=` used to silently resolve to TAB here (a real, previously-
+  // shipped bug: `?company=TAO` today would have shown TAB's connection
+  // status as if it were TAO's, with no error).
+  const companyParam = req.nextUrl.searchParams.get('company');
+  const company: QbCompany = companyParam === null ? 'TAB' : (companyParam as QbCompany);
+  if (!VALID_COMPANIES.has(company)) {
+    return NextResponse.json({ error: 'invalid company' }, { status: 400 });
+  }
   const verify = req.nextUrl.searchParams.get('verify') === 'true';
 
   // A normal status read is side-effect free. Verification is explicitly
