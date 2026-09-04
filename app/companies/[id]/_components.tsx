@@ -262,13 +262,18 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
       <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px' }}>
         <div>Campaign</div><div>Subject</div><div>To</div><div>Status</div><div>Sent</div>
       </div>
+      {/* Vincent, 2026-09-04: "隐藏的内容往下行展示" — the previous
+          nowrap+ellipsis truncation (Campaign/Subject/To) hid the rest of a
+          long value behind a title-only tooltip; wrap onto additional lines
+          instead so nothing is hidden. Row alignItems switched from center
+          to start since row height now varies with wrapped content. */}
       {drafts.map(d => {
         const campaign = d.email_campaigns as { name?: string; type?: string } | null;
         return (
-          <div key={d.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px', alignItems: 'center' }}>
-            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{campaign?.name || campaign?.type || '—'}</div>
-            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.subject as string ?? ''}>{(d.subject as string) || '—'}</div>
-            <div style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(d.to_email as string) || '—'}</div>
+          <div key={d.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+            <div>{campaign?.name || campaign?.type || '—'}</div>
+            <div>{(d.subject as string) || '—'}</div>
+            <div style={{ fontSize: 11 }}>{(d.to_email as string) || '—'}</div>
             <div>
               <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: d.status === 'sent' ? '#15803d' : d.status === 'skipped' ? '#94a3b8' : '#b45309' }}>{d.status as string}</span>
             </div>
