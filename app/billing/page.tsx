@@ -2802,20 +2802,30 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
   // created manually in QB outside this system).
   const currentFye = fyeDateString(month, parseInt(year || '0', 10));
   const generatedThisCycle = (c: CompanyBilling) => (c.generatedInvoices ?? []).filter(g => g.fyeCycle === currentFye);
-  // Latest invoice number for this cycle, per QB company — for the dedicated
-  // TAB Invoice / TAC Invoice columns. Most recent by createdAt if more than
-  // one somehow exists for the same cycle.
-  // Falls back to a MANUALLY INVOICED marker in Remarks (see
-  // manualInvoiceOverrides above) when this cycle has no real
-  // generated_invoices row — a company invoiced straight in QB, outside
-  // this system, on purpose.
-  const latestInvoiceNo = (c: CompanyBilling, company: 'TAB' | 'TAC') => {
-    const matches = generatedThisCycle(c).filter(g => g.qbCompany === company);
-    if (matches.length) return matches.reduce((a, b) => (a.createdAt > b.createdAt ? a : b)).invoiceNo;
-    return manualInvoiceOverrides(c.billingRemarks).find(o => o.company === company)?.invoiceNo ?? null;
+  // Every real generated_invoices row for this cycle+company, PLUS any
+  // MANUALLY INVOICED marker in Remarks for that same company — always
+  // combined, not either/or. A company can genuinely be billed twice in one
+  // cycle (Wolvez Capital, 2026-09-04: invoiced on-schedule through this
+  // system AND a second cycle ahead of schedule typed straight into
+  // QuickBooks — Vincent: "同时也要再FYE...的单号那边除了显示02611028，
+  // 02611029也要显示出来", i.e. show both, not pick one). Deduped by invoice
+  // number in case the same one somehow appears in both sources.
+  type InvoiceRef = { invoiceNo: string; manual: boolean };
+  const invoiceRefsFor = (c: CompanyBilling, company: 'TAB' | 'TAC'): InvoiceRef[] => {
+    const real = generatedThisCycle(c).filter(g => g.qbCompany === company && g.invoiceNo)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map(g => ({ invoiceNo: g.invoiceNo as string, manual: false }));
+    const manual = manualInvoiceOverrides(c.billingRemarks).filter(o => o.company === company)
+      .map(o => ({ invoiceNo: o.invoiceNo, manual: true }));
+    const seen = new Set<string>();
+    const out: InvoiceRef[] = [];
+    for (const ref of [...real, ...manual]) {
+      if (seen.has(ref.invoiceNo)) continue;
+      seen.add(ref.invoiceNo);
+      out.push(ref);
+    }
+    return out;
   };
-  const manualInvoiceOverride = (c: CompanyBilling, company: 'TAB' | 'TAC') =>
-    generatedThisCycle(c).some(g => g.qbCompany === company) ? null : manualInvoiceOverrides(c.billingRemarks).find(o => o.company === company) ?? null;
   const notInvoicedYet = (c: CompanyBilling) =>
     !currentFye ? true
     : generatedThisCycle(c).length > 0 ? false
@@ -2964,13 +2974,18 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   {arA   && <ServiceMini label="AR"   status={arA.status}   applicable={arA.applicable}   />}
                   {xbrlA && <ServiceMini label="XBRL" status={xbrlA.status} applicable={xbrlA.applicable} />}
                 </div>
-                {(latestInvoiceNo(c, 'TAB') || latestInvoiceNo(c, 'TAC') || c.pic) && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', marginTop: 7, alignItems: 'center' }}>
-                    {latestInvoiceNo(c, 'TAB') && <BillingInvoiceReference company="TAB" invoiceNo={latestInvoiceNo(c, 'TAB')} muted={!!manualInvoiceOverride(c, 'TAB')} title={manualInvoiceOverride(c, 'TAB') ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />}
-                    {latestInvoiceNo(c, 'TAC') && <BillingInvoiceReference company="TAC" invoiceNo={latestInvoiceNo(c, 'TAC')} muted={!!manualInvoiceOverride(c, 'TAC')} title={manualInvoiceOverride(c, 'TAC') ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />}
-                    {c.pic && <span style={{ fontSize: 10.5, color: '#64748b' }}>PIC: {formatStaffName(c.pic)}</span>}
-                  </div>
-                )}
+                {(() => {
+                  const tabRefs = invoiceRefsFor(c, 'TAB');
+                  const tacRefs = invoiceRefsFor(c, 'TAC');
+                  if (!tabRefs.length && !tacRefs.length && !c.pic) return null;
+                  return (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', marginTop: 7, alignItems: 'center' }}>
+                      {tabRefs.map(r => <BillingInvoiceReference key={`tab-${r.invoiceNo}`} company="TAB" invoiceNo={r.invoiceNo} muted={r.manual} title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />)}
+                      {tacRefs.map(r => <BillingInvoiceReference key={`tac-${r.invoiceNo}`} company="TAC" invoiceNo={r.invoiceNo} muted={r.manual} title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />)}
+                      {c.pic && <span style={{ fontSize: 10.5, color: '#64748b' }}>PIC: {formatStaffName(c.pic)}</span>}
+                    </div>
+                  );
+                })()}
               </div>
             );
             return (
@@ -3005,22 +3020,29 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
                   </div>
                   {/* Latest invoice number for this cycle, per QB company — the
                       authoritative generated_invoices record, not a QB-parsed guess. */}
-                  <div style={{ width: '100%', padding: '2px 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
-                    <BillingInvoiceReference company="TAB" invoiceNo={latestInvoiceNo(c, 'TAB')}
-                      muted={!!manualInvoiceOverride(c, 'TAB')}
-                      title={manualInvoiceOverride(c, 'TAB') ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />
-                  </div>
-                  <div style={{ width: '100%', padding: '0 6px', display: 'flex', justifyContent: 'center', boxSizing: 'border-box' }}>
+                  <div style={{ width: '100%', padding: '2px 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, boxSizing: 'border-box' }}>
                     {(() => {
-                      // This cycle's system-generated TAC invoice takes priority;
-                      // otherwise fall back to the company's most recent ND
-                      // invoice from synced history (ND invoices carry a service
-                      // period, not an FYE-cycle marker, so they can't be keyed
-                      // to cycles the way the TAB backfill was) — shown muted.
-                      const gen = latestInvoiceNo(c, 'TAC');
-                      const manualTac = manualInvoiceOverride(c, 'TAC');
-                      if (gen) return <BillingInvoiceReference company="TAC" invoiceNo={gen}
-                        muted={!!manualTac} title={manualTac ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />;
+                      const refs = invoiceRefsFor(c, 'TAB');
+                      if (!refs.length) return <BillingInvoiceReference company="TAB" />;
+                      return refs.map(r => (
+                        <BillingInvoiceReference key={r.invoiceNo} company="TAB" invoiceNo={r.invoiceNo} muted={r.manual}
+                          title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />
+                      ));
+                    })()}
+                  </div>
+                  <div style={{ width: '100%', padding: '0 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, boxSizing: 'border-box' }}>
+                    {(() => {
+                      // This cycle's system-generated + manually-noted TAC
+                      // invoice(s) take priority (both shown, not one); otherwise
+                      // fall back to the company's most recent ND invoice from
+                      // synced history (ND invoices carry a service period, not
+                      // an FYE-cycle marker, so they can't be keyed to cycles the
+                      // way the TAB backfill was) — shown muted.
+                      const refs = invoiceRefsFor(c, 'TAC');
+                      if (refs.length) return refs.map(r => (
+                        <BillingInvoiceReference key={r.invoiceNo} company="TAC" invoiceNo={r.invoiceNo} muted={r.manual}
+                          title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />
+                      ));
                       const ndHist = c.renewals.find(r => r.service === 'ND' && r.applicable)?.history?.[0];
                       if (ndHist?.invoice_no) return (
                         <BillingInvoiceReference company="TAC" invoiceNo={ndHist.invoice_no}
