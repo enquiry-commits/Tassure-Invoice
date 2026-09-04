@@ -121,11 +121,22 @@ export default function TrademarkTable({ category, title }: { category: Trademar
     setEditing(null);
     const previousValue = cellText(row, field);
     if (editValue === previousValue) return;
-    setRows(prev => prev.map(r => (r.id === row.id ? { ...r, [field]: editValue || null } : r)));
+    // company_name is the one NOT NULL column here (a blank Add Record row
+    // genuinely stores '', not null — see the API route's POST handler) —
+    // collapsing '' to null the way every other (nullable) field does made
+    // the compare-and-swap check send previousValue: null for a row whose
+    // real stored value is '', which the server's `.is(field, null)` filter
+    // can never match against an actual empty string. That guaranteed a
+    // conflict on the very first edit of any blank-named row, every time
+    // (confirmed live, 2026-09-04 — Vincent: "为什么这个trademark的还不能填写
+    // 内容"). Keep '' as '' for this one field instead of coercing to null.
+    const nextValue = field === 'company_name' ? editValue : (editValue || null);
+    const prevValueForRequest = field === 'company_name' ? previousValue : (previousValue || null);
+    setRows(prev => prev.map(r => (r.id === row.id ? { ...r, [field]: nextValue } : r)));
     const res = await fetch('/api/trademark', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: row.id, field, value: editValue || null, previousValue: previousValue || null }),
+      body: JSON.stringify({ id: row.id, field, value: nextValue, previousValue: prevValueForRequest }),
     });
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));

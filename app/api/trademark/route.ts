@@ -88,7 +88,16 @@ export async function PATCH(req: NextRequest) {
   const account = await getRequestAccount(req);
   // sn is the only integer column among EDITABLE_FIELDS — coerce it so an
   // update always sends a number, never the raw string the input gave us.
-  const coerce = (v: unknown) => (field === 'sn' ? (v ? parseInt(String(v), 10) || null : null) : (v || null));
+  // company_name is the only NOT NULL column — it must never coerce to null
+  // (writing null would violate the constraint; and comparing against null
+  // would never match a row whose real stored value is a genuine '' — see
+  // components/TrademarkTable.tsx's saveEdit comment for the conflict bug
+  // this caused before this field got its own branch here).
+  const coerce = (v: unknown) => (
+    field === 'sn' ? (v ? parseInt(String(v), 10) || null : null)
+    : field === 'company_name' ? (v ?? '').toString()
+    : (v || null)
+  );
   const stored = coerce(value);
   const prevStored = coerce(body.previousValue);
   const updatedAt = new Date().toISOString();

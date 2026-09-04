@@ -505,6 +505,19 @@ again.
   Client'` — deriving "active" purely from `nd_appointments`' own
   `cessation_date` misses companies TeamWork left un-ceased even though
   the company itself is now Struck Off.
+- **INV-DATA-013** — Optimistic-concurrency CAS on a text field must not
+  collapse `''` to `null` (the common `value || null` convention used
+  everywhere ELSE in this codebase) when the underlying column is `NOT
+  NULL` and can genuinely hold `''` (e.g. `trademark_records.company_name`
+  on a deliberately blank Add-Record row) — the server's `.is(field, null)`
+  filter never matches a real empty string, so every edit of a blank-but-
+  not-null row 409s as a false "someone else changed this" conflict, on
+  the very first save, every time, with no race actually involved. The
+  text sibling of INV-DATA-001's boolean null/false case. Any NOT NULL
+  text column needs its own coercion branch that keeps `''` as `''` (never
+  `null`) through cellText → saveEdit's request body → the PATCH route's
+  `coerce()` and CAS filter — same rule applies to the write side too
+  (writing `null` into a NOT NULL column 500s).
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
