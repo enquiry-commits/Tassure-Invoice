@@ -92,15 +92,21 @@ export function MatchQualityNote({ warnings }: { warnings: string[] }) {
 export function ArAgmSection({ cycles }: { cycles: Company360['arReminderCycles'] }) {
   return (
     <DataCard title="AR / AGM Cycles" icon={<Calendar size={15} color="#fff" />} count={cycles.length} empty="No AR/AGM cycles on file for this company.">
+      {/* FYE and PIC columns dropped (2026-09-04, Vincent: "FYE 和 PIC 这两个
+          不需要在（AR / AGM Cycles）显示" — both already shown in the header
+          card above). The 5 remaining real columns are genuinely equal width
+          (18.8% each, same "5等分" scheme as the header card's own
+          repeat(5,...) grid — "跟第一模块的5等分列宽一致"), leaving the
+          trailing match-badge column (no header label, not one of the 5) at
+          its previous small fixed width. */}
       <table className="system-list-table" style={{ width: '100%' }}>
         <colgroup>
-          <col style={{ width: '12%' }} /><col style={{ width: '13%' }} /><col style={{ width: '11%' }} />
-          <col style={{ width: '12%' }} /><col style={{ width: '12%' }} /><col style={{ width: '12%' }} />
-          <col style={{ width: '22%' }} /><col style={{ width: '6%' }} />
+          <col style={{ width: '18.8%' }} /><col style={{ width: '18.8%' }} /><col style={{ width: '18.8%' }} />
+          <col style={{ width: '18.8%' }} /><col style={{ width: '18.8%' }} /><col style={{ width: '6%' }} />
         </colgroup>
         <thead>
           <tr className="list-column-header-gray">
-            <th>FYE</th><th>Due Date</th><th>Filed</th><th>PIC</th><th>ACC PIC</th><th>TAX PIC</th><th>Remarks</th><th></th>
+            <th>Due Date</th><th>Filed</th><th>ACC PIC</th><th>TAX PIC</th><th>Remarks</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -109,13 +115,11 @@ export function ArAgmSection({ cycles }: { cycles: Company360['arReminderCycles'
             const overdue = !filed && c.daysUntilDue !== null && c.daysUntilDue < 0;
             return (
               <tr key={c.id as number} className="system-list-row">
-                <td style={{ padding: '6px 10px' }}>{c.fye_month as string} {c.fye_year as number}</td>
                 <td style={{ padding: '6px 10px' }}>
                   {fmtDate(c.due_date as string)}
                   {overdue && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: '#dc2626' }}>{Math.abs(c.daysUntilDue as number)}d overdue</span>}
                 </td>
                 <td style={{ padding: '6px 10px' }}>{filed ? fmtDate(c.filling_date as string) : <span style={{ color: '#cbd5e1' }}>—</span>}</td>
-                <td style={{ padding: '6px 10px', fontSize: 11 }}>{formatStaffName(c.pic as string) || '—'}</td>
                 <td style={{ padding: '6px 10px', fontSize: 11 }}>{formatStaffName(c.acc_pic as string) || '—'}</td>
                 <td style={{ padding: '6px 10px', fontSize: 11 }}>{formatStaffName(c.tax_pic as string) || '—'}</td>
                 <td style={{ padding: '6px 10px', fontSize: 11, color: '#64748b', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.remarks as string ?? ''}>{(c.remarks as string) || '—'}</td>
@@ -246,10 +250,13 @@ export function NdSection({ nd }: { nd: Company360['nomineeDirector'] }) {
 export function CommsSection({ drafts }: { drafts: Company360['communications']['drafts'] }) {
   return (
     <DataCard title="Communications" icon={<Mail size={15} color="#fff" />} count={drafts.length} empty="No client communications sent to this company yet.">
+      {/* Genuinely equal 5-way column split (2026-09-04, Vincent: "分成5等分
+          列宽和 第一模块的5等分列宽一致") — same scheme as the header card's
+          own repeat(5,...) grid, replacing the previous uneven percentages. */}
       <table className="system-list-table" style={{ width: '100%' }}>
         <colgroup>
-          <col style={{ width: '18%' }} /><col style={{ width: '32%' }} /><col style={{ width: '24%' }} />
-          <col style={{ width: '12%' }} /><col style={{ width: '14%' }} />
+          <col style={{ width: '20%' }} /><col style={{ width: '20%' }} /><col style={{ width: '20%' }} />
+          <col style={{ width: '20%' }} /><col style={{ width: '20%' }} />
         </colgroup>
         <thead><tr className="list-column-header-gray"><th>Campaign</th><th>Subject</th><th>To</th><th>Status</th><th>Sent</th></tr></thead>
         <tbody>
