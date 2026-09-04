@@ -89,46 +89,49 @@ export function MatchQualityNote({ warnings }: { warnings: string[] }) {
   );
 }
 
+// Shared with CommsSection below — must be the exact same formula as the
+// header card's own field grid in page.tsx (repeat(5, minmax(0,1fr)),
+// gap: 16) for the two to align (2026-09-04, Vincent: "上下没有对齐，第2和
+// 第3模块要和 第1模块对齐"). An HTML <table>'s colgroup percentages can
+// never exactly reproduce a CSS grid's gap-based column math (a table has
+// no native concept of a gap between columns, only per-cell padding), so
+// this replaced the previous <table> markup with the same div/grid row
+// pattern MasterListTable.tsx already uses elsewhere in this codebase —
+// not a new technique, just applied here for the first time on this page.
+const CARD_GRID_COLS = 'repeat(5, minmax(0,1fr))';
+
 export function ArAgmSection({ cycles }: { cycles: Company360['arReminderCycles'] }) {
   return (
     <DataCard title="AR / AGM Cycles" icon={<Calendar size={15} color="#fff" />} count={cycles.length} empty="No AR/AGM cycles on file for this company.">
       {/* FYE and PIC columns dropped (2026-09-04, Vincent: "FYE 和 PIC 这两个
           不需要在（AR / AGM Cycles）显示" — both already shown in the header
-          card above). The 5 remaining real columns are genuinely equal width
-          (18.8% each, same "5等分" scheme as the header card's own
-          repeat(5,...) grid — "跟第一模块的5等分列宽一致"), leaving the
-          trailing match-badge column (no header label, not one of the 5) at
-          its previous small fixed width. */}
-      <table className="system-list-table" style={{ width: '100%' }}>
-        <colgroup>
-          <col style={{ width: '18.8%' }} /><col style={{ width: '18.8%' }} /><col style={{ width: '18.8%' }} />
-          <col style={{ width: '18.8%' }} /><col style={{ width: '18.8%' }} /><col style={{ width: '6%' }} />
-        </colgroup>
-        <thead>
-          <tr className="list-column-header-gray">
-            <th>Due Date</th><th>Filed</th><th>ACC PIC</th><th>TAX PIC</th><th>Remarks</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {cycles.map(c => {
-            const filed = !!c.filling_date;
-            const overdue = !filed && c.daysUntilDue !== null && c.daysUntilDue < 0;
-            return (
-              <tr key={c.id as number} className="system-list-row">
-                <td style={{ padding: '6px 10px' }}>
-                  {fmtDate(c.due_date as string)}
-                  {overdue && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: '#dc2626' }}>{Math.abs(c.daysUntilDue as number)}d overdue</span>}
-                </td>
-                <td style={{ padding: '6px 10px' }}>{filed ? fmtDate(c.filling_date as string) : <span style={{ color: '#cbd5e1' }}>—</span>}</td>
-                <td style={{ padding: '6px 10px', fontSize: 11 }}>{formatStaffName(c.acc_pic as string) || '—'}</td>
-                <td style={{ padding: '6px 10px', fontSize: 11 }}>{formatStaffName(c.tax_pic as string) || '—'}</td>
-                <td style={{ padding: '6px 10px', fontSize: 11, color: '#64748b', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.remarks as string ?? ''}>{(c.remarks as string) || '—'}</td>
-                <td style={{ padding: '6px 10px' }}><MatchBadge via={c.matchedVia} /></td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+          card above). The match badge (no header label) sits inline at the
+          end of the Remarks cell instead of being its own 6th grid column —
+          a 6th column would shrink the other 5 relative to the header's own
+          5-column grid and reintroduce the same misalignment this was meant
+          to fix. */}
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px' }}>
+        <div>Due Date</div><div>Filed</div><div>ACC PIC</div><div>TAX PIC</div><div>Remarks</div>
+      </div>
+      {cycles.map(c => {
+        const filed = !!c.filling_date;
+        const overdue = !filed && c.daysUntilDue !== null && c.daysUntilDue < 0;
+        return (
+          <div key={c.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px', alignItems: 'center' }}>
+            <div>
+              {fmtDate(c.due_date as string)}
+              {overdue && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: '#dc2626' }}>{Math.abs(c.daysUntilDue as number)}d overdue</span>}
+            </div>
+            <div>{filed ? fmtDate(c.filling_date as string) : <span style={{ color: '#cbd5e1' }}>—</span>}</div>
+            <div style={{ fontSize: 11 }}>{formatStaffName(c.acc_pic as string) || '—'}</div>
+            <div style={{ fontSize: 11 }}>{formatStaffName(c.tax_pic as string) || '—'}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <span style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.remarks as string ?? ''}>{(c.remarks as string) || '—'}</span>
+              <MatchBadge via={c.matchedVia} />
+            </div>
+          </div>
+        );
+      })}
     </DataCard>
   );
 }
@@ -250,32 +253,29 @@ export function NdSection({ nd }: { nd: Company360['nomineeDirector'] }) {
 export function CommsSection({ drafts }: { drafts: Company360['communications']['drafts'] }) {
   return (
     <DataCard title="Communications" icon={<Mail size={15} color="#fff" />} count={drafts.length} empty="No client communications sent to this company yet.">
-      {/* Genuinely equal 5-way column split (2026-09-04, Vincent: "分成5等分
-          列宽和 第一模块的5等分列宽一致") — same scheme as the header card's
-          own repeat(5,...) grid, replacing the previous uneven percentages. */}
-      <table className="system-list-table" style={{ width: '100%' }}>
-        <colgroup>
-          <col style={{ width: '20%' }} /><col style={{ width: '20%' }} /><col style={{ width: '20%' }} />
-          <col style={{ width: '20%' }} /><col style={{ width: '20%' }} />
-        </colgroup>
-        <thead><tr className="list-column-header-gray"><th>Campaign</th><th>Subject</th><th>To</th><th>Status</th><th>Sent</th></tr></thead>
-        <tbody>
-          {drafts.map(d => {
-            const campaign = d.email_campaigns as { name?: string; type?: string } | null;
-            return (
-              <tr key={d.id as number} className="system-list-row">
-                <td style={{ padding: '6px 10px' }}>{campaign?.name || campaign?.type || '—'}</td>
-                <td style={{ padding: '6px 10px', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.subject as string ?? ''}>{(d.subject as string) || '—'}</td>
-                <td style={{ padding: '6px 10px', fontSize: 11 }}>{(d.to_email as string) || '—'}</td>
-                <td style={{ padding: '6px 10px' }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: d.status === 'sent' ? '#15803d' : d.status === 'skipped' ? '#94a3b8' : '#b45309' }}>{d.status as string}</span>
-                </td>
-                <td style={{ padding: '6px 10px' }}>{d.sent_at ? fmtDate(d.sent_at as string) : '—'}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      {/* Genuinely equal 5-way column split matching the header card's own
+          grid (2026-09-04, Vincent: "分成5等分列宽和 第一模块的5等分列宽一致",
+          then "上下没有对齐" once the first attempt — table colgroup
+          percentages — still didn't line up against a CSS grid's gap-based
+          math). Same div/grid pattern as ArAgmSection above; see
+          CARD_GRID_COLS' own comment for why a <table> can't do this. */}
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px' }}>
+        <div>Campaign</div><div>Subject</div><div>To</div><div>Status</div><div>Sent</div>
+      </div>
+      {drafts.map(d => {
+        const campaign = d.email_campaigns as { name?: string; type?: string } | null;
+        return (
+          <div key={d.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px', alignItems: 'center' }}>
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{campaign?.name || campaign?.type || '—'}</div>
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={d.subject as string ?? ''}>{(d.subject as string) || '—'}</div>
+            <div style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(d.to_email as string) || '—'}</div>
+            <div>
+              <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: d.status === 'sent' ? '#15803d' : d.status === 'skipped' ? '#94a3b8' : '#b45309' }}>{d.status as string}</span>
+            </div>
+            <div>{d.sent_at ? fmtDate(d.sent_at as string) : '—'}</div>
+          </div>
+        );
+      })}
     </DataCard>
   );
 }
