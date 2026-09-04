@@ -1,5 +1,5 @@
 import { AlertTriangle, Calendar, FileText, Mail, ScrollText, Stamp, Users, UserCog, PieChart } from 'lucide-react';
-import { fmtDate } from '@/lib/date';
+import { fmtDate, toIsoDateValue } from '@/lib/date';
 import { formatStaffName, nameForEmail } from '@/lib/staff-directory';
 import type { Company360 } from '@/lib/company-360';
 
@@ -89,31 +89,22 @@ export function MatchQualityNote({ warnings }: { warnings: string[] }) {
   );
 }
 
-// Used by CommsSection below — must be the exact same formula as the header
-// card's own field grid in page.tsx (repeat(5, minmax(0,1fr)), gap: 16) for
-// the two to align (2026-09-04, Vincent: "上下没有对齐，第2和第3模块要和
-// 第1模块对齐"). An HTML <table>'s colgroup percentages can never exactly
+// Shared equal-width grid formulas for every table-shaped Company 360
+// section (2026-09-04, Vincent: "5列就以5等分对齐，6列就按6等分对齐" — every
+// section's columns should be genuinely equal-width, not just visually
+// close). An HTML <table>'s colgroup percentages can never exactly
 // reproduce a CSS grid's gap-based column math (a table has no native
-// concept of a gap between columns, only per-cell padding), so this
-// replaced the previous <table> markup with the same div/grid row pattern
+// concept of a gap between columns, only per-cell padding — confirmed the
+// hard way on AR/AGM Cycles/Communications earlier the same day, "上下没有
+// 对齐"), so every section below uses the same div/grid row pattern
 // MasterListTable.tsx already uses elsewhere in this codebase — not a new
-// technique, just applied here for the first time on this page. NOT used by
-// ArAgmSection below anymore — see AR_AGM_GRID_COLS' own comment for why.
-const CARD_GRID_COLS = 'repeat(5, minmax(0,1fr))';
-
-// AR/AGM Cycles' own SEC PIC (ar_reminder.pic — this specific cycle's real
-// handler) turned out to genuinely diverge from the header card's Secretary
-// PIC (companies.sec_pic — a company-level assignment) for ~20% of real
-// companies, confirmed against production data (2026-09-04) after Vincent
-// asked why a real company's header PIC looked empty right after this
-// column was dropped — not the same field with a display quirk, two
-// legitimately different signals. Vincent: "(AR / AGM Cycles) 中的SEC PIC
-// 还是要保留" — restored as its own column. This makes 6 real columns here
-// (Due Date/Filed/SEC PIC/ACC PIC/TAX PIC/Remarks), one more than the
-// header card's 5-column grid, so per Vincent's own choice this section no
-// longer tries to align column-for-column with the header (CommsSection
-// still does, via CARD_GRID_COLS — this is scoped to ArAgmSection only).
-const AR_AGM_GRID_COLS = 'repeat(6, minmax(0,1fr))';
+// technique, just applied here. GRID_5_COLS also happens to match the
+// header card's own 5-column field grid in page.tsx (gap: 16), which is
+// why Communications (5 columns) visually lines up with it — that's
+// incidental to the equal-width request, not a separate alignment rule.
+const GRID_4_COLS = 'repeat(4, minmax(0,1fr))';
+const GRID_5_COLS = 'repeat(5, minmax(0,1fr))';
+const GRID_6_COLS = 'repeat(6, minmax(0,1fr))';
 
 export function ArAgmSection({ cycles }: { cycles: Company360['arReminderCycles'] }) {
   return (
@@ -122,14 +113,14 @@ export function ArAgmSection({ cycles }: { cycles: Company360['arReminderCycles'
           AGM Cycles）显示" — already shown in the header card above). PIC
           was also dropped then, but restored as SEC PIC — see AR_AGM_GRID_
           COLS' own comment. */}
-      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: AR_AGM_GRID_COLS, gap: 16, padding: '10px 16px' }}>
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px' }}>
         <div>Due Date</div><div>Filed</div><div>SEC PIC</div><div>ACC PIC</div><div>TAX PIC</div><div>Remarks</div>
       </div>
       {cycles.map(c => {
         const filed = !!c.filling_date;
         const overdue = !filed && c.daysUntilDue !== null && c.daysUntilDue < 0;
         return (
-          <div key={c.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: AR_AGM_GRID_COLS, gap: 16, padding: '10px 16px', alignItems: 'center' }}>
+          <div key={c.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px', alignItems: 'center' }}>
             <div>
               {fmtDate(c.due_date as string)}
               {overdue && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: '#dc2626' }}>{Math.abs(c.daysUntilDue as number)}d overdue</span>}
@@ -149,26 +140,36 @@ export function ArAgmSection({ cycles }: { cycles: Company360['arReminderCycles'
   );
 }
 
+// Newest first (2026-09-04, Vincent: "这边的排序要按照date排：最新的年费日期在
+// 最上面以此类推往下排序") — neither table was sorted before, just whatever
+// order the query happened to return. "This system's invoice records" sorts
+// by its own Cycle (fye_cycle, the billed FYE period — "年费日期"); QuickBooks
+// history sorts by its own Date (txn_date, when the invoice was actually
+// raised) — same newest-first intent, applied to each table's own date
+// column since the two represent different things. fye_cycle is "dd.mm.yyyy"
+// text, not lexicographically sortable as-is, so it goes through the same
+// toIsoDateValue() parser already used for this exact class of problem
+// elsewhere (Strike Off/Terminated's update_date sort, app/api/master-
+// list/route.ts). Unparseable/missing dates sort last, never dropped.
+function byDateDesc<T extends Record<string, unknown>>(field: string) {
+  return (a: T, b: T) => {
+    const isoA = toIsoDateValue(a[field] as string | null);
+    const isoB = toIsoDateValue(b[field] as string | null);
+    if (isoA && isoB) return isoB.localeCompare(isoA);
+    if (isoA) return -1;
+    if (isoB) return 1;
+    return 0;
+  };
+}
+
 export function InvoicesSection({ invoices }: { invoices: Company360['invoices'] }) {
   const total = invoices.generated.length + invoices.quickbooks.length;
+  const generatedSorted = [...invoices.generated].sort(byDateDesc('fye_cycle'));
+  const quickbooksSorted = [...invoices.quickbooks].sort(byDateDesc('txn_date'));
   return (
     <DataCard title="Invoices" icon={<FileText size={15} color="#fff" />} count={total} empty="No invoice history found for this company.">
       {invoices.generated.length > 0 && (
-        <table className="system-list-table" style={{ width: '100%' }}>
-          {/* Percentage colgroup, not fixed pixels — a fixed-px sum well
-              under the container's real width left everything crowded on
-              the left with a huge dead gap on the right (Vincent: "有点太
-              挤了，全部都堆在了左边"). The first 4 columns here (Invoice No/
-              Company/date-ish/Amount) use the EXACT SAME percentages as
-              the QuickBooks table below, so the two stacked tables' column
-              boundaries line up as one grid despite being separate
-              <table> elements — same fix as the original alignment pass,
-              just redone in % so it also survives different total column
-              counts without one table's flex column ballooning. */}
-          <colgroup>
-            <col style={{ width: '16%' }} /><col style={{ width: '10%' }} /><col style={{ width: '14%' }} />
-            <col style={{ width: '13%' }} /><col style={{ width: '22%' }} /><col style={{ width: '25%' }} />
-          </colgroup>
+        <>
           {/* 2026-09-02: this table used to be titled "Generated by this
               system" for every row, which overclaimed for the ~845
               historical rows bulk-imported to seed real QuickBooks history
@@ -179,58 +180,55 @@ export function InvoicesSection({ invoices }: { invoices: Company360['invoices']
               here ("为什么会有在2024年在系统的开单记录"). The Source column
               below now tells the two apart per row instead of one header
               claiming credit for both. */}
-          <thead><tr className="list-column-header-gray"><th colSpan={6} style={{ fontWeight: 700 }}>This system&apos;s invoice records</th></tr>
-            <tr className="list-column-header-gray"><th>Invoice No.</th><th>Company</th><th>Cycle</th><th>Amount</th><th>Source</th><th>Created</th></tr>
-          </thead>
-          <tbody>
-            {invoices.generated.map((r, i) => {
-              const createdByEmail = r.created_by_email as string | null;
-              return (
-                <tr key={i} className="system-list-row">
-                  <td style={{ padding: '6px 10px' }}>{r.invoice_no as string}</td>
-                  <td style={{ padding: '6px 10px' }}>{r.qb_company as string}</td>
-                  <td style={{ padding: '6px 10px' }}>{(r.fye_cycle as string) || '—'}</td>
-                  <td style={{ padding: '6px 10px', fontVariantNumeric: 'tabular-nums' }}>{r.total_amt != null ? `$${(r.total_amt as number).toFixed(2)}` : '—'}</td>
-                  <td style={{ padding: '6px 10px' }}>
-                    {createdByEmail ? (
-                      <span title={`Generated through this system by ${createdByEmail}`} style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 700, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 999, padding: '2px 8px', whiteSpace: 'nowrap' }}>
-                        {nameForEmail(createdByEmail) ?? createdByEmail}
-                      </span>
-                    ) : (
-                      <span title="Imported from real QuickBooks history to seed this company's record before this system's own invoice-generation feature existed — not generated by clicking through this app." style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 700, color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 999, padding: '2px 8px', whiteSpace: 'nowrap' }}>
-                        Imported (historical)
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '6px 10px' }}>{fmtDate(r.created_at as string)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+          <div className="list-column-header-gray" style={{ padding: '10px 16px', fontWeight: 700 }}>This system&apos;s invoice records</div>
+          <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px' }}>
+            <div>Invoice No.</div><div>Company</div><div>Cycle</div><div>Amount</div><div>Source</div><div>Created</div>
+          </div>
+          {generatedSorted.map((r, i) => {
+            const createdByEmail = r.created_by_email as string | null;
+            return (
+              <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+                <div>{r.invoice_no as string}</div>
+                <div>{r.qb_company as string}</div>
+                <div>{(r.fye_cycle as string) || '—'}</div>
+                <div style={{ fontVariantNumeric: 'tabular-nums' }}>{r.total_amt != null ? `$${(r.total_amt as number).toFixed(2)}` : '—'}</div>
+                <div>
+                  {createdByEmail ? (
+                    <span title={`Generated through this system by ${createdByEmail}`} style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 700, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 999, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                      {nameForEmail(createdByEmail) ?? createdByEmail}
+                    </span>
+                  ) : (
+                    <span title="Imported from real QuickBooks history to seed this company's record before this system's own invoice-generation feature existed — not generated by clicking through this app." style={{ display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 700, color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 999, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                      Imported (historical)
+                    </span>
+                  )}
+                </div>
+                <div>{fmtDate(r.created_at as string)}</div>
+              </div>
+            );
+          })}
+        </>
       )}
       {invoices.quickbooks.length > 0 && (
-        <table className="system-list-table" style={{ width: '100%' }}>
-          <colgroup>
-            <col style={{ width: '16%' }} /><col style={{ width: '10%' }} /><col style={{ width: '14%' }} />
-            <col style={{ width: '13%' }} /><col style={{ width: '15%' }} /><col style={{ width: '32%' }} />
-          </colgroup>
-          <thead><tr className="list-column-header-gray"><th colSpan={6} style={{ fontWeight: 700 }}>QuickBooks history (matched by name)</th></tr>
-            <tr className="list-column-header-gray"><th>Invoice No.</th><th>Company</th><th>Date</th><th>Amount</th><th>Balance</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {invoices.quickbooks.map((r, i) => (
-              <tr key={i} className="system-list-row">
-                <td style={{ padding: '6px 10px' }}>{r.invoice_no as string}</td>
-                <td style={{ padding: '6px 10px' }}>{r.qb_company as string}</td>
-                <td style={{ padding: '6px 10px' }}>{fmtDate(r.txn_date as string)}</td>
-                <td style={{ padding: '6px 10px', fontVariantNumeric: 'tabular-nums' }}>{r.total_amt != null ? `$${(r.total_amt as number).toFixed(2)}` : '—'}</td>
-                <td style={{ padding: '6px 10px', fontVariantNumeric: 'tabular-nums' }}>{r.balance != null ? `$${(r.balance as number).toFixed(2)}` : '—'}</td>
-                <td style={{ padding: '6px 10px' }}>{r.status as string}<MatchBadge via={r.matchScore as number} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <>
+          <div className="list-column-header-gray" style={{ padding: '10px 16px', fontWeight: 700 }}>QuickBooks history (matched by name)</div>
+          <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px' }}>
+            <div>Invoice No.</div><div>Company</div><div>Date</div><div>Amount</div><div>Balance</div><div>Status</div>
+          </div>
+          {quickbooksSorted.map((r, i) => (
+            <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+              <div>{r.invoice_no as string}</div>
+              <div>{r.qb_company as string}</div>
+              <div>{fmtDate(r.txn_date as string)}</div>
+              <div style={{ fontVariantNumeric: 'tabular-nums' }}>{r.total_amt != null ? `$${(r.total_amt as number).toFixed(2)}` : '—'}</div>
+              <div style={{ fontVariantNumeric: 'tabular-nums' }}>{r.balance != null ? `$${(r.balance as number).toFixed(2)}` : '—'}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                <span>{r.status as string}</span>
+                <MatchBadge via={r.matchScore as number} />
+              </div>
+            </div>
+          ))}
+        </>
       )}
     </DataCard>
   );
@@ -239,26 +237,20 @@ export function InvoicesSection({ invoices }: { invoices: Company360['invoices']
 export function NdSection({ nd }: { nd: Company360['nomineeDirector'] }) {
   return (
     <DataCard title="Nominee Director" icon={<Users size={15} color="#fff" />} count={nd.appointments.length} empty="No nominee director appointments on file.">
-      <table className="system-list-table" style={{ width: '100%' }}>
-        <colgroup>
-          <col style={{ width: '30%' }} /><col style={{ width: '24%' }} /><col style={{ width: '16%' }} />
-          <col style={{ width: '16%' }} /><col style={{ width: '14%' }} />
-        </colgroup>
-        <thead><tr className="list-column-header-gray"><th>Name</th><th>Sub-role</th><th>Appointed</th><th>Ceased</th><th>Status</th></tr></thead>
-        <tbody>
-          {nd.appointments.map((a, i) => (
-            <tr key={i} className="system-list-row">
-              <td style={{ padding: '6px 10px' }}>{a.ndName}</td>
-              <td style={{ padding: '6px 10px' }}>{a.subRole || '—'}</td>
-              <td style={{ padding: '6px 10px' }}>{fmtDate(a.appointmentDate)}</td>
-              <td style={{ padding: '6px 10px' }}>{a.cessationDate ? fmtDate(a.cessationDate) : '—'}</td>
-              <td style={{ padding: '6px 10px' }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: a.isActive ? '#15803d' : '#94a3b8' }}>{a.isActive ? 'Active' : 'Ceased'}</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_5_COLS, gap: 16, padding: '10px 16px' }}>
+        <div>Name</div><div>Sub-role</div><div>Appointed</div><div>Ceased</div><div>Status</div>
+      </div>
+      {nd.appointments.map((a, i) => (
+        <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_5_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+          <div>{a.ndName}</div>
+          <div>{a.subRole || '—'}</div>
+          <div>{fmtDate(a.appointmentDate)}</div>
+          <div>{a.cessationDate ? fmtDate(a.cessationDate) : '—'}</div>
+          <div>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: a.isActive ? '#15803d' : '#94a3b8' }}>{a.isActive ? 'Active' : 'Ceased'}</span>
+          </div>
+        </div>
+      ))}
     </DataCard>
   );
 }
@@ -271,8 +263,8 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
           then "上下没有对齐" once the first attempt — table colgroup
           percentages — still didn't line up against a CSS grid's gap-based
           math). Same div/grid pattern as ArAgmSection above; see
-          CARD_GRID_COLS' own comment for why a <table> can't do this. */}
-      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px' }}>
+          GRID_5_COLS' own comment for why a <table> can't do this. */}
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_5_COLS, gap: 16, padding: '10px 16px' }}>
         <div>Campaign</div><div>Subject</div><div>To</div><div>Status</div><div>Sent</div>
       </div>
       {/* Vincent, 2026-09-04: "隐藏的内容往下行展示" — the previous
@@ -283,7 +275,7 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
       {drafts.map(d => {
         const campaign = d.email_campaigns as { name?: string; type?: string } | null;
         return (
-          <div key={d.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: CARD_GRID_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+          <div key={d.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_5_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
             <div>{campaign?.name || campaign?.type || '—'}</div>
             <div>{(d.subject as string) || '—'}</div>
             <div style={{ fontSize: 11 }}>{(d.to_email as string) || '—'}</div>
@@ -321,26 +313,25 @@ export function DocsGeneratedSection({ docs }: { docs: Company360['documentsGene
 }
 
 export function TrademarkSection({ trademark }: { trademark: Company360['trademark'] }) {
+  // 4 real columns (Application No./Filed/Expires/Status) — the match badge
+  // has no header label of its own, so like AR/AGM Cycles' Remarks cell it
+  // sits inline at the end of Status instead of becoming a 5th grid column.
   return (
     <DataCard title="Trademark" icon={<Stamp size={15} color="#fff" />} count={trademark.length} empty="No trademark records found for this company.">
-      <table className="system-list-table" style={{ width: '100%' }}>
-        <colgroup>
-          <col style={{ width: '26%' }} /><col style={{ width: '18%' }} /><col style={{ width: '18%' }} />
-          <col style={{ width: '28%' }} /><col style={{ width: '10%' }} />
-        </colgroup>
-        <thead><tr className="list-column-header-gray"><th>Application No.</th><th>Filed</th><th>Expires</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-          {trademark.map((t, i) => (
-            <tr key={i} className="system-list-row">
-              <td style={{ padding: '6px 10px' }}>{(t.application_number as string) || '—'}</td>
-              <td style={{ padding: '6px 10px' }}>{t.application_date ? fmtDate(t.application_date as string) : '—'}</td>
-              <td style={{ padding: '6px 10px' }}>{t.mark_expired_date ? fmtDate(t.mark_expired_date as string) : '—'}</td>
-              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(t.status_text as string) || '—'}</td>
-              <td style={{ padding: '6px 10px' }}><MatchBadge via={t.matchScore as number} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_4_COLS, gap: 16, padding: '10px 16px' }}>
+        <div>Application No.</div><div>Filed</div><div>Expires</div><div>Status</div>
+      </div>
+      {trademark.map((t, i) => (
+        <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_4_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+          <div>{(t.application_number as string) || '—'}</div>
+          <div>{t.application_date ? fmtDate(t.application_date as string) : '—'}</div>
+          <div>{t.mark_expired_date ? fmtDate(t.mark_expired_date as string) : '—'}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, fontSize: 11 }}>
+            <span>{(t.status_text as string) || '—'}</span>
+            <MatchBadge via={t.matchScore as number} />
+          </div>
+        </div>
+      ))}
     </DataCard>
   );
 }
@@ -354,19 +345,19 @@ export function TrademarkSection({ trademark }: { trademark: Company360['tradema
 // Matched by exact UEN (lib/company-360.ts), not fuzzy name matching, so no
 // MatchBadge needed on these two.
 export function OfficialsSection({ officials }: { officials: Company360['officials'] }) {
-  // Converted to the same 6-column grid as AR_AGM_GRID_COLS (2026-09-04,
-  // Vincent: "AR / AGM Cycles 6等分，就变成和Officials模块的6等分可以对齐了"
+  // Converted to GRID_6_COLS (2026-09-04, Vincent: "AR / AGM Cycles 6等分，
+  // 就变成和Officials模块的6等分可以对齐了"
   // — these two sections sit back-to-back on the page now, and per the
   // table-vs-grid lesson already learned earlier the same day, the previous
   // uneven colgroup percentages (22/16/16/14/16/16) could never genuinely
   // align with a real grid no matter how close the numbers looked.
   return (
     <DataCard title="Officials" icon={<UserCog size={15} color="#fff" />} count={officials.length} empty="No officials on file from TeamWork for this company." scrollable={false}>
-      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: AR_AGM_GRID_COLS, gap: 16, padding: '10px 16px' }}>
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px' }}>
         <div>Name</div><div>Role</div><div>Sub-role(s)</div><div>Appointed</div><div>ID No.</div><div>Contact</div>
       </div>
       {officials.map((o, i) => (
-        <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: AR_AGM_GRID_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+        <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
           <div>{(o.name as string) || '—'}</div>
           <div>{(o.role as string) || '—'}</div>
           <div style={{ fontSize: 11 }}>{(o.sub_roles as string) || '—'}</div>
@@ -382,25 +373,19 @@ export function OfficialsSection({ officials }: { officials: Company360['officia
 export function ShareholdersSection({ shareholders }: { shareholders: Company360['shareholders'] }) {
   return (
     <DataCard title="Shareholders" icon={<PieChart size={15} color="#fff" />} count={shareholders.length} empty="No shareholder share register on file from TeamWork for this company.">
-      <table className="system-list-table" style={{ width: '100%' }}>
-        <colgroup>
-          <col style={{ width: '26%' }} /><col style={{ width: '14%' }} /><col style={{ width: '18%' }} />
-          <col style={{ width: '10%' }} /><col style={{ width: '16%' }} /><col style={{ width: '16%' }} />
-        </colgroup>
-        <thead><tr className="list-column-header-gray"><th>Shareholder</th><th>Shares</th><th>Paid-up Capital</th><th>Currency</th><th>Share Type / Class</th><th>Certificate No.</th></tr></thead>
-        <tbody>
-          {shareholders.map((s, i) => (
-            <tr key={i} className="system-list-row">
-              <td style={{ padding: '6px 10px' }}>{(s.shareholder_name as string) || '—'}</td>
-              <td style={{ padding: '6px 10px' }}>{(s.number_of_shares as string) || '—'}</td>
-              <td style={{ padding: '6px 10px' }}>{(s.paid_up_capital as string) || '—'}</td>
-              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(s.currency as string) || '—'}</td>
-              <td style={{ padding: '6px 10px', fontSize: 11 }}>{[s.share_type, s.share_class].filter(Boolean).join(' / ') || '—'}</td>
-              <td style={{ padding: '6px 10px', fontSize: 11 }}>{(s.share_certificate_no as string) || '—'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px' }}>
+        <div>Shareholder</div><div>Shares</div><div>Paid-up Capital</div><div>Currency</div><div>Share Type / Class</div><div>Certificate No.</div>
+      </div>
+      {shareholders.map((s, i) => (
+        <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+          <div>{(s.shareholder_name as string) || '—'}</div>
+          <div>{(s.number_of_shares as string) || '—'}</div>
+          <div>{(s.paid_up_capital as string) || '—'}</div>
+          <div style={{ fontSize: 11 }}>{(s.currency as string) || '—'}</div>
+          <div style={{ fontSize: 11 }}>{[s.share_type, s.share_class].filter(Boolean).join(' / ') || '—'}</div>
+          <div style={{ fontSize: 11 }}>{(s.share_certificate_no as string) || '—'}</div>
+        </div>
+      ))}
     </DataCard>
   );
 }
