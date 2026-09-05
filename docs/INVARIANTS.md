@@ -228,6 +228,26 @@ again.
   vs. `nominee_director` text. Both server PATCH and client optimistic
   state must derive this identically or the checkbox visually desyncs until
   reload.
+- **INV-PIC-006** — A column-filter dropdown over a multi-name field (PIC-
+  style columns via `formatStaffNameList()`, plus `directors`/`shareholders`
+  which are real people but never staff-directory-resolved) must decompose
+  each cell into its individual names for BOTH the option list and the
+  row-match check — never treat "Zhang Dan, Xu Min" as one opaque value
+  splintered from "Zhang Dan" alone. Confirmed live 2026-09-05: the same
+  nominee director/shareholder is genuinely reused across many companies
+  paired with a different co-appointee each time (e.g. "Zhang Dan" appears
+  in `directors` alongside "Sun Changjiang", "Feng Jiong", "Song Jianfeng"
+  on different real companies) — a filter keyed on the whole raw string
+  could never let staff select "every company with Zhang Dan," only one
+  specific pairing at a time. `components/MasterListTable.tsx`'s
+  `ColumnFilterMenu` and `app/billing/page.tsx`'s `ARColumnFilterMenu` both
+  implement this via a parallel `displayFieldValues()`/`arColumnValues()`
+  (plural) alongside the existing singular display formatter — the singular
+  one still governs what the cell itself shows, untouched. `app/reports/page.tsx`'s
+  `DimensionFilterMenu`-based `pic` dimension was NOT touched in the same
+  pass (its `value: (r) => string` contract is shared by the pivot
+  table/chart, not just filtering, so decomposing it is a larger, separate
+  change) — still splinters on multi-name PICs as of this writing.
 
 ## Recipient / CC / email address (INV-MAIL)
 

@@ -18,7 +18,7 @@ import { useIsMobile } from '@/lib/use-is-mobile';
 import { fmtDate, fmtMonth, toDisplayDate, toIsoDateValue, todaySGT } from '@/lib/date';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
-import { formatStaffName } from '@/lib/staff-directory';
+import { formatStaffName, formatStaffNameList } from '@/lib/staff-directory';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
 import { getHelperHealth, isHelperOutdated, buildMailtoLink, type DraftLike } from '@/lib/draft-helper-client';
@@ -3466,6 +3466,19 @@ function arColumnValue(r: ARRecord, field: ARColumnKey): string {
   return AR_DATE_COLUMNS.has(field) ? (toDisplayDate(raw) ?? raw) : raw;
 }
 
+// Vincent, 2026-09-05: same fix as components/MasterListTable.tsx's
+// displayFieldValues — a PIC cell holding "Chin Kah Ye, Ang Shi Ming" must
+// offer each person as their own filter option and match either individually,
+// not splinter into one checkbox per raw two-person combination.
+function arColumnValues(r: ARRecord, field: ARColumnKey): string[] {
+  if (AR_PIC_COLUMNS.has(field)) {
+    const raw = (r as unknown as Record<string, string | null>)[field] ?? '';
+    return formatStaffNameList(raw);
+  }
+  const value = arColumnValue(r, field).trim();
+  return value ? [value] : [];
+}
+
 // Excel-style per-column filter, mirroring components/MasterListTable.tsx's
 // ColumnFilterMenu — options are computed from the full loaded month/year
 // record set (non-cascading), not re-narrowed by other active filters.
@@ -3489,9 +3502,9 @@ function ARColumnFilterMenu({ field, label, records, selected, onApply }: {
   const options = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of records) {
-      const raw = arColumnValue(r, field).trim();
-      const key = raw === '' ? '(Blank)' : raw;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+      const values = arColumnValues(r, field);
+      if (values.length === 0) { counts.set('(Blank)', (counts.get('(Blank)') ?? 0) + 1); continue; }
+      for (const key of values) counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [records, field]);
@@ -4152,8 +4165,9 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
       if (filter === 'pending'     && r.stagesDone !== 0) return false;
       if (filter === 'overdue'     && !(!r.stages.arFiled && r.daysUntilDue !== null && r.daysUntilDue < 0)) return false;
       for (const [field, allowed] of Object.entries(columnFilters) as [ARColumnKey, Set<string>][]) {
-        const raw = arColumnValue(r, field).trim();
-        if (!allowed.has(raw === '' ? '(Blank)' : raw)) return false;
+        const values = arColumnValues(r, field);
+        const matches = values.length === 0 ? allowed.has('(Blank)') : values.some(v => allowed.has(v));
+        if (!matches) return false;
       }
       return true;
     });

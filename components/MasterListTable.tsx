@@ -8,7 +8,7 @@ import { usePagination, PaginationBar } from './Pagination';
 import { toDisplayDate, fmtDate } from '@/lib/date';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { normalize } from '@/lib/company-name';
-import { formatStaffName } from '@/lib/staff-directory';
+import { formatStaffName, formatStaffNameList } from '@/lib/staff-directory';
 import { titleCase } from '@/lib/text-case';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 
@@ -322,8 +322,9 @@ function ColumnFilterMenu({ field, label, rows, selected, onApply }: {
     const counts = new Map<string, number>();
     for (const r of rows) {
       const raw = (r as unknown as Record<string, string | null>)[field];
-      const key = displayFieldValue(field, raw) || '(Blank)';
-      counts.set(key, (counts.get(key) ?? 0) + 1);
+      const values = displayFieldValues(field, raw);
+      if (values.length === 0) { counts.set('(Blank)', (counts.get('(Blank)') ?? 0) + 1); continue; }
+      for (const key of values) counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [rows, field]);
@@ -706,12 +707,37 @@ const PIC_STYLE_FIELDS = new Set(['nominee_director', 'secretary', 'acc_pic', 't
 // just the same title-case rule on its own.
 const TITLE_CASE_FIELDS = new Set(['invoice_address']);
 const FORMATTED_TEXT_FIELDS = new Set([...PIC_STYLE_FIELDS, ...TITLE_CASE_FIELDS]);
+// Real multi-name text (comma-separated, confirmed against real Directors/
+// Shareholders values, e.g. "Cheng Jianan, Zhang Dan") that isn't staff and
+// so never goes through the staff directory — same column-filter treatment
+// as PIC_STYLE_FIELDS below (decomposed into individually filterable
+// people) without formatStaffName's lookup/title-casing.
+const MULTI_NAME_RAW_FIELDS = new Set(['directors', 'shareholders']);
 
 function displayFieldValue(field: string, raw: string | null | undefined): string {
   const value = (raw ?? '').trim();
   if (PIC_STYLE_FIELDS.has(field)) return formatStaffName(value);
   if (TITLE_CASE_FIELDS.has(field)) return titleCase(value);
   return value;
+}
+
+// Vincent, 2026-09-05: "filter 那边只需要显示一个人的名字就好...就算这个公司
+// 的格子内写着两个人的名字，但是只要对应到我filter 的那个PIC 也要显示出来"
+// — a column-filter dropdown must offer each co-assigned person once, not
+// splinter into a separate checkbox per raw combination ("Li Jianwei" AND
+// "Li Jianwei, Sherly Gunawan" as two unrelated options). Used by
+// ColumnFilterMenu below for BOTH the option list and the row-match check —
+// same "identical for display and matching" requirement formatStaffName's
+// own doc comment already states, just decomposed instead of joined. Every
+// field NOT in one of the two multi-name sets still returns its single
+// displayFieldValue as a one-element array, so existing single-value
+// columns are byte-for-byte unchanged.
+function displayFieldValues(field: string, raw: string | null | undefined): string[] {
+  const value = (raw ?? '').trim();
+  if (!value) return [];
+  if (PIC_STYLE_FIELDS.has(field)) return formatStaffNameList(value);
+  if (MULTI_NAME_RAW_FIELDS.has(field)) return [...new Set(value.split(',').map(s => s.trim()).filter(Boolean))];
+  return [displayFieldValue(field, value)];
 }
 
 // Always-visible input + on-blur save, for the modal (unlike EditCell's
@@ -1509,8 +1535,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const columnMatch = (r: MasterListRow) => {
     for (const [field, allowed] of Object.entries(columnFilters) as [ColumnField, Set<string>][]) {
       const raw = (r as unknown as Record<string, string | null>)[field];
-      const value = displayFieldValue(field, raw) || '(Blank)';
-      if (!allowed.has(value)) return false;
+      const values = displayFieldValues(field, raw);
+      // A row matches if it's blank and "(Blank)" is allowed, OR any ONE of
+      // its (possibly several) names is an allowed value — not the whole
+      // cell as one string. See displayFieldValues' own comment.
+      const matches = values.length === 0 ? allowed.has('(Blank)') : values.some(v => allowed.has(v));
+      if (!matches) return false;
     }
     return true;
   };

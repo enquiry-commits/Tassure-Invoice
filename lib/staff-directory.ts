@@ -135,13 +135,26 @@ export function findStaffEmails(rawValue: string | null | undefined): string[] {
  * so an unrecognised name must still show up.
  */
 export function formatStaffName(rawValue: string | null | undefined): string {
-  if (!rawValue) return '';
-  const names = rawValue
+  return formatStaffNameList(rawValue).join(', ');
+}
+
+/**
+ * Same resolution as formatStaffName, but returns each co-assigned person as
+ * its own array entry instead of one joined string. Added 2026-09-05 for
+ * column-filter dropdowns: filtering "Chin Kah Ye" should match a row whose
+ * PIC cell reads "Chin Kah Ye, Ang Shi Ming" too, not just an exact-string
+ * "Chin Kah Ye" cell — Vincent: 筛选那边只需要显示一个人的名字就好. Building
+ * the filter's option list AND its row-match check from this same list (not
+ * formatStaffName's joined string) keeps them in sync the same way
+ * formatStaffName's own doc comment already requires for display vs. match.
+ */
+export function formatStaffNameList(rawValue: string | null | undefined): string[] {
+  if (!rawValue) return [];
+  return rawValue
     .split(/[,/&]/)
     .map(part => part.trim())
     .filter(Boolean)
     .map(part => resolveOne(part)?.name ?? titleCase(part));
-  return names.join(', ');
 }
 
 const BY_EMAIL = new Map(STAFF_DIRECTORY.map(staff => [staff.email.toLowerCase(), staff.name]));
