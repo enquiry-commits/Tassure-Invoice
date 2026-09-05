@@ -32,23 +32,27 @@ interface StaffEntry {
 const STAFF_DIRECTORY: StaffEntry[] = [
   // Partners
   { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com' },
-  { name: 'Samuell Ng', email: 'samuellng@tassure.com' },
+  { name: 'Samuell Ng', email: 'samuellng@tassure.com', aliases: ['Samuell'] },
   { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', aliases: ['Yee Soon'] },
   { name: 'Leonard Lee', email: 'leonard.lee@tassure.com' },
   { name: 'Teo Siok Fieng', email: 'siokfieng@tassure.com' },
   // Internal
-  { name: 'Esther Loo', email: 'esther@tassure.com' },
-  { name: 'Chelsea Ang', email: 'chelsea@tassure.com' },
+  { name: 'Esther Loo', email: 'esther@tassure.com', aliases: ['Esther'] },
+  { name: 'Chelsea Ang', email: 'chelsea@tassure.com', aliases: ['Chelsea'] },
   { name: 'Vincent Seow', email: 'vincent@tassure.com' },
   { name: 'Yuna Lai', email: 'yuna@tassure.com' },
-  // Corporate Secretarial
-  { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', aliases: ['Hoe Chyi'] },
-  { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', aliases: ['Seng Xin'] },
-  { name: 'Jenny Lai', email: 'jennylai@tassure.com', aliases: ['Jenny'] },
-  { name: 'Chin Kah Ye', email: 'kahye@tassure.com', aliases: ['Kah Ye'] },
-  { name: 'Ang Shi Ming', email: 'shiming@tassure.com', aliases: ['Shi Ming'] },
+  // Corporate Secretarial — LHC/HSX/ASM/CKY/JL confirmed 2026-09-06 against
+  // Vincent's real collections spreadsheet ("Individual outstanding
+  // billing"), which uses these as its own PIC-column shorthand — same
+  // pattern as the Accounting/Tax initials below, just never surfaced in
+  // ar_reminder.pic itself before now.
+  { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', aliases: ['Hoe Chyi', 'LHC'] },
+  { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', aliases: ['Seng Xin', 'HSX'] },
+  { name: 'Jenny Lai', email: 'jennylai@tassure.com', aliases: ['Jenny', 'JL'] },
+  { name: 'Chin Kah Ye', email: 'kahye@tassure.com', aliases: ['Kah Ye', 'CKY'] },
+  { name: 'Ang Shi Ming', email: 'shiming@tassure.com', aliases: ['Shi Ming', 'ASM'] },
   // Malaysia Staff
-  { name: 'Tey Shemin', email: 'shemin@tassure.com', aliases: ['Shemin'] },
+  { name: 'Tey Shemin', email: 'shemin@tassure.com', aliases: ['Shemin', 'TSM'] },
   { name: 'Tan Min Quan', email: 'minquan@tassure.com', aliases: ['Min Quan'] },
   // Audit
   { name: 'Lina Chan', email: 'lina@tassure.com' },
@@ -63,7 +67,7 @@ const STAFF_DIRECTORY: StaffEntry[] = [
   { name: 'Jason Lee', email: 'chiasheng@tassure.com' },
   // Accounting — YH/WE/JF confirmed against the real spread of ar_reminder.acc_pic values
   { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', aliases: ['JF'] },
-  { name: 'Jay Tay', email: 'jaytay@tassure.com', aliases: ['Jay', 'JAY'] },
+  { name: 'Jay Tay', email: 'jaytay@tassure.com', aliases: ['Jay', 'JAY', 'JT'] },
   { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', aliases: ['YH'] },
   { name: 'Vernice Chai', email: 'vernice@tassure.com', aliases: ['Vernice'] },
   { name: 'Chee Wei En', email: 'weien@tassure.com', aliases: ['WE'] },
