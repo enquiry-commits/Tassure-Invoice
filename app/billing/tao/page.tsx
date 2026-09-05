@@ -11,32 +11,34 @@ import type { TaoCompanyRow } from '@/app/api/billing/tao/route';
 // items) — picking one of these resolves to the exact QB Item via
 // buildInvoiceLineArray's exact match (lib/qb-invoice-conventions.ts), so the
 // invoice item lines up with QuickBooks' own catalogue instead of falling
-// back to a fuzzy keyword guess. "Custom" lets ACC type something not listed
-// here; it still gets bucketed under a `service` category for the generic
-// disbursement/PIC-class gating in qb-invoice-conventions.ts.
-const TAO_PRODUCTS: { label: string; productService: string; service: string }[] = [
-  { label: 'Compilation Report Services', productService: 'Accounts:Compilation Report Services', service: 'Accounts' },
-  { label: 'Yearly Accounts Services',    productService: 'Accounts:Yearly Accounts Services',    service: 'Accounts' },
-  { label: 'Quarterly Accounts Services', productService: 'Accounts:Quarterly Accounts Services', service: 'Accounts' },
-  { label: 'Monthly Accounts Services',   productService: 'Accounts:Monthly Accounts Services',   service: 'Accounts' },
-  { label: 'Account Review',              productService: 'Accounts:Account Review',              service: 'Accounts' },
-  { label: 'Corporate Tax Services',      productService: 'Tax:Corporate Tax Services',            service: 'Tax' },
-  { label: 'Personal Tax Services',       productService: 'Tax:Personal Tax Services',             service: 'Tax' },
-  { label: 'GST Submission Services',     productService: 'Tax:GST Submission Services',           service: 'Tax' },
-  { label: 'GST Application Services',    productService: 'Tax:GST Application Services',          service: 'Tax' },
-  { label: 'AIS Submission',              productService: 'Tax:AIS submission',                    service: 'Tax' },
-  { label: 'Form IR8A Preparation',       productService: 'Tax:Form IR8A preparation',              service: 'Tax' },
-  { label: 'Certificate of Residence',    productService: 'Tax:Certificate of Residence',           service: 'Tax' },
-  { label: 'Withholding Tax',             productService: 'Tax:Withholding Tax',                    service: 'Tax' },
-  { label: 'Dormant Tax Return',          productService: 'Tax:Dormant Tax Return',                 service: 'Tax' },
-  { label: 'Other Tax Services',          productService: 'Tax:Other Tax Services',                 service: 'Tax' },
-  { label: 'Reimbursement (OPE)',         productService: 'Disbursement:Reimbursement - OPE',       service: 'Disbursement' },
-  { label: 'Custom / Other…',             productService: '',                                       service: 'Accounts' },
+// back to a fuzzy keyword guess. Same shape/role as app/billing/page.tsx's
+// QB_CATALOG, used the same way: picked once from the "Add line" dropdown
+// (grouped by category), not re-picked per line afterwards (Vincent,
+// 2026-09-05: "TAO 的这部分不能和 TAB/TAC的一样吗" pointing at that exact
+// catalogue-dropdown-appends-a-line pattern).
+const TAO_PRODUCTS: { label: string; category: string; productService: string; service: string }[] = [
+  { label: 'Compilation Report Services', category: 'Accounts', productService: 'Accounts:Compilation Report Services', service: 'Accounts' },
+  { label: 'Yearly Accounts Services',    category: 'Accounts', productService: 'Accounts:Yearly Accounts Services',    service: 'Accounts' },
+  { label: 'Quarterly Accounts Services', category: 'Accounts', productService: 'Accounts:Quarterly Accounts Services', service: 'Accounts' },
+  { label: 'Monthly Accounts Services',   category: 'Accounts', productService: 'Accounts:Monthly Accounts Services',   service: 'Accounts' },
+  { label: 'Account Review',              category: 'Accounts', productService: 'Accounts:Account Review',              service: 'Accounts' },
+  { label: 'Corporate Tax Services',      category: 'Tax', productService: 'Tax:Corporate Tax Services',            service: 'Tax' },
+  { label: 'Personal Tax Services',       category: 'Tax', productService: 'Tax:Personal Tax Services',             service: 'Tax' },
+  { label: 'GST Submission Services',     category: 'Tax', productService: 'Tax:GST Submission Services',           service: 'Tax' },
+  { label: 'GST Application Services',    category: 'Tax', productService: 'Tax:GST Application Services',          service: 'Tax' },
+  { label: 'AIS Submission',              category: 'Tax', productService: 'Tax:AIS submission',                    service: 'Tax' },
+  { label: 'Form IR8A Preparation',       category: 'Tax', productService: 'Tax:Form IR8A preparation',              service: 'Tax' },
+  { label: 'Certificate of Residence',    category: 'Tax', productService: 'Tax:Certificate of Residence',           service: 'Tax' },
+  { label: 'Withholding Tax',             category: 'Tax', productService: 'Tax:Withholding Tax',                    service: 'Tax' },
+  { label: 'Dormant Tax Return',          category: 'Tax', productService: 'Tax:Dormant Tax Return',                 service: 'Tax' },
+  { label: 'Other Tax Services',          category: 'Tax', productService: 'Tax:Other Tax Services',                 service: 'Tax' },
+  { label: 'Reimbursement (OPE)',         category: 'Disbursement', productService: 'Disbursement:Reimbursement - OPE', service: 'Disbursement' },
+  { label: 'Custom / Other…',             category: 'Other', productService: '',                                     service: 'Accounts' },
 ];
 
 type Line = {
   key: number;
-  productOption: string;
+  label: string;
   productService: string;
   service: string;
   description: string;
@@ -45,9 +47,8 @@ type Line = {
 };
 
 let lineKeySeq = 0;
-function newLine(): Line {
-  const opt = TAO_PRODUCTS[0];
-  return { key: ++lineKeySeq, productOption: '0', productService: opt.productService, service: opt.service, description: '', rate: '', qty: '1' };
+function newLine(opt: typeof TAO_PRODUCTS[number]): Line {
+  return { key: ++lineKeySeq, label: opt.label, productService: opt.productService, service: opt.service, description: opt.label, rate: '', qty: '1' };
 }
 
 function todayIso() {
@@ -222,7 +223,7 @@ export default function TaoBillingPage() {
 function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; onGenerated: () => void }) {
   const [txnDate, setTxnDate] = useState(todayIso());
   const [email, setEmail] = useState('');
-  const [lines, setLines] = useState<Line[]>([newLine()]);
+  const [lines, setLines] = useState<Line[]>([]);
   const [suggestedNumber, setSuggestedNumber] = useState('');
   const [docNumber, setDocNumber] = useState('');
   const [numberConnected, setNumberConnected] = useState<boolean | null>(null);
@@ -246,15 +247,17 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
 
   const updateLine = (key: number, patch: Partial<Line>) =>
     setLines(current => current.map(l => (l.key === key ? { ...l, ...patch } : l)));
-  const setLineProduct = (key: number, optIndex: string) => {
-    const opt = TAO_PRODUCTS[Number(optIndex)];
-    updateLine(key, { productOption: optIndex, productService: opt.productService, service: opt.service });
+  const addLine = (selectValue: string) => {
+    const opt = selectValue === '__custom__'
+      ? TAO_PRODUCTS.find(x => x.category === 'Other')
+      : TAO_PRODUCTS.find(x => x.productService === selectValue);
+    if (!opt) return;
+    setLines(current => [...current, newLine(opt)]);
   };
-  const addLine = () => setLines(current => [...current, newLine()]);
-  const removeLine = (key: number) => setLines(current => (current.length > 1 ? current.filter(l => l.key !== key) : current));
+  const removeLine = (key: number) => setLines(current => current.filter(l => l.key !== key));
 
   const total = lines.reduce((s, l) => s + (Number(l.rate) || 0) * (Number(l.qty) || 0), 0);
-  const linesValid = lines.every(l => l.description.trim() && Number.isFinite(Number(l.rate)) && Number(l.rate) !== 0 && Number(l.qty) > 0);
+  const linesValid = lines.length > 0 && lines.every(l => l.description.trim() && Number.isFinite(Number(l.rate)) && Number(l.rate) !== 0 && Number(l.qty) > 0);
 
   const generate = async () => {
     if (!linesValid) return;
@@ -357,12 +360,14 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
           <div style={{ textAlign: 'center', padding: '0 8px' }}>Rate (S$)</div>
           <div style={{ textAlign: 'right' }}>Amount</div><div />
         </div>
+        {lines.length === 0 && (
+          <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No lines yet — add one below.</div>
+        )}
         {lines.map(l => (
           <div key={l.key} style={{ display: 'grid', gridTemplateColumns: '1.1fr 2fr 60px 100px 100px 26px', gap: 0, alignItems: 'start', padding: '14px 10px', borderTop: '1px solid #f1f5f9' }}>
-            <select value={l.productOption} onChange={e => setLineProduct(l.key, e.target.value)}
-              style={{ ...inputStyle, width: '95%', fontSize: 12, fontWeight: 700, color: '#334155' }}>
-              {TAO_PRODUCTS.map((opt, i) => <option key={i} value={i}>{opt.label}</option>)}
-            </select>
+            <div style={{ display: 'flex', alignItems: 'center', paddingTop: 6 }} title={l.productService || undefined}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.label}</span>
+            </div>
             <textarea value={l.description} onChange={e => updateLine(l.key, { description: e.target.value })}
               placeholder="Line description (shown on the invoice)" rows={2}
               style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4, resize: 'vertical' }} />
@@ -374,8 +379,8 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
             <span style={{ fontSize: 12, fontWeight: 700, color: '#0f766e', textAlign: 'right' }}>
               {(Number(l.rate) || 0) && (Number(l.qty) || 0) ? fmtMoney((Number(l.rate) || 0) * (Number(l.qty) || 0)) : '—'}
             </span>
-            <button onClick={() => removeLine(l.key)} disabled={lines.length === 1} title="Remove line"
-              style={{ border: 'none', background: 'transparent', color: lines.length === 1 ? '#e2e8f0' : '#cbd5e1', cursor: lines.length === 1 ? 'default' : 'pointer', padding: 0, display: 'flex', justifyContent: 'center' }}>
+            <button onClick={() => removeLine(l.key)} title="Remove line"
+              style={{ border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'center' }}>
               <X size={13} />
             </button>
           </div>
@@ -383,7 +388,21 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#f8fafc' }}>
         <Plus size={13} style={{ color: '#0f766e' }} />
-        <button onClick={addLine} style={{ fontSize: 11, fontWeight: 700, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Add line</button>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add line</span>
+        <select value="" onChange={e => { if (e.target.value) addLine(e.target.value); }}
+          style={{ ...inputStyle, minWidth: 260, cursor: 'pointer' }}>
+          <option value="">Choose a QuickBooks item…</option>
+          {[...new Set(TAO_PRODUCTS.filter(x => x.category !== 'Other').map(x => x.category))].map(cat => (
+            <optgroup key={cat} label={cat}>
+              {TAO_PRODUCTS.filter(x => x.category === cat).map(x => (
+                <option key={x.productService} value={x.productService}>{x.label}</option>
+              ))}
+            </optgroup>
+          ))}
+          {TAO_PRODUCTS.filter(x => x.category === 'Other').map(x => (
+            <option key={x.label} value={x.productService || '__custom__'}>{x.label}</option>
+          ))}
+        </select>
       </div>
 
       {/* Total + Generate */}
