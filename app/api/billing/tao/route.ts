@@ -1,7 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
+import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 
 // GET /api/billing/tao — company list for ACC's own Accounts/Tax billing
 // page (app/billing/tao/page.tsx). Deliberately NOT the FYE-cycle renewal
@@ -105,4 +107,52 @@ export async function GET() {
     .sort((a, b) => a.companyName.localeCompare(b.companyName));
 
   return NextResponse.json({ companies: rows });
+}
+
+// POST /api/billing/tao — add a genuinely new company, one never synced from
+// TeamWork and with no QuickBooks history yet. Vincent, 2026-09-05: TAO's
+// candidate list (GET above) only ever draws from `companies` + real
+// QuickBooks history, both of which a brand-new client has none of — this is
+// the entry point he asked for so ACC isn't blocked waiting on a TeamWork
+// sync just to start billing a new Accounts client. Minimal insert (just the
+// name, `has_accounts: true` so it's immediately eligible above) — every
+// other `companies` column is nullable and gets filled in properly later,
+// either by staff or once TeamWork does pick this company up.
+export async function POST(req: NextRequest) {
+  const auth = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => req.cookies.getAll(), setAll: () => undefined } },
+  );
+  const { data: authData } = await auth.auth.getUser();
+  const account: ApprovedAccount | null = getApprovedAccount(authData.user?.email);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+
+  const { companyName } = await req.json().catch(() => ({})) as { companyName?: string };
+  const name = companyName?.trim();
+  if (!name) return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  const target = normalize(name);
+  const { data: existingRows, error: existingError } = await supabase.from('companies').select('id, company_name');
+  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 503 });
+
+  // Guard against creating a shadow duplicate of a company that's already in
+  // the system (e.g. staff mistyping a search and not realizing it already
+  // exists) — exact match first, fuzzy fallback same as the GET handler.
+  const exact = (existingRows ?? []).find(c => normalize(c.company_name) === target);
+  const fuzzy = exact ? null : findUniqueBestMatch(name, existingRows ?? [], c => c.company_name, 85);
+  const collision = exact ?? fuzzy?.value;
+  if (collision) {
+    return NextResponse.json({ error: `"${collision.company_name}" already exists in the system (id ${collision.id}) — search for it instead of adding a duplicate.` }, { status: 409 });
+  }
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('companies')
+    .insert({ company_name: name, has_accounts: true })
+    .select('id, company_name')
+    .single();
+  if (insertError) return NextResponse.json({ error: insertError.message }, { status: 503 });
+
+  return NextResponse.json({ company: { companyId: inserted.id, companyName: inserted.company_name, lastInvoice: null } });
 }

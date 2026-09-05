@@ -1527,6 +1527,14 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
   const invoiceRequestKey = useRef(globalThis.crypto.randomUUID()).current;
   const [drafting, setDrafting] = useState(false);
   const [draftResult, setDraftResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  // Vincent, 2026-09-05: "假设我今天要...开单一个...完全全新的公司...能不能
+  // 把这个建成客户的功能，也放置在 TAB/TAC" — findCustomer() in
+  // qb-invoice-conventions.ts only ever looks a QB Customer up, never
+  // creates one; a genuinely new client fails here with "Customer not found
+  // in QB {company}". Track which company(ies) hit exactly that error so the
+  // banner can offer a one-click "create it" recovery instead of a dead end.
+  const [missingCustomerCompanies, setMissingCustomerCompanies] = useState<Array<'TAB' | 'TAC'>>([]);
+  const [creatingCustomerFor, setCreatingCustomerFor] = useState<Partial<Record<'TAB' | 'TAC', boolean>>>({});
   const [email, setEmail] = useState(c.email ?? '');
   const [txnDate, setTxnDate] = useState(new Date().toISOString().slice(0, 10));
   const [invoiceNumbers, setInvoiceNumbers] = useState<InvoiceNumberState>({ TAB: '', TAC: '' });
@@ -1882,6 +1890,10 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
       if (json.errors?.tab) errs.push(`TAB: ${json.errors.tab}`);
       if (json.errors?.tac) errs.push(`TAC: ${json.errors.tac}`);
       if (json.errors?.persistence) errs.push(json.errors.persistence);
+      setMissingCustomerCompanies([
+        ...(/Customer not found in QB/i.test(json.errors?.tab ?? '') ? (['TAB'] as const) : []),
+        ...(/Customer not found in QB/i.test(json.errors?.tac ?? '') ? (['TAC'] as const) : []),
+      ]);
       if (json.success) {
         if (json.tab?.invoiceNo || json.tac?.invoiceNo) {
           setInvoiceNumbers(current => ({
@@ -1905,6 +1917,25 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
     } catch (e: unknown) {
       setDraftResult({ ok: false, msg: e instanceof Error ? e.message : 'Request failed' });
     } finally { setDrafting(false); }
+  };
+
+  const createCustomerAndRetry = async (company: 'TAB' | 'TAC') => {
+    setCreatingCustomerFor(prev => ({ ...prev, [company]: true }));
+    try {
+      const res = await fetch('/api/quickbooks/create-customer', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company, companyName: c.companyName }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setDraftResult({ ok: false, msg: json.error ?? `Could not create the customer in QuickBooks ${company}.` }); return; }
+      setMissingCustomerCompanies(prev => prev.filter(x => x !== company));
+      setDraftResult({ ok: true, msg: `Created "${json.customer.name}" in QuickBooks ${company} — generating the invoice now…` });
+      await createInvoice();
+    } catch (e: unknown) {
+      setDraftResult({ ok: false, msg: e instanceof Error ? e.message : 'Request failed' });
+    } finally {
+      setCreatingCustomerFor(prev => ({ ...prev, [company]: false }));
+    }
   };
 
   // Saves changes to an invoice that ALREADY exists (edit mode) — a
@@ -2347,7 +2378,15 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         <div style={{ marginTop: 20, padding: '12px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
           background: draftResult.ok ? 'var(--status-success-tint)' : 'var(--status-danger-tint)', color: draftResult.ok ? '#15803d' : 'var(--status-danger)',
           border: `1px solid ${draftResult.ok ? '#bbf7d0' : '#fecaca'}` }}>
-          {draftResult.ok ? '✓ ' : '✕ '}{draftResult.msg}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span>{draftResult.ok ? '✓ ' : '✕ '}{draftResult.msg}</span>
+            {missingCustomerCompanies.map(company => (
+              <button key={company} onClick={() => createCustomerAndRetry(company)} disabled={creatingCustomerFor[company]}
+                style={{ marginLeft: company === missingCustomerCompanies[0] ? 'auto' : 0, padding: '6px 12px', borderRadius: 7, border: 'none', background: creatingCustomerFor[company] ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: creatingCustomerFor[company] ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                {creatingCustomerFor[company] ? 'Creating…' : `Create "${c.companyName}" in QB ${company}`}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

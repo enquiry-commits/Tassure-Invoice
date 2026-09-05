@@ -121,6 +121,37 @@ export default function TaoBillingPage() {
   const [filter, setFilter] = useState<'all' | 'never' | 'billed'>('all');
   const [expanded, setExpanded] = useState<string | null>(null); // keyed by companyName
 
+  // Vincent, 2026-09-05: "TAO 那边...页面上加一个'新增公司'入口" — the GET
+  // list above only draws from `companies` + real QuickBooks history, so a
+  // genuinely new client (never synced from TeamWork, no QB invoices yet)
+  // has no way to appear otherwise. This is a deliberate side door, not a
+  // TeamWork-replacement — see app/api/billing/tao/route.ts's POST handler.
+  const [addingCompany, setAddingCompany] = useState(false);
+  const [newCompanyName, setNewCompanyName] = useState('');
+  const [addCompanyError, setAddCompanyError] = useState<string | null>(null);
+  const [addCompanySubmitting, setAddCompanySubmitting] = useState(false);
+
+  const submitNewCompany = async () => {
+    const name = newCompanyName.trim();
+    if (!name) return;
+    setAddCompanySubmitting(true); setAddCompanyError(null);
+    try {
+      const res = await fetch('/api/billing/tao', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyName: name }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setAddCompanyError(json.error ?? 'Could not add this company.'); return; }
+      setAddingCompany(false); setNewCompanyName('');
+      load();
+      setExpanded(json.company.companyName);
+    } catch (err) {
+      setAddCompanyError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAddCompanySubmitting(false);
+    }
+  };
+
   const load = () => {
     setLoadError(null);
     fetch('/api/billing/tao')
@@ -174,8 +205,32 @@ export default function TaoBillingPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
-          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{total} companies</span>
+          <span style={{ fontSize: 11, color: '#94a3b8' }}>{total} companies</span>
+          <button onClick={() => { setAddingCompany(v => !v); setAddCompanyError(null); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #a7f3d0', background: addingCompany ? '#ecfdf5' : '#fff', color: '#0f766e', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
+            <Plus size={13} />Add new company
+          </button>
         </div>
+        {addingCompany && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+            <input type="text" placeholder="Company name (not yet in the system)" value={newCompanyName}
+              onChange={e => setNewCompanyName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') submitNewCompany(); }}
+              autoFocus
+              style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none' }} />
+            <button onClick={submitNewCompany} disabled={addCompanySubmitting || !newCompanyName.trim()}
+              style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: addCompanySubmitting || !newCompanyName.trim() ? '#cbd5e1' : '#0f766e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
+              {addCompanySubmitting ? 'Adding…' : 'Add'}
+            </button>
+            <button onClick={() => { setAddingCompany(false); setNewCompanyName(''); setAddCompanyError(null); }}
+              style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, cursor: 'pointer' }}>
+              Cancel
+            </button>
+          </div>
+        )}
+        {addCompanyError && (
+          <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--status-danger)', fontWeight: 600 }}>{addCompanyError}</div>
+        )}
       </div>
 
       <div className="system-list-shell">
@@ -262,7 +317,8 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
   const [docNumber, setDocNumber] = useState('');
   const [numberConnected, setNumberConnected] = useState<boolean | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; msg: string; customerMissing?: boolean } | null>(null);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
   const requestKey = useRef(globalThis.crypto.randomUUID());
 
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -352,12 +408,34 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
         setResult({ ok: true, msg: `TAO #${json.tao.invoiceNo} generated — ${fmtMoney(json.tao.total ?? total)}` });
         setTimeout(onGenerated, 900);
       } else {
-        setResult({ ok: false, msg: json.errors?.tao ?? json.error ?? 'Invoice generation failed.' });
+        const msg: string = json.errors?.tao ?? json.error ?? 'Invoice generation failed.';
+        // Vincent, 2026-09-05: "能不能把这个建成客户的功能，也放置在...TAO"
+        // — a brand-new client has no QuickBooks Customer yet; offer to
+        // create one right from this exact error instead of a dead end.
+        setResult({ ok: false, msg, customerMissing: /Customer not found in QB/i.test(msg) });
       }
     } catch (err) {
       setResult({ ok: false, msg: err instanceof Error ? err.message : String(err) });
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const createCustomerAndRetry = async () => {
+    setCreatingCustomer(true);
+    try {
+      const res = await fetch('/api/quickbooks/create-customer', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company: 'TAO', companyName: company.companyName }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setResult({ ok: false, msg: json.error ?? 'Could not create the customer in QuickBooks.' }); return; }
+      setResult({ ok: true, msg: `Created "${json.customer.name}" in QuickBooks TAO — generating the invoice now…` });
+      await generate();
+    } catch (err) {
+      setResult({ ok: false, msg: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setCreatingCustomer(false);
     }
   };
 
@@ -501,7 +579,15 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
         <div style={{ marginTop: 14, padding: '12px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
           background: result.ok ? 'var(--status-success-tint)' : 'var(--status-danger-tint)', color: result.ok ? '#15803d' : 'var(--status-danger)',
           border: `1px solid ${result.ok ? '#bbf7d0' : '#fecaca'}` }}>
-          {result.ok ? '✓ ' : '✕ '}{result.msg}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span>{result.ok ? '✓ ' : '✕ '}{result.msg}</span>
+            {result.customerMissing && (
+              <button onClick={createCustomerAndRetry} disabled={creatingCustomer}
+                style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 7, border: 'none', background: creatingCustomer ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: creatingCustomer ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                {creatingCustomer ? 'Creating…' : `Create "${company.companyName}" in QuickBooks`}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

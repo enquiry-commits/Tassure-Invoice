@@ -150,6 +150,31 @@ export async function findCustomer(token: string, realmId: string, name: string)
     : null;
 }
 
+// Vincent, 2026-09-05: a genuinely new company has no QuickBooks Customer
+// yet — findCustomer() above only ever looks one up, it never creates one,
+// and until now nothing in this codebase did. This is the minimal create
+// (DisplayName only, per Vincent's own call — everything else gets filled
+// in directly in QuickBooks later): staff-triggered, one company at a time,
+// never automatic. QuickBooks itself rejects an exact-DisplayName collision
+// ("Duplicate Name Exists Error"), which doubles as a safety net against
+// accidentally creating a second record for a company that already exists
+// under the same name.
+export async function createCustomer(token: string, realmId: string, displayName: string): Promise<{ id: string; name: string } | { error: string }> {
+  const res = await fetch(`${QB_BASE}/v3/company/${realmId}/customer?minorversion=65`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ DisplayName: displayName }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    return { error: `QuickBooks rejected the new customer: ${errText.slice(0, 300)}` };
+  }
+  const json = await res.json();
+  const customer = json.Customer as Record<string, unknown> | undefined;
+  if (!customer?.Id) return { error: 'QuickBooks returned an incomplete customer result.' };
+  return { id: String(customer.Id), name: String(customer.DisplayName ?? displayName) };
+}
+
 // ── Parent-company Bill-To override ────────────────────────────────────────
 // Vincent: a subsidiary's invoice should record against the SUBSIDIARY's own
 // QB customer (CustomerRef, unchanged) but show the PARENT's name+address on
