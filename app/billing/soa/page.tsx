@@ -14,6 +14,21 @@ import { AGING_BUCKETS, type AgingBucket } from '@/lib/soa';
 function fmtMoney(n: number) {
   return `S$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+// The metric card's 28px/-0.035em letter-spacing (app/globals.css's
+// .metric-card-value) squeezes "S$" straight into the digits with no visual
+// separation at that size and weight. A dedicated span with its own spacing
+// breaks that up, same "small currency tag beside a big number" convention
+// most finance dashboards use (Vincent, 2026-09-06: "货币单位和数字...看起来
+// 像堆在一起"). Table-cell-sized money elsewhere on this page keeps plain
+// fmtMoney() — only the large metric-card figure needed this.
+function MoneyValue({ amount }: { amount: number }) {
+  return (
+    <span style={{ letterSpacing: 'normal' }}>
+      <span style={{ fontSize: '0.55em', fontWeight: 700, marginRight: 5, color: '#64748b', verticalAlign: '2px' }}>S$</span>
+      {amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    </span>
+  );
+}
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
 }
@@ -78,7 +93,7 @@ export default function SoaBillingPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
           <MetricCard value={counts.total} label="Clients With a Balance" sub="any TAB/TAC/TAO invoice still unpaid"
             icon={<Receipt size={16} />} color="#1d3a5c" />
-          <MetricCard value={fmtMoney(counts.totalOutstanding)} label="Total Outstanding" sub="across TAB, TAC and TAO combined"
+          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub="across TAB, TAC and TAO combined"
             icon={<Receipt size={16} />} color="#0f766e" />
           <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub="needs a statement sent soon"
             icon={<AlertTriangle size={16} />} color="var(--status-danger)" />
