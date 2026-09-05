@@ -60,7 +60,12 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
 - Master List (Active Clients, Ad-hoc, MAS, Name Change, Strike Off,
   Terminated, Trademark)
 - Nominee Directors tracking (appointments + subrole review)
-- Billing / QuickBooks invoice generation (TAB + TAC dual company files)
+- Billing / QuickBooks invoice generation (TAB + TAC dual company files) —
+  plus ACC's own TAO Accounts/Tax billing (`/billing/tao`, shipped
+  2026-09-05) and SOA collections (`/billing/soa`, shipped 2026-09-06 — every
+  client with an unpaid TAB/TAC/TAO balance, aged the same way as
+  QuickBooks' own AR Aging report, with real PDF-merge automation for the
+  combined statement Chelsea previously built by hand)
 - Client Communications (campaigns, templates, drafts, send history) +
   Draft Helper (separate desktop app) for the real Outlook send
 - Post Incorporate document generation (1 of 13 planned document types —

@@ -60,6 +60,9 @@ const tree: Node[] = [
           // flow above — a plain leaf, no restrictedTo (Vincent, 2026-09-05:
           // "这个暂时先不限制，所有人都看得到").
           { label: 'TAO',       href: '/billing/tao' },
+          // Collections — every client with an unpaid TAB/TAC/TAO balance,
+          // aged the same way as QuickBooks' own AR Aging report.
+          { label: 'SOA',       href: '/billing/soa' },
         ],
       },
       {
