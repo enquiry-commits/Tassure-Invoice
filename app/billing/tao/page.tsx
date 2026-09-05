@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Receipt, RefreshCw, Plus, Trash2, X, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Receipt, RefreshCw, Plus, X, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, AlertTriangle, Mail } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { isValidEmail } from '@/lib/campaign-recipients';
@@ -297,73 +297,124 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
     }
   };
 
+  // Same visual language as app/billing/page.tsx's ExpandedBillingRow (Vincent,
+  // 2026-09-05: "之前的UI就很不错" pointing at that exact TAB/TAC builder) —
+  // shared inputStyle, the same section-badge-with-number-box header row, the
+  // same table-with-uppercase-header + attached "Add line" footer bar, the
+  // same bottom "N lines · Total" + green Generate button + draft disclaimer.
+  // Columns TAB/TAC has that don't apply here are dropped rather than faked:
+  // no per-line include/exclude checkbox (every line here was added on
+  // purpose, nothing to opt out of), no Status column (that tracks renewal
+  // period due-dates, which don't exist for Accounts/Tax), no PIC/Class note
+  // (TAO invoices never carry one — see lib/qb-invoice-conventions.ts).
+  const inputStyle: React.CSSProperties = { border: '1px solid #cbd5e1', borderRadius: 5, padding: '6px 6px', fontSize: 12, outline: 'none', background: '#fff' };
+  const manuallyChanged = !!docNumber && !!suggestedNumber && docNumber !== suggestedNumber;
+  const numberBg = manuallyChanged ? '#fffbeb' : '#f8fafc';
+  const numberBorder = manuallyChanged ? '#fcd34d' : '#dbe5ee';
+  const numberColor = manuallyChanged ? '#92400e' : '#1e3a5f';
+
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
-        <label style={{ fontSize: 12, color: '#64748b' }}>Invoice date</label>
-        <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)}
-          style={{ padding: '6px 10px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 13 }} />
-        <label style={{ fontSize: 12, color: '#64748b', marginLeft: 12 }}>Bill email</label>
-        <input value={email} onChange={e => setEmail(e.target.value)} placeholder="optional"
-          style={{ flex: 1, minWidth: 160, padding: '6px 10px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 13 }} />
-        <label style={{ fontSize: 12, color: '#64748b' }}>TAO invoice #</label>
-        <input value={docNumber} onChange={e => setDocNumber(e.target.value.trim())} placeholder={numberConnected === false ? 'not connected' : '…'}
-          disabled={numberConnected === false}
-          style={{ width: 130, padding: '6px 10px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 13 }} />
+    <div style={{ padding: '28px 20px', background: '#fff' }}>
+      {/* Header: bill email + invoice date */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Mail size={13} style={{ color: '#64748b' }} />
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="client@email.com (optional)"
+            style={{ ...inputStyle, width: 240, color: 'var(--accent-blue)', fontWeight: 600 }} />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: '#64748b' }}>Invoice date</span>
+          <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} style={inputStyle} />
+        </div>
+      </div>
+
+      {/* Section badge + estimated QB number */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: '#0f766e', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 5, padding: '2px 8px' }}>TAO</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Accounts / Tax Services</span>
+        <span style={{ fontSize: 10, color: '#94a3b8' }}>· built manually, no template</span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 9px', borderRadius: 8, background: numberBg, border: `1px solid ${numberBorder}` }}>
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+            <span style={{ fontSize: 8, fontWeight: 800, color: manuallyChanged ? 'var(--status-warning)' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
+            <span style={{ fontSize: 8.5, color: '#94a3b8' }}>QB confirms when created</span>
+          </div>
+          <input value={docNumber} onChange={e => setDocNumber(e.target.value.trim())}
+            placeholder={numberConnected === false ? 'not connected' : '…'} disabled={numberConnected === false}
+            style={{ width: 92, border: 0, borderBottom: `1px solid ${manuallyChanged ? '#f59e0b' : '#94a3b8'}`, outline: 'none', background: 'transparent', color: numberColor, fontFamily: 'monospace', fontSize: 11.5, fontWeight: 800, padding: '2px 1px', textAlign: 'center' }} />
+        </div>
       </div>
       {numberConnected === false && (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: '#b45309', fontSize: 12, marginBottom: 12 }}>
-          <AlertCircle size={14} />QuickBooks TAO is not connected — connect it from the Dashboard before generating.
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: '#b45309', fontSize: 11, marginBottom: 10 }}>
+          <AlertCircle size={13} />QuickBooks TAO is not connected — connect it from the Dashboard before generating.
         </div>
       )}
 
-      <div style={{ marginBottom: 8 }}>
+      {/* Line-items table */}
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 2fr 60px 100px 100px 26px', gap: 0, background: '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+          <div>Service</div><div>Description</div>
+          <div style={{ textAlign: 'center', padding: '0 8px' }}>Qty</div>
+          <div style={{ textAlign: 'center', padding: '0 8px' }}>Rate (S$)</div>
+          <div style={{ textAlign: 'right' }}>Amount</div><div />
+        </div>
         {lines.map(l => (
-          <div key={l.key} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 100px 70px 28px', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          <div key={l.key} style={{ display: 'grid', gridTemplateColumns: '1.1fr 2fr 60px 100px 100px 26px', gap: 0, alignItems: 'start', padding: '14px 10px', borderTop: '1px solid #f1f5f9' }}>
             <select value={l.productOption} onChange={e => setLineProduct(l.key, e.target.value)}
-              style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 12 }}>
+              style={{ ...inputStyle, width: '95%', fontSize: 12, fontWeight: 700, color: '#334155' }}>
               {TAO_PRODUCTS.map((opt, i) => <option key={i} value={i}>{opt.label}</option>)}
             </select>
-            <input value={l.description} onChange={e => updateLine(l.key, { description: e.target.value })}
-              placeholder="Line description (shown on the invoice)"
-              style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 12 }} />
-            <input type="number" value={l.rate} onChange={e => updateLine(l.key, { rate: e.target.value })}
-              placeholder="Rate"
-              style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 12 }} />
-            <input type="number" value={l.qty} onChange={e => updateLine(l.key, { qty: e.target.value })}
-              style={{ padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', fontSize: 12 }} />
-            <button onClick={() => removeLine(l.key)} disabled={lines.length === 1}
-              style={{ border: 'none', background: 'none', color: lines.length === 1 ? '#cbd5e1' : '#dc2626', cursor: lines.length === 1 ? 'default' : 'pointer' }}>
-              <Trash2 size={15} />
+            <textarea value={l.description} onChange={e => updateLine(l.key, { description: e.target.value })}
+              placeholder="Line description (shown on the invoice)" rows={2}
+              style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4, resize: 'vertical' }} />
+            <input type="number" min={1} value={l.qty} onChange={e => updateLine(l.key, { qty: e.target.value })}
+              style={{ ...inputStyle, width: 44, textAlign: 'center', justifySelf: 'center' }} />
+            <input type="number" min={0} value={l.rate} onChange={e => updateLine(l.key, { rate: e.target.value })}
+              placeholder="0"
+              style={{ ...inputStyle, width: 90, textAlign: 'center', justifySelf: 'center', borderColor: !l.rate ? '#f87171' : '#cbd5e1', background: !l.rate ? 'var(--status-danger-tint)' : '#fff' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#0f766e', textAlign: 'right' }}>
+              {(Number(l.rate) || 0) && (Number(l.qty) || 0) ? fmtMoney((Number(l.rate) || 0) * (Number(l.qty) || 0)) : '—'}
+            </span>
+            <button onClick={() => removeLine(l.key)} disabled={lines.length === 1} title="Remove line"
+              style={{ border: 'none', background: 'transparent', color: lines.length === 1 ? '#e2e8f0' : '#cbd5e1', cursor: lines.length === 1 ? 'default' : 'pointer', padding: 0, display: 'flex', justifyContent: 'center' }}>
+              <X size={13} />
             </button>
           </div>
         ))}
-        <button onClick={addLine} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: '1px dashed #cbd5e1', borderRadius: 6, padding: '6px 12px', color: '#475569', fontSize: 12, cursor: 'pointer' }}>
-          <Plus size={13} />Add line
-        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#f8fafc' }}>
+        <Plus size={13} style={{ color: '#0f766e' }} />
+        <button onClick={addLine} style={{ fontSize: 11, fontWeight: 700, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Add line</button>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: 14, fontWeight: 700, color: '#1e3a5f', marginTop: 8, marginBottom: 16 }}>
-        Total: {fmtMoney(total)}
-      </div>
-
-      {result && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13,
-          background: result.ok ? '#f0fdf4' : '#fef2f2', border: `1px solid ${result.ok ? '#bbf7d0' : '#fecaca'}`, color: result.ok ? '#166534' : '#991b1b' }}>
-          {result.ok ? <CheckCircle2 size={15} /> : <AlertCircle size={15} />}{result.msg}
+      {/* Total + Generate */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
+        <div style={{ fontSize: 13, color: '#334155' }}>
+          <span style={{ color: '#64748b' }}>{lines.length} line{lines.length !== 1 ? 's' : ''} · Total </span>
+          <strong style={{ fontSize: 17, color: '#0f766e' }}>{fmtMoney(total)}</strong>
         </div>
-      )}
-
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        {!linesValid && <span style={{ fontSize: 11, color: 'var(--status-danger)', fontWeight: 600 }}>⚠ Fill in every description, rate and quantity before generating</span>}
         <button
           onClick={generate}
           disabled={generating || !linesValid || numberConnected === false}
           style={{
-            padding: '9px 22px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 700, cursor: generating || !linesValid ? 'default' : 'pointer',
-            background: generating || !linesValid || numberConnected === false ? '#cbd5e1' : '#1e3a5f', color: '#fff',
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none',
+            cursor: generating || !linesValid ? 'default' : 'pointer',
+            background: generating || !linesValid || numberConnected === false ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
           }}>
-          {generating ? 'Generating…' : 'Generate TAO Invoice'}
+          {generating ? 'Generating…' : 'Generate Invoice in QB (TAO)'}
         </button>
+      </div>
+
+      {result && (
+        <div style={{ marginTop: 14, padding: '12px 12px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+          background: result.ok ? 'var(--status-success-tint)' : 'var(--status-danger-tint)', color: result.ok ? '#15803d' : 'var(--status-danger)',
+          border: `1px solid ${result.ok ? '#bbf7d0' : '#fecaca'}` }}>
+          {result.ok ? '✓ ' : '✕ '}{result.msg}
+        </div>
+      )}
+
+      <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, marginTop: 20, fontSize: 10, color: '#94a3b8' }}>
+        ⚠ The invoice is created as a draft in QuickBooks (not sent). Review it in QB, then send to the client from there.
       </div>
     </div>
   );
