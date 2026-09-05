@@ -229,8 +229,10 @@ async function createInvoiceInCompany(
 
 // ── POST /api/quickbooks/create-invoice ───────────────────────────────────────
 // Basic services (Secretary/Address/AR/XBRL/Accounts/Tax/Discount) invoice
-// under TAB (the default company); Nominee Director always invoices
-// separately under TAC. A single request can produce up to two invoices.
+// under TAB (the default company) when billed via Chelsea's Billing Drafts;
+// Nominee Director always invoices separately under TAC; ACC's own Accounts/
+// Tax billing (/billing/tao) invoices separately under TAO. A single request
+// can produce up to three invoices.
 export async function POST(req: NextRequest) {
   const auth = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -244,7 +246,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     companyName, companyId, email, txnDate, sendEmail, pic,
-    tabLines, tacLines,
+    tabLines, tacLines, taoLines,
     fyeMonth, fyeYear, fyeCycle, docNumbers, expectedNextNumbers, idempotencyKey,
     overlapConfirmed,
   } = body as {
@@ -256,6 +258,7 @@ export async function POST(req: NextRequest) {
     pic?: string;          // person-in-charge — Class on TAB Secretary/XBRL lines only
     tabLines: DraftLineItem[];
     tacLines: DraftLineItem[];
+    taoLines?: DraftLineItem[]; // Accounts/Tax lines, billed by ACC via /billing/tao
     fyeMonth?: string;
     fyeYear?: number;
     fyeCycle?: string; // "dd.mm.yyyy"
@@ -268,8 +271,8 @@ export async function POST(req: NextRequest) {
     overlapConfirmed?: boolean;
   };
 
-  if (!companyName || (!tabLines?.length && !tacLines?.length)) {
-    return NextResponse.json({ error: 'companyName and at least one line (tabLines or tacLines) are required' }, { status: 400 });
+  if (!companyName || (!tabLines?.length && !tacLines?.length && !taoLines?.length)) {
+    return NextResponse.json({ error: 'companyName and at least one line (tabLines, tacLines or taoLines) are required' }, { status: 400 });
   }
   if (!idempotencyKey || !/^[A-Za-z0-9-]{16,100}$/.test(idempotencyKey)) {
     return NextResponse.json({ error: 'A valid invoice idempotency key is required.' }, { status: 400 });
@@ -277,7 +280,7 @@ export async function POST(req: NextRequest) {
   if (txnDate && !/^\d{4}-\d{2}-\d{2}$/.test(txnDate)) {
     return NextResponse.json({ error: 'txnDate must be YYYY-MM-DD.' }, { status: 400 });
   }
-  const requestedLines = [...(tabLines ?? []), ...(tacLines ?? [])];
+  const requestedLines = [...(tabLines ?? []), ...(tacLines ?? []), ...(taoLines ?? [])];
   if (requestedLines.some(line =>
     !line.description?.trim()
     || !Number.isFinite(Number(line.rate))
@@ -294,6 +297,7 @@ export async function POST(req: NextRequest) {
   const activeCompanies: QbCompany[] = [
     ...(tabLines?.length ? ['TAB' as const] : []),
     ...(tacLines?.length ? ['TAC' as const] : []),
+    ...(taoLines?.length ? ['TAO' as const] : []),
   ];
   const { data: priorReservations, error: priorReservationError } = await supabase
     .from('invoice_creation_reservations')
@@ -319,7 +323,7 @@ export async function POST(req: NextRequest) {
       const row = reservationByCompany.get(company);
       return row ? { invoiceNo: row.doc_number, qbId: row.qb_invoice_id, total: row.total_amt } : null;
     };
-    return NextResponse.json({ success: true, replayed: true, tab: replay('TAB'), tac: replay('TAC'), errors: {} });
+    return NextResponse.json({ success: true, replayed: true, tab: replay('TAB'), tac: replay('TAC'), tao: replay('TAO'), errors: {} });
   }
 
   // The modal number is an estimate. Re-read QuickBooks immediately before
@@ -444,14 +448,15 @@ export async function POST(req: NextRequest) {
     }
   };
 
-  const [tab, tac] = await Promise.all([
+  const [tab, tac, tao] = await Promise.all([
     safeCreate('TAB', tabLines ?? []),
     safeCreate('TAC', tacLines ?? []),
+    safeCreate('TAO', taoLines ?? []),
   ]);
 
   const reservationUpdateErrors: string[] = [];
   await Promise.all(([
-    ['TAB', tab], ['TAC', tac],
+    ['TAB', tab], ['TAC', tac], ['TAO', tao],
   ] as Array<[QbCompany, CompanyResult | null]>).map(async ([company, result]) => {
     if (!result || replayResult(company)) return;
     const reservationUpdate: Record<string, unknown> = {
@@ -475,6 +480,7 @@ export async function POST(req: NextRequest) {
   const toRecord: { qb_company: QbCompany; result: CompanyResult; lines: DraftLineItem[] }[] = [];
   if (tab && !tab.error) toRecord.push({ qb_company: 'TAB', result: tab, lines: tabLines ?? [] });
   if (tac && !tac.error) toRecord.push({ qb_company: 'TAC', result: tac, lines: tacLines ?? [] });
+  if (tao && !tao.error) toRecord.push({ qb_company: 'TAO', result: tao, lines: taoLines ?? [] });
 
   let persistenceWarning: string | null = reservationUpdateErrors.length
     ? reservationUpdateErrors.join(' ')
@@ -503,8 +509,8 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const anySuccess = !!(tab && !tab.error) || !!(tac && !tac.error);
-  const overlapConfirmationRequired = !!(tab?.overlapConfirmationRequired || tac?.overlapConfirmationRequired);
+  const anySuccess = !!(tab && !tab.error) || !!(tac && !tac.error) || !!(tao && !tao.error);
+  const overlapConfirmationRequired = !!(tab?.overlapConfirmationRequired || tac?.overlapConfirmationRequired || tao?.overlapConfirmationRequired);
   return NextResponse.json({
     success: anySuccess,
     tab: tab && !tab.error ? {
@@ -523,6 +529,14 @@ export async function POST(req: NextRequest) {
       expectedInvoiceNo: tac.expectedInvoiceNo,
       numberMode: tac.numberMode,
     } : null,
+    tao: tao && !tao.error ? {
+      invoiceNo: tao.invoiceNo,
+      qbId: tao.qbId,
+      total: tao.total,
+      numberAdjusted: tao.numberAdjusted,
+      expectedInvoiceNo: tao.expectedInvoiceNo,
+      numberMode: tao.numberMode,
+    } : null,
     // Distinct from `errors` below — a human decision pending, not a
     // failure. The caller re-submits the identical request (same
     // idempotencyKey) with overlapConfirmed:true to proceed.
@@ -530,10 +544,12 @@ export async function POST(req: NextRequest) {
     overlapWarnings: {
       ...(tab?.overlapConfirmationRequired ? { tab: tab.overlapWarnings } : {}),
       ...(tac?.overlapConfirmationRequired ? { tac: tac.overlapWarnings } : {}),
+      ...(tao?.overlapConfirmationRequired ? { tao: tao.overlapWarnings } : {}),
     },
     errors: {
       ...(tab?.error && !tab.overlapConfirmationRequired ? { tab: tab.error } : {}),
       ...(tac?.error && !tac.overlapConfirmationRequired ? { tac: tac.error } : {}),
+      ...(tao?.error && !tao.overlapConfirmationRequired ? { tao: tao.error } : {}),
       ...(persistenceWarning ? { persistence: persistenceWarning } : {}),
     },
   }, { status: anySuccess ? 200 : overlapConfirmationRequired ? 409 : 500 });

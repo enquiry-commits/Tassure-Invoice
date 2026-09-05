@@ -5,18 +5,25 @@ import { createAdminClient } from './supabase';
 // Invoice conventions learned from Tassure's real QB invoices (verified by
 // inspecting manual invoices 02610732 (TAB) and 02680230 (TAC)):
 //
-// 1. DocNumber — both companies run "custom transaction numbers". The billing
-//    screen estimates the next value using the scheme below, and creation
-//    revalidates then sends that exact number. QuickBooks treats any supplied
-//    DocNumber literally while CustomTxnNumbers is enabled; AUTO_GENERATE must
-//    never be sent as a placeholder. Scheme:
-//    0 + YY + series digit + 4-digit sequence, where series = 1 for TAB, 8 for TAC
-//    (2026 TAB → 0261xxxx, 2026 TAC → 0268xxxx).
+// 1. DocNumber — all three companies run "custom transaction numbers". The
+//    billing screen estimates the next value using the scheme below, and
+//    creation revalidates then sends that exact number. QuickBooks treats any
+//    supplied DocNumber literally while CustomTxnNumbers is enabled;
+//    AUTO_GENERATE must never be sent as a placeholder. Scheme:
+//    0 + YY + series digit + 4-digit sequence, where series = 1 for TAB, 8 for
+//    TAC, 6 for TAO (2026 TAB → 0261xxxx, 2026 TAC → 0268xxxx, 2026 TAO →
+//    0266xxxx). TAO's digit was not invented — ACC's own team has already been
+//    hand-issuing TAO invoices with series digit 6 directly in QuickBooks
+//    (e.g. 02660650, TAO02560838) since before this app generated any TAO
+//    invoices; matching it avoids the app's suggested number colliding with
+//    their existing numbering habit (2026-09-05).
 // 2. Terms — always Net 7 (Term id 7 in both companies; resolved dynamically
 //    in case the id ever differs).
 // 3. Class — TAB tags every SERVICE line with the PIC's person class
 //    ("Ang Shi Ming", "Chin Kah Ye", …); government-fee/disbursement lines
-//    carry no class. TAC invoices carry no classes at all.
+//    carry no class. TAC invoices carry no classes at all. TAO invoices only
+//    ever carry Accounts/Tax lines, which requiresPicClass() below never
+//    flags, so they naturally end up classless too — no extra gating needed.
 
 // create-invoice/route.ts's own copy of findCustomer/getItemMap/findLocation
 // (now merged in below) respected QB_ENVIRONMENT=sandbox; this file's
@@ -38,9 +45,13 @@ async function qbGet(token: string, realmId: string, query: string) {
 // Estimated next DocNumber in the company's yearly series. This is for display
 // and manual-override validation only; QuickBooks confirms the actual number
 // during its atomic invoice-create operation.
+const DOC_NUMBER_SERIES: Record<QbCompany, string> = { TAB: '1', TAC: '8', TAO: '6' };
+
 export async function nextDocNumber(token: string, realmId: string, company: QbCompany, txnDate: string): Promise<string | null> {
+  const series = DOC_NUMBER_SERIES[company];
+  if (!series) throw new Error(`No DocNumber series digit defined for QB company "${company}"`);
   const yy = String(new Date(txnDate).getFullYear()).slice(-2);
-  const prefix = `0${yy}${company === 'TAB' ? '1' : '8'}`;
+  const prefix = `0${yy}${series}`;
   const qr = await qbGet(token, realmId, `SELECT * FROM Invoice WHERE DocNumber LIKE '${prefix}%' ORDER BY DocNumber DESC MAXRESULTS 1`);
   const latest: string | undefined = qr?.Invoice?.[0]?.DocNumber;
   if (!latest) return `${prefix}0001`; // first invoice of the year in this series

@@ -17,6 +17,6 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: 'txnDate must be YYYY-MM-DD' }, { status: 400 });
   }
 
-  const [tab, tac] = await Promise.all([getNext('TAB', txnDate), getNext('TAC', txnDate)]);
-  return Response.json({ txnDate, TAB: tab, TAC: tac }, { headers: { 'Cache-Control': 'no-store' } });
+  const [tab, tac, tao] = await Promise.all([getNext('TAB', txnDate), getNext('TAC', txnDate), getNext('TAO', txnDate)]);
+  return Response.json({ txnDate, TAB: tab, TAC: tac, TAO: tao }, { headers: { 'Cache-Control': 'no-store' } });
 }

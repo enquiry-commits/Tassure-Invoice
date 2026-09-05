@@ -95,14 +95,28 @@ an issue since nothing is known wrong, just not yet confirmed right.
   test framework — see `PROJECT_STATUS.md`'s 2026-08-31 entry for why the
   full "Stability Foundation" governance package was not adopted wholesale.
 - **Three separate QuickBooks company files** — TAB (default/basic
-  services), TAC (专开 ND), and TAO (专开 Accounts, connect-only as of
-  2026-09-04 — OAuth/sync/webhook/PDF-download support is live, but no
-  invoice-*generation* routing to TAO exists yet: Billing Drafts still only
-  splits new invoices between TAB/TAC, and the DocNumber series digit/
-  PIC-Class policy/per-staff QB Location for TAO are all explicitly
-  undecided, deferred pending Vincent's call — see `PROJECT_STATUS.md`'s
-  2026-09-04 entry) — always confirm which one a change or query is meant
-  to touch; see `lib/qb-invoice-conventions.ts`.
+  services, billed by Chelsea via Billing Drafts), TAC (专开 ND), and TAO
+  (专开 Accounts/Tax, billed independently by ACC). As of 2026-09-05 ACC can
+  generate real TAO invoices through their own page, `/billing/tao`
+  (`app/billing/tao/page.tsx` + `app/api/billing/tao/route.ts`) — a manual
+  line-item builder, not a due-date-driven draft list like Billing Drafts,
+  since Accounts/Tax services have no renewal-cycle tracking anywhere in this
+  system and real invoice amounts are individually negotiated per client.
+  DocNumber series digit is "6" (confirmed against ACC's own pre-existing
+  manual QuickBooks numbering); TAO invoices carry no PIC/Class, same as TAC.
+  `invoice_creation_reservations`'s CHECK constraint was widened to allow TAO
+  (`scripts/add-tao-invoice-reservations-support.sql` — run this in the
+  Supabase SQL editor before this feature works end-to-end).
+  **Still explicitly deferred** (see `PROJECT_STATUS.md`'s 2026-09-05 entry):
+  the "flag for Chelsea" mechanism, where ACC marks a payment-risk client so
+  its Accounts billing routes through TAB/Chelsea instead of TAO — today
+  `app/api/billing/renewals/route.ts`'s TAB-Accounts carry-forward keeps
+  firing unconditionally for every client, independent of the new TAO page
+  (confirmed via real data on 2026-09-05: the two don't currently produce
+  genuine double-billing — they cover different scopes of work — so this is
+  safe to leave unconditional for now, not yet a bug). Always confirm which
+  company a change or query is meant to touch; see
+  `lib/qb-invoice-conventions.ts`.
 - **`docs/INVARIANTS.md` is a snapshot, not enforced by tests** — reading
   it before touching a risky area is a discipline, not a safety net a
   linter or CI gate would catch you missing.

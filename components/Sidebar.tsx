@@ -52,7 +52,16 @@ const tree: Node[] = [
       { label: 'Address Service',   href: '/address-service' },
       { label: 'AR Reminder',       href: '/billing?tab=ar' },
       { label: 'Late Filing',       href: '/late-filing' },
-      { label: 'Billing Drafts',    href: '/billing?tab=billing' },
+      {
+        id: 'billing-drafts', label: 'Billing Drafts',
+        children: [
+          { label: 'TAB / TAC', href: '/billing?tab=billing' },
+          // ACC's own Accounts/Tax billing, separate from Chelsea's TAB/TAC
+          // flow above — a plain leaf, no restrictedTo (Vincent, 2026-09-05:
+          // "这个暂时先不限制，所有人都看得到").
+          { label: 'TAO',       href: '/billing/tao' },
+        ],
+      },
       {
         id: 'client-communications', label: 'Client Communications',
         children: [
