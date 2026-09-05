@@ -23,8 +23,12 @@ export interface SoaCompanyRow {
   // the dropdown Chelsea uses to say which ONE of them actually owns
   // chasing THIS company's outstanding balance.
   picOptions: string[];
-  // Chelsea's manual pick (companies.soa_pic) — separate column from `pic`
-  // itself, which must never be overwritten just to resolve this ambiguity.
+  // Chelsea's manual pick, from soa_owners (keyed by normalized customer
+  // name, NOT companies.id — see that table's own migration comment: 18%
+  // of real customers with a balance have no matching `companies` row at
+  // all — some are individuals, some are genuine companies never onboarded
+  // via TeamWork, and bulk-matching the rest risked merging two genuinely
+  // different real companies that just share a naming pattern).
   soaPic: string | null;
   invoiceCount: number;
   totalOutstanding: number;
@@ -36,14 +40,16 @@ type UnpaidInvoice = { customer_name: string; qb_company: string; invoice_no: st
 export async function GET() {
   const supabase = createAdminClient();
 
-  const [invoices, companiesRes] = await Promise.all([
+  const [invoices, companiesRes, ownersRes] = await Promise.all([
     pageAll(() => supabase
       .from('quickbooks_invoices')
       .select('customer_name, qb_company, invoice_no, txn_date, balance')
       .gt('balance', 0)) as Promise<UnpaidInvoice[]>,
-    supabase.from('companies').select('id, company_name, pic, soa_pic'),
+    supabase.from('companies').select('id, company_name, pic'),
+    supabase.from('soa_owners').select('customer_name_norm, soa_pic'),
   ]);
   if (companiesRes.error) return NextResponse.json({ error: companiesRes.error.message }, { status: 503 });
+  if (ownersRes.error) return NextResponse.json({ error: ownersRes.error.message }, { status: 503 });
 
   const companies = companiesRes.data ?? [];
   const companyByNormName = new Map(companies.map(c => [normalize(c.company_name), c]));
@@ -53,6 +59,7 @@ export async function GET() {
     const match = findUniqueBestMatch(name, [...companyByNormName.entries()], entry => entry[0], 70);
     return match.value?.[1] ?? null;
   };
+  const ownerByNormName = new Map((ownersRes.data ?? []).map(o => [o.customer_name_norm, o.soa_pic]));
 
   const today = new Date();
   const byCompany = new Map<string, { displayName: string; invoiceCount: number; total: number; aging: AgingTotals }>();
@@ -74,7 +81,7 @@ export async function GET() {
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
       picOptions: formatStaffNameList(companyMatch?.pic ?? null),
-      soaPic: companyMatch?.soa_pic ?? null,
+      soaPic: ownerByNormName.get(key) ?? null,
       invoiceCount: entry.invoiceCount,
       totalOutstanding: Math.round(entry.total * 100) / 100,
       aging: entry.aging,
@@ -84,8 +91,10 @@ export async function GET() {
   return NextResponse.json({ companies: rows });
 }
 
-// PATCH /api/billing/soa — Chelsea's manual pick of which co-assigned PIC
-// actually owns chasing one company's outstanding balance.
+// PATCH /api/billing/soa — Chelsea's manual pick of who owns chasing one
+// customer's outstanding balance. Keyed by name (via soa_owners), not
+// companies.id — works identically whether or not this customer has a real
+// `companies` row.
 export async function PATCH(req: NextRequest) {
   const auth = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -96,11 +105,18 @@ export async function PATCH(req: NextRequest) {
   const account: ApprovedAccount | null = getApprovedAccount(authData.user?.email);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
 
-  const { companyId, soaPic } = await req.json().catch(() => ({})) as { companyId?: number; soaPic?: string | null };
-  if (!companyId) return NextResponse.json({ error: 'companyId is required' }, { status: 400 });
+  const { companyName, soaPic } = await req.json().catch(() => ({})) as { companyName?: string; soaPic?: string | null };
+  const name = companyName?.trim();
+  if (!name) return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from('companies').update({ soa_pic: soaPic?.trim() || null }).eq('id', companyId);
+  const { error } = await supabase.from('soa_owners').upsert({
+    customer_name_norm: normalize(name),
+    customer_name: name,
+    soa_pic: soaPic?.trim() || null,
+    updated_at: new Date().toISOString(),
+    updated_by_email: account.email,
+  }, { onConflict: 'customer_name_norm' });
   if (error) return NextResponse.json({ error: error.message }, { status: 503 });
   return NextResponse.json({ ok: true });
 }

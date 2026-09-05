@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
-import { formatStaffName } from '@/lib/staff-directory';
+import { formatStaffName, allStaffNames } from '@/lib/staff-directory';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import type { DraftLike } from '@/lib/draft-helper-client';
 import type { SoaCompanyRow } from '@/app/api/billing/soa/route';
@@ -76,14 +76,16 @@ export default function SoaBillingPage() {
   // Vincent, 2026-09-06: "PIC有几个人的情况，所以实际上就要在右边多一列可以
   // 让CHELSEA 下拉选择谁才是这个outstanding的主要负责人" — companies.pic can
   // legitimately list co-assigned people; this is a SEPARATE, manually-set
-  // column (companies.soa_pic) for which ONE of them owns chasing this
-  // particular outstanding balance. Optimistic update, matching the
-  // click-to-edit pattern used elsewhere in this app.
-  const updateSoaPic = (companyId: number, value: string) => {
-    setCompanies(current => (current ?? []).map(c => (c.companyId === companyId ? { ...c, soaPic: value || null } : c)));
+  // assignment (soa_owners, keyed by customer name — not companies.id, since
+  // 18% of real customers with a balance have no matching companies row at
+  // all) for which ONE of them owns chasing this particular outstanding
+  // balance. Optimistic update, matching the click-to-edit pattern used
+  // elsewhere in this app.
+  const updateSoaPic = (companyName: string, value: string) => {
+    setCompanies(current => (current ?? []).map(c => (c.companyName === companyName ? { ...c, soaPic: value || null } : c)));
     fetch('/api/billing/soa', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyId, soaPic: value || null }),
+      body: JSON.stringify({ companyName, soaPic: value || null }),
     }).catch(() => {});
   };
 
@@ -151,15 +153,21 @@ export default function SoaBillingPage() {
                   <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#1e3a5f' }}>{fmtMoney(c.totalOutstanding)}</div>
                   <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{c.pic ? formatStaffName(c.pic) : '—'}</div>
                   <div onClick={e => e.stopPropagation()} style={{ padding: '0 4px' }}>
-                    {c.picOptions.length === 0 || !c.companyId ? (
-                      <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
-                    ) : (
-                      <select value={c.soaPic ?? ''} onChange={e => updateSoaPic(c.companyId!, e.target.value)}
-                        style={{ width: '100%', border: `1px solid ${c.soaPic ? '#a7f3d0' : '#e2e8f0'}`, borderRadius: 6, padding: '4px 6px', fontSize: 11, background: c.soaPic ? '#ecfdf5' : '#fff', color: c.soaPic ? '#0f766e' : '#94a3b8', cursor: 'pointer' }}>
-                        <option value="">{c.picOptions.length > 1 ? 'Choose owner…' : c.picOptions[0]}</option>
-                        {c.picOptions.map(name => <option key={name} value={name}>{name}</option>)}
-                      </select>
-                    )}
+                    {(() => {
+                      // A customer with no companies.pic at all (no
+                      // companies row — an individual, or a real company
+                      // never onboarded via TeamWork) still needs an owner
+                      // for collections — falls back to every staff name
+                      // rather than having nothing to choose from.
+                      const options = c.picOptions.length ? c.picOptions : allStaffNames();
+                      return (
+                        <select value={c.soaPic ?? ''} onChange={e => updateSoaPic(c.companyName, e.target.value)}
+                          style={{ width: '100%', border: `1px solid ${c.soaPic ? '#a7f3d0' : '#e2e8f0'}`, borderRadius: 6, padding: '4px 6px', fontSize: 11, background: c.soaPic ? '#ecfdf5' : '#fff', color: c.soaPic ? '#0f766e' : '#94a3b8', cursor: 'pointer' }}>
+                          <option value="">{c.picOptions.length === 1 ? c.picOptions[0] : 'Choose owner…'}</option>
+                          {options.map(name => <option key={name} value={name}>{name}</option>)}
+                        </select>
+                      );
+                    })()}
                   </div>
                 </div>
               );

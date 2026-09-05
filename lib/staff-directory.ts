@@ -157,6 +157,14 @@ export function formatStaffNameList(rawValue: string | null | undefined): string
     .map(part => resolveOne(part)?.name ?? titleCase(part));
 }
 
+// Every staff name in the directory, for a picker that isn't derived from
+// any particular record's own PIC-style field — e.g. SOA's "Owner" dropdown
+// for a customer with no companies.pic at all (a genuine individual or a
+// company never onboarded via TeamWork) still needs someone to choose from.
+export function allStaffNames(): string[] {
+  return STAFF_DIRECTORY.map(s => s.name);
+}
+
 const BY_EMAIL = new Map(STAFF_DIRECTORY.map(staff => [staff.email.toLowerCase(), staff.name]));
 
 /**
