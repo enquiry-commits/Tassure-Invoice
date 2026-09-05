@@ -96,6 +96,21 @@ function fmtDate(iso: string | null) {
   return new Date(iso).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Same local-copy situation as TaoInvoiceRef below — app/billing/page.tsx's
+// own AutoTextarea (used for its Description column too) isn't exported.
+// Grows to fit its content instead of a fixed-rows box with internal
+// scrolling (Vincent, 2026-09-05: "description 太长不要隐藏起来要完全的展示").
+function AutoTextarea({ value, onChange, style }: { value: string; onChange: (v: string) => void; style?: React.CSSProperties }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const resize = () => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } };
+  useEffect(() => { resize(); }, [value]);
+  return (
+    <textarea ref={ref} value={value} rows={1}
+      onChange={e => { onChange(e.target.value); resize(); }}
+      style={{ ...style, overflow: 'hidden', resize: 'none' }} />
+  );
+}
+
 // Small local equivalent of app/billing/page.tsx's BillingInvoiceReference —
 // that one is typed to 'TAB' | 'TAC' and not exported, so this page carries
 // its own TAO-flavoured version rather than widening a shared private helper.
@@ -519,9 +534,8 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
                   不要开单"), never used to gate or auto-check anything. */}
               <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 2, whiteSpace: 'nowrap' }}>{l.lastBilled ? `Last: ${fmtDate(l.lastBilled)}` : 'New service'}</div>
             </div>
-            <textarea value={l.description} onChange={e => updateLine(l.key, { description: e.target.value })}
-              placeholder="Line description (shown on the invoice)" rows={2}
-              style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4, resize: 'vertical' }} />
+            <AutoTextarea value={l.description} onChange={v => updateLine(l.key, { description: v })}
+              style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
             <input type="number" min={1} value={l.qty} onChange={e => updateLine(l.key, { qty: e.target.value })}
               style={{ ...inputStyle, width: 44, textAlign: 'center', justifySelf: 'center' }} />
             <input type="number" min={0} value={l.rate} onChange={e => updateLine(l.key, { rate: e.target.value })}
