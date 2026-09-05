@@ -1,7 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
+import { formatStaffNameList } from '@/lib/staff-directory';
+import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import { agingBucket, emptyAgingTotals, type AgingTotals } from '@/lib/soa';
 
 // GET /api/billing/soa — every company with a real outstanding QuickBooks
@@ -14,6 +17,15 @@ export interface SoaCompanyRow {
   companyName: string;
   companyId: number | null;
   pic: string | null;
+  // Every individual person decomposed out of `pic` (see
+  // lib/staff-directory.ts's formatStaffNameList) — `pic` can legitimately
+  // list 2+ co-assigned people ("Chin Kah Ye, Ang Shi Ming"), and this backs
+  // the dropdown Chelsea uses to say which ONE of them actually owns
+  // chasing THIS company's outstanding balance.
+  picOptions: string[];
+  // Chelsea's manual pick (companies.soa_pic) — separate column from `pic`
+  // itself, which must never be overwritten just to resolve this ambiguity.
+  soaPic: string | null;
   invoiceCount: number;
   totalOutstanding: number;
   aging: AgingTotals;
@@ -29,7 +41,7 @@ export async function GET() {
       .from('quickbooks_invoices')
       .select('customer_name, qb_company, invoice_no, txn_date, balance')
       .gt('balance', 0)) as Promise<UnpaidInvoice[]>,
-    supabase.from('companies').select('id, company_name, pic'),
+    supabase.from('companies').select('id, company_name, pic, soa_pic'),
   ]);
   if (companiesRes.error) return NextResponse.json({ error: companiesRes.error.message }, { status: 503 });
 
@@ -61,6 +73,8 @@ export async function GET() {
       companyName: companyMatch?.company_name ?? entry.displayName,
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
+      picOptions: formatStaffNameList(companyMatch?.pic ?? null),
+      soaPic: companyMatch?.soa_pic ?? null,
       invoiceCount: entry.invoiceCount,
       totalOutstanding: Math.round(entry.total * 100) / 100,
       aging: entry.aging,
@@ -68,4 +82,25 @@ export async function GET() {
   }).sort((a, b) => b.totalOutstanding - a.totalOutstanding);
 
   return NextResponse.json({ companies: rows });
+}
+
+// PATCH /api/billing/soa — Chelsea's manual pick of which co-assigned PIC
+// actually owns chasing one company's outstanding balance.
+export async function PATCH(req: NextRequest) {
+  const auth = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => req.cookies.getAll(), setAll: () => undefined } },
+  );
+  const { data: authData } = await auth.auth.getUser();
+  const account: ApprovedAccount | null = getApprovedAccount(authData.user?.email);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+
+  const { companyId, soaPic } = await req.json().catch(() => ({})) as { companyId?: number; soaPic?: string | null };
+  if (!companyId) return NextResponse.json({ error: 'companyId is required' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  const { error } = await supabase.from('companies').update({ soa_pic: soaPic?.trim() || null }).eq('id', companyId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 503 });
+  return NextResponse.json({ ok: true });
 }

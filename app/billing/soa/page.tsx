@@ -22,7 +22,7 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
   current: '#64748b', d1_30: '#0f766e', d31_60: '#ca8a04', d61_90: '#ea580c', d91_plus: 'var(--status-danger)',
 };
 
-const soaListColumns = '32px minmax(220px,1.4fr) 100px 100px 100px 100px 100px 110px 100px';
+const soaListColumns = '32px minmax(220px,1.4fr) 100px 100px 100px 100px 100px 110px 100px 150px';
 
 export default function SoaBillingPage() {
   const [companies, setCompanies] = useState<SoaCompanyRow[] | null>(null);
@@ -57,6 +57,20 @@ export default function SoaBillingPage() {
   }, [companies, search]);
 
   const { page, setPage, totalPages, pageItems, startIndex, total } = usePagination(filtered, search);
+
+  // Vincent, 2026-09-06: "PIC有几个人的情况，所以实际上就要在右边多一列可以
+  // 让CHELSEA 下拉选择谁才是这个outstanding的主要负责人" — companies.pic can
+  // legitimately list co-assigned people; this is a SEPARATE, manually-set
+  // column (companies.soa_pic) for which ONE of them owns chasing this
+  // particular outstanding balance. Optimistic update, matching the
+  // click-to-edit pattern used elsewhere in this app.
+  const updateSoaPic = (companyId: number, value: string) => {
+    setCompanies(current => (current ?? []).map(c => (c.companyId === companyId ? { ...c, soaPic: value || null } : c)));
+    fetch('/api/billing/soa', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId, soaPic: value || null }),
+    }).catch(() => {});
+  };
 
   return (
     <div>
@@ -96,7 +110,7 @@ export default function SoaBillingPage() {
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
           <div style={{ minWidth: 940 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: soaListColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
-              {['', 'Company Name', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC'].map((h, i) => (
+              {['', 'Company Name', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Owner'].map((h, i) => (
                 i >= 2 ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>{h}</div> : <div key={i} style={{ padding: '0 6px' }}>{h}</div>
               ))}
             </div>
@@ -121,6 +135,17 @@ export default function SoaBillingPage() {
                   ))}
                   <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#1e3a5f' }}>{fmtMoney(c.totalOutstanding)}</div>
                   <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{c.pic ? formatStaffName(c.pic) : '—'}</div>
+                  <div onClick={e => e.stopPropagation()} style={{ padding: '0 4px' }}>
+                    {c.picOptions.length === 0 || !c.companyId ? (
+                      <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
+                    ) : (
+                      <select value={c.soaPic ?? ''} onChange={e => updateSoaPic(c.companyId!, e.target.value)}
+                        style={{ width: '100%', border: `1px solid ${c.soaPic ? '#a7f3d0' : '#e2e8f0'}`, borderRadius: 6, padding: '4px 6px', fontSize: 11, background: c.soaPic ? '#ecfdf5' : '#fff', color: c.soaPic ? '#0f766e' : '#94a3b8', cursor: 'pointer' }}>
+                        <option value="">{c.picOptions.length > 1 ? 'Choose owner…' : c.picOptions[0]}</option>
+                        {c.picOptions.map(name => <option key={name} value={name}>{name}</option>)}
+                      </select>
+                    )}
+                  </div>
                 </div>
               );
             })}
