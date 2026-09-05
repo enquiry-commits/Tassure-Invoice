@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Receipt, RefreshCw, Plus, X, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, AlertTriangle, Mail } from 'lucide-react';
+import { Receipt, RefreshCw, Plus, X, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, AlertTriangle, Mail, History } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { isValidEmail } from '@/lib/campaign-recipients';
 import type { TaoCompanyRow } from '@/app/api/billing/tao/route';
+import type { TaoServiceHistoryItem } from '@/app/api/billing/tao/service-history/route';
 
 // Curated real TAO product/service names (from actual QuickBooks TAO line
 // items) — picking one of these resolves to the exact QB Item via
@@ -44,6 +45,11 @@ type Line = {
   description: string;
   rate: string;
   qty: string;
+  // Set only when this line came from the "previously billed" checklist
+  // (keyed by that service's productService/description) — lets unticking
+  // the checkbox find and remove exactly this line, without touching lines
+  // added via the "Add line" catalogue dropdown.
+  historyKey?: string;
 };
 
 let lineKeySeq = 0;
@@ -231,6 +237,9 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const requestKey = useRef(globalThis.crypto.randomUUID());
 
+  const [history, setHistory] = useState<TaoServiceHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
   useEffect(() => {
     const controller = new AbortController();
     fetch(`/api/quickbooks/next-invoice-numbers?txnDate=${encodeURIComponent(txnDate)}`, { signal: controller.signal })
@@ -245,6 +254,23 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
     return () => controller.abort();
   }, [txnDate]);
 
+  // Vincent, 2026-09-05: "不管周期，是判断之前开过的所有服务，然后用户才来
+  // 自己打勾自己要开的单" — deliberately NOT TAB/TAC's due-date/period-rolling
+  // logic (no periodicity data model exists for Accounts/Tax services): just
+  // every distinct service this company has ever been billed for via TAO,
+  // presented as a checklist ACC ticks on/off, prefilled with the last known
+  // rate/description as a starting point.
+  useEffect(() => {
+    const controller = new AbortController();
+    setHistoryLoading(true);
+    fetch(`/api/billing/tao/service-history?companyName=${encodeURIComponent(company.companyName)}`, { signal: controller.signal })
+      .then(res => res.json())
+      .then(json => setHistory(json.services ?? []))
+      .catch(() => {})
+      .finally(() => setHistoryLoading(false));
+    return () => controller.abort();
+  }, [company.companyName]);
+
   const updateLine = (key: number, patch: Partial<Line>) =>
     setLines(current => current.map(l => (l.key === key ? { ...l, ...patch } : l)));
   const addLine = (selectValue: string) => {
@@ -255,6 +281,27 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
     setLines(current => [...current, newLine(opt)]);
   };
   const removeLine = (key: number) => setLines(current => current.filter(l => l.key !== key));
+
+  const historyKeyOf = (h: TaoServiceHistoryItem) => h.productService || h.description || '';
+  const toggleHistoryItem = (h: TaoServiceHistoryItem, checked: boolean) => {
+    const historyKey = historyKeyOf(h);
+    if (!checked) {
+      setLines(current => current.filter(l => l.historyKey !== historyKey));
+      return;
+    }
+    const opt = TAO_PRODUCTS.find(x => x.productService === h.productService);
+    const custom = TAO_PRODUCTS.find(x => x.category === 'Other')!;
+    setLines(current => [...current, {
+      key: ++lineKeySeq,
+      label: opt ? opt.label : (h.productService || custom.label),
+      productService: opt ? opt.productService : (h.productService ?? ''),
+      service: opt ? opt.service : (h.service || custom.service),
+      description: h.description ?? (opt ? opt.label : ''),
+      rate: h.rate != null ? String(h.rate) : '',
+      qty: h.qty != null ? String(h.qty) : '1',
+      historyKey,
+    }]);
+  };
 
   const total = lines.reduce((s, l) => s + (Number(l.rate) || 0) * (Number(l.qty) || 0), 0);
   const linesValid = lines.length > 0 && lines.every(l => l.description.trim() && Number.isFinite(Number(l.rate)) && Number(l.rate) !== 0 && Number(l.qty) > 0);
@@ -350,6 +397,47 @@ function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; o
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', color: '#b45309', fontSize: 11, marginBottom: 10 }}>
           <AlertCircle size={13} />QuickBooks TAO is not connected — connect it from the Dashboard before generating.
         </div>
+      )}
+
+      {/* Previously billed services — tick to add, untick to remove. Not a
+          due-date suggestion (no periodicity data exists for Accounts/Tax),
+          just every distinct service this company has ever been billed for
+          via TAO, so ACC isn't re-deriving it from QuickBooks by hand. */}
+      {historyLoading && <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 16 }}>Checking billing history…</div>}
+      {!historyLoading && history.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <History size={13} style={{ color: '#64748b' }} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Previously Billed Services</span>
+            <span style={{ fontSize: 10, color: '#94a3b8' }}>· tick what applies this time</span>
+          </div>
+          <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+            {history.map((h, i) => {
+              const key = historyKeyOf(h);
+              const checked = lines.some(l => l.historyKey === key);
+              const opt = TAO_PRODUCTS.find(x => x.productService === h.productService);
+              return (
+                <label key={key || i} style={{
+                  display: 'grid', gridTemplateColumns: '22px 1fr 100px 90px', gap: 10, alignItems: 'center',
+                  padding: '9px 12px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none', cursor: 'pointer',
+                  background: checked ? '#ecfdf5' : '#fff',
+                }}>
+                  <input type="checkbox" checked={checked} onChange={e => toggleHistoryItem(h, e.target.checked)}
+                    style={{ width: 14, height: 14, cursor: 'pointer', accentColor: '#0f766e' }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#334155' }}>{opt ? opt.label : (h.productService || 'Other')}</div>
+                    {h.description && <div style={{ fontSize: 10.5, color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.description}</div>}
+                  </div>
+                  <div style={{ fontSize: 10.5, color: '#94a3b8', textAlign: 'right', whiteSpace: 'nowrap' }}>Last: {fmtDate(h.lastTxnDate)}</div>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: '#0f766e', textAlign: 'right', whiteSpace: 'nowrap' }}>{h.rate != null ? fmtMoney(h.rate) : '—'}</div>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {!historyLoading && history.length === 0 && (
+        <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 16 }}>No prior TAO billing history for this company — add lines manually below.</div>
       )}
 
       {/* Line-items table */}
