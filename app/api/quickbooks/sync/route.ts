@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { qbQuery, type QbCompany } from '@/lib/quickbooks';
+import { qbQuery, correctedCustomerName, type QbCompany } from '@/lib/quickbooks';
 import { createAdminClient } from '@/lib/supabase';
 import { withAutomationRun, replaceAutomationExceptions, type AutomationRun } from '@/lib/automation-sync';
 import { processQuickBooksWebhookQueue } from '@/lib/quickbooks-webhook-queue';
@@ -201,7 +201,7 @@ async function syncYear(year: string, company: QbCompany, runId: string) {
       invoice_no:    docNo,
       qb_company:    company,
       qb_customer_id: qbCustomerId || null,
-      customer_name: (customer.name as string) ?? '',
+      customer_name: correctedCustomerName(company, qbCustomerId, (customer.name as string) ?? ''),
       txn_date:      txnDate,
       total_amt:     inv.TotalAmt ?? 0,
       balance,

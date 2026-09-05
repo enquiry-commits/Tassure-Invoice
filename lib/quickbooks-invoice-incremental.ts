@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { getValidToken, type QbCompany } from '@/lib/quickbooks';
+import { getValidToken, correctedCustomerName, type QbCompany } from '@/lib/quickbooks';
 import { createAdminClient } from '@/lib/supabase';
 import { parseInvoicePeriod } from '@/lib/invoice-period';
 
@@ -61,7 +61,7 @@ function invoiceRows(invoice: Record<string, unknown>, company: QbCompany, obser
     invoice_no: invoiceNumber,
     qb_company: company,
     qb_customer_id: qbCustomerId || null,
-    customer_name: String(customer.name ?? ''),
+    customer_name: correctedCustomerName(company, qbCustomerId, String(customer.name ?? '')),
     txn_date: transactionDate,
     total_amt: total,
     balance,
@@ -89,7 +89,7 @@ function invoiceRows(invoice: Record<string, unknown>, company: QbCompany, obser
       qb_invoice_id: qbInvoiceId,
       qb_line_id: String(line.Id ?? lineNumber),
       qb_customer_id: qbCustomerId || null,
-      customer_name: String(customer.name ?? ''),
+      customer_name: correctedCustomerName(company, qbCustomerId, String(customer.name ?? '')),
       txn_date: transactionDate,
       line_num: lineNumber,
       description: description || null,

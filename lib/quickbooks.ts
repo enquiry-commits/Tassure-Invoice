@@ -13,6 +13,35 @@ const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
 // not by separate app credentials.
 export type QbCompany = 'TAB' | 'TAC' | 'TAO';
 
+// Known QuickBooks customer records with a corrupted (mojibake) DisplayName.
+// Confirmed 2026-09-05: for each of these, QuickBooks itself holds TWO
+// customer records for the same real company — one correctly named, one
+// where the name was corrupted upstream of QuickBooks (GBK bytes misread as
+// Latin-1, then saved) — e.g. TAC customer 362 and TAO customer 1697 are
+// both a garbled duplicate of the correctly-named "吉木锌国际贸易（上海）
+// 有限公司". Vincent's call: don't merge/rename anything inside QuickBooks
+// itself (irreversible, needs manual review there) — correct the name only
+// on our side, at sync time, keyed by the stable qb_customer_id (never by
+// the free-text name, which IS the corrupted value for these rows). Both
+// full-year sync (app/api/quickbooks/sync/route.ts) and incremental webhook
+// sync (lib/quickbooks-invoice-incremental.ts) call correctedCustomerName()
+// so neither path can silently re-introduce the garbled text.
+const CUSTOMER_NAME_CORRECTIONS: Partial<Record<QbCompany, Record<string, string>>> = {
+  TAC: {
+    '362': '吉木锌国际贸易（上海）有限公司',
+    '363': '江苏日月照明电器有限公司',
+    '366': '俐玛精密测量技术（苏州）有限公司',
+    '394': '天马微电子股份有限公司',
+  },
+  TAO: {
+    '1697': '吉木锌国际贸易（上海）有限公司',
+  },
+};
+
+export function correctedCustomerName(company: QbCompany, qbCustomerId: string, rawName: string): string {
+  return CUSTOMER_NAME_CORRECTIONS[company]?.[qbCustomerId] ?? rawName;
+}
+
 interface TokenRow {
   realm_id: string;
   access_token: string;

@@ -447,6 +447,26 @@ again.
   (invoice PDF filenames, `lib/invoice-filename.ts`) has the same failure
   shape and needs the same explicit-match treatment, not just the token/
   data-layer routes.
+- **INV-QB-012** — Every place that writes `customer_name` into
+  `quickbooks_invoices`/`quickbooks_invoice_items` from a live QuickBooks
+  `CustomerRef` must go through `correctedCustomerName()`
+  (`lib/quickbooks.ts`), never `customer.name` directly. Confirmed
+  2026-09-05: QuickBooks itself holds duplicate customer records for at
+  least 4 real Chinese companies — one correctly named, one with a
+  mojibake DisplayName (GBK bytes misread as Latin-1 upstream of
+  QuickBooks) — invisible in every existing page because they only ever
+  display via `companies.company_name` (TeamWork-sourced, clean), never a
+  raw QB customer name, until the new `/billing/tao` page surfaced one
+  directly. A plain DB text-fix alone doesn't hold: both `qb_company,
+  qb_invoice_id`-keyed sync paths (`app/api/quickbooks/sync/route.ts`'s
+  full-year sync and `lib/quickbooks-invoice-incremental.ts`'s webhook
+  path) upsert `customer_name` fresh from QuickBooks on every run, so an
+  uncorrected write site silently reintroduces the garbled text the next
+  time either one touches that invoice. Vincent's call after finding the
+  duplicate-customer root cause: don't merge/rename anything inside
+  QuickBooks itself (irreversible, needs manual review there) — correct
+  only this app's own copy, keyed by the stable `qb_customer_id` (never
+  by the free-text name, which for these rows IS the corrupted value).
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
