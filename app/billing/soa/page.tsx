@@ -43,6 +43,7 @@ export default function SoaBillingPage() {
   const [companies, setCompanies] = useState<SoaCompanyRow[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [picFilter, setPicFilter] = useState(''); // '' = everyone
   const [expanded, setExpanded] = useState<string | null>(null); // keyed by companyName
 
   const load = () => {
@@ -57,21 +58,46 @@ export default function SoaBillingPage() {
   };
   useEffect(load, []);
 
-  const counts = useMemo(() => {
+  // Vincent, 2026-09-06: "我选择某个PIC,她就能看到和自己相关的所有欠款公司" —
+  // a person's own book is everything where she's the confirmed Owner
+  // (soaPic) OR she's still listed on the raw PIC field but nobody has
+  // picked an Owner for it yet (so she can find and claim her own
+  // unassigned companies too). Only offer names that actually show up
+  // somewhere in this data — not the full staff directory, most of whom
+  // never touch collections.
+  const picFilterOptions = useMemo(() => {
+    const names = new Set<string>();
+    for (const c of companies ?? []) {
+      if (c.soaPic) names.add(c.soaPic);
+      for (const p of c.picOptions) names.add(p);
+    }
+    return [...names].sort();
+  }, [companies]);
+
+  const picScoped = useMemo(() => {
     const list = companies ?? [];
+    if (!picFilter) return list;
+    return list.filter(c => c.soaPic === picFilter || (!c.soaPic && c.picOptions.includes(picFilter)));
+  }, [companies, picFilter]);
+
+  // KPI cards follow the PIC scope (this IS "her own dashboard" once she's
+  // picked herself) but not the free-text search box, which stays a
+  // find-one-company tool within whatever scope is active.
+  const counts = useMemo(() => {
+    const list = picScoped;
     const totalOutstanding = list.reduce((s, c) => s + c.totalOutstanding, 0);
     const seriouslyOverdue = list.filter(c => c.aging.d61_90 > 0 || c.aging.d91_plus > 0).length;
     return { total: list.length, totalOutstanding, seriouslyOverdue };
-  }, [companies]);
+  }, [picScoped]);
 
   const filtered = useMemo(() => {
-    let list = companies ?? [];
+    let list = picScoped;
     const q = search.trim().toLowerCase();
     if (q) list = list.filter(c => c.companyName.toLowerCase().includes(q));
     return list;
-  }, [companies, search]);
+  }, [picScoped, search]);
 
-  const { page, setPage, totalPages, pageItems, startIndex, total } = usePagination(filtered, search);
+  const { page, setPage, totalPages, pageItems, startIndex, total } = usePagination(filtered, `${search}::${picFilter}`);
 
   // Vincent, 2026-09-06: "PIC有几个人的情况，所以实际上就要在右边多一列可以
   // 让CHELSEA 下拉选择谁才是这个outstanding的主要负责人" — companies.pic can
@@ -93,11 +119,11 @@ export default function SoaBillingPage() {
     <div>
       {companies !== null && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
-          <MetricCard value={counts.total} label="Clients With a Balance" sub="any TAB/TAC/TAO invoice still unpaid"
+          <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilter ? `${picFilter}'s book` : 'any TAB/TAC/TAO invoice still unpaid'}
             icon={<Receipt size={16} />} color="#1d3a5c" />
-          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub="across TAB, TAC and TAO combined"
+          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub={picFilter ? `${picFilter}'s book` : 'across TAB, TAC and TAO combined'}
             icon={<Receipt size={16} />} color="#0f766e" />
-          <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub="needs a statement sent soon"
+          <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub={picFilter ? `${picFilter}'s book` : 'needs a statement sent soon'}
             icon={<AlertTriangle size={16} />} color="var(--status-danger)" />
         </div>
       )}
@@ -110,7 +136,20 @@ export default function SoaBillingPage() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
-          <span style={{ fontSize: 11, color: '#94a3b8' }}>{total} companies</span>
+          <div style={{ width: 1, height: 20, background: '#e2e8f0' }} />
+          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>My book:</span>
+          <select value={picFilter} onChange={e => setPicFilter(e.target.value)}
+            style={{ border: `1px solid ${picFilter ? '#a7f3d0' : '#e2e8f0'}`, borderRadius: 7, padding: '5px 8px', fontSize: 12.5, fontWeight: picFilter ? 700 : 400, background: picFilter ? '#ecfdf5' : '#fff', color: picFilter ? '#0f766e' : '#334155', cursor: 'pointer', outline: 'none' }}>
+            <option value="">Everyone</option>
+            {picFilterOptions.map(name => <option key={name} value={name}>{name}</option>)}
+          </select>
+          {picFilter && (
+            <button onClick={() => setPicFilter('')} title="Clear filter"
+              style={{ display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'none', color: '#94a3b8', fontSize: 11, cursor: 'pointer', padding: '4px 2px' }}>
+              <X size={12} />Clear
+            </button>
+          )}
+          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{total} companies</span>
         </div>
       </div>
 
