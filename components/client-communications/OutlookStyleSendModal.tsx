@@ -105,7 +105,18 @@ export default function OutlookStyleSendModal({
   const [editedTo, setEditedTo] = useState(draft.to_email ?? '');
   const [editedCc, setEditedCc] = useState(draft.cc_email ?? '');
   const [editedBcc, setEditedBcc] = useState('');
-  const [manualFiles, setManualFiles] = useState<File[]>([]);
+  // Seeded from draft.additional_attachments (not always empty!) — SOA's
+  // "Draft Email" (app/billing/soa/page.tsx) pre-attaches the merged
+  // statement PDF it just generated before this modal ever opens, expecting
+  // it to go out with no extra manual step. Vincent, 2026-09-06: "能不能在
+  // draft email 的时候一起把这个SOA带上呢，就算我还没有下载...PDF的前提" —
+  // it turned out this modal was silently dropping that prop on the floor:
+  // handleSend below builds its outgoing draft from THIS state, not from
+  // draft.additional_attachments, so an unseeded empty array meant the real
+  // PDF never got attached (and never even showed in the attachment list)
+  // unless someone re-dragged it in by hand. Still just a normal starting
+  // value — Remove/drag-drop on top of it work exactly as before.
+  const [manualFiles, setManualFiles] = useState<File[]>(() => draft.additional_attachments ?? []);
   const [standingSize, setStandingSize] = useState<number | null>(null);
   const [excludedSystemIndices, setExcludedSystemIndices] = useState<Set<number>>(new Set());
   const [includeStanding, setIncludeStanding] = useState(true);
