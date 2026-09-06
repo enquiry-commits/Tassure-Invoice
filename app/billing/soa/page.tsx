@@ -198,7 +198,19 @@ export default function SoaBillingPage() {
                       // never onboarded via TeamWork) still needs an owner
                       // for collections — falls back to every staff name
                       // rather than having nothing to choose from.
-                      const options = c.picOptions.length ? c.picOptions : allStaffNames();
+                      //
+                      // The confirmed soa_owners assignment can legitimately
+                      // be someone OTHER than whoever companies.pic lists —
+                      // e.g. the Google Sheet backfill recorded who really
+                      // chases this company's collections today, which can
+                      // differ from the Secretary-department PIC on file
+                      // (coverage, reassignment, ...). If soaPic isn't in the
+                      // picOptions list, a plain <select> silently renders
+                      // the FIRST option instead (misleadingly showing the
+                      // wrong name) since its value has no matching <option>
+                      // — so always guarantee soaPic itself is selectable.
+                      const base = c.picOptions.length ? c.picOptions : allStaffNames();
+                      const options = c.soaPic && !base.includes(c.soaPic) ? [c.soaPic, ...base] : base;
                       return (
                         <select value={c.soaPic ?? ''} onChange={e => updateSoaPic(c.companyName, e.target.value)}
                           style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: c.soaPic ? '#1e3a5f' : '#94a3b8', fontWeight: c.soaPic ? 600 : 400, cursor: 'pointer' }}>
