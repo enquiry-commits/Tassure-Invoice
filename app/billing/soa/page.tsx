@@ -139,7 +139,7 @@ export default function SoaBillingPage() {
           <div style={{ width: 1, height: 20, background: '#e2e8f0' }} />
           <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>My book:</span>
           <select value={picFilter} onChange={e => setPicFilter(e.target.value)}
-            style={{ border: `1px solid ${picFilter ? '#a7f3d0' : '#e2e8f0'}`, borderRadius: 7, padding: '5px 8px', fontSize: 12.5, fontWeight: picFilter ? 700 : 400, background: picFilter ? '#ecfdf5' : '#fff', color: picFilter ? '#0f766e' : '#334155', cursor: 'pointer', outline: 'none' }}>
+            style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12.5, fontWeight: picFilter ? 700 : 400, background: '#fff', color: picFilter ? '#1e3a5f' : '#334155', cursor: 'pointer', outline: 'none' }}>
             <option value="">Everyone</option>
             {picFilterOptions.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
@@ -201,7 +201,7 @@ export default function SoaBillingPage() {
                       const options = c.picOptions.length ? c.picOptions : allStaffNames();
                       return (
                         <select value={c.soaPic ?? ''} onChange={e => updateSoaPic(c.companyName, e.target.value)}
-                          style={{ width: '100%', border: `1px solid ${c.soaPic ? '#a7f3d0' : '#e2e8f0'}`, borderRadius: 6, padding: '4px 6px', fontSize: 11, background: c.soaPic ? '#ecfdf5' : '#fff', color: c.soaPic ? '#0f766e' : '#94a3b8', cursor: 'pointer' }}>
+                          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: c.soaPic ? '#1e3a5f' : '#94a3b8', fontWeight: c.soaPic ? 600 : 400, cursor: 'pointer' }}>
                           <option value="">{c.picOptions.length === 1 ? c.picOptions[0] : 'Choose owner…'}</option>
                           {options.map(name => <option key={name} value={name}>{name}</option>)}
                         </select>
