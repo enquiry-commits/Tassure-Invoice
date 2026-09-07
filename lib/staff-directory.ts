@@ -128,6 +128,20 @@ export function findStaffEmails(rawValue: string | null | undefined): string[] {
 }
 
 /**
+ * Resolves ONE raw value (a single name, no comma-splitting) to the staff
+ * member's canonical directory name, or null if it genuinely isn't a known
+ * staff member. Unlike formatStaffName/formatStaffNameList — which always
+ * show SOMETHING for display by falling back to title-casing unrecognised
+ * text — this is for callers that need to know whether resolution actually
+ * succeeded (lib/soa-owner.ts: a QuickBooks Class/Location name that fails
+ * to resolve must be treated as "no signal", never guessed at from raw text).
+ */
+export function resolveStaffName(rawValue: string | null | undefined): string | null {
+  if (!rawValue) return null;
+  return resolveOne(rawValue)?.name ?? null;
+}
+
+/**
  * Resolves a stored PIC-style value into a display-ready name — for Master
  * List / AR Reminder columns (ND, Secretary, ACC/TAX PIC, Contact Window,
  * Add @), so an abbreviation like "JF" or "Kah Ye" always renders the same

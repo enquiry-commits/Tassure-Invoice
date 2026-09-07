@@ -487,6 +487,23 @@ again.
   QuickBooks itself (irreversible, needs manual review there) — correct
   only this app's own copy, keyed by the stable `qb_customer_id` (never
   by the free-text name, which for these rows IS the corrupted value).
+- **INV-QB-013** — When deriving "who is really responsible for this
+  company's billing" FROM existing QuickBooks data (as opposed to INV-
+  QB-007's rule for WRITING a new PIC/Class), a per-line `ClassRef` name
+  is the authoritative signal, and an invoice's own `DepartmentRef`
+  (Location) is only a fallback for a line with no resolvable Class —
+  never the other way round. Confirmed against real live invoices
+  (2026-09-07, relayed by Chelsea): Location is a per-*operator* tag (staff
+  share QB logins and use Location to mark whose desk an invoice was
+  entered from — e.g. Chelsea processes invoices for several secretaries'
+  clients, so her name sits on the Location of many invoices that are not
+  actually hers), while Class is the real per-*service* ownership tag. A
+  real sample invoice showed `Location="Chelsea Ang"` with every line's
+  `Class="Chin Kah Ye"` — using Location as the primary signal here would
+  have attributed the client to the wrong person. `lib/soa-owner.ts`'s
+  `computeSuggestedOwner()` is the one place this priority is implemented;
+  any other feature that needs "the real owner" from QB data must reuse
+  it, not re-derive its own Location-first shortcut.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

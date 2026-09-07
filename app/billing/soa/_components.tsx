@@ -75,17 +75,26 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
   // and mis-scope TAC's list before the user notices.
   useEffect(() => { setSearch(''); setPicFilter(''); setExpanded(null); }, [qbCompany]);
 
+  // Vincent, 2026-09-07: "不用再靠人工从 Google Sheet 回填" — Chelsea's real
+  // rule (Class on the invoice line, Location as fallback — computed
+  // server-side into `suggestedOwner`, see lib/soa-owner.ts) now supplies a
+  // real default the moment QuickBooks itself carries the signal, no manual
+  // pick required first. A confirmed soa_owners pick (soaPic) still wins
+  // when one exists — it's a human override, not just a smarter guess.
+  const effectiveOwner = (c: SoaCompanyRow): string | null => c.soaPic ?? c.suggestedOwner;
+
   // Vincent, 2026-09-06: "我选择某个PIC,她就能看到和自己相关的所有欠款公司" —
-  // a person's own book is everything where she's the confirmed Owner
-  // (soaPic) OR she's still listed on the raw PIC field but nobody has
-  // picked an Owner for it yet (so she can find and claim her own
-  // unassigned companies too). Only offer names that actually show up
-  // somewhere in this data — not the full staff directory, most of whom
-  // never touch collections.
+  // a person's own book is everything where she's the confirmed Owner, the
+  // system's own suggested owner, OR she's still listed on the raw PIC field
+  // with no owner (confirmed or suggested) at all yet (so she can find and
+  // claim her own unassigned companies too). Only offer names that actually
+  // show up somewhere in this data — not the full staff directory, most of
+  // whom never touch collections.
   const picFilterOptions = useMemo(() => {
     const names = new Set<string>();
     for (const c of companies ?? []) {
-      if (c.soaPic) names.add(c.soaPic);
+      const owner = effectiveOwner(c);
+      if (owner) names.add(owner);
       for (const p of c.picOptions) names.add(p);
     }
     return [...names].sort();
@@ -94,7 +103,7 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
   const picScoped = useMemo(() => {
     const list = companies ?? [];
     if (!picFilter) return list;
-    return list.filter(c => c.soaPic === picFilter || (!c.soaPic && c.picOptions.includes(picFilter)));
+    return list.filter(c => effectiveOwner(c) === picFilter || (!effectiveOwner(c) && c.picOptions.includes(picFilter)));
   }, [companies, picFilter]);
 
   // KPI cards follow the PIC scope (this IS "her own dashboard" once she's
@@ -212,28 +221,39 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                   <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{c.pic ? formatStaffName(c.pic) : '—'}</div>
                   <div onClick={e => e.stopPropagation()} style={{ padding: '0 4px' }}>
                     {(() => {
+                      // Display priority: (1) soaPic — a human's confirmed
+                      // pick, always wins; (2) suggestedOwner — computed
+                      // server-side from THIS company's own real QuickBooks
+                      // Class/Location data (see lib/soa-owner.ts —
+                      // Vincent, 2026-09-07: "不用再靠人工从 Google Sheet
+                      // 回填"); (3) the single unambiguous companies.pic
+                      // name, only when there's exactly one and no better
+                      // signal exists — a last-resort convenience, same as
+                      // before this system had any real QB-derived signal.
+                      const singlePicFallback = c.picOptions.length === 1 ? c.picOptions[0] : null;
+                      const displayedOwner = c.soaPic ?? c.suggestedOwner ?? singlePicFallback;
+                      const isConfirmed = !!c.soaPic;
+
                       // A customer with no companies.pic at all (no
                       // companies row — an individual, or a real company
                       // never onboarded via TeamWork) still needs an owner
                       // for collections — falls back to every staff name
                       // rather than having nothing to choose from.
                       //
-                      // The confirmed soa_owners assignment can legitimately
-                      // be someone OTHER than whoever companies.pic lists —
-                      // e.g. the Google Sheet backfill recorded who really
-                      // chases this company's collections today, which can
-                      // differ from the Secretary-department PIC on file
-                      // (coverage, reassignment, ...). If soaPic isn't in the
-                      // picOptions list, a plain <select> silently renders
-                      // the FIRST option instead (misleadingly showing the
-                      // wrong name) since its value has no matching <option>
-                      // — so always guarantee soaPic itself is selectable.
+                      // displayedOwner can legitimately be someone OTHER
+                      // than whoever companies.pic lists (coverage,
+                      // reassignment, ...). If it isn't in the base options
+                      // list, a plain <select> silently renders the FIRST
+                      // option instead (misleadingly showing the wrong
+                      // name) since its value has no matching <option> — so
+                      // always guarantee it's selectable.
                       const base = c.picOptions.length ? c.picOptions : allStaffNames();
-                      const options = c.soaPic && !base.includes(c.soaPic) ? [c.soaPic, ...base] : base;
+                      const options = displayedOwner && !base.includes(displayedOwner) ? [displayedOwner, ...base] : base;
                       return (
-                        <select value={c.soaPic ?? ''} onChange={e => updateSoaPic(c.companyName, e.target.value)}
-                          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: c.soaPic ? '#1e3a5f' : '#94a3b8', fontWeight: c.soaPic ? 600 : 400, cursor: 'pointer' }}>
-                          <option value="">{c.picOptions.length === 1 ? c.picOptions[0] : 'Choose owner…'}</option>
+                        <select value={displayedOwner ?? ''} onChange={e => updateSoaPic(c.companyName, e.target.value)}
+                          title={!isConfirmed && c.suggestedOwner ? 'Suggested from QuickBooks — not yet confirmed' : undefined}
+                          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: isConfirmed ? '#1e3a5f' : displayedOwner ? '#0f766e' : '#94a3b8', fontWeight: isConfirmed ? 600 : 400, fontStyle: !isConfirmed && c.suggestedOwner ? 'italic' : 'normal', cursor: 'pointer' }}>
+                          <option value="">Choose owner…</option>
                           {options.map(name => <option key={name} value={name}>{name}</option>)}
                         </select>
                       );

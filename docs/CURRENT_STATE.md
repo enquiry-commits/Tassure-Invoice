@@ -68,7 +68,15 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
   just that QuickBooks system, aged the same way as QuickBooks' own AR
   Aging report, with real PDF-merge automation for the statement Chelsea
   previously built by hand; `/billing/soa` itself now just redirects to
-  the TAB book for any old bookmark/link)
+  the TAB book for any old bookmark/link). The Owner column's default is
+  now computed automatically from each company's own real QuickBooks
+  Class/Location data (`lib/soa-owner.ts`, see INV-QB-013) instead of
+  needing a manual Google Sheet backfill — a human pick in `soa_owners`
+  still overrides it when set. **Pending a real-data verification
+  round**: the underlying `location_name`/`class_name` columns need
+  `scripts/add-quickbooks-class-location.sql` run in Supabase before
+  they populate (auto-backfills on the next QuickBooks sync afterward,
+  no separate backfill job).
 - Client Communications (campaigns, templates, drafts, send history) +
   Draft Helper (separate desktop app) for the real Outlook send
 - Post Incorporate document generation (1 of 13 planned document types —

@@ -7,6 +7,7 @@ import { formatStaffNameList } from '@/lib/staff-directory';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import type { QbCompany } from '@/lib/quickbooks';
 import { agingBucket, emptyAgingTotals, type AgingTotals } from '@/lib/soa';
+import { computeSuggestedOwner, type OwnerInvoiceSignal } from '@/lib/soa-owner';
 
 const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
 
@@ -42,12 +43,21 @@ export interface SoaCompanyRow {
   // via TeamWork, and bulk-matching the rest risked merging two genuinely
   // different real companies that just share a naming pattern).
   soaPic: string | null;
+  // Chelsea's real rule, computed automatically from THIS company's own
+  // unpaid invoices — line Class first, that invoice's own Location as
+  // fallback (see lib/soa-owner.ts) — so a default no longer has to wait on
+  // manual Google Sheet backfill. null only when no unpaid invoice here has
+  // a resolvable Class or Location at all.
+  suggestedOwner: string | null;
   invoiceCount: number;
   totalOutstanding: number;
   aging: AgingTotals;
 }
 
-type UnpaidInvoice = { customer_name: string; qb_company: string; invoice_no: string; txn_date: string | null; balance: number | null };
+type UnpaidInvoice = {
+  customer_name: string; qb_company: string; qb_invoice_id: string; invoice_no: string;
+  txn_date: string | null; balance: number | null; location_name: string | null;
+};
 
 export async function GET(req: NextRequest) {
   const company = req.nextUrl.searchParams.get('company') as QbCompany | null;
@@ -60,7 +70,7 @@ export async function GET(req: NextRequest) {
   const [invoices, companiesRes, ownersRes] = await Promise.all([
     pageAll(() => supabase
       .from('quickbooks_invoices')
-      .select('customer_name, qb_company, invoice_no, txn_date, balance')
+      .select('customer_name, qb_company, qb_invoice_id, invoice_no, txn_date, balance, location_name')
       .eq('qb_company', company)
       .gt('balance', 0)) as Promise<UnpaidInvoice[]>,
     supabase.from('companies').select('id, company_name, pic'),
@@ -68,6 +78,28 @@ export async function GET(req: NextRequest) {
   ]);
   if (companiesRes.error) return NextResponse.json({ error: companiesRes.error.message }, { status: 503 });
   if (ownersRes.error) return NextResponse.json({ error: ownersRes.error.message }, { status: 503 });
+
+  // Class is per LINE, not per invoice (Chelsea's primary signal — see
+  // lib/soa-owner.ts) — a second, narrower query against just these same
+  // unpaid invoices' own items, not the whole quickbooks_invoice_items
+  // table (which also holds years of paid/irrelevant history).
+  const unpaidInvoiceIds = [...new Set(invoices.map(inv => inv.qb_invoice_id).filter(Boolean))];
+  const classNamesByInvoice = new Map<string, string[]>();
+  if (unpaidInvoiceIds.length) {
+    const { data: items, error: itemsError } = await supabase
+      .from('quickbooks_invoice_items')
+      .select('qb_invoice_id, class_name')
+      .eq('qb_company', company)
+      .in('qb_invoice_id', unpaidInvoiceIds)
+      .not('class_name', 'is', null);
+    if (itemsError) return NextResponse.json({ error: itemsError.message }, { status: 503 });
+    for (const item of items ?? []) {
+      if (!item.class_name) continue;
+      const list = classNamesByInvoice.get(item.qb_invoice_id) ?? [];
+      list.push(item.class_name);
+      classNamesByInvoice.set(item.qb_invoice_id, list);
+    }
+  }
 
   const companies = companiesRes.data ?? [];
   const companyByNormName = new Map(companies.map(c => [normalize(c.company_name), c]));
@@ -80,16 +112,19 @@ export async function GET(req: NextRequest) {
   const ownerByNormName = new Map((ownersRes.data ?? []).map(o => [o.customer_name_norm, o.soa_pic]));
 
   const today = new Date();
-  const byCompany = new Map<string, { displayName: string; invoiceCount: number; total: number; aging: AgingTotals }>();
+  const byCompany = new Map<string, {
+    displayName: string; invoiceCount: number; total: number; aging: AgingTotals; signals: OwnerInvoiceSignal[];
+  }>();
   for (const inv of invoices) {
     if (!inv.txn_date || !inv.balance) continue;
     const key = normalize(inv.customer_name);
     if (!key) continue;
-    if (!byCompany.has(key)) byCompany.set(key, { displayName: inv.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals() });
+    if (!byCompany.has(key)) byCompany.set(key, { displayName: inv.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [] });
     const entry = byCompany.get(key)!;
     entry.invoiceCount += 1;
     entry.total += inv.balance;
     entry.aging[agingBucket(inv.txn_date, today)] += inv.balance;
+    entry.signals.push({ qbInvoiceId: inv.qb_invoice_id, txnDate: inv.txn_date, locationName: inv.location_name });
   }
 
   const rows: SoaCompanyRow[] = [...byCompany.entries()].map(([key, entry]) => {
@@ -100,6 +135,7 @@ export async function GET(req: NextRequest) {
       pic: companyMatch?.pic ?? null,
       picOptions: formatStaffNameList(companyMatch?.pic ?? null),
       soaPic: ownerByNormName.get(key) ?? null,
+      suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice),
       invoiceCount: entry.invoiceCount,
       totalOutstanding: Math.round(entry.total * 100) / 100,
       aging: entry.aging,

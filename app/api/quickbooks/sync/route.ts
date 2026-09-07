@@ -196,6 +196,13 @@ async function syncYear(year: string, company: QbCompany, runId: string) {
     const qbCustomerId = String(customer.value ?? '');
     if (!qbInvoiceId) continue;
 
+    // Location (DepartmentRef) — set once per whole invoice, not per line.
+    // Real staff-per-person tag inside a shared QB login (lib/approved-
+    // accounts.ts's qbLocations), used as Chelsea's fallback signal for who
+    // owns a company's billing when no line carries a Class (see below).
+    const departmentRef = (inv.DepartmentRef as Record<string, unknown>) ?? {};
+    const locationName = (departmentRef.name as string) || null;
+
     invoiceRows.push({
       qb_invoice_id: qbInvoiceId,
       invoice_no:    docNo,
@@ -206,6 +213,7 @@ async function syncYear(year: string, company: QbCompany, runId: string) {
       total_amt:     inv.TotalAmt ?? 0,
       balance,
       status:        Number(inv.TotalAmt ?? 0) === 0 && balance === 0 ? 'Voided' : balance === 0 ? 'Paid' : 'Open',
+      location_name: locationName,
       scraped_at:    now,
       last_seen_sync_run: runId,
     });
@@ -217,6 +225,7 @@ async function syncYear(year: string, company: QbCompany, runId: string) {
       lineNum++;
       const detail  = (line.SalesItemLineDetail as Record<string, unknown>) ?? {};
       const itemRef = (detail.ItemRef as Record<string, unknown>) ?? {};
+      const classRef = (detail.ClassRef as Record<string, unknown>) ?? {};
       const product = (itemRef.name as string) ?? '';
       const desc    = (line.Description as string) ?? '';
       const parsed  = parsePeriod(desc) ?? {};
@@ -243,6 +252,13 @@ async function syncYear(year: string, company: QbCompany, runId: string) {
         qty:             (detail.Qty as number) ?? null,
         rate:            (detail.UnitPrice as number) ?? null,
         amount:          (line.Amount as number) ?? null,
+        // Class — set per line, e.g. via findPicClass/ClassRef when THIS app
+        // generates a TAB Secretary/XBRL line (lib/qb-invoice-conventions.ts)
+        // — but also whatever staff tag directly in the QuickBooks UI for
+        // any other line/company. Chelsea's real-world rule: this is the
+        // primary "who owns this service" signal, ahead of the invoice's
+        // own Location (see invoiceRows.push above).
+        class_name:      (classRef.name as string) || null,
         service_type:    classification.type,
         classification_source: classification.source,
         period_parse_status: parseStatus,
