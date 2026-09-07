@@ -224,7 +224,41 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
   };
 
   return (
-    <div>
+    <div style={{ paddingTop: 12 }}>
+      {/* Vincent, 2026-09-07: "这些按钮设计在卡片上方,好像late filing 页面
+          那样的排版" — header (icon+title+hint on the left, actions on the
+          right) sits above the metric cards, matching app/late-filing/
+          page.tsx's own layout exactly (same button padding/radius/font
+          size too) — these buttons used to live inside the list's own
+          title bar further down, which no longer needs one at all now
+          (mirrors Late Filing's list, which goes straight into its table
+          with no redundant inner title bar either). */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 26 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Receipt size={22} style={{ color: '#1d3a5c' }} />
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#1e3a5f', margin: 0 }}>SOA — {qbCompany} Statement of Account</h1>
+          <span style={{ fontSize: 12, color: '#64748b', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px' }}>
+            Aged the same way as QuickBooks&apos; own AR Aging report
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={exportExcel} disabled={exporting} title={`Just this ${qbCompany} sheet`}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 13, cursor: exporting ? 'default' : 'pointer', fontWeight: 600 }}>
+            {exporting ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={14} />}
+            {exporting ? 'Exporting…' : 'Export Excel'}
+          </button>
+          <button onClick={exportAllExcel} disabled={exportingAll} title="Full workbook — TAB/TAC/TAO + every staff sheet + Internal"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 13, cursor: exportingAll ? 'default' : 'pointer', fontWeight: 600 }}>
+            {exportingAll ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={14} />}
+            {exportingAll ? 'Exporting…' : 'Export Full Workbook'}
+          </button>
+          <button onClick={() => load()}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+            <RefreshCw size={14} />Refresh
+          </button>
+        </div>
+      </div>
+
       {companies !== null && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
           <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilter ? `${picFilter}'s book` : `any ${qbCompany} invoice still unpaid`}
@@ -262,25 +296,6 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
       </div>
 
       <div className="system-list-shell">
-        <div className="system-list-title-bar" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <span className="system-list-title">SOA — {qbCompany} Statement of Account</span>
-            <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Every {qbCompany} client with an unpaid balance, aged the same way as QuickBooks&apos; own AR Aging report — click a company to review and generate a statement</span>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={exportExcel} disabled={exporting} title={`Just this ${qbCompany} sheet`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: exporting ? 'default' : 'pointer', fontWeight: 600 }}>
-              {exporting ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={13} />}
-              {exporting ? 'Exporting…' : 'Export Excel'}
-            </button>
-            <button onClick={exportAllExcel} disabled={exportingAll} title="Full workbook — TAB/TAC/TAO + every staff sheet + Internal" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: exportingAll ? 'default' : 'pointer', fontWeight: 600 }}>
-              {exportingAll ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={13} />}
-              {exportingAll ? 'Exporting…' : 'Export Full Workbook'}
-            </button>
-            <button onClick={() => load()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
-              <RefreshCw size={13} />Refresh
-            </button>
-          </div>
-        </div>
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
           <div style={{ minWidth: 940 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: soaListColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
