@@ -75,6 +75,11 @@ const tree: Node[] = [
       {
         id: 'soa', label: 'Outstanding',
         children: [
+          // Vincent, 2026-09-07: "在 Outstanding -TAB的上面加多一个3级标题
+          // （All）" — every TAB/TAC/TAO row together, un-deduplicated (see
+          // lib/soa-data.ts's computeAllSoaRows). Owner edits made here are
+          // the same soa_owners writes the 3 pages below make, not a copy.
+          { label: 'All', href: '/billing/soa/all' },
           { label: 'TAB', href: '/billing/soa/tab' },
           { label: 'TAC', href: '/billing/soa/tac' },
           { label: 'TAO', href: '/billing/soa/tao' },

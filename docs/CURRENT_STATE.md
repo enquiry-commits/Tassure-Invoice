@@ -67,8 +67,16 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
   `/billing/soa/tao`, each its own SOA sidebar entry with data scoped to
   just that QuickBooks system, aged the same way as QuickBooks' own AR
   Aging report, with real PDF-merge automation for the statement Chelsea
-  previously built by hand; `/billing/soa` itself now just redirects to
-  the TAB book for any old bookmark/link). The Owner column's default is
+  previously built by hand; `/billing/soa` itself still redirects to the
+  TAB book for any old bookmark/link — unchanged by the entry below). Plus
+  a 4th "All" sidebar entry (`/billing/soa/all`, same day) showing every
+  TAB+TAC+TAO row TOGETHER, un-deduplicated — a company owing on 2+
+  systems shows as 2+ separate rows (each tagged with a Source column),
+  not merged into one. Owner edits made from "All" write through
+  `rowCompany()` to the exact same `soa_owners` row (customer name + that
+  row's own qb_company) the single-system pages read — same data, not a
+  copy, so it's immediately consistent both ways (`lib/soa-data.ts`'s
+  `computeAllSoaRows()`, `app/api/billing/soa/all/route.ts`). The Owner column's default is
   now computed automatically from each company's own real QuickBooks
   Class/Location data (`lib/soa-owner.ts`, see INV-QB-013) instead of
   needing a manual Google Sheet backfill — a human pick in `soa_owners`

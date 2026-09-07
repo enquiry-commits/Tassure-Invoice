@@ -10,6 +10,11 @@ import type { DraftLike } from '@/lib/draft-helper-client';
 import type { QbCompany } from '@/lib/quickbooks';
 import type { SoaCompanyRow } from '@/app/api/billing/soa/route';
 import type { SoaInvoiceDetail } from '@/app/api/billing/soa/detail/route';
+
+// A row in "All" mode carries which system it's actually from (see
+// app/api/billing/soa/all/route.ts) — absent in single-company mode, where
+// every row is implicitly the page's own qbCompany prop.
+type Row = SoaCompanyRow & { qbCompany?: QbCompany };
 import { AGING_BUCKETS, type AgingBucket } from '@/lib/soa';
 
 function fmtMoney(n: number) {
@@ -51,22 +56,49 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
   current: '#64748b', d1_30: '#0f766e', d31_60: '#ca8a04', d61_90: '#ea580c', d91_plus: 'var(--status-danger)',
 };
 
-const soaListColumns = '32px minmax(220px,1.4fr) 100px 100px 100px 100px 100px 110px 100px 150px';
-
 // Vincent, 2026-09-07: "把 SOA 放成一个单独的2级标题,然后把 TAB/TAC/TAO分成3
 // 个不同的3级标题,数据分开" — this used to be one page pooling TAB+TAC+TAO
 // together per customer. Now a single company-scoped view, rendered by 3
 // thin page.tsx files (tab/, tac/, tao/) each passing their own qbCompany —
 // every fetch below is scoped to that ONE QuickBooks system, so a TAB
 // statement never shows a TAC or TAO balance and vice versa.
-export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) {
-  const [companies, setCompanies] = useState<SoaCompanyRow[] | null>(null);
+//
+// Vincent, 2026-09-07, added an "All" 4th page above these 3: "在 Outstanding
+// -TAB的上面加多一个3级标题（All）,这个All, 就是把 TAB/TAC/TAO的所有总和放
+// 进去...举例：TAB/TAO 都有 1V CAPITAL PTE. LTD.，所有就要在ALL 出现2行" —
+// qbCompany 'ALL' fetches every row from all 3 systems, UN-deduplicated (a
+// company on 2 systems is 2 real rows, each tagged which). "当然在 ALL这边
+// 改OWNER，TAO/TAB也会有变化" — an Owner edit here PATCHes the exact same
+// soa_owners row (customer name + THAT row's own qbCompany) the individual
+// pages read, so it's genuinely the same data, not a copy that needs
+// syncing — see rowCompany()/updateSoaPic() below.
+export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
+  const [companies, setCompanies] = useState<Row[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [picFilter, setPicFilter] = useState(''); // '' = everyone
-  const [expanded, setExpanded] = useState<string | null>(null); // keyed by companyName
+  const [expanded, setExpanded] = useState<string | null>(null); // keyed by rowKey()
   const [exporting, setExporting] = useState(false);
   const [exportingAll, setExportingAll] = useState(false); // full 18-sheet workbook, not just this page's own
+
+  // A row's real qbCompany — its own tag in "All" mode, otherwise this
+  // page's fixed one. The `as QbCompany` is safe by construction, never a
+  // guess: computeAllSoaRows() (app/api/billing/soa/all/route.ts) always
+  // tags every row it returns, so c.qbCompany is only ever undefined when
+  // qbCompany itself is a real QbCompany (single-page mode), never 'ALL'.
+  const rowCompany = (c: Row): QbCompany => (c.qbCompany ?? qbCompany) as QbCompany;
+  // Company name alone isn't a unique row key in "All" mode (the same
+  // company can genuinely appear twice, once per system) — every row
+  // identity (React key, the expanded-detail lookup) goes through this.
+  const rowKey = (c: Row) => `${rowCompany(c)}:${c.companyName}`;
+
+  const soaListColumns = qbCompany === 'ALL'
+    ? '32px minmax(200px,1.2fr) 64px 100px 100px 100px 100px 100px 110px 100px 150px'
+    : '32px minmax(220px,1.4fr) 100px 100px 100px 100px 100px 110px 100px 150px';
+  // Display-only stand-in for qbCompany wherever the literal 'ALL' would
+  // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
+  // a typo, not a scope).
+  const scopeLabel = qbCompany === 'ALL' ? 'All' : qbCompany;
 
   // `silent`: skip the null-out-then-"Loading…" flash — used by the
   // background auto-refresh below, where re-fetching shouldn't visibly
@@ -76,7 +108,8 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
   const load = (opts?: { silent?: boolean }) => {
     setLoadError(null);
     if (!opts?.silent) setCompanies(null);
-    fetch(`/api/billing/soa?company=${qbCompany}`)
+    const url = qbCompany === 'ALL' ? '/api/billing/soa/all' : `/api/billing/soa?company=${qbCompany}`;
+    fetch(url)
       .then(res => res.json())
       .then(json => {
         if (json.error) { setLoadError(json.error); return; }
@@ -174,11 +207,21 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
   // says a different person). A pick made here is scoped to THIS page's
   // own qbCompany only. Optimistic update, matching the click-to-edit
   // pattern used elsewhere in this app.
-  const updateSoaPic = (companyName: string, value: string) => {
-    setCompanies(current => (current ?? []).map(c => (c.companyName === companyName ? { ...c, soaPic: value || null } : c)));
+  // Vincent, 2026-09-07, on the new "All" combined view: "当然在 ALL这边改
+  // OWNER，TAO/TAB也会有变化" — takes the whole row (not just a name) so it
+  // can PATCH the exact real qbCompany that row is from (rowCompany(c)),
+  // never the page's own qbCompany (which is the literal 'ALL' here and
+  // isn't a real system to scope a soa_owners write to). Matches the
+  // optimistic update on BOTH companyName AND rowCompany so editing one
+  // system's row never visually bleeds onto a same-named row from another
+  // system sitting right next to it in the combined list.
+  const updateSoaPic = (row: Row, value: string) => {
+    const company = rowCompany(row);
+    setCompanies(current => (current ?? []).map(c =>
+      (c.companyName === row.companyName && rowCompany(c) === company) ? { ...c, soaPic: value || null } : c));
     fetch('/api/billing/soa', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyName, soaPic: value || null, company: qbCompany }),
+      body: JSON.stringify({ companyName: row.companyName, soaPic: value || null, company }),
     }).catch(() => {});
   };
 
@@ -228,16 +271,21 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
       {/* Vincent, 2026-09-07: exports (green, #397f78) on the left, Refresh
           (dark navy) on the right — matches AR Reminder's own toolbar
           layout. The title+hint that used to live here moved back into the
-          list's own dark title bar below (see "SOA — {qbCompany}..." further
+          list's own dark title bar below (see "SOA — {scopeLabel}..." further
           down) — Vincent: "把SOA — TAB Statement of Account...放回去Company
           Name 上面的深蓝色行". */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 26 }}>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={exportExcel} disabled={exporting} title={`Just this ${qbCompany} sheet`}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', background: '#397f78', color: '#fff', fontSize: 13, cursor: exporting ? 'default' : 'pointer', fontWeight: 600 }}>
-            {exporting ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={14} />}
-            {exporting ? 'Exporting…' : 'Export Excel'}
-          </button>
+          {/* Vincent, 2026-09-07: "All" has no single real sheet of its own
+              to export (it's a combined view over TAB/TAC/TAO, not a 4th
+              real system) — only the full workbook makes sense here. */}
+          {qbCompany !== 'ALL' && (
+            <button onClick={exportExcel} disabled={exporting} title={`Just this ${qbCompany} sheet`}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', background: '#397f78', color: '#fff', fontSize: 13, cursor: exporting ? 'default' : 'pointer', fontWeight: 600 }}>
+              {exporting ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={14} />}
+              {exporting ? 'Exporting…' : 'Export Excel'}
+            </button>
+          )}
           <button onClick={exportAllExcel} disabled={exportingAll} title="Full workbook — TAB/TAC/TAO + every staff sheet + Internal"
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', background: '#397f78', color: '#fff', fontSize: 13, cursor: exportingAll ? 'default' : 'pointer', fontWeight: 600 }}>
             {exportingAll ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={14} />}
@@ -252,9 +300,9 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
 
       {companies !== null && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
-          <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilter ? `${picFilter}'s book` : `any ${qbCompany} invoice still unpaid`}
+          <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilter ? `${picFilter}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `any ${qbCompany} invoice still unpaid`}
             icon={<Receipt size={16} />} color="#1d3a5c" />
-          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub={picFilter ? `${picFilter}'s book` : `${qbCompany} invoices only`}
+          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub={picFilter ? `${picFilter}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `${qbCompany} invoices only`}
             icon={<Receipt size={16} />} color="#0f766e" />
           <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub={picFilter ? `${picFilter}'s book` : 'needs a statement sent soon'}
             icon={<AlertTriangle size={16} />} color="var(--status-danger)" />
@@ -289,24 +337,31 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
       <div className="system-list-shell">
         <div className="system-list-title-bar" style={{ padding: '8px 16px' }}>
           <div>
-            <span className="system-list-title">SOA — {qbCompany} Statement of Account</span>
-            <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Aged the same way as QuickBooks&apos; own AR Aging report</span>
+            <span className="system-list-title">SOA — {scopeLabel} Statement of Account</span>
+            <span className="system-list-title-hint" style={{ marginLeft: 8 }}>
+              {qbCompany === 'ALL'
+                ? 'Every TAB/TAC/TAO balance together — same company on 2+ systems shows as separate rows'
+                : <>Aged the same way as QuickBooks&apos; own AR Aging report</>}
+            </span>
           </div>
         </div>
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
           <div style={{ minWidth: 940 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: soaListColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
-              {['', 'Company Name', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Owner'].map((h, i) => (
+              {(qbCompany === 'ALL'
+                ? ['', 'Company Name', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Owner']
+                : ['', 'Company Name', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Owner']
+              ).map((h, i) => (
                 i >= 2 ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>{h}</div> : <div key={i} style={{ padding: '0 6px' }}>{h}</div>
               ))}
             </div>
             {companies === null && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>}
             {companies !== null && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No outstanding balances — nothing to show.</div>}
             {pageItems.map((c, i) => {
-              const isOpen = expanded === c.companyName;
+              const isOpen = expanded === rowKey(c);
               return (
-                <div key={c.companyName} className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}`}
-                  onClick={() => setExpanded(isOpen ? null : c.companyName)}
+                <div key={rowKey(c)} className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}`}
+                  onClick={() => setExpanded(isOpen ? null : rowKey(c))}
                   style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'center', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer' }}>
                   <div style={{ color: '#94a3b8', display: 'flex' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
@@ -323,6 +378,17 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                       <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName.toUpperCase()}
                     </div>
                   </div>
+                  {qbCompany === 'ALL' && (
+                    // Vincent, 2026-09-07: "company name 右边第2列 要放Source :
+                    // TAB or TAC or TAO" — which real system this specific
+                    // row's balance/Owner edit actually belongs to.
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{
+                        display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
+                        padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f',
+                      }}>{rowCompany(c)}</span>
+                    </div>
+                  )}
                   {AGING_BUCKETS.map(b => (
                     <div key={b.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: c.aging[b.key] > 0 ? 700 : 400, color: c.aging[b.key] > 0 ? BUCKET_COLOR[b.key] : '#cbd5e1' }}>
                       {c.aging[b.key] > 0 ? fmtNum(c.aging[b.key]) : '—'}
@@ -371,7 +437,7 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                       // value (already shown once, in "Associated" above).
                       const placeholders = PLACEHOLDER_OWNER_CODES.filter(code => !likelySet.has(code));
                       return (
-                        <select value={displayedOwner ?? ''} onChange={e => updateSoaPic(c.companyName, e.target.value)}
+                        <select value={displayedOwner ?? ''} onChange={e => updateSoaPic(c, e.target.value)}
                           title={!isConfirmed && c.suggestedOwner ? 'Suggested from QuickBooks — not yet confirmed' : undefined}
                           style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: isConfirmed ? '#1e3a5f' : displayedOwner ? '#0f766e' : '#94a3b8', fontWeight: isConfirmed ? 600 : 400, cursor: 'pointer' }}>
                           <option value="">Choose owner…</option>
@@ -404,7 +470,7 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
       <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
 
       {expanded !== null && (() => {
-        const c = (companies ?? []).find(x => x.companyName === expanded);
+        const c = (companies ?? []).find(x => rowKey(x) === expanded);
         if (!c) return null;
         return (
           <div onClick={() => setExpanded(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
@@ -415,12 +481,16 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                   <button onClick={() => setExpanded(null)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: '#fff' }}>{qbCompany} · {c.invoiceCount} unpaid invoice{c.invoiceCount !== 1 ? 's' : ''} · {fmtMoney(c.totalOutstanding)} total</span>
+                  <span style={{ fontSize: 11, color: '#fff' }}>{rowCompany(c)} · {c.invoiceCount} unpaid invoice{c.invoiceCount !== 1 ? 's' : ''} · {fmtMoney(c.totalOutstanding)} total</span>
                   <span style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
                   <span style={{ fontSize: 11, color: '#fff' }}>Review &amp; generate Statement of Account</span>
                 </div>
               </div>
-              <SoaDetail company={c} qbCompany={qbCompany} onSent={() => { load(); setExpanded(null); }} />
+              {/* rowCompany(c) is always a real QbCompany, never the literal
+                  'ALL' — SoaDetail (and everything it fetches: detail/pdf/
+                  campaign-preview) needs one real system to scope to, even
+                  when this modal was opened from the combined "All" list. */}
+              <SoaDetail company={c} qbCompany={rowCompany(c)} onSent={() => { load(); setExpanded(null); }} />
             </div>
           </div>
         );
