@@ -298,8 +298,17 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                   style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'center', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer' }}>
                   <div style={{ color: '#94a3b8', display: 'flex' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
+                    {/* Vincent, 2026-09-07: "公司名要统一...都大字母" — some
+                        companies (matched via companies.company_name) are
+                        already ALL CAPS, others (no companies match — falls
+                        back to the raw QuickBooks customer_name) can be
+                        mixed case, reading as inconsistent side by side.
+                        .toUpperCase() only at display time — the underlying
+                        c.companyName stays untouched, since it's also used
+                        as an exact lookup key (detail/pdf/campaign-preview
+                        fetches). */}
                     <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName}
+                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName.toUpperCase()}
                     </div>
                   </div>
                   {AGING_BUCKETS.map(b => (
@@ -390,7 +399,7 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
             <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 780, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
               <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: '4px solid #ea580c', padding: '16px 20px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{c.companyName}</div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{c.companyName.toUpperCase()}</div>
                   <button onClick={() => setExpanded(null)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

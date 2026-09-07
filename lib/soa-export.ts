@@ -69,7 +69,12 @@ export function renderAgingTable(
     rowNum++;
     const row = sheet.getRow(rowNum);
     row.values = [
-      r.companyName,
+      // Vincent, 2026-09-07: "公司名要统一...都大字母" — same display-only
+      // uppercasing as the on-screen list (app/billing/soa/_components.tsx)
+      // — some companies are already ALL CAPS (matched via companies
+      // .company_name), others fall back to a raw, possibly mixed-case
+      // QuickBooks customer_name.
+      r.companyName.toUpperCase(),
       ...AGING_BUCKETS.map(b => (r.aging[b.key] > 0 ? r.aging[b.key] : null)),
       r.totalOutstanding,
       r.owner ?? '',
