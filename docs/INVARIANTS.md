@@ -129,6 +129,22 @@ again.
   `code1 OR code2`, never `code1` alone, or it will silently discard a
   company that does have real classification data.
   *(source: 2026-09-03, same investigation as INV-TW-016.)*
+- **INV-TW-018** — "Does this client use OUR address service" must check
+  against EVERY real Tassure office/serviced-address location, never a
+  single hardcoded one — Tassure runs 5 (`lib/address-service.ts`'s
+  `ADDRESS_SERVICE_LOCATIONS`), and the original `usesOurAddress()` (`app/
+  api/teamwork/sync/route.ts`) only ever recognized the first (10 Anson
+  Road), silently undercounting every real client registered at one of the
+  other 4 — its own original comment even documented validating it only
+  against companies ALREADY flagged true, never checking the reverse
+  direction (a company NOT flagged, whose real address is one of ours).
+  Confirmed 2026-09-07 when Vincent's boss listed the other 4 addresses
+  directly. Any consumer of `companies.uses_address` (Address Service page,
+  AR Reminder, Reports, Company 360, dashboard/stats) inherits this same
+  risk if this list is ever incomplete again — a new Tassure office/
+  serviced address must be added to `ADDRESS_SERVICE_LOCATIONS`, not a new
+  one-off regex somewhere else.
+  *(source: 2026-09-07.)*
 
 ## AR/AGM cycle & ar_reminder data lifecycle (INV-AR)
 

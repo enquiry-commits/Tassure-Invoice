@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
+import { usesOurAddress, matchOurAddress } from '@/lib/address-service';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { todaySGT } from '@/lib/date';
@@ -78,11 +79,10 @@ interface TwCompany {
 }
 
 // A client "uses our address service" iff its registered office in TeamWork
-// is Tassure's own office (10 Anson Road #12-08 International Plaza).
-// Validated against all 319 flagged clients: 317 match this rule, and the 2
-// that don't turned out to be genuine cancellations (address moved away).
-// TeamWork is the source of truth here — QB history only proves a PAST bill.
-const usesOurAddress = (regAddr: string) => /10\s+ANSON/i.test(regAddr) && /12-08/.test(regAddr);
+// matches one of Tassure's own real office/serviced-address locations —
+// see lib/address-service.ts for the full list and why it's more than the
+// one original address. TeamWork is the source of truth here — QB history
+// only proves a PAST bill.
 
 function twHeaders(token = '') {
   const basic = Buffer.from(`${process.env.TEAMWORK_BASIC_USER}:${process.env.TEAMWORK_BASIC_PASS}`).toString('base64');
@@ -146,7 +146,7 @@ async function syncTeamworkCompanies() {
   const supabase = createAdminClient();
   const { data: rows, error } = await supabase
     .from('companies')
-    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, fye_day, best_email, uses_address, has_nd, pic, sec_pic, client_type, is_non_client, internal_code');
+    .select('id, internal_id, company_name, registration_no, company_type, tw_status, is_active, fye_month, fye_day, best_email, uses_address, address_service_location, has_nd, pic, sec_pic, client_type, is_non_client, internal_code');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const byInternal = new Map((rows ?? []).filter(r => r.internal_id).map(r => [r.internal_id as string, r]));
@@ -257,8 +257,16 @@ async function syncTeamworkCompanies() {
       if (/^\d+(,\d+)*$/.test(currentPic)) patch.pic = resolvedPic || null;
       // Address service follows the CURRENT TeamWork registered address (both
       // directions — cancelled service flips off, new service flips on). Only
-      // when TeamWork actually has an address on file.
-      if (regAddr && usesOurAddress(regAddr) !== (row.uses_address === true)) patch.uses_address = usesOurAddress(regAddr);
+      // when TeamWork actually has an address on file. address_service_location
+      // records WHICH of our real addresses (lib/address-service.ts) — null
+      // when not using any of ours, even if uses_address was true before
+      // (e.g. moved to a location not in our list yet).
+      if (regAddr) {
+        const nowUses = usesOurAddress(regAddr);
+        const nowLocation = matchOurAddress(regAddr);
+        if (nowUses !== (row.uses_address === true)) patch.uses_address = nowUses;
+        if (nowLocation !== (row.address_service_location ?? null)) patch.address_service_location = nowLocation;
+      }
       // Mirror TeamWork's displayed Client column. CSS Client and Shareholder
       // are independent identities, so a company can appear in both filters.
       if (clientType !== row.client_type) patch.client_type = clientType;
@@ -282,6 +290,7 @@ async function syncTeamworkCompanies() {
         is_active: true,
         is_non_client: isShareholder,
         uses_address: regAddr ? usesOurAddress(regAddr) : false,
+        address_service_location: regAddr ? matchOurAddress(regAddr) : null,
         synced_at: now,
       });
     }

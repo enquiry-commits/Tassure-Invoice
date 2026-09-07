@@ -96,6 +96,17 @@ Company 360 / My Tasks are freshly shipped (2026-08-31) and haven't had a
 real post-deploy login check yet — see Pending Improvements, not listed as
 an issue since nothing is known wrong, just not yet confirmed right.
 
+Address Service (2026-09-07): `usesOurAddress()` was only ever checking
+one of Tassure's 5 real address-service locations (see `docs/
+INVARIANTS.md` INV-TW-018) — code fixed to recognize all 5 and record
+which one (`companies.address_service_location`), but the real undercount
+this caused doesn't self-correct until BOTH `scripts/add-companies-
+address-service-location.sql` runs in Supabase AND a TeamWork sync
+actually processes each affected company again. Until then, `/address-
+service`'s per-location breakdown and `companies.uses_address` itself may
+still be missing real clients registered at the 4 non-Anson-Road
+addresses.
+
 ## Known risks (not bugs — things worth remembering before relying on data)
 
 - **Billing draft auto-fill accuracy varies by field** — Secretary ~85%

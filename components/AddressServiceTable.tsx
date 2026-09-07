@@ -1,7 +1,9 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { usePagination, PaginationBar } from './Pagination';
 import { formatStaffName } from '@/lib/staff-directory';
+import { ADDRESS_SERVICE_LOCATIONS, addressLocationLabel } from '@/lib/address-service';
 
 interface Row {
   companyName: string;
@@ -10,24 +12,43 @@ interface Row {
   pic: string;
   bestEmail: string | null;
   primaryContact: { contactName: string; phone: string } | null;
+  addressLocation: string | null;
 }
 
 // Client-side paginated table for the (server-rendered) Address Service page.
+// Vincent's boss, 2026-09-07: 5 real address-service locations, not just
+// one — added a Location column + filter so ACC/whoever can see (and find)
+// which clients are at which of ours.
 export default function AddressServiceTable({ companies }: { companies: Row[] }) {
+  const [locationFilter, setLocationFilter] = useState(''); // '' = all locations
+  const filtered = useMemo(
+    () => (locationFilter ? companies.filter(c => c.addressLocation === locationFilter) : companies),
+    [companies, locationFilter],
+  );
   const { page, setPage, totalPages, pageItems, startIndex, total } =
-    usePagination(companies, 'static');
+    usePagination(filtered, locationFilter);
 
   return (
     <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--list-border)' }}>
+        <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Location:</span>
+        <select value={locationFilter} onChange={e => setLocationFilter(e.target.value)}
+          style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12.5, fontWeight: locationFilter ? 700 : 400, background: '#fff', color: locationFilter ? '#1e3a5f' : '#334155', cursor: 'pointer', outline: 'none' }}>
+          <option value="">All locations</option>
+          {ADDRESS_SERVICE_LOCATIONS.map(loc => <option key={loc.key} value={loc.key}>{loc.label}</option>)}
+        </select>
+        <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{total} companies</span>
+      </div>
       <div className="system-list-scroll">
-        <table className="system-list-table" style={{ minWidth: 980 }}>
+        <table className="system-list-table" style={{ minWidth: 1180 }}>
           <colgroup>
             <col style={{ width: 58 }} />
-            <col style={{ width: 280 }} />
-            <col style={{ width: 130 }} />
-            <col style={{ width: 210 }} />
+            <col style={{ width: 260 }} />
+            <col style={{ width: 120 }} />
+            <col style={{ width: 190 }} />
             <col style={{ width: 200 }} />
-            <col style={{ width: 110 }} />
+            <col style={{ width: 100 }} />
+            <col style={{ width: 250 }} />
           </colgroup>
           <thead>
             <tr className="list-column-header-gray border-b">
@@ -37,6 +58,7 @@ export default function AddressServiceTable({ companies }: { companies: Row[] })
               <th>Company Type</th>
               <th>Contact</th>
               <th>PIC</th>
+              <th>Location</th>
             </tr>
           </thead>
           <tbody>
@@ -59,6 +81,9 @@ export default function AddressServiceTable({ companies }: { companies: Row[] })
                   {c.primaryContact?.contactName || c.bestEmail || '—'}
                 </td>
                 <td className="text-xs text-slate-500">{c.pic ? formatStaffName(c.pic) : '—'}</td>
+                <td className="text-xs text-slate-500" title={addressLocationLabel(c.addressLocation) ?? undefined}>
+                  {addressLocationLabel(c.addressLocation) ?? '—'}
+                </td>
               </tr>
             ))}
           </tbody>
