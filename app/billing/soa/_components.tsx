@@ -42,6 +42,11 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-SG', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// Non-person Owner values, always selectable for any company — not real
+// staff, so never in lib/staff-directory.ts. "BD" = "放着先" (hold off for
+// now), confirmed by Vincent 2026-09-07.
+const PLACEHOLDER_OWNER_CODES = ['BD'];
+
 const BUCKET_COLOR: Record<AgingBucket, string> = {
   current: '#64748b', d1_30: '#0f766e', d31_60: '#ca8a04', d61_90: '#ea580c', d91_plus: 'var(--status-danger)',
 };
@@ -284,6 +289,13 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                         ? [displayedOwner, ...c.picOptions] : c.picOptions;
                       const likelySet = new Set(likely);
                       const everyoneElse = allStaffNames().filter(n => !likelySet.has(n)).sort();
+                      // Vincent, 2026-09-07: "每个公司都能放BD" — "BD" ("放着
+                      // 先", a deliberate hold-off marker, not a real person)
+                      // must be pickable for ANY company, not only the 3 it
+                      // happened to already be backfilled onto. Excluded from
+                      // its own group when it's already the row's current
+                      // value (already shown once, in "Associated" above).
+                      const placeholders = PLACEHOLDER_OWNER_CODES.filter(code => !likelySet.has(code));
                       return (
                         <select value={displayedOwner ?? ''} onChange={e => updateSoaPic(c.companyName, e.target.value)}
                           title={!isConfirmed && c.suggestedOwner ? 'Suggested from QuickBooks — not yet confirmed' : undefined}
@@ -299,6 +311,11 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                               </optgroup>
                             </>
                           ) : everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
+                          {placeholders.length > 0 && (
+                            <optgroup label="Other">
+                              {placeholders.map(code => <option key={code} value={code}>{code}</option>)}
+                            </optgroup>
+                          )}
                         </select>
                       );
                     })()}
