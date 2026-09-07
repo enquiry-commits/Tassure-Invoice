@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { allStaffNames } from '@/lib/staff-directory';
@@ -65,6 +65,7 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
   const [search, setSearch] = useState('');
   const [picFilter, setPicFilter] = useState(''); // '' = everyone
   const [expanded, setExpanded] = useState<string | null>(null); // keyed by companyName
+  const [exporting, setExporting] = useState(false);
 
   // `silent`: skip the null-out-then-"Loading…" flash — used by the
   // background auto-refresh below, where re-fetching shouldn't visibly
@@ -180,6 +181,29 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
     }).catch(() => {});
   };
 
+  // Vincent, 2026-09-07: "我要可以导出EXCEL，要和GOOGLE SHEET的格式一样" —
+  // same blob-download pattern SoaDetail's own downloadPdf() already uses.
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch(`/api/billing/soa/export?company=${qbCompany}`);
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error ?? 'Unable to export.'); }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${qbCompany} A-R Ageing - ${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div>
       {companies !== null && (
@@ -224,9 +248,15 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
             <span className="system-list-title">SOA — {qbCompany} Statement of Account</span>
             <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Every {qbCompany} client with an unpaid balance, aged the same way as QuickBooks&apos; own AR Aging report — click a company to review and generate a statement</span>
           </div>
-          <button onClick={() => load()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
-            <RefreshCw size={13} />Refresh
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={exportExcel} disabled={exporting} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: exporting ? 'default' : 'pointer', fontWeight: 600 }}>
+              {exporting ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={13} />}
+              {exporting ? 'Exporting…' : 'Export Excel'}
+            </button>
+            <button onClick={() => load()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+              <RefreshCw size={13} />Refresh
+            </button>
+          </div>
         </div>
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
           <div style={{ minWidth: 940 }}>
