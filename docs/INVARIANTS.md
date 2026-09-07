@@ -615,6 +615,23 @@ again.
   tested the exact display it was supposed to affect and it didn't show —
   verify a "reads a remarks-like field" feature against a real row that
   actually has the target field populated, not just that the code compiles.
+- **INV-DATA-015** — A "who's responsible for this company" value sourced
+  from Vincent's real collections tracking must never be assumed to be one
+  global value per customer, even when the customer name is a clean,
+  reliable key. Confirmed 2026-09-07 (SOA's `soa_owners`, originally
+  designed as one global row per customer name): his real Google Sheet has
+  3 SEPARATE tabs — one per QuickBooks company (TAB/TAC/TAO) — each with
+  its own PIC column, and 13 of 81 real companies that owe on 2+ systems
+  have a genuinely different confirmed person on each tab (e.g. "Meishan
+  Silk Road Trading": TAB tab says one person, TAO tab says another). The
+  original backfill only ever read the sheet's DEFAULT/first tab (TAB) and
+  applied that answer uniformly across all 3 pages — silently wrong
+  whenever the real per-system answer actually differs. Fixed by adding
+  `qb_company` to `soa_owners`' key (`scripts/add-soa-owners-per-company
+  .sql`) — any future "one confirmed value per customer" field sourced from
+  a Vincent-maintained spreadsheet must be checked for this same shape
+  (multiple tabs/sections keyed by system or category) before assuming a
+  single customer-name key is enough.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

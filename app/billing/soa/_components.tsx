@@ -148,18 +148,22 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
   // Vincent, 2026-09-06: "PIC有几个人的情况，所以实际上就要在右边多一列可以
   // 让CHELSEA 下拉选择谁才是这个outstanding的主要负责人" — companies.pic can
   // legitimately list co-assigned people; this is a SEPARATE, manually-set
-  // assignment (soa_owners, keyed by customer name — not companies.id, since
-  // 18% of real customers with a balance have no matching companies row at
-  // all) for which ONE of them owns chasing this particular outstanding
-  // balance. Kept ONE shared owner per customer name across TAB/TAC/TAO
-  // (not re-split per company) — it's still the same real person chasing the
-  // same real customer regardless of which system billed them. Optimistic
-  // update, matching the click-to-edit pattern used elsewhere in this app.
+  // assignment (soa_owners, keyed by customer name + qb_company, not
+  // companies.id — see that table's own migration comments). Originally
+  // shared globally across TAB/TAC/TAO on the theory that it's "the same
+  // real person regardless of which system billed them" — Vincent,
+  // 2026-09-07, comparing against his real 3-tab Google Sheet: that
+  // assumption was wrong for 13 of 81 real companies that owe on 2+
+  // systems, which genuinely have a DIFFERENT confirmed person per tab
+  // (e.g. "Meishan Silk Road Trading": TAB tab says Chin Kah Ye, TAO tab
+  // says a different person). A pick made here is scoped to THIS page's
+  // own qbCompany only. Optimistic update, matching the click-to-edit
+  // pattern used elsewhere in this app.
   const updateSoaPic = (companyName: string, value: string) => {
     setCompanies(current => (current ?? []).map(c => (c.companyName === companyName ? { ...c, soaPic: value || null } : c)));
     fetch('/api/billing/soa', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ companyName, soaPic: value || null }),
+      body: JSON.stringify({ companyName, soaPic: value || null, company: qbCompany }),
     }).catch(() => {});
   };
 

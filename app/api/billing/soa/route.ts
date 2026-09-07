@@ -43,11 +43,12 @@ export interface SoaCompanyRow {
   // say which ONE of them actually owns chasing THIS outstanding balance.
   picOptions: string[];
   // Chelsea's manual pick, from soa_owners (keyed by normalized customer
-  // name, NOT companies.id — see that table's own migration comment: 18%
-  // of real customers with a balance have no matching `companies` row at
-  // all — some are individuals, some are genuine companies never onboarded
-  // via TeamWork, and bulk-matching the rest risked merging two genuinely
-  // different real companies that just share a naming pattern).
+  // name + qb_company, NOT companies.id — see that table's own migration
+  // comments: 18% of real customers with a balance have no matching
+  // `companies` row at all, and — confirmed 2026-09-07 against Vincent's
+  // real 3-tab Google Sheet — 13 of 81 companies that owe on 2+ systems
+  // genuinely have a DIFFERENT real person on each tab, so this can never
+  // be one global value per customer name).
   soaPic: string | null;
   // Chelsea's real rule, computed automatically from THIS company's own
   // unpaid invoices — line Class first, that invoice's own Location as
@@ -80,7 +81,7 @@ export async function GET(req: NextRequest) {
       .eq('qb_company', company)
       .gt('balance', 0)) as Promise<UnpaidInvoice[]>,
     supabase.from('companies').select('id, company_name, pic'),
-    supabase.from('soa_owners').select('customer_name_norm, soa_pic'),
+    supabase.from('soa_owners').select('customer_name_norm, soa_pic').eq('qb_company', company),
   ]);
   if (companiesRes.error) return NextResponse.json({ error: companiesRes.error.message }, { status: 503 });
   if (ownersRes.error) return NextResponse.json({ error: ownersRes.error.message }, { status: 503 });
@@ -154,9 +155,11 @@ export async function GET(req: NextRequest) {
 }
 
 // PATCH /api/billing/soa — Chelsea's manual pick of who owns chasing one
-// customer's outstanding balance. Keyed by name (via soa_owners), not
-// companies.id — works identically whether or not this customer has a real
-// `companies` row.
+// customer's outstanding balance ON ONE QuickBooks system. Keyed by
+// name + qb_company (via soa_owners), not companies.id — works identically
+// whether or not this customer has a real `companies` row, and keeps a
+// pick made on the TAB page from silently also applying to that same
+// customer's TAC/TAO page (see soa_owners' own migration comment).
 export async function PATCH(req: NextRequest) {
   const auth = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -167,18 +170,24 @@ export async function PATCH(req: NextRequest) {
   const account: ApprovedAccount | null = getApprovedAccount(authData.user?.email);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
 
-  const { companyName, soaPic } = await req.json().catch(() => ({})) as { companyName?: string; soaPic?: string | null };
+  const { companyName, soaPic, company } = await req.json().catch(() => ({})) as {
+    companyName?: string; soaPic?: string | null; company?: QbCompany;
+  };
   const name = companyName?.trim();
   if (!name) return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
+  if (!company || !QB_COMPANIES.includes(company)) {
+    return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO' }, { status: 400 });
+  }
 
   const supabase = createAdminClient();
   const { error } = await supabase.from('soa_owners').upsert({
     customer_name_norm: normalize(name),
     customer_name: name,
+    qb_company: company,
     soa_pic: soaPic?.trim() || null,
     updated_at: new Date().toISOString(),
     updated_by_email: account.email,
-  }, { onConflict: 'customer_name_norm' });
+  }, { onConflict: 'customer_name_norm,qb_company' });
   if (error) return NextResponse.json({ error: error.message }, { status: 503 });
   return NextResponse.json({ ok: true });
 }
