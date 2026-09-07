@@ -105,13 +105,23 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany | '
   // Vincent, 2026-09-07: first tried capping Company Name's width (see git
   // history) to stop it creating dead space before Source — then, after
   // seeing that live: "好像之前的比较好，就是尽量填满" (the earlier version
-  // was actually better — fill up as much as possible). Reverted back to a
-  // flexible `fr` share; the real fix for the "messy" look he'd flagged
-  // turned out to be the color/weight cleanup right below, not the column
-  // width.
+  // was actually better — fill up as much as possible), reverted to a
+  // flexible `fr` share on Company Name alone. That brought the SAME gap
+  // right back (screenshot: still a big empty run between Company Name and
+  // Source) — because it was the ONLY flexible column, so it absorbed
+  // 100% of the leftover viewport width no matter how the fixed columns
+  // were arranged around it. Then: "比例是多少?" / "列宽比例" (what's the
+  // ratio — asking about this exact fr split).
+  //
+  // Real fix: split the flexible share across TWO columns instead of one
+  // — Company Name gets a small share (0.35fr), Owner (the row's actual
+  // trailing column, already a <select> that reads fine wider) gets most
+  // of it (0.85fr). The page still fills edge-to-edge either way; the
+  // difference is WHERE the leftover space goes — mostly to the end of
+  // the row now, rather than pooling right before Source/Current.
   const soaListColumns = qbCompany === 'ALL'
-    ? '32px minmax(200px,1.2fr) 64px 100px 100px 100px 100px 100px 110px 100px 150px'
-    : '32px minmax(220px,1.4fr) 100px 100px 100px 100px 100px 110px 100px 150px';
+    ? '32px minmax(200px,0.35fr) 64px 100px 100px 100px 100px 100px 110px 100px minmax(150px,0.85fr)'
+    : '32px minmax(220px,0.35fr) 100px 100px 100px 100px 100px 110px 100px minmax(150px,0.85fr)';
   // Display-only stand-in for qbCompany wherever the literal 'ALL' would
   // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
   // a typo, not a scope).
