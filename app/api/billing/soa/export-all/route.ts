@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import type { QbCompany } from '@/lib/quickbooks';
-import { computeSoaRows, effectiveOwner, type SoaCompanyRow } from '@/lib/soa-data';
-import { buildCompanySheet, buildPersonSheet, buildInternalSheet } from '@/lib/soa-export';
+import { computeSoaRows, effectiveOwner, tagAndMergeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
+import { buildAllSheet, buildCompanySheet, buildPersonSheet, buildInternalSheet } from '@/lib/soa-export';
 import { resolveStaffName } from '@/lib/staff-directory';
 
 // The 14 staff-code tabs that exist in Vincent's real Google Sheet, in
@@ -18,9 +18,13 @@ type TableRow = { companyName: string; aging: SoaCompanyRow['aging']; totalOutst
 // internal的" — the FULL workbook, mirroring every real tab in his sheet
 // (confirmed by reading its own tab list, not guessed): TAB, TAO, TAC (his
 // real tab order), then one sheet per staff code, then a single "Internal"
-// catch-all — 18 sheets total. Deliberately excludes his sheet's other 2
-// tabs ("Bank Account", "Template - PIC") since he asked for these specific
-// 5 categories, not "everything in the workbook".
+// catch-all. Deliberately excludes his sheet's other 2 tabs ("Bank
+// Account", "Template - PIC") since he asked for these specific 5
+// categories, not "everything in the workbook". Extended same day, once
+// the on-screen "All" combined view shipped: "因为现在多了一个All , 所有
+// 等于在 EXPORT FULL WORKBOOK那边要加多一个 ALL 的 SHEET" — a 19th sheet,
+// placed FIRST (matching the sidebar's All-before-TAB/TAC/TAO order), with
+// every TAB/TAC/TAO row together and its own Source column.
 export async function GET() {
   let tab: SoaCompanyRow[], tac: SoaCompanyRow[], tao: SoaCompanyRow[];
   try {
@@ -32,6 +36,12 @@ export async function GET() {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Tassure';
   workbook.created = new Date();
+
+  // Built from the same tab/tac/tao arrays already fetched above — no
+  // second round trip to Supabase, and provably the same row set the
+  // on-screen All page's own computeAllSoaRows() call would produce (same
+  // shared tagAndMergeSoaRows() helper, see lib/soa-data.ts).
+  buildAllSheet(workbook, tagAndMergeSoaRows(tab, tac, tao));
 
   // Real tab order on his sheet is TAB, TAO, TAC — not alphabetical.
   const byCompany: [QbCompany, SoaCompanyRow[]][] = [['TAB', tab], ['TAO', tao], ['TAC', tac]];

@@ -153,8 +153,15 @@ export interface SoaCompanyRowWithSource extends SoaCompanyRow {
   qbCompany: QbCompany;
 }
 
-export async function computeAllSoaRows(): Promise<SoaCompanyRowWithSource[]> {
-  const [tab, tac, tao] = await Promise.all([computeSoaRows('TAB'), computeSoaRows('TAC'), computeSoaRows('TAO')]);
+// The tag+concat+sort step alone, pulled out of computeAllSoaRows() so
+// GET /api/billing/soa/export-all (2026-09-07: "在 EXPORT FULL WORKBOOK那边
+// 要加多一个 ALL 的 SHEET") can build the exact same "All" row set from the
+// tab/tac/tao arrays it already has in memory — that route computes all 3
+// anyway for its own TAB/TAC/TAO sheets, so routing through here avoids
+// fetching everything from Supabase a second time while staying provably
+// identical to what the on-screen All page (and its own separate
+// computeAllSoaRows() call) shows.
+export function tagAndMergeSoaRows(tab: SoaCompanyRow[], tac: SoaCompanyRow[], tao: SoaCompanyRow[]): SoaCompanyRowWithSource[] {
   // Array.prototype.sort is stable (guaranteed since ES2019) — concatenating
   // in this fixed order first, then sorting by name only, means same-named
   // rows across systems always land TAB-then-TAC-then-TAO, not shuffled.
@@ -163,4 +170,9 @@ export async function computeAllSoaRows(): Promise<SoaCompanyRowWithSource[]> {
     ...tac.map(r => ({ ...r, qbCompany: 'TAC' as const })),
     ...tao.map(r => ({ ...r, qbCompany: 'TAO' as const })),
   ].sort((a, b) => a.companyName.localeCompare(b.companyName));
+}
+
+export async function computeAllSoaRows(): Promise<SoaCompanyRowWithSource[]> {
+  const [tab, tac, tao] = await Promise.all([computeSoaRows('TAB'), computeSoaRows('TAC'), computeSoaRows('TAO')]);
+  return tagAndMergeSoaRows(tab, tac, tao);
 }
