@@ -67,9 +67,13 @@ const tree: Node[] = [
       // 成一个单独的2级标题,然后把 TAB/TAC/TAO分成3个不同的3级标题,数据分开"
       // — its own level-2 group (sibling of Billing Drafts, not nested
       // inside it), split into 3 separate level-3 pages, one per QuickBooks
-      // system — a TAB balance never shows on the TAC or TAO book.
+      // system — a TAB balance never shows on the TAC or TAO book. Label
+      // renamed from "SOA" to "Outstanding" same day, per Vincent — routes
+      // (/billing/soa/...) and the "SOA" name used internally (API,
+      // soa_owners, lib/soa*.ts, page titles) are untouched, this is purely
+      // the sidebar's own display text.
       {
-        id: 'soa', label: 'SOA',
+        id: 'soa', label: 'Outstanding',
         children: [
           { label: 'TAB', href: '/billing/soa/tab' },
           { label: 'TAC', href: '/billing/soa/tac' },
