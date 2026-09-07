@@ -69,7 +69,10 @@ const STAFF_DIRECTORY: StaffEntry[] = [
   { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', aliases: ['JF'] },
   { name: 'Jay Tay', email: 'jaytay@tassure.com', aliases: ['Jay', 'JAY', 'JT'] },
   { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', aliases: ['YH'] },
-  { name: 'Vernice Chai', email: 'vernice@tassure.com', aliases: ['Vernice'] },
+  // "VC" confirmed by Vincent 2026-09-07, surfaced by the SOA per-company
+  // owner backfill (5 real companies in his Google Sheet use it, e.g.
+  // "Meishan Silk Road Trading", "Lebese International").
+  { name: 'Vernice Chai', email: 'vernice@tassure.com', aliases: ['Vernice', 'VC'] },
   { name: 'Chee Wei En', email: 'weien@tassure.com', aliases: ['WE'] },
   // Tax — QT/VY/CS confirmed against the real spread of ar_reminder.tax_pic values
   { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', aliases: ['CS'] },
