@@ -56,6 +56,13 @@ function invoiceRows(invoice: Record<string, unknown>, company: QbCompany, obser
   const transactionDate = String(invoice.TxnDate ?? '');
   const balance = Number(invoice.Balance ?? 0);
   const total = Number(invoice.TotalAmt ?? 0);
+  // Location (DepartmentRef) — see app/api/quickbooks/sync/route.ts's own
+  // comment on the full-year sync; kept in sync here too so a webhook-
+  // driven update (e.g. this invoice's Class getting assigned/corrected
+  // directly in QuickBooks) reflects in SOA's Owner suggestion within
+  // seconds, not just after the next daily full sync.
+  const departmentRef = (invoice.DepartmentRef as Record<string, unknown>) ?? {};
+  const locationName = String(departmentRef.name ?? '') || null;
   const invoiceRow = {
     qb_invoice_id: qbInvoiceId,
     invoice_no: invoiceNumber,
@@ -66,6 +73,7 @@ function invoiceRows(invoice: Record<string, unknown>, company: QbCompany, obser
     total_amt: total,
     balance,
     status: total === 0 && balance === 0 ? 'Voided' : balance === 0 ? 'Paid' : 'Open',
+    location_name: locationName,
     scraped_at: observedAt,
     last_seen_sync_run: null,
   };
@@ -77,6 +85,7 @@ function invoiceRows(invoice: Record<string, unknown>, company: QbCompany, obser
     lineNumber++;
     const detail = (line.SalesItemLineDetail as Record<string, unknown>) ?? {};
     const itemRef = (detail.ItemRef as Record<string, unknown>) ?? {};
+    const classRef = (detail.ClassRef as Record<string, unknown>) ?? {};
     const product = String(itemRef.name ?? '');
     const description = String(line.Description ?? '');
     const classification = classify(description, product);
@@ -97,6 +106,7 @@ function invoiceRows(invoice: Record<string, unknown>, company: QbCompany, obser
       qty: detail.Qty ?? null,
       rate: detail.UnitPrice ?? null,
       amount: line.Amount ?? null,
+      class_name: String(classRef.name ?? '') || null,
       service_type: classification.type,
       classification_source: classification.source,
       period_parse_status: requiresPeriod

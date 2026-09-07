@@ -503,7 +503,15 @@ again.
   have attributed the client to the wrong person. `lib/soa-owner.ts`'s
   `computeSuggestedOwner()` is the one place this priority is implemented;
   any other feature that needs "the real owner" from QB data must reuse
-  it, not re-derive its own Location-first shortcut.
+  it, not re-derive its own Location-first shortcut. Both write paths
+  into `quickbooks_invoices.location_name`/`quickbooks_invoice_items
+  .class_name` — the full-year sync (`app/api/quickbooks/sync/route.ts`)
+  AND the webhook-driven incremental sync (`lib/quickbooks-invoice-
+  incremental.ts`) — must extract these fields identically; missing it
+  on either one leaves SOA's Owner suggestion silently stale for
+  whichever invoices only ever pass through that one path (a brand-new
+  invoice is only ever seen by the incremental path until the next
+  day's full sync catches up to it).
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

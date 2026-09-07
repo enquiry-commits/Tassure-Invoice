@@ -53,9 +53,14 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
   const [picFilter, setPicFilter] = useState(''); // '' = everyone
   const [expanded, setExpanded] = useState<string | null>(null); // keyed by companyName
 
-  const load = () => {
+  // `silent`: skip the null-out-then-"Loading…" flash — used by the
+  // background auto-refresh below, where re-fetching shouldn't visibly
+  // reset the table (or collapse an open detail row) every 30s. The
+  // manual Refresh button and the initial/company-switch load stay
+  // non-silent, since a visible reset there IS the expected feedback.
+  const load = (opts?: { silent?: boolean }) => {
     setLoadError(null);
-    setCompanies(null);
+    if (!opts?.silent) setCompanies(null);
     fetch(`/api/billing/soa?company=${qbCompany}`)
       .then(res => res.json())
       .then(json => {
@@ -69,7 +74,22 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
   // Next.js reuses the component instance across sibling routes rather than
   // remounting it, so a plain useEffect(load, []) would keep showing the
   // PREVIOUS company's data after clicking from one tab to another.
-  useEffect(load, [qbCompany]);
+  //
+  // Vincent, 2026-09-07: "当QUICKBOOK那边更新了...这边的欠款数字会不会更新？
+  // 而且最好是实时更新" — the underlying data already updates within
+  // seconds of a real QuickBooks change (a live webhook, confirmed against
+  // real production events, upserts quickbooks_invoices.balance the moment
+  // Intuit notifies us — see app/api/quickbooks/webhook/route.ts). What
+  // this page itself lacked was ever re-checking that data on its own — it
+  // only fetched once per visit. A 30s silent poll closes that last gap
+  // without the disruptive full-page "Loading…" reset a naive re-run of
+  // this same effect would cause.
+  useEffect(() => {
+    load();
+    const interval = setInterval(() => load({ silent: true }), 30_000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qbCompany]);
   // Also reset picFilter/search/expanded/page-affecting state when switching
   // companies — a PIC selected on TAB's book shouldn't silently carry over
   // and mis-scope TAC's list before the user notices.
@@ -187,7 +207,7 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
             <span className="system-list-title">SOA — {qbCompany} Statement of Account</span>
             <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Every {qbCompany} client with an unpaid balance, aged the same way as QuickBooks&apos; own AR Aging report — click a company to review and generate a statement</span>
           </div>
-          <button onClick={load} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+          <button onClick={() => load()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
             <RefreshCw size={13} />Refresh
           </button>
         </div>
