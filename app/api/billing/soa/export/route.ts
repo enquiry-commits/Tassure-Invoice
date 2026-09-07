@@ -90,6 +90,27 @@ export async function GET(req: NextRequest) {
     row.getCell(columnCount).alignment = { horizontal: 'left' };
   }
 
+  // Vincent, 2026-09-07: "你少了一行total" — a bottom TOTAL row, real SUM
+  // formulas over the data range (not a static precomputed number) so the
+  // total stays correct if a row is ever edited/deleted directly in Excel.
+  // Matches his real sheet's own convention: money in the data rows is
+  // plain, but the TOTAL row's own figures get an "S$" prefix.
+  const firstDataRow = headerRowNum + 1;
+  const lastDataRow = headerRowNum + rows.length;
+  const totalRow = sheet.addRow([]);
+  totalRow.getCell(1).value = 'TOTAL';
+  totalRow.font = bold;
+  for (let col = 2; col <= 1 + AGING_BUCKETS.length + 1; col++) {
+    const colLetter = sheet.getColumn(col).letter;
+    const cell = totalRow.getCell(col);
+    cell.value = rows.length ? { formula: `SUM(${colLetter}${firstDataRow}:${colLetter}${lastDataRow})` } : 0;
+    cell.numFmt = '"S$"#,##0.00';
+    cell.alignment = { horizontal: 'right' };
+    cell.border = { top: { style: 'thin' } };
+  }
+  totalRow.getCell(1).border = { top: { style: 'thin' } };
+  totalRow.getCell(columnCount).border = { top: { style: 'thin' } };
+
   sheet.getColumn(1).width = 42;
   for (let i = 2; i <= 1 + AGING_BUCKETS.length + 1; i++) sheet.getColumn(i).width = 13;
   sheet.getColumn(columnCount).width = 20;
