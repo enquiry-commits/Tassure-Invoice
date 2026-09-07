@@ -409,14 +409,24 @@ export default function LateFilingPage() {
 
   return (
     <div style={{ paddingTop:12 }}>
-      {/* Header */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:26 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <AlertTriangle size={22} style={{ color:'#dc2626' }} />
-          <h1 style={{ fontSize:20, fontWeight:800, color:'#1e3a5f', margin:0 }}>Late Filing Companies</h1>
-          <span style={{ fontSize:12, color:'#64748b', background:'#f1f5f9', border:'1px solid #e2e8f0', borderRadius:6, padding:'2px 8px' }}>
-            Auto-detected from AR records
-          </span>
+      {/* Header — Vincent, 2026-09-07: title+badge moved down into the
+          list's own dark title bar (see "Late Filing Companies" further
+          down), matching SOA's same real-data-driven pattern. "Late FY:"
+          filter moved up here, left side, in its place — Refresh/Add
+          Manual stay on the right, unchanged. */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:26, flexWrap:'wrap', gap:12 }}>
+        <div style={{ display:'flex', gap:7, flexWrap:'wrap', alignItems:'center' }}>
+          <span style={{ fontSize:12, color:'#94a3b8', fontWeight:600, marginRight:4 }}>Late FY:</span>
+          {(['ALL', ...allYears.map(String)]).map(y => (
+            <button key={y} onClick={() => setYearFilter(y)}
+              style={{ padding:'4px 14px', borderRadius:6, border:'1px solid',
+                fontSize:12, fontWeight:600, cursor:'pointer',
+                borderColor: yearFilter===y ? '#1e3a5f' : '#e2e8f0',
+                background:  yearFilter===y ? '#1e3a5f' : '#fff',
+                color:       yearFilter===y ? '#fff'    : '#475569' }}>
+              {y}
+            </button>
+          ))}
         </div>
         <div style={{ display:'flex', gap:8 }}>
           <button onClick={load}
@@ -454,21 +464,6 @@ export default function LateFilingPage() {
             />
           );
         })}
-      </div>
-
-      {/* Year Filter */}
-      <div style={{ display:'flex', gap:7, marginBottom:24, flexWrap:'wrap', alignItems:'center' }}>
-        <span style={{ fontSize:12, color:'#94a3b8', fontWeight:600, marginRight:4 }}>Late FY:</span>
-        {(['ALL', ...allYears.map(String)]).map(y => (
-          <button key={y} onClick={() => setYearFilter(y)}
-            style={{ padding:'4px 14px', borderRadius:6, border:'1px solid',
-              fontSize:12, fontWeight:600, cursor:'pointer',
-              borderColor: yearFilter===y ? '#1e3a5f' : '#e2e8f0',
-              background:  yearFilter===y ? '#1e3a5f' : '#fff',
-              color:       yearFilter===y ? '#fff'    : '#475569' }}>
-            {y}
-          </button>
-        ))}
       </div>
 
       {/* Add / Edit — one modal, same navy/grey/white chrome as Master List's */}
@@ -554,6 +549,12 @@ export default function LateFilingPage() {
             rounded corner. Splitting scroll (inner) from clip (outer) is
             the same fix already used by companies/page.tsx's shell. */}
         <div className="system-list-shell">
+        <div className="system-list-title-bar" style={{ padding:'8px 16px' }}>
+          <div>
+            <span className="system-list-title">Late Filing Companies</span>
+            <span className="system-list-title-hint" style={{ marginLeft:8 }}>Auto-detected from AR records</span>
+          </div>
+        </div>
         <div ref={outerRef} style={{ maxHeight:'calc(100vh - 260px)', overflowX:'hidden', overflowY:'auto' }}>
           <table className="system-list-table" style={{ minWidth: 1320 }}>
             <colgroup>
