@@ -105,9 +105,23 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany | '
   // identity (React key, the expanded-detail lookup) goes through this.
   const rowKey = (c: Row) => `${rowCompany(c)}:${c.companyName}`;
 
+  // Vincent, 2026-09-07, from a screenshot of the All list: "这部分的排版可
+  // 以怎么样调整一下，现在看起来稍微有点不协调有点乱" — the Company Name
+  // column used an unbounded `1.2fr`/`1.4fr` track, which on a wide screen
+  // grows far past what any real company name needs. In CSS Grid that extra
+  // width becomes dead space INSIDE the Company Name column itself — i.e.
+  // right after the (usually short) name text and before the next column —
+  // not trailing space at the end of the row. That's exactly what broke the
+  // "Source sits right next to Company Name" adjacency he asked for when
+  // building All: a big empty gap opened up between them. Capping the
+  // column at a fixed max (still comfortably wide enough for a genuinely
+  // long real name, e.g. "Anda Technology Pte. Ltd. (F.K.A. Anda
+  // Microelectronics Technology Pte Ltd)") stops the runaway growth — any
+  // leftover viewport width now sits harmlessly after the very last column
+  // instead of splitting two related columns apart.
   const soaListColumns = qbCompany === 'ALL'
-    ? '32px minmax(200px,1.2fr) 64px 100px 100px 100px 100px 100px 110px 100px 150px'
-    : '32px minmax(220px,1.4fr) 100px 100px 100px 100px 100px 110px 100px 150px';
+    ? '32px minmax(200px,440px) 64px 100px 100px 100px 100px 100px 110px 100px 150px'
+    : '32px minmax(220px,460px) 100px 100px 100px 100px 100px 110px 100px 150px';
   // Display-only stand-in for qbCompany wherever the literal 'ALL' would
   // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
   // a typo, not a scope).
