@@ -15,6 +15,14 @@ import { AGING_BUCKETS, type AgingBucket } from '@/lib/soa';
 function fmtMoney(n: number) {
   return `S$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
+// Vincent, 2026-09-07: "这些的所有数字前面都不需要 S$" — the list's own aging
+// columns (Current/1-30/.../91+/Total) drop the currency prefix; every
+// other money figure on this page (the detail modal's header summary and
+// its own invoice-breakdown table) keeps fmtMoney() since he pointed at
+// the list specifically, not those.
+function fmtNum(n: number) {
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 // The metric card's 28px/-0.035em letter-spacing (app/globals.css's
 // .metric-card-value) squeezes "S$" straight into the digits with no visual
 // separation at that size and weight. A dedicated span with its own spacing
@@ -238,10 +246,10 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                   </div>
                   {AGING_BUCKETS.map(b => (
                     <div key={b.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: c.aging[b.key] > 0 ? 700 : 400, color: c.aging[b.key] > 0 ? BUCKET_COLOR[b.key] : '#cbd5e1' }}>
-                      {c.aging[b.key] > 0 ? fmtMoney(c.aging[b.key]) : '—'}
+                      {c.aging[b.key] > 0 ? fmtNum(c.aging[b.key]) : '—'}
                     </div>
                   ))}
-                  <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#1e3a5f' }}>{fmtMoney(c.totalOutstanding)}</div>
+                  <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
                   <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                     {c.picOptions.length ? c.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
                   </div>
