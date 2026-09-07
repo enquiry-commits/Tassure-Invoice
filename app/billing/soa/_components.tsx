@@ -56,18 +56,15 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
   current: '#64748b', d1_30: '#0f766e', d31_60: '#ca8a04', d61_90: '#ea580c', d91_plus: 'var(--status-danger)',
 };
 
-// Vincent, 2026-09-07, on the "All" view's Source badge: "这边稍微用不同的
-// 颜色区分 TAB/TAC/TAO" — one distinct pastel-bg/dark-text pair per system,
-// same "tint background + saturated text" pairing this app already uses for
-// status badges (--status-warning/-tint etc. in app/globals.css), just not
-// worth 3 new CSS variables for a single badge. Deliberately distinct hues
-// from BUCKET_COLOR right next to it in the same row, so Source never reads
-// as another aging signal.
-const SOURCE_COLOR: Record<QbCompany, { bg: string; text: string }> = {
-  TAB: { bg: '#eff6ff', text: '#1d4ed8' }, // blue
-  TAC: { bg: '#f5f3ff', text: '#7c3aed' }, // violet
-  TAO: { bg: '#f0fdf4', text: '#15803d' }, // green
-};
+// Vincent, 2026-09-07: first asked for a distinct color per system on the
+// "All" view's Source badge ("这边稍微用不同的颜色区分 TAB/TAC/TAO"), tried
+// blue/violet/green — then, after seeing the whole row together: "我加多颜
+// 色太多了，全部变成灰色会在深蓝色就好" (too much color now — make it all
+// gray, with dark blue [for what matters] is enough). Reverted to a single
+// flat gray-bg/navy-text style for every system (inlined at the render
+// site below, no per-company lookup needed any more) — same simplification
+// applied to the aging-bucket numbers right next to it in the same row
+// (see the color/weight/font on AGING_BUCKETS.map below).
 
 // Vincent, 2026-09-07: "把 SOA 放成一个单独的2级标题,然后把 TAB/TAC/TAO分成3
 // 个不同的3级标题,数据分开" — this used to be one page pooling TAB+TAC+TAO
@@ -105,23 +102,16 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany | '
   // identity (React key, the expanded-detail lookup) goes through this.
   const rowKey = (c: Row) => `${rowCompany(c)}:${c.companyName}`;
 
-  // Vincent, 2026-09-07, from a screenshot of the All list: "这部分的排版可
-  // 以怎么样调整一下，现在看起来稍微有点不协调有点乱" — the Company Name
-  // column used an unbounded `1.2fr`/`1.4fr` track, which on a wide screen
-  // grows far past what any real company name needs. In CSS Grid that extra
-  // width becomes dead space INSIDE the Company Name column itself — i.e.
-  // right after the (usually short) name text and before the next column —
-  // not trailing space at the end of the row. That's exactly what broke the
-  // "Source sits right next to Company Name" adjacency he asked for when
-  // building All: a big empty gap opened up between them. Capping the
-  // column at a fixed max (still comfortably wide enough for a genuinely
-  // long real name, e.g. "Anda Technology Pte. Ltd. (F.K.A. Anda
-  // Microelectronics Technology Pte Ltd)") stops the runaway growth — any
-  // leftover viewport width now sits harmlessly after the very last column
-  // instead of splitting two related columns apart.
+  // Vincent, 2026-09-07: first tried capping Company Name's width (see git
+  // history) to stop it creating dead space before Source — then, after
+  // seeing that live: "好像之前的比较好，就是尽量填满" (the earlier version
+  // was actually better — fill up as much as possible). Reverted back to a
+  // flexible `fr` share; the real fix for the "messy" look he'd flagged
+  // turned out to be the color/weight cleanup right below, not the column
+  // width.
   const soaListColumns = qbCompany === 'ALL'
-    ? '32px minmax(200px,440px) 64px 100px 100px 100px 100px 100px 110px 100px 150px'
-    : '32px minmax(220px,460px) 100px 100px 100px 100px 100px 110px 100px 150px';
+    ? '32px minmax(200px,1.2fr) 64px 100px 100px 100px 100px 100px 110px 100px 150px'
+    : '32px minmax(220px,1.4fr) 100px 100px 100px 100px 100px 110px 100px 150px';
   // Display-only stand-in for qbCompany wherever the literal 'ALL' would
   // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
   // a typo, not a scope).
@@ -412,17 +402,28 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany | '
                     <div style={{ textAlign: 'center' }}>
                       <span style={{
                         display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
-                        padding: '2px 7px', borderRadius: 5,
-                        background: SOURCE_COLOR[rowCompany(c)].bg, color: SOURCE_COLOR[rowCompany(c)].text,
+                        padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f',
                       }}>{rowCompany(c)}</span>
                     </div>
                   )}
+                  {/* Vincent, 2026-09-07: "我加多颜色太多了，全部变成灰色会
+                      在深蓝色就好，并且数字不需要加粗普通的 Arial" — dropped
+                      the old per-severity rainbow (BUCKET_COLOR — gray/teal/
+                      amber/orange/red by how overdue a bucket is) for one
+                      flat gray on every non-empty cell; Total keeps navy
+                      (the one deliberate "dark blue" he asked to keep) as
+                      the sole accent. No more bold, and an explicit Arial
+                      stack instead of the app's default UI font (Segoe UI
+                      on his own machine — a different face even though the
+                      two look similar). BUCKET_COLOR itself is untouched —
+                      still used by the detail modal's own per-invoice
+                      bucket badge below, which he hasn't asked to change. */}
                   {AGING_BUCKETS.map(b => (
-                    <div key={b.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: c.aging[b.key] > 0 ? 700 : 400, color: c.aging[b.key] > 0 ? BUCKET_COLOR[b.key] : '#cbd5e1' }}>
+                    <div key={b.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: c.aging[b.key] > 0 ? '#64748b' : '#cbd5e1' }}>
                       {c.aging[b.key] > 0 ? fmtNum(c.aging[b.key]) : '—'}
                     </div>
                   ))}
-                  <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
+                  <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
                   <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                     {c.picOptions.length ? c.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
                   </div>
