@@ -20,14 +20,21 @@ async function fetchInvoicePdf(company: QbCompany, invoiceId: string): Promise<A
   return res.arrayBuffer();
 }
 
-// GET /api/billing/soa/pdf?companyName=... — Vincent, 2026-09-05: "关于那个
-// PDF合并是存在的，只是每次都是要CHELSEA自己一张一张的合并成一个PDF内，其实
-// 也花费了大量的时间" — this is that exact manual step, automated. Fetches
-// every real unpaid invoice's PDF for the company (across TAB/TAC/TAO, same
-// source as /api/billing/soa/detail) and merges every page into one PDF.
+const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
+
+// GET /api/billing/soa/pdf?companyName=...&company=TAB|TAC|TAO — Vincent,
+// 2026-09-05: "关于那个PDF合并是存在的，只是每次都是要CHELSEA自己一张一张的
+// 合并成一个PDF内，其实也花费了大量的时间" — this is that exact manual step,
+// automated. Fetches every real unpaid invoice's PDF for the company IN ONE
+// QuickBooks system (same `company` scoping as /api/billing/soa/detail, see
+// its comment) and merges every page into one PDF.
 export async function GET(req: NextRequest) {
   const companyName = req.nextUrl.searchParams.get('companyName')?.trim();
   if (!companyName) return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
+  const company = req.nextUrl.searchParams.get('company') as QbCompany | null;
+  if (!company || !QB_COMPANIES.includes(company)) {
+    return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO' }, { status: 400 });
+  }
 
   const supabase = createAdminClient();
   const target = normalize(companyName);
@@ -35,6 +42,7 @@ export async function GET(req: NextRequest) {
   const invoices = await pageAll(() => supabase
     .from('quickbooks_invoices')
     .select('customer_name, qb_company, qb_invoice_id, invoice_no, txn_date, balance')
+    .eq('qb_company', company)
     .gt('balance', 0)) as Array<{
       customer_name: string; qb_company: string; qb_invoice_id: string; invoice_no: string; txn_date: string | null;
     }>;

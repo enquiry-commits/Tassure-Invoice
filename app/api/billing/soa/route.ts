@@ -5,14 +5,26 @@ import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { formatStaffNameList } from '@/lib/staff-directory';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
+import type { QbCompany } from '@/lib/quickbooks';
 import { agingBucket, emptyAgingTotals, type AgingTotals } from '@/lib/soa';
 
-// GET /api/billing/soa — every company with a real outstanding QuickBooks
-// balance (any of TAB/TAC/TAO), aged into the same Current/1-30/31-60/
-// 61-90/91+ buckets as QuickBooks' own AgedReceivables report and Vincent's
-// real collections spreadsheet ("Individual outstanding billing"). This is
-// the automation target for the manual PDF-merge step Chelsea does today —
-// see app/billing/soa/pdf/route.ts for the actual merge.
+const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
+
+// GET /api/billing/soa?company=TAB|TAC|TAO — every company with a real
+// outstanding balance in THAT ONE QuickBooks system, aged into the same
+// Current/1-30/31-60/61-90/91+ buckets as QuickBooks' own AgedReceivables
+// report and Vincent's real collections spreadsheet ("Individual outstanding
+// billing"). This is the automation target for the manual PDF-merge step
+// Chelsea does today — see app/api/billing/soa/pdf/route.ts for the actual
+// merge.
+//
+// Vincent, 2026-09-07: "把 SOA 放成一个单独的2级标题,然后把 TAB/TAC/TAO分成3
+// 个不同的3级标题,数据分开" — TAB/TAC/TAO used to be pooled into one row per
+// customer (a company owing on two systems showed one combined total).
+// Split into 3 separate sidebar entries, each hitting this route with its
+// own `company` — a TAB statement never includes a TAC or TAO balance and
+// vice versa, so the invoices query itself is scoped by qb_company, not
+// filtered after the fact.
 export interface SoaCompanyRow {
   companyName: string;
   companyId: number | null;
@@ -37,13 +49,19 @@ export interface SoaCompanyRow {
 
 type UnpaidInvoice = { customer_name: string; qb_company: string; invoice_no: string; txn_date: string | null; balance: number | null };
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const company = req.nextUrl.searchParams.get('company') as QbCompany | null;
+  if (!company || !QB_COMPANIES.includes(company)) {
+    return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO' }, { status: 400 });
+  }
+
   const supabase = createAdminClient();
 
   const [invoices, companiesRes, ownersRes] = await Promise.all([
     pageAll(() => supabase
       .from('quickbooks_invoices')
       .select('customer_name, qb_company, invoice_no, txn_date, balance')
+      .eq('qb_company', company)
       .gt('balance', 0)) as Promise<UnpaidInvoice[]>,
     supabase.from('companies').select('id, company_name, pic'),
     supabase.from('soa_owners').select('customer_name_norm, soa_pic'),

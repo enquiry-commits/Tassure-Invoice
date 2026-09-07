@@ -2,13 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
+import type { QbCompany } from '@/lib/quickbooks';
 import { agingBucket, dueDate, type AgingBucket } from '@/lib/soa';
 
-// GET /api/billing/soa/detail?companyName=... — every real unpaid invoice
-// for one company, across whichever of TAB/TAC/TAO it's actually billed
-// under, each tagged with its own aging bucket. Backs the SOA detail modal
-// (the line-item list shown before generating the merged PDF) so ACC/Chelsea
-// can see exactly what's being combined before sending it.
+const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
+
+// GET /api/billing/soa/detail?companyName=...&company=TAB|TAC|TAO — every
+// real unpaid invoice for one company IN ONE QuickBooks system, each tagged
+// with its own aging bucket. Backs the SOA detail modal (the line-item list
+// shown before generating the merged PDF) so ACC/Chelsea can see exactly
+// what's being combined before sending it. Scoped by `company` (2026-09-07)
+// so a TAB/TAC/TAO statement never crosses into another system's invoices —
+// see app/api/billing/soa/route.ts's own comment for why.
 export interface SoaInvoiceDetail {
   qbCompany: string;
   qbInvoiceId: string;
@@ -23,6 +28,10 @@ export interface SoaInvoiceDetail {
 export async function GET(req: NextRequest) {
   const companyName = req.nextUrl.searchParams.get('companyName')?.trim();
   if (!companyName) return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
+  const company = req.nextUrl.searchParams.get('company') as QbCompany | null;
+  if (!company || !QB_COMPANIES.includes(company)) {
+    return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO' }, { status: 400 });
+  }
 
   const supabase = createAdminClient();
   const target = normalize(companyName);
@@ -30,6 +39,7 @@ export async function GET(req: NextRequest) {
   const invoices = await pageAll(() => supabase
     .from('quickbooks_invoices')
     .select('customer_name, qb_company, qb_invoice_id, invoice_no, txn_date, balance, total_amt')
+    .eq('qb_company', company)
     .gt('balance', 0)) as Array<{
       customer_name: string; qb_company: string; qb_invoice_id: string; invoice_no: string;
       txn_date: string | null; balance: number | null; total_amt: number | null;

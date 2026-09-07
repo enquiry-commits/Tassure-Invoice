@@ -62,10 +62,13 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
 - Nominee Directors tracking (appointments + subrole review)
 - Billing / QuickBooks invoice generation (TAB + TAC dual company files) —
   plus ACC's own TAO Accounts/Tax billing (`/billing/tao`, shipped
-  2026-09-05) and SOA collections (`/billing/soa`, shipped 2026-09-06 — every
-  client with an unpaid TAB/TAC/TAO balance, aged the same way as
-  QuickBooks' own AR Aging report, with real PDF-merge automation for the
-  combined statement Chelsea previously built by hand)
+  2026-09-05) and SOA collections (shipped 2026-09-06, split into 3
+  company-scoped pages 2026-09-07 — `/billing/soa/tab`, `/billing/soa/tac`,
+  `/billing/soa/tao`, each its own SOA sidebar entry with data scoped to
+  just that QuickBooks system, aged the same way as QuickBooks' own AR
+  Aging report, with real PDF-merge automation for the statement Chelsea
+  previously built by hand; `/billing/soa` itself now just redirects to
+  the TAB book for any old bookmark/link)
 - Client Communications (campaigns, templates, drafts, send history) +
   Draft Helper (separate desktop app) for the real Outlook send
 - Post Incorporate document generation (1 of 13 planned document types —

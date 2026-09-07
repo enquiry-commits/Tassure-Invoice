@@ -60,9 +60,20 @@ const tree: Node[] = [
           // flow above — a plain leaf, no restrictedTo (Vincent, 2026-09-05:
           // "这个暂时先不限制，所有人都看得到").
           { label: 'TAO',       href: '/billing/tao' },
-          // Collections — every client with an unpaid TAB/TAC/TAO balance,
-          // aged the same way as QuickBooks' own AR Aging report.
-          { label: 'SOA',       href: '/billing/soa' },
+        ],
+      },
+      // Collections — every client with an unpaid balance, aged the same way
+      // as QuickBooks' own AR Aging report. Vincent, 2026-09-07: "把 SOA 放
+      // 成一个单独的2级标题,然后把 TAB/TAC/TAO分成3个不同的3级标题,数据分开"
+      // — its own level-2 group (sibling of Billing Drafts, not nested
+      // inside it), split into 3 separate level-3 pages, one per QuickBooks
+      // system — a TAB balance never shows on the TAC or TAO book.
+      {
+        id: 'soa', label: 'SOA',
+        children: [
+          { label: 'TAB', href: '/billing/soa/tab' },
+          { label: 'TAC', href: '/billing/soa/tac' },
+          { label: 'TAO', href: '/billing/soa/tao' },
         ],
       },
       {
