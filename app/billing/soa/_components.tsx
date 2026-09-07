@@ -242,19 +242,19 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
           </span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => load()}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+            <RefreshCw size={14} />Refresh
+          </button>
           <button onClick={exportExcel} disabled={exporting} title={`Just this ${qbCompany} sheet`}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 13, cursor: exporting ? 'default' : 'pointer', fontWeight: 600 }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1e3a5f', color: '#fff', fontSize: 13, cursor: exporting ? 'default' : 'pointer', fontWeight: 600 }}>
             {exporting ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={14} />}
             {exporting ? 'Exporting…' : 'Export Excel'}
           </button>
           <button onClick={exportAllExcel} disabled={exportingAll} title="Full workbook — TAB/TAC/TAO + every staff sheet + Internal"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 13, cursor: exportingAll ? 'default' : 'pointer', fontWeight: 600 }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1e3a5f', color: '#fff', fontSize: 13, cursor: exportingAll ? 'default' : 'pointer', fontWeight: 600 }}>
             {exportingAll ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={14} />}
             {exportingAll ? 'Exporting…' : 'Export Full Workbook'}
-          </button>
-          <button onClick={() => load()}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
-            <RefreshCw size={14} />Refresh
           </button>
         </div>
       </div>
