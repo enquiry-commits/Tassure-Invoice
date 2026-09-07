@@ -56,6 +56,19 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
   current: '#64748b', d1_30: '#0f766e', d31_60: '#ca8a04', d61_90: '#ea580c', d91_plus: 'var(--status-danger)',
 };
 
+// Vincent, 2026-09-07, on the "All" view's Source badge: "这边稍微用不同的
+// 颜色区分 TAB/TAC/TAO" — one distinct pastel-bg/dark-text pair per system,
+// same "tint background + saturated text" pairing this app already uses for
+// status badges (--status-warning/-tint etc. in app/globals.css), just not
+// worth 3 new CSS variables for a single badge. Deliberately distinct hues
+// from BUCKET_COLOR right next to it in the same row, so Source never reads
+// as another aging signal.
+const SOURCE_COLOR: Record<QbCompany, { bg: string; text: string }> = {
+  TAB: { bg: '#eff6ff', text: '#1d4ed8' }, // blue
+  TAC: { bg: '#f5f3ff', text: '#7c3aed' }, // violet
+  TAO: { bg: '#f0fdf4', text: '#15803d' }, // green
+};
+
 // Vincent, 2026-09-07: "把 SOA 放成一个单独的2级标题,然后把 TAB/TAC/TAO分成3
 // 个不同的3级标题,数据分开" — this used to be one page pooling TAB+TAC+TAO
 // together per customer. Now a single company-scoped view, rendered by 3
@@ -385,7 +398,8 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany | '
                     <div style={{ textAlign: 'center' }}>
                       <span style={{
                         display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
-                        padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f',
+                        padding: '2px 7px', borderRadius: 5,
+                        background: SOURCE_COLOR[rowCompany(c)].bg, color: SOURCE_COLOR[rowCompany(c)].text,
                       }}>{rowCompany(c)}</span>
                     </div>
                   )}
