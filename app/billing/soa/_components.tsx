@@ -218,7 +218,9 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                     </div>
                   ))}
                   <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#1e3a5f' }}>{fmtMoney(c.totalOutstanding)}</div>
-                  <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{c.picOptions.length ? c.picOptions.join(', ') : '—'}</div>
+                  <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+                    {c.picOptions.length ? c.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
+                  </div>
                   <div onClick={e => e.stopPropagation()} style={{ padding: '0 4px' }}>
                     {(() => {
                       // Display priority: (1) soaPic — a human's confirmed
@@ -252,7 +254,7 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                       return (
                         <select value={displayedOwner ?? ''} onChange={e => updateSoaPic(c.companyName, e.target.value)}
                           title={!isConfirmed && c.suggestedOwner ? 'Suggested from QuickBooks — not yet confirmed' : undefined}
-                          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: isConfirmed ? '#1e3a5f' : displayedOwner ? '#0f766e' : '#94a3b8', fontWeight: isConfirmed ? 600 : 400, fontStyle: !isConfirmed && c.suggestedOwner ? 'italic' : 'normal', cursor: 'pointer' }}>
+                          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: isConfirmed ? '#1e3a5f' : displayedOwner ? '#0f766e' : '#94a3b8', fontWeight: isConfirmed ? 600 : 400, cursor: 'pointer' }}>
                           <option value="">Choose owner…</option>
                           {options.map(name => <option key={name} value={name}>{name}</option>)}
                         </select>
