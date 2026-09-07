@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
-import { formatStaffName, allStaffNames } from '@/lib/staff-directory';
+import { allStaffNames } from '@/lib/staff-directory';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import type { DraftLike } from '@/lib/draft-helper-client';
 import type { QbCompany } from '@/lib/quickbooks';
@@ -218,7 +218,7 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                     </div>
                   ))}
                   <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 800, color: '#1e3a5f' }}>{fmtMoney(c.totalOutstanding)}</div>
-                  <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{c.pic ? formatStaffName(c.pic) : '—'}</div>
+                  <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{c.picOptions.length ? c.picOptions.join(', ') : '—'}</div>
                   <div onClick={e => e.stopPropagation()} style={{ padding: '0 4px' }}>
                     {(() => {
                       // Display priority: (1) soaPic — a human's confirmed

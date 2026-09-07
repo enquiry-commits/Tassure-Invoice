@@ -7,7 +7,7 @@ import { formatStaffNameList } from '@/lib/staff-directory';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import type { QbCompany } from '@/lib/quickbooks';
 import { agingBucket, emptyAgingTotals, type AgingTotals } from '@/lib/soa';
-import { computeSuggestedOwner, type OwnerInvoiceSignal } from '@/lib/soa-owner';
+import { computeSuggestedOwner, collectInvolvedStaff, type OwnerInvoiceSignal } from '@/lib/soa-owner';
 
 const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
 
@@ -31,10 +31,16 @@ export interface SoaCompanyRow {
   companyId: number | null;
   pic: string | null;
   // Every individual person decomposed out of `pic` (see
-  // lib/staff-directory.ts's formatStaffNameList) — `pic` can legitimately
-  // list 2+ co-assigned people ("Chin Kah Ye, Ang Shi Ming"), and this backs
-  // the dropdown Chelsea uses to say which ONE of them actually owns
-  // chasing THIS company's outstanding balance.
+  // lib/staff-directory.ts's formatStaffNameList), UNIONED with every real
+  // Class name found across this company's own unpaid invoices — `pic`
+  // alone can legitimately list 2+ co-assigned people already ("Chin Kah
+  // Ye, Ang Shi Ming"), and can ALSO be missing someone real: Vincent,
+  // 2026-09-07, from a real example — "1V Capital Pte Ltd" only had "Chin
+  // Kah Ye" here, but its own invoices show Lee Jing Fei handling its
+  // Accounts lines too, matching Vincent's own tracking sheet ("真正在系统
+  // 的显示应该是PIC：CKY,LJF" — see lib/soa-owner.ts's collectInvolvedStaff).
+  // Backs both the PIC column's display and the dropdown Chelsea uses to
+  // say which ONE of them actually owns chasing THIS outstanding balance.
   picOptions: string[];
   // Chelsea's manual pick, from soa_owners (keyed by normalized customer
   // name, NOT companies.id — see that table's own migration comment: 18%
@@ -129,11 +135,13 @@ export async function GET(req: NextRequest) {
 
   const rows: SoaCompanyRow[] = [...byCompany.entries()].map(([key, entry]) => {
     const companyMatch = companyByNormName.get(key) ?? wordMatch(key);
+    const picFromCompanies = formatStaffNameList(companyMatch?.pic ?? null);
+    const picFromInvoices = collectInvolvedStaff(entry.signals, classNamesByInvoice);
     return {
       companyName: companyMatch?.company_name ?? entry.displayName,
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
-      picOptions: formatStaffNameList(companyMatch?.pic ?? null),
+      picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
       soaPic: ownerByNormName.get(key) ?? null,
       suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice),
       invoiceCount: entry.invoiceCount,

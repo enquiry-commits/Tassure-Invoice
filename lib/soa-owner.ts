@@ -35,3 +35,31 @@ export function computeSuggestedOwner(
   }
   return null;
 }
+
+// Vincent, 2026-09-07, from a real example: "1V Capital Pte Ltd" — his own
+// A/R Ageing sheet lists BOTH "CKY" and "JF" on its PIC column, and a real
+// invoice confirms why: its Accounts lines carry Class="Lee Jing Fei" while
+// a separate, more recent invoice carries Class="Chin Kah Ye" — genuinely
+// two different people have touched this account's real billing over time,
+// not one. "确实最终PIC 是CKY，但是LJF也是负责人之一，真正在系统的显示应该
+// 是PIC：CKY,LJF" — computeSuggestedOwner() (above) still correctly picks
+// ONE most-likely current owner for the Owner column (most-recent-invoice-
+// first), but the PIC column needs the full set, not just the winner.
+// Scans every line's Class across ALL of a customer's invoices (not just
+// the most recent) — Location is deliberately excluded here (unlike the
+// Owner fallback above): it's a per-*operator* QB-login tag (INV-QB-013),
+// so pooling it into "everyone who touched this account" would flood PIC
+// with whoever happened to key the invoice in, not who the service is for.
+export function collectInvolvedStaff(
+  invoices: OwnerInvoiceSignal[],
+  classNamesByInvoice: Map<string, string[]>,
+): string[] {
+  const seen = new Set<string>();
+  for (const inv of invoices) {
+    for (const className of classNamesByInvoice.get(inv.qbInvoiceId) ?? []) {
+      const resolved = resolveStaffName(className);
+      if (resolved) seen.add(resolved);
+    }
+  }
+  return [...seen];
+}
