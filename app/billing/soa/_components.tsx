@@ -260,27 +260,37 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
                       const displayedOwner = c.soaPic ?? c.suggestedOwner ?? singlePicFallback;
                       const isConfirmed = !!c.soaPic;
 
-                      // A customer with no companies.pic at all (no
-                      // companies row — an individual, or a real company
-                      // never onboarded via TeamWork) still needs an owner
-                      // for collections — falls back to every staff name
-                      // rather than having nothing to choose from.
-                      //
-                      // displayedOwner can legitimately be someone OTHER
-                      // than whoever companies.pic lists (coverage,
-                      // reassignment, ...). If it isn't in the base options
-                      // list, a plain <select> silently renders the FIRST
-                      // option instead (misleadingly showing the wrong
-                      // name) since its value has no matching <option> — so
-                      // always guarantee it's selectable.
-                      const base = c.picOptions.length ? c.picOptions : allStaffNames();
-                      const options = displayedOwner && !base.includes(displayedOwner) ? [displayedOwner, ...base] : base;
+                      // Vincent, 2026-09-07: "假设某个人不在PIC，但是owner
+                      // 我要加她怎么办" — the dropdown used to offer ONLY
+                      // picOptions once there was at least one (falling back
+                      // to the full directory only when picOptions was
+                      // completely empty), so Chelsea had no way to hand an
+                      // outstanding balance to someone who simply hasn't
+                      // touched this company yet (a coverage reassignment,
+                      // someone new taking over). Now always offers everyone
+                      // — picOptions/displayedOwner grouped first as the
+                      // likely picks, every other real staff name below,
+                      // alphabetical since that group is too long to scan
+                      // in file-declaration order.
+                      const likely = displayedOwner && !c.picOptions.includes(displayedOwner)
+                        ? [displayedOwner, ...c.picOptions] : c.picOptions;
+                      const likelySet = new Set(likely);
+                      const everyoneElse = allStaffNames().filter(n => !likelySet.has(n)).sort();
                       return (
                         <select value={displayedOwner ?? ''} onChange={e => updateSoaPic(c.companyName, e.target.value)}
                           title={!isConfirmed && c.suggestedOwner ? 'Suggested from QuickBooks — not yet confirmed' : undefined}
                           style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: isConfirmed ? '#1e3a5f' : displayedOwner ? '#0f766e' : '#94a3b8', fontWeight: isConfirmed ? 600 : 400, cursor: 'pointer' }}>
                           <option value="">Choose owner…</option>
-                          {options.map(name => <option key={name} value={name}>{name}</option>)}
+                          {likely.length > 0 ? (
+                            <>
+                              <optgroup label="Associated with this company">
+                                {likely.map(name => <option key={name} value={name}>{name}</option>)}
+                              </optgroup>
+                              <optgroup label="All staff">
+                                {everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
+                              </optgroup>
+                            </>
+                          ) : everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
                         </select>
                       );
                     })()}
