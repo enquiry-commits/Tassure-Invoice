@@ -46,12 +46,12 @@ function setColumnWidths(sheet: ExcelJS.Worksheet) {
 // so a caller stacking multiple tables (Internal's per-person sections)
 // knows where to continue.
 //
-// `totalLabel`: 'TOTAL' for the TAB/TAC/TAO sheets (matches Vincent's real
-// sheet — see app/api/billing/soa/export/route.ts's own history), '' (sum
-// row present but unlabeled) for a per-person sheet (matches his real "CKY"
-// tab's own bottom row, which sums with no "TOTAL" text in column 1), or
+// `totalLabel`: 'TOTAL' for the TAB/TAC/TAO sheets AND the per-person
+// sheets (Vincent, 2026-09-07: "个人的也是要有TOTAL" — his own real sheet's
+// per-person sum row actually has no "TOTAL" text, a deliberate departure
+// from matching it exactly here since he asked for the label directly), or
 // null to omit the total row entirely (Internal's own per-person
-// sub-sections never get one on his real sheet).
+// sub-sections never get one, on his real sheet or here).
 export function renderAgingTable(
   sheet: ExcelJS.Worksheet,
   startRow: number,
@@ -95,10 +95,23 @@ export function renderAgingTable(
     const totalRow = sheet.getRow(rowNum);
     if (totalLabel) totalRow.getCell(1).value = totalLabel;
     totalRow.font = BOLD;
+    // Vincent, 2026-09-07: "TOTAL,没有整合每一列的数值总额" — the SUM()
+    // formula alone rendered blank/0 for him: ExcelJS never evaluates a
+    // formula it writes, and ships no cached value alongside it, so a
+    // viewer that doesn't force a full recalc on open (observed with a
+    // Google Sheets import) shows nothing until someone manually
+    // recalculates. Precomputing the real sum here and passing it as
+    // `result` alongside the formula means the correct number is visible
+    // immediately either way — the formula is still there (and still
+    // authoritative) if a row is later edited/deleted directly in Excel.
+    const sums = AGING_BUCKETS.map(b => rows.reduce((s, r) => s + (r.aging[b.key] > 0 ? r.aging[b.key] : 0), 0));
+    sums.push(rows.reduce((s, r) => s + r.totalOutstanding, 0));
     for (let col = 2; col <= 1 + AGING_BUCKETS.length + 1; col++) {
       const colLetter = sheet.getColumn(col).letter;
       const cell = totalRow.getCell(col);
-      cell.value = rows.length ? { formula: `SUM(${colLetter}${firstDataRow}:${colLetter}${lastDataRow})` } : 0;
+      cell.value = rows.length
+        ? { formula: `SUM(${colLetter}${firstDataRow}:${colLetter}${lastDataRow})`, result: sums[col - 2] }
+        : 0;
       cell.numFmt = '"S$"#,##0.00';
       cell.alignment = { horizontal: 'right' };
       cell.border = { top: { style: 'thin' } };
@@ -144,10 +157,12 @@ export function buildCompanySheet(workbook: ExcelJS.Workbook, company: QbCompany
 // systems, since a company owing on 2 systems under the same owner is 2
 // real, separate rows on Vincent's real per-person tabs too (confirmed
 // against his real "CKY" tab: e.g. "1V Capital" appears once per system).
-// No title block, no "TOTAL" label on the sum row (matches his real sheet).
+// No title block. His real sheet's own sum row has no "TOTAL" text, but
+// Vincent, 2026-09-07: "个人的也是要有TOTAL,也是要有整合" — deliberately
+// diverges from that to add the label here, since he asked for it directly.
 export function buildPersonSheet(workbook: ExcelJS.Workbook, sheetName: string, rows: { companyName: string; aging: SoaCompanyRow['aging']; totalOutstanding: number; owner: string | null }[]) {
   const sheet = workbook.addWorksheet(sheetName);
-  renderAgingTable(sheet, 1, rows, '');
+  renderAgingTable(sheet, 1, rows, 'TOTAL');
   setColumnWidths(sheet);
   sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: COLUMN_COUNT } };
   sheet.views = [{ state: 'frozen', ySplit: 1 }];
