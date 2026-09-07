@@ -66,6 +66,7 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
   const [picFilter, setPicFilter] = useState(''); // '' = everyone
   const [expanded, setExpanded] = useState<string | null>(null); // keyed by companyName
   const [exporting, setExporting] = useState(false);
+  const [exportingAll, setExportingAll] = useState(false); // full 18-sheet workbook, not just this page's own
 
   // `silent`: skip the null-out-then-"Loading…" flash — used by the
   // background auto-refresh below, where re-fetching shouldn't visibly
@@ -183,24 +184,42 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
 
   // Vincent, 2026-09-07: "我要可以导出EXCEL，要和GOOGLE SHEET的格式一样" —
   // same blob-download pattern SoaDetail's own downloadPdf() already uses.
+  const downloadBlobFrom = async (url: string, fileName: string, onError: (msg: string) => void) => {
+    const res = await fetch(url);
+    if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error ?? 'Unable to export.'); }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  };
   const exportExcel = async () => {
     setExporting(true);
     try {
-      const res = await fetch(`/api/billing/soa/export?company=${qbCompany}`);
-      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error ?? 'Unable to export.'); }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${qbCompany} A-R Ageing - ${new Date().toISOString().slice(0, 10)}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      await downloadBlobFrom(`/api/billing/soa/export?company=${qbCompany}`, `${qbCompany} A-R Ageing - ${new Date().toISOString().slice(0, 10)}.xlsx`, setLoadError);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : String(err));
     } finally {
       setExporting(false);
+    }
+  };
+  // Vincent, 2026-09-07: "另外要生成一个完整版的EXCEL（和GOOGLE SHEET 那边
+  // 的一样的），要有 TAB/TAC/TAO/每个人员的/internal的" — the full 18-sheet
+  // workbook (see app/api/billing/soa/export-all/route.ts), offered from
+  // every one of the 3 pages since there's no single shared "SOA home" page
+  // to put a combined-export-only button on.
+  const exportAllExcel = async () => {
+    setExportingAll(true);
+    try {
+      await downloadBlobFrom('/api/billing/soa/export-all', `SOA - Full Workbook - ${new Date().toISOString().slice(0, 10)}.xlsx`, setLoadError);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExportingAll(false);
     }
   };
 
@@ -249,9 +268,13 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany }) 
             <span className="system-list-title-hint" style={{ marginLeft: 8 }}>Every {qbCompany} client with an unpaid balance, aged the same way as QuickBooks&apos; own AR Aging report — click a company to review and generate a statement</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={exportExcel} disabled={exporting} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: exporting ? 'default' : 'pointer', fontWeight: 600 }}>
+            <button onClick={exportExcel} disabled={exporting} title={`Just this ${qbCompany} sheet`} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: exporting ? 'default' : 'pointer', fontWeight: 600 }}>
               {exporting ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={13} />}
               {exporting ? 'Exporting…' : 'Export Excel'}
+            </button>
+            <button onClick={exportAllExcel} disabled={exportingAll} title="Full workbook — TAB/TAC/TAO + every staff sheet + Internal" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: exportingAll ? 'default' : 'pointer', fontWeight: 600 }}>
+              {exportingAll ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={13} />}
+              {exportingAll ? 'Exporting…' : 'Export Full Workbook'}
             </button>
             <button onClick={() => load()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
               <RefreshCw size={13} />Refresh
