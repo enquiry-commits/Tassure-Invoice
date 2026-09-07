@@ -72,11 +72,10 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
   now computed automatically from each company's own real QuickBooks
   Class/Location data (`lib/soa-owner.ts`, see INV-QB-013) instead of
   needing a manual Google Sheet backfill — a human pick in `soa_owners`
-  still overrides it when set. **Pending a real-data verification
-  round**: the underlying `location_name`/`class_name` columns need
-  `scripts/add-quickbooks-class-location.sql` run in Supabase before
-  they populate (auto-backfills on the next QuickBooks sync afterward,
-  no separate backfill job).
+  still overrides it when set. Verified end-to-end against real data
+  2026-09-07 after the SQL migration + a full production sync: TAB
+  94.6%, TAC 81.4%, TAO 98.5% of companies with an outstanding balance
+  now get a real computed owner with zero manual input.
 - Client Communications (campaigns, templates, drafts, send history) +
   Draft Helper (separate desktop app) for the real Outlook send
 - Post Incorporate document generation (1 of 13 planned document types —
