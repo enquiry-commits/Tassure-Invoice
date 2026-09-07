@@ -148,7 +148,7 @@ export async function GET(req: NextRequest) {
       totalOutstanding: Math.round(entry.total * 100) / 100,
       aging: entry.aging,
     };
-  }).sort((a, b) => b.totalOutstanding - a.totalOutstanding);
+  }).sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
 
   return NextResponse.json({ companies: rows });
 }
