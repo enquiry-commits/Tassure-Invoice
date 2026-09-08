@@ -20,6 +20,7 @@ type Candidate = {
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
+  promoted_memory_id: number | null;
   updated_at: string;
 };
 type StaffEntry = { email: string; name: string };
@@ -150,10 +151,10 @@ export default function AiLearningPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <BrainCircuit size={21} color="#1e3a5f" />
             <h1 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: '#1e293b' }}>AI Learning Review</h1>
-            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 750 }}>SHADOW MODE</span>
+            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 750 }}>CONTROLLED LEARNING</span>
           </div>
           <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: 12 }}>
-            Evidence-backed observations only. Nothing here changes business data or influences the assistant until separately integrated and approved.
+            Unreviewed observations remain inactive. Only an explicit approval promotes one into this user&apos;s AI memory; business data is never changed.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -172,7 +173,7 @@ export default function AiLearningPage() {
         <MetricCard value={counts.total} label="Detected Patterns" sub="observations, not facts" icon={<BrainCircuit size={16} />} color="#1e3a5f" />
         <MetricCard value={counts.observing} label="Still Observing" sub="not enough evidence yet" icon={<Eye size={16} />} color="#64748b" />
         <MetricCard value={counts.ready} label="Ready for Review" sub="never approved automatically" icon={<ShieldCheck size={16} />} color="#b45309" />
-        <MetricCard value={counts.approved} label="Approved" sub="reviewed, still not active" icon={<Check size={16} />} color="#15803d" />
+        <MetricCard value={counts.approved} label="Approved" sub="available to AI context" icon={<Check size={16} />} color="#15803d" />
       </div>
 
       {error && <div style={{ marginBottom: 12, border: '1px solid #fecaca', background: '#fff7f7', color: '#b91c1c', borderRadius: 8, padding: '9px 12px', fontSize: 12 }}>{error}</div>}

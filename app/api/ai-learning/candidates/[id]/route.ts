@@ -33,7 +33,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       content: body.content,
       note: body.note,
     });
-    return NextResponse.json({ mode: 'shadow', candidate: updated });
+    return NextResponse.json({ mode: 'controlled', candidate: updated });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 503 });
   }

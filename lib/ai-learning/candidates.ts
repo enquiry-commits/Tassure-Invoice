@@ -28,6 +28,7 @@ export type LearningCandidate = {
   reviewed_by: string | null;
   reviewed_at: string | null;
   review_note: string | null;
+  promoted_memory_id: number | null;
   created_at: string;
   updated_at: string;
 };

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   try {
     const candidates = await listLearningCandidates(target.email, status);
     return NextResponse.json({
-      mode: 'shadow', accountEmail: target.email, candidates,
+      mode: 'controlled', accountEmail: target.email, candidates,
       staffDirectory: account.canViewActivityInsights ? STAFF_DIRECTORY : [],
     });
   } catch (error) {
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   try {
     const candidates = await analyzeUserActivity(target.email, days);
     return NextResponse.json({
-      mode: 'shadow', accountEmail: target.email, analyzedDays: days, detected: candidates.length, candidates,
+      mode: 'controlled', accountEmail: target.email, analyzedDays: days, detected: candidates.length, candidates,
       staffDirectory: account.canViewActivityInsights ? STAFF_DIRECTORY : [],
     });
   } catch (error) {
