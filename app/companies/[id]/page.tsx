@@ -52,7 +52,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
       <MatchQualityNote warnings={data.matchQuality.warnings} />
 
       {/* Header card */}
-      <div className="system-list-shell" style={{ marginBottom: 20 }}>
+      {/* Vincent, 2026-09-08: "每个板块之间的间距拉大35%" — 20px × 1.35 = 27px
+          (was 20, matching _components.tsx's own DataCard gap, similarly
+          scaled to 21.6 — see that file's own comment). */}
+      <div className="system-list-shell" style={{ marginBottom: 27 }}>
         <div className="system-list-title-bar px-4 py-3" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Building2 size={15} color="#fff" />
           <h2 className="system-list-title">{company.companyName}</h2>

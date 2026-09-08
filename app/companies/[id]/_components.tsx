@@ -58,7 +58,10 @@ export function DataCard({ title, icon, count, empty, children, scrollable = tru
   scrollable?: boolean;
 }) {
   return (
-    <div className="system-list-shell" style={{ marginBottom: 16 }}>
+    // Vincent, 2026-09-08: "每个板块之间的间距拉大35%" — 16px × 1.35 = 21.6px
+    // (was 16, matching page.tsx's own header-card gap, similarly scaled to
+    // 27 — see that file's own comment).
+    <div className="system-list-shell" style={{ marginBottom: 21.6 }}>
       <div className="system-list-title-bar px-4 py-3" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         {icon}
         <h2 className="system-list-title">{title}</h2>
