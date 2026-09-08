@@ -104,23 +104,14 @@ Company 360 / My Tasks are freshly shipped (2026-08-31) and haven't had a
 real post-deploy login check yet — see Pending Improvements, not listed as
 an issue since nothing is known wrong, just not yet confirmed right.
 
-Activity Insights (`/activity-insights`, shipped 2026-09-08) is deployed
-but **`user_activity_events` (`scripts/add-user-activity-events.sql`) has
-not been run yet** — the write/read code degrades gracefully either way
-(confirmed directly: writes no-op, reads return an honest 0-event summary,
-see `docs/INVARIANTS.md` INV-DATA-016), so nothing is broken, but the page
-and the assistant's `my_activity_pattern` tool will show "no data" until
-Vincent runs that migration AND real usage accumulates afterward — remove
-this note once the migration has run and real events are visible.
-
-My Tasks' new chat interface (same day — `ai_conversations`/`ai_messages`,
-`scripts/add-ai-conversations.sql`; `user_memories`, `scripts/add-user-
-memories.sql`) is similarly deployed with **neither migration run yet**.
-Confirmed directly: reads degrade to empty (no crash), writes throw a
-clear error that both the API routes (503) and the frontend (falls back to
-an unsaved reply) already handle — so chatting itself works immediately,
-but nothing is saved/pinnable and `remember_this` can't actually save a
-memory until both migrations run. Remove this note once run and confirmed.
+All 4 of the AI-feature migrations shipped 2026-09-08 (`user_activity_
+events`, `ai_conversations`/`ai_messages`, `user_memories`) have now been
+run by Vincent and confirmed live with a real write+read round trip on
+each (not just "table exists") — Activity Insights, My Tasks' chat
+persistence/pinning, and the assistant's `remember_this` tool are all
+genuinely functional now, not just deployed. Real accumulated behavioral
+data (Activity Insights' own "top pages/actions" becoming meaningfully
+populated) still needs real usage over time — that's expected, not a bug.
 
 ## Known risks (not bugs — things worth remembering before relying on data)
 

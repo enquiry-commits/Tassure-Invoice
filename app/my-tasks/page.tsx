@@ -378,7 +378,13 @@ export default function MyTasksPage() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 16, height: 'calc(100vh - 170px)', minHeight: 480 }}>
+      {/* Vincent, 2026-09-08, from a screenshot showing the chat panel
+          running past the viewport: "上下尺寸稍微短一点，现在有点超过了，
+          可以减少15%的高度" — scaled both terms of the height calc down by
+          15% (100vh*0.85=85vh, 170px*0.85≈145px) rather than just bumping
+          the fixed offset, so the reduction holds proportionally across
+          different screen heights, not just the one in his screenshot. */}
+      <div style={{ display: 'flex', gap: 16, height: 'calc(85vh - 145px)', minHeight: 408 }}>
         {/* Sidebar — Vincent: "可以New Chat, 记录Chats and tasks, 可以
             Pin/ Pinned", modelled on the ChatGPT/Claude sidebar screenshots
             he shared: New Chat button, then Pinned / Recent sections. */}
@@ -434,68 +440,95 @@ export default function MyTasksPage() {
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           {activeView === 'chat' ? (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
-              <div ref={chatListRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, background: '#f8fafc' }}>
-                {!chatMessages.length && !chatLoadingThread && (
-                  <div style={{ maxWidth: 560, margin: '20px auto', textAlign: 'center' }}>
-                    <Bot size={28} color="#94a3b8" style={{ marginBottom: 10 }} />
-                    <div style={{ fontSize: 13.5, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks 助手</div>
-                    <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 16, lineHeight: 1.6 }}>{guide.summary}</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
-                      {guide.suggestions.map(s => (
-                        <button key={s} onClick={() => void sendChatMessage(s)} disabled={chatBusy}
-                          style={{ border: '1px solid #d7e1eb', borderRadius: 999, background: '#fff', color: '#31506f', padding: '6px 12px', fontSize: 12, fontWeight: 650, cursor: chatBusy ? 'wait' : 'pointer' }}>
-                          {s}
-                        </button>
-                      ))}
-                    </div>
+              {!chatMessages.length && !chatLoadingThread ? (
+                // Vincent, from a real ChatGPT screenshot: "在还没有开始问
+                // 问题前，输入框是在中间的" (before asking anything, the
+                // input box sits in the middle) — matches ChatGPT's own
+                // empty state exactly: headline, then a centered input,
+                // then suggestions below it. Only once a real conversation
+                // exists does the input move down to a bottom-pinned bar
+                // (the branch below), with messages filling the space above.
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, background: '#fff' }}>
+                  <Bot size={28} color="#94a3b8" style={{ marginBottom: 10 }} />
+                  <div style={{ fontSize: 15, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks 助手</div>
+                  <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20, lineHeight: 1.6, maxWidth: 480, textAlign: 'center' }}>{guide.summary}</div>
+                  <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 560 }}>
+                    <input
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) void sendChatMessage(); }}
+                      placeholder="问问今天要优先做什么，或任何系统问题…"
+                      autoFocus
+                      style={{ flex: 1, border: '1px solid #dbe3ec', borderRadius: 9, padding: '11px 14px', fontSize: 13, outline: 'none' }}
+                    />
+                    <button
+                      onClick={() => void sendChatMessage()}
+                      disabled={chatBusy || !chatInput.trim()}
+                      style={{ width: 40, borderRadius: 9, border: 'none', cursor: chatBusy || !chatInput.trim() ? 'not-allowed' : 'pointer', background: chatBusy || !chatInput.trim() ? '#cbd5e1' : '#0f766e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Send size={15} />
+                    </button>
                   </div>
-                )}
-                {chatLoadingThread && <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12.5, padding: 20 }}>Loading…</div>}
-                {chatMessages.map((message, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
-                      maxWidth: '72%',
-                      padding: '10px 13px',
-                      borderRadius: 12,
-                      fontSize: 13,
-                      lineHeight: 1.55,
-                      whiteSpace: message.role === 'user' ? 'pre-wrap' : 'normal',
-                      background: message.role === 'user' ? '#1d3a5c' : '#fff',
-                      color: message.role === 'user' ? '#fff' : '#334155',
-                      border: message.role === 'user' ? 'none' : '1px solid #e3e9f0',
-                      borderBottomRightRadius: message.role === 'user' ? 4 : 12,
-                      borderBottomLeftRadius: message.role === 'user' ? 12 : 4,
-                    }}
-                  >
-                    {message.role === 'assistant'
-                      ? <RichText text={message.content} onNav={href => { if (href.startsWith('/')) window.location.href = href; else window.open(href, '_blank', 'noopener,noreferrer'); }} />
-                      : message.content}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 14, maxWidth: 560 }}>
+                    {guide.suggestions.map(s => (
+                      <button key={s} onClick={() => void sendChatMessage(s)} disabled={chatBusy}
+                        style={{ border: '1px solid #d7e1eb', borderRadius: 999, background: '#fff', color: '#31506f', padding: '6px 12px', fontSize: 12, fontWeight: 650, cursor: chatBusy ? 'wait' : 'pointer' }}>
+                        {s}
+                      </button>
+                    ))}
                   </div>
-                ))}
-                {chatBusy && (
-                  <div style={{ alignSelf: 'flex-start', padding: '9px 14px', borderRadius: 12, background: '#fff', border: '1px solid #e3e9f0', fontSize: 12.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <Sparkles size={13} /> 正在结合系统资料查询…
+                </div>
+              ) : (
+                <>
+                  <div ref={chatListRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, background: '#f8fafc' }}>
+                    {chatLoadingThread && <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12.5, padding: 20 }}>Loading…</div>}
+                    {chatMessages.map((message, index) => (
+                      <div
+                        key={index}
+                        style={{
+                          alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start',
+                          maxWidth: '72%',
+                          padding: '10px 13px',
+                          borderRadius: 12,
+                          fontSize: 13,
+                          lineHeight: 1.55,
+                          whiteSpace: message.role === 'user' ? 'pre-wrap' : 'normal',
+                          background: message.role === 'user' ? '#1d3a5c' : '#fff',
+                          color: message.role === 'user' ? '#fff' : '#334155',
+                          border: message.role === 'user' ? 'none' : '1px solid #e3e9f0',
+                          borderBottomRightRadius: message.role === 'user' ? 4 : 12,
+                          borderBottomLeftRadius: message.role === 'user' ? 12 : 4,
+                        }}
+                      >
+                        {message.role === 'assistant'
+                          ? <RichText text={message.content} onNav={href => { if (href.startsWith('/')) window.location.href = href; else window.open(href, '_blank', 'noopener,noreferrer'); }} />
+                          : message.content}
+                      </div>
+                    ))}
+                    {chatBusy && (
+                      <div style={{ alignSelf: 'flex-start', padding: '9px 14px', borderRadius: 12, background: '#fff', border: '1px solid #e3e9f0', fontSize: 12.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <Sparkles size={13} /> 正在结合系统资料查询…
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderTop: '1px solid #e8edf3', background: '#fff' }}>
-                <input
-                  value={chatInput}
-                  onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) void sendChatMessage(); }}
-                  placeholder="问问今天要优先做什么，或任何系统问题…"
-                  style={{ flex: 1, border: '1px solid #dbe3ec', borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none' }}
-                />
-                <button
-                  onClick={() => void sendChatMessage()}
-                  disabled={chatBusy || !chatInput.trim()}
-                  style={{ width: 40, borderRadius: 9, border: 'none', cursor: chatBusy || !chatInput.trim() ? 'not-allowed' : 'pointer', background: chatBusy || !chatInput.trim() ? '#cbd5e1' : '#0f766e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  <Send size={15} />
-                </button>
-              </div>
+                  <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderTop: '1px solid #e8edf3', background: '#fff' }}>
+                    <input
+                      value={chatInput}
+                      onChange={e => setChatInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) void sendChatMessage(); }}
+                      placeholder="问问今天要优先做什么，或任何系统问题…"
+                      style={{ flex: 1, border: '1px solid #dbe3ec', borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none' }}
+                    />
+                    <button
+                      onClick={() => void sendChatMessage()}
+                      disabled={chatBusy || !chatInput.trim()}
+                      style={{ width: 40, borderRadius: 9, border: 'none', cursor: chatBusy || !chatInput.trim() ? 'not-allowed' : 'pointer', background: chatBusy || !chatInput.trim() ? '#cbd5e1' : '#0f766e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <Send size={15} />
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div style={{ flex: 1, overflowY: 'auto' }}>
