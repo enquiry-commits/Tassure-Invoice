@@ -376,13 +376,16 @@ export default function MyTasksPage() {
         </div>
       )}
 
-      {/* Vincent, 2026-09-08, from a screenshot showing the chat panel
-          running past the viewport: "上下尺寸稍微短一点，现在有点超过了，
-          可以减少15%的高度" — scaled both terms of the height calc down by
-          15% (100vh*0.85=85vh, 170px*0.85≈145px) rather than just bumping
-          the fixed offset, so the reduction holds proportionally across
-          different screen heights, not just the one in his screenshot. */}
-      <div style={{ display: 'flex', gap: 16, height: 'calc(85vh - 145px)', minHeight: 408 }}>
+      {/* Vincent, 2026-09-08: first "上下尺寸稍微短一点...可以减少15%的高
+          度" (reduced 100vh-170px by 15% -> 85vh-145px, minHeight 408) —
+          then, after a follow-up "下方长度加7%" got misread as widening the
+          input row instead: "看起来还是一样也，我说的是上下高度" (I meant
+          the vertical height). Scaled the CURRENT 85vh-145px calc up 7%
+          (85*1.07=90.95vh, 145*1.07=155.15->155px), same "scale both terms
+          proportionally" approach as the original reduction — net effect
+          vs. the very first version is ~0.85*1.07=91% (a ~9% reduction
+          overall, not the full 15%). minHeight 408*1.07=436.56->437. */}
+      <div style={{ display: 'flex', gap: 16, height: 'calc(90.95vh - 155px)', minHeight: 437 }}>
         {/* Sidebar — Vincent: "可以New Chat, 记录Chats and tasks, 可以
             Pin/ Pinned", modelled on the ChatGPT/Claude sidebar screenshots
             he shared: New Chat button, then Pinned / Recent sections. */}
@@ -466,11 +469,7 @@ export default function MyTasksPage() {
                   <Bot size={28} color="#94a3b8" style={{ marginBottom: 10 }} />
                   <div style={{ fontSize: 15, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
                   <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20 }}>Ready when you are.</div>
-                  {/* Vincent: "下方长度加7%" — 560 × 1.07 = 599.2, rounded
-                      to 599, applied to both this input row and the
-                      suggestion-buttons row below it (they've shared the
-                      same max-width since the empty state was built). */}
-                  <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 599 }}>
+                  <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 560 }}>
                     <input
                       value={chatInput}
                       onChange={e => setChatInput(e.target.value)}
@@ -487,7 +486,7 @@ export default function MyTasksPage() {
                       <Send size={15} />
                     </button>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 14, maxWidth: 599 }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 14, maxWidth: 560 }}>
                     {['What should I prioritize today?', 'Any overdue AR?', 'How does this work?'].map(s => (
                       <button key={s} onClick={() => void sendChatMessage(s)} disabled={chatBusy}
                         style={{ border: '1px solid #d7e1eb', borderRadius: 999, background: '#fff', color: '#31506f', padding: '6px 12px', fontSize: 12, fontWeight: 650, cursor: chatBusy ? 'wait' : 'pointer' }}>
