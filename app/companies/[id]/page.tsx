@@ -8,7 +8,7 @@ import CopyUenButton from './CopyUenButton';
 import CustomerSourceField from './CustomerSourceField';
 import {
   StatusBadge, MatchQualityNote,
-  ArAgmSection, InvoicesSection, NdSection, CommsSection, TrademarkSection,
+  ArAgmSection, InvoicesSection, NdSection, CommsSection, OutstandingSection, TrademarkSection,
   OfficialsSection, ShareholdersSection,
 } from './_components';
 
@@ -147,8 +147,11 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           Cycles变去第3" — Communications now directly follows the header,
           AR/AGM Cycles (now 6 equal columns, see AR_AGM_GRID_COLS) sits
           right before Officials (also converted to the same 6-column grid)
-          so the two visually adjacent sections actually align. */}
+          so the two visually adjacent sections actually align. Outstanding
+          inserted 2026-09-08 as the new module 3 ("在第3模块加上 Outstanding
+          板块"), pushing AR/AGM Cycles to module 4. */}
       <CommsSection drafts={data.communications.drafts} />
+      <OutstandingSection outstanding={data.outstanding} />
       <ArAgmSection cycles={data.arReminderCycles} />
       <OfficialsSection officials={data.officials} />
       <ShareholdersSection shareholders={data.shareholders} />

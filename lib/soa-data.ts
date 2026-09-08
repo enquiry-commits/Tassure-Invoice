@@ -62,15 +62,25 @@ export function effectiveOwner(row: Pick<SoaCompanyRow, 'soaPic' | 'suggestedOwn
   return row.soaPic ?? row.suggestedOwner ?? singlePicFallback;
 }
 
-export async function computeSoaRows(company: QbCompany): Promise<SoaCompanyRow[]> {
+// `customerNamePrefilter`: an ilike substring (e.g. Company 360's own
+// significantWord()) narrowing the initial unpaid-invoices query down to
+// one company's own rows — used by lib/company-360.ts's Outstanding
+// section so it isn't scanning every unpaid invoice across all customers
+// just to show one company's own balance. Omitted (the on-screen Outstanding
+// pages' own call), this behaves exactly as before — every company.
+export async function computeSoaRows(company: QbCompany, opts?: { customerNamePrefilter?: string }): Promise<SoaCompanyRow[]> {
   const supabase = createAdminClient();
 
   const [invoices, companiesRes, ownersRes] = await Promise.all([
-    pageAll(() => supabase
-      .from('quickbooks_invoices')
-      .select('customer_name, qb_company, qb_invoice_id, invoice_no, txn_date, balance, location_name')
-      .eq('qb_company', company)
-      .gt('balance', 0)) as Promise<UnpaidInvoice[]>,
+    pageAll(() => {
+      let query = supabase
+        .from('quickbooks_invoices')
+        .select('customer_name, qb_company, qb_invoice_id, invoice_no, txn_date, balance, location_name')
+        .eq('qb_company', company)
+        .gt('balance', 0);
+      if (opts?.customerNamePrefilter) query = query.ilike('customer_name', `%${opts.customerNamePrefilter}%`);
+      return query;
+    }) as Promise<UnpaidInvoice[]>,
     supabase.from('companies').select('id, company_name, pic'),
     supabase.from('soa_owners').select('customer_name_norm, soa_pic').eq('qb_company', company),
   ]);

@@ -1,6 +1,7 @@
-import { AlertTriangle, Calendar, FileText, Mail, ScrollText, Stamp, Users, UserCog, PieChart } from 'lucide-react';
+import { AlertTriangle, Calendar, FileText, Mail, Receipt, ScrollText, Stamp, Users, UserCog, PieChart } from 'lucide-react';
 import { fmtDate, toIsoDateValue } from '@/lib/date';
 import { formatStaffName, nameForEmail } from '@/lib/staff-directory';
+import { effectiveOwner } from '@/lib/soa-data';
 import type { Company360 } from '@/lib/company-360';
 
 // Colocated, route-scoped presentational pieces for Company 360 — every
@@ -286,6 +287,39 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
           </div>
         );
       })}
+    </DataCard>
+  );
+}
+
+// Outstanding — Vincent, 2026-09-08: "在第3模块加上 Outstanding 板块，目的
+// 是为了让用户可以点击进来这个company 360后，立刻可以看到这家公司到底目前
+// 在欠着哪家公司的欠款（TAB/TAO/TAC）主要的负责人是谁，谁要去催款" — exactly
+// the 5 columns he specified ("Outstanding 板块 5列...这些都同步从
+// Outstanding 来的"), styled to match the on-screen Outstanding "All"
+// list's own final look (plain gray Source badge, no currency prefix,
+// regular-weight numbers) rather than this page's older $-prefixed
+// Invoices convention — "同步" means matching Outstanding's own display,
+// not just its numbers. A company owing on 2+ systems shows as 2+ rows
+// here too, same as Outstanding's own "All" view — never merged.
+export function OutstandingSection({ outstanding }: { outstanding: Company360['outstanding'] }) {
+  return (
+    <DataCard title="Outstanding" icon={<Receipt size={15} color="#fff" />} count={outstanding.length} empty="No outstanding balance on TAB/TAC/TAO for this company.">
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_5_COLS, gap: 16, padding: '10px 16px' }}>
+        <div>Company Name</div><div>Source</div><div>Total</div><div>PIC</div><div>Owner</div>
+      </div>
+      {outstanding.map((r, i) => (
+        <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_5_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+          <div className="company-name-text">{r.companyName.toUpperCase()}</div>
+          <div>
+            <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em', padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f' }}>{r.qbCompany}</span>
+          </div>
+          <div style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontVariantNumeric: 'tabular-nums' }}>{r.totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+            {r.picOptions.length ? r.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
+          </div>
+          <div style={{ fontSize: 11, color: effectiveOwner(r) ? '#1e3a5f' : '#94a3b8' }}>{effectiveOwner(r) || '—'}</div>
+        </div>
+      ))}
     </DataCard>
   );
 }

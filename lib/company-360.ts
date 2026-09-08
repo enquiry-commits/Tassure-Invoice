@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalize, matchScore } from './company-name';
+import { computeSoaRows, effectiveOwner, type SoaCompanyRow } from './soa-data';
+import type { QbCompany } from './quickbooks';
 
 // Company 360 — one aggregation function, imported by both the page
 // (server component, no HTTP hop) and the API route (for any future
@@ -120,6 +122,16 @@ export type Company360 = {
   // most of this file's other fuzzy sections.
   officials: Record<string, unknown>[];
   shareholders: Record<string, unknown>[];
+  // Outstanding (2026-09-08, Vincent: "在第3模块加上 Outstanding 板块...立刻
+  // 可以看到这家公司到底目前在欠着哪家公司的欠款（TAB/TAO/TAC）主要的负责人
+  // 是谁") — every unpaid-balance row for THIS company across TAB/TAC/TAO,
+  // reusing lib/soa-data.ts's computeSoaRows() (the same computation the
+  // on-screen Outstanding pages use) so this can never silently show a
+  // different number/owner than those pages do for the same company.
+  // Matched by companyId when computeSoaRows() itself resolved one (same
+  // fuzzy company-name match every other SOA view relies on), falling back
+  // to an exact normalize()'d name match on the rarer row it didn't.
+  outstanding: (SoaCompanyRow & { qbCompany: QbCompany })[];
   matchQuality: {
     warnings: string[];
   };
@@ -163,6 +175,9 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
     { data: parentRow },
     { data: officialRows },
     { data: shareholderRows },
+    soaTabRows,
+    soaTacRows,
+    soaTaoRows,
   ] = await Promise.all([
     uen ? supabase.from('master_list').select('*').ilike('roc_no', uen) : Promise.resolve({ data: [] as Record<string, unknown>[] }),
     supabase.from('ar_reminder').select('*').eq('company_id', id).or('status.is.null,status.neq.Excluded'),
@@ -195,6 +210,18 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
     uen
       ? supabase.from('teamwork_shareholder_shares').select('shareholder_name, number_of_shares, issued_share_capital, paid_up_capital, consideration_paid_up_capital, currency, share_type, share_class, share_certificate_no, synced_at').ilike('uen', uen)
       : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    // Outstanding — same word-prefiltered pattern as quickbooks_invoices
+    // above, but going through computeSoaRows() (lib/soa-data.ts) so the
+    // Class/Location owner-suggestion and soa_owners override logic is the
+    // exact same computation the on-screen Outstanding pages use, not a
+    // second copy of it. .catch() keeps this page's established "missing
+    // data degrades gracefully, never breaks the whole page" behavior —
+    // computeSoaRows() is the only fetch in this whole function that can
+    // actually throw (it checks .error explicitly), so it's the one that
+    // needs an explicit guard here.
+    word ? computeSoaRows('TAB', { customerNamePrefilter: word }).catch(() => [] as SoaCompanyRow[]) : Promise.resolve([] as SoaCompanyRow[]),
+    word ? computeSoaRows('TAC', { customerNamePrefilter: word }).catch(() => [] as SoaCompanyRow[]) : Promise.resolve([] as SoaCompanyRow[]),
+    word ? computeSoaRows('TAO', { customerNamePrefilter: word }).catch(() => [] as SoaCompanyRow[]) : Promise.resolve([] as SoaCompanyRow[]),
   ]);
 
   // AR Reminder cycles — company_id + uen dual check (INV-AR-003, the same
@@ -233,6 +260,19 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
   // same reasoning as app/api/ar-reminder/route.ts's generatedMap).
   const normName = normalize(companyName);
   const generated = (generatedInvoiceRows ?? []).filter(r => normalize(r.company_name as string) === normName);
+
+  // Outstanding — computeSoaRows() already resolved its OWN companyId per
+  // row via the same companies-table fuzzy match used everywhere in this
+  // file; match on that first (most reliable), falling back to an exact
+  // normalize()'d name match for the rarer row with no companies-table
+  // match at all (same "18% of real customers have no matching companies
+  // row" gap lib/soa-data.ts's own SoaCompanyRow comment documents).
+  const matchesThisCompany = (r: SoaCompanyRow) => (r.companyId != null ? r.companyId === id : normalize(r.companyName) === normName);
+  const outstanding = ([
+    ...soaTabRows.filter(matchesThisCompany).map(r => ({ ...r, qbCompany: 'TAB' as const })),
+    ...soaTacRows.filter(matchesThisCompany).map(r => ({ ...r, qbCompany: 'TAC' as const })),
+    ...soaTaoRows.filter(matchesThisCompany).map(r => ({ ...r, qbCompany: 'TAO' as const })),
+  ]);
 
   const quickbooks = fuzzyMatch(companyName, qbCandidateRows ?? [], r => r.customer_name as string);
   const ndMatches = fuzzyMatch(companyName, ndCandidateRows ?? [], r => r.company_name as string);
@@ -302,6 +342,7 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
     trademark,
     officials: officialRows ?? [],
     shareholders: shareholderRows ?? [],
+    outstanding,
     matchQuality: { warnings },
   };
 }
