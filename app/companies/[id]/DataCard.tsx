@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { cloneElement, isValidElement, useState } from 'react';
+import type { ReactElement } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 // Pulled out of _components.tsx into its own 'use client' file (2026-09-08)
@@ -33,20 +34,36 @@ export function DataCard({ title, icon, count, empty, children, scrollable = tru
   scrollable?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  // Vincent, 2026-09-08: "收起的时候颜色放成灰色浅一点，打开才变回深蓝色"
+  // (lighter gray while collapsed, back to dark navy once opened). Reuses
+  // this app's own existing "gray table header" pair (--list-column-
+  // header-bg/-text, already used everywhere by .list-column-header-gray)
+  // for the collapsed look, rather than inventing a new gray — and the
+  // title bar's own normal navy (--list-header, from .system-list-title-
+  // bar) for the open look, so this is purely a state-driven override of
+  // colors that already exist in the design system.
+  const barBg = open ? 'var(--list-header)' : 'var(--list-column-header-bg)';
+  const barColor = open ? '#fff' : 'var(--list-column-header-text)';
+  // `icon` arrives as an already-rendered element (e.g. <Receipt color=
+  // "#fff" />) from each section's own call site — every one of those
+  // hardcodes white, which would go invisible on the light collapsed
+  // background. cloneElement re-colors it here instead of touching all 8
+  // call sites for what's really just this one shell's own state.
+  const coloredIcon = isValidElement(icon) ? cloneElement(icon as ReactElement<{ color?: string }>, { color: barColor }) : icon;
   return (
     <div className="system-list-shell" style={{ marginBottom: 21.6 }}>
       <div
         className="system-list-title-bar px-4 py-3"
-        style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', background: barBg, color: barColor }}
         onClick={() => setOpen(o => !o)}
         role="button"
         aria-expanded={open}
       >
-        {icon}
-        <h2 className="system-list-title">{title}</h2>
-        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
+        {coloredIcon}
+        <h2 className="system-list-title" style={{ color: barColor }}>{title}</h2>
+        <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: barColor, opacity: open ? 0.7 : 0.65, fontWeight: 600 }}>
           {count}
-          {open ? <ChevronDown size={14} color="#fff" /> : <ChevronRight size={14} color="#fff" />}
+          {open ? <ChevronDown size={14} color={barColor} /> : <ChevronRight size={14} color={barColor} />}
         </span>
       </div>
       {open && (
