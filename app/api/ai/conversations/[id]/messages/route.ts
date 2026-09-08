@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
 import { getConversationOwner, listMessages } from '@/lib/ai-conversations';
 
-// GET this conversation's own message history, ownership-checked — loaded
-// when My Tasks' new sidebar switches to a previously-saved thread.
+// GET this conversation's own message history, ownership-checked (or
+// canViewAsOthers — see [id]/route.ts's assertOwner comment for why no
+// ?viewAs= param is needed on an already-id-scoped route) — loaded when My
+// Tasks' new sidebar switches to a previously-saved thread.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id: idParam } = await params;
   const id = parseInt(idParam, 10);
@@ -13,7 +15,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
   const owner = await getConversationOwner(id);
   if (!owner) return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
-  if (owner !== account.email) return NextResponse.json({ error: 'Not your conversation' }, { status: 403 });
+  if (owner !== account.email && !account.canViewAsOthers) {
+    return NextResponse.json({ error: 'Not your conversation' }, { status: 403 });
+  }
 
   try {
     const messages = await listMessages(id);

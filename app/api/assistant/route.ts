@@ -7,7 +7,7 @@ import { buildTaskDigest, generateMyTasksBrief } from '@/lib/my-tasks-brief';
 import { getPersonActivitySummary } from '@/lib/activity-data';
 import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories';
 import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation } from '@/lib/ai-conversations';
-import type { ApprovedAccount } from '@/lib/approved-accounts';
+import { findMentionedAccount, resolveViewAsAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 
 /**
  * In-app AI assistant: answers questions about the system, looks up live data
@@ -254,10 +254,37 @@ async function ndLookup(name: string) {
 // otherwise fully anonymous before this, so a caller with no valid
 // session gets an explicit "can't identify you" rather than someone
 // else's data or a silent guess.
-async function myTasksSummary(account: ApprovedAccount | null) {
+// Extended 2026-09-08, same day, after Vincent screenshotted "如果我是HC，
+// 我要做什么今天？" falling through to the generic fallback: "我是最大的
+// ADMIN，和管理层就可以问这些问题，其他人一般只能问自己相关的东西" — an
+// optional `personQuery` (a name/nickname/initials, e.g. "HC") lets a
+// management account ask about a DIFFERENT staff member's tasks, reusing
+// the exact same target universe and same canViewAsOthers gate the My
+// Tasks page's own "View As" picker already enforces
+// (app/api/my-tasks/route.ts) — this is not a new permission, it's the
+// same one asked through chat instead of a dropdown. Enforced HERE, not
+// left to the calling engine to remember to check, since this function is
+// the one place both engines (Claude tool-use and the intent router) both
+// call through runTool()/directly.
+async function myTasksSummary(account: ApprovedAccount | null, personQuery?: string) {
   if (!account) return { signed_in: false as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
-  const tasks = await computeMyTasks(account);
-  return { signed_in: true as const, staff_name: account.name, ...buildTaskDigest(tasks) };
+
+  let target = account;
+  if (personQuery && personQuery.trim()) {
+    const mentioned = findMentionedAccount(personQuery);
+    if (!mentioned) {
+      return { signed_in: true as const, staff_name: account.name, person_not_found: true as const, message: `Could not match "${personQuery}" to a known staff account — tell the user plainly you don't recognize that name rather than guessing whose tasks to show.` };
+    }
+    if (mentioned.email !== account.email) {
+      if (!account.canViewAsOthers) {
+        return { signed_in: true as const, staff_name: account.name, permission_denied: true as const, message: `${account.name} does not have permission to view another staff member's tasks — that is limited to management accounts. Tell the user plainly they can only ask about their own tasks, do not reveal ${mentioned.name}'s data.` };
+      }
+      target = mentioned;
+    }
+  }
+
+  const tasks = await computeMyTasks(target);
+  return { signed_in: true as const, staff_name: target.name, viewing_other: target.email !== account.email, ...buildTaskDigest(tasks) };
 }
 
 // Vincent, 2026-09-08, the same day, pushing further than AR/Late Filing:
@@ -321,7 +348,7 @@ Current user location:
 - Path: ${context?.pathname ?? 'unknown'}
 When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location above.
 
-Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}. Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Never guess whose tasks or habits are whose from name alone.
+Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}. Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. If the user asks about a DIFFERENT staff member's tasks instead of their own (e.g. "如果我是HC，我要做什么今天？", "Show me Cindy's tasks", "HC 今天有什么任务") pass that person's name/nickname/initials as the tool's optional "person" argument — the tool itself enforces whether this account is allowed to see someone else's tasks (a management-only permission) and returns an explicit refusal or "not found" message when it can't proceed; relay that message honestly and do not fall back to answering about the caller instead, and never invent or guess another person's task data yourself. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Never guess whose tasks or habits are whose from name alone.
 ${memoryBlock}
 Use the remember_this tool ONLY when the user EXPLICITLY asks you to remember, note, or keep in mind something for the future (e.g. "记住...", "以后都...", "remember that I..."). Never call it just because something seems noteworthy from the conversation's tone — a single passing remark is not a durable preference, and this tool writes something that will keep influencing future conversations.
 
@@ -341,7 +368,7 @@ const CLAUDE_TOOLS = [
   { name: 'ar_batch', description: 'AR Reminder batch for a FYE month+year: totals and company names.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'English month name, e.g. April' }, year: { type: 'number' } }, required: ['month', 'year'] } },
   { name: 'nd_lookup', description: 'Look up a nominee director by person name: their active company appointments.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   { name: 'automation_health', description: 'Read live automation job health and the open integration-exception count.', input_schema: { type: 'object', properties: {} } },
-  { name: 'my_tasks_summary', description: "The currently logged-in staff member's own overdue/due-soon AR Reminder items and Late Filing flags (only theirs, resolved server-side from their real session — no arguments needed and none can override whose tasks are returned).", input_schema: { type: 'object', properties: {} } },
+  { name: 'my_tasks_summary', description: "Overdue/due-soon AR Reminder items and Late Filing flags for a staff member. With no `person` argument, returns the CURRENTLY LOGGED-IN caller's own tasks (resolved server-side from their real session). Pass `person` (a name, nickname, or initials, e.g. \"HC\") ONLY when the user explicitly asks about someone ELSE's tasks — this only succeeds if the caller's own account has management view-other-staff permission; otherwise the tool returns an explicit permission-denied message instead of any task data, which must be relayed honestly rather than worked around.", input_schema: { type: 'object', properties: { person: { type: 'string', description: "Optional: another staff member's name, nickname, or initials — only set this when the user is asking about someone other than themselves." } } } },
   { name: 'my_activity_pattern', description: "The currently logged-in staff member's own real page-visit/action history over the last 30 days (most-visited pages, most common key actions, hour-of-day activity) — for questions about their own habits, not anyone else's. May report no_data if tracking hasn't accumulated enough history yet.", input_schema: { type: 'object', properties: {} } },
   { name: 'remember_this', description: "Save something the user has EXPLICITLY asked to be remembered for future conversations (e.g. a stated preference, a fact about their role, a standing instruction). Only call this when the user directly asks to be remembered/noted — never infer one from conversational tone.", input_schema: { type: 'object', properties: { memory_type: { type: 'string', enum: ['fact', 'preference', 'behaviour', 'relationship', 'project', 'decision', 'rejection', 'pattern'] }, content: { type: 'string', description: 'The fact/preference itself, written as a short standalone statement.' } }, required: ['memory_type', 'content'] } },
 ];
@@ -351,7 +378,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'ar_batch') return arBatch(String(input.month ?? ''), Number(input.year ?? 0));
   if (name === 'nd_lookup') return ndLookup(String(input.name ?? ''));
   if (name === 'automation_health') return automationHealth();
-  if (name === 'my_tasks_summary') return myTasksSummary(account);
+  if (name === 'my_tasks_summary') return myTasksSummary(account, typeof input.person === 'string' ? input.person : undefined);
   if (name === 'my_activity_pattern') return myActivityPattern(account);
   if (name === 'remember_this') return rememberThis(account, String(input.memory_type ?? ''), String(input.content ?? ''));
   return { error: 'unknown tool' };
@@ -466,11 +493,42 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
   // instead of this specific person's own overdue items. Both fixed by
   // adding these exact phrasings here, checked before due-soon can ever
   // see them.
-  if (/(我的任务|我今天|今天.*优先|优先.*处理|my tasks?|what should i (do|focus|prioritize|work on)|prioriti[sz]e today|我该(做|处理)什么|我要处理什么|需要处理什么|overdue ar|any overdue|my overdue|哪些逾期|逾期.*ar)/.test(t)) {
+  //
+  // Widened AGAIN same day for "如果我是HC，我要做什么今天？" (Vincent's
+  // own real query, screenshotted still falling through to the generic
+  // fallback) — "我要做什么" wasn't recognized at all (only "我该做什么"
+  // was), added as its own alternative below.
+  if (/(我的任务|我今天|今天.*优先|优先.*处理|my tasks?|what should i (do|focus|prioritize|work on)|prioriti[sz]e today|我该(做|处理)什么|我要(做|处理)什么|需要处理什么|overdue ar|any overdue|my overdue|哪些逾期|逾期.*ar)/.test(t)) {
     if (!account) return '我认不出你目前的登录账号，请确认已登录后再试一次。\n\n[打开 My Tasks](/my-tasks)';
-    const tasks = await computeMyTasks(account);
-    const brief = await generateMyTasksBrief(tasks, account.name);
-    return `${brief}\n\n[打开 My Tasks 查看详情](/my-tasks)`;
+
+    // Cross-person: "如果我是HC，我要做什么今天？" — Vincent, 2026-09-08:
+    // "我是最大的ADMIN，和管理层就可以问这些问题，其他人一般只能问自己相
+    // 关的东西". Matched against the ORIGINAL-case `text`, not the
+    // lowercased `t` used above — short initials like "HC"/"JF" are only
+    // matched case-sensitively (see findMentionedAccount's own doc
+    // comment), and lowercasing would break that. A mention of the
+    // caller's own name/alias isn't a cross-person query at all (falls
+    // through with `target` left as `account`, no permission check
+    // needed). An explicit "如果我是X"/"if I were X" hypothesis that
+    // fails to resolve gets an honest "don't recognize that person"
+    // reply instead of silently defaulting to the caller's own tasks,
+    // which would otherwise look like it answered the question asked.
+    let target = account;
+    const mentioned = findMentionedAccount(text);
+    if (!mentioned && /(如果我是|假如我是|if i (?:were|was))/i.test(text)) {
+      return '我在系统里找不到你说的这位同事，请用完整姓名或已知的简称再试一次（例如 "Lim Hoe Chyi" 或 "HC"）。\n\n[打开 My Tasks](/my-tasks)';
+    }
+    if (mentioned && mentioned.email !== account.email) {
+      if (!account.canViewAsOthers) {
+        return `你的账号只能查询自己的任务，无法查看 ${mentioned.name} 的任务——这项权限仅开放给管理层。\n\n[打开 My Tasks](/my-tasks)`;
+      }
+      target = mentioned;
+    }
+
+    const tasks = await computeMyTasks(target);
+    const brief = await generateMyTasksBrief(tasks, target.name);
+    const prefix = target.email !== account.email ? `**${target.name} 的任务：**\n` : '';
+    return `${prefix}${brief}\n\n[打开 My Tasks 查看详情](/my-tasks)`;
   }
 
   // Vincent, 2026-09-08, same day: "为什么这个用户每天会打开这个页面，为什
@@ -649,10 +707,11 @@ async function persistExchange(conversationId: number | undefined, account: Appr
 
 // ── Route ────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  const { messages, context, conversationId } = (await req.json().catch(() => ({}))) as {
+  const { messages, context, conversationId, viewAs } = (await req.json().catch(() => ({}))) as {
     messages?: Msg[];
     context?: AssistantContext;
     conversationId?: number;
+    viewAs?: string;
   };
   if (!messages?.length) return NextResponse.json({ error: 'messages required' }, { status: 400 });
 
@@ -662,7 +721,23 @@ export async function POST(req: NextRequest) {
   // null here just means "couldn't identify this caller" (not logged in,
   // or an unapproved account), handled explicitly by my_tasks_summary /
   // the intent-router branch above rather than silently guessing.
-  const account = await getRequestAccount(req).catch(() => null);
+  const realAccount = await getRequestAccount(req).catch(() => null);
+
+  // "View As" identity substitution for chat (same day, extended from the
+  // Tasks-tab-only picker) — Vincent: "我作为最大的ADMIN 甚至是要可以带入
+  // 到那个员工的身份，去开一个NEW CHAT 在她的记录...通过View as". When the
+  // frontend sends `viewAs` (My Tasks' own picker), EVERYTHING below —
+  // tool calls, the system prompt's "current logged-in staff member",
+  // conversation persistence — operates as the TARGET, not the real
+  // caller. A bad/unauthorized viewAs is a hard error, never a silent
+  // fall-back to the caller's own identity (that would answer/save under
+  // the wrong person without saying so).
+  let account = realAccount;
+  if (realAccount && viewAs) {
+    const resolution = resolveViewAsAccount(realAccount, viewAs);
+    if (!resolution.ok) return NextResponse.json({ error: resolution.message }, { status: resolution.status });
+    account = resolution.account;
+  }
 
   const last = messages[messages.length - 1];
   const isFirstMessage = messages.length === 1;

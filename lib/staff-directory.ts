@@ -31,7 +31,13 @@ interface StaffEntry {
 
 const STAFF_DIRECTORY: StaffEntry[] = [
   // Partners
-  { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com' },
+  // "Cindy"/"Vincent" added 2026-09-08 — found missing by the My Tasks chat
+  // assistant's cross-person lookup diagnostic (scripts/diag-cross-person.ts):
+  // "If I were Vincent..." didn't resolve at all, only the full "Vincent
+  // Seow" did, unlike Samuell/Esther/Chelsea below who already had their
+  // own bare-first-name alias. These two are exactly the people most likely
+  // to be referred to by first name alone in this system.
+  { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', aliases: ['Cindy'] },
   { name: 'Samuell Ng', email: 'samuellng@tassure.com', aliases: ['Samuell'] },
   { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', aliases: ['Yee Soon'] },
   { name: 'Leonard Lee', email: 'leonard.lee@tassure.com' },
@@ -39,14 +45,18 @@ const STAFF_DIRECTORY: StaffEntry[] = [
   // Internal
   { name: 'Esther Loo', email: 'esther@tassure.com', aliases: ['Esther'] },
   { name: 'Chelsea Ang', email: 'chelsea@tassure.com', aliases: ['Chelsea'] },
-  { name: 'Vincent Seow', email: 'vincent@tassure.com' },
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', aliases: ['Vincent'] },
   { name: 'Yuna Lai', email: 'yuna@tassure.com' },
   // Corporate Secretarial — LHC/HSX/ASM/CKY/JL confirmed 2026-09-06 against
   // Vincent's real collections spreadsheet ("Individual outstanding
   // billing"), which uses these as its own PIC-column shorthand — same
   // pattern as the Accounting/Tax initials below, just never surfaced in
   // ar_reminder.pic itself before now.
-  { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', aliases: ['Hoe Chyi', 'LHC'] },
+  // "HC" added 2026-09-08 — Vincent's own real chat query ("如果我是HC，我
+  // 要做什么今天？") used this shorthand for her; same ad hoc-initials
+  // pattern as LHC/HSX/etc. above, just the last two letters of LHC on
+  // their own.
+  { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', aliases: ['Hoe Chyi', 'LHC', 'HC'] },
   { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', aliases: ['Seng Xin', 'HSX'] },
   { name: 'Jenny Lai', email: 'jennylai@tassure.com', aliases: ['Jenny', 'JL'] },
   { name: 'Chin Kah Ye', email: 'kahye@tassure.com', aliases: ['Kah Ye', 'CKY'] },
@@ -184,6 +194,20 @@ export function formatStaffNameList(rawValue: string | null | undefined): string
 // company never onboarded via TeamWork) still needs someone to choose from.
 export function allStaffNames(): string[] {
   return STAFF_DIRECTORY.map(s => s.name);
+}
+
+/**
+ * Every staff member's canonical name paired with every string that should
+ * resolve to them (their own full name plus all aliases) — for callers that
+ * need to scan a chunk of FREE TEXT for a staff mention, rather than
+ * resolve one already-isolated token the way resolveStaffName does. Added
+ * 2026-09-08 for the My Tasks chat assistant's cross-person lookup
+ * (app/api/assistant/route.ts, lib/approved-accounts.ts's
+ * findMentionedAccount) — asking "如果我是HC，我要做什么今天？" needs to
+ * find "HC" sitting inside a full sentence, not just validate "HC" alone.
+ */
+export function staffMentionCandidates(): { name: string; mentions: string[] }[] {
+  return STAFF_DIRECTORY.map(s => ({ name: s.name, mentions: [s.name, ...(s.aliases ?? [])] }));
 }
 
 const BY_EMAIL = new Map(STAFF_DIRECTORY.map(staff => [staff.email.toLowerCase(), staff.name]));

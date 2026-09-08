@@ -183,15 +183,21 @@ export default function MyTasksPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cat, setCat] = useState<Category>('ALL');
-  // "View as" — debug/demo tool for accounts with canViewAsOthers
-  // (Vincent: "希望可以从这边看到不同权限的人看到的内容是什么...方便我优化调整").
-  // Empty string = viewing your own real tasks. Deliberately NOT persisted
-  // anywhere (no localStorage, resets on reload) — this is a one-off
-  // inspection tool, not a real account switch, and only ever affects the
-  // Tasks view's own data — chat is always the real logged-in user's own
-  // conversations, never "viewed as" someone else (that would be reading
-  // another person's private chat history, a real privacy line this
-  // feature doesn't cross).
+  // "View as" — for accounts with canViewAsOthers (Vincent: "希望可以从这
+  // 边看到不同权限的人看到的内容是什么...方便我优化调整"). Empty string =
+  // acting as yourself. Deliberately NOT persisted anywhere (no
+  // localStorage, resets on reload).
+  //
+  // 2026-09-08, extended from Tasks-only to full identity substitution
+  // across BOTH Tasks and chat — Vincent: "不只是还原，而且我作为最大的
+  // ADMIN 甚至是要可以带入到那个员工的身份，去开一个NEW CHAT 在她的记录...
+  // 通过View as". While this is set, every chat action (list/read/create/
+  // send/pin/delete) operates on the TARGET's real ai_conversations rows,
+  // not a copy or a preview — a new chat started here becomes part of
+  // their actual history. Every affected API route re-checks
+  // canViewAsOthers itself (lib/approved-accounts.ts's
+  // resolveViewAsAccount / the relaxed ownership checks in the ai/
+  // conversations routes) — this client-side value is never trusted alone.
   const [viewAsEmail, setViewAsEmail] = useState('');
 
   const load = useCallback(async () => {
@@ -231,7 +237,8 @@ export default function MyTasksPage() {
 
   const loadConversations = useCallback(async () => {
     try {
-      const res = await fetch('/api/ai/conversations');
+      const url = viewAsEmail ? `/api/ai/conversations?viewAs=${encodeURIComponent(viewAsEmail)}` : '/api/ai/conversations';
+      const res = await fetch(url);
       if (!res.ok) return;
       const json = await res.json();
       setConversations(json.conversations ?? []);
@@ -240,9 +247,19 @@ export default function MyTasksPage() {
       // chat, not a hard dependency — a failed load here just means an
       // empty sidebar, never a broken page.
     }
-  }, []);
+  }, [viewAsEmail]);
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
+
+  // Switching identity mid-session must never keep showing whatever thread
+  // was open under the PREVIOUS identity — clear it so the next action
+  // (open something from the new sidebar list, or send a first message)
+  // starts from a clean slate rather than risking a message landing in the
+  // wrong person's thread.
+  useEffect(() => {
+    setActiveConversationId(null);
+    setChatMessages([]);
+  }, [viewAsEmail]);
 
   useEffect(() => {
     chatListRef.current?.scrollTo({ top: chatListRef.current.scrollHeight, behavior: 'smooth' });
@@ -297,7 +314,8 @@ export default function MyTasksPage() {
     let conversationId = activeConversationId;
     if (!conversationId) {
       try {
-        const res = await fetch('/api/ai/conversations', { method: 'POST' });
+        const createUrl = viewAsEmail ? `/api/ai/conversations?viewAs=${encodeURIComponent(viewAsEmail)}` : '/api/ai/conversations';
+        const res = await fetch(createUrl, { method: 'POST' });
         const json = await res.json();
         conversationId = json.conversation?.id ?? null;
         if (conversationId) {
@@ -318,7 +336,11 @@ export default function MyTasksPage() {
       const res = await fetch('/api/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: next, context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId }),
+        // viewAs — 2026-09-08, "View As" now covers chat too (see
+        // viewAsEmail's own comment above): the assistant resolves and
+        // answers/saves as the TARGET account, not the real caller, for
+        // the lifetime of this one request.
+        body: JSON.stringify({ messages: next, context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId, viewAs: viewAsEmail || undefined }),
       });
       const json = await res.json();
       setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。' }]);
@@ -332,6 +354,12 @@ export default function MyTasksPage() {
 
   const pinnedConversations = conversations.filter(c => c.pinned);
   const recentConversations = conversations.filter(c => !c.pinned);
+
+  // Resolved locally from the picker's own list (available as soon as the
+  // Tasks fetch resolves once, regardless of which tab is active) rather
+  // than from data.viewingAs, which only reflects the Tasks-view fetch —
+  // this banner now needs to show identically on the chat tab too.
+  const viewingAsAccount = viewAsEmail ? data?.viewableAccounts?.find(a => a.email === viewAsEmail) ?? null : null;
 
   const counts = data?.counts;
   const arRows = data?.arReminder;
@@ -353,7 +381,7 @@ export default function MyTasksPage() {
           <select
             value={viewAsEmail}
             onChange={e => setViewAsEmail(e.target.value)}
-            title="Admin-only: preview what the Tasks view looks like for another staff member (chat is unaffected — it's always your own)"
+            title="Management-only: act as another staff member across both Tasks and chat — new chats and messages you send are saved to THEIR account, not yours"
             style={{ marginLeft: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 12.5, color: '#475569', background: '#fff' }}
           >
             <option value="">View as: Me ({user?.name})</option>
@@ -369,10 +397,12 @@ export default function MyTasksPage() {
         </button>
       </div>
 
-      {activeView === 'tasks' && data?.viewingAs && (
+      {viewingAsAccount && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
           <AlertTriangle size={14} />
-          Viewing as {data.viewingAs.name} ({data.viewingAs.email}) — this is a preview for tuning My Tasks, not your own tasks.
+          {activeView === 'tasks'
+            ? `Viewing as ${viewingAsAccount.name} (${viewingAsAccount.email}) — this is their task queue, not yours.`
+            : `Acting as ${viewingAsAccount.name} (${viewingAsAccount.email}) — chats and messages here are saved to their account, not yours.`}
         </div>
       )}
 

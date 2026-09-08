@@ -682,6 +682,29 @@ again.
   deliberately built, `'inferred'` should never actually appear as a
   written value.
 
+- **INV-DATA-018** — `canViewAsOthers` (added 2026-09-02 for the My Tasks
+  Tasks-tab picker) grants FULL identity substitution for the assistant
+  chat too (`ai_conversations`/`ai_messages`), not read-only access —
+  extended 2026-09-08 after Vincent explicitly overrode an initial
+  read-only design mid-build: "不只是还原，而且我作为最大的ADMIN 甚至是要
+  可以带入到那个员工的身份，去开一个NEW CHAT 在她的记录...通过View as". A
+  privileged caller passing `viewAs=<target email>` (`lib/approved-
+  accounts.ts`'s `resolveViewAsAccount()`) doesn't just preview the
+  target's conversations — a new chat they start is CREATED under the
+  target's own email and becomes part of the target's real history, and
+  they can pin/rename/delete the target's existing threads too (the
+  ownership check in `app/api/ai/conversations/[id]/route.ts` and
+  `[id]/messages/route.ts` is "literal owner OR canViewAsOthers", not
+  scoped to a specific currently-selected target). Do not "fix" this to
+  read-only later without re-confirming with Vincent first — it was a
+  deliberate correction to what an earlier draft of this exact feature did.
+  Separately, `findMentionedAccount()` (same file) lets ANY account ask
+  about a named OTHER person conversationally (e.g. "如果我是HC...") while
+  staying logged in as themselves — gated the same way (refused for a
+  non-privileged caller) but never substitutes identity or writes into the
+  named person's own conversation; the two mechanisms are complementary,
+  not the same code path, and both must be checked when touching this area.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

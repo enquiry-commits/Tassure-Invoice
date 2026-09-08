@@ -113,6 +113,43 @@ genuinely functional now, not just deployed. Real accumulated behavioral
 data (Activity Insights' own "top pages/actions" becoming meaningfully
 populated) still needs real usage over time — that's expected, not a bug.
 
+**Management (`canViewAsOthers`: Vincent, Cindy Zhang, Samuell Ng, Tan Yee
+Soon) can now use the My Tasks chat to ask about or fully act as ANOTHER
+staff member**, added 2026-09-08 — two complementary mechanisms, both
+gated on the existing `canViewAsOthers` flag (no new permission
+introduced):
+- **Ask about someone else while staying yourself** — "如果我是HC，我要做
+  什么今天？" (or any phrasing naming a staff member) resolves the person
+  via `findMentionedAccount()` (`lib/approved-accounts.ts`, built on
+  `lib/staff-directory.ts`'s existing name/alias table) and answers with
+  THEIR task digest, saved in the ASKER's own conversation. A non-
+  privileged account asking about someone else gets an explicit refusal,
+  never the caller's own data mislabeled or someone else's data leaked
+  silently. Works in both engines (Claude tool-use and the no-key
+  `intentAnswer()` fallback that's the only one actually live in
+  production today — see below).
+- **Full "View As" identity substitution** — the My Tasks page's existing
+  View As picker (previously Tasks-tab only) now also drives the chat
+  sidebar/thread/composer: a privileged account can select a target and
+  genuinely operate AS them — new conversations are created under the
+  TARGET's own email and become part of their real `ai_conversations`
+  history, not a copy or a read-only preview (`resolveViewAsAccount()` in
+  the same file, wired through `/api/ai/conversations`, `[id]`,
+  `[id]/messages`, and `/api/assistant`'s POST). A persistent banner
+  states whose account is active whenever this is in effect.
+
+Both are `tsc`-clean and logic-verified via a standalone diagnostic script
+(12/12 cases, including Vincent's exact screenshotted phrase) — **not yet
+exercised by a real browser login** (same "code-complete, not yet
+click-through-verified" caveat as Company 360/My Tasks' own original ship
+below).
+
+Vincent has also named the real long-term direction this is heading:
+agentic action-taking through chat (e.g. "开A 公司的TAB INVOICE" → the
+assistant confirms FYE/details conversationally → creates the QuickBooks
+invoice itself). Explicitly a FUTURE step, not started — see Pending
+Improvements.
+
 **`ANTHROPIC_API_KEY` has never been set in Vercel production** (confirmed
 directly via the Vercel API's env list, 2026-09-08 — the key is simply
 absent from the project's environment variables). Every AI-assistant
@@ -170,6 +207,22 @@ Vincent can provide.
 
 ## Pending improvements (known, not yet scheduled)
 
+- **Agentic action-taking through the assistant chat** (e.g. "开A 公司的
+  TAB INVOICE" → assistant confirms FYE month + intent conversationally →
+  creates the QuickBooks invoice itself) — Vincent, 2026-09-08, named as
+  the real long-term direction: "我后续要做的是除了回答问题，甚至是可以协
+  助操作...员工全程只是一句话和回答你提出的确认问题，最终的操作，你协助
+  完成，这个是我要做的大方向，目前你先把内容都完善". Explicitly NOT
+  started — this is real billing/QuickBooks automation triggered by chat
+  and needs its own careful design pass (confirmation-loop UX, which
+  actions are safe to automate first, audit trail) when Vincent is ready
+  to actually scope it, matching the shared blueprint's own v1 guidance
+  (Read+Recommend+Draft only, no auto-actions yet).
+- Verify the new View-As-for-chat identity substitution (2026-09-08) with
+  a real login click-through: a privileged account selects a target,
+  starts a New Chat, sends a message, and the row is confirmed to land
+  under the TARGET's own email in `ai_conversations`/`ai_messages` — see
+  the dated entry above, logic-verified only so far.
 - Port the remaining 12 of 13 desktop-tool document-generation workflows
   (Pre Incorporate, Share Transfer, AGM, Strike Off, Change Business
   Activity/Registered Address/Secretary/Director, Update Particulars,
