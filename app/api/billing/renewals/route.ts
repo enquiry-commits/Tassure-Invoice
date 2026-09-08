@@ -118,6 +118,25 @@ export async function GET(req: NextRequest) {
     return respond(renewalsCache.today, renewalsCache.results, filterStatus, filterService, withinDays);
   }
 
+  let today: string, results: CompanyBilling[];
+  try {
+    ({ today, results } = await computeAllCompanyBilling(withinDays));
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
+  }
+  renewalsCache = { key: String(withinDays), ts: Date.now(), today, results };
+  return respond(today, results, filterStatus, filterService, withinDays);
+}
+
+// Extracted 2026-09-08 so lib/billing-lookup.ts's single-company preview
+// (assistant chat tool) can reuse this EXACT computation instead of
+// re-deriving a second, divergent copy of it — see that file's own
+// comment, and lib/billing-draft.ts's. Verbatim body, mechanically
+// extracted (not retyped) from what was previously inlined directly in
+// GET() above, to eliminate any risk of a transcription error in
+// business-critical billing logic — this function must always compute
+// exactly what GET() itself used to, byte for byte.
+export async function computeAllCompanyBilling(withinDays: number): Promise<{ today: string; results: CompanyBilling[] }> {
   const supabase = createAdminClient();
   const today = todaySGT();
   const cutoff18m = new Date(); cutoff18m.setMonth(cutoff18m.getMonth() - 18);
@@ -194,7 +213,12 @@ export async function GET(req: NextRequest) {
       .select('company_name, qb_company, invoice_no, qb_invoice_id, fye_cycle, fye_month, fye_year, total_amt, services, created_at')
       .order('created_at', { ascending: false }),
   ]);
-  if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
+  // Was `return NextResponse.json({error}, {status:500})` before this function
+  // was extracted from GET() — that doesn't type-check (or make sense) for a
+  // function that returns computed data, not an HTTP response. GET() below
+  // catches this and reproduces the exact same 500 response; unchanged from
+  // a caller's real-world perspective.
+  if (compErr) throw new Error(compErr.message);
 
   // A parent company (Vincent's Bill-To-override feature) need not itself be
   // an active CSS client, so it can be missing from `companies` above (which
@@ -559,9 +583,7 @@ export async function GET(req: NextRequest) {
       parentCompanyName: company.parent_company_id ? (parentNameById.get(company.parent_company_id) ?? null) : null,
     };
   });
-
-  renewalsCache = { key: String(withinDays), ts: Date.now(), today, results };
-  return respond(today, results, filterStatus, filterService, withinDays);
+  return { today, results };
 }
 
 // Cheap per-request filtering over the (possibly cached) computed results.

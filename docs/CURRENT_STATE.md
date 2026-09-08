@@ -144,11 +144,18 @@ exercised by a real browser login** (same "code-complete, not yet
 click-through-verified" caveat as Company 360/My Tasks' own original ship
 below).
 
-Vincent has also named the real long-term direction this is heading:
-agentic action-taking through chat (e.g. "开A 公司的TAB INVOICE" → the
-assistant confirms FYE/details conversationally → creates the QuickBooks
-invoice itself). Explicitly a FUTURE step, not started — see Pending
-Improvements.
+**Step 1 of the agentic-invoicing direction has now shipped**: a
+READ-ONLY `preview_invoice_draft` chat tool (`lib/billing-lookup.ts` +
+`lib/billing-draft.ts`, both new) shows exactly what a Billing Drafts
+invoice would contain for one company — real pre-fill rules, ported
+verbatim from `app/billing/page.tsx`'s own `initialLines`, verified
+against real data. It cannot create anything in QuickBooks; there is no
+write path in this tool at all. Gated by the same `isWithinRestriction()`
+check the Billing Drafts page itself uses, so the 6 AR-Reminder-restricted
+accounts can't get billing data through chat that the page itself blocks
+them from. The real confirm-and-execute step (an actual UI confirmation
+card, wired to the existing `/api/quickbooks/create-invoice`) is
+deliberately separate, later work — see Pending Improvements.
 
 **My Tasks gained a real "what has this person actually done" activity
 timeline** (`lib/recent-activity.ts`, same day), after Vincent caught the
@@ -249,17 +256,16 @@ treat as broken if it happens.
 
 ## Pending improvements (known, not yet scheduled)
 
-- **Agentic action-taking through the assistant chat** (e.g. "开A 公司的
-  TAB INVOICE" → assistant confirms FYE month + intent conversationally →
-  creates the QuickBooks invoice itself) — Vincent, 2026-09-08, named as
-  the real long-term direction: "我后续要做的是除了回答问题，甚至是可以协
-  助操作...员工全程只是一句话和回答你提出的确认问题，最终的操作，你协助
-  完成，这个是我要做的大方向，目前你先把内容都完善". Explicitly NOT
-  started — this is real billing/QuickBooks automation triggered by chat
-  and needs its own careful design pass (confirmation-loop UX, which
-  actions are safe to automate first, audit trail) when Vincent is ready
-  to actually scope it, matching the shared blueprint's own v1 guidance
-  (Read+Recommend+Draft only, no auto-actions yet).
+- **Real confirm-and-execute for agentic invoicing** (step 2 — step 1,
+  the read-only preview, shipped 2026-09-08). Needs: a new chat message
+  type that renders a real interactive confirmation card (not just text —
+  Vincent: "跳出弹窗要用户确认继续"), the actual "Confirm" button wired to
+  the EXISTING `/api/quickbooks/create-invoice` (same validation,
+  idempotency, and reservation machinery Billing Drafts itself uses — no
+  parallel write path), and an audit trail of what was proposed vs. what a
+  human actually confirmed. Design not yet started — needs a real pass
+  with Vincent on the confirmation UX and exactly which fields the user
+  must explicitly approve before any real QuickBooks write happens.
 - **Investigate why `ai_conversations`/`ai_messages` have zero real rows**
   despite real successful chat exchanges (Vincent's own screenshots,
   2026-09-08) — the DB write path itself is confirmed working (isolated

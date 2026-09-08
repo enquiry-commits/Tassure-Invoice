@@ -8,7 +8,8 @@ import { getPersonActivitySummary } from '@/lib/activity-data';
 import { getRecentActivity, summarizeByKind } from '@/lib/recent-activity';
 import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories';
 import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation } from '@/lib/ai-conversations';
-import { findMentionedAccount, resolveViewAsAccount, type ApprovedAccount } from '@/lib/approved-accounts';
+import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, type ApprovedAccount } from '@/lib/approved-accounts';
+import { previewInvoiceDraft } from '@/lib/billing-lookup';
 
 /**
  * In-app AI assistant: answers questions about the system, looks up live data
@@ -350,6 +351,46 @@ async function recentActivitySummary(account: ApprovedAccount | null, personQuer
   };
 }
 
+// Step 1 of Vincent's agentic-invoicing direction ("假设我真的要你执行，
+// 你能不能做到一步一步的引导，当遇到敏感的情况，就跳出弹窗要用户确认继
+// 续", 2026-09-08) — READ-ONLY preview of what a Billing Drafts invoice
+// would look like for one company, using the EXACT SAME pre-fill logic the
+// real page uses (lib/billing-lookup.ts, extracted verbatim from
+// app/api/billing/renewals/route.ts + app/billing/page.tsx — see those
+// files' own comments). This tool can never create anything in QuickBooks
+// — there is no write path here at all, deliberately, until a later,
+// separate step builds the actual confirm-and-execute flow with a real UI
+// confirmation gate.
+//
+// Gated identically to the Billing Drafts PAGE itself: the 6 AR-Reminder-
+// restricted accounts (`restrictedTo: '/billing?tab=ar'`) cannot open
+// Billing Drafts directly (enforced in proxy.ts) — a chat tool must never
+// become a silent bypass of that same restriction, so this checks the
+// identical isWithinRestriction() rule before returning any billing-draft
+// data, not just relying on the page-level block.
+async function invoiceDraftPreview(account: ApprovedAccount | null, companyQuery: string, fyeYear?: number) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  if (account.restrictedTo && !isWithinRestriction(account.restrictedTo, '/billing', new URLSearchParams({ tab: 'billing' }))) {
+    return { error: true as const, message: `${account.name}'s account does not have access to Billing Drafts, so it cannot preview invoice drafts either. Tell the user plainly this isn't available to their account — do not show any billing data.` };
+  }
+  const result = await previewInvoiceDraft(companyQuery, fyeYear);
+  if (!result.found) {
+    return { found: false as const, message: `No company matched "${companyQuery}".`, suggestions: result.suggestions };
+  }
+  return {
+    found: true as const,
+    company: result.preview.companyName,
+    uen: result.preview.uen,
+    fyeMonth: result.preview.fyeMonth,
+    fyeCycle: result.preview.fyeCycle,
+    alreadyInvoicedThisCycle: result.preview.alreadyInvoicedThisCycle,
+    totals: result.preview.totals,
+    lines: result.preview.lines.map(l => ({ service: l.service, description: l.description, rate: l.rate, qty: l.qty, include: l.include, reason: l.reason })),
+    warnings: result.preview.warnings,
+    note: 'READ-ONLY preview using the exact same pre-fill rules as Billing Drafts — nothing has been created in QuickBooks, and you have no tool that can create one. Present this clearly (company, FYE cycle, each INCLUDED line with its amount, the total, any warnings, and whether it is already invoiced this cycle), then tell the user they can generate the real invoice themselves in Billing Drafts — never claim you generated or will generate the real invoice.',
+  };
+}
+
 // Vincent's shared blueprint, section 5: structured long-term memory
 // ("Fact/Preference/Behaviour/..."), with an explicit warning right next
 // to it that v1 deliberately honors — "AI 不应因为一次对话就永久定义用户"
@@ -402,6 +443,8 @@ Key workflows:
 - Recipient rules: external customer emails go to To; Tassure emails go to CC; cindy@tassure.com is excluded; hoechyi@tassure.com is always CC; when kahye@tassure.com appears, sengxin@tassure.com is omitted.
 - Data freshness (SGT): TeamWork ND 05:00; TeamWork Companies and campaign recipients 05:30; AR generation 06:00; QuickBooks 06:30; AR workflow 07:00; Late Filing 08:00. Never claim a run succeeded without live evidence; direct staff to Dashboard Automation health when needed.
 
+If the user asks to generate/open/draft/check an invoice for a company, use preview_invoice_draft — it shows exactly what Billing Drafts would pre-fill (company, FYE cycle, each line item and amount, totals, warnings), but it is READ-ONLY: you have no tool that creates a real invoice in QuickBooks. Never say or imply you generated, will generate, or are generating the real invoice — always present the preview clearly and then tell the user to open Billing Drafts themselves to actually create it. If a FYE year is ambiguous, ask before calling the tool rather than guessing one.
+
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
 
@@ -431,6 +474,7 @@ const CLAUDE_TOOLS = [
   { name: 'my_activity_pattern', description: "The currently logged-in staff member's own real page-visit/action history over the last 30 days (most-visited pages, most common key actions, hour-of-day activity) — for questions about their own habits, not anyone else's. May report no_data if tracking hasn't accumulated enough history yet.", input_schema: { type: 'object', properties: {} } },
   { name: 'recent_activity_summary', description: "A real audit-trail activity summary — invoices generated, AR Reminder edits, email campaigns created, Master List edits, sent client emails, Post Incorporate docs generated, Trademark record edits, SOA owner picks. NOT page-view tracking (that's my_activity_pattern) — this is what someone has actually DONE across the system's real features, with history predating today. With no `person` argument, returns the CURRENTLY LOGGED-IN caller's own activity. Pass `person` (name/nickname/initials) to ask about someone ELSE — same management-only permission and same refusal behavior as my_tasks_summary's `person` argument.", input_schema: { type: 'object', properties: { person: { type: 'string', description: "Optional: another staff member's name, nickname, or initials." } } } },
   { name: 'remember_this', description: "Save something the user has EXPLICITLY asked to be remembered for future conversations (e.g. a stated preference, a fact about their role, a standing instruction). Only call this when the user directly asks to be remembered/noted — never infer one from conversational tone.", input_schema: { type: 'object', properties: { memory_type: { type: 'string', enum: ['fact', 'preference', 'behaviour', 'relationship', 'project', 'decision', 'rejection', 'pattern'] }, content: { type: 'string', description: 'The fact/preference itself, written as a short standalone statement.' } }, required: ['memory_type', 'content'] } },
+  { name: 'preview_invoice_draft', description: "READ-ONLY preview of what a TAB/TAC Billing Drafts invoice would look like for one company — same pre-fill rules as the real page (prior invoice, renewal/annual status, carried-forward Discount/Accounts/Tax lines). Does NOT create anything in QuickBooks; there is no tool available that can. Use whenever the user asks to see/check/preview/'draft'/'open' an invoice for a company. If the company can't be found, suggestions are returned — offer them rather than giving up.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' }, fyeYear: { type: 'number', description: 'Optional: calendar year of the FYE cycle to preview — defaults to the current year' } }, required: ['company'] } },
 ];
 
 async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {
@@ -442,6 +486,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'my_activity_pattern') return myActivityPattern(account);
   if (name === 'recent_activity_summary') return recentActivitySummary(account, typeof input.person === 'string' ? input.person : undefined);
   if (name === 'remember_this') return rememberThis(account, String(input.memory_type ?? ''), String(input.content ?? ''));
+  if (name === 'preview_invoice_draft') return invoiceDraftPreview(account, String(input.company ?? ''), typeof input.fyeYear === 'number' ? input.fyeYear : undefined);
   return { error: 'unknown tool' };
 }
 
