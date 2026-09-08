@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
+import { getRequestAccount } from '@/lib/request-account';
+import { computeMyTasks } from '@/lib/my-tasks-data';
+import { buildTaskDigest, generateMyTasksBrief } from '@/lib/my-tasks-brief';
+import type { ApprovedAccount } from '@/lib/approved-accounts';
 
 /**
  * In-app AI assistant: answers questions about the system, looks up live data
@@ -105,6 +109,9 @@ function currentPageHelp(pathname = ''): string {
   }
   if (pathname === '/late-filing') {
     return '**Late Filing 页面**\n· 列出符合迟报规则的公司及原因\n· 每天 08:00 SGT 自动检测\n· 若 Dashboard 显示超时或没有近期成功记录，应查看 Automation health 的详细异常，而不是只看页面数字\n\n[打开 Late Filing](/late-filing)';
+  }
+  if (pathname === '/my-tasks') {
+    return '**My Tasks 页面**\n· 汇总你自己名下（SEC/ACC/TAX PIC）的 AR Reminder 逾期、即将到期与 Late Filing 项目\n· 页面上方的"Today\'s Priority"是根据你目前真实的任务自动生成的每日提醒\n· 直接问我"我今天要优先处理什么"也可以，会按你自己的账号回答\n\n[打开 My Tasks](/my-tasks)';
   }
   if (pathname === '/billing') {
     return '**AR Reminder / Billing Drafts 页面**\n· AR Reminder：选择 FYE 周期、复核名单与状态\n· Billing Drafts：依据 TeamWork 服务状态和 QB 历史准备开单内容\n· 所有 Invoice 都先建立为 QuickBooks 草稿，仍需人工复核\n· PDF 可下载到本地文件夹；客户邮件在 Email Drafts 另行准备\n\n[AR Reminder](/billing?tab=ar) [Billing Drafts](/billing?tab=billing)';
@@ -234,8 +241,24 @@ async function ndLookup(name: string) {
   return { found: true as const, directors: out };
 }
 
+// Vincent, 2026-09-08: "更智能的分析和判断用户要做什么...可以沟通，可以对
+// 话" — this is the assistant's own personal-task tool, reusing the EXACT
+// same computeMyTasks() the on-screen My Tasks page and its own daily
+// briefing banner already use (lib/my-tasks-data.ts / lib/my-tasks-brief.ts)
+// — so "what should I do today" answered in chat can never disagree with
+// what My Tasks itself shows. `account` is the REAL logged-in caller
+// (from getRequestAccount(req) in POST below) — this assistant route was
+// otherwise fully anonymous before this, so a caller with no valid
+// session gets an explicit "can't identify you" rather than someone
+// else's data or a silent guess.
+async function myTasksSummary(account: ApprovedAccount | null) {
+  if (!account) return { signed_in: false as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  const tasks = await computeMyTasks(account);
+  return { signed_in: true as const, staff_name: account.name, ...buildTaskDigest(tasks) };
+}
+
 // ── Engine A: Claude with tool use ───────────────────────────────────────────
-function systemPrompt(context?: AssistantContext) {
+function systemPrompt(context?: AssistantContext, account?: ApprovedAccount | null) {
   return `You are the in-app assistant of the Tassure Corporate Services System (a Singapore corporate-services billing dashboard used by Tassure Asia staff). Answer in the user's language (usually Chinese). Be concise and concrete.
 
 System map (link pages with markdown, e.g. [开单草稿](/billing?tab=billing)):
@@ -245,6 +268,8 @@ Current user location:
 - Page: ${context?.page ?? 'unknown'}
 - Path: ${context?.pathname ?? 'unknown'}
 When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location above.
+
+Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}. Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. Never guess whose tasks are whose from name alone.
 
 Key workflows:
 - AR pipeline: TeamWork determines each company's FYE cycle → ar_reminder batches auto-generate daily (rolling 6 months) → staff review → Billing Drafts. Deleting an AR row is a soft delete (won't be auto-recreated; Add Manual restores it).
@@ -262,24 +287,26 @@ const CLAUDE_TOOLS = [
   { name: 'ar_batch', description: 'AR Reminder batch for a FYE month+year: totals and company names.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'English month name, e.g. April' }, year: { type: 'number' } }, required: ['month', 'year'] } },
   { name: 'nd_lookup', description: 'Look up a nominee director by person name: their active company appointments.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   { name: 'automation_health', description: 'Read live automation job health and the open integration-exception count.', input_schema: { type: 'object', properties: {} } },
+  { name: 'my_tasks_summary', description: "The currently logged-in staff member's own overdue/due-soon AR Reminder items and Late Filing flags (only theirs, resolved server-side from their real session — no arguments needed and none can override whose tasks are returned).", input_schema: { type: 'object', properties: {} } },
 ];
 
-async function runTool(name: string, input: Record<string, unknown>) {
+async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {
   if (name === 'search_company') return searchCompany(String(input.query ?? ''));
   if (name === 'ar_batch') return arBatch(String(input.month ?? ''), Number(input.year ?? 0));
   if (name === 'nd_lookup') return ndLookup(String(input.name ?? ''));
   if (name === 'automation_health') return automationHealth();
+  if (name === 'my_tasks_summary') return myTasksSummary(account);
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext): Promise<string> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, system: systemPrompt(context), tools: CLAUDE_TOOLS, messages: convo }),
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, system: systemPrompt(context, account), tools: CLAUDE_TOOLS, messages: convo }),
     });
     if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const data = await res.json();
@@ -290,7 +317,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext): Promis
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
     for (const tu of toolUses) {
-      const result = await runTool(tu.name!, tu.input ?? {});
+      const result = await runTool(tu.name!, tu.input ?? {}, account ?? null);
       results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result).slice(0, 6000) });
     }
     convo.push({ role: 'user', content: results });
@@ -334,13 +361,28 @@ function companyCard(c: CompanyCardData): string {
   return lines.join('\n');
 }
 
-async function intentAnswer(text: string, context?: AssistantContext): Promise<string> {
+async function intentAnswer(text: string, context?: AssistantContext, account?: ApprovedAccount | null): Promise<string> {
   const t = text.toLowerCase().trim();
 
   // Current-page help: the widget sends its location so vague questions do
   // not fall through to a generic answer.
   if (/(这个页面|这页|当前页面|这里).*(怎么用|做什么|有什么|如何|说明|帮助)|(怎么用|如何使用).*(这个页面|这页|这里)/.test(t)) {
     return currentPageHelp(context?.pathname);
+  }
+
+  // Vincent, 2026-09-08: "更智能的分析和判断用户要做什么...可以沟通，可以
+  // 对话" — checked BEFORE the automation-health branch below, since a
+  // phrase like "今天要优先做什么" would otherwise get swallowed by that
+  // branch's own "今天.*处理" pattern. Works with no ANTHROPIC_API_KEY set
+  // (this whole function is the no-key fallback engine) by reusing the
+  // exact rule-based sentence lib/my-tasks-brief.ts's own generateMyTasksBrief()
+  // falls back to — never a second, differently-worded summary of the
+  // same data.
+  if (/(我的任务|我今天|今天.*优先|优先.*处理|my tasks?|what should i (do|focus)|我该(做|处理)什么|我要处理什么|需要处理什么)/.test(t)) {
+    if (!account) return '我认不出你目前的登录账号，请确认已登录后再试一次。\n\n[打开 My Tasks](/my-tasks)';
+    const tasks = await computeMyTasks(account);
+    const brief = await generateMyTasksBrief(tasks, account.name);
+    return `${brief}\n\n[打开 My Tasks 查看详情](/my-tasks)`;
   }
 
   if (/(自动化|automation|cron|定时任务|同步任务|项目需要处理|今天.*处理|任务.*正常)/.test(t)) {
@@ -467,6 +509,7 @@ async function intentAnswer(text: string, context?: AssistantContext): Promise<s
     '· **查 AR 批次** — 如 "4月2026有几家AR"',
     '· **查到期** — 如 "30天内有什么到期"',
     '· **查迟报** — 如 "有几家迟报"',
+    '· **我的任务** — 如 "我今天要优先处理什么"（按你自己的登录账号回答）',
     '· **Email Drafts** — 如 "为什么这行还不能 Ready"',
     '· **Outlook Helper** — 如 "Helper 怎么安装和检查"',
     '· **页面导航** — 如 "打开开单草稿"',
@@ -484,18 +527,26 @@ export async function POST(req: NextRequest) {
   };
   if (!messages?.length) return NextResponse.json({ error: 'messages required' }, { status: 400 });
 
+  // 2026-09-08: this route was fully anonymous before — no personal-task
+  // question could ever be answered safely. getRequestAccount() reads the
+  // real session cookie the same way every other protected route does;
+  // null here just means "couldn't identify this caller" (not logged in,
+  // or an unapproved account), handled explicitly by my_tasks_summary /
+  // the intent-router branch above rather than silently guessing.
+  const account = await getRequestAccount(req).catch(() => null);
+
   const last = messages[messages.length - 1];
   try {
     if (process.env.ANTHROPIC_API_KEY) {
-      const reply = await claudeAnswer(messages.slice(-8), context);
+      const reply = await claudeAnswer(messages.slice(-8), context, account);
       return NextResponse.json({ reply, engine: 'claude' });
     }
-    const reply = await intentAnswer(last.content, context);
+    const reply = await intentAnswer(last.content, context, account);
     return NextResponse.json({ reply, engine: 'intent' });
   } catch (e) {
     // Claude path failed (bad key / network) — degrade to the intent engine.
     try {
-      const reply = await intentAnswer(last.content, context);
+      const reply = await intentAnswer(last.content, context, account);
       return NextResponse.json({ reply, engine: 'intent-fallback', note: e instanceof Error ? e.message : 'claude failed' });
     } catch {
       return NextResponse.json({ error: e instanceof Error ? e.message : 'assistant failed' }, { status: 500 });

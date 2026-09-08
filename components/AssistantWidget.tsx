@@ -68,6 +68,14 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     },
   },
   {
+    test: pathname => pathname === '/my-tasks',
+    guide: {
+      label: 'My Tasks',
+      summary: '可以按你自己的登录账号，判断今天应该优先处理什么，回答关于你自己名下 AR / Late Filing 任务的问题。',
+      suggestions: ['我今天要优先处理什么？', '我有哪些逾期的AR？', '这个页面怎么用？'],
+    },
+  },
+  {
     test: pathname => pathname === '/billing',
     guide: {
       label: 'AR Reminder / Billing Drafts',

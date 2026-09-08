@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { AlertTriangle, CalendarClock, Clock, ListChecks, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Clock, ListChecks, RefreshCw, Sparkles } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { fmtDate } from '@/lib/date';
 import { formatStaffName } from '@/lib/staff-directory';
@@ -20,6 +20,12 @@ type LateFilingTask = {
 type MyTasksResponse = {
   scope: 'full' | 'ar-only';
   scopeNote: string;
+  // Vincent, 2026-09-08: "每天打开My Tasks 的时候 AI助手会提醒今天可能会
+  // 需要完成的任务" — a short daily-priority sentence (lib/my-tasks-brief.ts),
+  // generated server-side from the exact same computed task lists below.
+  // null only if generation itself failed outright — the banner just
+  // doesn't render then, never blocks the rest of the page.
+  brief: string | null;
   arReminder: { overdue: ArTask[]; staleOverdue: ArTask[]; dueSoon: ArTask[] };
   lateFiling: { needsAttention: LateFilingTask[] } | null;
   counts: { arOverdue: number; arStaleOverdue: number; arDueSoon: number; lateFiling: number; total: number };
@@ -30,6 +36,25 @@ type MyTasksResponse = {
   // gates the picker below.
   viewableAccounts?: { email: string; name: string; restrictedTo: string | null }[];
 };
+
+// Vincent: "更智能的分析和判断用户要做什么...每天打开My Tasks 的时候 AI助
+// 手会提醒今天可能会需要完成的任务" — this banner is deliberately the
+// FIRST thing rendered under the header, before the metric cards, so it
+// reads as "here's today's priority" rather than a footnote. UI is
+// intentionally simple for now — Vincent: "具体的UI，我们会在后面不断的
+// 优化形式" (the concrete UI will keep being refined later).
+function DailyBriefBanner({ brief }: { brief: string | null }) {
+  if (!brief) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', borderRadius: 10, background: '#eff6ff', border: '1px solid #bfdbfe', marginBottom: 16 }}>
+      <Sparkles size={16} color="#1d4ed8" style={{ flexShrink: 0, marginTop: 1 }} />
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 3 }}>Today's Priority</div>
+        <div style={{ fontSize: 13, color: '#1e3a5f', lineHeight: 1.5 }}>{brief}</div>
+      </div>
+    </div>
+  );
+}
 
 type Category = 'ALL' | 'overdue' | 'dueSoon' | 'lateFiling';
 
@@ -171,6 +196,7 @@ export default function MyTasksPage() {
           <RefreshCw size={14} />Refresh
         </button>
       </div>
+      {data && <DailyBriefBanner brief={data.brief} />}
       {data?.viewingAs && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
           <AlertTriangle size={14} />
