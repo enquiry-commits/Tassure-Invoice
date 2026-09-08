@@ -2,8 +2,8 @@
 --
 -- This does NOT let an AI silently define a person or change business data.
 -- It stores only deterministic, evidence-backed observations from
--- user_activity_events. A candidate remains inert until the owning user (or
--- Vincent as system admin) explicitly approves it. Approval promotes exactly
+-- user_activity_events. A candidate remains inert until Vincent, the explicit
+-- system admin, approves it. Approval promotes exactly
 -- one inferred memory into the existing assistant context; business records
 -- are never changed by this migration.
 

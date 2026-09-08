@@ -376,12 +376,9 @@ export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canView
     const insertAt = reportsIdx >= 0 ? reportsIdx + 1 : myTasksIdx >= 0 ? myTasksIdx + 1 : level1.length;
     level1 = [...level1.slice(0, insertAt), ACTIVITY_INSIGHTS_NODE, ...level1.slice(insertAt)];
   }
-  if (canViewActivityInsights && !restrictedTo) {
-    const insightsIdx = level1.findIndex(n => n.href === '/activity-insights');
-    const insertAt = insightsIdx >= 0 ? insightsIdx + 1 : level1.length;
-    level1 = [...level1.slice(0, insertAt), AI_LEARNING_NODE, ...level1.slice(insertAt)];
-  }
-  if (isAdmin && !restrictedTo) level1 = [...level1, ADMIN_NODE];
+  // AI Learning is intentionally Vincent-only and always the final sidebar
+  // item. It is a governance/review surface, not a general staff feature.
+  if (isAdmin && !restrictedTo) level1 = [...level1, ADMIN_NODE, AI_LEARNING_NODE];
 
   useEffect(() => {
     if (localStorage.getItem('sidebar-collapsed') === 'true') setCollapsed(true);

@@ -18,6 +18,7 @@ function resolveTargetEmail(req: NextRequest, account: NonNullable<Awaited<Retur
 export async function GET(req: NextRequest) {
   const account = await getRequestAccount(req);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+  if (!account.admin) return NextResponse.json({ error: 'System administrator access required' }, { status: 403 });
   const target = resolveTargetEmail(req, account);
   if (!target.ok) return NextResponse.json({ error: target.error }, { status: target.status });
   const requestedStatus = req.nextUrl.searchParams.get('status') as CandidateStatus | null;
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const account = await getRequestAccount(req);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+  if (!account.admin) return NextResponse.json({ error: 'System administrator access required' }, { status: 403 });
   const target = resolveTargetEmail(req, account);
   if (!target.ok) return NextResponse.json({ error: target.error }, { status: target.status });
   const body = await req.json().catch(() => null) as { days?: number } | null;
