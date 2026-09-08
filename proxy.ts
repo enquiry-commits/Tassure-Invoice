@@ -55,6 +55,11 @@ export async function proxy(req: NextRequest) {
     if (isApi) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     return NextResponse.redirect(new URL('/login', req.url));
   }
+  // AI-learning governance is Vincent-only. Hiding the sidebar entry is not
+  // sufficient: reject direct URL navigation for every non-admin account too.
+  if (!isApi && path === '/ai-learning' && !account.admin) {
+    return NextResponse.redirect(new URL('/', req.url));
+  }
   // Some accounts only see one page (Vincent, 2026-08-17 — an Accounting-team
   // group confined to AR Reminder). Page navigation only, same as the rest of
   // this file: API routes stay reachable so the allowed page's own fetches

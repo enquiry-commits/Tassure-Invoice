@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText, ListChecks, Palette, BarChart3, Activity } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, ListChecks, Palette, BarChart3, Activity, BrainCircuit } from 'lucide-react';
 
 // `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
 // yet (see NavImg below) — currently Proposal Generator (a link out to a
@@ -118,6 +118,7 @@ const REPORTS_NODE: Node = { label: 'Reports', href: '/reports', icon: BarChart3
 // separate from REPORTS_NODE for the same reason `canViewActivityInsights`
 // is its own flag (see that field's own comment in lib/approved-accounts.ts).
 const ACTIVITY_INSIGHTS_NODE: Node = { label: 'Activity Insights', href: '/activity-insights', icon: Activity };
+const AI_LEARNING_NODE: Node = { label: 'AI Learning', href: '/ai-learning', icon: BrainCircuit };
 
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
@@ -375,7 +376,9 @@ export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canView
     const insertAt = reportsIdx >= 0 ? reportsIdx + 1 : myTasksIdx >= 0 ? myTasksIdx + 1 : level1.length;
     level1 = [...level1.slice(0, insertAt), ACTIVITY_INSIGHTS_NODE, ...level1.slice(insertAt)];
   }
-  if (isAdmin && !restrictedTo) level1 = [...level1, ADMIN_NODE];
+  // AI Learning is intentionally Vincent-only and always the final sidebar
+  // item. It is a governance/review surface, not a general staff feature.
+  if (isAdmin && !restrictedTo) level1 = [...level1, ADMIN_NODE, AI_LEARNING_NODE];
 
   useEffect(() => {
     if (localStorage.getItem('sidebar-collapsed') === 'true') setCollapsed(true);
