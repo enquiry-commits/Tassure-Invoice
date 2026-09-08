@@ -25,6 +25,15 @@ import { fyeDateString } from './invoice-templates';
 // later piece of work, not built yet.
 export type InvoicePreview = {
   companyName: string;
+  // 2026-09-08: added so the real "Confirm & Generate" step (Vincent:
+  // "不能直接和用户确认后弹出真正的弹窗吗") can submit to the EXACT same
+  // /api/quickbooks/create-invoice payload app/billing/page.tsx itself
+  // sends — companyId resolves the parent Bill-To override, pic sets the
+  // TAB Secretary/XBRL Class, email is the default recipient. Preview-only
+  // consumers (the assistant's text reply) can ignore these.
+  companyId: number | null;
+  email: string | null;
+  pic: string | null;
   uen: string | null;
   fyeMonth: string | null;
   fyeCycle: string;
@@ -70,6 +79,9 @@ export async function previewInvoiceDraft(companyQuery: string, fyeYear?: number
     found: true,
     preview: {
       companyName: company.companyName,
+      companyId: company.resolvedCompanyId,
+      email: company.email,
+      pic: company.pic,
       uen: company.uen,
       fyeMonth: company.fyeMonth,
       fyeCycle: cycleFye ?? '',

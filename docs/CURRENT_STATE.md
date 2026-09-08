@@ -153,9 +153,9 @@ against real data. It cannot create anything in QuickBooks; there is no
 write path in this tool at all. Gated by the same `isWithinRestriction()`
 check the Billing Drafts page itself uses, so the 6 AR-Reminder-restricted
 accounts can't get billing data through chat that the page itself blocks
-them from. The real confirm-and-execute step (an actual UI confirmation
-card, wired to the existing `/api/quickbooks/create-invoice`) is
-deliberately separate, later work — see Pending Improvements.
+them from. **Step 2 (the real confirm-and-execute card + popup) shipped
+2026-09-09** — see Pending Improvements for its own not-yet-tested
+caveat and known follow-up gaps.
 
 **My Tasks gained a real "what has this person actually done" activity
 timeline** (`lib/recent-activity.ts`, same day), after Vincent caught the
@@ -256,16 +256,19 @@ treat as broken if it happens.
 
 ## Pending improvements (known, not yet scheduled)
 
-- **Real confirm-and-execute for agentic invoicing** (step 2 — step 1,
-  the read-only preview, shipped 2026-09-08). Needs: a new chat message
-  type that renders a real interactive confirmation card (not just text —
-  Vincent: "跳出弹窗要用户确认继续"), the actual "Confirm" button wired to
-  the EXISTING `/api/quickbooks/create-invoice` (same validation,
-  idempotency, and reservation machinery Billing Drafts itself uses — no
-  parallel write path), and an audit trail of what was proposed vs. what a
-  human actually confirmed. Design not yet started — needs a real pass
-  with Vincent on the confirmation UX and exactly which fields the user
-  must explicitly approve before any real QuickBooks write happens.
+- **Agentic invoicing step 2 shipped 2026-09-09** (`InvoiceDraftCard` +
+  `GenerateConfirmModal` in `app/my-tasks/page.tsx`) — real styled card,
+  real popup confirmation, wired to the exact existing `/api/quickbooks/
+  create-invoice`. **Not yet end-to-end tested with a real invoice** (only
+  build/type-checked and the data layer verified against real company
+  data) — Vincent needs to try the real button himself. Known follow-up
+  gaps, not yet started: (1) the invoice preview card's structured data
+  isn't persisted to `ai_messages` — reopening a saved conversation later
+  shows the plain text reply only, no card; (2) no dedicated audit trail
+  distinguishing "AI proposed this draft" from "human clicked confirm" —
+  today it's implicit (whatever `/api/quickbooks/create-invoice` itself
+  already logs to `generated_invoices.created_by_email`, same as a manual
+  Billing Drafts submission, nothing chat-specific).
 - **Investigate why `ai_conversations`/`ai_messages` have zero real rows**
   despite real successful chat exchanges (Vincent's own screenshots,
   2026-09-08) — the DB write path itself is confirmed working (isolated

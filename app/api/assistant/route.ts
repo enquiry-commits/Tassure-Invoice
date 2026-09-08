@@ -9,7 +9,7 @@ import { getRecentActivity, summarizeByKind } from '@/lib/recent-activity';
 import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories';
 import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation } from '@/lib/ai-conversations';
 import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, type ApprovedAccount } from '@/lib/approved-accounts';
-import { previewInvoiceDraft } from '@/lib/billing-lookup';
+import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 
 /**
  * In-app AI assistant: answers questions about the system, looks up live data
@@ -379,15 +379,16 @@ async function invoiceDraftPreview(account: ApprovedAccount | null, companyQuery
   }
   return {
     found: true as const,
-    company: result.preview.companyName,
-    uen: result.preview.uen,
-    fyeMonth: result.preview.fyeMonth,
-    fyeCycle: result.preview.fyeCycle,
-    alreadyInvoicedThisCycle: result.preview.alreadyInvoicedThisCycle,
-    totals: result.preview.totals,
-    lines: result.preview.lines.map(l => ({ service: l.service, description: l.description, rate: l.rate, qty: l.qty, include: l.include, reason: l.reason })),
-    warnings: result.preview.warnings,
-    note: 'READ-ONLY preview using the exact same pre-fill rules as Billing Drafts — nothing has been created in QuickBooks, and you have no tool that can create one. Present this clearly (company, FYE cycle, each INCLUDED line with its amount, the total, any warnings, and whether it is already invoiced this cycle), then tell the user they can generate the real invoice themselves in Billing Drafts — never claim you generated or will generate the real invoice.',
+    // Full InvoicePreview passed through as-is (not re-mapped to a
+    // stripped-down subset) — Claude only reasons over company/fyeCycle/
+    // lines/totals/warnings, but the frontend's real "Confirm & Generate"
+    // card (2026-09-08 — Vincent: "不能直接和用户确认后弹出真正的弹窗
+    // 吗") needs companyId/email/pic and each line's productService too,
+    // to submit the EXACT same payload app/billing/page.tsx itself sends
+    // to /api/quickbooks/create-invoice. See claudeAnswer()'s own capture
+    // of this same object as `invoicePreview` on the reply.
+    preview: result.preview,
+    note: 'READ-ONLY preview using the exact same pre-fill rules as Billing Drafts — nothing has been created in QuickBooks, and you have no tool that can create one directly. Present it clearly (company, FYE cycle, each INCLUDED line with its amount, the total, any warnings, and whether it is already invoiced this cycle). The user will see a real "Generate Invoice" button on this preview in the UI — tell them to review it and click that themselves when ready; never claim you generated, will generate, or are generating the real invoice yourself.',
   };
 }
 
@@ -445,7 +446,7 @@ Key workflows:
 - Recipient rules: external customer emails go to To; Tassure emails go to CC; cindy@tassure.com is excluded; hoechyi@tassure.com is always CC; when kahye@tassure.com appears, sengxin@tassure.com is omitted.
 - Data freshness (SGT): TeamWork ND 05:00; TeamWork Companies and campaign recipients 05:30; AR generation 06:00; QuickBooks 06:30; AR workflow 07:00; Late Filing 08:00. Never claim a run succeeded without live evidence; direct staff to Dashboard Automation health when needed.
 
-If the user asks to generate/open/draft/check an invoice for a company, use preview_invoice_draft — it shows exactly what Billing Drafts would pre-fill (company, FYE cycle, each line item and amount, totals, warnings), but it is READ-ONLY: you have no tool that creates a real invoice in QuickBooks. Never say or imply you generated, will generate, or are generating the real invoice — always present the preview clearly and then tell the user to open Billing Drafts themselves to actually create it. If a FYE year is ambiguous, ask before calling the tool rather than guessing one.
+If the user asks to generate/open/draft/check an invoice for a company, use preview_invoice_draft — it shows exactly what Billing Drafts would pre-fill (company, FYE cycle, each line item and amount, totals, warnings), but it is READ-ONLY: you have no tool that creates a real invoice in QuickBooks. The UI shows the user a real "Generate Invoice" button on the preview itself, with its own confirmation step — never say or imply YOU generated, will generate, or are generating the real invoice; tell the user to review the preview and use that button when ready. If a FYE year is ambiguous, ask before calling the tool rather than guessing one.
 
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
@@ -492,7 +493,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<string> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview }> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -503,6 +504,12 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     { type: 'text', text: staticSystemPrompt(), cache_control: { type: 'ephemeral' } },
     { type: 'text', text: await dynamicSystemPrompt(context, account) },
   ];
+  // Captures the LAST successful preview_invoice_draft result across the
+  // tool-use loop (2026-09-08 — see invoiceDraftPreview's own comment) so
+  // it can ride along with the text reply as structured data for the
+  // frontend's real "Confirm & Generate" card — Claude's own prose is for
+  // the user to read, not something the UI should try to parse back apart.
+  let lastInvoicePreview: InvoicePreview | undefined;
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -513,7 +520,8 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const data = await res.json();
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
-      return (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
+      const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
+      return { text, invoicePreview: lastInvoicePreview };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -527,6 +535,9 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
       let result: unknown;
       try {
         result = await runTool(tu.name!, tu.input ?? {}, account ?? null);
+        if (tu.name === 'preview_invoice_draft' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
+          lastInvoicePreview = (result as { preview: InvoicePreview }).preview;
+        }
       } catch (err) {
         result = { error: err instanceof Error ? err.message : 'tool failed' };
       }
@@ -534,7 +545,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     }
     convo.push({ role: 'user', content: results });
   }
-  return '抱歉,这个问题查询步骤太多,请换个更具体的问法。';
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -896,9 +907,9 @@ export async function POST(req: NextRequest) {
   const isFirstMessage = messages.length === 1;
   try {
     if (process.env.ANTHROPIC_API_KEY) {
-      const reply = await claudeAnswer(messages.slice(-8), context, account);
+      const { text: reply, invoicePreview } = await claudeAnswer(messages.slice(-8), context, account);
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
-      return NextResponse.json({ reply, engine: 'claude' });
+      return NextResponse.json({ reply, engine: 'claude', invoicePreview });
     }
     const reply = await intentAnswer(last.content, context, account);
     await persistExchange(conversationId, account, last.content, reply, isFirstMessage);

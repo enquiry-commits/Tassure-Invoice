@@ -3,11 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AlertTriangle, CalendarClock, Clock, ListChecks, RefreshCw, Sparkles,
-  Plus, Pin, Trash2, Send, Bot, MessageSquare, Activity,
+  Plus, Pin, Trash2, Send, Bot, MessageSquare, Activity, FileCheck2, X,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { RichText } from '@/components/assistant/ChatRichText';
 import { fmtDate } from '@/lib/date';
+import type { InvoicePreview } from '@/lib/billing-lookup';
+import type { EditableLine } from '@/lib/billing-draft';
 
 type SessionUser = { email: string; name: string; restrictedTo?: string | null; admin?: boolean };
 
@@ -150,7 +152,12 @@ function LateFilingTable({ rows }: { rows: LateFilingTask[] }) {
 // asked whether to keep or drop them: "共存—聊天主体，任务列表另外一个区
 // 域/标签页").
 type Conversation = { id: number; title: string; pinned: boolean; created_at: string; updated_at: string };
-type ChatMsg = { role: 'user' | 'assistant'; content: string };
+// invoicePreview (2026-09-08) rides along on an assistant message when the
+// preview_invoice_draft tool ran — see InvoiceDraftCard below. Only ever
+// present on a fresh reply from THIS session; reopening a saved
+// conversation later shows the plain text only (the card's structured
+// data isn't persisted to ai_messages yet — a known, deliberate v1 gap).
+type ChatMsg = { role: 'user' | 'assistant'; content: string; invoicePreview?: InvoicePreview };
 type ActiveView = 'chat' | 'tasks' | 'activity';
 
 // Local to this page only — deliberately not added to lib/date.ts's shared
@@ -194,6 +201,237 @@ function RecentActivityPanel({ items, subjectName }: { items: RecentActivityItem
             <span style={{ fontSize: 12.5, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.detail}</span>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Invoice draft preview + real confirm-and-generate (2026-09-08) ─────────
+// Step 2 of Vincent's agentic-invoicing direction (step 1 shipped earlier
+// today: the read-only preview_invoice_draft tool). Vincent, on the plain
+// markdown-table version: "这些内容很简陋，不能直接和用户确认后弹出真正
+// 的弹窗吗？...要预览实际页面预览，不是文字大纲" — a real styled card
+// (not a markdown outline in the chat bubble) plus a genuine confirmation
+// MODAL before anything real happens.
+//
+// The actual QuickBooks write goes through the EXACT SAME endpoint and
+// payload shape app/billing/page.tsx itself sends to
+// /api/quickbooks/create-invoice — same idempotency, same reservation
+// system, same overlap/number-conflict handling. This never invents a
+// parallel write path; it only assembles the same request a human would
+// send from Billing Drafts, and requires an explicit click on a real
+// button before sending it — the AI itself can never trigger this call,
+// it only ever produces the preview data the card renders.
+function draftLinesToApiLines(lines: EditableLine[]) {
+  const included = lines.filter(l => l.include);
+  const toApiLine = (l: EditableLine) => ({
+    service: l.service, productService: l.productService, description: l.description,
+    rate: l.rate, qty: l.qty, periodConfirmed: l.periodReviewed === true,
+  });
+  return {
+    tabLines: included.filter(l => l.service !== 'ND').map(toApiLine),
+    tacLines: included.filter(l => l.service === 'ND').map(toApiLine),
+  };
+}
+
+type GenerateOutcome =
+  | { state: 'idle' }
+  | { state: 'confirming' }
+  | { state: 'submitting' }
+  | { state: 'overlap'; warnings: string[] }
+  | { state: 'success'; tab?: { invoiceNo: string | null; total: number }; tac?: { invoiceNo: string | null; total: number } }
+  | { state: 'error'; message: string };
+
+function InvoiceDraftCard({ preview, onGenerated }: { preview: InvoicePreview; onGenerated: (summary: string) => void }) {
+  const [outcome, setOutcome] = useState<GenerateOutcome>({ state: 'idle' });
+  // One idempotency key per confirmation attempt (fresh each time the card
+  // moves from idle -> confirming), reused across an overlap-confirm retry
+  // of the SAME logical request — matches app/billing/page.tsx's own
+  // per-row key, which also stays stable across its retries.
+  const idempotencyKeyRef = useRef<string | null>(null);
+
+  const included = preview.lines.filter(l => l.include);
+  const { tab: totalTab, tac: totalTac } = preview.totals;
+  const blocked = included.length === 0 || preview.alreadyInvoicedThisCycle;
+
+  const submit = async (overlapConfirmed: boolean) => {
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = globalThis.crypto.randomUUID();
+    setOutcome({ state: 'submitting' });
+    const { tabLines, tacLines } = draftLinesToApiLines(preview.lines);
+    const fyeYear = preview.fyeCycle ? parseInt(preview.fyeCycle.split('.')[2] ?? '', 10) : undefined;
+    try {
+      const res = await fetch('/api/quickbooks/create-invoice', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: preview.companyName,
+          companyId: preview.companyId ?? undefined,
+          email: preview.email ?? undefined,
+          pic: preview.pic ?? undefined,
+          sendEmail: false,
+          tabLines, tacLines,
+          fyeMonth: preview.fyeMonth ?? undefined,
+          fyeYear: fyeYear && Number.isFinite(fyeYear) ? fyeYear : undefined,
+          fyeCycle: preview.fyeCycle || undefined,
+          idempotencyKey: idempotencyKeyRef.current,
+          overlapConfirmed,
+        }),
+      });
+      const json = await res.json();
+      if (res.status === 409 && json.overlapConfirmationRequired && !overlapConfirmed) {
+        const warnings = [...(json.overlapWarnings?.tab ?? []), ...(json.overlapWarnings?.tac ?? [])];
+        setOutcome({ state: 'overlap', warnings: warnings.length ? warnings : ['This invoice period overlaps one already on file.'] });
+        return;
+      }
+      if (!res.ok) {
+        setOutcome({ state: 'error', message: json.error || `Request failed (${res.status})` });
+        return;
+      }
+      const summaryParts: string[] = [];
+      if (json.tab) summaryParts.push(`TAB #${json.tab.invoiceNo ?? '?'} · S$${(json.tab.total ?? 0).toLocaleString()}`);
+      if (json.tac) summaryParts.push(`TAC #${json.tac.invoiceNo ?? '?'} · S$${(json.tac.total ?? 0).toLocaleString()}`);
+      setOutcome({ state: 'success', tab: json.tab, tac: json.tac });
+      onGenerated(`已生成 ${preview.companyName} 的发票：${summaryParts.join(' · ') || '无新增品项'}`);
+    } catch (err) {
+      setOutcome({ state: 'error', message: err instanceof Error ? err.message : '网络错误，请重试。' });
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 460 }}>
+      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <FileCheck2 size={14} color="#1e3a5f" style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+          <div style={{ fontSize: 10.5, color: '#94a3b8' }}>UEN {preview.uen ?? '—'} · FYE {preview.fyeCycle || preview.fyeMonth || '—'}</div>
+        </div>
+        {preview.alreadyInvoicedThisCycle && (
+          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>ALREADY INVOICED</span>
+        )}
+      </div>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+        <thead>
+          <tr style={{ background: '#fbfcfd' }}>
+            <th style={{ textAlign: 'left', padding: '6px 14px', color: '#94a3b8', fontWeight: 700, fontSize: 10 }}>SERVICE</th>
+            <th style={{ textAlign: 'right', padding: '6px 14px', color: '#94a3b8', fontWeight: 700, fontSize: 10 }}>AMOUNT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {included.length === 0 && (
+            <tr><td colSpan={2} style={{ padding: '12px 14px', color: '#94a3b8', textAlign: 'center' }}>Nothing due this cycle.</td></tr>
+          )}
+          {included.map((line, i) => (
+            <tr key={i} style={{ borderTop: '1px solid #f1f5f9' }}>
+              <td style={{ padding: '7px 14px', color: '#334155' }}>
+                {line.service}
+                {line.reason && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>{line.reason}</div>}
+              </td>
+              <td style={{ padding: '7px 14px', textAlign: 'right', color: '#173b61', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>S${(line.qty * line.rate).toLocaleString()}</td>
+            </tr>
+          ))}
+        </tbody>
+        {included.length > 0 && (
+          <tfoot>
+            {totalTab > 0 && <tr style={{ borderTop: '1px solid #eef2f7' }}><td style={{ padding: '7px 14px', fontWeight: 750, color: '#173b61' }}>TAB Total</td><td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 800, color: '#173b61' }}>S${totalTab.toLocaleString()}</td></tr>}
+            {totalTac > 0 && <tr><td style={{ padding: '7px 14px', fontWeight: 750, color: '#173b61' }}>TAC Total</td><td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 800, color: '#173b61' }}>S${totalTac.toLocaleString()}</td></tr>}
+          </tfoot>
+        )}
+      </table>
+
+      {preview.warnings.length > 0 && (
+        <div style={{ padding: '8px 14px', background: '#fffbeb', borderTop: '1px solid #fde68a', fontSize: 10.5, color: '#92400e' }}>
+          {preview.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+        </div>
+      )}
+
+      <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7' }}>
+        {outcome.state === 'success' ? (
+          <div style={{ fontSize: 11.5, color: '#15803d', fontWeight: 700 }}>
+            ✓ Generated{outcome.tab ? ` — TAB #${outcome.tab.invoiceNo ?? '?'}` : ''}{outcome.tac ? ` — TAC #${outcome.tac.invoiceNo ?? '?'}` : ''}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOutcome({ state: 'confirming' })}
+            disabled={blocked}
+            title={preview.alreadyInvoicedThisCycle ? 'Already invoiced this cycle' : included.length === 0 ? 'Nothing due this cycle' : undefined}
+            style={{
+              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+              cursor: blocked ? 'not-allowed' : 'pointer',
+              background: blocked ? '#e2e8f0' : '#0f766e',
+              color: blocked ? '#94a3b8' : '#fff',
+            }}
+          >
+            Generate Invoice
+          </button>
+        )}
+      </div>
+
+      {(outcome.state === 'confirming' || outcome.state === 'submitting' || outcome.state === 'overlap' || outcome.state === 'error') && (
+        <GenerateConfirmModal
+          preview={preview}
+          outcome={outcome}
+          onCancel={() => setOutcome({ state: 'idle' })}
+          onConfirm={() => void submit(outcome.state === 'overlap')}
+        />
+      )}
+    </div>
+  );
+}
+
+function GenerateConfirmModal({ preview, outcome, onCancel, onConfirm }: {
+  preview: InvoicePreview;
+  outcome: Extract<GenerateOutcome, { state: 'confirming' | 'submitting' | 'overlap' | 'error' }>;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const included = preview.lines.filter(l => l.include);
+  const submitting = outcome.state === 'submitting';
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }} onClick={submitting ? undefined : onCancel}>
+      <div style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FileCheck2 size={16} color="#1e3a5f" />
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b', flex: 1 }}>
+            {outcome.state === 'overlap' ? 'Period overlap — confirm anyway?' : 'Confirm invoice generation'}
+          </div>
+          {!submitting && <button onClick={onCancel} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={16} /></button>}
+        </div>
+
+        <div style={{ padding: '14px 18px' }}>
+          <div style={{ fontSize: 12.5, color: '#334155', marginBottom: 10 }}>
+            This will create a real invoice in QuickBooks for <strong>{preview.companyName}</strong> — FYE {preview.fyeCycle || preview.fyeMonth}.
+          </div>
+
+          {outcome.state === 'overlap' && (
+            <div style={{ marginBottom: 10, padding: '9px 11px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 11.5, color: '#92400e' }}>
+              {outcome.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
+              <div style={{ marginTop: 4, fontWeight: 700 }}>Generate anyway?</div>
+            </div>
+          )}
+
+          {outcome.state === 'error' && (
+            <div style={{ marginBottom: 10, padding: '9px 11px', background: '#fff7f7', border: '1px solid #fecaca', borderRadius: 8, fontSize: 11.5, color: '#b91c1c' }}>
+              {outcome.message}
+            </div>
+          )}
+
+          <div style={{ border: '1px solid #eef2f7', borderRadius: 8, overflow: 'hidden' }}>
+            {included.map((line, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '7px 11px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none', fontSize: 11.5 }}>
+                <span style={{ color: '#475569' }}>{line.service}</span>
+                <span style={{ fontWeight: 700, color: '#173b61', fontVariantNumeric: 'tabular-nums' }}>S${(line.qty * line.rate).toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, padding: '12px 18px', borderTop: '1px solid #eef2f7' }}>
+          <button onClick={onCancel} disabled={submitting} style={{ flex: 1, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer' }}>Cancel</button>
+          <button onClick={onConfirm} disabled={submitting} style={{ flex: 1, border: 'none', background: submitting ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 750, cursor: submitting ? 'wait' : 'pointer' }}>
+            {submitting ? 'Generating…' : outcome.state === 'overlap' ? 'Confirm anyway' : 'Confirm & Generate'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -406,7 +644,7 @@ export default function MyTasksPage() {
         body: JSON.stringify({ messages: next, context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId, viewAs: viewAsEmail || undefined }),
       });
       const json = await res.json();
-      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。' }]);
+      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined }]);
       loadConversations(); // pick up the auto-derived title / updated_at reorder
     } catch {
       setChatMessages(current => [...current, { role: 'assistant', content: '网络错误，请重试。' }]);
@@ -623,7 +861,15 @@ export default function MyTasksPage() {
                         }}
                       >
                         {message.role === 'assistant'
-                          ? <RichText text={message.content} onNav={href => { if (href.startsWith('/')) window.location.href = href; else window.open(href, '_blank', 'noopener,noreferrer'); }} />
+                          ? <>
+                              <RichText text={message.content} onNav={href => { if (href.startsWith('/')) window.location.href = href; else window.open(href, '_blank', 'noopener,noreferrer'); }} />
+                              {message.invoicePreview && (
+                                <InvoiceDraftCard
+                                  preview={message.invoicePreview}
+                                  onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
+                                />
+                              )}
+                            </>
                           : message.content}
                       </div>
                     ))}
