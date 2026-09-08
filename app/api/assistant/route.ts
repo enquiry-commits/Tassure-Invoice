@@ -435,8 +435,13 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
   const t = text.toLowerCase().trim();
 
   // Current-page help: the widget sends its location so vague questions do
-  // not fall through to a generic answer.
-  if (/(这个页面|这页|当前页面|这里).*(怎么用|做什么|有什么|如何|说明|帮助)|(怎么用|如何使用).*(这个页面|这页|这里)/.test(t)) {
+  // not fall through to a generic answer. English branch added 2026-09-08
+  // after Vincent screenshotted the My Tasks empty state's own "How does
+  // this work?" suggestion button silently missing every branch and
+  // landing on the generic capability list — this router is otherwise
+  // Chinese-oriented, but that button's exact English text is now real,
+  // clickable UI, not just something a user might type, so it has to work.
+  if (/(这个页面|这页|当前页面|这里).*(怎么用|做什么|有什么|如何|说明|帮助)|(怎么用|如何使用).*(这个页面|这页|这里)|how (does|do i use) this (page|work)/.test(t)) {
     return currentPageHelp(context?.pathname);
   }
 
@@ -448,7 +453,20 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
   // exact rule-based sentence lib/my-tasks-brief.ts's own generateMyTasksBrief()
   // falls back to — never a second, differently-worded summary of the
   // same data.
-  if (/(我的任务|我今天|今天.*优先|优先.*处理|my tasks?|what should i (do|focus)|我该(做|处理)什么|我要处理什么|需要处理什么)/.test(t)) {
+  //
+  // Widened same day, after Vincent screenshotted 2 of the My Tasks empty
+  // state's own real suggestion buttons failing in production (no
+  // ANTHROPIC_API_KEY set there, confirmed by that exact screenshot, so
+  // this router — not Claude — is what actually answers): "What should I
+  // prioritize today?" matched nothing (missing "prioritize" as a verb —
+  // "do"/"focus" aren't the only ways to ask this), and "Any overdue AR?"
+  // was quietly stolen by the due-soon branch further below (its own
+  // /(到期|due|...)/ pattern matches the "due" INSIDE "overdue" as a
+  // substring) — answering with a generic company-wide due-soon list
+  // instead of this specific person's own overdue items. Both fixed by
+  // adding these exact phrasings here, checked before due-soon can ever
+  // see them.
+  if (/(我的任务|我今天|今天.*优先|优先.*处理|my tasks?|what should i (do|focus|prioritize|work on)|prioriti[sz]e today|我该(做|处理)什么|我要处理什么|需要处理什么|overdue ar|any overdue|my overdue|哪些逾期|逾期.*ar)/.test(t)) {
     if (!account) return '我认不出你目前的登录账号，请确认已登录后再试一次。\n\n[打开 My Tasks](/my-tasks)';
     const tasks = await computeMyTasks(account);
     const brief = await generateMyTasksBrief(tasks, account.name);

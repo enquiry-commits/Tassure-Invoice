@@ -113,6 +113,21 @@ genuinely functional now, not just deployed. Real accumulated behavioral
 data (Activity Insights' own "top pages/actions" becoming meaningfully
 populated) still needs real usage over time — that's expected, not a bug.
 
+**`ANTHROPIC_API_KEY` has never been set in Vercel production** (confirmed
+directly via the Vercel API's env list, 2026-09-08 — the key is simply
+absent from the project's environment variables). Every AI-assistant
+feature shipped this session (`app/api/assistant`'s Claude tool-use
+engine, `my_tasks_summary`/`my_activity_pattern`/`remember_this` tools,
+`lib/my-tasks-brief.ts`'s Claude-phrased daily briefing) is CODE-COMPLETE
+and degrades correctly to its own rule-based/keyword-matching fallback —
+nothing is broken — but production has only ever run that fallback, never
+real Claude reasoning. This is very likely the real substance behind
+Vincent's "现在的回答还是很基础的AI模型，都是固定嵌套式的回答" feedback —
+the fallback IS exactly that, by design. Setting the key in Vercel is the
+one remaining step to actually turn this on, and it's not something
+Claude Code can do — it needs a real Anthropic API key, which only
+Vincent can provide.
+
 ## Known risks (not bugs — things worth remembering before relying on data)
 
 - **Billing draft auto-fill accuracy varies by field** — Secretary ~85%
