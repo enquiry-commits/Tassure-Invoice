@@ -314,7 +314,7 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
   return (
     <DataCard title="Outstanding" icon={<Receipt size={15} color="#fff" />} count={outstanding.length} empty="No outstanding balance on TAB/TAC/TAO for this company.">
       <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px' }}>
-        <div>Invoice</div><div>Company</div><div>Aging</div><div>Total Balance</div><div>Due Date</div><div>Owner</div>
+        <div>Invoice No.</div><div>Company</div><div>Aging</div><div>Total Balance</div><div>Due Date</div><div>Owner</div>
       </div>
       {outstanding.map((r, i) => {
         // "欠下多久了...主要显示是最久的是欠了多久时间，比如最久的是 91+，
@@ -325,8 +325,15 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
         const oldestLabel = oldest ? AGING_BUCKETS.find(b => b.key === oldest)?.label : null;
         return (
           <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
-            <div style={{ fontSize: 11, lineHeight: 1.6 }}>
-              {r.unpaidInvoices.length ? r.unpaidInvoices.map(inv => <div key={inv.invoiceNo}>#{inv.invoiceNo}</div>) : '—'}
+            {/* Vincent, 2026-09-08: "Invoice 换成 Invoice No. , 格式要参考
+                Invoice No. 列的字体格式" — same page's own Invoices section
+                again: its Invoice No. cell is bare inherited text with no
+                "#" prefix, so this drops both the earlier custom font-size
+                override and the "#" this column used to add. Still stacks
+                one line per unpaid invoice — a structural necessity, not a
+                styling deviation, same reasoning as Due Date below. */}
+            <div>
+              {r.unpaidInvoices.length ? r.unpaidInvoices.map(inv => <div key={inv.invoiceNo}>{inv.invoiceNo}</div>) : '—'}
             </div>
             {/* Vincent, 2026-09-08: "Source 换成 Company（和截图那边一样，
                 包括字体和格式大小）" — points at this exact page's own
