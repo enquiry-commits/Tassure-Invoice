@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { RichText } from '@/components/assistant/ChatRichText';
-import { getPageGuide } from '@/components/AssistantWidget';
 import { fmtDate } from '@/lib/date';
 
 type SessionUser = { email: string; name: string; restrictedTo?: string | null; admin?: boolean };
@@ -229,7 +228,6 @@ export default function MyTasksPage() {
   const [chatBusy, setChatBusy] = useState(false);
   const [chatLoadingThread, setChatLoadingThread] = useState(false);
   const chatListRef = useRef<HTMLDivElement>(null);
-  const guide = getPageGuide('/my-tasks');
 
   const loadConversations = useCallback(async () => {
     try {
@@ -449,9 +447,25 @@ export default function MyTasksPage() {
                 // exists does the input move down to a bottom-pinned bar
                 // (the branch below), with messages filling the space above.
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, background: '#fff' }}>
+                  {/* Vincent, from a screenshot of his own copy-editing pass
+                      (comparing against a real ChatGPT "准备好了，随时开始"
+                      empty state): "这个内容...可以简单一点，放成英文的
+                      （准备好了，随时开始）就可以了...这个不需要：可以按你
+                      自己的登录账号..." — dropped the descriptive Chinese
+                      paragraph entirely, title/subtitle down to just "My
+                      Tasks" / "Ready when you are.", and shortened the 3
+                      suggestion buttons — his own preferred, more
+                      ChatGPT-like of the two versions he compared
+                      ("如果你希望整体更像 ChatGPT 的 AI 助手界面...第二版
+                      会更简洁、自然，也没有那么强的'系统说明感'"). No longer
+                      pulls from AssistantWidget's shared getPageGuide() —
+                      that guide's fuller Chinese explanatory copy is still
+                      right for the floating widget (matches every other
+                      page's guide there), just not for this page's own new,
+                      deliberately minimal empty state. */}
                   <Bot size={28} color="#94a3b8" style={{ marginBottom: 10 }} />
-                  <div style={{ fontSize: 15, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks 助手</div>
-                  <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20, lineHeight: 1.6, maxWidth: 480, textAlign: 'center' }}>{guide.summary}</div>
+                  <div style={{ fontSize: 15, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
+                  <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20 }}>Ready when you are.</div>
                   <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 560 }}>
                     <input
                       value={chatInput}
@@ -470,7 +484,7 @@ export default function MyTasksPage() {
                     </button>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 14, maxWidth: 560 }}>
-                    {guide.suggestions.map(s => (
+                    {['What should I prioritize today?', 'Any overdue AR?', 'How does this work?'].map(s => (
                       <button key={s} onClick={() => void sendChatMessage(s)} disabled={chatBusy}
                         style={{ border: '1px solid #d7e1eb', borderRadius: 999, background: '#fff', color: '#31506f', padding: '6px 12px', fontSize: 12, fontWeight: 650, cursor: chatBusy ? 'wait' : 'pointer' }}>
                         {s}
