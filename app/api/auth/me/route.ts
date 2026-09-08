@@ -20,6 +20,7 @@ export async function GET() {
       restrictedTo: account.restrictedTo ?? null,
       admin: account.admin ?? false,
       canViewReports: account.canViewReports ?? false,
+      canViewActivityInsights: account.canViewActivityInsights ?? false,
     },
   });
 }

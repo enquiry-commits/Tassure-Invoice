@@ -104,6 +104,15 @@ Company 360 / My Tasks are freshly shipped (2026-08-31) and haven't had a
 real post-deploy login check yet — see Pending Improvements, not listed as
 an issue since nothing is known wrong, just not yet confirmed right.
 
+Activity Insights (`/activity-insights`, shipped 2026-09-08) is deployed
+but **`user_activity_events` (`scripts/add-user-activity-events.sql`) has
+not been run yet** — the write/read code degrades gracefully either way
+(confirmed directly: writes no-op, reads return an honest 0-event summary,
+see `docs/INVARIANTS.md` INV-DATA-016), so nothing is broken, but the page
+and the assistant's `my_activity_pattern` tool will show "no data" until
+Vincent runs that migration AND real usage accumulates afterward — remove
+this note once the migration has run and real events are visible.
+
 ## Known risks (not bugs — things worth remembering before relying on data)
 
 - **Billing draft auto-fill accuracy varies by field** — Secretary ~85%

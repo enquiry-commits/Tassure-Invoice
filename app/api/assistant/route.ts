@@ -4,6 +4,7 @@ import { normalize } from '@/lib/company-name';
 import { getRequestAccount } from '@/lib/request-account';
 import { computeMyTasks } from '@/lib/my-tasks-data';
 import { buildTaskDigest, generateMyTasksBrief } from '@/lib/my-tasks-brief';
+import { getPersonActivitySummary } from '@/lib/activity-data';
 import type { ApprovedAccount } from '@/lib/approved-accounts';
 
 /**
@@ -257,6 +258,30 @@ async function myTasksSummary(account: ApprovedAccount | null) {
   return { signed_in: true as const, staff_name: account.name, ...buildTaskDigest(tasks) };
 }
 
+// Vincent, 2026-09-08, the same day, pushing further than AR/Late Filing:
+// "为什么这个用户每天会打开这个页面，为什么会时常在这个页面操作，为什么
+// 每次关注某些特定的更新" — real observed page-visit/action history
+// (lib/activity-data.ts, user_activity_events), available to anyone about
+// THEMSELVES (no canViewActivityInsights gate — that flag is for seeing
+// OTHER people's data; this is "tell me about my own habits", same
+// self-only reasoning as my_tasks_summary above). This table only
+// accumulates from 2026-09-08 onward — a brand-new account or a quiet
+// week genuinely has little or nothing to report, and this tool says so
+// honestly rather than the model inventing a plausible-sounding pattern.
+async function myActivityPattern(account: ApprovedAccount | null) {
+  if (!account) return { signed_in: false as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  const summary = await getPersonActivitySummary(account.email, 30);
+  if (summary.totalEvents === 0) {
+    return { signed_in: true as const, staff_name: account.name, no_data: true as const, message: 'No activity has been recorded for this person yet — tracking only started 2026-09-08 and has no historical data. Say so plainly rather than guessing a pattern.' };
+  }
+  return {
+    signed_in: true as const, staff_name: account.name, range_days: summary.rangeDays, total_events: summary.totalEvents,
+    top_pages: summary.topPages.map(p => ({ page: p.pathname, visits: p.visits, last_visited: p.lastVisitedAt })),
+    top_actions: summary.topActions.map(a => ({ action: a.eventType, count: a.count, last_at: a.lastAt })),
+    hour_of_day_distribution: summary.hourOfDayDistribution,
+  };
+}
+
 // ── Engine A: Claude with tool use ───────────────────────────────────────────
 function systemPrompt(context?: AssistantContext, account?: ApprovedAccount | null) {
   return `You are the in-app assistant of the Tassure Corporate Services System (a Singapore corporate-services billing dashboard used by Tassure Asia staff). Answer in the user's language (usually Chinese). Be concise and concrete.
@@ -269,7 +294,7 @@ Current user location:
 - Path: ${context?.pathname ?? 'unknown'}
 When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location above.
 
-Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}. Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. Never guess whose tasks are whose from name alone.
+Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}. Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Never guess whose tasks or habits are whose from name alone.
 
 Key workflows:
 - AR pipeline: TeamWork determines each company's FYE cycle → ar_reminder batches auto-generate daily (rolling 6 months) → staff review → Billing Drafts. Deleting an AR row is a soft delete (won't be auto-recreated; Add Manual restores it).
@@ -288,6 +313,7 @@ const CLAUDE_TOOLS = [
   { name: 'nd_lookup', description: 'Look up a nominee director by person name: their active company appointments.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   { name: 'automation_health', description: 'Read live automation job health and the open integration-exception count.', input_schema: { type: 'object', properties: {} } },
   { name: 'my_tasks_summary', description: "The currently logged-in staff member's own overdue/due-soon AR Reminder items and Late Filing flags (only theirs, resolved server-side from their real session — no arguments needed and none can override whose tasks are returned).", input_schema: { type: 'object', properties: {} } },
+  { name: 'my_activity_pattern', description: "The currently logged-in staff member's own real page-visit/action history over the last 30 days (most-visited pages, most common key actions, hour-of-day activity) — for questions about their own habits, not anyone else's. May report no_data if tracking hasn't accumulated enough history yet.", input_schema: { type: 'object', properties: {} } },
 ];
 
 async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {
@@ -296,6 +322,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'nd_lookup') return ndLookup(String(input.name ?? ''));
   if (name === 'automation_health') return automationHealth();
   if (name === 'my_tasks_summary') return myTasksSummary(account);
+  if (name === 'my_activity_pattern') return myActivityPattern(account);
   return { error: 'unknown tool' };
 }
 
@@ -383,6 +410,24 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
     const tasks = await computeMyTasks(account);
     const brief = await generateMyTasksBrief(tasks, account.name);
     return `${brief}\n\n[打开 My Tasks 查看详情](/my-tasks)`;
+  }
+
+  // Vincent, 2026-09-08, same day: "为什么这个用户每天会打开这个页面，为什
+  // 么会时常在这个页面操作" — real recorded page-visit/action history
+  // (lib/activity-data.ts), only from the day this tracking shipped
+  // onward. Honest about having nothing to say yet rather than guessing a
+  // pattern from no data — matches my_activity_pattern's own no_data path
+  // in the Claude engine above.
+  if (/(我的习惯|使用习惯|我最常|我常常|我经常|为什么我.*(打开|访问|操作)|我什么时候最活跃|activity pattern|my habits?)/.test(t)) {
+    if (!account) return '我认不出你目前的登录账号，请确认已登录后再试一次。';
+    const summary = await getPersonActivitySummary(account.email, 30);
+    if (summary.totalEvents === 0) return '这项追踪是从今天新上线的，目前还没有累积到足够的真实使用记录，暂时回答不了这个问题——用一段时间之后再问我。';
+    const topPage = summary.topPages[0];
+    const topAction = summary.topActions[0];
+    const lines = [`过去${summary.rangeDays}天，你一共有${summary.totalEvents}次记录。`];
+    if (topPage) lines.push(`你最常打开的页面是 ${topPage.pathname}（${topPage.visits}次）。`);
+    if (topAction) lines.push(`你最常做的操作是 ${topAction.eventType}（${topAction.count}次）。`);
+    return lines.join(' ');
   }
 
   if (/(自动化|automation|cron|定时任务|同步任务|项目需要处理|今天.*处理|任务.*正常)/.test(t)) {

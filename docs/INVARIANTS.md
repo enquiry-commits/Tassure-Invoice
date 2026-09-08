@@ -649,6 +649,23 @@ again.
   (multiple tabs/sections keyed by system or category) before assuming a
   single customer-name key is enough.
 
+- **INV-DATA-016** — `user_activity_events` (added 2026-09-08, real
+  page-visit/key-action behavioral tracking — `lib/activity-data.ts`)
+  starts EMPTY at the moment it's deployed and can never be backfilled —
+  unlike every other table in this app, there is no prior system (no
+  Google Sheet, no TeamWork field, no QuickBooks history) that ever
+  recorded "who visited what page when" before this shipped. Any consumer
+  of this table (the Activity Insights page, the assistant's
+  `my_activity_pattern` tool, any future one) MUST treat a 0-row result as
+  "not enough history yet," never as evidence the tracking is broken or
+  that the person genuinely does nothing — and must never invent a
+  plausible-sounding usage pattern to fill the gap. `pageAll()`'s own
+  `{data} = await ...` destructuring (ignores `.error`) means a query
+  against a table that doesn't exist yet ALSO silently resolves to an
+  empty array rather than throwing — confirmed directly before the SQL
+  migration was even run, so the honest "no data" UI path was exercised
+  and verified before real data ever existed to distinguish the two cases.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

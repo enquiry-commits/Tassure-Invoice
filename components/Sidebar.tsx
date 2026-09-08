@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText, ListChecks, Palette, BarChart3 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, ListChecks, Palette, BarChart3, Activity } from 'lucide-react';
 
 // `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
 // yet (see NavImg below) — currently Proposal Generator (a link out to a
@@ -112,6 +112,12 @@ const ADMIN_NODE: Node = { label: 'Appearance Settings', href: '/admin/appearanc
 // for leadership, deliberately not part of `tree` for the same reason as
 // ADMIN_NODE above (only a handful of accounts ever see it).
 const REPORTS_NODE: Node = { label: 'Reports', href: '/reports', icon: BarChart3 };
+
+// Spliced in for accounts with `canViewActivityInsights` (2026-09-08) —
+// real click-path/behavioral analytics, per-person and company-wide. Kept
+// separate from REPORTS_NODE for the same reason `canViewActivityInsights`
+// is its own flag (see that field's own comment in lib/approved-accounts.ts).
+const ACTIVITY_INSIGHTS_NODE: Node = { label: 'Activity Insights', href: '/activity-insights', icon: Activity };
 
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
@@ -350,7 +356,7 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
   );
 }
 
-export default function Sidebar({ restrictedTo, isAdmin, canViewReports }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean }) {
+export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canViewActivityInsights }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean; canViewActivityInsights?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
   let level1 = level1For(restrictedTo);
   if (canViewReports && !restrictedTo) {
@@ -358,6 +364,16 @@ export default function Sidebar({ restrictedTo, isAdmin, canViewReports }: { res
     level1 = myTasksIdx >= 0
       ? [...level1.slice(0, myTasksIdx + 1), REPORTS_NODE, ...level1.slice(myTasksIdx + 1)]
       : [...level1, REPORTS_NODE];
+  }
+  if (canViewActivityInsights && !restrictedTo) {
+    // Right after Reports when both are present (keeps the two leadership-
+    // analytics entries adjacent), else right after My Tasks like Reports
+    // itself does — never assumes canViewReports is also set, even though
+    // today's real accounts happen to have both.
+    const reportsIdx = level1.findIndex(n => n.href === '/reports');
+    const myTasksIdx = level1.findIndex(n => n.href === '/my-tasks');
+    const insertAt = reportsIdx >= 0 ? reportsIdx + 1 : myTasksIdx >= 0 ? myTasksIdx + 1 : level1.length;
+    level1 = [...level1.slice(0, insertAt), ACTIVITY_INSIGHTS_NODE, ...level1.slice(insertAt)];
   }
   if (isAdmin && !restrictedTo) level1 = [...level1, ADMIN_NODE];
 

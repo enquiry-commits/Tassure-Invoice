@@ -26,6 +26,7 @@ import {
   type DraftLike,
   type DraftOpenResult,
 } from '@/lib/draft-helper-client';
+import { logActivity } from '@/lib/activity-client';
 
 const FYE_MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -383,6 +384,9 @@ export default function EmailDraftWorkbenchPage() {
       };
     });
     const results = await openDraftsInOutlook(prepared, commonFiles);
+    // Vincent, 2026-09-08: "现在每个用户进入系统后的点击操作路径" — a key
+    // action, not just a page view: this is the actual batch send trigger.
+    logActivity('create_outlook_drafts', { count: drafts.length, successCount: results.filter(r => r.ok).length });
     await Promise.all(results.map(async (result, index) => {
       if (!result.ok) return;
       try {

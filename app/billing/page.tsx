@@ -15,6 +15,7 @@ import MetricCard from '@/components/MetricCard';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
+import { logActivity } from '@/lib/activity-client';
 import { fmtDate, fmtMonth, toDisplayDate, toIsoDateValue, todaySGT } from '@/lib/date';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
@@ -1895,6 +1896,11 @@ function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: str
         ...(/Customer not found in QB/i.test(json.errors?.tac ?? '') ? (['TAC'] as const) : []),
       ]);
       if (json.success) {
+        // Vincent, 2026-09-08: "现在每个用户进入系统后的点击操作路径" — a
+        // key action, not just a page view: this is the moment a real
+        // invoice actually gets created, not merely that someone opened
+        // Billing Drafts.
+        logActivity('generate_invoice', { companyName: c.companyName, tab: !!json.tab, tac: !!json.tac });
         if (json.tab?.invoiceNo || json.tac?.invoiceNo) {
           setInvoiceNumbers(current => ({
             TAB: json.tab?.invoiceNo ? String(json.tab.invoiceNo) : current.TAB,
@@ -4125,6 +4131,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
     if (id == null) return;
     setPendingDeleteId(null);
     await fetch('/api/ar-reminder', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) });
+    logActivity('ar_delete', { id });
     setRecords(prev => prev.filter(r => r.id !== id));
     setModalRecord(prev => prev && prev.id === id ? null : prev);
   }, [pendingDeleteId]);

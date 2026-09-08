@@ -7,8 +7,9 @@ import Sidebar from '@/components/Sidebar';
 import MobileNav from '@/components/MobileNav';
 import AssistantWidget from '@/components/AssistantWidget';
 import { applyThemeTokens } from '@/lib/apply-theme';
+import { logActivity } from '@/lib/activity-client';
 
-type SessionUser = { email?: string; name: string; restrictedTo?: string | null; admin?: boolean; canViewReports?: boolean };
+type SessionUser = { email?: string; name: string; restrictedTo?: string | null; admin?: boolean; canViewReports?: boolean; canViewActivityInsights?: boolean };
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -32,6 +33,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     fetch('/api/appearance-settings').then(response => response.ok ? response.json() : null)
       .then(result => result?.tokens && applyThemeTokens(result.tokens)).catch(() => {});
   }, [isAuthPage]);
+
+  // Vincent, 2026-09-08: "现在每个用户进入系统后的点击操作路径" — every
+  // route change, for every real page, logged once here rather than
+  // instrumented per-page — mounted at the app shell so this covers the
+  // whole site automatically as new pages get added, not just the ones
+  // someone remembered to add a tracking call to. Login/auth pages excluded
+  // (not meaningful — everyone hits them once, logged out).
+  useEffect(() => {
+    if (isAuthPage) return;
+    logActivity('page_view');
+  }, [pathname, isAuthPage]);
 
   async function logout() {
     // Sidebar group expand/collapse choices live in localStorage, which
@@ -67,7 +79,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <Sidebar restrictedTo={user?.restrictedTo ?? null} isAdmin={user?.admin ?? false} canViewReports={user?.canViewReports ?? false} />
+        <Sidebar restrictedTo={user?.restrictedTo ?? null} isAdmin={user?.admin ?? false} canViewReports={user?.canViewReports ?? false} canViewActivityInsights={user?.canViewActivityInsights ?? false} />
         <main style={{ flex: 1, overflowY: 'auto', background: '#f1f5f9' }}><div className="p-6">{children}</div></main>
       </div>
     </>

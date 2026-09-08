@@ -27,6 +27,15 @@ export type ApprovedAccount = {
   // Yee Soon) but are conceptually unrelated permissions, and collapsing
   // them would silently couple their futures together.
   canViewReports?: boolean;
+  // Gates /admin/activity — real click-path/action behavioral analytics
+  // (lib/activity-data.ts, user_activity_events), per-person and
+  // company-wide. Added 2026-09-08, Vincent: "Vincent 和管理层，可以调用
+  // 全部的数据来继续单独人员的了解，又或者是整体公司人员的了解" — kept as
+  // its own flag rather than folded into canViewAsOthers/canViewReports
+  // for the exact reason those two were kept separate from each other
+  // (see canViewAsOthers' own comment): same 4 people today, conceptually
+  // unrelated permission, don't couple their futures together.
+  canViewActivityInsights?: boolean;
   // When set, this account is confined to exactly this one page (path +
   // required query params, e.g. AR Reminder is the 'ar' tab on /billing —
   // see components/Sidebar.tsx's tree for the canonical href). Enforced in
@@ -37,15 +46,15 @@ export type ApprovedAccount = {
 };
 
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
-  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true, canViewAsOthers: true, canViewReports: true },
-  { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', canViewAsOthers: true, canViewReports: true },
-  { name: 'Samuell Ng', email: 'samuellng@tassure.com', canViewAsOthers: true, canViewReports: true },
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
+  { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
+  { name: 'Samuell Ng', email: 'samuellng@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
   // New login account, added 2026-09-02 specifically to grant this
   // permission (Vincent confirmed the real login email directly: "准确是
   // Tan Yee Soon (yeesoon@tassure.com)") — previously only existed in
   // lib/staff-directory.ts (used for PIC-matching text, not login) with no
   // way to actually sign in at all.
-  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', canViewAsOthers: true, canViewReports: true },
+  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
   { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', qbLocations: { TAB: 'Lim Hoe Chyi', TAC: 'Lim Hoe Chyi' } },
   { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', qbLocations: { TAB: 'Hoo Seng Xin', TAC: 'Seng Xin' } },
   { name: 'Jenny Lai', email: 'jennylai@tassure.com', qbLocations: { TAB: 'Jenny Lai', TAC: 'Jenny Lai' } },

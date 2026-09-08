@@ -7,6 +7,7 @@ import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { fmtDate as fmtDateStr, toDisplayDate, toIsoDateValue } from '@/lib/date';
 import { formatStaffName } from '@/lib/staff-directory';
+import { logActivity } from '@/lib/activity-client';
 
 const FYE_MONTHS = ['ALL','JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
@@ -329,6 +330,9 @@ export default function LateFilingPage() {
       alert(json.error ?? 'Unable to mark this record as resolved.');
       return;
     }
+    // Vincent, 2026-09-08: "现在每个用户进入系统后的点击操作路径" — a key
+    // action, not just a page view.
+    logActivity('late_filing_resolve', { companyName: row.company_name });
     load();
   }
 
