@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText, ListChecks, Palette, BarChart3, Activity, BrainCircuit } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, ListChecks, BarChart3, Activity, ShieldCheck } from 'lucide-react';
 
 // `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
 // yet (see NavImg below) — currently Proposal Generator (a link out to a
@@ -102,10 +102,16 @@ const tree: Node[] = [
   { label: 'Proposal Generator', href: '/sso/proposal-generator', img: '/nav/proposal-generator.png', external: true },
 ];
 
-// Appended only for the one account with admin:true (lib/approved-accounts.ts)
-// — not part of `tree` itself, so groupIds()/level1For() (used by every
-// other account) stay untouched.
-const ADMIN_NODE: Node = { label: 'Appearance Settings', href: '/admin/appearance', icon: Palette };
+// Appended only for the one account with admin:true (Vincent). Appearance
+// Settings and AI Learning are governance tools, grouped as level-2 entries
+// instead of competing with the system's operational level-1 navigation.
+const ADMIN_NODE: Node = {
+  id: 'admin', label: 'Admin', icon: ShieldCheck,
+  children: [
+    { label: 'Appearance Settings', href: '/admin/appearance' },
+    { label: 'AI Learning', href: '/ai-learning' },
+  ],
+};
 
 // Spliced in right after My Tasks (2026-09-03) for accounts with
 // `canViewReports` (lib/approved-accounts.ts) — customer-profile analytics
@@ -118,10 +124,10 @@ const REPORTS_NODE: Node = { label: 'Reports', href: '/reports', icon: BarChart3
 // separate from REPORTS_NODE for the same reason `canViewActivityInsights`
 // is its own flag (see that field's own comment in lib/approved-accounts.ts).
 const ACTIVITY_INSIGHTS_NODE: Node = { label: 'Activity Insights', href: '/activity-insights', icon: Activity };
-const AI_LEARNING_NODE: Node = { label: 'AI Learning', href: '/ai-learning', icon: BrainCircuit };
 
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
+const SIDEBAR_GROUP_IDS = [...groupIds(tree), ADMIN_NODE.id!];
 const firstLeaf = (n: Node): string => n.href ?? (n.children ? firstLeaf(n.children[0]) : '#');
 
 function findNode(nodes: Node[], href: string): Node | null {
@@ -289,7 +295,7 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
   // Collapsed by default — groups only open when a user actually clicks into
   // them (or previously chose to leave one open, remembered per-key below).
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(groupIds(tree).map(id => [id, false])));
+    Object.fromEntries(SIDEBAR_GROUP_IDS.map(id => [id, false])));
 
   useEffect(() => {
     setExpanded(prev => {
@@ -376,9 +382,9 @@ export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canView
     const insertAt = reportsIdx >= 0 ? reportsIdx + 1 : myTasksIdx >= 0 ? myTasksIdx + 1 : level1.length;
     level1 = [...level1.slice(0, insertAt), ACTIVITY_INSIGHTS_NODE, ...level1.slice(insertAt)];
   }
-  // AI Learning is intentionally Vincent-only and always the final sidebar
-  // item. It is a governance/review surface, not a general staff feature.
-  if (isAdmin && !restrictedTo) level1 = [...level1, ADMIN_NODE, AI_LEARNING_NODE];
+  // The complete Admin group is intentionally Vincent-only and remains the
+  // final level-1 item in the sidebar.
+  if (isAdmin && !restrictedTo) level1 = [...level1, ADMIN_NODE];
 
   useEffect(() => {
     if (localStorage.getItem('sidebar-collapsed') === 'true') setCollapsed(true);
