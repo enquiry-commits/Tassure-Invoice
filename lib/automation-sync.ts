@@ -30,7 +30,15 @@ export type AutomationSource =
   | 'ar_generate'
   | 'ar_workflow'
   | 'late_filing'
-  | 'quickbooks';
+  | 'quickbooks'
+  // Added 2026-09-08 — periodic background pattern detection for AI
+  // Learning (app/api/ai-learning/analyze-all/route.ts), so it can keep
+  // running unattended (Vincent: "最好是在我没有在线的时候，它也能不断的
+  // 在跑"). No hard DB constraint restricts this column's values
+  // (automation_sync_runs.source is plain text — confirmed against
+  // scripts/harden-automation.sql before adding this), so this union
+  // extension alone is enough, no migration needed.
+  | 'ai_learning';
 
 type JsonSummary = Record<string, unknown>;
 

@@ -55,6 +55,10 @@
     {
       "path": "/api/quickbooks/sync",
       "schedule": "30 19 * * *"
+    },
+    {
+      "path": "/api/ai-learning/analyze-all",
+      "schedule": "30 23 * * *"
     }
   ]
 }

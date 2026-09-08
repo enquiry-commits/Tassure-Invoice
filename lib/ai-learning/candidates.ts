@@ -35,6 +35,17 @@ export type LearningCandidate = {
 
 const FINAL_STATUSES = new Set<CandidateStatus>(['approved', 'rejected', 'dismissed']);
 
+// Auto-approval thresholds — see analyzeUserActivity's own comment on why
+// both are required and why they're set this high.
+const AUTO_APPROVE_MIN_CONFIDENCE = 0.9;
+const AUTO_APPROVE_MIN_DISTINCT_DAYS = 5;
+// Matches this codebase's existing convention for automated actors
+// (system:teamwork, system:late-filing, system:draft-send, ...) — never a
+// real person's email, so review_ai_learning_candidate's audit trail
+// (ai_learning_feedback.actor_email) always shows plainly that this
+// specific approval was automatic, not Vincent's.
+const AUTO_APPROVE_ACTOR = 'system:ai-learning-auto';
+
 export async function analyzeUserActivity(accountEmail: string, windowDays = 30): Promise<LearningCandidate[]> {
   const email = accountEmail.trim().toLowerCase();
   const days = Math.min(Math.max(windowDays, 7), 180);
@@ -86,7 +97,43 @@ export async function analyzeUserActivity(accountEmail: string, windowDays = 30)
     .upsert(rows, { onConflict: 'account_email,pattern_kind,pattern_key' })
     .select('*');
   if (error) throw new Error(error.message);
-  return (data ?? []) as LearningCandidate[];
+  const upserted = (data ?? []) as LearningCandidate[];
+
+  // Auto-approve only the highest-confidence, best-evidenced candidates —
+  // Vincent, 2026-09-08: "我希望AI可以自主学习...最好是在我没有在线的时
+  // 候，它也能不断的在跑" (reviewing every candidate himself was too slow).
+  // This does NOT remove human review — it only raises the bar past which
+  // review is skipped, and stays well short of "AI silently defines a
+  // person from one conversation" (the exact risk this whole
+  // controlled-learning design exists to prevent, see this file's own SQL
+  // migration comment, and docs/INVARIANTS.md INV-DATA-017). Both signals
+  // are required, not either: confidence >= 0.9 (not just "reasonably
+  // confident") AND distinct_days >= 5 (a real, sustained pattern, not a
+  // couple of lucky days) — short of both, a candidate stays in the human
+  // queue exactly as before, now with a one-click bulk-approve option
+  // (app/ai-learning/page.tsx) so review itself is faster, not skipped.
+  // Never touches a candidate a human already finalized — the upsert
+  // above already preserves an existing approved/rejected/dismissed
+  // status, so only observing/ready_for_review rows ever reach here.
+  const results: LearningCandidate[] = [];
+  for (const candidate of upserted) {
+    const autoApproveEligible = !FINAL_STATUSES.has(candidate.status)
+      && candidate.confidence >= AUTO_APPROVE_MIN_CONFIDENCE
+      && candidate.distinct_days >= AUTO_APPROVE_MIN_DISTINCT_DAYS;
+    if (!autoApproveEligible) { results.push(candidate); continue; }
+    try {
+      const approved = await reviewLearningCandidate({
+        candidate, actorEmail: AUTO_APPROVE_ACTOR, decision: 'approve',
+        note: `Auto-approved: confidence ${Math.round(candidate.confidence * 100)}% >= 90%, ${candidate.distinct_days} distinct days >= 5.`,
+      });
+      results.push(approved);
+    } catch {
+      // Auto-approval failing must never break the analysis pass itself —
+      // the candidate just stays exactly as upserted, in the human queue.
+      results.push(candidate);
+    }
+  }
+  return results;
 }
 
 export async function listLearningCandidates(

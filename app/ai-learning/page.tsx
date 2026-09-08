@@ -57,6 +57,7 @@ export default function AiLearningPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
+  const [bulkApproving, setBulkApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -135,6 +136,36 @@ export default function AiLearningPage() {
     }
   };
 
+  // "[全选高置信度项 → 一键通过] 按钮" — Vincent, 2026-09-08, on why full
+  // auto-approval isn't the answer but slow one-by-one review is also the
+  // wrong tradeoff. Everything reaching ready_for_review already cleared
+  // confidence>=0.75 + distinct_days>=3 (see review_ai_learning_candidate's
+  // own next_status logic) — approving each individually here is a
+  // deliberate choice to keep this a REAL per-candidate audit trail
+  // (ai_learning_feedback gets one row per candidate, actor_email is
+  // Vincent's own, same as if he'd clicked each one) rather than a single
+  // bulk endpoint that would blur who actually reviewed what.
+  const bulkApproveReady = async () => {
+    const ready = candidates.filter(candidate => candidate.status === 'ready_for_review' && mayReview(candidate));
+    if (!ready.length) return;
+    setBulkApproving(true);
+    setError(null);
+    try {
+      for (const candidate of ready) {
+        const response = await fetch(`/api/ai-learning/candidates/${candidate.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision: 'approve' }),
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || `Review failed for candidate ${candidate.id}`);
+        setCandidates(current => current.map(item => item.id === candidate.id ? body.candidate : item));
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : String(reason));
+    } finally {
+      setBulkApproving(false);
+    }
+  };
+
   const counts = useMemo(() => ({
     total: candidates.length,
     observing: candidates.filter(candidate => candidate.status === 'observing').length,
@@ -154,7 +185,7 @@ export default function AiLearningPage() {
             <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 750 }}>CONTROLLED LEARNING</span>
           </div>
           <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: 12 }}>
-            Unreviewed observations remain inactive. Only an explicit approval promotes one into this user&apos;s AI memory; business data is never changed.
+            Runs unattended daily. Only very high-confidence, well-evidenced observations (≥90% confidence, seen on 5+ separate days) promote themselves automatically — everything else waits here for review. Business data is never changed.
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -166,6 +197,11 @@ export default function AiLearningPage() {
           <button type="button" onClick={() => void analyze()} disabled={analyzing || !selectedEmail} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 8, padding: '8px 12px', background: '#1e3a5f', color: '#fff', fontSize: 12, fontWeight: 750, cursor: analyzing ? 'wait' : 'pointer', opacity: analyzing ? 0.65 : 1 }}>
             <RefreshCcw size={13} /> {analyzing ? 'Analyzing…' : 'Analyze last 30 days'}
           </button>
+          {counts.ready > 0 && (
+            <button type="button" onClick={() => void bulkApproveReady()} disabled={bulkApproving} title="Approve every candidate already at 'Ready for review' in one click — no need to open each one" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #bbdfc7', borderRadius: 8, padding: '8px 12px', background: '#f3fbf6', color: '#15803d', fontSize: 12, fontWeight: 750, cursor: bulkApproving ? 'wait' : 'pointer', opacity: bulkApproving ? 0.65 : 1 }}>
+              <Check size={13} /> {bulkApproving ? 'Approving…' : `Approve all ready (${counts.ready})`}
+            </button>
+          )}
         </div>
       </div>
 

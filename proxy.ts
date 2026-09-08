@@ -14,6 +14,7 @@ const CRON_PATHS = new Set([
   '/api/quickbooks/sync',
   '/api/ar-reminder/sync-workflow',
   '/api/late-filing/sync',
+  '/api/ai-learning/analyze-all',
 ]);
 
 export async function proxy(req: NextRequest) {

@@ -705,6 +705,27 @@ again.
   named person's own conversation; the two mechanisms are complementary,
   not the same code path, and both must be checked when touching this area.
 
+- **INV-DATA-019** — `ai_learning_candidates` auto-approval (added
+  2026-09-08, `lib/ai-learning/candidates.ts`'s `analyzeUserActivity()`)
+  is a DELIBERATE, negotiated exception to INV-DATA-017's "explicit only"
+  rule for `user_memories` — not a contradiction of it, and not a
+  precedent for lowering the bar further without going back to Vincent.
+  He explicitly asked for auto-approval with zero human review ("我希望AI
+  可以自主学习...不一定要我审核对话"); the actual design landed on a
+  narrower middle ground after being shown the direct conflict with his
+  own blueprint's "AI 不应因为一次对话就永久定义用户" and the fact this
+  same feature's human-approval gate had JUST been deliberately tightened
+  in a prior commit ("restrict AI learning review to Vincent"). The bar —
+  `confidence >= 0.9 AND distinct_days >= 5`, both required — is the
+  actual agreed compromise, not an arbitrary starting guess. Never lower
+  either threshold, remove the human-review path for anything short of
+  it, or auto-approve a candidate a human already rejected/dismissed
+  (the upsert in `analyzeUserActivity()` already guards the latter by
+  preserving any final status) without an explicit new ask from Vincent.
+  The auto-approve actor is always `system:ai-learning-auto` — never a
+  real person's email — so `ai_learning_feedback`/`user_memories` audit
+  trails stay honest about which approvals were automatic.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined
