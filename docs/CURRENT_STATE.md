@@ -170,6 +170,21 @@ same as Activity Insights' own top-pages/actions; only turning it into an
 interpreted narrative (vs. a raw list) would benefit from real Claude
 reasoning once a key is set.
 
+**Vincent independently re-derived the same root cause from his own
+research** (2026-09-08, same day): he tried an open-ended phrasing
+("根据chelsea 最近做的东西，你判断接下来应该会做什么") that no regex
+could ever generalize to, then shared a doc reaching the same conclusion
+already stated below — system prompt (business/SOP context) + tool use
+(real-time data) + memory (RAG-lite) is exactly what `claudeAnswer()`
+already is, it's just never running. Used the doc's prompt-caching note as
+a real improvement made regardless: `app/api/assistant/route.ts`'s system
+prompt is now split into `staticSystemPrompt()` (cached, identical per
+user) and `dynamicSystemPrompt()` (current user/location/memories, sent
+fresh) — the previous single-string version interleaved dynamic content in
+the middle, which would have defeated a cache-prefix match almost every
+call. Zero effect until the key is set, but correct groundwork rather than
+something to redo later.
+
 **`ANTHROPIC_API_KEY` has never been set in Vercel production** (confirmed
 directly via the Vercel API's env list, 2026-09-08 — the key is simply
 absent from the project's environment variables). Every AI-assistant

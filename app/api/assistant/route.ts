@@ -368,27 +368,30 @@ async function rememberThis(account: ApprovedAccount | null, memoryType: string,
 }
 
 // ── Engine A: Claude with tool use ───────────────────────────────────────────
-async function systemPrompt(context?: AssistantContext, account?: ApprovedAccount | null) {
-  // Blueprint section 11 "Context Package": "RELEVANT MEMORY" is one of
-  // the pieces every call should carry — a SMALL, targeted slice, never
-  // the account's full history dumped in. Capped at 8 for the same reason
-  // the Claude tool-result payloads elsewhere in this file stay compact.
-  const memories = account ? await listMemories(account.email, 8) : [];
-  const memoryBlock = memories.length
-    ? `\nThings this user has explicitly asked to be remembered (treat as durable context, not absolute fact if it conflicts with live system data):\n${memories.map(m => `- [${m.memory_type}] ${m.content}`).join('\n')}\n`
-    : '';
+// Split into a STATIC block (identical for every user/request — persona,
+// system map, key workflows, tool-usage instructions) and a DYNAMIC block
+// (current user identity/location/memories — genuinely different every
+// call). Added 2026-09-08, prompted by Vincent sharing his own research
+// doc on prompt caching ("系统提示词变化小，用 cache_control 做提示词缓
+// 存"): claudeAnswer() below marks only the static block cacheable — with
+// the two interleaved in one string (the original shape here), a cache
+// breakpoint after the whole thing would barely ever hit, since the
+// per-user middle section changes on nearly every call and breaks the
+// prefix match. Splitting them like this means the (much larger) static
+// block — plus CLAUDE_TOOLS, which the Anthropic API caches as part of
+// the same prefix ahead of system — can actually be reused across
+// different users and turns, not just repeated calls from the exact same
+// person with the exact same memories.
+function staticSystemPrompt(): string {
   return `You are the in-app assistant of the Tassure Corporate Services System (a Singapore corporate-services billing dashboard used by Tassure Asia staff). Answer in the user's language (usually Chinese). Be concise and concrete.
 
 System map (link pages with markdown, e.g. [开单草稿](/billing?tab=billing)):
 ${PAGES.map(p => `- ${p.label}: ${p.href}`).join('\n')}
 
-Current user location:
-- Page: ${context?.page ?? 'unknown'}
-- Path: ${context?.pathname ?? 'unknown'}
-When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location above.
+When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location given in the next message.
 
-Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}. Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. If the user asks about a DIFFERENT staff member's tasks instead of their own (e.g. "如果我是HC，我要做什么今天？", "Show me Cindy's tasks", "HC 今天有什么任务") pass that person's name/nickname/initials as the tool's optional "person" argument — the tool itself enforces whether this account is allowed to see someone else's tasks (a management-only permission) and returns an explicit refusal or "not found" message when it can't proceed; relay that message honestly and do not fall back to answering about the caller instead, and never invent or guess another person's task data yourself. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Use recent_activity_summary for "what has X actually been doing" / "what's Chelsea been up to" style questions — it reads real audit-trail history (invoices, AR edits, campaigns, Master List, sent emails, ...) that predates today, unlike my_activity_pattern's page-view tracking; it also accepts an optional "person" argument with the same management-only permission as my_tasks_summary. Never guess whose tasks or habits are whose from name alone.
-${memoryBlock}
+Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. If the user asks about a DIFFERENT staff member's tasks instead of their own (e.g. "如果我是HC，我要做什么今天？", "Show me Cindy's tasks", "HC 今天有什么任务") pass that person's name/nickname/initials as the tool's optional "person" argument — the tool itself enforces whether this account is allowed to see someone else's tasks (a management-only permission) and returns an explicit refusal or "not found" message when it can't proceed; relay that message honestly and do not fall back to answering about the caller instead, and never invent or guess another person's task data yourself. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Use recent_activity_summary for "what has X actually been doing" / "what's Chelsea been up to" style questions, INCLUDING open-ended ones like "根据她最近做的东西，判断她接下来会做什么" (based on her recent activity, predict what she'll likely do next) — call the tool to get the real data, then reason over it yourself; don't just recite the raw counts back. It reads real audit-trail history (invoices, AR edits, campaigns, Master List, sent emails, ...) that predates today, unlike my_activity_pattern's page-view tracking; it also accepts an optional "person" argument with the same management-only permission as my_tasks_summary. Never guess whose tasks or habits are whose from name alone.
+
 Use the remember_this tool ONLY when the user EXPLICITLY asks you to remember, note, or keep in mind something for the future (e.g. "记住...", "以后都...", "remember that I..."). Never call it just because something seems noteworthy from the conversation's tone — a single passing remark is not a durable preference, and this tool writes something that will keep influencing future conversations.
 
 Key workflows:
@@ -400,6 +403,23 @@ Key workflows:
 - Data freshness (SGT): TeamWork ND 05:00; TeamWork Companies and campaign recipients 05:30; AR generation 06:00; QuickBooks 06:30; AR workflow 07:00; Late Filing 08:00. Never claim a run succeeded without live evidence; direct staff to Dashboard Automation health when needed.
 
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
+}
+
+async function dynamicSystemPrompt(context?: AssistantContext, account?: ApprovedAccount | null): Promise<string> {
+  // Blueprint section 11 "Context Package": "RELEVANT MEMORY" is one of
+  // the pieces every call should carry — a SMALL, targeted slice, never
+  // the account's full history dumped in. Capped at 8 for the same reason
+  // the Claude tool-result payloads elsewhere in this file stay compact.
+  const memories = account ? await listMemories(account.email, 8) : [];
+  const memoryBlock = memories.length
+    ? `\nThings this user has explicitly asked to be remembered (treat as durable context, not absolute fact if it conflicts with live system data):\n${memories.map(m => `- [${m.memory_type}] ${m.content}`).join('\n')}\n`
+    : '';
+  return `Current user location:
+- Page: ${context?.page ?? 'unknown'}
+- Path: ${context?.pathname ?? 'unknown'}
+
+Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}.
+${memoryBlock}`;
 }
 
 const CLAUDE_TOOLS = [
@@ -428,7 +448,14 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
 async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
-  const system = await systemPrompt(context, account);
+  // Two blocks, not one interpolated string — see staticSystemPrompt's own
+  // comment. Only the static block (and CLAUDE_TOOLS ahead of it, cached
+  // as part of the same prefix) carries cache_control; the dynamic block
+  // is small and cheap to send fresh every call.
+  const system = [
+    { type: 'text', text: staticSystemPrompt(), cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: await dynamicSystemPrompt(context, account) },
+  ];
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
