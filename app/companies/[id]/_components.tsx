@@ -299,18 +299,22 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
 // (all confirmed scoped to Company 360 only — "我刚才说的全部是针对
 // Company 360" — the on-screen Outstanding pages themselves are untouched):
 // Invoice (was Company Name — this page already knows which company it's
-// on), Source, Aging (the oldest bucket this balance still touches), Total
-// Balance (was "Total"), Due Date (was PIC), Owner. Styled to match the
-// on-screen Outstanding "All" list's own final look (plain gray badges, no
-// currency prefix, regular-weight numbers) — "同步" means matching
-// Outstanding's own display, not just its numbers. A company owing on 2+
-// systems shows as 2+ rows here too, same as Outstanding's own "All"
-// view — never merged.
+// on), Company (was "Source" — renamed + de-styled to match this exact
+// page's own Invoices section, which already labels this same TAB/TAC/TAO
+// value "Company"), Aging (the oldest bucket this balance still touches,
+// styled yellow), Total Balance (was "Total", styled to match Invoices'
+// own Amount cell — $-prefixed, no bold), Due Date (was PIC, styled to
+// match Officials/ND's own Appointed cell — bare text, no bold), Owner.
+// Per-column styling now deliberately borrows from sibling sections on
+// THIS SAME page rather than a separate "Outstanding page" look, per his
+// own explicit column-by-column asks. A company owing on 2+ systems shows
+// as 2+ rows here too, same as Outstanding's own "All" view — never
+// merged.
 export function OutstandingSection({ outstanding }: { outstanding: Company360['outstanding'] }) {
   return (
     <DataCard title="Outstanding" icon={<Receipt size={15} color="#fff" />} count={outstanding.length} empty="No outstanding balance on TAB/TAC/TAO for this company.">
       <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px' }}>
-        <div>Invoice</div><div>Source</div><div>Aging</div><div>Total Balance</div><div>Due Date</div><div>Owner</div>
+        <div>Invoice</div><div>Company</div><div>Aging</div><div>Total Balance</div><div>Due Date</div><div>Owner</div>
       </div>
       {outstanding.map((r, i) => {
         // "欠下多久了...主要显示是最久的是欠了多久时间，比如最久的是 91+，
@@ -324,23 +328,35 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
             <div style={{ fontSize: 11, lineHeight: 1.6 }}>
               {r.unpaidInvoices.length ? r.unpaidInvoices.map(inv => <div key={inv.invoiceNo}>#{inv.invoiceNo}</div>) : '—'}
             </div>
-            <div>
-              <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em', padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f' }}>{r.qbCompany}</span>
-            </div>
+            {/* Vincent, 2026-09-08: "Source 换成 Company（和截图那边一样，
+                包括字体和格式大小）" — points at this exact page's own
+                Invoices section, whose "Company" column shows this same
+                TAB/TAC/TAO value as bare inherited text, no badge — so
+                match that literally (no custom style at all) rather than
+                keep a separate pill look for what both sections already
+                agree is the same value. */}
+            <div>{r.qbCompany}</div>
             <div>
               {/* Vincent, 2026-09-08: "放成黄色显示" — yellow, distinct from
-                  the neutral gray Source badge right next to it, so the
-                  one column that's actually a severity signal reads as
-                  one at a glance. */}
+                  the plain Company text next to it, so the one column
+                  that's actually a severity signal reads as one at a
+                  glance. */}
               {oldestLabel ? (
                 <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em', padding: '2px 7px', borderRadius: 5, background: '#fef9c3', color: '#854d0e' }}>{oldestLabel}</span>
               ) : '—'}
             </div>
-            <div style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontVariantNumeric: 'tabular-nums' }}>{r.totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <div style={{ fontSize: 11, lineHeight: 1.6 }}>
-              {/* Same order as the Invoice column above (both come from
-                  r.unpaidInvoices, oldest due date first) so line i of one
-                  lines up with line i of the other. */}
+            {/* Vincent: "Total Balance 列的格式要参考 Amount 列的字体格式" —
+                InvoicesSection's own Amount cell: $-prefixed, tabular-nums,
+                no bold, no font-family override. */}
+            <div style={{ fontVariantNumeric: 'tabular-nums' }}>${r.totalOutstanding.toFixed(2)}</div>
+            <div>
+              {/* Vincent: "Due Date 列的格式要参考 Appointed 列的字体格式" —
+                  Officials/ND's own Appointed cell is bare inherited text,
+                  no custom size/line-height. Still stacks one line per
+                  unpaid invoice (Appointed never has more than one date to
+                  show), same order as the Invoice column above (both come
+                  from r.unpaidInvoices, oldest due date first) so line i of
+                  one lines up with line i of the other. */}
               {r.unpaidInvoices.length ? r.unpaidInvoices.map(inv => <div key={inv.invoiceNo}>{fmtDate(inv.dueDate)}</div>) : '—'}
             </div>
             <div style={{ fontSize: 11, color: effectiveOwner(r) ? '#1e3a5f' : '#94a3b8' }}>{effectiveOwner(r) || '—'}</div>
