@@ -3,14 +3,24 @@ import { getRequestAccount } from '@/lib/request-account';
 import { getApprovedAccount, APPROVED_ACCOUNTS } from '@/lib/approved-accounts';
 import { computeMyTasks } from '@/lib/my-tasks-data';
 import { generateMyTasksBrief } from '@/lib/my-tasks-brief';
+import { getRecentActivity } from '@/lib/recent-activity';
 import { todaySGT } from '@/lib/date';
 
 // My Tasks — the logged-in staff member's own outstanding items,
-// aggregated. Scope for v1: AR Reminder + Late Filing only — the only two
-// areas with reliable per-person PIC data (see docs/FEATURE_MAP.md /
-// PROJECT_STATUS.md 2026-08-31 entry for why Nominee Director review,
-// Client Communications drafts, and Trademark were left out: none of them
-// have a real assignee column to attribute a row to a specific person).
+// aggregated. `arReminder`/`lateFiling`/`counts` scope for v1: AR Reminder
+// + Late Filing only — the only two areas with reliable per-person PIC
+// data (see docs/FEATURE_MAP.md / PROJECT_STATUS.md 2026-08-31 entry for
+// why Nominee Director review, Client Communications drafts, and
+// Trademark were left out: none of them have a real assignee column to
+// attribute a row to a specific person).
+//
+// `recentActivity` (added 2026-09-08) is a SEPARATE, deliberately broader
+// lens on top of that same limitation — see lib/recent-activity.ts's own
+// comment: it reads the real audit-trail ("who did this") columns that DO
+// already exist across Billing Drafts, Email Drafts/Campaigns, Master
+// List, Post Incorporate, Trademark and SOA, none of which have a
+// personal "queue" the way AR Reminder does, but all of which DO record
+// who actually did something and when.
 //
 // Auth via getRequestAccount (lib/request-account.ts) — the convention
 // every other protected route uses (reads the session JWT off the cookie;
@@ -67,6 +77,14 @@ export async function GET(req: NextRequest) {
   // mid-fallback) so My Tasks itself still loads either way.
   const brief = await generateMyTasksBrief(tasks, account.name).catch(() => null);
 
+  // 2026-09-08: real audit-trail activity (invoices generated, AR edits,
+  // campaigns, Master List edits, sent emails, ...) — see lib/recent-
+  // activity.ts's own comment for why this exists (My Tasks' AR+Late-
+  // Filing-only lens made a genuinely active user like Chelsea look like
+  // she'd done nothing). Same graceful-degrade-never-break-the-page
+  // pattern as `brief` above.
+  const recentActivity = await getRecentActivity(account.email).catch(() => []);
+
   return NextResponse.json({
     scope: tasks.arOnly ? 'ar-only' : 'full',
     scopeNote: tasks.arOnly
@@ -76,6 +94,7 @@ export async function GET(req: NextRequest) {
       : "My Tasks currently covers AR Reminder and Late Filing only — Nominee Director reviews, Client Communications drafts and Trademark renewals aren't aggregated here yet.",
     generatedAt: todaySGT(),
     brief,
+    recentActivity,
     arReminder: tasks.arReminder,
     lateFiling: tasks.lateFiling,
     counts: tasks.counts,

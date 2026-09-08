@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AlertTriangle, CalendarClock, Clock, ListChecks, RefreshCw, Sparkles,
-  Plus, Pin, Trash2, Send, Bot, MessageSquare,
+  Plus, Pin, Trash2, Send, Bot, MessageSquare, Activity,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { RichText } from '@/components/assistant/ChatRichText';
@@ -20,6 +20,17 @@ type LateFilingTask = {
   id: number; companyName: string; uen: string | null; nextAgmDueDate: string | null;
   remarks: string | null; pic: string | null; accPic: string | null; taxPic: string | null; matchedAs: string[];
 };
+// Vincent, 2026-09-08, on the View-As-Chelsea screen showing 0 tasks
+// despite her using the system daily: "没有真正了解到...我们的员工在做什
+// 么" — a real audit-trail timeline (lib/recent-activity.ts), separate
+// from the AR/Late-Filing-only lens above. See that file's own comment
+// for the full reasoning and what real data check prompted it.
+type RecentActivityItem = {
+  at: string;
+  kind: 'invoice' | 'ar_edit' | 'campaign' | 'master_list_edit' | 'email_sent' | 'post_incorporate' | 'trademark_edit' | 'soa_owner';
+  label: string;
+  detail: string;
+};
 type MyTasksResponse = {
   scope: 'full' | 'ar-only';
   scopeNote: string;
@@ -29,6 +40,7 @@ type MyTasksResponse = {
   // null only if generation itself failed outright — the banner just
   // doesn't render then, never blocks the rest of the page.
   brief: string | null;
+  recentActivity: RecentActivityItem[];
   arReminder: { overdue: ArTask[]; staleOverdue: ArTask[]; dueSoon: ArTask[] };
   lateFiling: { needsAttention: LateFilingTask[] } | null;
   counts: { arOverdue: number; arStaleOverdue: number; arDueSoon: number; lateFiling: number; total: number };
@@ -134,7 +146,53 @@ function LateFilingTable({ rows }: { rows: LateFilingTask[] }) {
 // 域/标签页").
 type Conversation = { id: number; title: string; pinned: boolean; created_at: string; updated_at: string };
 type ChatMsg = { role: 'user' | 'assistant'; content: string };
-type ActiveView = 'chat' | 'tasks';
+type ActiveView = 'chat' | 'tasks' | 'activity';
+
+// Local to this page only — deliberately not added to lib/date.ts's shared
+// exports, since this is the one place in the app showing a full
+// date+time (every other date display in this system is date-only).
+function formatActivityAt(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-SG', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+const ACTIVITY_KIND_COLOR: Record<RecentActivityItem['kind'], string> = {
+  invoice: '#0f766e',
+  ar_edit: '#1e3a5f',
+  campaign: '#7c3aed',
+  master_list_edit: '#b45309',
+  email_sent: '#0369a1',
+  post_incorporate: '#65a30d',
+  trademark_edit: '#be185d',
+  soa_owner: '#475569',
+};
+
+function RecentActivityPanel({ items, subjectName }: { items: RecentActivityItem[]; subjectName: string }) {
+  if (!items.length) {
+    return (
+      <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
+        No recorded activity for {subjectName} yet — this reflects real actions (invoices generated, AR edits, campaigns, Master List changes, sent emails, ...), not just today's usage.
+      </div>
+    );
+  }
+  return (
+    <div className="system-list-shell">
+      <div className="system-list-title-bar px-4 py-3">
+        <h2 className="system-list-title">Recent Activity <span style={{ opacity: 0.7, fontWeight: 500 }}>({items.length})</span></h2>
+      </div>
+      <div>
+        {items.map((item, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '9px 16px', borderBottom: i < items.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+            <span style={{ fontSize: 11, color: '#94a3b8', width: 108, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{formatActivityAt(item.at)}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: ACTIVITY_KIND_COLOR[item.kind], width: 168, flexShrink: 0 }}>{item.label}</span>
+            <span style={{ fontSize: 12.5, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.detail}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function ConversationRow({ conversation, active, onOpen, onTogglePin, onDelete }: {
   conversation: Conversation; active: boolean;
@@ -400,9 +458,9 @@ export default function MyTasksPage() {
       {viewingAsAccount && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 12, fontWeight: 700, marginBottom: 12 }}>
           <AlertTriangle size={14} />
-          {activeView === 'tasks'
-            ? `Viewing as ${viewingAsAccount.name} (${viewingAsAccount.email}) — this is their task queue, not yours.`
-            : `Acting as ${viewingAsAccount.name} (${viewingAsAccount.email}) — chats and messages here are saved to their account, not yours.`}
+          {activeView === 'tasks' && `Viewing as ${viewingAsAccount.name} (${viewingAsAccount.email}) — this is their task queue, not yours.`}
+          {activeView === 'activity' && `Viewing as ${viewingAsAccount.name} (${viewingAsAccount.email}) — this is their real activity history.`}
+          {activeView === 'chat' && `Acting as ${viewingAsAccount.name} (${viewingAsAccount.email}) — chats and messages here are saved to their account, not yours.`}
         </div>
       )}
 
@@ -441,6 +499,18 @@ export default function MyTasksPage() {
             {!!counts?.total && (
               <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, color: '#fff', background: counts.total > 0 ? '#dc2626' : '#94a3b8', borderRadius: 999, padding: '1px 6px' }}>{counts.total}</span>
             )}
+          </button>
+          <button
+            onClick={() => setActiveView('activity')}
+            title="Real activity — invoices generated, AR edits, campaigns, Master List changes, sent emails and more (not just AR/Late Filing)"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px', border: 'none', borderBottom: '1px solid #f1f5f9',
+              background: activeView === 'activity' ? '#eef2f7' : '#fff', color: activeView === 'activity' ? '#1e3a5f' : '#334155',
+              fontSize: 12.5, fontWeight: activeView === 'activity' ? 700 : 600, cursor: 'pointer', textAlign: 'left',
+            }}
+          >
+            <Activity size={14} />
+            Activity
           </button>
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px 6px' }}>
             {pinnedConversations.length > 0 && (
@@ -575,6 +645,16 @@ export default function MyTasksPage() {
                     </button>
                   </div>
                 </>
+              )}
+            </div>
+          ) : activeView === 'activity' ? (
+            <div style={{ flex: 1, overflowY: 'auto' }}>
+              {loading && !data ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>
+              ) : error ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#dc2626' }}>{error}</div>
+              ) : (
+                <RecentActivityPanel items={data?.recentActivity ?? []} subjectName={viewingAsAccount?.name ?? 'you'} />
               )}
             </div>
           ) : (

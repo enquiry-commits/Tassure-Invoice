@@ -150,6 +150,26 @@ assistant confirms FYE/details conversationally → creates the QuickBooks
 invoice itself). Explicitly a FUTURE step, not started — see Pending
 Improvements.
 
+**My Tasks gained a real "what has this person actually done" activity
+timeline** (`lib/recent-activity.ts`, same day), after Vincent caught the
+View-As-Chelsea screen showing 0 tasks despite her real, heavy daily use
+and pushed back: "没有真正了解到这个系统在干嘛，我们的员工在做什么". A
+direct Supabase check (not a guess) found her real footprint — 89
+generated invoices, 41 real AR Reminder edits, 95 email campaigns — none
+of it visible to My Tasks, because Billing Drafts and Email Campaigns have
+no per-person "queue," only an audit trail of who did what. The new
+"Activity" sidebar tab (My Tasks) and the assistant's `recent_activity_
+summary` tool read across every such pre-existing `created_by_email`/
+`updated_by_email`/`sent_by_email` column in the system (invoices, AR
+edits, campaigns, Master List, sent emails, Post Incorporate, Trademark,
+SOA owners) — no new table. Confirmed this generalizes across roles, not
+just Chelsea's own pattern: Corporate Secretarial staff (Lim Hoe Chyi, Ang
+Shi Ming, Chin Kah Ye) show mostly AR Reminder + Master List edits, not
+invoicing. This needed NO Anthropic API key — it's plain SQL aggregation,
+same as Activity Insights' own top-pages/actions; only turning it into an
+interpreted narrative (vs. a raw list) would benefit from real Claude
+reasoning once a key is set.
+
 **`ANTHROPIC_API_KEY` has never been set in Vercel production** (confirmed
 directly via the Vercel API's env list, 2026-09-08 — the key is simply
 absent from the project's environment variables). Every AI-assistant
@@ -218,6 +238,14 @@ Vincent can provide.
   actions are safe to automate first, audit trail) when Vincent is ready
   to actually scope it, matching the shared blueprint's own v1 guidance
   (Read+Recommend+Draft only, no auto-actions yet).
+- **A real "still-outstanding" queue for Billing Drafts / Email Campaigns**
+  (not just the "recent activity" display shipped 2026-09-08) — Vincent,
+  when asked to choose between the two: "两个都要，先做展示版" (want both,
+  display version first). This second half needs genuinely NEW business
+  rules (e.g. "which companies are overdue for invoicing, and whose job is
+  it") that don't exist anywhere in the system today — unlike the display
+  version, this can't be built from existing audit-trail columns alone and
+  needs a real design discussion with Vincent before starting.
 - Verify the new View-As-for-chat identity substitution (2026-09-08) with
   a real login click-through: a privileged account selects a target,
   starts a New Chat, sends a message, and the row is confirmed to land

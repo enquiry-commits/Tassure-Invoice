@@ -5,6 +5,7 @@ import { getRequestAccount } from '@/lib/request-account';
 import { computeMyTasks } from '@/lib/my-tasks-data';
 import { buildTaskDigest, generateMyTasksBrief } from '@/lib/my-tasks-brief';
 import { getPersonActivitySummary } from '@/lib/activity-data';
+import { getRecentActivity, summarizeByKind } from '@/lib/recent-activity';
 import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories';
 import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation } from '@/lib/ai-conversations';
 import { findMentionedAccount, resolveViewAsAccount, type ApprovedAccount } from '@/lib/approved-accounts';
@@ -311,6 +312,44 @@ async function myActivityPattern(account: ApprovedAccount | null) {
   };
 }
 
+// Vincent, 2026-09-08, on the "View as: Chelsea Ang" screen showing 0
+// tasks despite her using the system daily: "没有真正了解到...我们的员工
+// 在做什么". Real audit-trail activity (lib/recent-activity.ts) — invoices
+// generated, AR edits, campaigns, Master List changes, sent emails, etc —
+// NOT the same as my_activity_pattern above (that's page-VISIT tracking,
+// only from 2026-09-08 onward; this reaches back through each feature's
+// own existing "who did this" columns, real history predating today).
+// Supports the same optional cross-person `person` lookup as
+// my_tasks_summary, for the same reason and the same permission.
+async function recentActivitySummary(account: ApprovedAccount | null, personQuery?: string) {
+  if (!account) return { signed_in: false as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+
+  let target = account;
+  if (personQuery && personQuery.trim()) {
+    const mentioned = findMentionedAccount(personQuery);
+    if (!mentioned) {
+      return { signed_in: true as const, staff_name: account.name, person_not_found: true as const, message: `Could not match "${personQuery}" to a known staff account — tell the user plainly you don't recognize that name rather than guessing whose activity to show.` };
+    }
+    if (mentioned.email !== account.email) {
+      if (!account.canViewAsOthers) {
+        return { signed_in: true as const, staff_name: account.name, permission_denied: true as const, message: `${account.name} does not have permission to view another staff member's activity — that is limited to management accounts. Tell the user plainly they can only ask about their own activity, do not reveal ${mentioned.name}'s data.` };
+      }
+      target = mentioned;
+    }
+  }
+
+  const items = await getRecentActivity(target.email, 25);
+  if (!items.length) {
+    return { signed_in: true as const, staff_name: target.name, viewing_other: target.email !== account.email, no_data: true as const, message: 'No recorded activity for this person in generated_invoices/ar_reminder/email_campaigns/master_list/email_drafts/post_incorporate_operations/trademark_records/soa_owners. This is a genuine possibility for someone whose real work is outside these specific features (e.g. TeamWork-only work), not necessarily a tracking gap — say so plainly rather than assuming something is broken.' };
+  }
+  return {
+    signed_in: true as const, staff_name: target.name, viewing_other: target.email !== account.email,
+    total_items: items.length,
+    by_kind: summarizeByKind(items),
+    most_recent: items.slice(0, 8),
+  };
+}
+
 // Vincent's shared blueprint, section 5: structured long-term memory
 // ("Fact/Preference/Behaviour/..."), with an explicit warning right next
 // to it that v1 deliberately honors — "AI 不应因为一次对话就永久定义用户"
@@ -348,7 +387,7 @@ Current user location:
 - Path: ${context?.pathname ?? 'unknown'}
 When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location above.
 
-Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}. Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. If the user asks about a DIFFERENT staff member's tasks instead of their own (e.g. "如果我是HC，我要做什么今天？", "Show me Cindy's tasks", "HC 今天有什么任务") pass that person's name/nickname/initials as the tool's optional "person" argument — the tool itself enforces whether this account is allowed to see someone else's tasks (a management-only permission) and returns an explicit refusal or "not found" message when it can't proceed; relay that message honestly and do not fall back to answering about the caller instead, and never invent or guess another person's task data yourself. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Never guess whose tasks or habits are whose from name alone.
+Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}. Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. If the user asks about a DIFFERENT staff member's tasks instead of their own (e.g. "如果我是HC，我要做什么今天？", "Show me Cindy's tasks", "HC 今天有什么任务") pass that person's name/nickname/initials as the tool's optional "person" argument — the tool itself enforces whether this account is allowed to see someone else's tasks (a management-only permission) and returns an explicit refusal or "not found" message when it can't proceed; relay that message honestly and do not fall back to answering about the caller instead, and never invent or guess another person's task data yourself. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Use recent_activity_summary for "what has X actually been doing" / "what's Chelsea been up to" style questions — it reads real audit-trail history (invoices, AR edits, campaigns, Master List, sent emails, ...) that predates today, unlike my_activity_pattern's page-view tracking; it also accepts an optional "person" argument with the same management-only permission as my_tasks_summary. Never guess whose tasks or habits are whose from name alone.
 ${memoryBlock}
 Use the remember_this tool ONLY when the user EXPLICITLY asks you to remember, note, or keep in mind something for the future (e.g. "记住...", "以后都...", "remember that I..."). Never call it just because something seems noteworthy from the conversation's tone — a single passing remark is not a durable preference, and this tool writes something that will keep influencing future conversations.
 
@@ -370,6 +409,7 @@ const CLAUDE_TOOLS = [
   { name: 'automation_health', description: 'Read live automation job health and the open integration-exception count.', input_schema: { type: 'object', properties: {} } },
   { name: 'my_tasks_summary', description: "Overdue/due-soon AR Reminder items and Late Filing flags for a staff member. With no `person` argument, returns the CURRENTLY LOGGED-IN caller's own tasks (resolved server-side from their real session). Pass `person` (a name, nickname, or initials, e.g. \"HC\") ONLY when the user explicitly asks about someone ELSE's tasks — this only succeeds if the caller's own account has management view-other-staff permission; otherwise the tool returns an explicit permission-denied message instead of any task data, which must be relayed honestly rather than worked around.", input_schema: { type: 'object', properties: { person: { type: 'string', description: "Optional: another staff member's name, nickname, or initials — only set this when the user is asking about someone other than themselves." } } } },
   { name: 'my_activity_pattern', description: "The currently logged-in staff member's own real page-visit/action history over the last 30 days (most-visited pages, most common key actions, hour-of-day activity) — for questions about their own habits, not anyone else's. May report no_data if tracking hasn't accumulated enough history yet.", input_schema: { type: 'object', properties: {} } },
+  { name: 'recent_activity_summary', description: "A real audit-trail activity summary — invoices generated, AR Reminder edits, email campaigns created, Master List edits, sent client emails, Post Incorporate docs generated, Trademark record edits, SOA owner picks. NOT page-view tracking (that's my_activity_pattern) — this is what someone has actually DONE across the system's real features, with history predating today. With no `person` argument, returns the CURRENTLY LOGGED-IN caller's own activity. Pass `person` (name/nickname/initials) to ask about someone ELSE — same management-only permission and same refusal behavior as my_tasks_summary's `person` argument.", input_schema: { type: 'object', properties: { person: { type: 'string', description: "Optional: another staff member's name, nickname, or initials." } } } },
   { name: 'remember_this', description: "Save something the user has EXPLICITLY asked to be remembered for future conversations (e.g. a stated preference, a fact about their role, a standing instruction). Only call this when the user directly asks to be remembered/noted — never infer one from conversational tone.", input_schema: { type: 'object', properties: { memory_type: { type: 'string', enum: ['fact', 'preference', 'behaviour', 'relationship', 'project', 'decision', 'rejection', 'pattern'] }, content: { type: 'string', description: 'The fact/preference itself, written as a short standalone statement.' } }, required: ['memory_type', 'content'] } },
 ];
 
@@ -380,6 +420,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'automation_health') return automationHealth();
   if (name === 'my_tasks_summary') return myTasksSummary(account, typeof input.person === 'string' ? input.person : undefined);
   if (name === 'my_activity_pattern') return myActivityPattern(account);
+  if (name === 'recent_activity_summary') return recentActivitySummary(account, typeof input.person === 'string' ? input.person : undefined);
   if (name === 'remember_this') return rememberThis(account, String(input.memory_type ?? ''), String(input.content ?? ''));
   return { error: 'unknown tool' };
 }
@@ -547,6 +588,44 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
     if (topPage) lines.push(`你最常打开的页面是 ${topPage.pathname}（${topPage.visits}次）。`);
     if (topAction) lines.push(`你最常做的操作是 ${topAction.eventType}（${topAction.count}次）。`);
     return lines.join(' ');
+  }
+
+  // Vincent, 2026-09-08, on the View-as-Chelsea screen showing 0 tasks
+  // despite her real daily use: "没有真正了解到...我们的员工在做什么" —
+  // real audit-trail activity (lib/recent-activity.ts), checked separately
+  // from the page-visit "习惯" branch just above (different question: "what
+  // has this person actually DONE" vs "which pages do they visit"). Also
+  // checked before the generic company-lookup branches further below, so
+  // "Chelsea最近做了什么" doesn't get misread as a company-name search.
+  // Supports the same cross-person lookup as the my-tasks branch above,
+  // same permission, same explicit-refusal-over-silent-fallback behaviour.
+  if (/(最近.*(做了什么|在做什么|做过什么|活动)|活动记录|最近动态|recent activity|activity (history|log|summary)|what (has|have) .*(been doing|done))/i.test(t)) {
+    if (!account) return '我认不出你目前的登录账号，请确认已登录后再试一次。';
+    let target = account;
+    const mentioned = findMentionedAccount(text);
+    if (mentioned && mentioned.email !== account.email) {
+      if (!account.canViewAsOthers) {
+        return `你的账号只能查询自己的活动记录，无法查看 ${mentioned.name} 的——这项权限仅开放给管理层。`;
+      }
+      target = mentioned;
+    }
+    const items = await getRecentActivity(target.email, 25);
+    const whoLabel = target.email !== account.email ? `${target.name} ` : '你';
+    if (!items.length) {
+      return `${whoLabel}目前没有可显示的活动记录——这是根据真实的系统操作（开票/AR编辑/邮件Campaign/Master List等），不是页面访问记录，如果这个人主要工作不在这些功能上，看到空白是正常的，不代表追踪坏了。`;
+    }
+    const byKind = summarizeByKind(items);
+    const lines = [
+      `**${whoLabel === '你' ? '你的' : `${whoLabel}的`}最近活动**（共 ${items.length} 条真实记录）`,
+      '',
+      ...byKind.map(k => `· ${k.label}：${k.count} 次`),
+      '',
+      '最近几条：',
+      ...items.slice(0, 5).map(i => `· ${i.at.slice(0, 10)} — ${i.label} — ${i.detail}`),
+      '',
+      '[打开 My Tasks 查看完整时间线](/my-tasks)',
+    ];
+    return lines.join('\n');
   }
 
   if (/(自动化|automation|cron|定时任务|同步任务|项目需要处理|今天.*处理|任务.*正常)/.test(t)) {
