@@ -3,12 +3,19 @@ import { fmtDate, toIsoDateValue } from '@/lib/date';
 import { formatStaffName, nameForEmail } from '@/lib/staff-directory';
 import { effectiveOwner } from '@/lib/soa-data';
 import { AGING_BUCKETS, oldestAgingBucket } from '@/lib/soa';
+import { DataCard } from './DataCard';
 import type { Company360 } from '@/lib/company-360';
+
+export { DataCard };
 
 // Colocated, route-scoped presentational pieces for Company 360 — every
 // one of these is read-only, so all stay server components (no 'use
 // client'), matching app/companies/[id]/page.tsx itself. Kept in one file
-// since none of these are reused outside this route.
+// since none of these are reused outside this route. DataCard itself
+// (2026-09-08, once it needed collapse/expand state) moved out to its own
+// 'use client' file, DataCard.tsx — re-exported here so every existing
+// `import { DataCard, ... } from './_components'` elsewhere keeps working
+// unchanged.
 
 export function StatusBadge({ status }: { status: string | null }) {
   const normalized = (status ?? '').toLowerCase();
@@ -44,42 +51,6 @@ function MatchBadge({ via }: { via: 'company_id' | 'uen' | 'fuzzy' | number }) {
   }
   if (via === 'fuzzy') return <span title="Matched by company name only, not a company ID/UEN — verify this is really the right company." style={pillStyle}>name match only</span>;
   return null;
-}
-
-export function DataCard({ title, icon, count, empty, children, scrollable = true }: {
-  title: string; icon: React.ReactNode; count: number; empty: string; children?: React.ReactNode;
-  // 2026-09-03, Vincent on Officials specifically ("这一块不需要限制长度有多
-  // 少显示多少") — the 360px internal scroll every other section here still
-  // uses is fine for occasional overflow, but Officials can genuinely run to
-  // 8+ real rows (every appointed role, one row each) and forcing that into
-  // a little scrollbox made it harder to read than just letting the card
-  // grow and the page itself scroll. Opt-in per section, not a global
-  // change to every DataCard.
-  scrollable?: boolean;
-}) {
-  return (
-    // Vincent, 2026-09-08: "每个板块之间的间距拉大35%" — 16px × 1.35 = 21.6px
-    // (was 16, matching page.tsx's own header-card gap, similarly scaled to
-    // 27 — see that file's own comment).
-    <div className="system-list-shell" style={{ marginBottom: 21.6 }}>
-      <div className="system-list-title-bar px-4 py-3" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {icon}
-        <h2 className="system-list-title">{title}</h2>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{count}</span>
-      </div>
-      {count === 0 ? (
-        <div style={{ padding: '24px 16px', textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>{empty}</div>
-      ) : scrollable ? (
-        <div className="system-list-scroll" style={{ maxHeight: 360 }}>
-          {children}
-        </div>
-      ) : (
-        <div className="system-list-scroll" style={{ overflow: 'visible' }}>
-          {children}
-        </div>
-      )}
-    </div>
-  );
 }
 
 export function MatchQualityNote({ warnings }: { warnings: string[] }) {
