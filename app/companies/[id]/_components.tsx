@@ -328,8 +328,12 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
               <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em', padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f' }}>{r.qbCompany}</span>
             </div>
             <div>
+              {/* Vincent, 2026-09-08: "放成黄色显示" — yellow, distinct from
+                  the neutral gray Source badge right next to it, so the
+                  one column that's actually a severity signal reads as
+                  one at a glance. */}
               {oldestLabel ? (
-                <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em', padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f' }}>{oldestLabel}</span>
+                <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em', padding: '2px 7px', borderRadius: 5, background: '#fef9c3', color: '#854d0e' }}>{oldestLabel}</span>
               ) : '—'}
             </div>
             <div style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontVariantNumeric: 'tabular-nums' }}>{r.totalOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
