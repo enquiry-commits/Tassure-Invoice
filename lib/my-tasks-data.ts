@@ -51,6 +51,17 @@ export type MyTasksData = {
   };
   lateFiling: { needsAttention: Record<string, unknown>[] } | null;
   counts: { arOverdue: number; arStaleOverdue: number; arDueSoon: number; lateFiling: number; total: number };
+  // 2026-09-08 — Vincent, on his own account's Tasks tab: "还是很像摆设，
+  // 不知道是不是没有数据支撑" — checked against all 911 ar_reminder rows
+  // ever: his account has NEVER been PIC on a single one (he's the owner,
+  // not a caseworker — this is structurally correct, not missing data).
+  // "0 outstanding" and "never been assigned anything" are different
+  // situations and deserve different copy — "you're all caught up" implies
+  // the former. True whenever the account has EVER matched as PIC on any
+  // ar_reminder row (regardless of filed/date) or any mirrored Late Filing
+  // row — independent of the overdue/dueSoon counts above, which only
+  // reflect CURRENTLY-relevant rows.
+  everAssigned: boolean;
 };
 
 export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksData> {
@@ -68,10 +79,12 @@ export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksD
   const overdue: Record<string, unknown>[] = [];
   const staleOverdue: Record<string, unknown>[] = [];
   const dueSoon: Record<string, unknown>[] = [];
+  let everAssigned = false;
 
   for (const row of (arRows ?? []) as ArRow[]) {
     const mine = matchedAs(row, account.email);
     if (!mine.length) continue;
+    everAssigned = true;
     const filed = !!row.filling_date;
     if (filed) continue;
     const days = daysUntil(row.due_date, today);
@@ -118,6 +131,7 @@ export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksD
       if (!picRow) continue;
       const mine = matchedAs(picRow, account.email);
       if (!mine.length) continue;
+      everAssigned = true;
       needsAttention.push({
         id: row.id, companyName: row.company_name, uen: row.uen,
         financialYearEnd: row.financial_year_end, nextAgmDueDate: row.next_agm_due_date, remarks: row.remarks,
@@ -139,5 +153,6 @@ export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksD
       lateFiling: lateFiling?.needsAttention.length ?? 0,
       total: overdue.length + staleOverdue.length + dueSoon.length + (lateFiling?.needsAttention.length ?? 0),
     },
+    everAssigned,
   };
 }

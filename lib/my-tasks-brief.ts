@@ -16,7 +16,15 @@ import type { MyTasksData } from './my-tasks-data';
 // the rest of My Tasks loading.
 export async function generateMyTasksBrief(tasks: MyTasksData, staffName: string): Promise<string> {
   if (tasks.counts.total === 0) {
-    return "You're all caught up — nothing on AR Reminder or Late Filing needs attention today.";
+    // 2026-09-08 — Vincent, on his OWN account's empty Tasks tab: "还是很
+    // 像摆设，不知道是不是没有数据支撑" — confirmed against real data
+    // (lib/my-tasks-data.ts's own comment on `everAssigned`): his account
+    // has never once been PIC on anything, ever. "You're all caught up"
+    // implies work existed and got finished — false and misleading for an
+    // account that was never assigned anything in the first place.
+    return tasks.everAssigned
+      ? "You're all caught up — nothing on AR Reminder or Late Filing needs attention today."
+      : "This account isn't assigned as PIC on any AR Reminder or Late Filing item — that's expected for a management/non-caseworker account, not a sign anything is broken.";
   }
   if (process.env.ANTHROPIC_API_KEY) {
     try {
@@ -64,6 +72,7 @@ function ruleBasedBrief(tasks: MyTasksData): string {
 export function buildTaskDigest(tasks: MyTasksData) {
   return {
     counts: tasks.counts,
+    everAssigned: tasks.everAssigned,
     worstOverdue: [...tasks.arReminder.staleOverdue, ...tasks.arReminder.overdue]
       .sort((a, b) => (a.daysUntilDue as number) - (b.daysUntilDue as number))
       .slice(0, 5)

@@ -98,6 +98,7 @@ export async function GET(req: NextRequest) {
     arReminder: tasks.arReminder,
     lateFiling: tasks.lateFiling,
     counts: tasks.counts,
+    everAssigned: tasks.everAssigned,
     viewingAs,
     // Only ever sent to a viewer with canViewAsOthers, regardless of whose
     // tasks are currently being shown — an account without the flag

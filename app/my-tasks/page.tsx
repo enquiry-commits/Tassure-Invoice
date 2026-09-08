@@ -41,6 +41,11 @@ type MyTasksResponse = {
   // doesn't render then, never blocks the rest of the page.
   brief: string | null;
   recentActivity: RecentActivityItem[];
+  // 2026-09-08 — see lib/my-tasks-data.ts's own comment: distinguishes
+  // "genuinely 0 outstanding right now" from "this account has never once
+  // been PIC on anything" (true for management/owner accounts, who aren't
+  // caseworkers) — the empty state below reads differently for each.
+  everAssigned: boolean;
   arReminder: { overdue: ArTask[]; staleOverdue: ArTask[]; dueSoon: ArTask[] };
   lateFiling: { needsAttention: LateFilingTask[] } | null;
   counts: { arOverdue: number; arStaleOverdue: number; arDueSoon: number; lateFiling: number; total: number };
@@ -679,7 +684,27 @@ export default function MyTasksPage() {
 
                   {counts?.total === 0 ? (
                     <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>
-                      {data?.viewingAs ? `Nothing outstanding for ${data.viewingAs.name}.` : "Nothing outstanding — you're all caught up."}
+                      {!data?.everAssigned ? (
+                        // 2026-09-08 — Vincent, on his own account: "还是很
+                        // 像摆设，不知道是不是没有数据支撑" — confirmed: his
+                        // account has never been PIC on a single AR
+                        // Reminder/Late Filing row, ever. "You're all caught
+                        // up" would falsely imply work existed and got
+                        // done — this is a genuinely different, honest
+                        // message for an account that was never a
+                        // caseworker in the first place.
+                        <>
+                          <div>{data?.viewingAs ? `${data.viewingAs.name} isn't` : "Your account isn't"} assigned as PIC on any AR Reminder or Late Filing item — that's expected for a management/non-caseworker account, not a sign anything is broken.</div>
+                          {!data?.viewingAs && (
+                            <div style={{ marginTop: 8, fontSize: 12.5 }}>
+                              {!!data?.viewableAccounts?.length && 'Use "View as" above to check a specific team member, or '}
+                              see the <button onClick={() => setActiveView('activity')} style={{ border: 'none', background: 'none', color: '#0f766e', fontWeight: 700, cursor: 'pointer', padding: 0, font: 'inherit' }}>Activity</button> tab for what's actually happening across the system.
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        data?.viewingAs ? `Nothing outstanding for ${data.viewingAs.name}.` : "Nothing outstanding — you're all caught up."
+                      )}
                     </div>
                   ) : (
                     <>
