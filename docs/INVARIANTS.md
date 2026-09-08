@@ -666,6 +666,22 @@ again.
   migration was even run, so the honest "no data" UI path was exercised
   and verified before real data ever existed to distinguish the two cases.
 
+- **INV-DATA-017** — `user_memories` (added 2026-09-08, from Vincent's
+  shared AI-assistant blueprint) may ONLY be written to through an
+  EXPLICIT, user-initiated path — today that's the assistant's
+  `remember_this` tool, which its own system-prompt instruction fires
+  only when the user directly asks to be remembered/noted (`app/api/
+  assistant/route.ts`). Never wire automatic pattern-mining from
+  `user_activity_events` (or conversation tone/sentiment) into a write to
+  this table — the blueprint that introduced this schema explicitly warns
+  against exactly that shortcut ("AI 不应因为一次对话就永久定义用户";
+  "用户的一次情绪性表达不应被直接写成永久性格或偏好"). The schema's own
+  `source` column (`'explicit' | 'inferred'`) exists so a FUTURE, properly
+  confidence-scored auto-learning pass (the blueprint's own Phase 3) can
+  be added later without a migration — but until that pass exists and is
+  deliberately built, `'inferred'` should never actually appear as a
+  written value.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

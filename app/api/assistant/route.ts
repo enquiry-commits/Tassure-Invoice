@@ -5,6 +5,8 @@ import { getRequestAccount } from '@/lib/request-account';
 import { computeMyTasks } from '@/lib/my-tasks-data';
 import { buildTaskDigest, generateMyTasksBrief } from '@/lib/my-tasks-brief';
 import { getPersonActivitySummary } from '@/lib/activity-data';
+import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories';
+import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation } from '@/lib/ai-conversations';
 import type { ApprovedAccount } from '@/lib/approved-accounts';
 
 /**
@@ -282,8 +284,33 @@ async function myActivityPattern(account: ApprovedAccount | null) {
   };
 }
 
+// Vincent's shared blueprint, section 5: structured long-term memory
+// ("Fact/Preference/Behaviour/..."), with an explicit warning right next
+// to it that v1 deliberately honors — "AI 不应因为一次对话就永久定义用户"
+// (the AI shouldn't permanently define the user from one conversation).
+// So this tool ONLY fires when the user directly, explicitly asks the
+// assistant to remember/note something — never silently inferred from
+// conversation tone or from user_activity_events. See the system prompt's
+// own instruction on when to actually call this.
+const VALID_MEMORY_TYPES: MemoryType[] = ['fact', 'preference', 'behaviour', 'relationship', 'project', 'decision', 'rejection', 'pattern'];
+async function rememberThis(account: ApprovedAccount | null, memoryType: string, content: string) {
+  if (!account) return { saved: false as const, message: 'No valid session on this request — cannot save a memory for an unidentified user.' };
+  const type = (VALID_MEMORY_TYPES as string[]).includes(memoryType) ? (memoryType as MemoryType) : 'fact';
+  if (!content.trim()) return { saved: false as const, message: 'Nothing to remember — content was empty.' };
+  const memory = await createMemory(account.email, type, content.trim().slice(0, 500));
+  return { saved: true as const, memory_id: memory.id, memory_type: memory.memory_type, content: memory.content };
+}
+
 // ── Engine A: Claude with tool use ───────────────────────────────────────────
-function systemPrompt(context?: AssistantContext, account?: ApprovedAccount | null) {
+async function systemPrompt(context?: AssistantContext, account?: ApprovedAccount | null) {
+  // Blueprint section 11 "Context Package": "RELEVANT MEMORY" is one of
+  // the pieces every call should carry — a SMALL, targeted slice, never
+  // the account's full history dumped in. Capped at 8 for the same reason
+  // the Claude tool-result payloads elsewhere in this file stay compact.
+  const memories = account ? await listMemories(account.email, 8) : [];
+  const memoryBlock = memories.length
+    ? `\nThings this user has explicitly asked to be remembered (treat as durable context, not absolute fact if it conflicts with live system data):\n${memories.map(m => `- [${m.memory_type}] ${m.content}`).join('\n')}\n`
+    : '';
   return `You are the in-app assistant of the Tassure Corporate Services System (a Singapore corporate-services billing dashboard used by Tassure Asia staff). Answer in the user's language (usually Chinese). Be concise and concrete.
 
 System map (link pages with markdown, e.g. [开单草稿](/billing?tab=billing)):
@@ -295,6 +322,8 @@ Current user location:
 When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location above.
 
 Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}. Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Never guess whose tasks or habits are whose from name alone.
+${memoryBlock}
+Use the remember_this tool ONLY when the user EXPLICITLY asks you to remember, note, or keep in mind something for the future (e.g. "记住...", "以后都...", "remember that I..."). Never call it just because something seems noteworthy from the conversation's tone — a single passing remark is not a durable preference, and this tool writes something that will keep influencing future conversations.
 
 Key workflows:
 - AR pipeline: TeamWork determines each company's FYE cycle → ar_reminder batches auto-generate daily (rolling 6 months) → staff review → Billing Drafts. Deleting an AR row is a soft delete (won't be auto-recreated; Add Manual restores it).
@@ -314,6 +343,7 @@ const CLAUDE_TOOLS = [
   { name: 'automation_health', description: 'Read live automation job health and the open integration-exception count.', input_schema: { type: 'object', properties: {} } },
   { name: 'my_tasks_summary', description: "The currently logged-in staff member's own overdue/due-soon AR Reminder items and Late Filing flags (only theirs, resolved server-side from their real session — no arguments needed and none can override whose tasks are returned).", input_schema: { type: 'object', properties: {} } },
   { name: 'my_activity_pattern', description: "The currently logged-in staff member's own real page-visit/action history over the last 30 days (most-visited pages, most common key actions, hour-of-day activity) — for questions about their own habits, not anyone else's. May report no_data if tracking hasn't accumulated enough history yet.", input_schema: { type: 'object', properties: {} } },
+  { name: 'remember_this', description: "Save something the user has EXPLICITLY asked to be remembered for future conversations (e.g. a stated preference, a fact about their role, a standing instruction). Only call this when the user directly asks to be remembered/noted — never infer one from conversational tone.", input_schema: { type: 'object', properties: { memory_type: { type: 'string', enum: ['fact', 'preference', 'behaviour', 'relationship', 'project', 'decision', 'rejection', 'pattern'] }, content: { type: 'string', description: 'The fact/preference itself, written as a short standalone statement.' } }, required: ['memory_type', 'content'] } },
 ];
 
 async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {
@@ -323,17 +353,19 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'automation_health') return automationHealth();
   if (name === 'my_tasks_summary') return myTasksSummary(account);
   if (name === 'my_activity_pattern') return myActivityPattern(account);
+  if (name === 'remember_this') return rememberThis(account, String(input.memory_type ?? ''), String(input.content ?? ''));
   return { error: 'unknown tool' };
 }
 
 async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
+  const system = await systemPrompt(context, account);
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, system: systemPrompt(context, account), tools: CLAUDE_TOOLS, messages: convo }),
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, system, tools: CLAUDE_TOOLS, messages: convo }),
     });
     if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const data = await res.json();
@@ -344,7 +376,18 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
     for (const tu of toolUses) {
-      const result = await runTool(tu.name!, tu.input ?? {}, account ?? null);
+      // A single tool's own failure (e.g. remember_this before its table's
+      // migration has run) must not derail the whole conversation turn —
+      // without this, it would bubble out of claudeAnswer() and land the
+      // OUTER catch in POST() below, silently swapping this reply to the
+      // plain intent-router engine mid-conversation, which has no
+      // equivalent handling and would answer something unrelated.
+      let result: unknown;
+      try {
+        result = await runTool(tu.name!, tu.input ?? {}, account ?? null);
+      } catch (err) {
+        result = { error: err instanceof Error ? err.message : 'tool failed' };
+      }
       results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result).slice(0, 6000) });
     }
     convo.push({ role: 'user', content: results });
@@ -564,11 +607,34 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
   ].join('\n');
 }
 
+// Persists this exchange into a saved thread — Vincent: "My Tasks 这个页
+// 面是好像AI聊天这样的界面...记录Chats". Ownership-checked against the
+// real session; an invalid/foreign id just means "don't persist," never
+// an error that would fail the chat reply itself — the reply is still
+// good even if saving it somewhere failed. Auto-titles from the first
+// real user message (ChatGPT-style), never overwriting a title the user
+// (or a later save) already set.
+async function persistExchange(conversationId: number | undefined, account: ApprovedAccount | null, userMessage: string, reply: string, isFirstMessage: boolean) {
+  if (!conversationId || !account) return;
+  try {
+    const owner = await getConversationOwner(conversationId);
+    if (owner !== account.email) return;
+    await appendMessage(conversationId, 'user', userMessage);
+    await appendMessage(conversationId, 'assistant', reply);
+    if (isFirstMessage) await renameConversation(conversationId, deriveTitle(userMessage));
+    else await touchConversation(conversationId);
+  } catch {
+    // Persistence is a nice-to-have on top of a reply that already
+    // succeeded — never surface this as a failure to the caller.
+  }
+}
+
 // ── Route ────────────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  const { messages, context } = (await req.json().catch(() => ({}))) as {
+  const { messages, context, conversationId } = (await req.json().catch(() => ({}))) as {
     messages?: Msg[];
     context?: AssistantContext;
+    conversationId?: number;
   };
   if (!messages?.length) return NextResponse.json({ error: 'messages required' }, { status: 400 });
 
@@ -581,17 +647,21 @@ export async function POST(req: NextRequest) {
   const account = await getRequestAccount(req).catch(() => null);
 
   const last = messages[messages.length - 1];
+  const isFirstMessage = messages.length === 1;
   try {
     if (process.env.ANTHROPIC_API_KEY) {
       const reply = await claudeAnswer(messages.slice(-8), context, account);
+      await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
       return NextResponse.json({ reply, engine: 'claude' });
     }
     const reply = await intentAnswer(last.content, context, account);
+    await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
     return NextResponse.json({ reply, engine: 'intent' });
   } catch (e) {
     // Claude path failed (bad key / network) — degrade to the intent engine.
     try {
       const reply = await intentAnswer(last.content, context, account);
+      await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
       return NextResponse.json({ reply, engine: 'intent-fallback', note: e instanceof Error ? e.message : 'claude failed' });
     } catch {
       return NextResponse.json({ error: e instanceof Error ? e.message : 'assistant failed' }, { status: 500 });

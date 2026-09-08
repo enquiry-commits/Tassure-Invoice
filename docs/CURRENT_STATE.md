@@ -113,6 +113,15 @@ and the assistant's `my_activity_pattern` tool will show "no data" until
 Vincent runs that migration AND real usage accumulates afterward — remove
 this note once the migration has run and real events are visible.
 
+My Tasks' new chat interface (same day — `ai_conversations`/`ai_messages`,
+`scripts/add-ai-conversations.sql`; `user_memories`, `scripts/add-user-
+memories.sql`) is similarly deployed with **neither migration run yet**.
+Confirmed directly: reads degrade to empty (no crash), writes throw a
+clear error that both the API routes (503) and the frontend (falls back to
+an unsaved reply) already handle — so chatting itself works immediately,
+but nothing is saved/pinnable and `remember_this` can't actually save a
+memory until both migrations run. Remove this note once run and confirmed.
+
 ## Known risks (not bugs — things worth remembering before relying on data)
 
 - **Billing draft auto-fill accuracy varies by field** — Secretary ~85%
