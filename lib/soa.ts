@@ -43,3 +43,24 @@ export type AgingTotals = Record<AgingBucket, number>;
 export function emptyAgingTotals(): AgingTotals {
   return { current: 0, d1_30: 0, d31_60: 0, d61_90: 0, d91_plus: 0 };
 }
+
+// The single most-overdue bucket a company's outstanding balance actually
+// touches — Vincent, 2026-09-08, on Company 360's Outstanding section:
+// "欠下多久了...主要显示是最久的是欠了多久时间，比如最久的是 91+，就放
+// 91+" (show how long overdue — specifically the OLDEST/most-overdue
+// bucket; if the oldest is 91+, show 91+). AGING_BUCKETS is already
+// ordered least-to-most overdue, so scanning it in reverse and returning
+// the first non-zero bucket is exactly "the oldest one this balance is
+// still sitting in" — a company with some Current AND some 91+ invoices
+// shows 91+, not Current, matching his framing that the oldest wins.
+// Returns null only when every bucket is genuinely zero (shouldn't happen
+// for a row that has a real totalOutstanding > 0, but this is a domain
+// fact worth asserting via a null case rather than silently defaulting to
+// "Current").
+export function oldestAgingBucket(aging: AgingTotals): AgingBucket | null {
+  for (let i = AGING_BUCKETS.length - 1; i >= 0; i--) {
+    const bucket = AGING_BUCKETS[i];
+    if (aging[bucket.key] > 0) return bucket.key;
+  }
+  return null;
+}

@@ -5,7 +5,7 @@ import { pageAll } from './page-all';
 import { normalize, findUniqueBestMatch } from './company-name';
 import { formatStaffNameList } from './staff-directory';
 import type { QbCompany } from './quickbooks';
-import { agingBucket, emptyAgingTotals, type AgingTotals } from './soa';
+import { agingBucket, dueDate, emptyAgingTotals, type AgingTotals } from './soa';
 import { computeSuggestedOwner, collectInvolvedStaff, type OwnerInvoiceSignal } from './soa-owner';
 
 // Shared by GET /api/billing/soa (the on-screen list) and
@@ -46,6 +46,18 @@ export interface SoaCompanyRow {
   invoiceCount: number;
   totalOutstanding: number;
   aging: AgingTotals;
+  // Every unpaid invoice behind this row's total, its own number + due
+  // date — Vincent, 2026-09-08, on Company 360's Outstanding section only
+  // ("我刚才说的全部是针对 Company 360"): "Company Name列 换成Invoice 列"
+  // (that section already knows which company it's on, so the real
+  // invoice number is more useful there than a repeated company name),
+  // then "把PIC 换成这个 Due Date". Sorted oldest-due-first — same "the
+  // oldest one matters most" framing as oldestAgingBucket() below. Kept
+  // here rather than a second query so this stays covered by the same
+  // "one shared computation" guarantee as everything else on this row —
+  // every existing consumer of SoaCompanyRow ignores an added field it
+  // doesn't ask for.
+  unpaidInvoices: { invoiceNo: string; dueDate: string }[];
 }
 
 type UnpaidInvoice = {
@@ -122,17 +134,19 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
   const today = new Date();
   const byCompany = new Map<string, {
     displayName: string; invoiceCount: number; total: number; aging: AgingTotals; signals: OwnerInvoiceSignal[];
+    unpaidInvoices: { invoiceNo: string; dueDate: string }[];
   }>();
   for (const inv of invoices) {
     if (!inv.txn_date || !inv.balance) continue;
     const key = normalize(inv.customer_name);
     if (!key) continue;
-    if (!byCompany.has(key)) byCompany.set(key, { displayName: inv.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [] });
+    if (!byCompany.has(key)) byCompany.set(key, { displayName: inv.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [] });
     const entry = byCompany.get(key)!;
     entry.invoiceCount += 1;
     entry.total += inv.balance;
     entry.aging[agingBucket(inv.txn_date, today)] += inv.balance;
     entry.signals.push({ qbInvoiceId: inv.qb_invoice_id, txnDate: inv.txn_date, locationName: inv.location_name });
+    if (inv.invoice_no) entry.unpaidInvoices.push({ invoiceNo: inv.invoice_no, dueDate: dueDate(inv.txn_date).toISOString().slice(0, 10) });
   }
 
   return [...byCompany.entries()].map(([key, entry]) => {
@@ -149,6 +163,10 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
       invoiceCount: entry.invoiceCount,
       totalOutstanding: Math.round(entry.total * 100) / 100,
       aging: entry.aging,
+      // Oldest due date first — same "the oldest one matters most" framing
+      // as the Aging bucket, and gives Company 360's Invoice/Due Date
+      // columns a stable, meaningful order (not raw DB fetch order).
+      unpaidInvoices: entry.unpaidInvoices.sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
     };
   }).sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
 }
