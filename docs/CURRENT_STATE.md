@@ -185,20 +185,27 @@ the middle, which would have defeated a cache-prefix match almost every
 call. Zero effect until the key is set, but correct groundwork rather than
 something to redo later.
 
-**`ANTHROPIC_API_KEY` has never been set in Vercel production** (confirmed
-directly via the Vercel API's env list, 2026-09-08 — the key is simply
-absent from the project's environment variables). Every AI-assistant
-feature shipped this session (`app/api/assistant`'s Claude tool-use
-engine, `my_tasks_summary`/`my_activity_pattern`/`remember_this` tools,
+**`ANTHROPIC_API_KEY` was set in Vercel production 2026-09-08** (Vincent
+provided a real key to experiment with — "先实验一下免费的API效果"). Added
+via the Vercel API as a `sensitive`-type env var (write-only — its value
+can never be read back via the API or dashboard once created), Production
+target only, then a redeploy to pick it up (env var changes need a fresh
+deployment on Vercel — an already-running deployment doesn't hot-reload
+new env vars). Every AI-assistant feature shipped this session
+(`app/api/assistant`'s Claude tool-use engine, `my_tasks_summary`/
+`my_activity_pattern`/`recent_activity_summary`/`remember_this` tools,
 `lib/my-tasks-brief.ts`'s Claude-phrased daily briefing) is CODE-COMPLETE
-and degrades correctly to its own rule-based/keyword-matching fallback —
-nothing is broken — but production has only ever run that fallback, never
-real Claude reasoning. This is very likely the real substance behind
-Vincent's "现在的回答还是很基础的AI模型，都是固定嵌套式的回答" feedback —
-the fallback IS exactly that, by design. Setting the key in Vercel is the
-one remaining step to actually turn this on, and it's not something
-Claude Code can do — it needs a real Anthropic API key, which only
-Vincent can provide.
+and was already degrading correctly to its own rule-based/keyword fallback
+with no key — now it should run real Claude reasoning instead. **Not yet
+confirmed by an actual live chat exchange** — verify by asking the My
+Tasks chat something no regex could match (e.g. Vincent's own test:
+"根据chelsea 最近做的东西，你判断接下来应该会做什么") and checking the
+reply is a real reasoned answer, not the old capability-list fallback. If
+the key runs out of credit or hits a spend limit later, `POST /api/
+assistant` degrades automatically back to `intentAnswer()` with no error
+surfaced to the user (confirmed by reading the route's own try/catch — see
+`docs/PROJECT_STATUS.md`'s 2026-09-08 entry) — this is not something to
+treat as broken if it happens.
 
 ## Known risks (not bugs — things worth remembering before relying on data)
 
@@ -253,6 +260,17 @@ Vincent can provide.
   actions are safe to automate first, audit trail) when Vincent is ready
   to actually scope it, matching the shared blueprint's own v1 guidance
   (Read+Recommend+Draft only, no auto-actions yet).
+- **Investigate why `ai_conversations`/`ai_messages` have zero real rows**
+  despite real successful chat exchanges (Vincent's own screenshots,
+  2026-09-08) — the DB write path itself is confirmed working (isolated
+  `createConversation`/`appendMessage` directly, bypassing HTTP, a real
+  row was created/read/cleaned up successfully), so the gap is somewhere
+  in `/api/ai/conversations` POST or the real deployed request's
+  `getRequestAccount` resolution, not the table or the admin client.
+  `sendChatMessage()`'s own try/catch around conversation creation
+  swallows a failure silently (deliberately, so a save failure never
+  blocks getting an answer) — which is exactly why this went unnoticed.
+  Not yet root-caused.
 - **A real "still-outstanding" queue for Billing Drafts / Email Campaigns**
   (not just the "recent activity" display shipped 2026-09-08) — Vincent,
   when asked to choose between the two: "两个都要，先做展示版" (want both,
