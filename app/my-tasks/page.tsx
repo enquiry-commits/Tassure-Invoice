@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AlertTriangle, CalendarClock, Clock, ListChecks, RefreshCw, Sparkles,
-  Plus, Pin, Trash2, Send, Bot, MessageSquare, Activity, FileCheck2, X,
+  Plus, Pin, Trash2, Send, MessageSquare, Activity, FileCheck2, X,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { RichText } from '@/components/assistant/ChatRichText';
@@ -1253,7 +1253,12 @@ export default function MyTasksPage() {
                       right for the floating widget (matches every other
                       page's guide there), just not for this page's own new,
                       deliberately minimal empty state. */}
-                  <Bot size={28} color="#94a3b8" style={{ marginBottom: 10 }} />
+                  <picture style={{ display: 'block', width: 160, height: 96, marginBottom: 10, transform: 'translateY(-16px)' }}>
+                    <source media="(prefers-reduced-motion: reduce)" srcSet="/my-tasks-robot-still.png" />
+                    {/* Loops only while this empty-chat branch is mounted; first submitted message removes it. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/my-tasks-robot.gif" alt="" width={160} height={96} style={{ display: 'block', objectFit: 'contain' }} />
+                  </picture>
                   <div style={{ fontSize: 15, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
                   <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20 }}>Ready when you are.</div>
                   <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 560 }}>
@@ -1342,8 +1347,12 @@ export default function MyTasksPage() {
                       </div>
                     ))}
                     {chatBusy && (
-                      <div style={{ alignSelf: 'flex-start', padding: '9px 14px', borderRadius: 12, background: '#fff', border: '1px solid #e3e9f0', fontSize: 12.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <Sparkles size={13} /> 正在结合系统资料查询…
+                      <div role="status" aria-label="正在结合系统资料查询…" style={{ alignSelf: 'flex-start', padding: '4px 10px', display: 'flex', alignItems: 'center' }}>
+                        <picture>
+                          <source media="(prefers-reduced-motion: reduce)" srcSet="/my-tasks-thinking-still.png" />
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/my-tasks-thinking.gif" alt="" width={160} height={96} style={{ display: 'block', objectFit: 'contain' }} />
+                        </picture>
                       </div>
                     )}
                   </div>
