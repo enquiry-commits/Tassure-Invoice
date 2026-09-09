@@ -256,6 +256,21 @@ treat as broken if it happens.
 
 ## Pending improvements (known, not yet scheduled)
 
+- **Floating AssistantWidget rebuilt as a draggable/resizable/collapsible
+  popup, shipped 2026-09-09** — full functional parity with My Tasks chat
+  (same cards, same attachments, now shared via `components/assistant/
+  ChatCards.tsx`), plus a real conversation lifecycle (open = conceptually
+  a new conversation; navigate away without closing = same conversation
+  keeps going; manually close = ends it, already saved to My Tasks' Recent
+  chat via the existing lazy-creation-on-first-message pattern; collapse =
+  shrinks to a small icon without losing anything; a real reload always
+  starts fresh). Hidden on `/my-tasks` itself; the first click each session
+  redirects there instead of opening the popup, to nudge people toward the
+  full chat experience. See PROJECT_STATUS.md's dated entry for Vincent's
+  full 7-rule spec and the implementation notes. **Not yet exercised in a
+  real browser** — drag, resize, collapse/expand, and the close-vs-collapse
+  distinction are real interaction behavior only a live click-through can
+  actually confirm; Vincent needs to try it on a few different pages.
 - **Smart deep links for the agentic-chat preview cards, shipped 2026-09-09**
   — Vincent: "当用户点击去开单的时候你应该是带用户去到开单的接口，并且协
   助好找到对应的公司和点击好打开了那个发票编辑的弹窗，不只是带到 Billing
