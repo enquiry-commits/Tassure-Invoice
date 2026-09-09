@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AlertTriangle, CalendarClock, Clock, ListChecks, RefreshCw, Sparkles,
-  Plus, Pin, Trash2, Send, MessageSquare, Activity, FileCheck2, X,
+  Plus, Pin, Trash2, Send, MessageSquare, Activity, FileCheck2, X, ExternalLink,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { RichText } from '@/components/assistant/ChatRichText';
@@ -238,9 +238,18 @@ function RecentActivityPanel({ items, subjectName }: { items: RecentActivityItem
 // shared with the server side (app/api/assistant/route.ts builds the same
 // kind of link for a not-found suggestion) so the URL format can't drift
 // between the two.
+// Redesigned 2026-09-09 — Vincent: "深链很小也不明显，用户可能都不知道
+//是可以点击的" (the deep link is small and inconspicuous, users might not
+// even know it's clickable). Was an 11px plain-color centered text line;
+// now a full-width outlined "secondary button" directly under the real
+// primary button, with an icon — a standard, immediately-recognizable
+// primary/secondary button pairing rather than a link easy to mistake for
+// a caption.
 const deepLinkStyle: React.CSSProperties = {
-  display: 'block', textAlign: 'center', marginTop: 6, fontSize: 11, fontWeight: 650,
-  color: '#31506f', textDecoration: 'none',
+  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+  width: '100%', marginTop: 8, padding: '9px 12px', borderRadius: 8, boxSizing: 'border-box',
+  border: '1px solid #cbd8e6', background: '#fff',
+  fontSize: 12.5, fontWeight: 700, color: '#1d3a5c', textDecoration: 'none',
 };
 
 // ── Invoice draft preview + real confirm-and-generate (2026-09-08) ─────────
@@ -404,7 +413,7 @@ function InvoiceDraftCard({ preview, onGenerated }: { preview: InvoicePreview; o
         )}
         {outcome.state !== 'success' && (
           <a href={billingDeepLink(preview.companyName, preview.fyeMonth, preview.fyeCycle)} style={deepLinkStyle}>
-            Open in Billing Drafts to review or adjust further →
+            <ExternalLink size={13} /> Open in Billing Drafts
           </a>
         )}
       </div>
@@ -558,7 +567,7 @@ function LateFilingResolveCard({ preview, onGenerated }: { preview: LateFilingRe
         )}
         {outcome.state !== 'success' && (
           <a href={lateFilingDeepLink(preview.companyName)} style={deepLinkStyle}>
-            Open in Late Filing to review or edit further →
+            <ExternalLink size={13} /> Open in Late Filing
           </a>
         )}
       </div>
@@ -700,7 +709,7 @@ function InvoiceEditCard({ preview, onGenerated }: { preview: InvoiceEditPreview
         )}
         {outcome.state !== 'success' && (
           <a href={billingDeepLink(preview.companyName, preview.fyeMonth, preview.fyeCycle)} style={deepLinkStyle}>
-            Open in Billing Drafts to review or adjust further →
+            <ExternalLink size={13} /> Open in Billing Drafts
           </a>
         )}
       </div>
