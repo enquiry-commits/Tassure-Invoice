@@ -17,12 +17,27 @@ export type Conversation = {
   updated_at: string;
 };
 
+// Added 2026-09-09 (scripts/add-ai-messages-preview-data.sql) — Vincent,
+// after testing the agentic-chat preview cards live: "我发现每次只能看到
+// 一次，当我切换了页面或者点击了接口，这个预览和深链的记录就不见了".
+// The 4 preview types (InvoicePreview / LateFilingResolvePreview /
+// InvoiceEditPreview / PostIncorporatePreview, each in its own lib module)
+// are deliberately NOT imported here — this module stays a general-purpose
+// persistence layer, agnostic to which tool produced a given reply.
+// app/api/assistant/route.ts decides the `type`/`data` shape; this file
+// just stores and returns it opaquely.
+export type StoredPreview = {
+  type: 'invoice_draft' | 'late_filing_resolve' | 'invoice_edit' | 'post_incorporate';
+  data: Record<string, unknown>;
+};
+
 export type ConversationMessage = {
   id: number;
   conversation_id: number;
   role: 'user' | 'assistant';
   content: string;
   created_at: string;
+  preview_data?: StoredPreview | null;
 };
 
 // Pinned first, then most-recently-updated — matches the ChatGPT sidebar
@@ -87,8 +102,16 @@ export async function listMessages(conversationId: number): Promise<Conversation
   return (data ?? []) as ConversationMessage[];
 }
 
-export async function appendMessage(conversationId: number, role: 'user' | 'assistant', content: string): Promise<void> {
+export async function appendMessage(conversationId: number, role: 'user' | 'assistant', content: string, previewData?: StoredPreview | null): Promise<void> {
   const supabase = createAdminClient();
+  if (previewData !== undefined) {
+    const { error } = await supabase.from('ai_messages').insert({ conversation_id: conversationId, role, content, preview_data: previewData });
+    if (!error) return;
+    // The preview_data column might not be migrated onto this database yet
+    // (scripts/add-ai-messages-preview-data.sql) — never let an optional,
+    // additive column being absent break the base save that has worked all
+    // along; fall through to the plain insert below instead.
+  }
   await supabase.from('ai_messages').insert({ conversation_id: conversationId, role, content });
 }
 

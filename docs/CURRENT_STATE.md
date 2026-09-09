@@ -308,10 +308,10 @@ treat as broken if it happens.
   create-invoice`. **Not yet end-to-end tested with a real invoice** (only
   build/type-checked and the data layer verified against real company
   data) — Vincent needs to try the real button himself. Known follow-up
-  gaps, not yet started: (1) none of the 4 preview cards' structured data
-  (invoice draft, invoice edit, Late Filing resolve, Post Incorporate) is
-  persisted to `ai_messages` — reopening a saved conversation later shows
-  the plain text reply only, no card; (2) no dedicated audit trail
+  gaps, not yet started: (1) ~~none of the 4 preview cards' structured data
+  is persisted to `ai_messages`~~ — fixed 2026-09-09, see the dated entry
+  above (`preview_data` column, needs Vincent to run the migration SQL
+  before it takes effect in production); (2) no dedicated audit trail
   distinguishing "AI proposed this draft" from "human clicked confirm" —
   today it's implicit (whatever `/api/quickbooks/create-invoice` itself
   already logs to `generated_invoices.created_by_email`, same as a manual

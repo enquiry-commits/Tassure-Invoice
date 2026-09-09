@@ -1,0 +1,16 @@
+-- 2026-09-09 — Vincent, after testing the agentic-chat preview cards live:
+-- "我发现每次只能看到一次，当我切换了页面或者点击了接口，这个预览和深
+-- 链的记录就不见了" (I found I can only see it once — switch pages or
+-- click into the link, and the preview + deep link disappear). This was a
+-- known, deliberately-flagged v1 gap (see PROJECT_STATUS.md / CURRENT_
+-- STATE.md's own notes from earlier the same day: "none of the 4 preview
+-- cards' structured data is persisted to ai_messages") — now closed.
+--
+-- One generic jsonb column, not 4 separate typed columns, because
+-- ai_messages/ai_conversations (scripts/add-ai-conversations.sql) is a
+-- general-purpose chat persistence layer that should stay agnostic to
+-- which specific tool produced a given assistant reply — the shape stored
+-- here is {type: 'invoice_draft'|'late_filing_resolve'|'invoice_edit'|
+-- 'post_incorporate', data: <the real preview object the API already
+-- returns>}, decided entirely in app/api/assistant/route.ts, not here.
+ALTER TABLE ai_messages ADD COLUMN IF NOT EXISTS preview_data jsonb;

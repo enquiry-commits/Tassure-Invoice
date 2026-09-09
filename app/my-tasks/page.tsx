@@ -158,10 +158,13 @@ function LateFilingTable({ rows }: { rows: LateFilingTask[] }) {
 // 域/标签页").
 type Conversation = { id: number; title: string; pinned: boolean; created_at: string; updated_at: string };
 // invoicePreview (2026-09-08) rides along on an assistant message when the
-// preview_invoice_draft tool ran — see InvoiceDraftCard below. Only ever
-// present on a fresh reply from THIS session; reopening a saved
-// conversation later shows the plain text only (the card's structured
-// data isn't persisted to ai_messages yet — a known, deliberate v1 gap).
+// preview_invoice_draft tool ran — see InvoiceDraftCard below. Was only
+// ever present on a fresh reply from THIS session until 2026-09-09
+// (Vincent: "我发现每次只能看到一次，当我切换了页面或者点击了接口，这个
+// 预览和深链的记录就不见了") — openConversation() below now reconstitutes
+// it (and the other 3 preview types) from ai_messages.preview_data
+// (scripts/add-ai-messages-preview-data.sql) when reopening a saved
+// conversation, so the card survives a page switch/reload.
 // A brief 2026-09-09 experiment surfaced which engine answered (Claude vs.
 // the rule-based fallback) as a visible notice — Vincent explicitly asked
 // for the opposite: "很奇怪，我想要的就是回复看起来还是正常的，token 我
@@ -1027,7 +1030,21 @@ export default function MyTasksPage() {
     try {
       const res = await fetch(`/api/ai/conversations/${id}/messages`);
       const json = await res.json();
-      setChatMessages((json.messages ?? []).map((m: { role: 'user' | 'assistant'; content: string }) => ({ role: m.role, content: m.content })));
+      type StoredMessage = { role: 'user' | 'assistant'; content: string; preview_data?: { type: string; data: Record<string, unknown> } | null };
+      setChatMessages((json.messages ?? []).map((m: StoredMessage) => {
+        const msg: ChatMsg = { role: m.role, content: m.content };
+        // Reconstitutes whichever preview card this reply originally
+        // carried (2026-09-09 — Vincent: "我发现每次只能看到一次，当我切
+        // 换了页面或者点击了接口，这个预览和深链的记录就不见了"). Older
+        // rows saved before scripts/add-ai-messages-preview-data.sql simply
+        // have no preview_data — falls back to plain text exactly as before.
+        const p = m.preview_data;
+        if (p?.type === 'invoice_draft') msg.invoicePreview = p.data as unknown as InvoicePreview;
+        else if (p?.type === 'late_filing_resolve') msg.lateFilingPreview = p.data as unknown as LateFilingResolvePreview;
+        else if (p?.type === 'invoice_edit') msg.invoiceEditPreview = p.data as unknown as InvoiceEditPreview;
+        else if (p?.type === 'post_incorporate') msg.postIncorporatePreview = p.data as unknown as PostIncorporatePreview;
+        return msg;
+      }));
     } catch {
       setChatMessages([{ role: 'assistant', content: '无法加载这段对话的历史记录，请重试。' }]);
     } finally {

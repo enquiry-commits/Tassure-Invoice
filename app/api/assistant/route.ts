@@ -7,7 +7,7 @@ import { buildTaskDigest, generateMyTasksBrief } from '@/lib/my-tasks-brief';
 import { getPersonActivitySummary } from '@/lib/activity-data';
 import { getRecentActivity, summarizeByKind } from '@/lib/recent-activity';
 import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories';
-import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation } from '@/lib/ai-conversations';
+import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation, type StoredPreview } from '@/lib/ai-conversations';
 import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, type ApprovedAccount } from '@/lib/approved-accounts';
 import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
@@ -1139,13 +1139,27 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
 // good even if saving it somewhere failed. Auto-titles from the first
 // real user message (ChatGPT-style), never overwriting a title the user
 // (or a later save) already set.
-async function persistExchange(conversationId: number | undefined, account: ApprovedAccount | null, userMessage: string, reply: string, isFirstMessage: boolean) {
+// Builds the opaque {type, data} shape lib/ai-conversations.ts's
+// StoredPreview expects — one field, whichever tool actually fired, wins;
+// never more than one of the 4 is set on a given reply in practice.
+function toStoredPreview(
+  invoicePreview?: InvoicePreview, lateFilingPreview?: LateFilingResolvePreview,
+  invoiceEditPreview?: InvoiceEditPreview, postIncorporatePreview?: PostIncorporatePreview,
+): StoredPreview | null {
+  if (invoicePreview) return { type: 'invoice_draft', data: invoicePreview as unknown as Record<string, unknown> };
+  if (lateFilingPreview) return { type: 'late_filing_resolve', data: lateFilingPreview as unknown as Record<string, unknown> };
+  if (invoiceEditPreview) return { type: 'invoice_edit', data: invoiceEditPreview as unknown as Record<string, unknown> };
+  if (postIncorporatePreview) return { type: 'post_incorporate', data: postIncorporatePreview as unknown as Record<string, unknown> };
+  return null;
+}
+
+async function persistExchange(conversationId: number | undefined, account: ApprovedAccount | null, userMessage: string, reply: string, isFirstMessage: boolean, previewData?: StoredPreview | null) {
   if (!conversationId || !account) return;
   try {
     const owner = await getConversationOwner(conversationId);
     if (owner !== account.email) return;
     await appendMessage(conversationId, 'user', userMessage);
-    await appendMessage(conversationId, 'assistant', reply);
+    await appendMessage(conversationId, 'assistant', reply, previewData);
     if (isFirstMessage) await renameConversation(conversationId, deriveTitle(userMessage));
     else await touchConversation(conversationId);
   } catch {
@@ -1199,7 +1213,7 @@ export async function POST(req: NextRequest) {
       // earlier-collected director's details off the back of an 8-message
       // window would make Claude re-ask for them or, worse, guess.
       const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview } = await claudeAnswer(messages.slice(-24), context, account);
-      await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
+      await persistExchange(conversationId, account, last.content, reply, isFirstMessage, toStoredPreview(invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview));
       return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview });
     }
     const reply = await intentAnswer(last.content, context, account);
