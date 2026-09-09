@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Local UI update (2026-09-09): replaced the My Tasks empty-chat Bot icon with Vincent's supplied robot video converted to a transparent looping WebP. Cropped the left gray panel, removed green screen/spill, and added a static transparent PNG for prefers-reduced-motion. Assets render at 80×97 CSS pixels above My Tasks; no chat or task behavior changed. Not yet pushed.
+Local UI update (2026-09-09): replaced the My Tasks empty-chat Bot icon with Vincent's supplied robot video converted to a transparent looping GIF. Per his clarification, retained the left gray panel and removed only green screen/spill. Renders at 160×96 CSS pixels above My Tasks, loops until the first submitted message removes the empty-state view, and returns for New Chat. Static PNG supports prefers-reduced-motion. Not yet pushed.
 
 Last updated: 2026-09-09 (Assistant — smart deep links for the 3 agentic-chat preview cards. Vincent, after phases 1-4 had already shipped: "当用户点击去开单的时候你应该是带用户去到开单的接口，并且协助好找到对应的公司和点击好打开了那个发票编辑的弹窗，不只是带到 Billing draft 的接口页面就停了...思考用户真正要的便利和下一步到底可能是什么". The in-chat card+modal already lets the user finish the whole action without leaving the conversation, so this isn't a replacement for that — it's the escape hatch for when they want to do more than the compact card shows, PLUS a real fix for the not-found case (which previously really did just hand back a bare tab link).
 

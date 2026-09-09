@@ -1246,11 +1246,11 @@ export default function MyTasksPage() {
                       right for the floating widget (matches every other
                       page's guide there), just not for this page's own new,
                       deliberately minimal empty state. */}
-                  <picture style={{ display: 'block', width: 80, height: 97, marginBottom: 10 }}>
+                  <picture style={{ display: 'block', width: 160, height: 96, marginBottom: 10 }}>
                     <source media="(prefers-reduced-motion: reduce)" srcSet="/my-tasks-robot-still.png" />
-                    {/* Animated WebP preserves the source animation and transparent background. */}
+                    {/* Loops only while this empty-chat branch is mounted; first submitted message removes it. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/my-tasks-robot.webp" alt="" width={80} height={97} style={{ display: 'block', objectFit: 'contain' }} />
+                    <img src="/my-tasks-robot.gif" alt="" width={160} height={96} style={{ display: 'block', objectFit: 'contain' }} />
                   </picture>
                   <div style={{ fontSize: 15, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
                   <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20 }}>Ready when you are.</div>
