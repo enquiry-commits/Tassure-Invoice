@@ -256,6 +256,20 @@ treat as broken if it happens.
 
 ## Pending improvements (known, not yet scheduled)
 
+- **Smart deep links for the agentic-chat preview cards, shipped 2026-09-09**
+  — Vincent: "当用户点击去开单的时候你应该是带用户去到开单的接口，并且协
+  助好找到对应的公司和点击好打开了那个发票编辑的弹窗，不只是带到 Billing
+  draft 的接口页面就停了". `app/billing/page.tsx` and `app/late-filing/
+  page.tsx` both now accept an `?openCompany=<name>` query param (plus
+  `month`/`year` on the Billing page) and auto-open the real per-company
+  edit dialog a manual click would — never auto-submitting anything, just
+  landing the user in a ready-to-review state. `lib/deep-links.ts` is the
+  one shared URL-format contract (server + client). Verified via a
+  diagnostic script (URL construction + the real `findUniqueBestMatch()`
+  matching against 16 real Late Filing rows and 792 real Billing rows,
+  exact and partial-name cases both). **Not yet click-through tested** —
+  whether the modal/dialog actually pops open correctly on a real browser
+  navigation needs Vincent to try it.
 - **Agentic-chat phases 2-4 all shipped 2026-09-09** — the "preview tool +
   real card/modal + write through the exact existing validated endpoint"
   pattern now covers 4 real actions: invoice draft generation (step 1/2

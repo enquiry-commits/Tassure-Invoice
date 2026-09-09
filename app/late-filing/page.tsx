@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { Suspense, useEffect, useState, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, Plus, Check, X, RefreshCw, Zap, Calendar, Building2, Clock, ChevronRight, Trash2, Undo2 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
@@ -8,6 +9,7 @@ import { usePagination, PaginationBar } from '@/components/Pagination';
 import { fmtDate as fmtDateStr, toDisplayDate, toIsoDateValue } from '@/lib/date';
 import { formatStaffName } from '@/lib/staff-directory';
 import { logActivity } from '@/lib/activity-client';
+import { findUniqueBestMatch } from '@/lib/company-name';
 
 const FYE_MONTHS = ['ALL','JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
@@ -191,7 +193,19 @@ type EditState = { uen?: string; company_name?: string; remarks?: string | null;
   // in the database itself.
   previousUpdatedAt?: string | null; };
 
-export default function LateFilingPage() {
+function LateFilingPageInner() {
+  // Smart deep-link from the chat assistant (2026-09-09 — see
+  // app/billing/page.tsx's CombinedPage for the same mechanism's own fuller
+  // comment). Unlike Billing Drafts, there is no "generate" write to guard
+  // against here — resolve() is already a one-click, no-confirmation PATCH
+  // on the real page, so auto-triggering it from a mere navigation would be
+  // a real, surprising write with no human click on THIS page at all. The
+  // safe equivalent is opening the real edit dialog (startEdit, below) —
+  // pre-filled with this company's real current remarks/dates, same as a
+  // manual click on the row — never calling resolve()/recall() itself.
+  const searchParams = useSearchParams();
+  const openCompany = searchParams.get('openCompany');
+
   const [rows, setRows]         = useState<LateRow[]>([]);
   const [loading, setLoading]   = useState(true);
   const [fye, setFye]           = useState('ALL');
@@ -297,6 +311,14 @@ export default function LateFilingPage() {
   }
   function startNew() { setEditId('new'); setEditForm({ financial_year_end: '' }); setCustomRemarks(false); }
   function cancelEdit() { setEditId(null); setEditForm({}); setCustomRemarks(false); }
+
+  const triedAutoOpen = useRef(false);
+  useEffect(() => {
+    if (!openCompany || triedAutoOpen.current || !rows.length) return;
+    triedAutoOpen.current = true;
+    const match = findUniqueBestMatch(openCompany, rows, r => r.company_name, 70).value;
+    if (match) startEdit(match);
+  }, [openCompany, rows]);
 
   async function save() {
     setSaving(true);
@@ -742,5 +764,16 @@ export default function LateFilingPage() {
         />
       )}
     </div>
+  );
+}
+
+// useSearchParams (added 2026-09-09 for the openCompany deep link above)
+// requires a Suspense boundary around it in the app router — same pattern
+// app/billing/page.tsx's own Page/CombinedPage split already uses.
+export default function LateFilingPage() {
+  return (
+    <Suspense>
+      <LateFilingPageInner />
+    </Suspense>
   );
 }

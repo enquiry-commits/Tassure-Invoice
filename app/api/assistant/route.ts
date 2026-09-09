@@ -13,6 +13,7 @@ import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import { previewInvoiceEdit, type InvoiceEditPreview, type InvoiceEditChange } from '@/lib/invoice-edit-lookup';
 import type { QbCompany } from '@/lib/quickbooks';
+import { billingDeepLink, lateFilingDeepLink } from '@/lib/deep-links';
 import {
   validatePostIncorporateInput,
   type PostIncorporateInput, type PostIncorporateCompany, type PostIncorporateDirector, type PostIncorporateShareholder, type PostIncorporatePreview,
@@ -382,7 +383,21 @@ async function invoiceDraftPreview(account: ApprovedAccount | null, companyQuery
   }
   const result = await previewInvoiceDraft(companyQuery, fyeYear);
   if (!result.found) {
-    return { found: false as const, message: `No company matched "${companyQuery}".`, suggestions: result.suggestions };
+    // Each suggestion becomes a real, working link straight to that
+    // company's Billing Drafts entry (not just a name for the user to go
+    // type in themselves) — see lib/deep-links.ts's own header comment.
+    // No fyeMonth/fyeCycle known for a bare suggestion string, so the link
+    // omits them; the target page falls back to whatever cycle it already
+    // has loaded.
+    const suggestionLinks = result.suggestions.map(name => ({ name, link: billingDeepLink(name, null, '') }));
+    return {
+      found: false as const,
+      message: `No company matched "${companyQuery}".`,
+      suggestions: suggestionLinks,
+      instruction: suggestionLinks.length
+        ? 'Present each suggestion as a clickable markdown link using its "link" value, e.g. [Company Name](link) — do not just list the bare names.'
+        : undefined,
+    };
   }
   return {
     found: true as const,
@@ -412,7 +427,15 @@ async function lateFilingResolvePreview(account: ApprovedAccount | null, company
   if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
   const result = await previewLateFilingResolve(companyQuery);
   if (!result.found) {
-    return { found: false as const, message: `No company matched "${companyQuery}" in the Late Filing list.`, suggestions: result.suggestions };
+    const suggestionLinks = result.suggestions.map(name => ({ name, link: lateFilingDeepLink(name) }));
+    return {
+      found: false as const,
+      message: `No company matched "${companyQuery}" in the Late Filing list.`,
+      suggestions: suggestionLinks,
+      instruction: suggestionLinks.length
+        ? 'Present each suggestion as a clickable markdown link using its "link" value, e.g. [Company Name](link) — do not just list the bare names.'
+        : undefined,
+    };
   }
   return {
     found: true as const,
@@ -441,7 +464,15 @@ async function invoiceEditPreview(account: ApprovedAccount | null, companyQuery:
   }
   const result = await previewInvoiceEdit(companyQuery, qbCompanyHint, changes);
   if (!result.found) {
-    return { found: false as const, message: result.message, suggestions: result.suggestions };
+    const suggestionLinks = (result.suggestions ?? []).map(name => ({ name, link: billingDeepLink(name, null, '') }));
+    return {
+      found: false as const,
+      message: result.message,
+      suggestions: suggestionLinks,
+      instruction: suggestionLinks.length
+        ? 'Present each suggestion as a clickable markdown link using its "link" value, e.g. [Company Name](link) — do not just list the bare names.'
+        : undefined,
+    };
   }
   return {
     found: true as const,
@@ -616,11 +647,13 @@ Key workflows:
 - Recipient rules: external customer emails go to To; Tassure emails go to CC; cindy@tassure.com is excluded; hoechyi@tassure.com is always CC; when kahye@tassure.com appears, sengxin@tassure.com is omitted.
 - Data freshness (SGT): TeamWork ND 05:00; TeamWork Companies and campaign recipients 05:30; AR generation 06:00; QuickBooks 06:30; AR workflow 07:00; Late Filing 08:00. Never claim a run succeeded without live evidence; direct staff to Dashboard Automation health when needed.
 
-If the user asks to generate/open/draft/check an invoice for a company, use preview_invoice_draft — it shows exactly what Billing Drafts would pre-fill (company, FYE cycle, each line item and amount, totals, warnings), but it is READ-ONLY: you have no tool that creates a real invoice in QuickBooks. The UI shows the user a real "Generate Invoice" button on the preview itself, with its own confirmation step — never say or imply YOU generated, will generate, or are generating the real invoice; tell the user to review the preview and use that button when ready. If a FYE year is ambiguous, ask before calling the tool rather than guessing one.
+If the user asks to generate/open/draft/check an invoice for a company, use preview_invoice_draft — it shows exactly what Billing Drafts would pre-fill (company, FYE cycle, each line item and amount, totals, warnings), but it is READ-ONLY: you have no tool that creates a real invoice in QuickBooks. The UI shows the user a real "Generate Invoice" button on the preview itself, with its own confirmation step, PLUS a real "Open in Billing Drafts" link that takes them straight to that company's own edit view on the real page (already found, already open) for when they want to do more than the compact card allows — never say or imply YOU generated, will generate, or are generating the real invoice; tell the user to review the preview and use those when ready. If a FYE year is ambiguous, ask before calling the tool rather than guessing one.
 
-If the user asks about resolving/closing/clearing a company's Late Filing status, use preview_late_filing_resolve the same way — it shows what the record's remarks would become, but is READ-ONLY; the UI shows a real "Mark Resolved" button with its own confirmation. Same rule: never say or imply YOU resolved it.
+If the user asks about resolving/closing/clearing a company's Late Filing status, use preview_late_filing_resolve the same way — it shows what the record's remarks would become, but is READ-ONLY; the UI shows a real "Mark Resolved" button with its own confirmation, plus an "Open in Late Filing" link to that company's real edit dialog. Same rule: never say or imply YOU resolved it.
 
-If the user asks to change/edit/fix/correct something on an ALREADY-GENERATED invoice (e.g. "change the Secretary line to $700"), use preview_invoice_edit — turn their stated change into the tool's "changes" argument yourself (which line, what new value), never guess a number they didn't give you. It fetches the invoice's real current lines and shows a before/after diff; READ-ONLY, nothing is saved. If it reports unmatchedChanges, tell the user plainly which part of their request didn't match a real line. The UI shows a real "Save Changes" button with its own confirmation — never say or imply YOU saved the change.
+If the user asks to change/edit/fix/correct something on an ALREADY-GENERATED invoice (e.g. "change the Secretary line to $700"), use preview_invoice_edit — turn their stated change into the tool's "changes" argument yourself (which line, what new value), never guess a number they didn't give you. It fetches the invoice's real current lines and shows a before/after diff; READ-ONLY, nothing is saved. If it reports unmatchedChanges, tell the user plainly which part of their request didn't match a real line. The UI shows a real "Save Changes" button with its own confirmation, plus an "Open in Billing Drafts" link, same as invoicing above — never say or imply YOU saved the change.
+
+All three of the above tools, when they report a company as not found, return a "suggestions" list where each entry already carries a real, working "link" — a deep link that takes the user straight to that specific company already found and its real editing view already open, not just the bare tab page. Always present these as clickable markdown links using each entry's own "link" value (e.g. "Did you mean [Company Name](that link)?"), never as plain unlinked names the user has to go search for themselves — this is exactly the same "actually help them get there" principle as the real buttons on a successful preview, just for the not-found case.
 
 If the user asks to generate/prepare the Post Incorporate document set for a newly incorporated company, DO NOT ask for everything at once and DO NOT call preview_post_incorporate on a near-empty object just to "see what's missing" — that wastes the user's time reading a wall of errors. Instead run a real guided intake conversation: first collect the company's own details (name, UEN, registered address, registration date, chairman, secretary, currency, FYE, whether ND service is needed — secretaryCompanyName can be left out, it defaults automatically), confirm you have those, THEN walk through each director one at a time (name, address, ID type/number, nationality, DOB, gender, email, phone, whether they're a nominee director — and only if so, their nominator's details), THEN each shareholder one at a time (name/address/ID, shares, whether fully paid-up — and if so, a share certificate number — corporate shareholders need their corporate director names). Keep track of everything collected so far across the conversation yourself (the tool has no memory between calls — you must re-send the FULL picture, everything collected so far, every time you call it, not just what's new). Never invent, guess, infer, or auto-fill any identity value (ID numbers, addresses, dates of birth, share details) — every one of these must come from the user exactly as stated; if something is genuinely unknown, leave it blank and ask, don't make one up to move faster. Only call preview_post_incorporate once you believe the picture is reasonably complete. If it reports complete:false, relay its errors plainly and ask for exactly what's still missing, then call it again once supplied. It is READ-ONLY — there is no tool that generates or downloads the actual documents; the UI shows a real "Generate & Download" button on the resulting preview card. Never say or imply YOU generated or downloaded the documents.
 

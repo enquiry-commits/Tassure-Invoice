@@ -25,6 +25,7 @@ import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverl
 import { getHelperHealth, isHelperOutdated, buildMailtoLink, type DraftLike } from '@/lib/draft-helper-client';
 import { isValidEmail } from '@/lib/campaign-recipients';
 import { manualInvoiceOverrides } from '@/lib/manual-invoice-marker';
+import { findUniqueBestMatch } from '@/lib/company-name';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared types & helpers
@@ -2597,7 +2598,7 @@ function useCrossCycleSearch(
 const CURRENT_YEAR_FOR_OPTIONS = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 14 }, (_, i) => String(CURRENT_YEAR_FOR_OPTIONS - 12 + i));
 
-function BillingTab({ month, year, setMonth, setYear }: { month: string; year: string; setMonth: (v: string) => void; setYear: (v: string) => void }) {
+function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: string; year: string; setMonth: (v: string) => void; setYear: (v: string) => void; openCompany?: string | null }) {
   const [data,       setData]       = useState<{ summary: BillingSummary; companies: CompanyBilling[] } | null>(null);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState<string | null>(null);
@@ -2860,6 +2861,25 @@ function BillingTab({ month, year, setMonth, setYear }: { month: string; year: s
     return matches[0] ? { companyName: matches[0].companyName, fyeMonth: matches[0].fyeMonth, fyeYear: null } : null;
   }, []);
   const crossMonthNotice = useCrossCycleSearch(monthCompanies, [month], year, setMonth, setYear, search, useCallback(() => { setFilter('all'); }, []), fetchBillingMatch);
+
+  // Smart deep-link auto-open (see CombinedPage's own comment on
+  // `openCompany`) — fires once monthCompanies has actually loaded for the
+  // requested cycle, fuzzy-matches by name (never trust an id from outside
+  // this page — see the "Draft builder modal" comment on why `companyId`
+  // here is an AR-Reminder row id, not a stable identifier), and opens the
+  // exact same modal a manual row click would. That modal already
+  // auto-detects new-draft vs. edit-existing-invoice on its own (loadLiveLines
+  // fires whenever a generated invoice exists for the cycle) — one deep link
+  // serves both preview_invoice_draft and preview_invoice_edit's needs.
+  // Only ever attempted once per page load so it never fights a user who
+  // closes the modal or opens a different company afterward.
+  const triedAutoOpen = useRef(false);
+  useEffect(() => {
+    if (!openCompany || triedAutoOpen.current || !monthCompanies.length) return;
+    triedAutoOpen.current = true;
+    const match = findUniqueBestMatch(openCompany, monthCompanies, c => c.companyName, 70).value;
+    if (match) setExpanded(match.companyId);
+  }, [openCompany, monthCompanies]);
 
   // "Needs billing" for month-driven invoicing = this FYE cycle hasn't been
   // invoiced yet. Prefer our own generated_invoices record (exact — we made
@@ -4508,16 +4528,34 @@ function CombinedPage() {
   const router       = useRouter();
   const tab          = (searchParams.get('tab') ?? 'billing') as 'billing' | 'ar';
 
+  // Smart deep-link from the chat assistant (2026-09-09 — Vincent: "当用户
+  // 点击去开单的时候你应该是带用户去到开单的接口，并且协助好找到对应的公
+  // 司和点击好打开了那个发票编辑的弹窗，不只是带到 Billing draft 的接口页
+  // 面就停了"). openCompany carries a company name (not an id — the ids used
+  // inside BillingTab/ARTab are ephemeral, batch-scoped, and NOT stable
+  // across a fresh fetch, so name + fuzzy match via lib/company-name.ts is
+  // the only identifier a caller outside this page can reliably supply —
+  // see BillingTab's own openCompany effect for the actual lookup/open).
+  // month/year (an FYE cycle) ride along so the target company's own cycle
+  // is loaded BEFORE the lookup runs, instead of whatever /api/ar-reminder/
+  // latest would have picked.
+  const openCompany = searchParams.get('openCompany');
+  const monthParam  = searchParams.get('month');
+  const yearParam   = searchParams.get('year');
+
   // Month/year is shared across both tabs — invoicing is organised by FYE month,
   // so Billing Drafts and AR Reminder always look at the same batch of companies.
-  const [month, setMonth] = useState('');
-  const [year,  setYear]  = useState('');
+  const [month, setMonth] = useState(monthParam ?? '');
+  const [year,  setYear]  = useState(yearParam ?? '');
   useEffect(() => {
+    // A deep link already states which cycle to load — don't overwrite it
+    // with whatever the "latest" batch happens to be.
+    if (monthParam && yearParam) return;
     fetch('/api/ar-reminder/latest')
       .then(r => r.json())
       .then(({ month: m, year: y }) => { setMonth(String(m)); setYear(String(y)); })
       .catch(() => { setMonth('January'); setYear(String(new Date().getFullYear())); });
-  }, []);
+  }, [monthParam, yearParam]);
 
   const switchTab = (t: 'billing' | 'ar') => {
     router.replace(`/billing?tab=${t}`, { scroll: false });
@@ -4559,7 +4597,7 @@ function CombinedPage() {
       {/* Tab content */}
       <div style={{ paddingBottom: tab === 'ar' ? 44 : 0 }}>
         {tab === 'billing'
-          ? <BillingTab month={month} year={year} setMonth={setMonth} setYear={setYear} />
+          ? <BillingTab month={month} year={year} setMonth={setMonth} setYear={setYear} openCompany={openCompany} />
           : <ARTab month={month} year={year} setMonth={setMonth} setYear={setYear} />}
       </div>
     </div>

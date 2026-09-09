@@ -42,6 +42,13 @@ export type InvoiceEditPreview = {
   unmatchedChanges: string[];
   currentTotal: number;
   proposedTotal: number;
+  // Added 2026-09-09 so the frontend's "Open in Billing Drafts" deep link
+  // (app/my-tasks/page.tsx) can load the SAME FYE cycle this invoice
+  // belongs to before searching for the company — without this, the page
+  // would search whatever cycle it happens to have loaded (usually the
+  // latest one) and silently fail to find an older/different cycle.
+  fyeMonth: string | null;
+  fyeCycle: string;
 };
 
 export type InvoiceEditResult =
@@ -124,6 +131,8 @@ export async function previewInvoiceEdit(
       unmatchedChanges,
       currentTotal,
       proposedTotal,
+      fyeMonth: company.fyeMonth,
+      fyeCycle: cycleFye ?? '',
     },
   };
 }

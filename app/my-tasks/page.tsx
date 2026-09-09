@@ -13,6 +13,7 @@ import type { EditableLine } from '@/lib/billing-draft';
 import type { LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import type { InvoiceEditPreview } from '@/lib/invoice-edit-lookup';
 import type { PostIncorporatePreview } from '@/lib/docx-post-incorporate';
+import { billingDeepLink, lateFilingDeepLink } from '@/lib/deep-links';
 import { logActivity } from '@/lib/activity-client';
 
 type SessionUser = { email: string; name: string; restrictedTo?: string | null; admin?: boolean };
@@ -210,6 +211,30 @@ function RecentActivityPanel({ items, subjectName }: { items: RecentActivityItem
   );
 }
 
+// Smart deep links (2026-09-09) — Vincent, after the 3 preview+confirm
+// cards below had already shipped: "当用户点击去开单的时候你应该是带用户
+// 去到开单的接口，并且协助好找到对应的公司和点击好打开了那个发票编辑的
+// 弹窗，不只是带到 Billing draft 的接口页面就停了...思考用户真正要的便利
+// 和下一步到底可能是什么". The in-chat card+modal already lets the user
+// finish the whole action without leaving the conversation — this is the
+// escape hatch for when they want to do more than the compact card shows
+// (add a line the pre-fill didn't cover, double-check something on the
+// real page first, etc.): a link that doesn't just dump them on the
+// generic tab, but actually finds the company and opens the SAME edit
+// dialog a manual click would — see app/billing/page.tsx's CombinedPage/
+// BillingTab (openCompany) and app/late-filing/page.tsx's
+// LateFilingPageInner (openCompany) for the actual auto-open logic this
+// links into. Deliberately still just a navigation, never a second write
+// path — the target page's own real button is what the user clicks next.
+// billingDeepLink/lateFilingDeepLink themselves live in lib/deep-links.ts,
+// shared with the server side (app/api/assistant/route.ts builds the same
+// kind of link for a not-found suggestion) so the URL format can't drift
+// between the two.
+const deepLinkStyle: React.CSSProperties = {
+  display: 'block', textAlign: 'center', marginTop: 6, fontSize: 11, fontWeight: 650,
+  color: '#31506f', textDecoration: 'none',
+};
+
 // ── Invoice draft preview + real confirm-and-generate (2026-09-08) ─────────
 // Step 2 of Vincent's agentic-invoicing direction (step 1 shipped earlier
 // today: the read-only preview_invoice_draft tool). Vincent, on the plain
@@ -369,6 +394,11 @@ function InvoiceDraftCard({ preview, onGenerated }: { preview: InvoicePreview; o
             Generate Invoice
           </button>
         )}
+        {outcome.state !== 'success' && (
+          <a href={billingDeepLink(preview.companyName, preview.fyeMonth, preview.fyeCycle)} style={deepLinkStyle}>
+            Open in Billing Drafts to review or adjust further →
+          </a>
+        )}
       </div>
 
       {(outcome.state === 'confirming' || outcome.state === 'submitting' || outcome.state === 'overlap' || outcome.state === 'error') && (
@@ -518,6 +548,11 @@ function LateFilingResolveCard({ preview, onGenerated }: { preview: LateFilingRe
             Mark Resolved
           </button>
         )}
+        {outcome.state !== 'success' && (
+          <a href={lateFilingDeepLink(preview.companyName)} style={deepLinkStyle}>
+            Open in Late Filing to review or edit further →
+          </a>
+        )}
       </div>
 
       {(outcome.state === 'confirming' || outcome.state === 'submitting' || outcome.state === 'error') && (
@@ -654,6 +689,11 @@ function InvoiceEditCard({ preview, onGenerated }: { preview: InvoiceEditPreview
           >
             Save Changes
           </button>
+        )}
+        {outcome.state !== 'success' && (
+          <a href={billingDeepLink(preview.companyName, preview.fyeMonth, preview.fyeCycle)} style={deepLinkStyle}>
+            Open in Billing Drafts to review or adjust further →
+          </a>
         )}
       </div>
 
