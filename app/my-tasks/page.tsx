@@ -944,15 +944,20 @@ function ConversationRow({ conversation, active, onOpen, onTogglePin, onDelete }
 
 // Pending-attachment chips shown above the chat input, before sending —
 // see the ChatAttachment/pendingAttachments comments in MyTasksPage.
-function AttachmentChips({ attachments, onRemove }: { attachments: ChatAttachment[]; onRemove: (id: string) => void }) {
+// onView (2026-09-09, Vincent: "假设我要看回去这个附带的图片，我想要点击
+// 放大查看是可以的吗？") opens the full-size lightbox for an image, or the
+// real file in a new tab for a PDF — same handler AttachmentThumbnails
+// uses below, so a pending attachment can be double-checked before sending
+// the same way an already-sent one can be reviewed afterward.
+function AttachmentChips({ attachments, onRemove, onView }: { attachments: ChatAttachment[]; onRemove: (id: string) => void; onView: (a: ChatAttachment) => void }) {
   if (!attachments.length) return null;
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
       {attachments.map(a => (
         <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 4px', borderRadius: 8, border: '1px solid #dbe3ec', background: '#f8fafc' }}>
           {a.kind === 'image'
-            ? <img src={`data:${a.mediaType};base64,${a.base64}`} alt={a.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 5, display: 'block' }} />
-            : <div style={{ width: 32, height: 32, borderRadius: 5, background: '#eef2f7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FileText size={15} color="#64748b" /></div>}
+            ? <img src={`data:${a.mediaType};base64,${a.base64}`} alt={a.name} onClick={() => onView(a)} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 5, display: 'block', cursor: 'zoom-in' }} />
+            : <button type="button" onClick={() => onView(a)} title="在新标签页打开" style={{ width: 32, height: 32, borderRadius: 5, background: '#eef2f7', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}><FileText size={15} color="#64748b" /></button>}
           <span style={{ fontSize: 11, color: '#475569', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
           <button type="button" onClick={() => onRemove(a.id)} style={{ width: 16, height: 16, borderRadius: '50%', border: 'none', background: '#e2e8f0', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, flexShrink: 0 }}>
             <X size={10} />
@@ -964,17 +969,45 @@ function AttachmentChips({ attachments, onRemove }: { attachments: ChatAttachmen
 }
 
 // Thumbnails on an already-sent user message bubble — same visual language
-// as AttachmentChips but without the remove button.
-function AttachmentThumbnails({ attachments }: { attachments: ChatAttachment[] }) {
+// as AttachmentChips but without the remove button. Click an image to open
+// it full-size in AttachmentLightbox below; click a PDF chip to open the
+// real file in a new tab (a PDF can't be "enlarged" the same way an image
+// can — the browser's own PDF viewer already does that job).
+function AttachmentThumbnails({ attachments, onView }: { attachments: ChatAttachment[]; onView: (a: ChatAttachment) => void }) {
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
       {attachments.map(a => (
         a.kind === 'image'
-          ? <img key={a.id} src={`data:${a.mediaType};base64,${a.base64}`} alt={a.name} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(255,255,255,0.35)', display: 'block' }} />
-          : <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', fontSize: 11 }}>
+          ? <img key={a.id} src={`data:${a.mediaType};base64,${a.base64}`} alt={a.name} onClick={() => onView(a)} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(255,255,255,0.35)', display: 'block', cursor: 'zoom-in' }} />
+          : <button key={a.id} type="button" onClick={() => onView(a)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', fontSize: 11, border: 'none', color: 'inherit', font: 'inherit', cursor: 'pointer' }}>
               <FileText size={13} />{a.name}
-            </div>
+            </button>
       ))}
+    </div>
+  );
+}
+
+// Full-size image viewer (2026-09-09) — a real, dedicated "view attachment"
+// affordance rather than the thumbnail being the only way to ever see it
+// again. Click-outside or the × closes it; PDFs never reach this component
+// (they open in a real browser tab instead, see handleViewAttachment).
+function AttachmentLightbox({ attachment, onClose }: { attachment: ChatAttachment; onClose: () => void }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.75)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 28 }}>
+      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }}>
+        <img
+          src={`data:${attachment.mediaType};base64,${attachment.base64}`}
+          alt={attachment.name}
+          style={{ display: 'block', maxWidth: '90vw', maxHeight: '90vh', borderRadius: 8, boxShadow: '0 20px 60px rgba(0,0,0,0.45)' }}
+        />
+        <button
+          onClick={onClose}
+          title="关闭"
+          style={{ position: 'absolute', top: -14, right: -14, width: 32, height: 32, borderRadius: '50%', border: 'none', background: '#fff', color: '#1e293b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 10px rgba(0,0,0,0.35)' }}
+        >
+          <X size={16} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -1079,6 +1112,16 @@ export default function MyTasksPage() {
   }, [pendingAttachments.length]);
 
   const removeAttachment = (id: string) => setPendingAttachments(prev => prev.filter(a => a.id !== id));
+
+  // "假设我要看回去这个附带的图片，我想要点击放大查看是可以的吗？" — an
+  // image opens in the lightbox below; a PDF opens in a real new tab (its
+  // data: URL is already in memory, no extra fetch needed) since a browser
+  // already renders a PDF viewer for that on its own.
+  const [viewingAttachment, setViewingAttachment] = useState<ChatAttachment | null>(null);
+  const handleViewAttachment = (a: ChatAttachment) => {
+    if (a.kind === 'image') setViewingAttachment(a);
+    else window.open(`data:${a.mediaType};base64,${a.base64}`, '_blank');
+  };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -1434,7 +1477,7 @@ export default function MyTasksPage() {
                   <div style={{ fontSize: 15, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
                   <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20 }}>Ready when you are.</div>
                   <div style={{ width: '100%', maxWidth: 560 }}>
-                    <AttachmentChips attachments={pendingAttachments} onRemove={removeAttachment} />
+                    <AttachmentChips attachments={pendingAttachments} onRemove={removeAttachment} onView={handleViewAttachment} />
                     {attachError && <div style={{ fontSize: 11, color: '#b91c1c', marginBottom: 6 }}>{attachError}</div>}
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
@@ -1524,7 +1567,7 @@ export default function MyTasksPage() {
                             </>
                           : <>
                               {message.content}
-                              {message.attachments?.length ? <AttachmentThumbnails attachments={message.attachments} /> : null}
+                              {message.attachments?.length ? <AttachmentThumbnails attachments={message.attachments} onView={handleViewAttachment} /> : null}
                             </>}
                       </div>
                     ))}
@@ -1539,7 +1582,7 @@ export default function MyTasksPage() {
                     )}
                   </div>
                   <div style={{ padding: '10px 12px', borderTop: '1px solid #e8edf3', background: '#fff' }}>
-                    <AttachmentChips attachments={pendingAttachments} onRemove={removeAttachment} />
+                    <AttachmentChips attachments={pendingAttachments} onRemove={removeAttachment} onView={handleViewAttachment} />
                     {attachError && <div style={{ fontSize: 11, color: '#b91c1c', marginBottom: 6 }}>{attachError}</div>}
                     <div style={{ display: 'flex', gap: 8 }}>
                     <button
@@ -1642,6 +1685,7 @@ export default function MyTasksPage() {
           )}
         </div>
       </div>
+      {viewingAttachment && <AttachmentLightbox attachment={viewingAttachment} onClose={() => setViewingAttachment(null)} />}
     </div>
   );
 }
