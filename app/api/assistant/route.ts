@@ -20,6 +20,7 @@ import { listCompanies, type CompanyListFilters } from '@/lib/company-list-looku
 import { getTrademarkSummary } from '@/lib/trademark-lookup';
 import { getUpcomingDeadlines } from '@/lib/deadlines-lookup';
 import { getRecentChanges } from '@/lib/audit-lookup';
+import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
 import { fyeDateString } from '@/lib/invoice-templates';
@@ -414,6 +415,33 @@ async function upcomingDeadlinesTool(days?: number) {
   return {
     ...result,
     note: `Real deadlines from ar_reminder (AR filing + AGM, only cycles not yet filed / AGMs not yet held) and trademark_records (registered marks' expiry). daysUntilDue is negative for something already overdue. extendedFrom being set means that deadline was formally EXTENDED (EOT) from that original date — say so rather than just quoting the later date. IMPORTANT: the overdue AR count here will NOT match late_filing_summary's, and that is correct, not a contradiction — the Late Filing page applies its own additional rules (excludes struck-off/terminated companies and already-resolved rows) and is the authoritative "who do we actually chase" list; this is the raw deadline view. If the user is asking who to chase, prefer late_filing_summary and say which one you used.`,
+  };
+}
+
+// Added 2026-09-09 — the fifth preview→confirm→execute action, per Vincent:
+// "可以真正执行只是每次执行要提前获得用户点击同意才真正执行操作". READ-ONLY
+// here, exactly like the other four: this shows the real current value and
+// what it would become; the actual write only happens if the user clicks
+// Confirm on the card, which PATCHes the same conflict-safe
+// /api/ar-reminder endpoint the AR Reminder page itself uses (it requires
+// the previous value, so a value someone else changed in the meantime is
+// rejected rather than silently overwritten).
+async function arUpdatePreviewTool(account: ApprovedAccount | null, input: Record<string, unknown>) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  const company = String(input.company ?? '').trim();
+  const field = String(input.field ?? '').trim();
+  if (!company) return { error: true as const, message: 'A company name is required.' };
+  if (!isArEditableField(field)) {
+    return { error: true as const, message: `"${field}" is not a field this assistant can change. Only these are allowed: ${Object.keys(AR_CHAT_EDITABLE_FIELDS).join(', ')}. Tell the user plainly which ones you can help with rather than trying another field name.` };
+  }
+  const rawValue = input.value;
+  const value = rawValue == null ? null : String(rawValue);
+  const result = await previewArUpdate(company, field, value, typeof input.fyeYear === 'number' ? input.fyeYear : undefined);
+  if (!result.found) return result;
+  return {
+    found: true as const,
+    preview: result.preview,
+    note: 'READ-ONLY preview — NOTHING has been changed yet, and you have no tool that can write this directly. The user sees a card with the real before/after and a Confirm button; only their click performs the update. Present the change plainly (company, which FYE cycle, which field, current value → new value) and tell them to confirm on the card. Never say or imply you have already made, or are making, the change. If alreadyThatValue is true, say it is already set to that. If cycleAlreadyFiled is true, point that out before they change a workflow date on an already-filed cycle.',
   };
 }
 
@@ -1104,6 +1132,8 @@ Use check_email_status whenever the user asks whether an email, invoice, or remi
 
 Use company_deep_lookup for ANY question about a specific named company that goes beyond basic status/FYE — directors, secretary, shareholders, trademarks, invoice history, Post Incorporate documents generated, ND appointments, Client Communications activity. search_company only has a thin slice of what this system actually knows about a company; company_deep_lookup has the real depth. Never tell the user a company-specific question "can't be checked" or point them to go look at Company 360 themselves without trying this tool first — it reads the exact same data that page does. It deliberately never returns personal ID numbers, date of birth, home address, or personal contact numbers for directors/shareholders — if asked for those specifically, say plainly this system doesn't surface that level of personal detail through chat, don't guess or fabricate them.
 
+When the user asks you to actually CHANGE something on an AR Reminder cycle — mark it prepared/sent/received/AGM-held/filed, assign a Secretary/Accounts/Tax PIC, or set remarks (e.g. "把 XX 的年报标记为已申报", "把 XX 指派给 Chelsea") — use preview_ar_update. It is READ-ONLY: it shows the real current value and what it would become, and the user gets a Confirm button on the card. Their click is what performs the update — never say or imply you have already made the change, are making it, or will make it yourself; say what will change and ask them to confirm on the card. If they ask for a field that isn't in the allowed list, say plainly which fields you can change rather than trying a different field name.
+
 When the user asks WHICH companies (not "how many", not one named company) — "Chelsea 负责哪些公司", "哪些公司用注册地址", "12月FYE的有哪些", "哪些要做XBRL" — use list_companies. It is the ONLY tool that returns a filtered list; every other tool answers about one named company or gives a single number. Always report its real totalMatched, and say the list is partial when truncated is true.
 
 Use upcoming_deadlines for "接下来/下个月有什么要交", "哪些逾期了" — it unifies AR filing, AGM and trademark-renewal deadlines and flags EOT-extended ones. Its overdue AR count will differ from late_filing_summary's; that is expected (Late Filing applies extra rules and is the authoritative chase-list), so say which one you used rather than presenting them as contradictory.
@@ -1152,6 +1182,12 @@ const CLAUDE_TOOLS = [
     limit: { type: 'number', description: 'How many names to return, default 50, max 200' },
   } } },
   { name: 'upcoming_deadlines', description: 'REAL, live UNIFIED deadline view across AR filing deadlines, AGM deadlines and trademark renewals — plus everything already OVERDUE. Use for "下个月有哪些deadline", "接下来要交什么", "哪些逾期了". Shows when a deadline was formally EXTENDED (EOT) and what the original date was. For "who should we chase about late filing" specifically, late_filing_summary is the authoritative list (it applies extra rules this raw view does not).', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days ahead to look, default 30, max 365' } } } },
+  { name: 'preview_ar_update', description: "Preview a change to ONE AR Reminder cycle — marking it prepared/sent/received/AGM-held/FILED, assigning a PIC, or setting remarks. READ-ONLY: it shows the real current value and what it would become; the user gets a Confirm button on the card and ONLY their click performs the update. Use whenever the user asks to update/mark/set/assign something on an AR cycle (e.g. \"把 XX 的年报标记为已申报\", \"把 XX 指派给 Chelsea\"). Pass value as a date like '03 Apr 2026' for date fields, a staff name for PIC fields, or null/empty to clear. Never claim you performed the update yourself.", input_schema: { type: 'object', properties: {
+    company: { type: 'string', description: 'Company name, partial match is fine' },
+    field: { type: 'string', enum: ['prepared_date', 'sent_date', 'received_date', 'agm_held_date', 'filling_date', 'pic', 'acc_pic', 'tax_pic', 'remarks'], description: 'Which field to change' },
+    value: { type: 'string', description: "New value — a date like '03 Apr 2026' for date fields, a staff name for PIC fields. Omit or empty to clear the field." },
+    fyeYear: { type: 'number', description: 'Which FYE cycle year — defaults to the most recent not-yet-filed cycle' },
+  }, required: ['company', 'field'] } },
   { name: 'recent_changes', description: 'REAL field-level change history from the audit log — who changed which field on which company, from what value to what, and when. Use for "最近谁改了什么", "这家公司最近被改了什么", "谁动过这个". Most changes are AUTOMATED nightly syncs (changed_by "system:..."); pass humanOnly:true when the user means a person. Different from recent_activity_summary, which describes what a person has been DOING across features rather than the field-level diff trail.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days back, default 7, max 365' }, humanOnly: { type: 'boolean', description: 'Exclude automated system syncs' }, company: { type: 'string', description: 'Only changes for this company' }, limit: { type: 'number', description: 'How many change rows to return, default 30, max 100' } } } },
   { name: 'trademark_summary', description: 'REAL, live company-WIDE trademark counts and lists — how many trademarks are registered vs. still in progress (application filed, not yet granted), and which registered marks are expiring soon. Use this for any trademark question that is NOT about one specific company (e.g. "现在有多少个商标在处理中", "哪些商标快到期了") — for ONE specific company\'s own trademark(s), use company_deep_lookup instead, which has the exact same data already scoped to that company.', input_schema: { type: 'object', properties: {} } },
   { name: 'late_filing_summary', description: 'REAL, live company-WIDE Late Filing counts — how many companies are currently overdue in total, broken down by severity (serious/recent/review) and by which staff member (PIC) currently has the most active overdue companies. Use this for any Late Filing question that is NOT about one specific company (e.g. "目前一共有多少家迟报", "谁PIC压的最多") — for one specific company, use preview_late_filing_resolve instead.', input_schema: { type: 'object', properties: {} } },
@@ -1238,6 +1274,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'company_deep_lookup') return companyDeepLookup(String(input.company ?? ''));
   if (name === 'list_companies') return companyListTool(input);
   if (name === 'upcoming_deadlines') return upcomingDeadlinesTool(typeof input.days === 'number' ? input.days : undefined);
+  if (name === 'preview_ar_update') return arUpdatePreviewTool(account, input);
   if (name === 'recent_changes') return recentChangesTool(input);
   if (name === 'trademark_summary') return trademarkSummaryTool();
   if (name === 'late_filing_summary') return lateFilingSummaryTool();
@@ -1262,7 +1299,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview }> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview }> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -1280,6 +1317,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   // the user to read, not something the UI should try to parse back apart.
   let lastInvoicePreview: InvoicePreview | undefined;
   let lastLateFilingPreview: LateFilingResolvePreview | undefined;
+  let lastArUpdatePreview: ArUpdatePreview | undefined;
   let lastInvoiceEditPreview: InvoiceEditPreview | undefined;
   let lastPostIncorporatePreview: PostIncorporatePreview | undefined;
   // INV-DATA-022 deterministic safety net — see mentionsOutstandingBalance's
@@ -1315,7 +1353,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview };
+      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -1339,6 +1377,9 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
         if (tu.name === 'preview_late_filing_resolve' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
           lastLateFilingPreview = (result as { preview: LateFilingResolvePreview }).preview;
         }
+        if (tu.name === 'preview_ar_update' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
+          lastArUpdatePreview = (result as { preview: ArUpdatePreview }).preview;
+        }
         if (tu.name === 'preview_invoice_edit' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
           lastInvoiceEditPreview = (result as { preview: InvoiceEditPreview }).preview;
         }
@@ -1352,7 +1393,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -1668,11 +1709,13 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
 function toStoredPreview(
   invoicePreview?: InvoicePreview, lateFilingPreview?: LateFilingResolvePreview,
   invoiceEditPreview?: InvoiceEditPreview, postIncorporatePreview?: PostIncorporatePreview,
+  arUpdatePreview?: ArUpdatePreview,
 ): StoredPreview | null {
   if (invoicePreview) return { type: 'invoice_draft', data: invoicePreview as unknown as Record<string, unknown> };
   if (lateFilingPreview) return { type: 'late_filing_resolve', data: lateFilingPreview as unknown as Record<string, unknown> };
   if (invoiceEditPreview) return { type: 'invoice_edit', data: invoiceEditPreview as unknown as Record<string, unknown> };
   if (postIncorporatePreview) return { type: 'post_incorporate', data: postIncorporatePreview as unknown as Record<string, unknown> };
+  if (arUpdatePreview) return { type: 'ar_update', data: arUpdatePreview as unknown as Record<string, unknown> };
   return null;
 }
 
@@ -1756,9 +1799,9 @@ export async function POST(req: NextRequest) {
       // than the other, single-shot preview tools ever did; losing an
       // earlier-collected director's details off the back of an 8-message
       // window would make Claude re-ask for them or, worse, guess.
-      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview } = await claudeAnswer(messages.slice(-24), context, account);
-      await persistExchange(conversationId, account, last.content, reply, isFirstMessage, toStoredPreview(invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview));
-      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview });
+      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview } = await claudeAnswer(messages.slice(-24), context, account);
+      await persistExchange(conversationId, account, last.content, reply, isFirstMessage, toStoredPreview(invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview));
+      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview });
     }
     // The rule-based intent router only ever understands plain text — an
     // attached image/PDF is real content only Claude can actually look at,

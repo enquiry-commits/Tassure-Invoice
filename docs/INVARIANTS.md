@@ -1024,6 +1024,49 @@ again.
   confirmed as a real, recurring risk now that it's happened twice in the
   same session. `lib/late-filing-categorize.ts` is the model to follow: one
   tiny, framework-free file, importable from anywhere.
+- **INV-DATA-030** — A company that has been struck off or terminated is
+  routinely REMOVED from the `companies` table entirely while `master_list`
+  keeps its full historical record — confirmed on production: of 6 sampled
+  struck-off companies, 4 had no `companies` row at all. Any
+  company-lookup path that queries only `companies` will therefore answer
+  "no such company" for a real former client the firm served for years
+  (`lib/company-deep-lookup.ts` did exactly that until it gained a
+  master_list fallback returning `recordSource: 'master_list_only'`). Two
+  rules follow: (a) a lookup meant to answer "do we know this company" must
+  fall back to master_list, and (b) "is X still our client" must be
+  answered from the master_list lifecycle category, NOT from
+  `companies.tw_status`/`is_active` alone — those come from TeamWork and can
+  disagree with it.
+- **INV-DATA-031** — Annual Return FILING status and INVOICING status are
+  different concepts on the same AR cycle and must never be used to answer
+  each other's question — the same confusion INV-DATA-022 already documents
+  for `search_company`'s `ar_reminders` field. `ar_batch` returned only
+  filing status, so "4月有几家没开单" (a billing question) had no correct
+  answer at all; it now returns `filing_status` and `billing_status`
+  separately, with invoiced-vs-not resolved the way AR Reminder's own page
+  does it (a `generated_invoices` row whose `fye_cycle` matches that row's
+  own cycle).
+- **INV-DATA-032** — Any count reported to a user must come from a COUNT
+  query or a fully-paged fetch, never from the length of a capped
+  `.limit()`/`.range()` read: `lib/audit-lookup.ts` first reported exactly
+  1000 changes for a 7-day window because that was Supabase's row cap, not
+  the real figure (1058). The same class of error is why `lib/page-all.ts`
+  exists — reach for a count query or `pageAll()` rather than assuming a
+  single read returned everything.
+- **INV-DATA-033** — Every chat action that WRITES must go through the
+  preview → user-click-Confirm → execute pattern the assistant's four
+  original action cards established, per Vincent: "可以真正执行只是每次执行
+  要提前获得用户点击同意才真正执行操作" (real execution is fine, as long as
+  every execution gets an explicit user click first). Concretely: the chat
+  TOOL is read-only and returns a preview with the real current value; the
+  CARD renders a before/after and a Confirm button; only the click calls
+  the real API. `preview_ar_update` (2026-09-09) also shows the two extra
+  rules such an action needs: send the previous value so a conflict-safe
+  endpoint REJECTS a value someone else changed in the meantime (surface
+  that 409 to the user rather than swallowing it), and keep the chat-
+  writable field list deliberately NARROWER than the endpoint's own
+  allowlist, so chat is a workflow shortcut rather than a way to rewrite
+  any column of a compliance record by typing a sentence.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

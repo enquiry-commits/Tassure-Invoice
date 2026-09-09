@@ -15,6 +15,8 @@ import type { EditableLine } from '@/lib/billing-draft';
 import type { LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import type { InvoiceEditPreview } from '@/lib/invoice-edit-lookup';
 import type { PostIncorporatePreview } from '@/lib/docx-post-incorporate';
+// type-only (lib/ar-update-lookup.ts is server-only — see INV-DOC-006)
+import type { ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { billingDeepLink, lateFilingDeepLink } from '@/lib/deep-links';
 import { logActivity } from '@/lib/activity-client';
 
@@ -41,6 +43,7 @@ export type ChatMsg = {
   lateFilingPreview?: LateFilingResolvePreview;
   invoiceEditPreview?: InvoiceEditPreview;
   postIncorporatePreview?: PostIncorporatePreview;
+  arUpdatePreview?: ArUpdatePreview;
 };
 
 // Turns a local ChatMsg back into what /api/assistant expects — content
@@ -74,6 +77,7 @@ export function storedMessageToChatMsg(m: { role: 'user' | 'assistant'; content:
   else if (p?.type === 'late_filing_resolve') msg.lateFilingPreview = p.data as unknown as LateFilingResolvePreview;
   else if (p?.type === 'invoice_edit') msg.invoiceEditPreview = p.data as unknown as InvoiceEditPreview;
   else if (p?.type === 'post_incorporate') msg.postIncorporatePreview = p.data as unknown as PostIncorporatePreview;
+  else if (p?.type === 'ar_update') msg.arUpdatePreview = p.data as unknown as ArUpdatePreview;
   return msg;
 }
 
@@ -788,6 +792,160 @@ export function AttachmentLightbox({ attachment, onClose }: { attachment: ChatAt
         >
           <X size={16} />
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── AR Reminder update (preview → confirm → execute) ────────────────────
+// The fifth confirm-gated action, added 2026-09-09 per Vincent: "可以真正
+// 执行只是每次执行要提前获得用户点击同意才真正执行操作". Same three-step
+// shape as the cards above: this only ever SHOWS the change; the real write
+// happens after an explicit Confirm click, against the same conflict-safe
+// PATCH /api/ar-reminder the AR Reminder page itself uses. `previousValue`
+// is sent so a value someone else changed in the meantime is REJECTED (409)
+// rather than silently overwritten — that conflict is shown to the user
+// instead of being swallowed.
+type ArUpdateOutcome =
+  | { state: 'idle' }
+  | { state: 'confirming' }
+  | { state: 'submitting' }
+  | { state: 'success' }
+  | { state: 'conflict'; currentValue: string | null; updatedByName: string | null }
+  | { state: 'error'; message: string };
+
+export function ArUpdateCard({ preview, onGenerated }: { preview: ArUpdatePreview; onGenerated: (summary: string) => void }) {
+  const [outcome, setOutcome] = useState<ArUpdateOutcome>({ state: 'idle' });
+  const cycle = preview.fyeMonth && preview.fyeYear ? `FYE ${preview.fyeMonth} ${preview.fyeYear}` : '';
+
+  const submit = async () => {
+    setOutcome({ state: 'submitting' });
+    try {
+      const res = await fetch('/api/ar-reminder', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: preview.rowId,
+          field: preview.field,
+          value: preview.newValue,
+          previousValue: preview.currentValue,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        setOutcome({ state: 'conflict', currentValue: json.currentValue ?? null, updatedByName: json.updatedByName ?? null });
+        return;
+      }
+      if (!res.ok) {
+        setOutcome({ state: 'error', message: json.error || `Request failed (${res.status})` });
+        return;
+      }
+      logActivity('ar_update_from_chat', { companyName: preview.companyName, field: preview.field });
+      setOutcome({ state: 'success' });
+      onGenerated(`已更新 ${preview.companyName}${cycle ? `（${cycle}）` : ''} 的 ${preview.fieldLabel}：${preview.currentValue || '（空）'} → ${preview.newValue || '（空）'}。`);
+    } catch (err) {
+      setOutcome({ state: 'error', message: err instanceof Error ? err.message : '网络错误，请重试。' });
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 420 }}>
+      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <FileCheck2 size={14} color="#1d4ed8" style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+          <div style={{ fontSize: 10.5, color: '#94a3b8' }}>{cycle}{preview.uen ? ` · UEN ${preview.uen}` : ''}</div>
+        </div>
+        {preview.cycleAlreadyFiled && (
+          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#15803d', background: '#f0fdf7', border: '1px solid #bae6d3', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>FILED</span>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px', fontSize: 11.5 }}>
+        <div style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, marginBottom: 3 }}>{preview.fieldLabel.toUpperCase()}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ color: '#64748b', textDecoration: preview.alreadyThatValue ? 'none' : 'line-through' }}>{preview.currentValue || '（空）'}</span>
+          <span style={{ color: '#cbd5e1' }}>→</span>
+          <span style={{ color: '#173b61', fontWeight: 700 }}>{preview.newValue || '（空）'}</span>
+        </div>
+        {preview.alreadyThatValue && (
+          <div style={{ marginTop: 6, fontSize: 10.5, color: '#b45309' }}>已经是这个值了，无需更改。</div>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7' }}>
+        {outcome.state === 'success' ? (
+          <div style={{ fontSize: 11.5, color: '#15803d', fontWeight: 700 }}>✓ 已更新</div>
+        ) : outcome.state === 'conflict' ? (
+          <div style={{ fontSize: 11, color: '#b45309' }}>
+            这条记录已被{outcome.updatedByName ? ` ${outcome.updatedByName} ` : '其他人'}改成「{outcome.currentValue || '（空）'}」，没有覆盖。请重新确认后再试。
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOutcome({ state: 'confirming' })}
+            disabled={preview.alreadyThatValue}
+            style={{
+              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+              cursor: preview.alreadyThatValue ? 'not-allowed' : 'pointer',
+              background: preview.alreadyThatValue ? '#e2e8f0' : '#1d4ed8',
+              color: preview.alreadyThatValue ? '#94a3b8' : '#fff',
+            }}
+          >
+            更新 {preview.fieldLabel}
+          </button>
+        )}
+      </div>
+
+      {(outcome.state === 'confirming' || outcome.state === 'submitting' || outcome.state === 'error') && (
+        <ArUpdateConfirmModal
+          preview={preview}
+          outcome={outcome}
+          onCancel={() => setOutcome({ state: 'idle' })}
+          onConfirm={() => void submit()}
+        />
+      )}
+    </div>
+  );
+}
+
+function ArUpdateConfirmModal({ preview, outcome, onCancel, onConfirm }: {
+  preview: ArUpdatePreview;
+  outcome: Extract<ArUpdateOutcome, { state: 'confirming' | 'submitting' | 'error' }>;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const busy = outcome.state === 'submitting';
+  const cycle = preview.fyeMonth && preview.fyeYear ? `FYE ${preview.fyeMonth} ${preview.fyeYear}` : '';
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 400, overflow: 'hidden', boxShadow: '0 20px 50px rgba(15,23,42,0.3)' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <AlertTriangle size={16} color="#b45309" />
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#173b61' }}>确认更新 AR Reminder</div>
+          <button type="button" onClick={onCancel} disabled={busy} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: busy ? 'default' : 'pointer', color: '#94a3b8' }}><X size={16} /></button>
+        </div>
+        <div style={{ padding: '14px 18px', fontSize: 12, color: '#475569', lineHeight: 1.7 }}>
+          <div><strong style={{ color: '#173b61' }}>{preview.companyName}</strong>{cycle ? ` · ${cycle}` : ''}</div>
+          <div style={{ marginTop: 8 }}>
+            {preview.fieldLabel}：<span style={{ textDecoration: 'line-through', color: '#94a3b8' }}>{preview.currentValue || '（空）'}</span>
+            {' → '}
+            <strong style={{ color: '#173b61' }}>{preview.newValue || '（空）'}</strong>
+          </div>
+          {preview.cycleAlreadyFiled && (
+            <div style={{ marginTop: 8, color: '#b45309' }}>注意：这个周期已经标记为已申报。</div>
+          )}
+          <div style={{ marginTop: 10, fontSize: 11, color: '#94a3b8' }}>确认后会真正写入系统，和在 AR Reminder 页面手动修改一样。</div>
+          {outcome.state === 'error' && (
+            <div style={{ marginTop: 10, color: '#b91c1c', fontSize: 11.5 }}>{outcome.message}</div>
+          )}
+        </div>
+        <div style={{ padding: '12px 18px', borderTop: '1px solid #eef2f7', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" onClick={onCancel} disabled={busy} style={{ border: '1px solid #dbe3ec', background: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: '#475569', cursor: busy ? 'default' : 'pointer' }}>取消</button>
+          <button type="button" onClick={onConfirm} disabled={busy} style={{ border: 'none', background: busy ? '#93b4f5' : '#1d4ed8', color: '#fff', borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 750, cursor: busy ? 'default' : 'pointer' }}>
+            {busy ? '更新中…' : '确认更新'}
+          </button>
+        </div>
       </div>
     </div>
   );

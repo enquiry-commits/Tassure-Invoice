@@ -8,7 +8,7 @@ import {
 import MetricCard from '@/components/MetricCard';
 import { RichText } from '@/components/assistant/ChatRichText';
 import {
-  InvoiceDraftCard, LateFilingResolveCard, InvoiceEditCard, PostIncorporateCard,
+  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard,
   AttachmentChips, AttachmentThumbnails, AttachmentLightbox,
   toApiMessage, storedMessageToChatMsg,
   type ChatAttachment, type ChatMsg,
@@ -507,7 +507,7 @@ export default function MyTasksPage() {
         body: JSON.stringify({ messages: next.map(toApiMessage), context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId, viewAs: viewAsEmail || undefined }),
       });
       const json = await res.json();
-      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined, postIncorporatePreview: json.postIncorporatePreview ?? undefined }]);
+      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined, postIncorporatePreview: json.postIncorporatePreview ?? undefined, arUpdatePreview: json.arUpdatePreview ?? undefined }]);
       loadConversations(); // pick up the auto-derived title / updated_at reorder
     } catch {
       setChatMessages(current => [...current, { role: 'assistant', content: '网络错误，请重试。' }]);
@@ -773,6 +773,12 @@ export default function MyTasksPage() {
                               {message.lateFilingPreview && (
                                 <LateFilingResolveCard
                                   preview={message.lateFilingPreview}
+                                  onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
+                                />
+                              )}
+                              {message.arUpdatePreview && (
+                                <ArUpdateCard
+                                  preview={message.arUpdatePreview}
                                   onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
                                 />
                               )}

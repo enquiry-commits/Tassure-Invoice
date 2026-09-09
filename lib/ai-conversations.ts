@@ -27,7 +27,7 @@ export type Conversation = {
 // app/api/assistant/route.ts decides the `type`/`data` shape; this file
 // just stores and returns it opaquely.
 export type StoredPreview = {
-  type: 'invoice_draft' | 'late_filing_resolve' | 'invoice_edit' | 'post_incorporate';
+  type: 'invoice_draft' | 'late_filing_resolve' | 'invoice_edit' | 'post_incorporate' | 'ar_update';
   data: Record<string, unknown>;
 };
 
