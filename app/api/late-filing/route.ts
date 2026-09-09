@@ -51,10 +51,72 @@ function nextManualFields(
 }
 
 // ── GET — auto-detect late filers from ar_reminder + merge manual overrides ──
+export type LateRow = {
+  id: string;              // entity_name as synthetic ID
+  company_name: string;
+  uen: string;
+  financial_year_end: string;
+  last_annual_return_date: string | null;
+  last_agm_date: string | null;
+  last_accounts_date: string | null;
+  next_agm_due_date: string | null;
+  remarks: string | null;
+  late_fy: number;         // the year that is outstanding
+  // Secretary PIC for the outstanding cycle (ar_reminder.pic — same field
+  // AR Reminder's own "SEC PIC" column edits), added 2026-09-03 per
+  // Vincent: "秘书部门的PIC" for a quick "who's responsible" glance. Read
+  // live from ar_reminder, same as every other date field on this row —
+  // not stored on late_filing_companies, not editable here. Editing PIC
+  // still happens on AR Reminder itself, the one place it's actually
+  // owned, so this can never drift into a second source of truth for the
+  // same value. Null for a pure manual-only late_filing_companies row
+  // (source: 'manual' with no matching ar_reminder entity) — there's no
+  // cycle to read a PIC from.
+  pic: string | null;
+  source: 'auto' | 'manual';
+  // Only set for rows that already have a real late_filing_companies row
+  // (source: 'manual') — used as an optimistic-concurrency token by
+  // PATCH below. A pure 'auto' row doesn't exist there yet, so editing
+  // it is a first-time insert with nothing to conflict against.
+  updated_at: string | null;
+  // Which fields a human has overridden, for the blue "auto-filled" dot —
+  // see scripts/add-late-filing-manual-fields.sql. Only ever set on rows
+  // with a real late_filing_companies row; a pure ar_reminder-derived
+  // 'auto' row (no manual row at all) is never manual for any field.
+  manual_fields: Record<string, boolean> | null;
+  // Vincent, 2026-08-24: who last saved this row (e.g. clicked Resolve) —
+  // scripts/add-late-filing-updated-by.sql. Only ever set on rows with a
+  // real late_filing_companies row, same as manual_fields above.
+  updated_by_email: string | null;
+  updated_by_name: string | null;
+  // Vincent, 2026-08-24: set by the sync when a Resolved row's company is
+  // STILL genuinely overdue per fresh TeamWork data — see
+  // scripts/add-late-filing-resolved-still-overdue.sql and
+  // app/api/late-filing/sync/route.ts's own check.
+  resolved_but_still_overdue_since: string | null;
+};
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const fyeFilter = searchParams.get('fye') ?? 'ALL';
 
+  const stillRelevant = await getLateFilingList();
+
+  // Apply FYE filter
+  const out = fyeFilter === 'ALL'
+    ? stillRelevant
+    : stillRelevant.filter(r => r.financial_year_end === fyeFilter.toUpperCase());
+
+  return NextResponse.json({ companies: out, total: out.length });
+}
+
+// Extracted 2026-09-09 so lib/late-filing-lookup.ts's single-company preview
+// (assistant chat tool) can reuse this EXACT computation instead of
+// re-deriving a second, divergent copy of it -- same reasoning as
+// computeAllCompanyBilling in app/api/billing/renewals/route.ts. Verbatim
+// body, mechanically extracted (not retyped) from what was previously
+// inlined directly in GET() above.
+export async function getLateFilingList(): Promise<LateRow[]> {
   const sb  = createAdminClient();
   const today = todaySGT();
   const thisYear = thisYearSGT();
@@ -148,50 +210,6 @@ export async function GET(req: NextRequest) {
   }
 
   // 5. Detect late filers
-  type LateRow = {
-    id: string;              // entity_name as synthetic ID
-    company_name: string;
-    uen: string;
-    financial_year_end: string;
-    last_annual_return_date: string | null;
-    last_agm_date: string | null;
-    last_accounts_date: string | null;
-    next_agm_due_date: string | null;
-    remarks: string | null;
-    late_fy: number;         // the year that is outstanding
-    // Secretary PIC for the outstanding cycle (ar_reminder.pic — same field
-    // AR Reminder's own "SEC PIC" column edits), added 2026-09-03 per
-    // Vincent: "秘书部门的PIC" for a quick "who's responsible" glance. Read
-    // live from ar_reminder, same as every other date field on this row —
-    // not stored on late_filing_companies, not editable here. Editing PIC
-    // still happens on AR Reminder itself, the one place it's actually
-    // owned, so this can never drift into a second source of truth for the
-    // same value. Null for a pure manual-only late_filing_companies row
-    // (source: 'manual' with no matching ar_reminder entity) — there's no
-    // cycle to read a PIC from.
-    pic: string | null;
-    source: 'auto' | 'manual';
-    // Only set for rows that already have a real late_filing_companies row
-    // (source: 'manual') — used as an optimistic-concurrency token by
-    // PATCH below. A pure 'auto' row doesn't exist there yet, so editing
-    // it is a first-time insert with nothing to conflict against.
-    updated_at: string | null;
-    // Which fields a human has overridden, for the blue "auto-filled" dot —
-    // see scripts/add-late-filing-manual-fields.sql. Only ever set on rows
-    // with a real late_filing_companies row; a pure ar_reminder-derived
-    // 'auto' row (no manual row at all) is never manual for any field.
-    manual_fields: Record<string, boolean> | null;
-    // Vincent, 2026-08-24: who last saved this row (e.g. clicked Resolve) —
-    // scripts/add-late-filing-updated-by.sql. Only ever set on rows with a
-    // real late_filing_companies row, same as manual_fields above.
-    updated_by_email: string | null;
-    updated_by_name: string | null;
-    // Vincent, 2026-08-24: set by the sync when a Resolved row's company is
-    // STILL genuinely overdue per fresh TeamWork data — see
-    // scripts/add-late-filing-resolved-still-overdue.sql and
-    // app/api/late-filing/sync/route.ts's own check.
-    resolved_but_still_overdue_since: string | null;
-  };
 
   const detected: LateRow[] = [];
 
@@ -308,13 +326,7 @@ export async function GET(req: NextRequest) {
   // chronologically — plain string comparison, matching this file's own
   // convention elsewhere (e.g. `fyeDate > today` above).
   const stillRelevant = detected.filter(r => !r.next_agm_due_date || r.next_agm_due_date <= today);
-
-  // Apply FYE filter
-  const out = fyeFilter === 'ALL'
-    ? stillRelevant
-    : stillRelevant.filter(r => r.financial_year_end === fyeFilter.toUpperCase());
-
-  return NextResponse.json({ companies: out, total: out.length });
+  return stillRelevant;
 }
 
 // ── POST — add manual entry ───────────────────────────────────────────────────

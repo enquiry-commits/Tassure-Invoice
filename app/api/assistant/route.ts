@@ -10,6 +10,7 @@ import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories
 import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation } from '@/lib/ai-conversations';
 import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, type ApprovedAccount } from '@/lib/approved-accounts';
 import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
+import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 
 /**
  * In-app AI assistant: answers questions about the system, looks up live data
@@ -392,6 +393,28 @@ async function invoiceDraftPreview(account: ApprovedAccount | null, companyQuery
   };
 }
 
+// Phase 2 of the agentic-chat direction ("可以把上面的4项分阶段进行吗？我
+// 觉得都需要", 2026-09-09) — READ-ONLY preview of what marking a Late
+// Filing record "Resolved" would set its remarks to, using the exact same
+// getLateFilingList() the real page's own list is built from and the exact
+// same resolve() remarks rule (lib/late-filing-lookup.ts). No auth
+// restriction check needed here the way preview_invoice_draft has one —
+// /late-filing carries no page-level restriction the 6 AR-Reminder-only
+// accounts don't already structurally lose access to (they can't reach
+// /my-tasks chat at all, per that tool's own comment).
+async function lateFilingResolvePreview(account: ApprovedAccount | null, companyQuery: string) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  const result = await previewLateFilingResolve(companyQuery);
+  if (!result.found) {
+    return { found: false as const, message: `No company matched "${companyQuery}" in the Late Filing list.`, suggestions: result.suggestions };
+  }
+  return {
+    found: true as const,
+    preview: result.preview,
+    note: 'READ-ONLY preview of what marking this Late Filing record "Resolved" would set its remarks to — nothing has been changed yet, and you have no tool that can change it directly. Present it clearly (company, UEN, overdue FYE year, current remarks, and what the remarks would become), then tell the user a real "Mark Resolved" button with its own confirmation appears in the UI on this preview — never claim you resolved it yourself. If it is already resolved, say so plainly.',
+  };
+}
+
 // Vincent's shared blueprint, section 5: structured long-term memory
 // ("Fact/Preference/Behaviour/..."), with an explicit warning right next
 // to it that v1 deliberately honors — "AI 不应因为一次对话就永久定义用户"
@@ -448,6 +471,8 @@ Key workflows:
 
 If the user asks to generate/open/draft/check an invoice for a company, use preview_invoice_draft — it shows exactly what Billing Drafts would pre-fill (company, FYE cycle, each line item and amount, totals, warnings), but it is READ-ONLY: you have no tool that creates a real invoice in QuickBooks. The UI shows the user a real "Generate Invoice" button on the preview itself, with its own confirmation step — never say or imply YOU generated, will generate, or are generating the real invoice; tell the user to review the preview and use that button when ready. If a FYE year is ambiguous, ask before calling the tool rather than guessing one.
 
+If the user asks about resolving/closing/clearing a company's Late Filing status, use preview_late_filing_resolve the same way — it shows what the record's remarks would become, but is READ-ONLY; the UI shows a real "Mark Resolved" button with its own confirmation. Same rule: never say or imply YOU resolved it.
+
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
 
@@ -478,6 +503,7 @@ const CLAUDE_TOOLS = [
   { name: 'recent_activity_summary', description: "A real audit-trail activity summary — invoices generated, AR Reminder edits, email campaigns created, Master List edits, sent client emails, Post Incorporate docs generated, Trademark record edits, SOA owner picks. NOT page-view tracking (that's my_activity_pattern) — this is what someone has actually DONE across the system's real features, with history predating today. With no `person` argument, returns the CURRENTLY LOGGED-IN caller's own activity. Pass `person` (name/nickname/initials) to ask about someone ELSE — same management-only permission and same refusal behavior as my_tasks_summary's `person` argument.", input_schema: { type: 'object', properties: { person: { type: 'string', description: "Optional: another staff member's name, nickname, or initials." } } } },
   { name: 'remember_this', description: "Save something the user has EXPLICITLY asked to be remembered for future conversations (e.g. a stated preference, a fact about their role, a standing instruction). Only call this when the user directly asks to be remembered/noted — never infer one from conversational tone.", input_schema: { type: 'object', properties: { memory_type: { type: 'string', enum: ['fact', 'preference', 'behaviour', 'relationship', 'project', 'decision', 'rejection', 'pattern'] }, content: { type: 'string', description: 'The fact/preference itself, written as a short standalone statement.' } }, required: ['memory_type', 'content'] } },
   { name: 'preview_invoice_draft', description: "READ-ONLY preview of what a TAB/TAC Billing Drafts invoice would look like for one company — same pre-fill rules as the real page (prior invoice, renewal/annual status, carried-forward Discount/Accounts/Tax lines). Does NOT create anything in QuickBooks; there is no tool available that can. Use whenever the user asks to see/check/preview/'draft'/'open' an invoice for a company. If the company can't be found, suggestions are returned — offer them rather than giving up.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' }, fyeYear: { type: 'number', description: 'Optional: calendar year of the FYE cycle to preview — defaults to the current year' } }, required: ['company'] } },
+  { name: 'preview_late_filing_resolve', description: "READ-ONLY preview of what marking a Late Filing record 'Resolved' would set its remarks to, for one company currently on the Late Filing list — same rule the real page's own Resolve button uses. Does NOT change anything; there is no tool available that can. Use whenever the user asks about resolving/closing/clearing a company's Late Filing status. If the company can't be found, suggestions are returned.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
 ];
 
 async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {
@@ -490,10 +516,11 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'recent_activity_summary') return recentActivitySummary(account, typeof input.person === 'string' ? input.person : undefined);
   if (name === 'remember_this') return rememberThis(account, String(input.memory_type ?? ''), String(input.content ?? ''));
   if (name === 'preview_invoice_draft') return invoiceDraftPreview(account, String(input.company ?? ''), typeof input.fyeYear === 'number' ? input.fyeYear : undefined);
+  if (name === 'preview_late_filing_resolve') return lateFilingResolvePreview(account, String(input.company ?? ''));
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview }> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview }> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -510,6 +537,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   // frontend's real "Confirm & Generate" card — Claude's own prose is for
   // the user to read, not something the UI should try to parse back apart.
   let lastInvoicePreview: InvoicePreview | undefined;
+  let lastLateFilingPreview: LateFilingResolvePreview | undefined;
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -521,7 +549,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text, invoicePreview: lastInvoicePreview };
+      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -538,6 +566,9 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
         if (tu.name === 'preview_invoice_draft' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
           lastInvoicePreview = (result as { preview: InvoicePreview }).preview;
         }
+        if (tu.name === 'preview_late_filing_resolve' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
+          lastLateFilingPreview = (result as { preview: LateFilingResolvePreview }).preview;
+        }
       } catch (err) {
         result = { error: err instanceof Error ? err.message : 'tool failed' };
       }
@@ -545,7 +576,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -907,9 +938,9 @@ export async function POST(req: NextRequest) {
   const isFirstMessage = messages.length === 1;
   try {
     if (process.env.ANTHROPIC_API_KEY) {
-      const { text: reply, invoicePreview } = await claudeAnswer(messages.slice(-8), context, account);
+      const { text: reply, invoicePreview, lateFilingPreview } = await claudeAnswer(messages.slice(-8), context, account);
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
-      return NextResponse.json({ reply, engine: 'claude', invoicePreview });
+      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview });
     }
     const reply = await intentAnswer(last.content, context, account);
     await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
