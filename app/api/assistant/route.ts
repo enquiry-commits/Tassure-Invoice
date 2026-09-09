@@ -63,6 +63,30 @@ function attachmentSummary(content: string | ContentBlock[]): string {
   return parts.length ? `\n\n[附带 ${parts.join('、')} — 未保存到对话记录，仅供本次对话参考]` : '';
 }
 
+// Deterministic safety net for INV-DATA-022 (see docs/INVARIANTS.md) — a
+// second, WORSE real incident on the same topic the same day: after
+// check_outstanding_balance shipped, a short elliptical follow-up ("那么
+// 1v capital呢" — "what about 1v capital", right after a genuinely correct
+// $0 answer for a DIFFERENT company) got a confidently-worded "✅ 确认：...
+// 没有欠款" reply with fake precise numbers ($0, 0张) for a company that
+// actually owed S$3,650 — the model appears to have pattern-completed the
+// PREVIOUS answer's exact template rather than actually calling the tool
+// again for the new company.
+//
+// Checking the USER's question for keywords is NOT enough here — "那么
+// 1v capital呢" itself contains no arrears-related word at all; the topic
+// only exists in conversation context an upfront keyword check can't see.
+// The reliable signal is the other direction: does CLAUDE'S OWN REPLY talk
+// about arrears/outstanding balance (in either direction — claiming there
+// IS one or there ISN'T) without the tool having actually been called this
+// turn? That catches the failure regardless of how obliquely the question
+// was phrased. Applied to the reply text at both return points below.
+function mentionsOutstandingBalance(text: string): boolean {
+  const t = text.toLowerCase();
+  const keywords = ['欠款', '欠钱', '未付', '未结', '挂账', '尚欠', '还欠', '有没有欠', '有欠', 'outstanding', 'arrears', 'owe', 'owing', 'unpaid'];
+  return keywords.some(k => t.includes(k));
+}
+
 // ── System map: single source for both engines ──────────────────────────────
 const PAGES = [
   { label: 'Dashboard 总览',        href: '/',                          kw: ['dashboard', '总览', '首页', 'overview', '主页'] },
@@ -716,7 +740,7 @@ If the user asks to generate/prepare the Post Incorporate document set for a new
 
 The user may attach an image or PDF (a screenshot, an invoice, a scanned document) as reference for the current question — when one is present, actually look at it and factor what you see into your answer rather than only responding to the text.
 
-If the user asks whether a company owes money, has arrears, has an outstanding balance, or anything similar (欠款/未付/outstanding), you MUST call check_outstanding_balance and answer strictly from what it returns — never from search_company's ar_reminders (that is Annual Return FILING status, a completely different concept from money owed) and never from general impression or conversation context. This is a hard rule after a real incident: asked about one company, a prior reply said "没有欠款标记" (no arrears marker) with no real data behind it, while the company's real Company 360 page showed 2 real unpaid invoices — a materially wrong answer for a billing company to give. If you have not called check_outstanding_balance for THIS company in THIS conversation, you do not know whether it has an outstanding balance — say so and call the tool, never assume "no news is good news" from an unrelated field or from having discussed a different company's arrears earlier in the same conversation.
+If the user asks whether a company owes money, has arrears, has an outstanding balance, or anything similar (欠款/未付/outstanding), you MUST call check_outstanding_balance and answer strictly from what it returns — never from search_company's ar_reminders (that is Annual Return FILING status, a completely different concept from money owed) and never from general impression or conversation context. This applies EVERY time a different company comes up, including a short follow-up naming just the company (e.g. "那么 X 呢") right after you already answered about a different company — that is a NEW company and needs its OWN fresh call; never reuse, copy, or pattern-match the previous answer's wording/numbers/template for it, even if the previous one was genuinely correct. This is a hard rule after two real incidents the same day: first, a reply said "没有欠款标记" with no real data behind it at all; then, right after check_outstanding_balance existed and had been used correctly once, a terse follow-up about a DIFFERENT company got a confident "✅ 确认：...没有欠款" reply with fabricated precise numbers ($0, 0 unpaid invoices) for a company that actually owed S$3,650 — the tool was never actually called for it. If you have not called check_outstanding_balance for THIS SPECIFIC company in THIS SPECIFIC turn, you do not know whether it has an outstanding balance — call the tool, don't guess, and don't reuse another company's result.
 
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
@@ -849,6 +873,16 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   let lastLateFilingPreview: LateFilingResolvePreview | undefined;
   let lastInvoiceEditPreview: InvoiceEditPreview | undefined;
   let lastPostIncorporatePreview: PostIncorporatePreview | undefined;
+  // INV-DATA-022 deterministic safety net — see mentionsOutstandingBalance's
+  // own comment on why this checks the REPLY, not the question.
+  // outstandingToolCalled flips true the instant check_outstanding_balance
+  // actually fires (found or not — a real "not found" is still a real
+  // check, never a guess).
+  let outstandingToolCalled = false;
+  const guardedText = (text: string): string =>
+    mentionsOutstandingBalance(text) && !outstandingToolCalled
+      ? `⚠️ 系统提示：这条回复提到了欠款/outstanding，但本次没有检测到真正调用 check_outstanding_balance 查询实时数据——内容可能不准确，请换个更明确的问法重新提问（例如直接说"查一下 XX 公司的欠款"），不要直接采信。\n\n${text}`
+      : text;
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -860,7 +894,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview };
+      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -873,6 +907,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
       // equivalent handling and would answer something unrelated.
       let result: unknown;
       try {
+        if (tu.name === 'check_outstanding_balance') outstandingToolCalled = true;
         result = await runTool(tu.name!, tu.input ?? {}, account ?? null);
         if (tu.name === 'preview_invoice_draft' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
           lastInvoicePreview = (result as { preview: InvoicePreview }).preview;

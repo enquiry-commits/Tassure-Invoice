@@ -783,6 +783,28 @@ again.
   status field and a payment-status field side by side must keep them
   visually and semantically distinct — never let one imply the other.
 
+  A SECOND, worse incident the same day, right after `check_outstanding_
+  balance` shipped: a short elliptical follow-up ("那么 1v capital呢",
+  right after a genuinely correct $0 answer for a DIFFERENT company) got a
+  confident "✅ 确认：...没有欠款" reply with fabricated precise numbers
+  ($0, 0 unpaid invoices) for a company that actually owed S$3,650 — the
+  tool was never actually called for it; the model pattern-completed the
+  previous company's answer template instead. Prompt instructions alone
+  are NOT sufficient to guarantee a tool gets called every time, especially
+  on a terse follow-up that doesn't restate the topic in words a keyword
+  check could see. The real fix is a deterministic, code-level guard in
+  `claudeAnswer()` (`app/api/assistant/route.ts`): `mentionsOutstanding
+  Balance()` scans the REPLY text itself (not the user's question — the
+  real elliptical follow-up contained no arrears-related word at all) for
+  arrears/outstanding-balance language; if found and
+  `check_outstanding_balance` was not actually invoked that turn, a visible
+  `⚠️ 系统提示` warning is prepended before the reply ever reaches the
+  user. Any future high-stakes factual claim (money, legal/compliance
+  status) that an LLM could plausibly answer via pattern-completion instead
+  of a real tool call should get the same treatment: a deterministic,
+  code-level check on the OUTPUT for the claim's own telltale language, not
+  just an instruction trusting the model to always call the right tool.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined
