@@ -350,6 +350,30 @@ again.
   `ar_reminder.id` — an assumption to the contrary silently mirrored an
   "email sent" auto-fill onto a completely unrelated company's ar_reminder
   row.
+- **INV-DOC-005** — The **Nominator** (`nominatorType`/`nominatorInd*`/
+  `nominatorCorp*` on both `PostIncorporateDirector` and
+  `PostIncorporateShareholder`) is a genuinely SEPARATE real person/entity
+  from the ND (nominee director) or nominee shareholder they nominate — NOT
+  the same person filling a second role. Confirmed directly from "08
+  Declaration of Maintenance of ROND"'s own template text: the per-nominee
+  block is a letter FROM the Nominator TO the company ("I, the undersigned,
+  have appointed a nominee director of the Company..."), signed by the
+  Nominator in their OWN capacity — `signature_position: 'Director'`
+  (`lib/docx-post-incorporate.ts`'s `nomineeDirectorItem()`) means the real
+  nominator is very often ALSO a director of the same company (a controlling
+  shareholder/director who requested the ND arrangement), never that the
+  nominator "is" the ND. A previous version of `app/post-incorporate/
+  page.tsx`'s Bizfile-parse handler read this backwards and auto-filled the
+  Nominator fields with the ND's OWN bio (`nominatorIndName: d.name`) —
+  confidently wrong data on a real legal declaration, worse than leaving it
+  blank. Bizfile itself carries no nominator data at all and never will (it's
+  the official ACRA extract, which has no such concept) — any future
+  auto-fill attempt here must not reach for the ND's/nominee's own record as
+  a stand-in. The safe assist is a "pick an existing Director/Shareholder to
+  copy their details in" convenience (since the real nominator is very often
+  already one of them), never a blind default. *(source: 2026-09-09,
+  confirmed on a real company, LAKEFILL VENTURES PTE. LTD. — Vincent: "我之
+  前一直误解了我把ND 当成是 NOMINATOR".)*
 
 ## Automation & cron reliability (INV-CRON)
 

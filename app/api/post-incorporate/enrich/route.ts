@@ -89,7 +89,16 @@ export async function GET(req: NextRequest) {
   const fyeMonthRaw = ((masterRow as { fye?: string } | null)?.fye || (companyRow as { fye_month?: string } | null)?.fye_month || '').trim();
   const fyeMonthOnly = /^[A-Za-z]+$/.test(fyeMonthRaw) ? fyeMonthRaw : '';
   const fyeDay = (companyRow as { fye_day?: number | null } | null)?.fye_day ?? null;
-  const fyeMonthIndex = fyeMonthOnly ? MONTH_NAMES.findIndex(m => m.toLowerCase() === fyeMonthOnly.toLowerCase()) : -1;
+  // master_list.fye is routinely a 3-letter abbreviation ("DEC"), not the
+  // full month name — confirmed on this exact real company (LAKEFILL
+  // VENTURES: master_list.fye = "DEC", companies.fye_month = "December").
+  // An exact-string match against MONTH_NAMES silently failed on "DEC" and
+  // fell back to month-only, even with a real fye_day on record — matching
+  // on the first 3 letters (same technique lib/invoice-period.ts's own
+  // monthNumber() already uses) handles both forms.
+  const fyeMonthIndex = fyeMonthOnly
+    ? MONTH_NAMES.findIndex(m => m.toLowerCase().slice(0, 3) === fyeMonthOnly.toLowerCase().slice(0, 3))
+    : -1;
   const financialYearEndDayMonth = fyeDay && fyeMonthIndex !== -1
     ? `${String(fyeDay).padStart(2, '0')}/${String(fyeMonthIndex + 1).padStart(2, '0')}`
     : fyeMonthOnly;

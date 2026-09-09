@@ -86,6 +86,62 @@ function emptyShareholder(): ShareholderRow {
   };
 }
 
+// A Nominator (the real person who appointed the ND/nominee shareholder —
+// see "08 Declaration of Maintenance of ROND"'s own template text, a letter
+// FROM the Nominator TO the company) is very often already one of the
+// company's own Directors or Shareholders entered elsewhere in this same
+// form (e.g. a controlling shareholder who is also a director requesting
+// the ND arrangement). Bizfile itself carries no nominator data at all
+// (Vincent: "虽然也能理解 因为bizfile没有nominator信息"), so this can never be
+// auto-filled on parse — but picking an existing person here (mirroring
+// "jianwei的generate tool是可以选nominator") is much faster than retyping
+// their details from scratch. A one-shot copy, not a live link: selecting
+// an option just fills the Nominator fields at that moment: the operator
+// can still edit them afterward, and nothing stays bound to the source
+// person if their own details change later.
+type NominatorCandidate = {
+  key: string; label: string; name: string; address: string; nationality: string;
+  identificationNumber: string; dateOfBirth: string; email: string; phone: string;
+};
+function nominatorCandidatesFrom(
+  directors: DirectorRow[], shareholders: ShareholderRow[], exclude: { kind: 'director' | 'shareholder'; index: number },
+): NominatorCandidate[] {
+  const out: NominatorCandidate[] = [];
+  directors.forEach((d, i) => {
+    if (!d.name.trim() || (exclude.kind === 'director' && exclude.index === i)) return;
+    out.push({
+      key: `director:${i}`, label: `${d.name.trim()} (Director)`, name: d.name, address: d.address,
+      nationality: d.nationality, identificationNumber: d.identificationNumber, dateOfBirth: d.dateOfBirth,
+      email: d.email, phone: d.phone,
+    });
+  });
+  shareholders.forEach((s, i) => {
+    if (!s.name.trim() || (exclude.kind === 'shareholder' && exclude.index === i)) return;
+    out.push({
+      key: `shareholder:${i}`, label: `${s.name.trim()} (Shareholder)`, name: s.name, address: s.address,
+      nationality: s.nationality, identificationNumber: s.identificationNumber, dateOfBirth: s.dateOfBirth,
+      email: s.email, phone: s.phone,
+    });
+  });
+  return out;
+}
+// Fields a picked candidate can actually supply — Date Became Nominator has
+// no source anywhere (it's a new fact: WHEN this person became the
+// nominator, not derivable from their director/shareholder appointment
+// date), so it's always left for manual entry.
+type NominatorFillTarget = {
+  nominatorIndName?: string; nominatorIndAddress?: string; nominatorIndNationality?: string;
+  nominatorIndIdentificationNumber?: string; nominatorIndBirthDate?: string; nominatorIndEmail?: string;
+  nominatorIndContactNumber?: string;
+};
+function nominatorFillFrom(c: NominatorCandidate): NominatorFillTarget {
+  return {
+    nominatorIndName: c.name, nominatorIndAddress: c.address, nominatorIndNationality: c.nationality,
+    nominatorIndIdentificationNumber: c.identificationNumber, nominatorIndBirthDate: c.dateOfBirth,
+    nominatorIndEmail: c.email, nominatorIndContactNumber: c.phone,
+  };
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
@@ -226,7 +282,6 @@ export default function PostIncorporatePage() {
       // 进去系统内的空格."
       let enrichedFye = '';
       let nomineeDirectorNames: string[] = [];
-      let nomineeDirectorDetails: { name: string; address: string; idType: string; idNo: string; dob: string; email: string; mobile: string; dateBecameNominator: string }[] = [];
       let teamworkOfficials: TeamworkOfficial[] = [];
       let teamworkShareholderNames: string[] = [];
       let teamworkShareholderDetails: TeamworkShareholderDetail[] = [];
@@ -236,14 +291,16 @@ export default function PostIncorporatePage() {
           const enrichBody = await enrichRes.json();
           enrichedFye = enrichBody.financialYearEndDayMonth || '';
           nomineeDirectorNames = enrichBody.nomineeDirectorNames || [];
-          nomineeDirectorDetails = enrichBody.nomineeDirectorDetails || [];
+          // nomineeDirectorDetails (the ND's OWN bio from Tassure's roster)
+          // is intentionally not consumed here anymore — it was previously
+          // (wrongly) used to auto-fill the Nominator fields with the ND's
+          // own info; see the note where directors are built below for why.
           teamworkOfficials = enrichBody.teamworkOfficials || [];
           teamworkShareholderNames = enrichBody.teamworkShareholderNames || [];
           teamworkShareholderDetails = enrichBody.teamworkShareholderDetails || [];
         }
       } catch { /* enrichment is a nice-to-have; a failure here shouldn't block the Bizfile result itself */ }
       const officialByName = new Map(teamworkOfficials.map(o => [o.name.trim().toUpperCase(), o]));
-      const nomineeDetailByName = new Map(nomineeDirectorDetails.map(d => [d.name, d]));
       const shareholderDetailByName = new Map(teamworkShareholderDetails.map(s => [s.name.trim().toUpperCase(), s]));
       setTassureNdNames(new Set(nomineeDirectorNames));
       setTeamworkOfficialByName(officialByName);
@@ -285,31 +342,31 @@ export default function PostIncorporatePage() {
         setDirectors(bfDirectors.map(d => {
           const isNominee = isNomineeDirector(d);
           const match = officialByName.get(d.name.trim().toUpperCase());
-          const nameKey = d.name.trim().toUpperCase();
-          const isTassureNd = nomineeDirectorNames.includes(nameKey);
-          const nomineeDetail = nomineeDetailByName.get(nameKey);
           return {
             ...emptyDirector(), name: d.name, address: d.address, identificationType: d.identificationType || 'NRIC',
             identificationNumber: d.identificationNumber, nationality: d.nationality, dateOfAppointment: d.dateOfAppointment || '',
             dateOfBirth: teamworkDateToIso(match?.dob || ''), email: match?.email || '', phone: match?.mobile || '',
             isNomineeDirector: isNominee, nominatorType: isNominee ? 'individual' : '',
-            // The "nominator" here is this SAME director acting in that
-            // capacity (see nomineeDirectorItem/signature_position:
-            // 'Director' in lib/docx-post-incorporate.ts) — only knowable
-            // when Tassure itself is the one supplying the arrangement,
-            // since only then does Tassure have this person's own bio on
-            // file (nomineeDirectorDetails, from the SAME 13-person roster
-            // used for isTassureNd/needNdService above). Nationality isn't
-            // captured anywhere in the synced snapshot yet, so stays blank.
-            ...(isTassureNd && nomineeDetail ? {
-              nominatorIndName: d.name,
-              nominatorIndAddress: nomineeDetail.address,
-              nominatorIndIdentificationNumber: nomineeDetail.idNo,
-              nominatorIndBirthDate: teamworkDateToIso(nomineeDetail.dob),
-              nominatorIndEmail: nomineeDetail.email,
-              nominatorIndContactNumber: nomineeDetail.mobile,
-              nominatorIndDateBecameNominator: nomineeDetail.dateBecameNominator,
-            } : {}),
+            // The Nominator is a genuinely SEPARATE real person from the ND
+            // — confirmed directly from "08 Declaration of Maintenance of
+            // ROND"'s own template text: the Nominator's block is a letter
+            // FROM the Nominator TO the company ("I, the undersigned, have
+            // appointed a nominee director of the Company..."), signed by
+            // the Nominator in their OWN capacity (often "Director", since
+            // the real nominator is very often another director/shareholder
+            // of the same company who requested the ND arrangement — NOT
+            // because the nominator "is" the ND). A previous version of this
+            // code read `signature_position: 'Director'` backwards and
+            // auto-filled these fields with the ND's OWN bio
+            // (nominatorIndName: d.name) — confidently wrong data is worse
+            // than a blank field here, and Vincent confirmed this was a real
+            // misunderstanding baked in from early on ("我之前一直误解了我把
+            // ND 当成是 NOMINATOR"). Bizfile genuinely has no nominator
+            // data (Vincent: "虽然也能理解 因为bizfile没有nominator信息") —
+            // left blank for manual entry (or the "Quick-fill Nominator
+            // from…" picker below, which copies from an already-entered
+            // Director/Shareholder — the real nominator is very often
+            // already one of them).
           };
         }));
         setActiveDirectorTab(0);
@@ -611,6 +668,19 @@ export default function PostIncorporatePage() {
                     </Field>
                     {d.nominatorType === 'individual' ? (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                        <div className="col-span-2 md:col-span-4">
+                          <Field label="Quick-fill Nominator from an existing Director/Shareholder (optional)">
+                            <select className={inputClass} value="" onChange={e => {
+                              const cand = nominatorCandidatesFrom(directors, shareholders, { kind: 'director', index: di }).find(c => c.key === e.target.value);
+                              if (cand) updateDirector(di, nominatorFillFrom(cand));
+                            }}>
+                              <option value="">— 手动填写 Manual entry —</option>
+                              {nominatorCandidatesFrom(directors, shareholders, { kind: 'director', index: di }).map(c => (
+                                <option key={c.key} value={c.key}>{c.label}</option>
+                              ))}
+                            </select>
+                          </Field>
+                        </div>
                         <Field label="Nominator Name"><input className={inputClass} value={d.nominatorIndName || ''} onChange={e => updateDirector(di, { nominatorIndName: e.target.value })} /></Field>
                         <Field label="Nominator Address"><input className={inputClass} value={d.nominatorIndAddress || ''} onChange={e => updateDirector(di, { nominatorIndAddress: e.target.value })} /></Field>
                         <Field label="Nominator Nationality"><input className={inputClass} value={d.nominatorIndNationality || ''} onChange={e => updateDirector(di, { nominatorIndNationality: e.target.value })} /></Field>
@@ -798,6 +868,19 @@ export default function PostIncorporatePage() {
                     </Field>
                     {s.nominatorType === 'individual' ? (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+                        <div className="col-span-2 md:col-span-4">
+                          <Field label="Quick-fill Nominator from an existing Director/Shareholder (optional)">
+                            <select className={inputClass} value="" onChange={e => {
+                              const cand = nominatorCandidatesFrom(directors, shareholders, { kind: 'shareholder', index: si }).find(c => c.key === e.target.value);
+                              if (cand) updateShareholder(si, nominatorFillFrom(cand));
+                            }}>
+                              <option value="">— 手动填写 Manual entry —</option>
+                              {nominatorCandidatesFrom(directors, shareholders, { kind: 'shareholder', index: si }).map(c => (
+                                <option key={c.key} value={c.key}>{c.label}</option>
+                              ))}
+                            </select>
+                          </Field>
+                        </div>
                         <Field label="Nominator Name"><input className={inputClass} value={s.nominatorIndName || ''} onChange={e => updateShareholder(si, { nominatorIndName: e.target.value })} /></Field>
                         <Field label="Nominator Address"><input className={inputClass} value={s.nominatorIndAddress || ''} onChange={e => updateShareholder(si, { nominatorIndAddress: e.target.value })} /></Field>
                         <Field label="Nominator Nationality"><input className={inputClass} value={s.nominatorIndNationality || ''} onChange={e => updateShareholder(si, { nominatorIndNationality: e.target.value })} /></Field>
