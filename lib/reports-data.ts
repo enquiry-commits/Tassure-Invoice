@@ -99,6 +99,57 @@ export function computeRevenueTrend(qbInvoices: Record<string, unknown>[], years
 // already does. Open (not yet filed) AR/AGM cycles only — SEC/ACC/TAX PIC
 // dropdowns hold plain staff names, not emails, same fields My Tasks
 // already reads, no resolution step needed.
+// Extracted 2026-09-09 from app/api/reports/route.ts (verbatim) so the chat
+// assistant's portfolio summary can reuse the SAME client-flow numbers the
+// Reports page shows. Its own caveats still apply and must be repeated
+// wherever this is surfaced: master_list.join_date/update_date are staff-
+// typed free text in mixed formats, and update_date on a terminated/
+// struck-off row is an informal proxy for "when it changed", not a
+// guaranteed transition-date field.
+const MONTH_ABBR = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+export function parseFlexibleDate(raw: unknown): Date | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const s = raw.trim();
+
+  const named = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/);
+  if (named) {
+    const mi = MONTH_ABBR.indexOf(named[2].slice(0, 3).toLowerCase());
+    if (mi >= 0) return new Date(Number(named[3]), mi, Number(named[1]));
+  }
+  const dotted = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
+  if (dotted) {
+    const yr = dotted[3].length === 2 ? 2000 + Number(dotted[3]) : Number(dotted[3]);
+    return new Date(yr, Number(dotted[2]) - 1, Number(dotted[1]));
+  }
+  const slashed = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slashed) {
+    const yr = slashed[3].length === 2 ? 2000 + Number(slashed[3]) : Number(slashed[3]);
+    return new Date(yr, Number(slashed[1]) - 1, Number(slashed[2]));
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+export function computeClientFlow(masterList: Record<string, unknown>[]) {
+  const newByYear: Record<number, number> = {};
+  const churnedByYear: Record<number, number> = {};
+  for (const m of masterList) {
+    const jd = parseFlexibleDate(m.join_date);
+    if (jd) {
+      const y = jd.getFullYear();
+      newByYear[y] = (newByYear[y] ?? 0) + 1;
+    }
+    if (m.list_type === 'terminated' || m.list_type === 'strike_off') {
+      const ud = parseFlexibleDate(m.update_date);
+      if (ud) {
+        const y = ud.getFullYear();
+        churnedByYear[y] = (churnedByYear[y] ?? 0) + 1;
+      }
+    }
+  }
+  return { newByYear, churnedByYear };
+}
+
 export function computePicWorkload(arRows: Record<string, unknown>[]) {
   const picCount: Record<string, number> = {};
   for (const r of arRows) {

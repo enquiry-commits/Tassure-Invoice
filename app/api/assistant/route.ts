@@ -18,6 +18,8 @@ import { getCustomerProfileSummary } from '@/lib/customer-profile-lookup';
 import { lookupCompanyDeep } from '@/lib/company-deep-lookup';
 import { listCompanies, type CompanyListFilters } from '@/lib/company-list-lookup';
 import { getTrademarkSummary } from '@/lib/trademark-lookup';
+import { getUpcomingDeadlines } from '@/lib/deadlines-lookup';
+import { getRecentChanges } from '@/lib/audit-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
 import { fyeDateString } from '@/lib/invoice-templates';
@@ -343,7 +345,12 @@ async function customerProfileSummary(account: ApprovedAccount | null) {
     by_company_type: summary.byCompanyType,
     by_industry: summary.byIndustry,
     industry_data_coverage_pct: Math.round(summary.industryDataCoverage * 100),
-    note: 'Real, current counts across every active client (companies.is_active = true), same computation and same "active" definition as the Reports page\'s own KPIs. by_company_type is LEGAL ENTITY STRUCTURE (Private Limited / Sole Proprietorship / LLP, etc.) — NOT an industry. by_industry is real SSIC industry classification, top 15 by count; industry_data_coverage_pct is what share of active clients actually have an SSIC on file (the rest are "Unspecified" and excluded from by_industry, not silently assumed to be any particular industry) — mention that coverage figure if it is meaningfully below 100%, so the industry breakdown is not read as more complete than it is.',
+    by_service: summary.byService,
+    by_customer_source: summary.byCustomerSource,
+    by_lifecycle: summary.byLifecycle,
+    address_service: summary.addressService,
+    client_flow: summary.clientFlow,
+    note: 'Real, current counts across every active client (companies.is_active = true), same computation and same "active" definition as the Reports page\'s own KPIs. by_company_type is LEGAL ENTITY STRUCTURE (Private Limited / Sole Proprietorship / LLP, etc.) — NOT an industry. by_industry is real SSIC industry classification, top 15 by count; industry_data_coverage_pct is what share of active clients actually have an SSIC on file (the rest are "Unspecified" and excluded from by_industry, not silently assumed to be any particular industry) — mention that coverage figure if it is meaningfully below 100%, so the industry breakdown is not read as more complete than it is. by_lifecycle spans the WHOLE Master List history (not just active clients) — it is the only place "how many clients have we lost" is answerable (terminated / strike_off / inactive_old are all former clients, and they are NOT part of total_active_clients). client_flow is best-effort: it is derived from staff-typed free-text join/update dates in mixed formats, and the churn date is an informal proxy for when the status changed, not a guaranteed transition-date field — present those two numbers as directional, never exact.',
   };
 }
 
@@ -394,6 +401,35 @@ async function companyListTool(input: Record<string, unknown>) {
   return {
     ...result,
     note: `Real, current list — same companies+master_list data the Reports page's own drill-down uses, filtered to ACTIVE clients unless includeInactive was set. totalMatched is the REAL full count; only the first ${result.returned} are listed${result.truncated ? ' (truncated)' : ''} — always state the real total, and never imply the listed names are all of them when truncated is true. PIC matching is deliberately loose (staff names are stored inconsistently in this system, e.g. "Kah Ye Chin" vs "Chin Kah Ye"), so double-check a surprising match rather than treating it as exact.`,
+  };
+}
+
+// Added 2026-09-09 — "下个月有哪些deadline" had no answer: AR filing, AGM
+// and trademark-renewal deadlines live in different tables and nothing
+// crossed them. See lib/deadlines-lookup.ts's own header comment (including
+// why ar_reminder.due_date is used directly for EOT-extended cycles).
+async function upcomingDeadlinesTool(days?: number) {
+  const rangeDays = days && days > 0 ? Math.min(days, 365) : 30;
+  const result = await getUpcomingDeadlines(rangeDays);
+  return {
+    ...result,
+    note: `Real deadlines from ar_reminder (AR filing + AGM, only cycles not yet filed / AGMs not yet held) and trademark_records (registered marks' expiry). daysUntilDue is negative for something already overdue. extendedFrom being set means that deadline was formally EXTENDED (EOT) from that original date — say so rather than just quoting the later date. IMPORTANT: the overdue AR count here will NOT match late_filing_summary's, and that is correct, not a contradiction — the Late Filing page applies its own additional rules (excludes struck-off/terminated companies and already-resolved rows) and is the authoritative "who do we actually chase" list; this is the raw deadline view. If the user is asking who to chase, prefer late_filing_summary and say which one you used.`,
+  };
+}
+
+// Added 2026-09-09 — audit_log (field-level "who changed what, from what,
+// to what") had zero chat coverage. See lib/audit-lookup.ts's own header
+// comment on how this differs from recent_activity_summary.
+async function recentChangesTool(input: Record<string, unknown>) {
+  const result = await getRecentChanges({
+    days: typeof input.days === 'number' ? input.days : undefined,
+    humanOnly: input.humanOnly === true,
+    company: typeof input.company === 'string' ? input.company : undefined,
+    limit: typeof input.limit === 'number' ? input.limit : undefined,
+  });
+  return {
+    ...result,
+    note: 'Real field-level change history. changedAt is already Singapore time — relay it as given. isAutomated/changedBy starting with "system:" means a nightly sync made the change, NOT a person — most changes are automated, so when the user asks who changed something, lead with the HUMAN changes (humanChanges / humanOnly:true) and only mention system syncs if relevant. totalInRange/humanChanges/automatedChanges are real counts over the whole window; the changes array is only the most recent few — never imply it is the complete list.',
   };
 }
 
@@ -1068,6 +1104,12 @@ Use check_email_status whenever the user asks whether an email, invoice, or remi
 
 Use company_deep_lookup for ANY question about a specific named company that goes beyond basic status/FYE — directors, secretary, shareholders, trademarks, invoice history, Post Incorporate documents generated, ND appointments, Client Communications activity. search_company only has a thin slice of what this system actually knows about a company; company_deep_lookup has the real depth. Never tell the user a company-specific question "can't be checked" or point them to go look at Company 360 themselves without trying this tool first — it reads the exact same data that page does. It deliberately never returns personal ID numbers, date of birth, home address, or personal contact numbers for directors/shareholders — if asked for those specifically, say plainly this system doesn't surface that level of personal detail through chat, don't guess or fabricate them.
 
+When the user asks WHICH companies (not "how many", not one named company) — "Chelsea 负责哪些公司", "哪些公司用注册地址", "12月FYE的有哪些", "哪些要做XBRL" — use list_companies. It is the ONLY tool that returns a filtered list; every other tool answers about one named company or gives a single number. Always report its real totalMatched, and say the list is partial when truncated is true.
+
+Use upcoming_deadlines for "接下来/下个月有什么要交", "哪些逾期了" — it unifies AR filing, AGM and trademark-renewal deadlines and flags EOT-extended ones. Its overdue AR count will differ from late_filing_summary's; that is expected (Late Filing applies extra rules and is the authoritative chase-list), so say which one you used rather than presenting them as contradictory.
+
+Use recent_changes for "最近谁改了什么" / "这家公司最近被改了什么". Most rows are automated nightly syncs — when the user means a person, pass humanOnly:true and lead with the human edits.
+
 For company-WIDE (not one-company) questions, four more real tools exist — never say "no such capability" for these without calling the matching tool first: trademark_summary (how many trademarks registered/in-progress, which are expiring soon), late_filing_summary (how many companies overdue in total, broken down by severity and by which staff member has the most), communications_summary (how many emails sent recently, all-time status/campaign-type breakdown), nd_roster_capacity (each nominee director's current active-appointment count — there is NO fixed "max slots per person" rule anywhere in this system, never invent one). revenue_workload_summary (revenue/invoice-volume trend by year, PIC workload) is the same canViewReports-gated management tier as customer_profile_summary.
 
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
@@ -1109,6 +1151,8 @@ const CLAUDE_TOOLS = [
     includeInactive: { type: 'boolean', description: 'Include non-active companies (default false)' },
     limit: { type: 'number', description: 'How many names to return, default 50, max 200' },
   } } },
+  { name: 'upcoming_deadlines', description: 'REAL, live UNIFIED deadline view across AR filing deadlines, AGM deadlines and trademark renewals — plus everything already OVERDUE. Use for "下个月有哪些deadline", "接下来要交什么", "哪些逾期了". Shows when a deadline was formally EXTENDED (EOT) and what the original date was. For "who should we chase about late filing" specifically, late_filing_summary is the authoritative list (it applies extra rules this raw view does not).', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days ahead to look, default 30, max 365' } } } },
+  { name: 'recent_changes', description: 'REAL field-level change history from the audit log — who changed which field on which company, from what value to what, and when. Use for "最近谁改了什么", "这家公司最近被改了什么", "谁动过这个". Most changes are AUTOMATED nightly syncs (changed_by "system:..."); pass humanOnly:true when the user means a person. Different from recent_activity_summary, which describes what a person has been DOING across features rather than the field-level diff trail.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days back, default 7, max 365' }, humanOnly: { type: 'boolean', description: 'Exclude automated system syncs' }, company: { type: 'string', description: 'Only changes for this company' }, limit: { type: 'number', description: 'How many change rows to return, default 30, max 100' } } } },
   { name: 'trademark_summary', description: 'REAL, live company-WIDE trademark counts and lists — how many trademarks are registered vs. still in progress (application filed, not yet granted), and which registered marks are expiring soon. Use this for any trademark question that is NOT about one specific company (e.g. "现在有多少个商标在处理中", "哪些商标快到期了") — for ONE specific company\'s own trademark(s), use company_deep_lookup instead, which has the exact same data already scoped to that company.', input_schema: { type: 'object', properties: {} } },
   { name: 'late_filing_summary', description: 'REAL, live company-WIDE Late Filing counts — how many companies are currently overdue in total, broken down by severity (serious/recent/review) and by which staff member (PIC) currently has the most active overdue companies. Use this for any Late Filing question that is NOT about one specific company (e.g. "目前一共有多少家迟报", "谁PIC压的最多") — for one specific company, use preview_late_filing_resolve instead.', input_schema: { type: 'object', properties: {} } },
   { name: 'communications_summary', description: 'REAL, live company-WIDE email/campaign counts from Client Communications — how many emails were actually sent in a recent window, plus the all-time breakdown by status (pending/opened/sent/skipped) and by campaign type. Use this for any Client Communications question that is NOT about one specific company (e.g. "这个月一共发了多少封邮件", "还有哪些campaign没处理完") — for one specific company, use check_email_status instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many recent days to count real sends over — default 30, max 365' } } } },
@@ -1193,6 +1237,8 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'customer_profile_summary') return customerProfileSummary(account);
   if (name === 'company_deep_lookup') return companyDeepLookup(String(input.company ?? ''));
   if (name === 'list_companies') return companyListTool(input);
+  if (name === 'upcoming_deadlines') return upcomingDeadlinesTool(typeof input.days === 'number' ? input.days : undefined);
+  if (name === 'recent_changes') return recentChangesTool(input);
   if (name === 'trademark_summary') return trademarkSummaryTool();
   if (name === 'late_filing_summary') return lateFilingSummaryTool();
   if (name === 'communications_summary') return communicationsSummaryTool(typeof input.days === 'number' ? input.days : undefined);
