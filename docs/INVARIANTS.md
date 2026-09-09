@@ -705,6 +705,19 @@ again.
   named person's own conversation; the two mechanisms are complementary,
   not the same code path, and both must be checked when touching this area.
 
+- **INV-DATA-020** — Every mutating API route must call
+  `getRequestAccount()` AND actually check its result for `null` (401 if
+  so) — calling it alone is not a gate. Found real 2026-09-09: `POST
+  /api/master-list/move` had no auth check at all (only a client-side
+  `window.confirm()`, trivially bypassed by hitting the URL directly);
+  `POST`/`PATCH /api/late-filing` called `getRequestAccount()` but never
+  checked for `null`, silently proceeding with `updated_by_email: null`;
+  `DELETE /api/late-filing` didn't call it at all. All four fixed to
+  match every sibling mutating route (AR Reminder, Trademark,
+  QuickBooks). When adding or reviewing a new mutating route, grep for
+  `getRequestAccount` in it and confirm the very next real line is a
+  null-check with a `401` response — its mere presence proves nothing.
+
 - **INV-DATA-019** — `ai_learning_candidates` auto-approval (added
   2026-09-08, `lib/ai-learning/candidates.ts`'s `analyzeUserActivity()`)
   is a DELIBERATE, negotiated exception to INV-DATA-017's "explicit only"

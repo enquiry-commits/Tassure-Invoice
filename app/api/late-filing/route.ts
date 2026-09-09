@@ -318,8 +318,16 @@ export async function GET(req: NextRequest) {
 }
 
 // ── POST — add manual entry ───────────────────────────────────────────────────
+// 2026-09-09: getRequestAccount() was already called on all three handlers
+// below, but its result was never actually checked — an unauthenticated
+// request still went through with updated_by_email/name left null, same
+// bug in spirit as master-list/move's own missing check (that one fixed in
+// the same change). DELETE didn't even fetch an account at all. Now all
+// three require a real approved account, matching every sibling mutating
+// route in this app.
 export async function POST(req: NextRequest) {
   const account = await getRequestAccount(req);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
   const body = await req.json();
   const sb = createAdminClient();
   const { data, error } = await sb
@@ -336,6 +344,7 @@ export async function PATCH(req: NextRequest) {
   // "Resolved: AUTO: Overdue 1847 days" showed up with no way to tell who
   // clicked Resolve or when, unlike ar_reminder which already tracks this.
   const account = await getRequestAccount(req);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
   const { uen, company_name, previousUpdatedAt, ...fields } = await req.json();
   if (!uen && !company_name) return NextResponse.json({ error: 'uen or company_name required' }, { status: 400 });
 
@@ -401,6 +410,8 @@ export async function PATCH(req: NextRequest) {
 
 // ── DELETE — remove manual entry ─────────────────────────────────────────────
 export async function DELETE(req: NextRequest) {
+  const account = await getRequestAccount(req);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
   const { uen } = await req.json();
   if (!uen) return NextResponse.json({ error: 'uen required' }, { status: 400 });
   const sb = createAdminClient();
