@@ -1,5 +1,5 @@
 // Preserve animation timing and pale lavender artwork; remove neutral white background regions.
-// Usage: node scripts/prepare-thinking-gif.mjs <source.gif>
+// Usage: node scripts/prepare-thinking-gif.mjs <source.gif> [crop-width:height:x:y]
 import { spawnSync } from 'node:child_process';
 const source = process.argv[2];
 if (!source) throw new Error('A source GIF path is required');
@@ -11,7 +11,10 @@ function run(args, input) {
   if (result.status !== 0) throw new Error(result.stderr?.toString() || 'ffmpeg failed');
   return result.stdout;
 }
-const raw = run(['-i', source, '-vf', `scale=${width}:${height}:flags=lanczos,fps=${fps}`,
+const crop = process.argv[3];
+if (crop && !/^\d+:\d+:\d+:\d+$/.test(crop)) throw new Error('Invalid crop');
+const filter = `${crop ? `crop=${crop},` : ''}scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=white,fps=${fps}`;
+const raw = run(['-i', source, '-vf', filter,
   '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1']);
 const pixels = width * height, stride = pixels * 4;
 if (raw.length % stride) throw new Error('Incomplete decoded frame');
