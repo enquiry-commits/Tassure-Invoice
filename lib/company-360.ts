@@ -32,7 +32,7 @@ const FUZZY_MATCH_THRESHOLD = 85;
 // before scoring — normalize() already strips "pte ltd"/"sdn bhd"/etc., so
 // the remaining longest word is usually the one distinguishing word a raw
 // company_name column will still literally contain.
-function significantWord(companyName: string): string | null {
+export function significantWord(companyName: string): string | null {
   const words = normalize(companyName).split(' ').filter(w => w.length > 2);
   if (!words.length) return null;
   return words.reduce((a, b) => (b.length > a.length ? b : a));

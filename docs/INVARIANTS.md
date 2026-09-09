@@ -762,6 +762,27 @@ again.
   value on an actual legal document is a categorically worse failure than
   a wrong guessed value in a chat reply.
 
+- **INV-DATA-022** — Annual Return/AGM FILING status (`ar_reminder.status`,
+  surfaced in the assistant's `search_company` tool as `ar_reminders`) and
+  QuickBooks OUTSTANDING BALANCE / arrears (real unpaid invoices, computed
+  by `computeSoaRows()` in `lib/soa-data.ts`, surfaced via
+  `check_outstanding_balance` in `app/api/assistant/route.ts`) are two
+  completely unrelated concepts — one tracks whether a company's annual
+  return has been lodged, the other tracks whether it has paid its
+  invoices. A real 2026-09-09 incident: asked whether "1V Capital" owed
+  money, the chat assistant answered "这家公司也没有欠款标记" (no arrears
+  marker) after reading only `ar_reminders` (which said "Pending" — a
+  filing-status word that has nothing to do with payment) — while the
+  company's real Company 360 page showed 2 real unpaid invoices totalling
+  S$3,650. Vincent: "这个回复就不对了" / "明明有outstanding". Never answer
+  an outstanding-balance/arrears question from `ar_reminders`, general
+  company data, or unrelated conversation context — only
+  `check_outstanding_balance`'s own real result is a valid basis for that
+  claim (enforced in `staticSystemPrompt()`'s own explicit rule). Any
+  future feature (chat tool, report, dashboard card) that shows a filing-
+  status field and a payment-status field side by side must keep them
+  visually and semantically distinct — never let one imply the other.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

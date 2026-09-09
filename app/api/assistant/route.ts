@@ -12,6 +12,7 @@ import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, type A
 import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import { previewInvoiceEdit, type InvoiceEditPreview, type InvoiceEditChange } from '@/lib/invoice-edit-lookup';
+import { lookupOutstandingBalance } from '@/lib/outstanding-lookup';
 import type { QbCompany } from '@/lib/quickbooks';
 import { billingDeepLink, lateFilingDeepLink } from '@/lib/deep-links';
 import {
@@ -194,10 +195,39 @@ async function searchCompany(q: string) {
       status: c.tw_status, client_type: c.client_type, active: c.is_active,
       services: { address: !!c.uses_address, nd: !!c.has_nd, xbrl: !!c.has_xbrl },
       pic: c.sec_pic ?? c.pic, nominee_directors: ndNames,
+      // `ar_reminders` is Annual Return FILING status ("Pending"/"Filed") —
+      // a completely different concept from money owed. A real 2026-09-09
+      // mistake: the model read this field, found nothing alarming, and
+      // told Vincent a company "也没有欠款标记" (has no arrears marker) —
+      // while the company's real Company 360 page showed 2 real unpaid
+      // invoices. This field must NEVER be used to answer an outstanding-
+      // balance/arrears question — see check_outstanding_balance below,
+      // the only tool with real data on that.
       ar_reminders: (ar ?? []).map(r => `${r.fye_month} ${r.fye_year} (${r.status ?? 'Pending'}, due ${r.due_date ?? '?'})`),
     });
   }
   return { found: true as const, companies: results };
+}
+
+// Added 2026-09-09 after the exact mistake documented on `ar_reminders`
+// above — calls the EXACT SAME computeSoaRows() (lib/soa-data.ts)
+// Company 360's own real Outstanding section and the /billing/soa pages
+// use, narrowed to one company across TAB/TAC/TAO the same way
+// lib/company-360.ts's own Outstanding section does. READ-ONLY — this only
+// reports what's already true in QuickBooks, never changes anything.
+async function checkOutstandingBalance(companyQuery: string) {
+  const result = await lookupOutstandingBalance(companyQuery);
+  if (!result.found) return { found: false as const, message: result.message, suggestions: result.suggestions };
+  return {
+    found: true as const,
+    companyName: result.companyName,
+    hasOutstanding: result.hasOutstanding,
+    totalOutstanding: result.totalOutstanding,
+    byQbCompany: result.lines,
+    note: result.hasOutstanding
+      ? 'Real, current outstanding balance from QuickBooks — tell the user the total and, if useful, the breakdown by TAB/TAC/TAO, the oldest aging bucket, and which invoices are unpaid.'
+      : 'No unpaid invoice found for this company across TAB/TAC/TAO — safe to tell the user there is no outstanding balance on file, but this is a live QuickBooks check, not an inference from AR Reminder/filing status.',
+  };
 }
 
 async function arBatch(month: string, year: number) {
@@ -686,6 +716,8 @@ If the user asks to generate/prepare the Post Incorporate document set for a new
 
 The user may attach an image or PDF (a screenshot, an invoice, a scanned document) as reference for the current question — when one is present, actually look at it and factor what you see into your answer rather than only responding to the text.
 
+If the user asks whether a company owes money, has arrears, has an outstanding balance, or anything similar (欠款/未付/outstanding), you MUST call check_outstanding_balance and answer strictly from what it returns — never from search_company's ar_reminders (that is Annual Return FILING status, a completely different concept from money owed) and never from general impression or conversation context. This is a hard rule after a real incident: asked about one company, a prior reply said "没有欠款标记" (no arrears marker) with no real data behind it, while the company's real Company 360 page showed 2 real unpaid invoices — a materially wrong answer for a billing company to give. If you have not called check_outstanding_balance for THIS company in THIS conversation, you do not know whether it has an outstanding balance — say so and call the tool, never assume "no news is good news" from an unrelated field or from having discussed a different company's arrears earlier in the same conversation.
+
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
 
@@ -707,7 +739,8 @@ ${memoryBlock}`;
 }
 
 const CLAUDE_TOOLS = [
-  { name: 'search_company', description: 'Look up companies by (partial) name: status, FYE month, services, PIC, active nominee directors, recent AR reminder rows.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+  { name: 'search_company', description: 'Look up companies by (partial) name: status, FYE month, services, PIC, active nominee directors, recent AR reminder rows. NOTE: the ar_reminders field this returns is Annual Return FILING status ("Pending"/"Filed") — it has nothing to do with whether the company owes money. Never use it to answer an outstanding-balance/arrears question; use check_outstanding_balance for that instead.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
+  { name: 'check_outstanding_balance', description: "REAL, live QuickBooks outstanding-balance / arrears check for one company (TAB + TAC + TAO combined) — the exact same computation Company 360's own Outstanding section and the /billing/soa pages use. Use this whenever the user asks whether a company owes money, has arrears, has an outstanding balance, or anything similar (欠款/未付/outstanding) — never answer that kind of question from search_company or any other tool, and never guess. Returns hasOutstanding, the real total, and a breakdown per QuickBooks company (total, invoice count, oldest aging bucket, the real unpaid invoice numbers/due dates, and who owns chasing it).", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
   { name: 'ar_batch', description: 'AR Reminder batch for a FYE month+year: totals and company names.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'English month name, e.g. April' }, year: { type: 'number' } }, required: ['month', 'year'] } },
   { name: 'nd_lookup', description: 'Look up a nominee director by person name: their active company appointments.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   { name: 'automation_health', description: 'Read live automation job health and the open integration-exception count.', input_schema: { type: 'object', properties: {} } },
@@ -777,6 +810,7 @@ const CLAUDE_TOOLS = [
 
 async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {
   if (name === 'search_company') return searchCompany(String(input.query ?? ''));
+  if (name === 'check_outstanding_balance') return checkOutstandingBalance(String(input.company ?? ''));
   if (name === 'ar_batch') return arBatch(String(input.month ?? ''), Number(input.year ?? 0));
   if (name === 'nd_lookup') return ndLookup(String(input.name ?? ''));
   if (name === 'automation_health') return automationHealth();
