@@ -162,14 +162,12 @@ type Conversation = { id: number; title: string; pinned: boolean; created_at: st
 // present on a fresh reply from THIS session; reopening a saved
 // conversation later shows the plain text only (the card's structured
 // data isn't persisted to ai_messages yet — a known, deliberate v1 gap).
-// engine/engineNote (2026-09-09, Vincent: "你帮我看看是不是TOKEN用完了？")
-// — the API has always returned which engine actually answered
-// ('claude' | 'intent' | 'intent-fallback') plus, on a fallback, the real
-// underlying error (e.g. "Claude API 401: ..."), but the UI silently threw
-// both away, so there was no way to SEE a degradation happening short of
-// digging through server logs. Surfaced here as a small, honest notice —
-// never hidden, never alarmist wording, just what actually happened.
-type ChatMsg = { role: 'user' | 'assistant'; content: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; engine?: string; engineNote?: string };
+// A brief 2026-09-09 experiment surfaced which engine answered (Claude vs.
+// the rule-based fallback) as a visible notice — Vincent explicitly asked
+// for the opposite: "很奇怪，我想要的就是回复看起来还是正常的，token 我
+// 自己会去看usage". Reverted same day; the API still returns `engine`/
+// `note`, this UI just no longer shows them.
+type ChatMsg = { role: 'user' | 'assistant'; content: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview };
 type ActiveView = 'chat' | 'tasks' | 'activity';
 
 // Local to this page only — deliberately not added to lib/date.ts's shared
@@ -1088,7 +1086,7 @@ export default function MyTasksPage() {
         body: JSON.stringify({ messages: next, context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId, viewAs: viewAsEmail || undefined }),
       });
       const json = await res.json();
-      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined, postIncorporatePreview: json.postIncorporatePreview ?? undefined, engine: json.engine, engineNote: json.note }]);
+      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined, postIncorporatePreview: json.postIncorporatePreview ?? undefined }]);
       loadConversations(); // pick up the auto-derived title / updated_at reorder
     } catch {
       setChatMessages(current => [...current, { role: 'assistant', content: '网络错误，请重试。' }]);
@@ -1312,12 +1310,6 @@ export default function MyTasksPage() {
                         {message.role === 'assistant'
                           ? <>
                               <RichText text={message.content} onNav={href => { if (href.startsWith('/')) window.location.href = href; else window.open(href, '_blank', 'noopener,noreferrer'); }} />
-                              {(message.engine === 'intent' || message.engine === 'intent-fallback') && (
-                                <div style={{ marginTop: 6, fontSize: 10.5, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '5px 8px' }}>
-                                  ⚠ 本次回复由基础规则引擎回答，未使用 Claude AI
-                                  {message.engine === 'intent-fallback' && message.engineNote ? `（原因：${message.engineNote}）` : ''}
-                                </div>
-                              )}
                               {message.invoicePreview && (
                                 <InvoiceDraftCard
                                   preview={message.invoicePreview}
