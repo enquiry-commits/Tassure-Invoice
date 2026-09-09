@@ -16,9 +16,11 @@ import { lookupOutstandingBalance, summarizeOutstandingBalance } from '@/lib/out
 import { lookupEmailStatus, getCommunicationsSummary } from '@/lib/email-status-lookup';
 import { getCustomerProfileSummary } from '@/lib/customer-profile-lookup';
 import { lookupCompanyDeep } from '@/lib/company-deep-lookup';
+import { listCompanies, type CompanyListFilters } from '@/lib/company-list-lookup';
 import { getTrademarkSummary } from '@/lib/trademark-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
+import { fyeDateString } from '@/lib/invoice-templates';
 import { pageAll } from '@/lib/page-all';
 import { formatSgtDateTime } from '@/lib/date';
 import type { QbCompany } from '@/lib/quickbooks';
@@ -357,9 +359,41 @@ async function customerProfileSummary(account: ApprovedAccount | null) {
 async function companyDeepLookup(companyQuery: string) {
   const result = await lookupCompanyDeep(companyQuery);
   if (!result.found) return result;
+  // A master_list-only hit carries its own note explaining that this is a
+  // FORMER client with no live record — never overwrite it with the live-data
+  // note below.
+  if (result.recordSource === 'master_list_only') return result;
   return {
     ...result,
-    note: 'Real, current data pulled live from the same computation Company 360 itself renders from. Use this for ANY question about a specific company beyond basic status/FYE — directors/secretary/shareholders, trademarks, invoice/document history, ND appointments, communications. For a precise outstanding-balance figure specifically, prefer check_outstanding_balance (this result\'s own outstanding total is the same number, just without the per-invoice breakdown/SOA link).',
+    note: 'Real, current data pulled live from the same computation Company 360 itself renders from. Use this for ANY question about a specific company beyond basic status/FYE — directors/secretary/shareholders, trademarks, invoice/document history, ND appointments, communications, contact email. IMPORTANT for "is this still our client": answer from masterListCategories (the real client-lifecycle record — terminated / strike_off / name_change / mas / ad_hoc / active_client), NOT from status/isActive alone; those come from a different source (TeamWork) and CAN disagree with it. If masterListCategories says terminated or strike_off, say so plainly even when status looks Active, and mention both rather than silently picking one. For a precise outstanding-balance figure specifically, prefer check_outstanding_balance (this result\'s own outstanding total is the same number, just without the per-invoice breakdown/SOA link).',
+  };
+}
+
+// Added 2026-09-09 — closes the biggest STRUCTURAL gap found in the review:
+// every other tool answers about ONE named company or gives ONE global
+// number; nothing could return a filtered LIST. See lib/company-list-
+// lookup.ts's own header comment.
+async function companyListTool(input: Record<string, unknown>) {
+  const filters: CompanyListFilters = {};
+  if (typeof input.pic === 'string' && input.pic.trim()) filters.pic = input.pic;
+  if (typeof input.fyeMonth === 'string' && input.fyeMonth.trim()) filters.fyeMonth = input.fyeMonth;
+  if (typeof input.service === 'string' && ['address', 'nd', 'agm', 'xbrl', 'accounts', 'tax'].includes(input.service)) {
+    filters.service = input.service as CompanyListFilters['service'];
+  }
+  if (typeof input.industry === 'string' && input.industry.trim()) filters.industry = input.industry;
+  if (typeof input.companyType === 'string' && input.companyType.trim()) filters.companyType = input.companyType;
+  if (typeof input.customerSource === 'string' && input.customerSource.trim()) filters.customerSource = input.customerSource;
+  if (typeof input.status === 'string' && input.status.trim()) filters.status = input.status;
+  if (typeof input.includeInactive === 'boolean') filters.activeOnly = !input.includeInactive;
+  if (typeof input.limit === 'number') filters.limit = input.limit;
+
+  if (!Object.keys(filters).length) {
+    return { error: true as const, message: 'No filter was given — this tool needs at least one (pic / fyeMonth / service / industry / companyType / customerSource / status). Ask the user which companies they mean rather than listing the entire roster.' };
+  }
+  const result = await listCompanies(filters);
+  return {
+    ...result,
+    note: `Real, current list — same companies+master_list data the Reports page's own drill-down uses, filtered to ACTIVE clients unless includeInactive was set. totalMatched is the REAL full count; only the first ${result.returned} are listed${result.truncated ? ' (truncated)' : ''} — always state the real total, and never imply the listed names are all of them when truncated is true. PIC matching is deliberately loose (staff names are stored inconsistently in this system, e.g. "Kah Ye Chin" vs "Chin Kah Ye"), so double-check a surprising match rather than treating it as exact.`,
   };
 }
 
@@ -469,18 +503,46 @@ async function revenueWorkloadSummary(account: ApprovedAccount | null) {
   };
 }
 
+// Extended 2026-09-09: this used to return ONLY Annual-Return FILING status
+// (Filed/Pending), which is a completely different concept from whether the
+// company has been INVOICED for that cycle — exactly the confusion that
+// already caused a real wrong answer once on `search_company`'s own
+// `ar_reminders` field (see INV-DATA-022). "4月有几家没开单" (how many
+// haven't been invoiced in April) is a BILLING question and had no tool at
+// all on the Claude path. Invoiced-vs-not is decided the same way AR
+// Reminder's own page does it: a generated_invoices row whose fye_cycle
+// matches this row's own cycle (fyeDateString), matched on normalized
+// company name.
 async function arBatch(month: string, year: number) {
   const sb = createAdminClient();
-  const { data } = await sb.from('ar_reminder')
-    .select('entity_name, status, due_date')
-    .eq('fye_month', month).eq('fye_year', year)
-    .or('status.is.null,status.neq.Excluded');
+  const [{ data }, { data: generated }] = await Promise.all([
+    sb.from('ar_reminder')
+      .select('entity_name, status, due_date, pic, filling_date, agm_held_date')
+      .eq('fye_month', month).eq('fye_year', year)
+      .or('status.is.null,status.neq.Excluded'),
+    sb.from('generated_invoices').select('company_name, fye_cycle'),
+  ]);
   const rows = data ?? [];
+  const cycle = fyeDateString(month, year);
+  const invoicedNames = new Set(
+    (generated ?? []).filter(g => g.fye_cycle === cycle).map(g => normalize(g.company_name as string)),
+  );
+  const invoiced = rows.filter(r => invoicedNames.has(normalize(r.entity_name as string)));
+  const notInvoiced = rows.filter(r => !invoicedNames.has(normalize(r.entity_name as string)));
   return {
     month, year, total: rows.length,
-    filed: rows.filter(r => r.status === 'Filed').length,
-    pending: rows.filter(r => !r.status || r.status === 'Pending').length,
+    filing_status: {
+      filed: rows.filter(r => r.status === 'Filed').length,
+      pending: rows.filter(r => !r.status || r.status === 'Pending').length,
+    },
+    billing_status: {
+      invoiced: invoiced.length,
+      not_invoiced: notInvoiced.length,
+      not_invoiced_companies: notInvoiced.slice(0, 40).map(r => r.entity_name),
+    },
+    agm_not_yet_held: rows.filter(r => !r.agm_held_date).length,
     companies: rows.slice(0, 40).map(r => r.entity_name),
+    note: 'filing_status is Annual Return FILING progress (has the AR been filed with ACRA). billing_status is a COMPLETELY DIFFERENT thing — whether we have raised an invoice for that cycle. Never answer a "开单/invoice" question from filing_status, or a "申报/filed" question from billing_status; they routinely disagree and mixing them up has caused a real wrong answer in this system before.',
   };
 }
 
@@ -1035,7 +1097,18 @@ const CLAUDE_TOOLS = [
   { name: 'active_users_today', description: 'REAL, live list of which staff have actually used the system recently (real recorded page-view/action events, tracking since 2026-09-08) — management-only. Use this for "who else is using the system today/this week" style questions. Returns each active person\'s email, how many events they generated, and their most-visited page. Default (days omitted or 1) is the real Singapore calendar day — "today", not a rolling 24-hour window; pass a larger `days` for a genuine rolling multi-day window instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Number of days — 1 (default) means the real SGT calendar day "today"; a larger value is a genuine rolling N-day window, max 30' } } } },
   { name: 'check_email_status', description: 'REAL email send status for one company — the exact same data the Email Activity/Delivery History page shows (email_drafts, joined with its campaign). Use this whenever the user asks whether an email/invoice/reminder was actually sent to a company (e.g. "XX 的Email 发送出去了吗"). Returns each real draft/campaign record for the company (status: pending/opened/sent/skipped, subject, recipient, when and by whom it was sent if it was) — never guess whether something was sent, always check this.', input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
   { name: 'customer_profile_summary', description: 'REAL, live breakdown of ALL active clients by legal entity type (Private Limited/Sole Proprietorship/LLP/...) and by real SSIC industry classification — the exact same computation the Reports page\'s own "Explore" section uses. Management-only (canViewReports — Vincent, Cindy, Samuell, Tan Yee Soon). Use this whenever the user asks what TYPE or INDUSTRY our clients/customers are, which type/industry is biggest, or for a customer-profile breakdown (e.g. "客户最大是什么类型的客户？从事什么行业的？") — never say there is no such tool without calling this first. Returns counts for each type/industry sorted largest-first, plus what share of clients actually have an industry on file.', input_schema: { type: 'object', properties: {} } },
-  { name: 'company_deep_lookup', description: "REAL, live, DEEP data for ONE specific company — everything Company 360 itself shows: directors/secretary/shareholders (names + roles only), trademark records, invoice history (generated + QuickBooks), Post Incorporate documents generated, ND appointments, outstanding balance, Client Communications draft count, AR Reminder cycles. Use this for ANY question about a specific named company beyond basic status/FYE (e.g. \"这家公司有商标吗\", \"董事是谁\", \"最近生成过什么文件\", \"股东有哪些\") — search_company only has a thin slice of this; never say a company-specific question can't be answered without trying this tool first. Does NOT include personal ID numbers/DOB/home address/personal contact info for directors/shareholders — deliberately never surfaced through chat.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
+  { name: 'company_deep_lookup', description: "REAL, live, DEEP data for ONE specific company — everything Company 360 itself shows: directors/secretary/shareholders (names + roles only), trademark records, invoice history (generated + QuickBooks), Post Incorporate documents generated, ND appointments, outstanding balance, Client Communications draft count, AR Reminder cycles. Use this for ANY question about a specific named company beyond basic status/FYE (e.g. \"这家公司有商标吗\", \"董事是谁\", \"最近生成过什么文件\", \"股东有哪些\") — search_company only has a thin slice of this; never say a company-specific question can't be answered without trying this tool first. Does NOT include personal ID numbers/DOB/home address/personal contact info for directors/shareholders — deliberately never surfaced through chat. ALSO finds FORMER clients: a struck-off/terminated company is often deleted from the live company table entirely, so this falls back to its Master List history and returns recordSource:'master_list_only' with what it WAS (lifecycle status, join date, secretary, directors) — check recordSource before describing anything as current.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
+  { name: 'list_companies', description: "REAL, live LIST of companies matching a filter — the one tool that answers \"WHICH companies...\" questions (every other tool is either one named company, or a single global number). Use it for e.g. \"Chelsea 负责哪些公司\" (pic), \"哪些公司用我们的注册地址\" (service:'address'), \"12月FYE的有哪些\" (fyeMonth), \"哪些公司要做XBRL\" (service:'xbrl'), \"哪些是控股公司\" (industry). At least one filter is required — never try to list the whole roster. Defaults to ACTIVE clients only; set includeInactive to include struck-off/inactive ones. Returns the REAL total matched plus the first N names — always report the real total.", input_schema: { type: 'object', properties: {
+    pic: { type: 'string', description: "Secretary PIC name, loose match (staff names are stored inconsistently, e.g. 'Kah Ye Chin' vs 'Chin Kah Ye')" },
+    fyeMonth: { type: 'string', description: "Financial year end month, e.g. 'December' or 'DEC'" },
+    service: { type: 'string', enum: ['address', 'nd', 'agm', 'xbrl', 'accounts', 'tax'], description: 'Only companies using this service' },
+    industry: { type: 'string', description: 'SSIC industry description substring, e.g. "HOLDING"' },
+    companyType: { type: 'string', description: 'Legal entity type substring, e.g. "Exempt Private"' },
+    customerSource: { type: 'string', description: 'Customer source substring' },
+    status: { type: 'string', description: 'TeamWork status substring, e.g. "Active", "Striking"' },
+    includeInactive: { type: 'boolean', description: 'Include non-active companies (default false)' },
+    limit: { type: 'number', description: 'How many names to return, default 50, max 200' },
+  } } },
   { name: 'trademark_summary', description: 'REAL, live company-WIDE trademark counts and lists — how many trademarks are registered vs. still in progress (application filed, not yet granted), and which registered marks are expiring soon. Use this for any trademark question that is NOT about one specific company (e.g. "现在有多少个商标在处理中", "哪些商标快到期了") — for ONE specific company\'s own trademark(s), use company_deep_lookup instead, which has the exact same data already scoped to that company.', input_schema: { type: 'object', properties: {} } },
   { name: 'late_filing_summary', description: 'REAL, live company-WIDE Late Filing counts — how many companies are currently overdue in total, broken down by severity (serious/recent/review) and by which staff member (PIC) currently has the most active overdue companies. Use this for any Late Filing question that is NOT about one specific company (e.g. "目前一共有多少家迟报", "谁PIC压的最多") — for one specific company, use preview_late_filing_resolve instead.', input_schema: { type: 'object', properties: {} } },
   { name: 'communications_summary', description: 'REAL, live company-WIDE email/campaign counts from Client Communications — how many emails were actually sent in a recent window, plus the all-time breakdown by status (pending/opened/sent/skipped) and by campaign type. Use this for any Client Communications question that is NOT about one specific company (e.g. "这个月一共发了多少封邮件", "还有哪些campaign没处理完") — for one specific company, use check_email_status instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many recent days to count real sends over — default 30, max 365' } } } },
@@ -1119,6 +1192,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'check_email_status') return checkEmailStatus(String(input.company ?? ''));
   if (name === 'customer_profile_summary') return customerProfileSummary(account);
   if (name === 'company_deep_lookup') return companyDeepLookup(String(input.company ?? ''));
+  if (name === 'list_companies') return companyListTool(input);
   if (name === 'trademark_summary') return trademarkSummaryTool();
   if (name === 'late_filing_summary') return lateFilingSummaryTool();
   if (name === 'communications_summary') return communicationsSummaryTool(typeof input.days === 'number' ? input.days : undefined);
@@ -1427,7 +1501,8 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
     return [
       `**${MONTH_MAP[monthKey]} ${year} AR 批次**`,
       `· 共 **${b.total}** 家`,
-      `· 待处理 ${b.pending} · 已申报 ${b.filed}`,
+      `· 待处理 ${b.filing_status.pending} · 已申报 ${b.filing_status.filed}`,
+      `· 已开单 ${b.billing_status.invoiced} · 未开单 ${b.billing_status.not_invoiced}`,
       '',
       '部分名单:',
       ...b.companies.slice(0, 8).map(n => `· ${n}`),
