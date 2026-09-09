@@ -32,6 +32,8 @@ import { createAdminClient } from '@/lib/supabase';
 //   when Tassure itself is supplying that specific director's arrangement,
 //   not any nominee director in general (Vincent: "这个是只针对当秘书提供ND
 //   服务...并且这些信息都应该是自动填好的").
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
 export async function GET(req: NextRequest) {
   const account = await getRequestAccount(req);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
@@ -44,7 +46,7 @@ export async function GET(req: NextRequest) {
 
   const [{ data: companyRow }, { data: masterRow }, { data: ndAppointmentRows }, { data: ndPeople }, { data: officialRows }, { data: shareRows }] = await Promise.all([
     uen
-      ? supabase.from('companies').select('fye_month').ilike('registration_no', uen).maybeSingle()
+      ? supabase.from('companies').select('fye_month, fye_day').ilike('registration_no', uen).maybeSingle()
       : Promise.resolve({ data: null }),
     uen
       ? supabase.from('master_list').select('fye').ilike('roc_no', uen).maybeSingle()
@@ -74,11 +76,23 @@ export async function GET(req: NextRequest) {
   ]);
 
   // master_list.fye is manually curated (more likely to already be the
-  // clean month name this form wants); companies.fye_month is the
-  // TeamWork-self-corrected value. Only ever a bare month name in either
-  // column — no source in this system has the day-of-month.
-  const fyeRaw = ((masterRow as { fye?: string } | null)?.fye || (companyRow as { fye_month?: string } | null)?.fye_month || '').trim();
-  const financialYearEndDayMonth = /^[A-Za-z]+$/.test(fyeRaw) ? fyeRaw : '';
+  // clean month name this form wants) and has no day-of-month counterpart at
+  // all; companies.fye_month is the TeamWork-self-corrected month name.
+  // companies.fye_day is the TeamWork-synced exact day-of-month — already
+  // relied on elsewhere for real date math (AR Reminder due-date computation,
+  // Company 360's own FYE display) — that this route never queried before,
+  // so the field always came back month-only ("DEC") even though the day was
+  // already sitting in Supabase. Confirmed real bug (LAKEFILL VENTURES,
+  // 2026-09-09): field should show "31/12", showed "DEC". Falls back to
+  // month-only when no day is on record (a real, if less common, case),
+  // rather than blanking the whole field.
+  const fyeMonthRaw = ((masterRow as { fye?: string } | null)?.fye || (companyRow as { fye_month?: string } | null)?.fye_month || '').trim();
+  const fyeMonthOnly = /^[A-Za-z]+$/.test(fyeMonthRaw) ? fyeMonthRaw : '';
+  const fyeDay = (companyRow as { fye_day?: number | null } | null)?.fye_day ?? null;
+  const fyeMonthIndex = fyeMonthOnly ? MONTH_NAMES.findIndex(m => m.toLowerCase() === fyeMonthOnly.toLowerCase()) : -1;
+  const financialYearEndDayMonth = fyeDay && fyeMonthIndex !== -1
+    ? `${String(fyeDay).padStart(2, '0')}/${String(fyeMonthIndex + 1).padStart(2, '0')}`
+    : fyeMonthOnly;
 
   const ndNameById = new Map(((ndPeople ?? []) as { id: number; name: string }[]).map(p => [p.id, p.name]));
   const ndAppointments = (ndAppointmentRows ?? []) as { nd_id: number; appointment_date: string | null }[];

@@ -752,7 +752,8 @@ export default function PostIncorporatePage() {
                   <Field label="Paid-Up Capital">
                     <div className="flex items-center gap-2">
                       <input className={inputClass} value={s.paidUpCapital} onChange={e => updateShareholder(si, { paidUpCapital: e.target.value })} />
-                      <span className="text-xs text-slate-500 whitespace-nowrap">{s.currency || 'SINGAPORE DOLLAR'}</span>
+                      <input className={`${inputClass} w-40 shrink-0`} value={s.currency} placeholder="SINGAPORE DOLLAR"
+                        onChange={e => updateShareholder(si, { currency: e.target.value })} />
                     </div>
                   </Field>
                   <YesNoField label="是否fully paid-up" value={s.fullyPaidUp} onChange={v => updateShareholder(si, { fullyPaidUp: v })} />

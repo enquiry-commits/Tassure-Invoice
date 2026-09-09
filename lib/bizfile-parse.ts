@@ -103,13 +103,49 @@ function labelValueActivity(lines: string[], label: string): string {
   return parts.join(' ').replace(/\s+/g, ' ').trim();
 }
 
+// The Capital table's Amount/Number of Shares/Currency/Share Type row can
+// span more than one physical PDF line — the Currency name alone can be long
+// enough to wrap ("UNITED STATES OF AMERICA DOLLAR", vs. the shorter
+// "SINGAPORE DOLLAR" this was originally written against). The old code only
+// ever read ONE line after the heading (`after[1]`) and split it by tab
+// assuming exactly 4 cells, so a wrapped currency silently truncated
+// mid-word and Share Type — which wrapped onto the next line along with it —
+// came back empty. Confirmed against a real Bizfile PDF (LAKEFILL VENTURES,
+// 2026-09-09): Currency showed "UNITED STATES OF" and Share Type showed
+// blank, when the real values were "UNITED STATES OF AMERICA DOLLAR" /
+// "ORDINARY".
+//
+// Fixed by reading forward across up to a handful of lines after the
+// heading (stopping at the next real "Label\t:value" field or known section
+// heading, whichever comes first) as one continuous stream of
+// whitespace-separated tokens rather than trusting a single line's tab
+// boundaries: the first 2 tokens are Amount and Number of Shares (plain
+// numbers, never wrap), the LAST token is the Share Type (a single word on
+// every real sample seen so far — "ORDINARY"), and everything in between,
+// however many lines it took to print, is the Currency name. A Share Type
+// with its own multi-word qualifier (e.g. ACRA's "PREFERENCE (REDEEMABLE)")
+// is a known remaining gap this doesn't handle — no worse than before, just
+// not yet fixed; flag it if a real sample of one ever turns up.
+const CAPITAL_TABLE_STOP_RE = /\t:|^(Issued Share Capital|Paid-Up Capital|Registered Office Address|Officer\(s\)|Shareholder\(s\))$/;
+
 function parseCapitalTable(text: string, heading: string): CapitalInfo {
   const idx = text.indexOf(heading);
   if (idx === -1) return { amount: '', numberOfShares: '', currency: '', shareType: '' };
   const after = text.slice(idx + heading.length).split('\n').map(l => l.trim()).filter(Boolean);
-  const dataLine = after[1] || '';
-  const cells = dataLine.split('\t').map(c => c.trim());
-  return { amount: cells[0] || '', numberOfShares: cells[1] || '', currency: cells[2] || '', shareType: cells[3] || '' };
+  // after[0] is the column-header line ("Amount" / "Number of Shares" /
+  // "Currency" / "Type"); real data starts at after[1].
+  const dataLines: string[] = [];
+  for (let i = 1; i < after.length && dataLines.length < 5; i++) {
+    if (CAPITAL_TABLE_STOP_RE.test(after[i])) break;
+    dataLines.push(after[i]);
+  }
+  const tokens = dataLines.join(' ').replace(/\t/g, ' ').split(/\s+/).filter(Boolean);
+  const amount = tokens[0] || '';
+  const numberOfShares = tokens[1] || '';
+  const rest = tokens.slice(2);
+  const shareType = rest.length ? rest[rest.length - 1] : '';
+  const currency = rest.slice(0, -1).join(' ');
+  return { amount, numberOfShares, currency, shareType };
 }
 
 // --- page 3: Officer(s)/Shareholder(s) tables, coordinate-based ---
@@ -375,15 +411,76 @@ export function parseBizfileText(rawText: string): { company: ParsedCompany } {
   return { company };
 }
 
+// A Bizfile Officer(s)/Shareholder(s) table that doesn't fit on one PDF page
+// continues onto the next page WITHOUT repeating its own section heading —
+// confirmed against a real Bizfile (LAKEFILL VENTURES, 2026-09-09, 5
+// shareholders with long overseas addresses): the table split 2 rows on the
+// heading's own page and 3 rows on the page after, and the old per-page-only
+// loop below (`if (nonEmpty.some(... === 'Shareholder(s)')) shareholders =
+// extractShareholdersFromItems(nonEmpty)`) only ever looked at the ONE page
+// where the heading text itself appeared, silently discarding every row that
+// spilled onto a continuation page — the 2 rows it found looked like a
+// complete (if oddly small) result, not an obvious failure.
+//
+// Fixed by walking forward from the heading's page and merging in every
+// following page that doesn't itself start a different known section, until
+// hitting this section's own real terminator (the next section's heading, or
+// — for Shareholder(s) specifically — the "Includes nationality.../
+// Abbreviation" footnote ACRA always prints right after the table). Each
+// later page's Y is offset down by a fixed step far larger than any real
+// page height, so the existing Y-based row/column logic (which only ever
+// compares relative Y within one flat item list) keeps working unmodified
+// across the page boundary — row 1 of page 2 sorts as "below" the last row
+// of page 1, exactly like a row that wrapped within a single page already
+// does. A continuation page's own footer boilerplate is stripped before
+// merging (except on the LAST page of the run, which still needs it as the
+// final floor when no explicit terminator is ever found) so it can never be
+// mistaken for a mid-table row or wrongly cut off later rows.
+const KNOWN_SECTION_HEADINGS = ['Officer(s)', 'Shareholder(s)'];
+const SECTION_TERMINATORS: Record<string, string[]> = {
+  'Officer(s)': ['Shareholder(s)'],
+  'Shareholder(s)': ['Includes nationality', 'Abbreviation'],
+};
+const PAGE_Y_STEP = 100000;
+
+function pageHasTerminator(items: Item[], heading: string): boolean {
+  const terminators = SECTION_TERMINATORS[heading] ?? [];
+  return items.some(it => {
+    const s = it.str.trim();
+    return terminators.some(t => s.startsWith(t)) || (KNOWN_SECTION_HEADINGS.includes(s) && s !== heading);
+  });
+}
+
+function collectSectionItems(pageItems: Item[][], heading: string): Item[] {
+  const startPage = pageItems.findIndex(items => items.some(it => it.str.trim() === heading));
+  if (startPage === -1) return [];
+
+  let endPage = startPage;
+  if (!pageHasTerminator(pageItems[startPage], heading)) {
+    for (let p = startPage + 1; p < pageItems.length; p++) {
+      endPage = p;
+      if (pageHasTerminator(pageItems[p], heading)) break;
+    }
+  }
+
+  const merged: Item[] = [];
+  for (let p = startPage; p <= endPage; p++) {
+    const isLastPage = p === endPage;
+    const offset = (p - startPage) * PAGE_Y_STEP;
+    for (const it of pageItems[p]) {
+      const s = it.str.trim();
+      if (!s) continue;
+      if (!isLastPage && FOOTER_ITEM_PATTERNS.some(re => re.test(s))) continue;
+      merged.push({ str: it.str, x: it.x, y: it.y - offset });
+    }
+  }
+  return merged;
+}
+
 export function parseBizfilePages(pageTexts: string[], pageItems: Item[][]): ParsedBizfile {
   const { company } = parseBizfileText(pageTexts.join('\n'));
-  let officers: ParsedOfficer[] = [];
-  let shareholders: ParsedShareholder[] = [];
-  for (const items of pageItems) {
-    const nonEmpty = items.filter(it => it.str.trim());
-    if (nonEmpty.some(it => it.str.trim() === 'Officer(s)')) officers = extractOfficersFromItems(nonEmpty);
-    if (nonEmpty.some(it => it.str.trim() === 'Shareholder(s)')) shareholders = extractShareholdersFromItems(nonEmpty);
-  }
+  const officers = extractOfficersFromItems(collectSectionItems(pageItems, 'Officer(s)'));
+  const shareholders = extractShareholdersFromItems(collectSectionItems(pageItems, 'Shareholder(s)'));
   return { company, officers, shareholders };
 }
 

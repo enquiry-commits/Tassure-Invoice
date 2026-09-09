@@ -145,6 +145,43 @@ again.
   serviced address must be added to `ADDRESS_SERVICE_LOCATIONS`, not a new
   one-off regex somewhere else.
   *(source: 2026-09-07.)*
+- **INV-TW-019** — A Bizfile Officer(s)/Shareholder(s) table that doesn't fit
+  on one PDF page continues onto the next page WITHOUT repeating its own
+  section heading — the old per-page loop in `parseBizfilePages()` only ever
+  looked at the ONE page containing the heading text and used `shareholders =
+  extractShareholdersFromItems(...)` (assignment, not merge), so every row
+  that spilled onto a continuation page was silently dropped. Confirmed on a
+  real Bizfile (LAKEFILL VENTURES PTE. LTD., 2026-09-09, 5 shareholders with
+  long overseas addresses): only 2 of 5 shareholders were detected, and the
+  result looked like a complete (if small) table, not an obvious failure —
+  this is the kind of bug that passes a casual glance. Fixed by
+  `collectSectionItems()`, which walks forward from the heading's page,
+  merging in every following page that doesn't start a different known
+  section, until hitting the section's own real terminator (the next
+  section's heading, or — for Shareholder(s) — the "Includes
+  nationality.../Abbreviation" footnote ACRA always prints after the table);
+  each later page's Y is offset by a large fixed step so the existing
+  Y-based row/column logic keeps working unmodified across the page
+  boundary. Any future Bizfile table extractor must go through this same
+  page-merging helper, never assume a table's heading page is the whole
+  table. *(source: 2026-09-09, `lib/bizfile-parse.ts`.)*
+- **INV-TW-020** — The Capital table's Currency cell can wrap onto its own
+  PDF line when the currency's full name is long ("UNITED STATES OF AMERICA
+  DOLLAR" vs. the shorter "SINGAPORE DOLLAR" `parseCapitalTable()` was
+  originally written against) — the old code read exactly ONE line after the
+  heading and split it by tab assuming 4 cells, so a wrapped currency
+  silently truncated mid-word and Share Type (whichever line it wrapped onto)
+  came back empty. Confirmed on the same real Bizfile as INV-TW-019: Currency
+  showed "UNITED STATES OF", Share Type showed blank; correct values were
+  "UNITED STATES OF AMERICA DOLLAR" / "ORDINARY". Fixed by reading forward
+  across up to 5 lines (stopping at the next real `Label\t:value` field or
+  known section heading) as one continuous stream of whitespace-separated
+  tokens: first 2 tokens are Amount/Number of Shares (plain numbers, never
+  wrap), the LAST token is Share Type (a single word on every real sample
+  seen so far), everything between is Currency. A Share Type with its own
+  multi-word qualifier (e.g. ACRA's "PREFERENCE (REDEEMABLE)") is a known
+  remaining gap — flag it if a real sample ever turns up.
+  *(source: 2026-09-09, `lib/bizfile-parse.ts`.)*
 
 ## AR/AGM cycle & ar_reminder data lifecycle (INV-AR)
 
