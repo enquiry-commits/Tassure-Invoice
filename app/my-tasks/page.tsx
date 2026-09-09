@@ -12,6 +12,7 @@ import type { InvoicePreview } from '@/lib/billing-lookup';
 import type { EditableLine } from '@/lib/billing-draft';
 import type { LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import type { InvoiceEditPreview } from '@/lib/invoice-edit-lookup';
+import type { PostIncorporatePreview } from '@/lib/docx-post-incorporate';
 import { logActivity } from '@/lib/activity-client';
 
 type SessionUser = { email: string; name: string; restrictedTo?: string | null; admin?: boolean };
@@ -160,7 +161,7 @@ type Conversation = { id: number; title: string; pinned: boolean; created_at: st
 // present on a fresh reply from THIS session; reopening a saved
 // conversation later shows the plain text only (the card's structured
 // data isn't persisted to ai_messages yet — a known, deliberate v1 gap).
-type ChatMsg = { role: 'user' | 'assistant'; content: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview };
+type ChatMsg = { role: 'user' | 'assistant'; content: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview };
 type ActiveView = 'chat' | 'tasks' | 'activity';
 
 // Local to this page only — deliberately not added to lib/date.ts's shared
@@ -704,6 +705,135 @@ function InvoiceEditConfirmModal({ preview, outcome, onCancel, onConfirm }: {
   );
 }
 
+// Phase 4 of the agentic-chat direction — the guided-intake preview
+// (preview_post_incorporate in app/api/assistant/route.ts) already carries
+// the FULL, validated PostIncorporateInput back out as `preview.input`, so
+// this card's confirm step posts it verbatim to the exact same
+// /api/post-incorporate/generate the real /post-incorporate page's own
+// handleSubmit() calls. Structurally different from the other 3 cards:
+// that endpoint returns a binary ZIP (Content-Type: application/zip), not
+// JSON, so "success" here means "the browser download actually started" —
+// mirrors app/post-incorporate/page.tsx's own blob/createObjectURL flow
+// exactly, not a re-invented download path.
+type PostIncorporateOutcome =
+  | { state: 'idle' }
+  | { state: 'confirming' }
+  | { state: 'submitting' }
+  | { state: 'success'; filename: string }
+  | { state: 'error'; message: string };
+
+function PostIncorporateCard({ preview, onGenerated }: { preview: PostIncorporatePreview; onGenerated: (summary: string) => void }) {
+  const [outcome, setOutcome] = useState<PostIncorporateOutcome>({ state: 'idle' });
+
+  const submit = async () => {
+    setOutcome({ state: 'submitting' });
+    try {
+      const res = await fetch('/api/post-incorporate/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preview.input),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
+        setOutcome({ state: 'error', message: body.error || `Request failed (${res.status})` });
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const filename = match ? match[1] : `${preview.company || 'Post-Incorporate'}.zip`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setOutcome({ state: 'success', filename });
+      onGenerated(`已生成并下载 "${filename}"（${preview.company} 的 Post Incorporate 文件）。`);
+    } catch (err) {
+      setOutcome({ state: 'error', message: err instanceof Error ? err.message : '网络错误，请重试。' });
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 460 }}>
+      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <FileCheck2 size={14} color="#1e3a5f" style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.company} — {preview.uen}</div>
+          <div style={{ fontSize: 10.5, color: '#94a3b8' }}>Post Incorporate document set — ready to generate</div>
+        </div>
+      </div>
+
+      <div style={{ padding: '10px 14px', fontSize: 11.5, color: '#334155', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div>{preview.directorsCount} director{preview.directorsCount === 1 ? '' : 's'}</div>
+        <div>{preview.shareholdersCount} shareholder{preview.shareholdersCount === 1 ? '' : 's'}</div>
+        <div>ND service: {preview.needNdService ? 'Yes' : 'No'}</div>
+      </div>
+
+      <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7' }}>
+        {outcome.state === 'success' ? (
+          <div style={{ fontSize: 11.5, color: '#15803d', fontWeight: 700 }}>✓ Downloaded — {outcome.filename}</div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOutcome({ state: 'confirming' })}
+            style={{ width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750, cursor: 'pointer', background: '#0f766e', color: '#fff' }}
+          >
+            Generate &amp; Download
+          </button>
+        )}
+      </div>
+
+      {(outcome.state === 'confirming' || outcome.state === 'submitting' || outcome.state === 'error') && (
+        <PostIncorporateConfirmModal preview={preview} outcome={outcome} onCancel={() => setOutcome({ state: 'idle' })} onConfirm={() => void submit()} />
+      )}
+    </div>
+  );
+}
+
+function PostIncorporateConfirmModal({ preview, outcome, onCancel, onConfirm }: {
+  preview: PostIncorporatePreview;
+  outcome: Extract<PostIncorporateOutcome, { state: 'confirming' | 'submitting' | 'error' }>;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const submitting = outcome.state === 'submitting';
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }} onClick={submitting ? undefined : onCancel}>
+      <div style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FileCheck2 size={16} color="#1e3a5f" />
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b', flex: 1 }}>Confirm document generation</div>
+          {!submitting && <button onClick={onCancel} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={16} /></button>}
+        </div>
+        <div style={{ padding: '14px 18px' }}>
+          <div style={{ fontSize: 12.5, color: '#334155', marginBottom: 10 }}>
+            This will generate the real Post Incorporate document set for <strong>{preview.company}</strong> ({preview.uen}) and download it as a .zip to this device.
+          </div>
+          {outcome.state === 'error' && (
+            <div style={{ marginBottom: 10, padding: '9px 11px', background: '#fff7f7', border: '1px solid #fecaca', borderRadius: 8, fontSize: 11.5, color: '#b91c1c' }}>
+              {outcome.message}
+            </div>
+          )}
+          <div style={{ border: '1px solid #eef2f7', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ padding: '7px 11px', fontSize: 11.5, color: '#173b61', fontWeight: 700 }}>{preview.directorsCount} director{preview.directorsCount === 1 ? '' : 's'}</div>
+            <div style={{ padding: '7px 11px', borderTop: '1px solid #f1f5f9', fontSize: 11.5, color: '#173b61', fontWeight: 700 }}>{preview.shareholdersCount} shareholder{preview.shareholdersCount === 1 ? '' : 's'}</div>
+            <div style={{ padding: '7px 11px', borderTop: '1px solid #f1f5f9', fontSize: 11.5, color: '#173b61', fontWeight: 700 }}>ND service: {preview.needNdService ? 'Yes' : 'No'}</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, padding: '12px 18px', borderTop: '1px solid #eef2f7' }}>
+          <button onClick={onCancel} disabled={submitting} style={{ flex: 1, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer' }}>Cancel</button>
+          <button onClick={onConfirm} disabled={submitting} style={{ flex: 1, border: 'none', background: submitting ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 750, cursor: submitting ? 'wait' : 'pointer' }}>
+            {submitting ? 'Generating…' : 'Confirm & Generate'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConversationRow({ conversation, active, onOpen, onTogglePin, onDelete }: {
   conversation: Conversation; active: boolean;
   onOpen: () => void; onTogglePin: () => void; onDelete: () => void;
@@ -911,7 +1041,7 @@ export default function MyTasksPage() {
         body: JSON.stringify({ messages: next, context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId, viewAs: viewAsEmail || undefined }),
       });
       const json = await res.json();
-      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined }]);
+      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined, postIncorporatePreview: json.postIncorporatePreview ?? undefined }]);
       loadConversations(); // pick up the auto-derived title / updated_at reorder
     } catch {
       setChatMessages(current => [...current, { role: 'assistant', content: '网络错误，请重试。' }]);
@@ -1145,6 +1275,12 @@ export default function MyTasksPage() {
                               {message.invoiceEditPreview && (
                                 <InvoiceEditCard
                                   preview={message.invoiceEditPreview}
+                                  onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
+                                />
+                              )}
+                              {message.postIncorporatePreview && (
+                                <PostIncorporateCard
+                                  preview={message.postIncorporatePreview}
                                   onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
                                 />
                               )}

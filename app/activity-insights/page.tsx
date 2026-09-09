@@ -57,8 +57,12 @@ export default function ActivityInsightsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Vincent-only, 2026-09-09 ("只有Vincent 可以看到") — moved from the
+    // canViewActivityInsights flag (still true for Cindy/Samuell/Yee Soon,
+    // but that flag now only gates the unrelated AI Learning candidates
+    // cross-staff view) to `admin`, which only Vincent's account has.
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(result => {
-      if (!result?.user?.canViewActivityInsights) { router.replace('/'); return; }
+      if (!result?.user?.admin) { router.replace('/'); return; }
       setAuthorized(true);
     }).catch(() => router.replace('/'));
   }, [router]);

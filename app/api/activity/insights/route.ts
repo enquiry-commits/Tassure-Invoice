@@ -6,10 +6,14 @@ import { getCompanyActivitySummary, getPersonActivitySummary } from '@/lib/activ
 // Real behavioral analytics for leadership — Vincent, 2026-09-08: "Vincent
 // 和管理层，可以调用全部的数据来继续单独人员的了解，又或者是整体公司人员
 // 的了解" (Vincent and management can pull all the data to understand an
-// individual staff member, or the whole company). Gated on
-// ApprovedAccount.canViewActivityInsights, same enforcement pattern as
-// /api/reports (a real server-side 403, not just hidden UI) — see that
-// route's own comment for why this guard pattern exists.
+// individual staff member, or the whole company). Originally gated on
+// ApprovedAccount.canViewActivityInsights (given to Vincent/Cindy/Samuell/
+// Yee Soon); narrowed to `admin` (Vincent only) 2026-09-09 per Vincent
+// moving this into the Admin nav group ("只有Vincent 可以看到") — a real
+// server-side 403, not just hidden UI, same enforcement pattern as
+// /api/reports. `canViewActivityInsights` itself is untouched and still
+// gates the unrelated AI Learning candidates cross-staff view for those 3
+// accounts — only this route's own guard changed.
 //
 // ?email=<address> returns that one person's own summary; omitted returns
 // the whole-company summary. Both read the exact same
@@ -20,7 +24,7 @@ const STAFF_DIRECTORY = APPROVED_ACCOUNTS.map(a => ({ email: a.email, name: a.na
 export async function GET(req: NextRequest) {
   const account = await getRequestAccount(req);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
-  if (!account.canViewActivityInsights) return NextResponse.json({ error: 'Your account cannot view Activity Insights.' }, { status: 403 });
+  if (!account.admin) return NextResponse.json({ error: 'Your account cannot view Activity Insights.' }, { status: 403 });
 
   const email = req.nextUrl.searchParams.get('email');
   const days = Math.min(Math.max(parseInt(req.nextUrl.searchParams.get('days') ?? '30', 10) || 30, 1), 180);

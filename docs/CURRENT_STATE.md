@@ -256,15 +256,48 @@ treat as broken if it happens.
 
 ## Pending improvements (known, not yet scheduled)
 
+- **Agentic-chat phases 2-4 all shipped 2026-09-09** — the "preview tool +
+  real card/modal + write through the exact existing validated endpoint"
+  pattern now covers 4 real actions: invoice draft generation (step 1/2
+  above), editing an already-generated QuickBooks invoice
+  (`preview_invoice_edit` → `PATCH /api/quickbooks/update-invoice`),
+  marking a Late Filing record resolved (`preview_late_filing_resolve` →
+  `PATCH /api/late-filing`), and generating the Post Incorporate document
+  set (`preview_post_incorporate` → `POST /api/post-incorporate/generate`).
+  Post Incorporate is structurally different from the other three: it's a
+  genuine multi-turn GUIDED INTAKE conversation (Claude collects company,
+  then each director, then each shareholder, a few real fields at a time,
+  tracking progress itself across turns — the tool has no memory between
+  calls) rather than a one-shot lookup, and its real endpoint returns a
+  binary ZIP file, not JSON, so the frontend card does a `res.blob()` +
+  `URL.createObjectURL()` + synthetic `<a download>` click instead of
+  `res.json()`. The absolute constraint that survived Vincent's explicit
+  push for genuine task-completion ("我比较极端 我希望是可以真正协助执行
+  操作的...你要思考用户真正要的是什么") is that Claude must never invent,
+  infer, or auto-fill any identity value (ID numbers, addresses, DOB,
+  share details) — see `docs/INVARIANTS.md` INV-DATA-021. `claudeAnswer()`'s
+  history window widened from `messages.slice(-8)` to `-24` so the guided
+  intake doesn't lose earlier-collected director/shareholder details.
+  Verified: `validatePostIncorporateInput()` (the real function the tool's
+  completeness check depends on) exercised against 5 real cases via a
+  throwaway diagnostic script (empty input, minimal valid, bad chairman
+  match, UEN shareholder missing corporate director names, duplicate share
+  certificate numbers) — all 5 behaved exactly as the real validator's own
+  code says they should. `npx tsc --noEmit` and `npm run build` both
+  clean. **Not yet end-to-end tested against the real endpoint** (would
+  actually write a `post_incorporate_operations` audit row and download a
+  real ZIP) — Vincent needs to try the real button himself, same reasoning
+  as the other three phases' own un-exercised write paths.
 - **Agentic invoicing step 2 shipped 2026-09-09** (`InvoiceDraftCard` +
   `GenerateConfirmModal` in `app/my-tasks/page.tsx`) — real styled card,
   real popup confirmation, wired to the exact existing `/api/quickbooks/
   create-invoice`. **Not yet end-to-end tested with a real invoice** (only
   build/type-checked and the data layer verified against real company
   data) — Vincent needs to try the real button himself. Known follow-up
-  gaps, not yet started: (1) the invoice preview card's structured data
-  isn't persisted to `ai_messages` — reopening a saved conversation later
-  shows the plain text reply only, no card; (2) no dedicated audit trail
+  gaps, not yet started: (1) none of the 4 preview cards' structured data
+  (invoice draft, invoice edit, Late Filing resolve, Post Incorporate) is
+  persisted to `ai_messages` — reopening a saved conversation later shows
+  the plain text reply only, no card; (2) no dedicated audit trail
   distinguishing "AI proposed this draft" from "human clicked confirm" —
   today it's implicit (whatever `/api/quickbooks/create-invoice` itself
   already logs to `generated_invoices.created_by_email`, same as a manual

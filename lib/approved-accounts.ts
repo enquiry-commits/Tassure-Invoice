@@ -29,14 +29,20 @@ export type ApprovedAccount = {
   // Yee Soon) but are conceptually unrelated permissions, and collapsing
   // them would silently couple their futures together.
   canViewReports?: boolean;
-  // Gates /admin/activity — real click-path/action behavioral analytics
-  // (lib/activity-data.ts, user_activity_events), per-person and
-  // company-wide. Added 2026-09-08, Vincent: "Vincent 和管理层，可以调用
-  // 全部的数据来继续单独人员的了解，又或者是整体公司人员的了解" — kept as
-  // its own flag rather than folded into canViewAsOthers/canViewReports
-  // for the exact reason those two were kept separate from each other
-  // (see canViewAsOthers' own comment): same 4 people today, conceptually
-  // unrelated permission, don't couple their futures together.
+  // Originally gated the Activity Insights page/nav itself (real
+  // click-path/action behavioral analytics — lib/activity-data.ts,
+  // user_activity_events). Added 2026-09-08, Vincent: "Vincent 和管理层，
+  // 可以调用全部的数据来继续单独人员的了解，又或者是整体公司人员的了解".
+  // 2026-09-09: Vincent moved that page into the Admin nav group and asked
+  // that only he see it ("只有Vincent 可以看到") — app/activity-insights
+  // and app/api/activity/insights/route.ts now gate on `admin` instead.
+  // This flag is left as-is (still true for Cindy/Samuell/Yee Soon) because
+  // it also gates a genuinely different, still-shared feature: the AI
+  // Learning candidates cross-staff view (app/api/ai-learning/candidates,
+  // app/ai-learning/page.tsx's bulk-approve staff list) — narrowing THIS
+  // flag would have silently taken that away from them too, which Vincent
+  // never asked for. If nothing ends up using this flag beyond AI Learning,
+  // consider renaming it to reflect that narrower scope.
   canViewActivityInsights?: boolean;
   // When set, this account is confined to exactly this one page (path +
   // required query params, e.g. AR Reminder is the 'ar' tab on /billing —

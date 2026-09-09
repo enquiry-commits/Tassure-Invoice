@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText, ListChecks, BarChart3, Activity, ShieldCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, ListChecks, BarChart3, ShieldCheck } from 'lucide-react';
 
 // `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
 // yet (see NavImg below) — currently Proposal Generator (a link out to a
@@ -103,13 +103,28 @@ const tree: Node[] = [
 ];
 
 // Appended only for the one account with admin:true (Vincent). Appearance
-// Settings and AI Learning are governance tools, grouped as level-2 entries
-// instead of competing with the system's operational level-1 navigation.
+// Settings, AI Learning and Activity Insights are governance tools, grouped
+// as level-2 entries instead of competing with the system's operational
+// level-1 navigation.
+//
+// Activity Insights moved in here 2026-09-09 (Vincent: "这个放在 Admin 内
+// 的 2级标题...并且只有Vincent 可以看到") — it used to be its own level-1
+// item, spliced in for every account with `canViewActivityInsights`
+// (Vincent/Cindy/Samuell/Yee Soon). Nesting it under Admin, which only ever
+// renders for `isAdmin` (Vincent), makes it Vincent-only in the nav; the
+// page (app/activity-insights/page.tsx) and its API
+// (app/api/activity/insights/route.ts) were updated to match — both now
+// gate on `admin` instead of `canViewActivityInsights`. That flag itself is
+// left alone on Cindy/Samuell/Yee Soon's accounts (lib/approved-accounts.ts)
+// since it still gates unrelated real features (the AI Learning candidates
+// cross-staff view) — only the Activity Insights page/nav moved, not the
+// flag's other meaning.
 const ADMIN_NODE: Node = {
   id: 'admin', label: 'Admin', icon: ShieldCheck,
   children: [
     { label: 'Appearance Settings', href: '/admin/appearance' },
     { label: 'AI Learning', href: '/ai-learning' },
+    { label: 'Activity Insights', href: '/activity-insights' },
   ],
 };
 
@@ -118,12 +133,6 @@ const ADMIN_NODE: Node = {
 // for leadership, deliberately not part of `tree` for the same reason as
 // ADMIN_NODE above (only a handful of accounts ever see it).
 const REPORTS_NODE: Node = { label: 'Reports', href: '/reports', icon: BarChart3 };
-
-// Spliced in for accounts with `canViewActivityInsights` (2026-09-08) —
-// real click-path/behavioral analytics, per-person and company-wide. Kept
-// separate from REPORTS_NODE for the same reason `canViewActivityInsights`
-// is its own flag (see that field's own comment in lib/approved-accounts.ts).
-const ACTIVITY_INSIGHTS_NODE: Node = { label: 'Activity Insights', href: '/activity-insights', icon: Activity };
 
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
@@ -363,7 +372,7 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
   );
 }
 
-export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canViewActivityInsights }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean; canViewActivityInsights?: boolean }) {
+export default function Sidebar({ restrictedTo, isAdmin, canViewReports }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
   let level1 = level1For(restrictedTo);
   if (canViewReports && !restrictedTo) {
@@ -371,16 +380,6 @@ export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canView
     level1 = myTasksIdx >= 0
       ? [...level1.slice(0, myTasksIdx + 1), REPORTS_NODE, ...level1.slice(myTasksIdx + 1)]
       : [...level1, REPORTS_NODE];
-  }
-  if (canViewActivityInsights && !restrictedTo) {
-    // Right after Reports when both are present (keeps the two leadership-
-    // analytics entries adjacent), else right after My Tasks like Reports
-    // itself does — never assumes canViewReports is also set, even though
-    // today's real accounts happen to have both.
-    const reportsIdx = level1.findIndex(n => n.href === '/reports');
-    const myTasksIdx = level1.findIndex(n => n.href === '/my-tasks');
-    const insertAt = reportsIdx >= 0 ? reportsIdx + 1 : myTasksIdx >= 0 ? myTasksIdx + 1 : level1.length;
-    level1 = [...level1.slice(0, insertAt), ACTIVITY_INSIGHTS_NODE, ...level1.slice(insertAt)];
   }
   // The complete Admin group is intentionally Vincent-only and remains the
   // final level-1 item in the sidebar.

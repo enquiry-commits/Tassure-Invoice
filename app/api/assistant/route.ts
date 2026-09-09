@@ -13,6 +13,10 @@ import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import { previewInvoiceEdit, type InvoiceEditPreview, type InvoiceEditChange } from '@/lib/invoice-edit-lookup';
 import type { QbCompany } from '@/lib/quickbooks';
+import {
+  validatePostIncorporateInput,
+  type PostIncorporateInput, type PostIncorporateCompany, type PostIncorporateDirector, type PostIncorporateShareholder, type PostIncorporatePreview,
+} from '@/lib/docx-post-incorporate';
 
 /**
  * In-app AI assistant: answers questions about the system, looks up live data
@@ -446,6 +450,118 @@ async function invoiceEditPreview(account: ApprovedAccount | null, companyQuery:
   };
 }
 
+// Phase 4 of the agentic-chat direction — and a real course-correction.
+// Vincent, on the first read of this feature's real data requirements
+// (director/shareholder ID numbers, addresses, nominee sub-fields — real
+// legal-document identity data with no automatic source): "我比较极端 我
+// 希望是可以真正协助执行操作的，不只是停留在询问和回答阶段...你要思考用
+// 户真正要的是什么，你又可以帮助什么" — rejecting a downgrade to a
+// read-only status query. The resolution: this tool doesn't INFER any
+// identity data (that would be genuinely dangerous — a wrong NRIC or
+// address on a real legal document) — it validates whatever the
+// conversation has GUIDED the user into providing, using the exact real
+// validatePostIncorporateInput() the live page itself uses. Claude's job
+// (see the static prompt) is to be the guided intake form: ask for a
+// director/shareholder's real details a few at a time, track what's been
+// given across the conversation, never invent a value, and only call this
+// once it believes the picture is complete — the tool is the source of
+// truth on whether it actually is.
+// Claude assembles this tool's `input` incrementally across a multi-turn
+// conversation (the guided intake), so it arrives as loosely-typed JSON —
+// never trust it has every field the real PostIncorporateInput type
+// declares. This mirrors that type's fields exactly (mechanically, field
+// for field, against the real definitions in lib/docx-post-incorporate.ts
+// — not re-derived from memory) and fills anything missing/mistyped with
+// a safe empty default, so validatePostIncorporateInput() below never
+// throws on a `.trim()` of undefined — it just reports the field as
+// missing, which is the correct behavior here anyway.
+function str(v: unknown): string { return typeof v === 'string' ? v : ''; }
+function bool(v: unknown): boolean { return v === true; }
+function strArr(v: unknown): string[] { return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []; }
+function nominatorType(v: unknown): 'individual' | 'corporate entity' | '' {
+  return v === 'individual' || v === 'corporate entity' ? v : '';
+}
+// Same constant/default the real /post-incorporate page's own emptyCompany()
+// pre-fills (app/post-incorporate/page.tsx) — Tassure's own registered
+// secretarial-firm name never varies per company, so the guided intake
+// shouldn't waste a turn asking for it unless the user overrides it.
+const TASSURE_SECRETARY_COMPANY_NAME = 'TASSURE ASIA BIZSERVICES PTE LTD';
+function normalizePostIncorporateInput(raw: Record<string, unknown>): PostIncorporateInput {
+  const rc = (raw.company && typeof raw.company === 'object') ? raw.company as Record<string, unknown> : {};
+  const company: PostIncorporateCompany = {
+    name: str(rc.name), uen: str(rc.uen), address: str(rc.address), regDate: str(rc.regDate),
+    chairmanName: str(rc.chairmanName), secretaryName: str(rc.secretaryName),
+    secretaryCompanyName: str(rc.secretaryCompanyName) || TASSURE_SECRETARY_COMPANY_NAME,
+    secretaryCompanyAddress: str(rc.secretaryCompanyAddress),
+    currency: str(rc.currency) || 'SGD', financialYearEndDayMonth: str(rc.financialYearEndDayMonth),
+    needNdService: bool(rc.needNdService),
+  };
+
+  const nominatorFields = (r: Record<string, unknown>) => ({
+    nominatorType: nominatorType(r.nominatorType),
+    nominatorIndName: str(r.nominatorIndName), nominatorIndAddress: str(r.nominatorIndAddress),
+    nominatorIndNationality: str(r.nominatorIndNationality), nominatorIndIdentificationNumber: str(r.nominatorIndIdentificationNumber),
+    nominatorIndBirthDate: str(r.nominatorIndBirthDate), nominatorIndEmail: str(r.nominatorIndEmail),
+    nominatorIndContactNumber: str(r.nominatorIndContactNumber), nominatorIndDateBecameNominator: str(r.nominatorIndDateBecameNominator),
+    nominatorCorpName: str(r.nominatorCorpName), nominatorCorpUen: str(r.nominatorCorpUen),
+    nominatorCorpRegisteredAddress: str(r.nominatorCorpRegisteredAddress), nominatorCorpLegalForm: str(r.nominatorCorpLegalForm),
+    nominatorCorpRepresentative: str(r.nominatorCorpRepresentative), nominatorCorpEmail: str(r.nominatorCorpEmail),
+    nominatorCorpContactNumber: str(r.nominatorCorpContactNumber), nominatorCorpDateBecameNominator: str(r.nominatorCorpDateBecameNominator),
+  });
+
+  const directors: PostIncorporateDirector[] = (Array.isArray(raw.directors) ? raw.directors : []).map(rd => {
+    const d = (rd && typeof rd === 'object') ? rd as Record<string, unknown> : {};
+    return {
+      name: str(d.name), address: str(d.address), identificationType: str(d.identificationType),
+      identificationNumber: str(d.identificationNumber), nationality: str(d.nationality),
+      dateOfBirth: str(d.dateOfBirth), gender: str(d.gender), email: str(d.email), phone: str(d.phone),
+      isNomineeDirector: bool(d.isNomineeDirector),
+      ...nominatorFields(d),
+    };
+  });
+
+  const shareholders: PostIncorporateShareholder[] = (Array.isArray(raw.shareholders) ? raw.shareholders : []).map(rs => {
+    const s = (rs && typeof rs === 'object') ? rs as Record<string, unknown> : {};
+    return {
+      name: str(s.name), address: str(s.address), identificationType: str(s.identificationType),
+      identificationNumber: str(s.identificationNumber), numberOfShares: str(s.numberOfShares),
+      paidUpCapital: str(s.paidUpCapital), fullyPaidUp: bool(s.fullyPaidUp),
+      shareCertificateNo: str(s.shareCertificateNo), corporateDirectorNames: strArr(s.corporateDirectorNames),
+      corpRepresentative: str(s.corpRepresentative), corpRepIdType: str(s.corpRepIdType), corpRepIdNo: str(s.corpRepIdNo),
+      isNomineeShareholder: bool(s.isNomineeShareholder),
+      ...nominatorFields(s),
+    };
+  });
+
+  return { company, directors, shareholders };
+}
+
+async function postIncorporatePreview(account: ApprovedAccount | null, raw: Record<string, unknown>) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  const input = normalizePostIncorporateInput(raw);
+  const errors = validatePostIncorporateInput(input);
+  if (errors.length) {
+    return {
+      complete: false as const,
+      errors,
+      message: `Not ready yet — ${errors.join(' ')} Ask the user for exactly what's missing (do not guess or invent any value yourself — especially identification numbers, addresses, dates of birth, and share details, which must come from the user exactly as given, never inferred).`,
+    };
+  }
+  const preview: PostIncorporatePreview = {
+    input,
+    company: input.company.name,
+    uen: input.company.uen,
+    directorsCount: input.directors.filter(d => d.name.trim()).length,
+    shareholdersCount: input.shareholders.filter(s => s.name.trim()).length,
+    needNdService: input.company.needNdService,
+  };
+  return {
+    complete: true as const,
+    preview,
+    note: 'All required fields are present and pass validation. Present a clear summary to the user (company, UEN, N directors, N shareholders, whether ND service is needed) and confirm it looks right before they proceed — the UI shows a real "Generate & Download" button on this preview. You have no tool that creates the actual documents yourself; never claim you generated or downloaded them.',
+  };
+}
+
 // Vincent's shared blueprint, section 5: structured long-term memory
 // ("Fact/Preference/Behaviour/..."), with an explicit warning right next
 // to it that v1 deliberately honors — "AI 不应因为一次对话就永久定义用户"
@@ -506,6 +622,8 @@ If the user asks about resolving/closing/clearing a company's Late Filing status
 
 If the user asks to change/edit/fix/correct something on an ALREADY-GENERATED invoice (e.g. "change the Secretary line to $700"), use preview_invoice_edit — turn their stated change into the tool's "changes" argument yourself (which line, what new value), never guess a number they didn't give you. It fetches the invoice's real current lines and shows a before/after diff; READ-ONLY, nothing is saved. If it reports unmatchedChanges, tell the user plainly which part of their request didn't match a real line. The UI shows a real "Save Changes" button with its own confirmation — never say or imply YOU saved the change.
 
+If the user asks to generate/prepare the Post Incorporate document set for a newly incorporated company, DO NOT ask for everything at once and DO NOT call preview_post_incorporate on a near-empty object just to "see what's missing" — that wastes the user's time reading a wall of errors. Instead run a real guided intake conversation: first collect the company's own details (name, UEN, registered address, registration date, chairman, secretary, currency, FYE, whether ND service is needed — secretaryCompanyName can be left out, it defaults automatically), confirm you have those, THEN walk through each director one at a time (name, address, ID type/number, nationality, DOB, gender, email, phone, whether they're a nominee director — and only if so, their nominator's details), THEN each shareholder one at a time (name/address/ID, shares, whether fully paid-up — and if so, a share certificate number — corporate shareholders need their corporate director names). Keep track of everything collected so far across the conversation yourself (the tool has no memory between calls — you must re-send the FULL picture, everything collected so far, every time you call it, not just what's new). Never invent, guess, infer, or auto-fill any identity value (ID numbers, addresses, dates of birth, share details) — every one of these must come from the user exactly as stated; if something is genuinely unknown, leave it blank and ask, don't make one up to move faster. Only call preview_post_incorporate once you believe the picture is reasonably complete. If it reports complete:false, relay its errors plainly and ask for exactly what's still missing, then call it again once supplied. It is READ-ONLY — there is no tool that generates or downloads the actual documents; the UI shows a real "Generate & Download" button on the resulting preview card. Never say or imply YOU generated or downloaded the documents.
+
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
 
@@ -552,6 +670,47 @@ const CLAUDE_TOOLS = [
       } },
     },
   }, required: ['company', 'changes'] } },
+  { name: 'preview_post_incorporate', description: "Guided-intake validator for a new company's Post Incorporate document set (16 real Word documents: board resolution, director consents, share certificates, secretary appointment, ND declarations, etc). This is NOT a one-shot call — conduct a multi-turn conversation collecting the real details a few at a time (company info first, then each director's real details, then each shareholder's), and only call this tool once you believe the picture is complete. It is READ-ONLY: it validates and returns a summary, but creates nothing — there is no tool available that can generate or download the actual documents. NEVER invent, guess, or infer any value yourself — especially identification numbers (NRIC/FIN/passport/UEN), addresses, dates of birth, and share details — every one of these must come from the user exactly as they state it. If the tool reports complete:false, relay its errors/message honestly and ask the user for exactly what's missing; call the tool again once they've supplied it. `secretaryCompanyName` defaults to Tassure's own fixed registered name if not given — don't ask the user for it unless they want to override it. Pass every field you've collected so far each time, even if incomplete, so the tool can tell you precisely what's still missing.", input_schema: { type: 'object', properties: {
+    company: { type: 'object', description: "Company-level info. Strictly required: name, uen, regDate (ISO yyyy-mm-dd), at least one director with a name, and chairmanName must exactly match one director's name.", properties: {
+      name: { type: 'string' }, uen: { type: 'string' }, address: { type: 'string', description: 'Registered office address' },
+      regDate: { type: 'string', description: 'ISO yyyy-mm-dd incorporation/registration date' },
+      chairmanName: { type: 'string', description: "Must exactly match one director's name" },
+      secretaryName: { type: 'string', description: 'The named company secretary (a Tassure staff member)' },
+      secretaryCompanyName: { type: 'string', description: "Tassure's own registered secretarial-firm name — omit to use the default" },
+      secretaryCompanyAddress: { type: 'string', description: "Tassure's own registered office address for this engagement — ask the user, do not guess (Tassure has several real office locations)" },
+      currency: { type: 'string', description: 'Defaults to SGD if omitted' },
+      financialYearEndDayMonth: { type: 'string', description: 'e.g. "31 December"' },
+      needNdService: { type: 'boolean', description: 'Whether this company needs Nominee Director service' },
+    } },
+    directors: { type: 'array', description: 'At least one director with a non-empty name is required.', items: { type: 'object', properties: {
+      name: { type: 'string' }, address: { type: 'string' }, identificationType: { type: 'string', description: 'e.g. NRIC / PASSPORT / FIN' },
+      identificationNumber: { type: 'string' }, nationality: { type: 'string' }, dateOfBirth: { type: 'string', description: 'ISO yyyy-mm-dd' },
+      gender: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' },
+      isNomineeDirector: { type: 'boolean' },
+      nominatorType: { type: 'string', enum: ['individual', 'corporate entity', ''], description: 'Only relevant when isNomineeDirector is true' },
+      nominatorIndName: { type: 'string' }, nominatorIndAddress: { type: 'string' }, nominatorIndNationality: { type: 'string' },
+      nominatorIndIdentificationNumber: { type: 'string' }, nominatorIndBirthDate: { type: 'string' }, nominatorIndEmail: { type: 'string' },
+      nominatorIndContactNumber: { type: 'string' }, nominatorIndDateBecameNominator: { type: 'string' },
+      nominatorCorpName: { type: 'string' }, nominatorCorpUen: { type: 'string' }, nominatorCorpRegisteredAddress: { type: 'string' },
+      nominatorCorpLegalForm: { type: 'string' }, nominatorCorpRepresentative: { type: 'string' }, nominatorCorpEmail: { type: 'string' },
+      nominatorCorpContactNumber: { type: 'string' }, nominatorCorpDateBecameNominator: { type: 'string' },
+    } } },
+    shareholders: { type: 'array', description: 'A UEN (corporate) shareholder needs at least one corporateDirectorNames entry; a fullyPaidUp shareholder needs a unique shareCertificateNo.', items: { type: 'object', properties: {
+      name: { type: 'string' }, address: { type: 'string' }, identificationType: { type: 'string', description: 'e.g. NRIC / PASSPORT / FIN / UEN (UEN = corporate shareholder)' },
+      identificationNumber: { type: 'string' }, numberOfShares: { type: 'string' }, paidUpCapital: { type: 'string' },
+      fullyPaidUp: { type: 'boolean' }, shareCertificateNo: { type: 'string', description: 'Required and must be unique if fullyPaidUp is true' },
+      corporateDirectorNames: { type: 'array', items: { type: 'string' }, description: 'Required (at least one) when identificationType is UEN' },
+      corpRepresentative: { type: 'string' }, corpRepIdType: { type: 'string' }, corpRepIdNo: { type: 'string' },
+      isNomineeShareholder: { type: 'boolean' },
+      nominatorType: { type: 'string', enum: ['individual', 'corporate entity', ''] },
+      nominatorIndName: { type: 'string' }, nominatorIndAddress: { type: 'string' }, nominatorIndNationality: { type: 'string' },
+      nominatorIndIdentificationNumber: { type: 'string' }, nominatorIndBirthDate: { type: 'string' }, nominatorIndEmail: { type: 'string' },
+      nominatorIndContactNumber: { type: 'string' }, nominatorIndDateBecameNominator: { type: 'string' },
+      nominatorCorpName: { type: 'string' }, nominatorCorpUen: { type: 'string' }, nominatorCorpRegisteredAddress: { type: 'string' },
+      nominatorCorpLegalForm: { type: 'string' }, nominatorCorpRepresentative: { type: 'string' }, nominatorCorpEmail: { type: 'string' },
+      nominatorCorpContactNumber: { type: 'string' }, nominatorCorpDateBecameNominator: { type: 'string' },
+    } } },
+  }, required: ['company', 'directors', 'shareholders'] } },
 ];
 
 async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {
@@ -570,10 +729,11 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
     const changes = Array.isArray(input.changes) ? input.changes as InvoiceEditChange[] : [];
     return invoiceEditPreview(account, String(input.company ?? ''), qbCompany, changes);
   }
+  if (name === 'preview_post_incorporate') return postIncorporatePreview(account, input);
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview }> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview }> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -592,6 +752,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   let lastInvoicePreview: InvoicePreview | undefined;
   let lastLateFilingPreview: LateFilingResolvePreview | undefined;
   let lastInvoiceEditPreview: InvoiceEditPreview | undefined;
+  let lastPostIncorporatePreview: PostIncorporatePreview | undefined;
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -603,7 +764,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview };
+      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -626,6 +787,9 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
         if (tu.name === 'preview_invoice_edit' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
           lastInvoiceEditPreview = (result as { preview: InvoiceEditPreview }).preview;
         }
+        if (tu.name === 'preview_post_incorporate' && result && typeof result === 'object' && (result as { complete?: boolean }).complete) {
+          lastPostIncorporatePreview = (result as { preview: PostIncorporatePreview }).preview;
+        }
       } catch (err) {
         result = { error: err instanceof Error ? err.message : 'tool failed' };
       }
@@ -633,7 +797,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -995,9 +1159,15 @@ export async function POST(req: NextRequest) {
   const isFirstMessage = messages.length === 1;
   try {
     if (process.env.ANTHROPIC_API_KEY) {
-      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview } = await claudeAnswer(messages.slice(-8), context, account);
+      // Widened from 8 to 24 (2026-09-09, alongside preview_post_incorporate)
+      // — a guided intake conversation (company info, then each director,
+      // then each shareholder) genuinely needs more turns of real history
+      // than the other, single-shot preview tools ever did; losing an
+      // earlier-collected director's details off the back of an 8-message
+      // window would make Claude re-ask for them or, worse, guess.
+      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview } = await claudeAnswer(messages.slice(-24), context, account);
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
-      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview });
+      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview });
     }
     const reply = await intentAnswer(last.content, context, account);
     await persistExchange(conversationId, account, last.content, reply, isFirstMessage);

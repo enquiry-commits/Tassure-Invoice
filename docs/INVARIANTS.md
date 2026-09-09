@@ -739,6 +739,29 @@ again.
   real person's email — so `ai_learning_feedback`/`user_memories` audit
   trails stay honest about which approvals were automatic.
 
+- **INV-DATA-021** — An agentic-chat tool that assembles a real legal
+  document's identity data (a person's ID number, address, date of birth,
+  share details — `preview_post_incorporate` in `app/api/assistant/
+  route.ts`, added 2026-09-09 for the Post Incorporate document set) must
+  NEVER let Claude invent, infer, or auto-fill any such value — every one
+  must come from the user exactly as stated, or be left blank and asked
+  for. This is stated explicitly in `staticSystemPrompt()`'s own guidance
+  for the tool and is the one constraint Vincent did NOT want relaxed when
+  he rejected downgrading this feature to a read-only status query ("我比
+  较极端 我希望是可以真正协助执行操作的...你要思考用户真正要的是什么" —
+  he wanted genuine guided task-completion, not passive Q&A, but never
+  asked to relax the no-guessing rule on identity data itself). The
+  resolution that satisfies both: the tool conducts a real multi-turn
+  guided intake (collect a few real fields at a time, track progress
+  across the conversation) but still only VALIDATES what the user actually
+  gave it, via the same real `validatePostIncorporateInput()` the live
+  `/post-incorporate` page itself uses — never Claude's own judgment of
+  whether the picture is "close enough." Any future agentic tool touching
+  another real legal/compliance document (NRIC, addresses, dates of birth,
+  UENs, share/ownership data) must follow the same rule — a wrong guessed
+  value on an actual legal document is a categorically worse failure than
+  a wrong guessed value in a chat reply.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

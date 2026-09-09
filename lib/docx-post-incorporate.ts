@@ -146,6 +146,21 @@ export type PostIncorporateInput = {
   shareholders: PostIncorporateShareholder[];
 };
 
+// The chat assistant's guided-intake preview (app/api/assistant/route.ts's
+// preview_post_incorporate tool) — carries the FULL assembled input back
+// out so the frontend card can POST it to /api/post-incorporate/generate
+// verbatim once the user confirms, the same way InvoicePreview/
+// LateFilingResolvePreview/InvoiceEditPreview each carry what their own
+// real confirm-button submission needs.
+export type PostIncorporatePreview = {
+  input: PostIncorporateInput;
+  company: string;
+  uen: string;
+  directorsCount: number;
+  shareholdersCount: number;
+  needNdService: boolean;
+};
+
 export type GeneratedDoc = { filename: string; buffer: Buffer };
 
 const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
