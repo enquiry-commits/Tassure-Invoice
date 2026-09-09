@@ -1246,7 +1246,7 @@ export default function MyTasksPage() {
                       right for the floating widget (matches every other
                       page's guide there), just not for this page's own new,
                       deliberately minimal empty state. */}
-                  <picture style={{ display: 'block', width: 160, height: 96, marginBottom: 10 }}>
+                  <picture style={{ display: 'block', width: 160, height: 96, marginBottom: 10, transform: 'translateY(-16px)' }}>
                     <source media="(prefers-reduced-motion: reduce)" srcSet="/my-tasks-robot-still.png" />
                     {/* Loops only while this empty-chat branch is mounted; first submitted message removes it. */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}

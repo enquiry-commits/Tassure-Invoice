@@ -1,5 +1,7 @@
 # TASSURE Invoice - Shared Project Status
 
+Local UI adjustment (2026-09-09): moved the empty-chat robot 16px upward using a visual transform, keeping the My Tasks heading and subtitle in their original positions. Querying animation unchanged. Not yet pushed.
+
 Local UI follow-up (2026-09-09): replaced the My Tasks querying bubble with Vincent's second robot GIF, green-screen keyed to transparency, cropped to the subject and displayed at 82×97. Runs at Vincent's requested 1.25× speed, loops while chatBusy is true and disappears when the reply finishes. Includes an accessible status label and reduced-motion still. TypeScript check passed. Not yet pushed.
 
 Local UI update (2026-09-09): replaced the My Tasks empty-chat Bot icon with Vincent's supplied robot video converted to a transparent looping GIF. Per his clarification, retained the left gray panel and removed only green screen/spill. Renders at 160×96 CSS pixels above My Tasks, loops until the first submitted message removes the empty-state view, and returns for New Chat. Static PNG supports prefers-reduced-motion. Not yet pushed.
