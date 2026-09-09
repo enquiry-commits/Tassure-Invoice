@@ -32,8 +32,35 @@ import {
 
 export const maxDuration = 60;
 
-type Msg = { role: 'user' | 'assistant'; content: string };
+// Added 2026-09-09 — Vincent: "我希望可以优化便利功能就是可以直接拖拽图
+// 片或者文件到对话框，或者可以在聊天框复制粘贴图片（作为此次对话的附带
+// 参考）". Anthropic's own Messages API already accepts `content` as either
+// a plain string OR an array of content blocks (text/image/document) —
+// claudeAnswer() below already just passes `content` straight through to
+// that API unchanged, so widening the type here is most of the real work;
+// everywhere else that assumed `content` was always a string (the intent
+// router, title-deriving, what gets persisted to ai_messages) now goes
+// through messageText() to extract just the text portion instead.
+type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+  | { type: 'document'; source: { type: 'base64'; media_type: string; data: string } };
+type Msg = { role: 'user' | 'assistant'; content: string | ContentBlock[] };
 type AssistantContext = { pathname?: string; page?: string };
+
+function messageText(content: string | ContentBlock[]): string {
+  if (typeof content === 'string') return content;
+  return content.filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text').map(b => b.text).join('\n').trim();
+}
+function attachmentSummary(content: string | ContentBlock[]): string {
+  if (typeof content === 'string') return '';
+  const images = content.filter(b => b.type === 'image').length;
+  const docs = content.filter(b => b.type === 'document').length;
+  const parts: string[] = [];
+  if (images) parts.push(`${images} 张图片`);
+  if (docs) parts.push(`${docs} 个文件`);
+  return parts.length ? `\n\n[附带 ${parts.join('、')} — 未保存到对话记录，仅供本次对话参考]` : '';
+}
 
 // ── System map: single source for both engines ──────────────────────────────
 const PAGES = [
@@ -657,6 +684,8 @@ All three of the above tools, when they report a company as not found, return a 
 
 If the user asks to generate/prepare the Post Incorporate document set for a newly incorporated company, DO NOT ask for everything at once and DO NOT call preview_post_incorporate on a near-empty object just to "see what's missing" — that wastes the user's time reading a wall of errors. Instead run a real guided intake conversation: first collect the company's own details (name, UEN, registered address, registration date, chairman, secretary, currency, FYE, whether ND service is needed — secretaryCompanyName can be left out, it defaults automatically), confirm you have those, THEN walk through each director one at a time (name, address, ID type/number, nationality, DOB, gender, email, phone, whether they're a nominee director — and only if so, their nominator's details), THEN each shareholder one at a time (name/address/ID, shares, whether fully paid-up — and if so, a share certificate number — corporate shareholders need their corporate director names). Keep track of everything collected so far across the conversation yourself (the tool has no memory between calls — you must re-send the FULL picture, everything collected so far, every time you call it, not just what's new). Never invent, guess, infer, or auto-fill any identity value (ID numbers, addresses, dates of birth, share details) — every one of these must come from the user exactly as stated; if something is genuinely unknown, leave it blank and ask, don't make one up to move faster. Only call preview_post_incorporate once you believe the picture is reasonably complete. If it reports complete:false, relay its errors plainly and ask for exactly what's still missing, then call it again once supplied. It is READ-ONLY — there is no tool that generates or downloads the actual documents; the UI shows a real "Generate & Download" button on the resulting preview card. Never say or imply YOU generated or downloaded the documents.
 
+The user may attach an image or PDF (a screenshot, an invoice, a scanned document) as reference for the current question — when one is present, actually look at it and factor what you see into your answer rather than only responding to the text.
+
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
 
@@ -1153,14 +1182,20 @@ function toStoredPreview(
   return null;
 }
 
-async function persistExchange(conversationId: number | undefined, account: ApprovedAccount | null, userMessage: string, reply: string, isFirstMessage: boolean, previewData?: StoredPreview | null) {
+async function persistExchange(conversationId: number | undefined, account: ApprovedAccount | null, userMessage: string | ContentBlock[], reply: string, isFirstMessage: boolean, previewData?: StoredPreview | null) {
   if (!conversationId || !account) return;
   try {
     const owner = await getConversationOwner(conversationId);
     if (owner !== account.email) return;
-    await appendMessage(conversationId, 'user', userMessage);
+    // ai_messages.content is a plain text column — the actual image/PDF
+    // bytes are never written to it (would bloat the table with every
+    // pasted screenshot for no real benefit, since these are only meant as
+    // this-conversation reference material, not a permanent archive). Just
+    // the text portion plus a plain note that something was attached.
+    const userText = messageText(userMessage) || (typeof userMessage === 'string' ? '' : '(图片/文件)');
+    await appendMessage(conversationId, 'user', userText + attachmentSummary(userMessage));
     await appendMessage(conversationId, 'assistant', reply, previewData);
-    if (isFirstMessage) await renameConversation(conversationId, deriveTitle(userMessage));
+    if (isFirstMessage) await renameConversation(conversationId, deriveTitle(userText || '图片/文件'));
     else await touchConversation(conversationId);
   } catch {
     // Persistence is a nice-to-have on top of a reply that already
@@ -1177,6 +1212,21 @@ export async function POST(req: NextRequest) {
     viewAs?: string;
   };
   if (!messages?.length) return NextResponse.json({ error: 'messages required' }, { status: 400 });
+
+  // Defense-in-depth for image/PDF attachments — the client already caps
+  // count/size before sending (app/my-tasks/page.tsx: 2 files x 1.5MB raw
+  // max, ~4.19M base64 chars worst case), but this route never trusts that
+  // alone. The threshold below sits just above that legitimate worst case
+  // (kept in sync with the client's own caps — raise one, raise the other)
+  // so a real client upload always passes, while a bug or a direct API
+  // call bypassing the client gets a clear, specific error here instead of
+  // an opaque platform 413 from Vercel's own harder request-size ceiling.
+  for (const m of messages) {
+    if (!Array.isArray(m.content)) continue;
+    if (m.content.length > 6) return NextResponse.json({ error: 'Too many attachments on one message.' }, { status: 400 });
+    const totalBase64Chars = m.content.reduce((sum, b) => sum + (b.type !== 'text' ? b.source.data.length : 0), 0);
+    if (totalBase64Chars > 4_500_000) return NextResponse.json({ error: 'Attachments too large for one message.' }, { status: 400 });
+  }
 
   // 2026-09-08: this route was fully anonymous before — no personal-task
   // question could ever be answered safely. getRequestAccount() reads the
@@ -1216,13 +1266,18 @@ export async function POST(req: NextRequest) {
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage, toStoredPreview(invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview));
       return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview });
     }
-    const reply = await intentAnswer(last.content, context, account);
+    // The rule-based intent router only ever understands plain text — an
+    // attached image/PDF is real content only Claude can actually look at,
+    // so say so plainly rather than silently ignoring what the user attached.
+    const attachNote = attachmentSummary(last.content) ? '\n\n（附带的图片/文件目前只有在 Claude 模式下才能被读取——基础模式暂时看不到内容。）' : '';
+    const reply = await intentAnswer(messageText(last.content), context, account) + attachNote;
     await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
     return NextResponse.json({ reply, engine: 'intent' });
   } catch (e) {
     // Claude path failed (bad key / network) — degrade to the intent engine.
     try {
-      const reply = await intentAnswer(last.content, context, account);
+      const attachNote = attachmentSummary(last.content) ? '\n\n（附带的图片/文件目前只有在 Claude 模式下才能被读取——基础模式暂时看不到内容。）' : '';
+      const reply = await intentAnswer(messageText(last.content), context, account) + attachNote;
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
       return NextResponse.json({ reply, engine: 'intent-fallback', note: e instanceof Error ? e.message : 'claude failed' });
     } catch {

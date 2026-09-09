@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AlertTriangle, CalendarClock, Clock, ListChecks, RefreshCw, Sparkles,
   Plus, Pin, Trash2, Send, MessageSquare, Activity, FileCheck2, X, ExternalLink,
+  Paperclip, FileText,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { RichText } from '@/components/assistant/ChatRichText';
@@ -170,7 +171,16 @@ type Conversation = { id: number; title: string; pinned: boolean; created_at: st
 // for the opposite: "很奇怪，我想要的就是回复看起来还是正常的，token 我
 // 自己会去看usage". Reverted same day; the API still returns `engine`/
 // `note`, this UI just no longer shows them.
-type ChatMsg = { role: 'user' | 'assistant'; content: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview };
+// Drag-drop/paste attachments (2026-09-09) — Vincent: "我希望可以优化便
+// 利功能就是可以直接拖拽图片或者文件到对话框，或者可以在聊天框复制粘贴
+// 图片（作为此次对话的附带参考）". Kept in memory only (never persisted —
+// see app/api/assistant/route.ts's persistExchange comment on why), so a
+// reopened conversation shows the plain "[附带 N 张图片]" text note but not
+// the actual thumbnail; base64 is carried in EVERY subsequent request in
+// this same browser session so Claude keeps "seeing" it across follow-up
+// turns for as long as messages.slice(-24) still includes that turn.
+type ChatAttachment = { id: string; name: string; mediaType: string; base64: string; kind: 'image' | 'document' };
+type ChatMsg = { role: 'user' | 'assistant'; content: string; attachments?: ChatAttachment[]; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview };
 type ActiveView = 'chat' | 'tasks' | 'activity';
 
 // Local to this page only — deliberately not added to lib/date.ts's shared
@@ -932,6 +942,43 @@ function ConversationRow({ conversation, active, onOpen, onTogglePin, onDelete }
   );
 }
 
+// Pending-attachment chips shown above the chat input, before sending —
+// see the ChatAttachment/pendingAttachments comments in MyTasksPage.
+function AttachmentChips({ attachments, onRemove }: { attachments: ChatAttachment[]; onRemove: (id: string) => void }) {
+  if (!attachments.length) return null;
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
+      {attachments.map(a => (
+        <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 4px', borderRadius: 8, border: '1px solid #dbe3ec', background: '#f8fafc' }}>
+          {a.kind === 'image'
+            ? <img src={`data:${a.mediaType};base64,${a.base64}`} alt={a.name} style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 5, display: 'block' }} />
+            : <div style={{ width: 32, height: 32, borderRadius: 5, background: '#eef2f7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FileText size={15} color="#64748b" /></div>}
+          <span style={{ fontSize: 11, color: '#475569', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
+          <button type="button" onClick={() => onRemove(a.id)} style={{ width: 16, height: 16, borderRadius: '50%', border: 'none', background: '#e2e8f0', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, flexShrink: 0 }}>
+            <X size={10} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Thumbnails on an already-sent user message bubble — same visual language
+// as AttachmentChips but without the remove button.
+function AttachmentThumbnails({ attachments }: { attachments: ChatAttachment[] }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+      {attachments.map(a => (
+        a.kind === 'image'
+          ? <img key={a.id} src={`data:${a.mediaType};base64,${a.base64}`} alt={a.name} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(255,255,255,0.35)', display: 'block' }} />
+          : <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 6, background: 'rgba(255,255,255,0.15)', fontSize: 11 }}>
+              <FileText size={13} />{a.name}
+            </div>
+      ))}
+    </div>
+  );
+}
+
 export default function MyTasksPage() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [data, setData] = useState<MyTasksResponse | null>(null);
@@ -988,6 +1035,63 @@ export default function MyTasksPage() {
   const [chatInput, setChatInput] = useState('');
   const [chatBusy, setChatBusy] = useState(false);
   const [chatLoadingThread, setChatLoadingThread] = useState(false);
+
+  // Pending attachments for the NEXT message — cleared once sent (they move
+  // into that message's own `attachments` field, see sendChatMessage).
+  const [pendingAttachments, setPendingAttachments] = useState<ChatAttachment[]>([]);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Conservative caps — Vercel's own Serverless Function request-body limit
+  // is a hard ~4.5MB. Worst case here (2 files x 1.5MB raw = 3MB) inflates
+  // to ~4MB once base64-encoded (x4/3), leaving real headroom for the rest
+  // of the conversation history and JSON overhead in the same request —
+  // matches the server-side guard in app/api/assistant/route.ts (kept in
+  // sync there: raise one, raise the other).
+  const MAX_ATTACHMENTS = 2;
+  const MAX_FILE_BYTES = 1.5 * 1024 * 1024;
+
+  const addFiles = useCallback((files: FileList | File[]) => {
+    setAttachError(null);
+    const list = Array.from(files);
+    if (!list.length) return;
+    if (pendingAttachments.length + list.length > MAX_ATTACHMENTS) {
+      setAttachError(`最多同时附带 ${MAX_ATTACHMENTS} 个文件。`);
+      return;
+    }
+    for (const file of list) {
+      const kind: ChatAttachment['kind'] | null = file.type.startsWith('image/') ? 'image' : file.type === 'application/pdf' ? 'document' : null;
+      if (!kind) { setAttachError(`"${file.name}" 类型暂不支持 — 目前只支持图片和 PDF。`); continue; }
+      if (file.size > MAX_FILE_BYTES) { setAttachError(`"${file.name}" 超过 ${(MAX_FILE_BYTES / 1024 / 1024).toFixed(1)}MB，暂不支持。`); continue; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const base64 = result.split(',')[1] ?? '';
+        if (!base64) { setAttachError(`无法读取 "${file.name}"。`); return; }
+        setPendingAttachments(prev => prev.length >= MAX_ATTACHMENTS ? prev : [...prev, {
+          id: globalThis.crypto.randomUUID(), name: file.name, mediaType: file.type, base64, kind,
+        }]);
+      };
+      reader.onerror = () => setAttachError(`无法读取 "${file.name}"。`);
+      reader.readAsDataURL(file);
+    }
+  }, [pendingAttachments.length]);
+
+  const removeAttachment = (id: string) => setPendingAttachments(prev => prev.filter(a => a.id !== id));
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files);
+  };
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const fileItems = Array.from(e.clipboardData.items).filter(it => it.kind === 'file');
+    if (!fileItems.length) return; // let normal text paste proceed untouched
+    e.preventDefault();
+    const files = fileItems.map(it => it.getAsFile()).filter((f): f is File => !!f);
+    if (files.length) addFiles(files);
+  };
   const chatListRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(async () => {
@@ -1076,9 +1180,31 @@ export default function MyTasksPage() {
     await fetch(`/api/ai/conversations/${conversation.id}`, { method: 'DELETE' }).catch(() => {});
   };
 
+  // Local ChatMsg[] always keeps `content` as a plain string (for
+  // consistent rendering) plus an optional `attachments` array; this turns
+  // that back into what /api/assistant actually expects — content blocks
+  // when there are attachments, a bare string otherwise — at request time,
+  // for every message in the history (not just the newest one), so Claude
+  // keeps "seeing" an earlier turn's image for as long as the server's own
+  // messages.slice(-24) window still includes that turn.
+  const toApiMessage = (m: ChatMsg) => {
+    if (m.role !== 'user' || !m.attachments?.length) return { role: m.role, content: m.content };
+    return {
+      role: m.role,
+      content: [
+        { type: 'text' as const, text: m.content || '（无文字说明，请查看附带的图片/文件）' },
+        ...m.attachments.map(a => ({
+          type: a.kind,
+          source: { type: 'base64' as const, media_type: a.mediaType, data: a.base64 },
+        })),
+      ],
+    };
+  };
+
   const sendChatMessage = async (suggestedText?: string) => {
-    const content = (suggestedText ?? chatInput).trim();
-    if (!content || chatBusy) return;
+    const text = (suggestedText ?? chatInput).trim();
+    const attachments = pendingAttachments;
+    if ((!text && !attachments.length) || chatBusy) return;
 
     let conversationId = activeConversationId;
     if (!conversationId) {
@@ -1097,9 +1223,11 @@ export default function MyTasksPage() {
       }
     }
 
-    const next = [...chatMessages, { role: 'user' as const, content }];
+    const next: ChatMsg[] = [...chatMessages, { role: 'user' as const, content: text, attachments: attachments.length ? attachments : undefined }];
     setChatMessages(next);
     setChatInput('');
+    setPendingAttachments([]);
+    setAttachError(null);
     setChatBusy(true);
     try {
       const res = await fetch('/api/assistant', {
@@ -1109,7 +1237,7 @@ export default function MyTasksPage() {
         // viewAsEmail's own comment above): the assistant resolves and
         // answers/saves as the TARGET account, not the real caller, for
         // the lifetime of this one request.
-        body: JSON.stringify({ messages: next, context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId, viewAs: viewAsEmail || undefined }),
+        body: JSON.stringify({ messages: next.map(toApiMessage), context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId, viewAs: viewAsEmail || undefined }),
       });
       const json = await res.json();
       setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined, postIncorporatePreview: json.postIncorporatePreview ?? undefined }]);
@@ -1251,7 +1379,27 @@ export default function MyTasksPage() {
         {/* Main panel */}
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           {activeView === 'chat' ? (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
+            <div
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden', position: 'relative' }}
+              onDragOver={e => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={e => { e.preventDefault(); setDragActive(false); }}
+              onDrop={handleDrop}
+            >
+              {dragActive && (
+                <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,118,110,0.08)', border: '2px dashed #0f766e', borderRadius: 10, zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                  <div style={{ background: '#fff', padding: '10px 18px', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#0f766e', boxShadow: '0 4px 16px rgba(15,23,42,0.15)' }}>
+                    松开以添加图片或 PDF
+                  </div>
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                multiple
+                hidden
+                onChange={e => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }}
+              />
               {!chatMessages.length && !chatLoadingThread ? (
                 // Vincent, from a real ChatGPT screenshot: "在还没有开始问
                 // 问题前，输入框是在中间的" (before asking anything, the
@@ -1285,22 +1433,35 @@ export default function MyTasksPage() {
                   </picture>
                   <div style={{ fontSize: 15, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
                   <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20 }}>Ready when you are.</div>
-                  <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 560 }}>
-                    <input
-                      value={chatInput}
-                      onChange={e => setChatInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) void sendChatMessage(); }}
-                      placeholder="问问今天要优先做什么，或任何系统问题…"
-                      autoFocus
-                      style={{ flex: 1, border: '1px solid #dbe3ec', borderRadius: 9, padding: '11px 14px', fontSize: 13, outline: 'none' }}
-                    />
-                    <button
-                      onClick={() => void sendChatMessage()}
-                      disabled={chatBusy || !chatInput.trim()}
-                      style={{ width: 40, borderRadius: 9, border: 'none', cursor: chatBusy || !chatInput.trim() ? 'not-allowed' : 'pointer', background: chatBusy || !chatInput.trim() ? '#cbd5e1' : '#0f766e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                    >
-                      <Send size={15} />
-                    </button>
+                  <div style={{ width: '100%', maxWidth: 560 }}>
+                    <AttachmentChips attachments={pendingAttachments} onRemove={removeAttachment} />
+                    {attachError && <div style={{ fontSize: 11, color: '#b91c1c', marginBottom: 6 }}>{attachError}</div>}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        title="附加图片或 PDF"
+                        style={{ width: 40, flexShrink: 0, borderRadius: 9, border: '1px solid #dbe3ec', background: '#fff', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      >
+                        <Paperclip size={16} />
+                      </button>
+                      <input
+                        value={chatInput}
+                        onChange={e => setChatInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) void sendChatMessage(); }}
+                        onPaste={handlePaste}
+                        placeholder="问问今天要优先做什么，或任何系统问题…（可拖拽/粘贴图片、PDF）"
+                        autoFocus
+                        style={{ flex: 1, border: '1px solid #dbe3ec', borderRadius: 9, padding: '11px 14px', fontSize: 13, outline: 'none' }}
+                      />
+                      <button
+                        onClick={() => void sendChatMessage()}
+                        disabled={chatBusy || (!chatInput.trim() && !pendingAttachments.length)}
+                        style={{ width: 40, flexShrink: 0, borderRadius: 9, border: 'none', cursor: chatBusy || (!chatInput.trim() && !pendingAttachments.length) ? 'not-allowed' : 'pointer', background: chatBusy || (!chatInput.trim() && !pendingAttachments.length) ? '#cbd5e1' : '#0f766e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        <Send size={15} />
+                      </button>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 14, maxWidth: 560 }}>
                     {['What should I prioritize today?', 'Any overdue AR?', 'How does this work?'].map(s => (
@@ -1361,7 +1522,10 @@ export default function MyTasksPage() {
                                 />
                               )}
                             </>
-                          : message.content}
+                          : <>
+                              {message.content}
+                              {message.attachments?.length ? <AttachmentThumbnails attachments={message.attachments} /> : null}
+                            </>}
                       </div>
                     ))}
                     {chatBusy && (
@@ -1374,21 +1538,34 @@ export default function MyTasksPage() {
                       </div>
                     )}
                   </div>
-                  <div style={{ display: 'flex', gap: 8, padding: '10px 12px', borderTop: '1px solid #e8edf3', background: '#fff' }}>
+                  <div style={{ padding: '10px 12px', borderTop: '1px solid #e8edf3', background: '#fff' }}>
+                    <AttachmentChips attachments={pendingAttachments} onRemove={removeAttachment} />
+                    {attachError && <div style={{ fontSize: 11, color: '#b91c1c', marginBottom: 6 }}>{attachError}</div>}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      title="附加图片或 PDF"
+                      style={{ width: 40, flexShrink: 0, borderRadius: 9, border: '1px solid #dbe3ec', background: '#fff', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                    >
+                      <Paperclip size={16} />
+                    </button>
                     <input
                       value={chatInput}
                       onChange={e => setChatInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) void sendChatMessage(); }}
-                      placeholder="问问今天要优先做什么，或任何系统问题…"
+                      onPaste={handlePaste}
+                      placeholder="问问今天要优先做什么，或任何系统问题…（可拖拽/粘贴图片、PDF）"
                       style={{ flex: 1, border: '1px solid #dbe3ec', borderRadius: 9, padding: '9px 12px', fontSize: 13, outline: 'none' }}
                     />
                     <button
                       onClick={() => void sendChatMessage()}
-                      disabled={chatBusy || !chatInput.trim()}
-                      style={{ width: 40, borderRadius: 9, border: 'none', cursor: chatBusy || !chatInput.trim() ? 'not-allowed' : 'pointer', background: chatBusy || !chatInput.trim() ? '#cbd5e1' : '#0f766e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      disabled={chatBusy || (!chatInput.trim() && !pendingAttachments.length)}
+                      style={{ width: 40, flexShrink: 0, borderRadius: 9, border: 'none', cursor: chatBusy || (!chatInput.trim() && !pendingAttachments.length) ? 'not-allowed' : 'pointer', background: chatBusy || (!chatInput.trim() && !pendingAttachments.length) ? '#cbd5e1' : '#0f766e', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
                       <Send size={15} />
                     </button>
+                    </div>
                   </div>
                 </>
               )}
