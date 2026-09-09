@@ -1334,8 +1334,12 @@ export default function MyTasksPage() {
                       </div>
                     ))}
                     {chatBusy && (
-                      <div style={{ alignSelf: 'flex-start', padding: '9px 14px', borderRadius: 12, background: '#fff', border: '1px solid #e3e9f0', fontSize: 12.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <Sparkles size={13} /> 正在结合系统资料查询…
+                      <div role="status" aria-label="正在结合系统资料查询…" style={{ alignSelf: 'flex-start', padding: '4px 10px', display: 'flex', alignItems: 'center' }}>
+                        <picture>
+                          <source media="(prefers-reduced-motion: reduce)" srcSet="/my-tasks-thinking-still.png" />
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src="/my-tasks-thinking.gif" alt="" width={82} height={97} style={{ display: 'block', objectFit: 'contain' }} />
+                        </picture>
                       </div>
                     )}
                   </div>
