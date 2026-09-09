@@ -944,6 +944,57 @@ again.
   chat tool should carry the same guard — check the reply for a refusal
   claim against what the caller's account is actually allowed, not just
   trust the model relayed the tool's real answer.
+- **INV-DATA-024** — `getPersonActivitySummary`/`getCompanyActivitySummary`
+  (`lib/activity-data.ts`) computing "since" as `Date.now() - rangeDays *
+  86_400_000` means `rangeDays=1` is a ROLLING 24-hour window ending right
+  now, NOT the Singapore-time calendar day "today" — genuinely different
+  ranges except right at midnight. Confirmed real: Vincent asked "今天活跃
+  的人员" (today's active people); the honest reply, computed from
+  `rangeDays===1`, described its own output as "过去24小时" (past 24 hours)
+  — technically accurate for what was computed, not what "today" means.
+  `days<=1` is only ever used by a caller meaning "today" colloquially (no
+  caller passes 1 to mean a deliberate rolling window) — fixed by switching
+  ONLY that case to the real SGT calendar-day boundary (`sinceFor()`);
+  `days>1` keeps rolling-window behavior, which has no single unambiguous
+  calendar boundary to snap to anyway. Any future "since N days" helper
+  where 1 day can mean "today" needs the same split.
+- **INV-DATA-025** — A raw DB timestamp (`created_at`/`updated_at`, always
+  UTC) handed to an LLM to relay in a reply must be pre-formatted into
+  Singapore time server-side, never left for the model to convert itself —
+  confirmed real: a reply once echoed "2026-09-09 02:04:08 UTC" verbatim,
+  which the user (correctly) didn't recognize as the "10点" (10am) they
+  remembered, since nothing had done the +8 conversion. `lib/date.ts`'s
+  `formatSgtDateTime()` (same convention `app/page.tsx`'s own local
+  `formatSgtTime()` already used) is the one shared formatter — any chat
+  tool result carrying a timestamp for direct display (not further date
+  math) must run it through this before returning, as
+  `recentActivitySummary()`/`myActivityPattern()` now do.
+- **INV-DATA-026** — SOA (Statement of Account — a PDF of a company's
+  unpaid invoices, downloaded from `/billing/soa/{tab,tac,tao}` with a real
+  "Draft Email" button to send it to the client) is a genuinely different
+  feature from Billing Drafts (new invoice generation) — confirmed real
+  confusion in the chat assistant, 2026-09-09: asked "我要开SOA", it
+  offered to preview a NEW billing draft instead. An SOA only exists where
+  a company has a real outstanding balance — `check_outstanding_balance`'s
+  `byQbCompany` lines now each carry a real `soa_link`
+  (`soaDeepLink()`, `lib/deep-links.ts`) straight to that company's own SOA
+  book, pre-opened via the same `openCompany` query-param convention
+  `billingDeepLink`/`lateFilingDeepLink` already use. Any future chat
+  capability touching SOA must go through `check_outstanding_balance`
+  first to find which real QuickBooks company(ies) the balance is under —
+  never assume, and never redirect to Billing Drafts for an SOA request.
+- **INV-DATA-027** — `companies.ssic_description_1` has inconsistent casing
+  in real data — confirmed on production: "WHOLESALE TRADE OF A VARIETY OF
+  GOODS WITHOUT A DOMINANT PRODUCT" (140 companies) and "Wholesale trade of
+  a variety of goods without a dominant product" (12 companies) are the
+  SAME industry, split into two entries by any grouping that keys on the
+  raw string. `lib/customer-profile-lookup.ts` groups on
+  `.trim().toUpperCase()` instead. This same risk applies to
+  `app/reports/page.tsx`'s own "Explore" section pivot (client-side
+  grouping straight off `ssicDescription1`) and `app/api/reports/
+  export/route.ts` — neither has been fixed as part of this entry (out of
+  scope for the chat-assistant work that found it), but both should
+  normalize the same way before this is relied on for anything precise.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

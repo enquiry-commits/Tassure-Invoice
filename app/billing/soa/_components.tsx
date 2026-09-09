@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { allStaffNames } from '@/lib/staff-directory';
+import { findUniqueBestMatch } from '@/lib/company-name';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import type { DraftLike } from '@/lib/draft-helper-client';
 import type { QbCompany } from '@/lib/quickbooks';
@@ -82,7 +84,17 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
 // soa_owners row (customer name + THAT row's own qbCompany) the individual
 // pages read, so it's genuinely the same data, not a copy that needs
 // syncing — see rowCompany()/updateSoaPic() below.
-export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
+function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
+  // Deep link from the chat assistant (soaDeepLink(), lib/deep-links.ts) —
+  // same openCompany convention and auto-open pattern already used by
+  // /billing and /late-filing (Vincent: "当用户点击去开单的时候你应该是带
+  // 用户去到开单的接口，并且协助好找到对应的公司和点击好打开了那个发票
+  // 编辑的弹窗，不只是带到...接口页面就停了" — the same principle applies
+  // here: landing on the general SOA book and stopping isn't enough, the
+  // specific company's own detail (with its real Download PDF/Draft Email
+  // buttons) should already be open).
+  const searchParams = useSearchParams();
+  const openCompany = searchParams.get('openCompany');
   const [companies, setCompanies] = useState<Row[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -101,6 +113,19 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany | '
   // company can genuinely appear twice, once per system) — every row
   // identity (React key, the expanded-detail lookup) goes through this.
   const rowKey = (c: Row) => `${rowCompany(c)}:${c.companyName}`;
+
+  // Same "only try once, once real data has loaded" guard app/late-filing/
+  // page.tsx's own openCompany auto-open already uses — companies starts
+  // null while loading, and a plain effect keyed on [openCompany, companies]
+  // would otherwise keep re-matching (and re-opening after a manual close)
+  // every time companies re-fetches on the 30s silent poll above.
+  const triedAutoOpen = useRef(false);
+  useEffect(() => {
+    if (!openCompany || triedAutoOpen.current || !companies?.length) return;
+    triedAutoOpen.current = true;
+    const match = findUniqueBestMatch(openCompany, companies, c => c.companyName, 70).value;
+    if (match) setExpanded(rowKey(match));
+  }, [openCompany, companies]);
 
   // Vincent, 2026-09-07: after capping Company Name's width, then
   // reverting that (see git history), he asked "比例是多少?" / "列宽比例"
@@ -526,6 +551,19 @@ export default function SoaBillingView({ qbCompany }: { qbCompany: QbCompany | '
         );
       })()}
     </div>
+  );
+}
+
+// useSearchParams (added 2026-09-09 for the openCompany deep link above)
+// requires a Suspense boundary around it in the app router — same pattern
+// app/late-filing/page.tsx and app/billing/page.tsx already use. Wrapped
+// here, once, rather than in each of the 4 pages (tab/tac/tao/all) that
+// render this component.
+export default function SoaBillingView(props: { qbCompany: QbCompany | 'ALL' }) {
+  return (
+    <Suspense>
+      <SoaBillingViewInner {...props} />
+    </Suspense>
   );
 }
 

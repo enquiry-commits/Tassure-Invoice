@@ -2,6 +2,25 @@ import 'server-only';
 
 import { createAdminClient } from './supabase';
 import { pageAll } from './page-all';
+import { todaySGT } from './date';
+
+// "rangeDays" for these summaries has always meant "a rolling N*24h window
+// ending right now" — correct for a genuine trend question ("past 30 days")
+// but WRONG for "today" specifically: a rolling 24h window ending at, say,
+// 3pm SGT covers yesterday 3pm SGT through now, not the SGT calendar day.
+// Confirmed real: Vincent asked "今天活跃的人员" (today's active people) and
+// the reply, worked out honestly from `rangeDays===1`, described itself as
+// "过去24小时" (past 24 hours) in the same sentence — technically accurate
+// for what the tool actually computed, but not what "today" means. `days<=1`
+// is only ever used by callers that mean "today" colloquially (no current
+// caller passes 1 to mean a deliberate rolling-24h window instead), so this
+// switches ONLY that case to the real SGT calendar-day boundary; `days>1`
+// keeps the existing rolling-window behavior unchanged (a genuine "past N
+// days" trend has no single unambiguous calendar boundary to snap to).
+function sinceFor(rangeDays: number): string {
+  if (rangeDays <= 1) return new Date(`${todaySGT()}T00:00:00+08:00`).toISOString();
+  return new Date(Date.now() - rangeDays * 86_400_000).toISOString();
+}
 
 // Real behavioral tracking — Vincent, 2026-09-08: "现在每个用户进入系统后
 // 的点击操作路径...为什么这个用户每天会打开这个页面，为什么会时常在这个
@@ -81,7 +100,7 @@ function summarize(events: ActivityEvent[]): { topPages: PageVisitStat[]; topAct
 
 export async function getPersonActivitySummary(email: string, rangeDays = 30): Promise<PersonActivitySummary> {
   const supabase = createAdminClient();
-  const since = new Date(Date.now() - rangeDays * 86_400_000).toISOString();
+  const since = sinceFor(rangeDays);
   const events = await pageAll<ActivityEvent>(() => supabase
     .from('user_activity_events')
     .select('account_email, pathname, event_type, detail, created_at')
@@ -101,7 +120,7 @@ export type CompanyActivitySummary = {
 
 export async function getCompanyActivitySummary(rangeDays = 30): Promise<CompanyActivitySummary> {
   const supabase = createAdminClient();
-  const since = new Date(Date.now() - rangeDays * 86_400_000).toISOString();
+  const since = sinceFor(rangeDays);
   const events = await pageAll<ActivityEvent>(() => supabase
     .from('user_activity_events')
     .select('account_email, pathname, event_type, detail, created_at')

@@ -5,6 +5,25 @@ export function todaySGT(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: SGT });
 }
 
+// Same format/convention app/page.tsx's own local formatSgtTime() already
+// uses for the Dashboard's activity feed — shared here so any other server-
+// side code (the chat assistant's activity tools, in particular) formats
+// timestamps for a human to read the same way, rather than relaying a raw
+// DB timestamp string. Confirmed real: the assistant echoed a raw
+// "2026-09-09 02:04:08 UTC" value back to Vincent, who (correctly) didn't
+// recognize it as matching what he remembered as "10点" (10am) — the DATE
+// was right, only the hour needed the +8 SGT conversion nobody applied
+// before this.
+/** Format an ISO timestamp as "DD Mon YYYY, HH:mm" in Singapore time, e.g. "09 Sept 2026, 10:04". "—" when empty/invalid. */
+export function formatSgtDateTime(value: string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-GB', {
+    timeZone: SGT, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+}
+
 export function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
 }

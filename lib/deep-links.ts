@@ -25,3 +25,16 @@ export function billingDeepLink(companyName: string, fyeMonth: string | null, fy
 export function lateFilingDeepLink(companyName: string): string {
   return `/late-filing?${new URLSearchParams({ openCompany: companyName }).toString()}`;
 }
+
+// SOA (Statement of Account) is its own real feature — a PDF of a
+// company's unpaid invoices downloaded from /billing/soa/{tab,tac,tao},
+// with a "Draft Email" button right there to send it to the client — NOT
+// the same thing as Billing Drafts (new invoice generation). Confirmed
+// real bug in the assistant, 2026-09-09: asked "我要开SOA", it offered to
+// preview a new Billing Draft instead. `qbCompany` must be a real 'TAB' |
+// 'TAC' | 'TAO' (never 'ALL' — the "All" combined view exists but a
+// specific company's outstanding balance is always tagged with the real
+// QuickBooks company it's under, from check_outstanding_balance).
+export function soaDeepLink(qbCompany: 'TAB' | 'TAC' | 'TAO', companyName: string): string {
+  return `/billing/soa/${qbCompany.toLowerCase()}?${new URLSearchParams({ openCompany: companyName }).toString()}`;
+}

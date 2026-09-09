@@ -14,8 +14,10 @@ import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/l
 import { previewInvoiceEdit, type InvoiceEditPreview, type InvoiceEditChange } from '@/lib/invoice-edit-lookup';
 import { lookupOutstandingBalance, summarizeOutstandingBalance } from '@/lib/outstanding-lookup';
 import { lookupEmailStatus } from '@/lib/email-status-lookup';
+import { getCustomerProfileSummary } from '@/lib/customer-profile-lookup';
+import { formatSgtDateTime } from '@/lib/date';
 import type { QbCompany } from '@/lib/quickbooks';
-import { billingDeepLink, lateFilingDeepLink } from '@/lib/deep-links';
+import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
 import {
   validatePostIncorporateInput,
   type PostIncorporateInput, type PostIncorporateCompany, type PostIncorporateDirector, type PostIncorporateShareholder, type PostIncorporatePreview,
@@ -267,10 +269,15 @@ async function checkOutstandingBalance(companyQuery: string) {
     companyName: result.companyName,
     hasOutstanding: result.hasOutstanding,
     totalOutstanding: result.totalOutstanding,
-    byQbCompany: result.lines,
+    // Each line's real, clickable link to that QB company's own SOA book
+    // (/billing/soa/tab|tac|tao), pre-opened to this exact company — see
+    // soaDeepLink()'s own comment on why this is a genuinely different
+    // feature from Billing Drafts (confirmed real confusion: the assistant
+    // once offered to preview a NEW billing draft when asked to "开SOA").
+    byQbCompany: result.lines.map(l => ({ ...l, soa_link: soaDeepLink(l.qbCompany, result.companyName) })),
     note: result.hasOutstanding
-      ? 'Real, current outstanding balance from QuickBooks — tell the user the total and, if useful, the breakdown by TAB/TAC/TAO, the oldest aging bucket, and which invoices are unpaid.'
-      : 'No unpaid invoice found for this company across TAB/TAC/TAO — safe to tell the user there is no outstanding balance on file, but this is a live QuickBooks check, not an inference from AR Reminder/filing status.',
+      ? 'Real, current outstanding balance from QuickBooks — tell the user the total and, if useful, the breakdown by TAB/TAC/TAO, the oldest aging bucket, and which invoices are unpaid. If the user wants the SOA (Statement of Account) PDF or wants to send it to the client, present each line\'s soa_link as a clickable markdown link — that page has the real "Download SOA PDF" and "Draft Email" buttons, already open to this company; never suggest Billing Drafts for this.'
+      : 'No unpaid invoice found for this company across TAB/TAC/TAO — safe to tell the user there is no outstanding balance on file, but this is a live QuickBooks check, not an inference from AR Reminder/filing status. An SOA/statement only exists where there is an outstanding balance — say so plainly if asked for one here.',
   };
 }
 
@@ -305,6 +312,31 @@ async function checkEmailStatus(companyQuery: string) {
     note: sent.length
       ? `Real record(s) exist showing this was actually sent (status "sent", with sentAt/sentByName) — tell the user plainly it was sent, when, and by whom, from the drafts array. There may ALSO be other, unsent drafts in the same list (status pending/opened/skipped) — distinguish them clearly, don't imply everything listed was sent.`
       : `Real email draft/campaign record(s) exist for this company, but none has status "sent" — tell the user honestly it has NOT been sent yet (or was skipped), and what state it's actually in, from the drafts array. Do not guess it was probably sent.`,
+  };
+}
+
+// Added 2026-09-09 — a real gap Vincent flagged twice the same day: "那么
+// 现在我们的客户最大是什么类型的客户？从事什么行业的？" (what type/industry
+// is our biggest client) got an honest "no such tool" answer both times,
+// pointing at Companies/Active Client for manual browsing — technically
+// true, but this exact same data is already computed once on the Reports
+// page's own "Explore" section. Gated on canViewReports, same as that page
+// (this is management-level aggregate business data, not something every
+// account should see through chat just because Reports itself is admin-
+// gated) — a chat tool must never become a silent bypass of a page's own
+// restriction, same principle invoiceDraftPreview's own comment states.
+async function customerProfileSummary(account: ApprovedAccount | null) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  if (!account.canViewReports) {
+    return { error: true as const, message: `${account.name}'s account cannot view Reports/customer-profile analytics — that is limited to management accounts (Vincent, Cindy, Samuell, Tan Yee Soon). Tell the user plainly this isn't available to their account.` };
+  }
+  const summary = await getCustomerProfileSummary();
+  return {
+    total_active_clients: summary.totalActiveClients,
+    by_company_type: summary.byCompanyType,
+    by_industry: summary.byIndustry,
+    industry_data_coverage_pct: Math.round(summary.industryDataCoverage * 100),
+    note: 'Real, current counts across every active client (companies.is_active = true), same computation and same "active" definition as the Reports page\'s own KPIs. by_company_type is LEGAL ENTITY STRUCTURE (Private Limited / Sole Proprietorship / LLP, etc.) — NOT an industry. by_industry is real SSIC industry classification, top 15 by count; industry_data_coverage_pct is what share of active clients actually have an SSIC on file (the rest are "Unspecified" and excluded from by_industry, not silently assumed to be any particular industry) — mention that coverage figure if it is meaningfully below 100%, so the industry breakdown is not read as more complete than it is.',
   };
 }
 
@@ -450,8 +482,11 @@ async function myActivityPattern(account: ApprovedAccount | null) {
   }
   return {
     signed_in: true as const, staff_name: account.name, range_days: summary.rangeDays, total_events: summary.totalEvents,
-    top_pages: summary.topPages.map(p => ({ page: p.pathname, visits: p.visits, last_visited: p.lastVisitedAt })),
-    top_actions: summary.topActions.map(a => ({ action: a.eventType, count: a.count, last_at: a.lastAt })),
+    // Already formatted in Singapore time (see recentActivitySummary's own
+    // comment on this same class of bug — a raw UTC timestamp read back to
+    // the user doesn't match their own mental clock).
+    top_pages: summary.topPages.map(p => ({ page: p.pathname, visits: p.visits, last_visited: formatSgtDateTime(p.lastVisitedAt) })),
+    top_actions: summary.topActions.map(a => ({ action: a.eventType, count: a.count, last_at: formatSgtDateTime(a.lastAt) })),
     hour_of_day_distribution: summary.hourOfDayDistribution,
   };
 }
@@ -481,7 +516,7 @@ async function activeUsersToday(account: ApprovedAccount | null, days?: number) 
   return {
     range_days: rangeDays,
     note: rangeDays === 1
-      ? 'This is a rolling 24-hour window from right now, not a strict calendar-day boundary — close enough to answer "today" but be honest that it is a 24h window if precision matters.'
+      ? 'This is the real Singapore-time calendar day (00:00 SGT to now), matching "today" exactly — say "today", not "the last 24 hours".'
       : `Rolling ${rangeDays}-day window from right now.`,
     active_users: summary.byPerson.map(p => ({ email: p.email, event_count: p.totalEvents, most_visited_page: p.topPage })),
     company_top_pages: summary.topPages.slice(0, 5).map(p => ({ page: p.pathname, visits: p.visits })),
@@ -522,7 +557,13 @@ async function recentActivitySummary(account: ApprovedAccount | null, personQuer
     signed_in: true as const, staff_name: target.name, viewing_other: target.email !== account.email,
     total_items: items.length,
     by_kind: summarizeByKind(items),
-    most_recent: items.slice(0, 8),
+    // `at` replaced with an already-SGT-formatted string (raw ISO timestamps
+    // are UTC) — confirmed real: without this, a reply once echoed
+    // "2026-09-09 02:04:08 UTC" verbatim, which the user (correctly) didn't
+    // recognize as the "10点" (10am) they remembered; doing the +8 SGT
+    // conversion here, once, means Claude never has to attempt that math
+    // itself again.
+    most_recent: items.slice(0, 8).map(({ at, ...rest }) => ({ ...rest, at: formatSgtDateTime(at) })),
   };
 }
 
@@ -828,7 +869,9 @@ The user may attach an image or PDF (a screenshot, an invoice, a scanned documen
 
 If the user asks whether a company owes money, has arrears, has an outstanding balance, or anything similar (欠款/未付/outstanding), you MUST call check_outstanding_balance and answer strictly from what it returns — never from search_company's ar_reminders (that is Annual Return FILING status, a completely different concept from money owed) and never from general impression or conversation context. This applies EVERY time a different company comes up, including a short follow-up naming just the company (e.g. "那么 X 呢") right after you already answered about a different company — that is a NEW company and needs its OWN fresh call; never reuse, copy, or pattern-match the previous answer's wording/numbers/template for it, even if the previous one was genuinely correct. This is a hard rule after two real incidents the same day: first, a reply said "没有欠款标记" with no real data behind it at all; then, right after check_outstanding_balance existed and had been used correctly once, a terse follow-up about a DIFFERENT company got a confident "✅ 确认：...没有欠款" reply with fabricated precise numbers ($0, 0 unpaid invoices) for a company that actually owed S$3,650 — the tool was never actually called for it. If you have not called check_outstanding_balance for THIS SPECIFIC company in THIS SPECIFIC turn, you do not know whether it has an outstanding balance — call the tool, don't guess, and don't reuse another company's result. If the question is about a QuickBooks company as a WHOLE rather than one specific customer (e.g. "TAB 的欠款总数是多少", "how much is outstanding on TAC overall"), use outstanding_balance_summary instead — check_outstanding_balance cannot answer that and will not help; never say "I have no tool for that" without first checking whether outstanding_balance_summary is the right one.
 
-Use active_users_today when the user asks who else is using/has used the system (今天/这周谁在用系统, "who's active today") — this IS a real, answerable question from real tracked activity data; never say the system has no such capability without calling the tool first, and never guess who might be active.
+SOA (Statement of Account) is a REAL, DIFFERENT feature from Billing Drafts — confirmed real confusion, 2026-09-09: asked "我要开SOA" (I want to generate an SOA), a reply offered to preview a NEW invoice draft for a company instead, which is wrong. An SOA is a PDF of a company's unpaid invoices, downloaded from that company's own QuickBooks book (/billing/soa/tab, /tac, or /tao — never Billing Drafts), with a real "Draft Email" button right there to send it straight to the client — it only exists where the company genuinely has an outstanding balance. Whenever the user asks to "开SOA"/generate, download, check, or send an SOA/statement of account for a company, call check_outstanding_balance for that company first (never guess which QB company it's under) and, if hasOutstanding is true, present each byQbCompany line's soa_link as a real clickable markdown link — tell the user that page already has the company open with a real "Download SOA PDF" button and a "Draft Email" button to send it to the client; never claim you generated or sent anything yourself, and never redirect to Billing Drafts for this.
+
+Use active_users_today when the user asks who else is using/has used the system (今天/这周谁在用系统, "who's active today") — this IS a real, answerable question from real tracked activity data; never say the system has no such capability without calling the tool first, and never guess who might be active. "今天" (today) in active_users_today's own default (days=1) is the real Singapore calendar day, not a rolling 24-hour window — say "today", never describe it as "the last 24 hours". Every timestamp these activity tools (active_users_today, recent_activity_summary, my_activity_pattern) return is already formatted in Singapore time — relay it as given, never attempt your own UTC conversion or arithmetic on it.
 
 Use check_email_status whenever the user asks whether an email, invoice, or reminder was actually SENT to a company (e.g. "XX 的Email 发送出去了吗") — this is real, checkable data (the same records the Email Activity page shows), not something to defer to "go check that page yourself" without first trying the tool.
 
@@ -854,10 +897,11 @@ ${memoryBlock}`;
 
 const CLAUDE_TOOLS = [
   { name: 'search_company', description: 'Look up companies by (partial) name: status, FYE month, services, PIC, active nominee directors, recent AR reminder rows. NOTE: the ar_reminders field this returns is Annual Return FILING status ("Pending"/"Filed") — it has nothing to do with whether the company owes money. Never use it to answer an outstanding-balance/arrears question; use check_outstanding_balance for that instead.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
-  { name: 'check_outstanding_balance', description: "REAL, live QuickBooks outstanding-balance / arrears check for ONE SPECIFIC company (TAB + TAC + TAO combined) — the exact same computation Company 360's own Outstanding section and the /billing/soa pages use. Use this whenever the user names a company and asks whether IT owes money / has arrears / has an outstanding balance (欠款/未付/outstanding) — never answer from search_company or any other tool, and never guess. For a COMPANY-WIDE total across all customers (e.g. \"TAB 的欠款总数是多少\"), use outstanding_balance_summary instead — this tool cannot answer that. Returns hasOutstanding, the real total, and a breakdown per QuickBooks company (total, invoice count, oldest aging bucket, the real unpaid invoice numbers/due dates, and who owns chasing it).", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
+  { name: 'check_outstanding_balance', description: "REAL, live QuickBooks outstanding-balance / arrears check for ONE SPECIFIC company (TAB + TAC + TAO combined) — the exact same computation Company 360's own Outstanding section and the /billing/soa pages use. Use this whenever the user names a company and asks whether IT owes money / has arrears / has an outstanding balance (欠款/未付/outstanding), or wants to generate/download/send an SOA (Statement of Account) for it — never answer from search_company or any other tool, and never guess. For a COMPANY-WIDE total across all customers (e.g. \"TAB 的欠款总数是多少\"), use outstanding_balance_summary instead — this tool cannot answer that. Returns hasOutstanding, the real total, and a breakdown per QuickBooks company (total, invoice count, oldest aging bucket, the real unpaid invoice numbers/due dates, who owns chasing it, and a real soa_link to that company's own SOA book — the real page to download the SOA PDF and draft the client email, NOT Billing Drafts).", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
   { name: 'outstanding_balance_summary', description: "REAL, live QuickBooks outstanding-balance total ACROSS ALL CUSTOMERS for one or more QuickBooks companies (TAB/TAC/TAO) — the exact same computation the real /billing/soa pages use, summed. Use this for a company-WIDE question like \"TAB 的欠款总数是多少\"/\"how much is outstanding on TAC overall\" — NOT for a question about one specific company (use check_outstanding_balance for that). Returns, per requested QB company, the real total, how many customers have a balance, and the top 5 largest debtors with their own totals and oldest aging bucket.", input_schema: { type: 'object', properties: { qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks companies to summarize — omit to summarize all 3' } } } },
-  { name: 'active_users_today', description: 'REAL, live list of which staff have actually used the system recently (real recorded page-view/action events, tracking since 2026-09-08) — management-only. Use this for "who else is using the system today/this week" style questions. Returns each active person\'s email, how many events they generated, and their most-visited page, over a rolling window (default 1 day = "today").', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Rolling window in days, default 1 ("today"), max 30' } } } },
+  { name: 'active_users_today', description: 'REAL, live list of which staff have actually used the system recently (real recorded page-view/action events, tracking since 2026-09-08) — management-only. Use this for "who else is using the system today/this week" style questions. Returns each active person\'s email, how many events they generated, and their most-visited page. Default (days omitted or 1) is the real Singapore calendar day — "today", not a rolling 24-hour window; pass a larger `days` for a genuine rolling multi-day window instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Number of days — 1 (default) means the real SGT calendar day "today"; a larger value is a genuine rolling N-day window, max 30' } } } },
   { name: 'check_email_status', description: 'REAL email send status for one company — the exact same data the Email Activity/Delivery History page shows (email_drafts, joined with its campaign). Use this whenever the user asks whether an email/invoice/reminder was actually sent to a company (e.g. "XX 的Email 发送出去了吗"). Returns each real draft/campaign record for the company (status: pending/opened/sent/skipped, subject, recipient, when and by whom it was sent if it was) — never guess whether something was sent, always check this.', input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
+  { name: 'customer_profile_summary', description: 'REAL, live breakdown of ALL active clients by legal entity type (Private Limited/Sole Proprietorship/LLP/...) and by real SSIC industry classification — the exact same computation the Reports page\'s own "Explore" section uses. Management-only (canViewReports — Vincent, Cindy, Samuell, Tan Yee Soon). Use this whenever the user asks what TYPE or INDUSTRY our clients/customers are, which type/industry is biggest, or for a customer-profile breakdown (e.g. "客户最大是什么类型的客户？从事什么行业的？") — never say there is no such tool without calling this first. Returns counts for each type/industry sorted largest-first, plus what share of clients actually have an industry on file.', input_schema: { type: 'object', properties: {} } },
   { name: 'ar_batch', description: 'AR Reminder batch for a FYE month+year: totals and company names.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'English month name, e.g. April' }, year: { type: 'number' } }, required: ['month', 'year'] } },
   { name: 'nd_lookup', description: 'Look up a nominee director by person name: their active company appointments.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   { name: 'automation_health', description: 'Read live automation job health and the open integration-exception count.', input_schema: { type: 'object', properties: {} } },
@@ -934,6 +978,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   }
   if (name === 'active_users_today') return activeUsersToday(account, typeof input.days === 'number' ? input.days : undefined);
   if (name === 'check_email_status') return checkEmailStatus(String(input.company ?? ''));
+  if (name === 'customer_profile_summary') return customerProfileSummary(account);
   if (name === 'ar_batch') return arBatch(String(input.month ?? ''), Number(input.year ?? 0));
   if (name === 'nd_lookup') return ndLookup(String(input.name ?? ''));
   if (name === 'automation_health') return automationHealth();
