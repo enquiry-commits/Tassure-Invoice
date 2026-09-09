@@ -11,6 +11,7 @@ import { fmtDate } from '@/lib/date';
 import type { InvoicePreview } from '@/lib/billing-lookup';
 import type { EditableLine } from '@/lib/billing-draft';
 import type { LateFilingResolvePreview } from '@/lib/late-filing-lookup';
+import type { InvoiceEditPreview } from '@/lib/invoice-edit-lookup';
 import { logActivity } from '@/lib/activity-client';
 
 type SessionUser = { email: string; name: string; restrictedTo?: string | null; admin?: boolean };
@@ -159,7 +160,7 @@ type Conversation = { id: number; title: string; pinned: boolean; created_at: st
 // present on a fresh reply from THIS session; reopening a saved
 // conversation later shows the plain text only (the card's structured
 // data isn't persisted to ai_messages yet — a known, deliberate v1 gap).
-type ChatMsg = { role: 'user' | 'assistant'; content: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview };
+type ChatMsg = { role: 'user' | 'assistant'; content: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview };
 type ActiveView = 'chat' | 'tasks' | 'activity';
 
 // Local to this page only — deliberately not added to lib/date.ts's shared
@@ -564,6 +565,145 @@ function LateFilingConfirmModal({ preview, outcome, onCancel, onConfirm }: {
   );
 }
 
+// ── Invoice edit diff preview + real confirm (2026-09-09) ──────────────────
+// Phase 3 of the agentic-chat direction — the hardest of the three built so
+// far, since there's no algorithmic pre-fill: the human states the change,
+// preview_invoice_edit (lib/invoice-edit-lookup.ts) fetches the real
+// current invoice and applies it to a copy. This card just renders that
+// diff and, on confirm, calls the exact same /api/quickbooks/update-invoice
+// app/billing/page.tsx's own saveInvoiceEdit() uses — same structural/
+// sent/payment/void/SyncToken gates, all still enforced server-side.
+type EditOutcome =
+  | { state: 'idle' }
+  | { state: 'confirming' }
+  | { state: 'submitting' }
+  | { state: 'success'; invoiceNo: string | null; total: number | null }
+  | { state: 'error'; message: string };
+
+function InvoiceEditCard({ preview, onGenerated }: { preview: InvoiceEditPreview; onGenerated: (summary: string) => void }) {
+  const [outcome, setOutcome] = useState<EditOutcome>({ state: 'idle' });
+  const blocked = preview.changesSummary.length === 0;
+
+  const submit = async () => {
+    setOutcome({ state: 'submitting' });
+    try {
+      const res = await fetch('/api/quickbooks/update-invoice', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          qbCompany: preview.qbCompany,
+          qbInvoiceId: preview.qbInvoiceId,
+          pic: preview.pic ?? undefined,
+          lines: preview.proposedLines.map(l => ({ service: l.service, productService: l.productService, description: l.description, rate: l.rate, qty: l.qty })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setOutcome({ state: 'error', message: json.error || `Request failed (${res.status})` });
+        return;
+      }
+      setOutcome({ state: 'success', invoiceNo: json.invoiceNo ?? null, total: json.total ?? null });
+      onGenerated(`已更新 ${preview.companyName} 的 ${preview.qbCompany} 发票 #${json.invoiceNo ?? preview.docNumber} — 总额 S$${(json.total ?? preview.proposedTotal).toLocaleString()}。`);
+    } catch (err) {
+      setOutcome({ state: 'error', message: err instanceof Error ? err.message : '网络错误，请重试。' });
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 460 }}>
+      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <FileCheck2 size={14} color="#1e3a5f" style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName} — {preview.qbCompany} #{preview.docNumber}</div>
+          <div style={{ fontSize: 10.5, color: '#94a3b8' }}>Editing a real, already-generated invoice</div>
+        </div>
+      </div>
+
+      <div style={{ padding: '10px 14px', fontSize: 11.5 }}>
+        {preview.changesSummary.map((s, i) => (
+          <div key={i} style={{ color: '#173b61', fontWeight: 700, marginBottom: 4 }}>• {s}</div>
+        ))}
+        {preview.unmatchedChanges.map((s, i) => (
+          <div key={i} style={{ color: '#b45309', marginBottom: 4 }}>⚠ {s}</div>
+        ))}
+        {preview.changesSummary.length > 0 && (
+          <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#64748b' }}>Total</span>
+            <span style={{ fontWeight: 800, color: '#173b61' }}>
+              S${preview.currentTotal.toLocaleString()} {preview.currentTotal !== preview.proposedTotal && <>→ S${preview.proposedTotal.toLocaleString()}</>}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7' }}>
+        {outcome.state === 'success' ? (
+          <div style={{ fontSize: 11.5, color: '#15803d', fontWeight: 700 }}>✓ Saved{outcome.invoiceNo ? ` — #${outcome.invoiceNo}` : ''}</div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOutcome({ state: 'confirming' })}
+            disabled={blocked}
+            title={blocked ? 'No real change to save' : undefined}
+            style={{
+              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+              cursor: blocked ? 'not-allowed' : 'pointer',
+              background: blocked ? '#e2e8f0' : '#0f766e',
+              color: blocked ? '#94a3b8' : '#fff',
+            }}
+          >
+            Save Changes
+          </button>
+        )}
+      </div>
+
+      {(outcome.state === 'confirming' || outcome.state === 'submitting' || outcome.state === 'error') && (
+        <InvoiceEditConfirmModal preview={preview} outcome={outcome} onCancel={() => setOutcome({ state: 'idle' })} onConfirm={() => void submit()} />
+      )}
+    </div>
+  );
+}
+
+function InvoiceEditConfirmModal({ preview, outcome, onCancel, onConfirm }: {
+  preview: InvoiceEditPreview;
+  outcome: Extract<EditOutcome, { state: 'confirming' | 'submitting' | 'error' }>;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const submitting = outcome.state === 'submitting';
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }} onClick={submitting ? undefined : onCancel}>
+      <div style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FileCheck2 size={16} color="#1e3a5f" />
+          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b', flex: 1 }}>Confirm invoice change</div>
+          {!submitting && <button onClick={onCancel} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={16} /></button>}
+        </div>
+        <div style={{ padding: '14px 18px' }}>
+          <div style={{ fontSize: 12.5, color: '#334155', marginBottom: 10 }}>
+            This will update the real, already-sent-to-QuickBooks invoice for <strong>{preview.companyName}</strong> ({preview.qbCompany} #{preview.docNumber}).
+          </div>
+          {outcome.state === 'error' && (
+            <div style={{ marginBottom: 10, padding: '9px 11px', background: '#fff7f7', border: '1px solid #fecaca', borderRadius: 8, fontSize: 11.5, color: '#b91c1c' }}>
+              {outcome.message}
+            </div>
+          )}
+          <div style={{ border: '1px solid #eef2f7', borderRadius: 8, overflow: 'hidden' }}>
+            {preview.changesSummary.map((s, i) => (
+              <div key={i} style={{ padding: '7px 11px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none', fontSize: 11.5, color: '#173b61', fontWeight: 700 }}>{s}</div>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, padding: '12px 18px', borderTop: '1px solid #eef2f7' }}>
+          <button onClick={onCancel} disabled={submitting} style={{ flex: 1, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer' }}>Cancel</button>
+          <button onClick={onConfirm} disabled={submitting} style={{ flex: 1, border: 'none', background: submitting ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 750, cursor: submitting ? 'wait' : 'pointer' }}>
+            {submitting ? 'Saving…' : 'Confirm & Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ConversationRow({ conversation, active, onOpen, onTogglePin, onDelete }: {
   conversation: Conversation; active: boolean;
   onOpen: () => void; onTogglePin: () => void; onDelete: () => void;
@@ -771,7 +911,7 @@ export default function MyTasksPage() {
         body: JSON.stringify({ messages: next, context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId, viewAs: viewAsEmail || undefined }),
       });
       const json = await res.json();
-      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined }]);
+      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined }]);
       loadConversations(); // pick up the auto-derived title / updated_at reorder
     } catch {
       setChatMessages(current => [...current, { role: 'assistant', content: '网络错误，请重试。' }]);
@@ -999,6 +1139,12 @@ export default function MyTasksPage() {
                               {message.lateFilingPreview && (
                                 <LateFilingResolveCard
                                   preview={message.lateFilingPreview}
+                                  onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
+                                />
+                              )}
+                              {message.invoiceEditPreview && (
+                                <InvoiceEditCard
+                                  preview={message.invoiceEditPreview}
                                   onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
                                 />
                               )}

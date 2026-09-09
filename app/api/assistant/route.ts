@@ -11,6 +11,8 @@ import { getConversationOwner, appendMessage, deriveTitle, renameConversation, t
 import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, type ApprovedAccount } from '@/lib/approved-accounts';
 import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
+import { previewInvoiceEdit, type InvoiceEditPreview, type InvoiceEditChange } from '@/lib/invoice-edit-lookup';
+import type { QbCompany } from '@/lib/quickbooks';
 
 /**
  * In-app AI assistant: answers questions about the system, looks up live data
@@ -415,6 +417,35 @@ async function lateFilingResolvePreview(account: ApprovedAccount | null, company
   };
 }
 
+// Phase 3 of the agentic-chat direction ("可以把上面的4项分阶段进行吗？我
+// 觉得都需要", 2026-09-09) — the hardest of the four, because unlike a new
+// draft there is no algorithmic way to compute "what the edit should be";
+// the user has to STATE it, and this tool's `changes` argument is where
+// Claude's own understanding of that statement gets turned into
+// structured data BEFORE any real lookup happens — lib/invoice-edit-
+// lookup.ts then does the actual matching/diffing against the real
+// current invoice, never trusting Claude's own arithmetic. Gated by the
+// same isWithinRestriction() check as preview_invoice_draft — this reads
+// and would eventually let a user touch the same Billing Drafts data.
+async function invoiceEditPreview(account: ApprovedAccount | null, companyQuery: string, qbCompanyHint: QbCompany | undefined, changes: InvoiceEditChange[]) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  if (account.restrictedTo && !isWithinRestriction(account.restrictedTo, '/billing', new URLSearchParams({ tab: 'billing' }))) {
+    return { error: true as const, message: `${account.name}'s account does not have access to Billing Drafts, so it cannot preview or edit invoices either. Tell the user plainly this isn't available to their account — do not show any billing data.` };
+  }
+  if (!changes.length) {
+    return { error: true as const, message: 'No change was specified. Ask the user exactly which line and what the new value should be before calling this tool.' };
+  }
+  const result = await previewInvoiceEdit(companyQuery, qbCompanyHint, changes);
+  if (!result.found) {
+    return { found: false as const, message: result.message, suggestions: result.suggestions };
+  }
+  return {
+    found: true as const,
+    preview: result.preview,
+    note: 'READ-ONLY preview of an edit to a REAL, already-generated invoice — nothing has been changed in QuickBooks yet, and you have no tool that can change it directly. Present the diff clearly (each changed line: before → after, and the total: before → after). If unmatchedChanges is non-empty, tell the user plainly which requested change could not be matched to a real line rather than silently ignoring it. The UI shows a real "Save Changes" button on this preview with its own confirmation — never claim you saved or are saving the change yourself.',
+  };
+}
+
 // Vincent's shared blueprint, section 5: structured long-term memory
 // ("Fact/Preference/Behaviour/..."), with an explicit warning right next
 // to it that v1 deliberately honors — "AI 不应因为一次对话就永久定义用户"
@@ -473,6 +504,8 @@ If the user asks to generate/open/draft/check an invoice for a company, use prev
 
 If the user asks about resolving/closing/clearing a company's Late Filing status, use preview_late_filing_resolve the same way — it shows what the record's remarks would become, but is READ-ONLY; the UI shows a real "Mark Resolved" button with its own confirmation. Same rule: never say or imply YOU resolved it.
 
+If the user asks to change/edit/fix/correct something on an ALREADY-GENERATED invoice (e.g. "change the Secretary line to $700"), use preview_invoice_edit — turn their stated change into the tool's "changes" argument yourself (which line, what new value), never guess a number they didn't give you. It fetches the invoice's real current lines and shows a before/after diff; READ-ONLY, nothing is saved. If it reports unmatchedChanges, tell the user plainly which part of their request didn't match a real line. The UI shows a real "Save Changes" button with its own confirmation — never say or imply YOU saved the change.
+
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
 
@@ -504,6 +537,21 @@ const CLAUDE_TOOLS = [
   { name: 'remember_this', description: "Save something the user has EXPLICITLY asked to be remembered for future conversations (e.g. a stated preference, a fact about their role, a standing instruction). Only call this when the user directly asks to be remembered/noted — never infer one from conversational tone.", input_schema: { type: 'object', properties: { memory_type: { type: 'string', enum: ['fact', 'preference', 'behaviour', 'relationship', 'project', 'decision', 'rejection', 'pattern'] }, content: { type: 'string', description: 'The fact/preference itself, written as a short standalone statement.' } }, required: ['memory_type', 'content'] } },
   { name: 'preview_invoice_draft', description: "READ-ONLY preview of what a TAB/TAC Billing Drafts invoice would look like for one company — same pre-fill rules as the real page (prior invoice, renewal/annual status, carried-forward Discount/Accounts/Tax lines). Does NOT create anything in QuickBooks; there is no tool available that can. Use whenever the user asks to see/check/preview/'draft'/'open' an invoice for a company. If the company can't be found, suggestions are returned — offer them rather than giving up.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' }, fyeYear: { type: 'number', description: 'Optional: calendar year of the FYE cycle to preview — defaults to the current year' } }, required: ['company'] } },
   { name: 'preview_late_filing_resolve', description: "READ-ONLY preview of what marking a Late Filing record 'Resolved' would set its remarks to, for one company currently on the Late Filing list — same rule the real page's own Resolve button uses. Does NOT change anything; there is no tool available that can. Use whenever the user asks about resolving/closing/clearing a company's Late Filing status. If the company can't be found, suggestions are returned.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
+  { name: 'preview_invoice_edit', description: "READ-ONLY preview of a change to a REAL, already-generated invoice for one company this cycle (e.g. 'change the Secretary line to $700', 'set the AR line qty to 2'). Fetches the invoice's real current lines from QuickBooks, applies the stated change(s) to a copy, and returns a before/after diff. Does NOT save anything to QuickBooks; there is no tool available that can. Only works on an invoice that was already generated for the company's CURRENT cycle — if none exists, say so (the user should generate one first via preview_invoice_draft). Turn the user's stated change into the `changes` array yourself — match by `service` (Secretary/Address/ND/AR/XBRL/Accounts/Tax/Discount) when the user names a service, or `matchDescription` (a substring of the real line description) when they don't. Never guess a numeric value the user didn't state.", input_schema: { type: 'object', properties: {
+    company: { type: 'string', description: 'Company name, partial match is fine' },
+    qbCompany: { type: 'string', enum: ['TAB', 'TAC'], description: "Optional: which QuickBooks company's invoice to edit, if the user specified (ND lines are always TAC, everything else TAB). Omit if there's only one invoice this cycle." },
+    changes: {
+      type: 'array',
+      description: 'One entry per line the user wants changed.',
+      items: { type: 'object', properties: {
+        service: { type: 'string', description: 'Which service line to target, e.g. "Secretary"' },
+        matchDescription: { type: 'string', description: 'Fallback: a substring of the real line description, if service alone would be ambiguous or unknown' },
+        newRate: { type: 'number', description: 'New unit rate, if the user asked to change the amount' },
+        newQty: { type: 'number', description: 'New quantity, if the user asked to change it' },
+        newDescription: { type: 'string', description: 'New description text, if the user asked to change it' },
+      } },
+    },
+  }, required: ['company', 'changes'] } },
 ];
 
 async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {
@@ -517,10 +565,15 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'remember_this') return rememberThis(account, String(input.memory_type ?? ''), String(input.content ?? ''));
   if (name === 'preview_invoice_draft') return invoiceDraftPreview(account, String(input.company ?? ''), typeof input.fyeYear === 'number' ? input.fyeYear : undefined);
   if (name === 'preview_late_filing_resolve') return lateFilingResolvePreview(account, String(input.company ?? ''));
+  if (name === 'preview_invoice_edit') {
+    const qbCompany = input.qbCompany === 'TAB' || input.qbCompany === 'TAC' ? input.qbCompany : undefined;
+    const changes = Array.isArray(input.changes) ? input.changes as InvoiceEditChange[] : [];
+    return invoiceEditPreview(account, String(input.company ?? ''), qbCompany, changes);
+  }
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview }> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview }> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -538,6 +591,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   // the user to read, not something the UI should try to parse back apart.
   let lastInvoicePreview: InvoicePreview | undefined;
   let lastLateFilingPreview: LateFilingResolvePreview | undefined;
+  let lastInvoiceEditPreview: InvoiceEditPreview | undefined;
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -549,7 +603,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview };
+      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -569,6 +623,9 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
         if (tu.name === 'preview_late_filing_resolve' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
           lastLateFilingPreview = (result as { preview: LateFilingResolvePreview }).preview;
         }
+        if (tu.name === 'preview_invoice_edit' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
+          lastInvoiceEditPreview = (result as { preview: InvoiceEditPreview }).preview;
+        }
       } catch (err) {
         result = { error: err instanceof Error ? err.message : 'tool failed' };
       }
@@ -576,7 +633,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -938,9 +995,9 @@ export async function POST(req: NextRequest) {
   const isFirstMessage = messages.length === 1;
   try {
     if (process.env.ANTHROPIC_API_KEY) {
-      const { text: reply, invoicePreview, lateFilingPreview } = await claudeAnswer(messages.slice(-8), context, account);
+      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview } = await claudeAnswer(messages.slice(-8), context, account);
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
-      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview });
+      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview });
     }
     const reply = await intentAnswer(last.content, context, account);
     await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
