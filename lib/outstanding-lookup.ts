@@ -95,3 +95,32 @@ export async function lookupOutstandingBalance(companyQuery: string): Promise<Ou
 
   return { found: true, companyName, hasOutstanding: lines.length > 0, totalOutstanding, lines };
 }
+
+// Added 2026-09-09 — a second real gap the same day: "目前 TAB 的欠款总数
+// 是多少？" (what's TAB's current total outstanding?) is a COMPANY-WIDE
+// question, not a one-company question — lookupOutstandingBalance() above
+// can't answer it (by design, it narrows to one company). This calls the
+// exact same computeSoaRows() with NO prefilter — the exact real query
+// GET /api/billing/soa?company=X uses for its own on-screen list — and
+// sums it, so the real page and this chat answer can never diverge.
+export type QbOutstandingSummary = {
+  qbCompany: QbCompany;
+  totalOutstanding: number;
+  companyCount: number;
+  topDebtors: { companyName: string; totalOutstanding: number; oldestAgingBucketLabel: string | null }[];
+};
+
+export async function summarizeOutstandingBalance(qbCompanies: QbCompany[]): Promise<QbOutstandingSummary[]> {
+  const results = await Promise.all(
+    qbCompanies.map(async (qbCompany): Promise<QbOutstandingSummary> => {
+      const rows = await computeSoaRows(qbCompany).catch(() => [] as SoaCompanyRow[]);
+      const totalOutstanding = rows.reduce((sum, r) => sum + r.totalOutstanding, 0);
+      const topDebtors = [...rows]
+        .sort((a, b) => b.totalOutstanding - a.totalOutstanding)
+        .slice(0, 5)
+        .map(r => ({ companyName: r.companyName, totalOutstanding: r.totalOutstanding, oldestAgingBucketLabel: bucketLabel(oldestAgingBucket(r.aging)) }));
+      return { qbCompany, totalOutstanding, companyCount: rows.length, topDebtors };
+    }),
+  );
+  return results;
+}

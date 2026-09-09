@@ -4,7 +4,7 @@ import { normalize } from '@/lib/company-name';
 import { getRequestAccount } from '@/lib/request-account';
 import { computeMyTasks } from '@/lib/my-tasks-data';
 import { buildTaskDigest, generateMyTasksBrief } from '@/lib/my-tasks-brief';
-import { getPersonActivitySummary } from '@/lib/activity-data';
+import { getPersonActivitySummary, getCompanyActivitySummary } from '@/lib/activity-data';
 import { getRecentActivity, summarizeByKind } from '@/lib/recent-activity';
 import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories';
 import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation, type StoredPreview } from '@/lib/ai-conversations';
@@ -12,7 +12,8 @@ import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, type A
 import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import { previewInvoiceEdit, type InvoiceEditPreview, type InvoiceEditChange } from '@/lib/invoice-edit-lookup';
-import { lookupOutstandingBalance } from '@/lib/outstanding-lookup';
+import { lookupOutstandingBalance, summarizeOutstandingBalance } from '@/lib/outstanding-lookup';
+import { lookupEmailStatus } from '@/lib/email-status-lookup';
 import type { QbCompany } from '@/lib/quickbooks';
 import { billingDeepLink, lateFilingDeepLink } from '@/lib/deep-links';
 import {
@@ -84,6 +85,25 @@ function attachmentSummary(content: string | ContentBlock[]): string {
 function mentionsOutstandingBalance(text: string): boolean {
   const t = text.toLowerCase();
   const keywords = ['欠款', '欠钱', '未付', '未结', '挂账', '尚欠', '还欠', '有没有欠', '有欠', 'outstanding', 'arrears', 'owe', 'owing', 'unpaid'];
+  return keywords.some(k => t.includes(k));
+}
+
+// Same failure family, caught the same day: Vincent (real canViewAsOthers:
+// true, verified in lib/approved-accounts.ts) asked "Chelsea 今天要做什
+// 么" / "Chelsea Ang" and got two straight fabricated "我没有权限查看其他
+// 员工的任务" refusals — a moment after the SAME account had successfully
+// used this exact cross-person feature for "CKY" earlier in the SAME
+// conversation. my_tasks_summary()'s own real code only ever returns
+// permission_denied when `!account.canViewAsOthers` — impossible for
+// Vincent's account — so this was never a real tool result, the model
+// pattern-completed a plausible-sounding refusal instead of calling the
+// tool. Vincent: "你是不是傻了 我是Vincent 最大的Admin" / "它会有时候分不
+// 清楚权限". Only meaningful when the CALLER's own account genuinely does
+// have canViewAsOthers — for an account that really doesn't, a "no
+// permission" reply can be completely correct and must never be flagged.
+function claimsPermissionDenied(text: string): boolean {
+  const t = text.toLowerCase();
+  const keywords = ['没有权限', '无权限', '权限限制', '权限不足', 'permission denied', 'no permission', "don't have permission", 'not have permission'];
   return keywords.some(k => t.includes(k));
 }
 
@@ -254,6 +274,40 @@ async function checkOutstandingBalance(companyQuery: string) {
   };
 }
 
+// Added 2026-09-09 — a second real gap the same day: "目前 TAB 的欠款总数
+// 是多少？" is a company-WIDE question check_outstanding_balance can't
+// answer by design (it only ever narrows to one company). See
+// lib/outstanding-lookup.ts's summarizeOutstandingBalance for the real
+// computation (same computeSoaRows(), no prefilter, summed).
+async function outstandingBalanceSummary(qbCompanies: QbCompany[]) {
+  const results = await summarizeOutstandingBalance(qbCompanies);
+  return {
+    summaries: results,
+    note: 'Real, current company-wide totals from QuickBooks (summed across every customer with a balance) — tell the user the real total per QB company asked about, and mention the top debtors if useful. This is a live check, not an inference from anything else.',
+  };
+}
+
+// Added 2026-09-09 — Vincent asked "Bao Fortune 的Email 发送出去了吗？"
+// and was told to go check the 邮件记录 page manually instead of getting
+// an actual answer: "这个也是还判断不出来". The real data (email_drafts,
+// joined with email_campaigns) was always there — see
+// lib/email-status-lookup.ts's own comment for why this mirrors the real
+// Email Activity page's own search query exactly.
+async function checkEmailStatus(companyQuery: string) {
+  const result = await lookupEmailStatus(companyQuery);
+  if (!result.found) return { found: false as const, message: result.message };
+  const sent = result.drafts.filter(d => d.status === 'sent');
+  return {
+    found: true as const,
+    companyName: result.companyQuery,
+    anySent: sent.length > 0,
+    drafts: result.drafts,
+    note: sent.length
+      ? `Real record(s) exist showing this was actually sent (status "sent", with sentAt/sentByName) — tell the user plainly it was sent, when, and by whom, from the drafts array. There may ALSO be other, unsent drafts in the same list (status pending/opened/skipped) — distinguish them clearly, don't imply everything listed was sent.`
+      : `Real email draft/campaign record(s) exist for this company, but none has status "sent" — tell the user honestly it has NOT been sent yet (or was skipped), and what state it's actually in, from the drafts array. Do not guess it was probably sent.`,
+  };
+}
+
 async function arBatch(month: string, year: number) {
   const sb = createAdminClient();
   const { data } = await sb.from('ar_reminder')
@@ -399,6 +453,38 @@ async function myActivityPattern(account: ApprovedAccount | null) {
     top_pages: summary.topPages.map(p => ({ page: p.pathname, visits: p.visits, last_visited: p.lastVisitedAt })),
     top_actions: summary.topActions.map(a => ({ action: a.eventType, count: a.count, last_at: a.lastAt })),
     hour_of_day_distribution: summary.hourOfDayDistribution,
+  };
+}
+
+// Added 2026-09-09 — Vincent asked "今天除了Vincent 还有谁在使用这个系
+// 统" and got told the system has no "who's currently online" feature,
+// with no attempt to answer from data that actually does exist:
+// "还是不够智能" (still not smart enough). getCompanyActivitySummary()
+// (lib/activity-data.ts) — the exact real computation behind Activity
+// Insights' own company-wide view — already tracks real page-view/action
+// events per person; a short rangeDays window IS a real, honest answer to
+// "who's used the system today", just never exposed as a chat tool.
+// Gated by canViewAsOthers, same as every other cross-person tool in this
+// file (see my_tasks_summary's own comment on that field vs.
+// canViewActivityInsights, which gates the dedicated Activity Insights
+// PAGE only — a narrower, admin-only UI, not this general capability).
+async function activeUsersToday(account: ApprovedAccount | null, days?: number) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  if (!account.canViewAsOthers) {
+    return { error: true as const, message: `${account.name} does not have permission to see company-wide activity — that is limited to management accounts. Tell the user plainly they can only see their own activity (my_activity_pattern).` };
+  }
+  const rangeDays = days && days > 0 ? Math.min(days, 30) : 1;
+  const summary = await getCompanyActivitySummary(rangeDays);
+  if (!summary.totalEvents) {
+    return { no_data: true as const, range_days: rangeDays, message: `No activity recorded in the last ${rangeDays} day(s) — tracking only started 2026-09-08, so this could mean genuinely nobody used the system, or just that nothing was tracked yet. Say so honestly, don't guess.` };
+  }
+  return {
+    range_days: rangeDays,
+    note: rangeDays === 1
+      ? 'This is a rolling 24-hour window from right now, not a strict calendar-day boundary — close enough to answer "today" but be honest that it is a 24h window if precision matters.'
+      : `Rolling ${rangeDays}-day window from right now.`,
+    active_users: summary.byPerson.map(p => ({ email: p.email, event_count: p.totalEvents, most_visited_page: p.topPage })),
+    company_top_pages: summary.topPages.slice(0, 5).map(p => ({ page: p.pathname, visits: p.visits })),
   };
 }
 
@@ -716,7 +802,7 @@ ${PAGES.map(p => `- ${p.label}: ${p.href}`).join('\n')}
 
 When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location given in the next message.
 
-Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. If it returns counts.total 0, check everAssigned before answering: everAssigned false means this account has NEVER been PIC on anything (typical for management/owner accounts who aren't caseworkers) — say that plainly, don't say "you're all caught up" (which wrongly implies work existed and got done). everAssigned true with total 0 means genuinely caught up. If the user asks about a DIFFERENT staff member's tasks instead of their own (e.g. "如果我是HC，我要做什么今天？", "Show me Cindy's tasks", "HC 今天有什么任务") pass that person's name/nickname/initials as the tool's optional "person" argument — the tool itself enforces whether this account is allowed to see someone else's tasks (a management-only permission) and returns an explicit refusal or "not found" message when it can't proceed; relay that message honestly and do not fall back to answering about the caller instead, and never invent or guess another person's task data yourself. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Use recent_activity_summary for "what has X actually been doing" / "what's Chelsea been up to" style questions, INCLUDING open-ended ones like "根据她最近做的东西，判断她接下来会做什么" (based on her recent activity, predict what she'll likely do next) — call the tool to get the real data, then reason over it yourself; don't just recite the raw counts back. It reads real audit-trail history (invoices, AR edits, campaigns, Master List, sent emails, ...) that predates today, unlike my_activity_pattern's page-view tracking; it also accepts an optional "person" argument with the same management-only permission as my_tasks_summary. Never guess whose tasks or habits are whose from name alone.
+Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. If it returns counts.total 0, check everAssigned before answering: everAssigned false means this account has NEVER been PIC on anything (typical for management/owner accounts who aren't caseworkers) — say that plainly, don't say "you're all caught up" (which wrongly implies work existed and got done). everAssigned true with total 0 means genuinely caught up. If the user asks about a DIFFERENT staff member's tasks instead of their own (e.g. "如果我是HC，我要做什么今天？", "Show me Cindy's tasks", "HC 今天有什么任务") pass that person's name/nickname/initials as the tool's optional "person" argument — ALWAYS actually call the tool for this, every single time a different person's name comes up, even a second/third name in the same conversation right after a previous person's query — never answer "no permission" (or anything else) from memory of how a similar-looking request went earlier; the tool itself, not your own guess, is what determines whether this account is allowed to see someone else's tasks (a management-only permission) and returns an explicit refusal or "not found" message when it can't proceed — relay THAT message honestly and do not fall back to answering about the caller instead, and never invent or guess another person's task data (or a permission refusal) yourself. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Use recent_activity_summary for "what has X actually been doing" / "what's Chelsea been up to" style questions, INCLUDING open-ended ones like "根据她最近做的东西，判断她接下来会做什么" (based on her recent activity, predict what she'll likely do next) — call the tool to get the real data, then reason over it yourself; don't just recite the raw counts back. It reads real audit-trail history (invoices, AR edits, campaigns, Master List, sent emails, ...) that predates today, unlike my_activity_pattern's page-view tracking; it also accepts an optional "person" argument with the same management-only permission as my_tasks_summary. Never guess whose tasks or habits are whose from name alone.
 
 Use the remember_this tool ONLY when the user EXPLICITLY asks you to remember, note, or keep in mind something for the future (e.g. "记住...", "以后都...", "remember that I..."). Never call it just because something seems noteworthy from the conversation's tone — a single passing remark is not a durable preference, and this tool writes something that will keep influencing future conversations.
 
@@ -740,7 +826,11 @@ If the user asks to generate/prepare the Post Incorporate document set for a new
 
 The user may attach an image or PDF (a screenshot, an invoice, a scanned document) as reference for the current question — when one is present, actually look at it and factor what you see into your answer rather than only responding to the text.
 
-If the user asks whether a company owes money, has arrears, has an outstanding balance, or anything similar (欠款/未付/outstanding), you MUST call check_outstanding_balance and answer strictly from what it returns — never from search_company's ar_reminders (that is Annual Return FILING status, a completely different concept from money owed) and never from general impression or conversation context. This applies EVERY time a different company comes up, including a short follow-up naming just the company (e.g. "那么 X 呢") right after you already answered about a different company — that is a NEW company and needs its OWN fresh call; never reuse, copy, or pattern-match the previous answer's wording/numbers/template for it, even if the previous one was genuinely correct. This is a hard rule after two real incidents the same day: first, a reply said "没有欠款标记" with no real data behind it at all; then, right after check_outstanding_balance existed and had been used correctly once, a terse follow-up about a DIFFERENT company got a confident "✅ 确认：...没有欠款" reply with fabricated precise numbers ($0, 0 unpaid invoices) for a company that actually owed S$3,650 — the tool was never actually called for it. If you have not called check_outstanding_balance for THIS SPECIFIC company in THIS SPECIFIC turn, you do not know whether it has an outstanding balance — call the tool, don't guess, and don't reuse another company's result.
+If the user asks whether a company owes money, has arrears, has an outstanding balance, or anything similar (欠款/未付/outstanding), you MUST call check_outstanding_balance and answer strictly from what it returns — never from search_company's ar_reminders (that is Annual Return FILING status, a completely different concept from money owed) and never from general impression or conversation context. This applies EVERY time a different company comes up, including a short follow-up naming just the company (e.g. "那么 X 呢") right after you already answered about a different company — that is a NEW company and needs its OWN fresh call; never reuse, copy, or pattern-match the previous answer's wording/numbers/template for it, even if the previous one was genuinely correct. This is a hard rule after two real incidents the same day: first, a reply said "没有欠款标记" with no real data behind it at all; then, right after check_outstanding_balance existed and had been used correctly once, a terse follow-up about a DIFFERENT company got a confident "✅ 确认：...没有欠款" reply with fabricated precise numbers ($0, 0 unpaid invoices) for a company that actually owed S$3,650 — the tool was never actually called for it. If you have not called check_outstanding_balance for THIS SPECIFIC company in THIS SPECIFIC turn, you do not know whether it has an outstanding balance — call the tool, don't guess, and don't reuse another company's result. If the question is about a QuickBooks company as a WHOLE rather than one specific customer (e.g. "TAB 的欠款总数是多少", "how much is outstanding on TAC overall"), use outstanding_balance_summary instead — check_outstanding_balance cannot answer that and will not help; never say "I have no tool for that" without first checking whether outstanding_balance_summary is the right one.
+
+Use active_users_today when the user asks who else is using/has used the system (今天/这周谁在用系统, "who's active today") — this IS a real, answerable question from real tracked activity data; never say the system has no such capability without calling the tool first, and never guess who might be active.
+
+Use check_email_status whenever the user asks whether an email, invoice, or reminder was actually SENT to a company (e.g. "XX 的Email 发送出去了吗") — this is real, checkable data (the same records the Email Activity page shows), not something to defer to "go check that page yourself" without first trying the tool.
 
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
@@ -764,7 +854,10 @@ ${memoryBlock}`;
 
 const CLAUDE_TOOLS = [
   { name: 'search_company', description: 'Look up companies by (partial) name: status, FYE month, services, PIC, active nominee directors, recent AR reminder rows. NOTE: the ar_reminders field this returns is Annual Return FILING status ("Pending"/"Filed") — it has nothing to do with whether the company owes money. Never use it to answer an outstanding-balance/arrears question; use check_outstanding_balance for that instead.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
-  { name: 'check_outstanding_balance', description: "REAL, live QuickBooks outstanding-balance / arrears check for one company (TAB + TAC + TAO combined) — the exact same computation Company 360's own Outstanding section and the /billing/soa pages use. Use this whenever the user asks whether a company owes money, has arrears, has an outstanding balance, or anything similar (欠款/未付/outstanding) — never answer that kind of question from search_company or any other tool, and never guess. Returns hasOutstanding, the real total, and a breakdown per QuickBooks company (total, invoice count, oldest aging bucket, the real unpaid invoice numbers/due dates, and who owns chasing it).", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
+  { name: 'check_outstanding_balance', description: "REAL, live QuickBooks outstanding-balance / arrears check for ONE SPECIFIC company (TAB + TAC + TAO combined) — the exact same computation Company 360's own Outstanding section and the /billing/soa pages use. Use this whenever the user names a company and asks whether IT owes money / has arrears / has an outstanding balance (欠款/未付/outstanding) — never answer from search_company or any other tool, and never guess. For a COMPANY-WIDE total across all customers (e.g. \"TAB 的欠款总数是多少\"), use outstanding_balance_summary instead — this tool cannot answer that. Returns hasOutstanding, the real total, and a breakdown per QuickBooks company (total, invoice count, oldest aging bucket, the real unpaid invoice numbers/due dates, and who owns chasing it).", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
+  { name: 'outstanding_balance_summary', description: "REAL, live QuickBooks outstanding-balance total ACROSS ALL CUSTOMERS for one or more QuickBooks companies (TAB/TAC/TAO) — the exact same computation the real /billing/soa pages use, summed. Use this for a company-WIDE question like \"TAB 的欠款总数是多少\"/\"how much is outstanding on TAC overall\" — NOT for a question about one specific company (use check_outstanding_balance for that). Returns, per requested QB company, the real total, how many customers have a balance, and the top 5 largest debtors with their own totals and oldest aging bucket.", input_schema: { type: 'object', properties: { qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks companies to summarize — omit to summarize all 3' } } } },
+  { name: 'active_users_today', description: 'REAL, live list of which staff have actually used the system recently (real recorded page-view/action events, tracking since 2026-09-08) — management-only. Use this for "who else is using the system today/this week" style questions. Returns each active person\'s email, how many events they generated, and their most-visited page, over a rolling window (default 1 day = "today").', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Rolling window in days, default 1 ("today"), max 30' } } } },
+  { name: 'check_email_status', description: 'REAL email send status for one company — the exact same data the Email Activity/Delivery History page shows (email_drafts, joined with its campaign). Use this whenever the user asks whether an email/invoice/reminder was actually sent to a company (e.g. "XX 的Email 发送出去了吗"). Returns each real draft/campaign record for the company (status: pending/opened/sent/skipped, subject, recipient, when and by whom it was sent if it was) — never guess whether something was sent, always check this.', input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
   { name: 'ar_batch', description: 'AR Reminder batch for a FYE month+year: totals and company names.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'English month name, e.g. April' }, year: { type: 'number' } }, required: ['month', 'year'] } },
   { name: 'nd_lookup', description: 'Look up a nominee director by person name: their active company appointments.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   { name: 'automation_health', description: 'Read live automation job health and the open integration-exception count.', input_schema: { type: 'object', properties: {} } },
@@ -835,6 +928,12 @@ const CLAUDE_TOOLS = [
 async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {
   if (name === 'search_company') return searchCompany(String(input.query ?? ''));
   if (name === 'check_outstanding_balance') return checkOutstandingBalance(String(input.company ?? ''));
+  if (name === 'outstanding_balance_summary') {
+    const requested = Array.isArray(input.qbCompanies) ? input.qbCompanies.filter((c): c is QbCompany => c === 'TAB' || c === 'TAC' || c === 'TAO') : [];
+    return outstandingBalanceSummary(requested.length ? requested : ['TAB', 'TAC', 'TAO']);
+  }
+  if (name === 'active_users_today') return activeUsersToday(account, typeof input.days === 'number' ? input.days : undefined);
+  if (name === 'check_email_status') return checkEmailStatus(String(input.company ?? ''));
   if (name === 'ar_batch') return arBatch(String(input.month ?? ''), Number(input.year ?? 0));
   if (name === 'nd_lookup') return ndLookup(String(input.name ?? ''));
   if (name === 'automation_health') return automationHealth();
@@ -879,10 +978,22 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   // actually fires (found or not — a real "not found" is still a real
   // check, never a guess).
   let outstandingToolCalled = false;
-  const guardedText = (text: string): string =>
-    mentionsOutstandingBalance(text) && !outstandingToolCalled
-      ? `⚠️ 系统提示：这条回复提到了欠款/outstanding，但本次没有检测到真正调用 check_outstanding_balance 查询实时数据——内容可能不准确，请换个更明确的问法重新提问（例如直接说"查一下 XX 公司的欠款"），不要直接采信。\n\n${text}`
-      : text;
+  // Same deterministic-guard family — see claimsPermissionDenied's own
+  // comment. Flips true only when my_tasks_summary/recent_activity_summary
+  // was actually called THIS turn with a real `person` argument (a
+  // self-only call never hits the permission branch at all, so it doesn't
+  // count here).
+  let crossPersonToolCalled = false;
+  const guardedText = (text: string): string => {
+    let out = text;
+    if (mentionsOutstandingBalance(out) && !outstandingToolCalled) {
+      out = `⚠️ 系统提示：这条回复提到了欠款/outstanding，但本次没有检测到真正调用 check_outstanding_balance（单个公司）或 outstanding_balance_summary（整体汇总）查询实时数据——内容可能不准确，请换个更明确的问法重新提问（例如直接说"查一下 XX 公司的欠款"或"TAB 的欠款总数是多少"），不要直接采信。\n\n${out}`;
+    }
+    if (account?.canViewAsOthers && claimsPermissionDenied(out) && !crossPersonToolCalled) {
+      out = `⚠️ 系统提示：这条回复说没有权限，但你的账号（${account.name}）实际上是可以查看其他员工任务/活动的管理账户——这个拒绝是错的，本次没有检测到真正调用查询工具。请换个更明确的问法重新提问（例如给出完整姓名，如"Chelsea Ang 今天要做什么"）。\n\n${out}`;
+    }
+    return out;
+  };
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -907,7 +1018,10 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
       // equivalent handling and would answer something unrelated.
       let result: unknown;
       try {
-        if (tu.name === 'check_outstanding_balance') outstandingToolCalled = true;
+        if (tu.name === 'check_outstanding_balance' || tu.name === 'outstanding_balance_summary') outstandingToolCalled = true;
+        if ((tu.name === 'my_tasks_summary' || tu.name === 'recent_activity_summary') && typeof tu.input?.person === 'string' && tu.input.person.trim()) {
+          crossPersonToolCalled = true;
+        }
         result = await runTool(tu.name!, tu.input ?? {}, account ?? null);
         if (tu.name === 'preview_invoice_draft' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
           lastInvoicePreview = (result as { preview: InvoicePreview }).preview;

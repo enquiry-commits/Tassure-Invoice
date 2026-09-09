@@ -805,6 +805,26 @@ again.
   code-level check on the OUTPUT for the claim's own telltale language, not
   just an instruction trusting the model to always call the right tool.
 
+- **INV-DATA-023** — The same hallucination family as INV-DATA-022, applied
+  to permission checks: Vincent (real `canViewAsOthers: true`, confirmed in
+  `lib/approved-accounts.ts`) asked "Chelsea 今天要做什么" then "Chelsea
+  Ang" right after successfully using the exact same cross-person feature
+  for "CKY" moments earlier in the SAME conversation — both got a
+  fabricated "我没有权限查看其他员工的任务" refusal. `my_tasks_summary()`'s
+  own real code (`app/api/assistant/route.ts`) only ever returns
+  `permission_denied` when `!account.canViewAsOthers` — impossible for
+  Vincent's account, so this was never a real tool result. Vincent: "你是
+  不是傻了 我是Vincent 最大的Admin" / "它会有时候分不清楚权限". Fixed the
+  same way as INV-DATA-022: `claimsPermissionDenied()` scans the REPLY for
+  permission-denial language; if the CALLER's own account genuinely has
+  `canViewAsOthers` (ground truth known server-side — this is the one case
+  where the guard can be MORE than a hedge, since the claim is definitely
+  false, not just unverified) and no cross-person tool call happened that
+  turn, a corrective warning is prepended. Any future permission-gated
+  chat tool should carry the same guard — check the reply for a refusal
+  claim against what the caller's account is actually allowed, not just
+  trust the model relayed the tool's real answer.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined
