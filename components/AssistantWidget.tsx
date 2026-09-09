@@ -5,7 +5,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Bot, MessageCircle, Send, Sparkles, X } from 'lucide-react';
 import { RichText } from '@/components/assistant/ChatRichText';
 
-type Msg = { role: 'user' | 'assistant'; content: string };
+// engine/engineNote (2026-09-09, Vincent: "你帮我看看是不是TOKEN用完了？")
+// — see app/my-tasks/page.tsx's ChatMsg for the fuller comment; same idea,
+// smaller surface (this widget has no per-message JSX beyond RichText).
+type Msg = { role: 'user' | 'assistant'; content: string; engine?: string; engineNote?: string };
 
 export type PageGuide = {
   label: string;
@@ -171,6 +174,8 @@ export default function AssistantWidget() {
       setMsgs(current => [...current, {
         role: 'assistant',
         content: json.reply ?? json.error ?? '出错了，请重试。',
+        engine: json.engine,
+        engineNote: json.note,
       }]);
     } catch {
       setMsgs(current => [...current, { role: 'assistant', content: '网络错误，请重试。' }]);
@@ -288,7 +293,15 @@ export default function AssistantWidget() {
                 }}
               >
                 {message.role === 'assistant'
-                  ? <RichText text={message.content} onNav={nav} />
+                  ? <>
+                      <RichText text={message.content} onNav={nav} />
+                      {(message.engine === 'intent' || message.engine === 'intent-fallback') && (
+                        <div style={{ marginTop: 6, fontSize: 10, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '5px 8px' }}>
+                          ⚠ 本次回复由基础规则引擎回答，未使用 Claude AI
+                          {message.engine === 'intent-fallback' && message.engineNote ? `（原因：${message.engineNote}）` : ''}
+                        </div>
+                      )}
+                    </>
                   : message.content}
               </div>
             ))}
