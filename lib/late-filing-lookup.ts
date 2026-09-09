@@ -2,6 +2,7 @@ import 'server-only';
 
 import { getLateFilingList, type LateRow } from '@/app/api/late-filing/route';
 import { normalize, findUniqueBestMatch } from './company-name';
+import { categorizeLateFilingRow, type LateCategory } from './late-filing-categorize';
 
 // Added 2026-09-09, phase 2 of the agentic-chat direction (Vincent: "可以
 // 把上面的4项分阶段进行吗？我觉得都需要" — after invoicing, next up is
@@ -68,5 +69,43 @@ export async function previewLateFilingResolve(companyQuery: string): Promise<La
       proposedRemarks: computeResolvedRemarks(row.remarks),
       alreadyResolved: /^Resolved:/i.test(row.remarks ?? ''),
     },
+  };
+}
+
+// Added 2026-09-09 — a real gap Vincent flagged: the Late Filing chat tool
+// could only ever preview ONE named company (above); there was no way to
+// answer "目前一共有多少家迟报" or "谁PIC压的最多" without opening the real
+// page. Reuses getLateFilingList() (the exact same "still relevant" set the
+// page's own default/ALL view shows) and categorizeLateFilingRow() (the
+// exact same serious/recent/review/resolved split the page's own metric
+// cards use) — no second, divergent computation.
+export type LateFilingSummary = {
+  totalRows: number;
+  activeOverdue: number; // excludes 'resolved' — a resolved row isn't really "on someone's plate" anymore
+  byCategory: { category: LateCategory; count: number }[];
+  byPic: { pic: string; count: number }[]; // ACTIVE (non-resolved) rows only, sorted largest-first; 'Unassigned' for a null PIC
+};
+
+export async function getLateFilingSummary(): Promise<LateFilingSummary> {
+  const rows = await getLateFilingList();
+  const categoryCounts = new Map<LateCategory, number>();
+  const picCounts = new Map<string, number>();
+  let activeOverdue = 0;
+
+  for (const row of rows) {
+    const category = categorizeLateFilingRow(row);
+    categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+    if (category !== 'resolved') {
+      activeOverdue += 1;
+      const pic = row.pic || 'Unassigned';
+      picCounts.set(pic, (picCounts.get(pic) ?? 0) + 1);
+    }
+  }
+
+  return {
+    totalRows: rows.length,
+    activeOverdue,
+    byCategory: [...categoryCounts.entries()].map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
+    byPic: [...picCounts.entries()].map(([pic, count]) => ({ pic, count })).sort((a, b) => b.count - a.count),
   };
 }

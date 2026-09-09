@@ -80,7 +80,15 @@ type MetricKey = 'count' | 'usesAddress' | 'hasNd' | 'hasAgm' | 'hasXbrl' | 'has
 
 const DIMENSIONS: { key: DimensionKey; label: string; value: (r: CompanyRow) => string }[] = [
   { key: 'companyType', label: 'Company Type', value: r => r.companyType || 'Unspecified' },
-  { key: 'ssic', label: 'SSIC Industry', value: r => r.ssicDescription1 || 'Not yet synced / unclassified' },
+  // .toUpperCase() (2026-09-09) — ssic_description_1 has inconsistent
+  // casing in real data (confirmed: the SAME industry synced with both
+  // "WHOLESALE TRADE OF A VARIETY OF GOODS WITHOUT A DOMINANT PRODUCT" and
+  // "Wholesale trade of a variety of goods without a dominant product" on
+  // different companies), which was silently splitting one real industry
+  // into two separate pivot rows. Same fix as lib/customer-profile-
+  // lookup.ts's chat-facing equivalent — see docs/INVARIANTS.md
+  // INV-DATA-027. Never applied to the null-fallback label itself.
+  { key: 'ssic', label: 'SSIC Industry', value: r => r.ssicDescription1 ? r.ssicDescription1.trim().toUpperCase() : 'Not yet synced / unclassified' },
   { key: 'customerSource', label: 'Customer Source', value: r => customerSourceLabel(r.customerSource) },
   { key: 'twStatus', label: 'Roster Status', value: r => r.twStatus || 'Untracked' },
   { key: 'pic', label: 'Secretary PIC', value: r => formatStaffName(r.pic) || 'Unassigned' },

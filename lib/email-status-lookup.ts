@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createAdminClient } from './supabase';
+import { pageAll } from './page-all';
 
 // Added 2026-09-09 — Vincent asked the chat "Bao Fortune 的Email 发送出去
 //了吗？" (has Bao Fortune's email been sent?) and got told to go check the
@@ -58,4 +59,41 @@ export async function lookupEmailStatus(companyQuery: string, limit = 10): Promi
     };
   });
   return { found: true, companyQuery, drafts };
+}
+
+// Added 2026-09-09 — a real gap: lookupEmailStatus above only ever answers
+// about ONE named company; there was no way to ask "这个月一共发了多少封
+// 邮件" (how many emails sent this month) or "还有哪些campaign没处理完"
+// (which campaigns are still pending) without opening the Email Activity
+// page. Same table/join as lookupEmailStatus, unscoped by company.
+export type CommunicationsSummary = {
+  rangeDays: number;
+  sentInRange: number; // count with a real sent_at within the last rangeDays
+  byStatus: { status: string; count: number }[]; // ALL-TIME (not range-limited) — "still pending" needs the true current state, not just a recent window
+  byCampaignType: { type: string; count: number }[]; // ALL-TIME, by campaign type
+};
+
+export async function getCommunicationsSummary(rangeDays = 30): Promise<CommunicationsSummary> {
+  const supabase = createAdminClient();
+  const since = new Date(Date.now() - rangeDays * 86_400_000).toISOString();
+  const rows = await pageAll<{ status: string; sent_at: string | null; email_campaigns: CampaignRef | CampaignRef[] | null }>(() =>
+    supabase.from('email_drafts').select('status, sent_at, email_campaigns!inner(type)'));
+
+  const statusCounts = new Map<string, number>();
+  const typeCounts = new Map<string, number>();
+  let sentInRange = 0;
+  for (const r of rows) {
+    statusCounts.set(r.status, (statusCounts.get(r.status) ?? 0) + 1);
+    const campaign = Array.isArray(r.email_campaigns) ? r.email_campaigns[0] : r.email_campaigns;
+    const type = campaign?.type ?? 'Unknown';
+    typeCounts.set(type, (typeCounts.get(type) ?? 0) + 1);
+    if (r.sent_at && r.sent_at >= since) sentInRange += 1;
+  }
+
+  return {
+    rangeDays,
+    sentInRange,
+    byStatus: [...statusCounts.entries()].map(([status, count]) => ({ status, count })).sort((a, b) => b.count - a.count),
+    byCampaignType: [...typeCounts.entries()].map(([type, count]) => ({ type, count })).sort((a, b) => b.count - a.count),
+  };
 }

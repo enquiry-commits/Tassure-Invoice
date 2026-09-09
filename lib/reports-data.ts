@@ -70,3 +70,46 @@ export function buildReportsCompanyRows(companies: CompanyRaw[], masterList: Mas
 // matches what this function reads.
 export const REPORTS_COMPANY_SELECT = 'id, company_name, registration_no, company_type, ssic_description_1, customer_source, tw_status, pic, is_active, uses_address, has_nd, has_agm, has_xbrl, has_accounts, has_tax';
 export const REPORTS_MASTER_LIST_SELECT = 'roc_no, join_date';
+
+// Extracted 2026-09-09 from app/api/reports/route.ts's own inline
+// computation (verbatim, not rewritten) so a new customer_profile_summary-
+// style chat tool (revenue/workload) can reuse the EXACT same numbers the
+// Reports page itself shows, rather than a second, divergent copy. Needs
+// `quickbooks_invoices.select('txn_date, total_amt')`, full table (no
+// filter) — the same fetch app/api/reports/route.ts already does.
+export function computeRevenueTrend(qbInvoices: Record<string, unknown>[], years: number[]) {
+  const invoiceCountByYear: Record<number, number> = {};
+  const revenueByYear: Record<number, number> = {};
+  for (const inv of qbInvoices) {
+    const d = typeof inv.txn_date === 'string' ? new Date(inv.txn_date) : null;
+    if (!d || isNaN(d.getTime())) continue;
+    const y = d.getFullYear();
+    invoiceCountByYear[y] = (invoiceCountByYear[y] ?? 0) + 1;
+    revenueByYear[y] = (revenueByYear[y] ?? 0) + (Number(inv.total_amt) || 0);
+  }
+  return {
+    invoiceCountTrend: years.map(y => ({ label: String(y), value: invoiceCountByYear[y] ?? 0 })),
+    revenueTrendThousands: years.map(y => ({ label: String(y), value: Math.round((revenueByYear[y] ?? 0) / 1000) })),
+  };
+}
+
+// Extracted 2026-09-09, same reasoning as computeRevenueTrend above. Needs
+// `ar_reminder.select('pic, acc_pic, tax_pic, filling_date').or('status.is.
+// null,status.neq.Excluded')` — the same fetch app/api/reports/route.ts
+// already does. Open (not yet filed) AR/AGM cycles only — SEC/ACC/TAX PIC
+// dropdowns hold plain staff names, not emails, same fields My Tasks
+// already reads, no resolution step needed.
+export function computePicWorkload(arRows: Record<string, unknown>[]) {
+  const picCount: Record<string, number> = {};
+  for (const r of arRows) {
+    if (r.filling_date) continue;
+    for (const name of [r.pic, r.acc_pic, r.tax_pic]) {
+      if (!name || name === 'Client') continue;
+      picCount[name as string] = (picCount[name as string] ?? 0) + 1;
+    }
+  }
+  return Object.entries(picCount)
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 12);
+}

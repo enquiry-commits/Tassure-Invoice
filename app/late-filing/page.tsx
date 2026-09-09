@@ -10,6 +10,7 @@ import { fmtDate as fmtDateStr, toDisplayDate, toIsoDateValue } from '@/lib/date
 import { formatStaffName } from '@/lib/staff-directory';
 import { logActivity } from '@/lib/activity-client';
 import { findUniqueBestMatch } from '@/lib/company-name';
+import { categorizeLateFilingRow, type LateCategory } from '@/lib/late-filing-categorize';
 
 const FYE_MONTHS = ['ALL','JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
 
@@ -52,37 +53,10 @@ const REMARKS_OPTIONS = [
   'LATE FILING',
 ];
 
-// Classify a late-filing row into one of four buckets, so the count can be
-// broken down instead of a single "Total". Signal comes from the auto-detection
-// remark plus (for manual/strike-off rows) the outstanding due date:
-//   serious  — genuinely, badly overdue (> 1 year) or actively being struck off
-//   recent   — overdue, but only recently (<= 1 year past due)
-//   review   — manually flagged as possibly-resolved, pending human check
-// Vincent, 2026-08-20: dropped the old "habitual" bucket (a bad historical
-// average alone, with no cycle actually overdue right now) — too easy to
-// confuse with companies genuinely late today. A bad average is still
-// shown as supplementary text on a row that IS currently overdue; it's
-// just never the reason a row gets flagged at all on its own anymore
-// (see app/api/late-filing/sync/route.ts's isLate).
-type LateCategory = 'serious' | 'recent' | 'review' | 'resolved';
-function categorize(row: LateRow): LateCategory {
-  const r = row.remarks ?? '';
-  if (/^Resolved:/i.test(r)) return 'resolved';
-  if (/^Review:/i.test(r)) return 'review';
-
-  const overdueMatch = r.match(/Overdue (\d+) days/);
-  const isStrikeOff = /STRIKE OFF/i.test(r);
-
-  let overdueDays: number | null = overdueMatch ? parseInt(overdueMatch[1], 10) : null;
-  // Manual strike-off rows (no "Overdue N" remark): derive from the due date.
-  if (overdueDays === null && row.next_agm_due_date) {
-    overdueDays = Math.round((Date.now() - new Date(row.next_agm_due_date + 'T00:00:00').getTime()) / 86400000);
-  }
-
-  if (isStrikeOff) return 'serious';
-  if (overdueDays !== null && overdueDays > 365) return 'serious';
-  return 'recent';
-}
+// categorize() moved to lib/late-filing-categorize.ts (2026-09-09) as
+// categorizeLateFilingRow() — reused by a new server-side chat aggregate
+// tool, so the classification rule lives in exactly one place.
+const categorize = categorizeLateFilingRow;
 
 function fmtDate(d: string | null) {
   if (!d) return <span style={{ color: '#94a3b8' }}>NA</span>;

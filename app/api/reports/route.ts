@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
 import { customerSourceLabel } from '@/lib/customer-source';
-import { buildReportsCompanyRows, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT } from '@/lib/reports-data';
+import { buildReportsCompanyRows, computeRevenueTrend, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT } from '@/lib/reports-data';
 
 // Reports — customer-profile analytics for leadership (Vincent, Cindy,
 // Samuell, Tan Yee Soon; gated on ApprovedAccount.canViewReports, see
@@ -168,34 +168,12 @@ export async function GET(req: NextRequest) {
   const newClientsTrend = years.map(y => ({ label: String(y), value: newByYear[y] ?? 0 }));
   const churnedTrend = years.map(y => ({ label: String(y), value: churnedByYear[y] ?? 0 }));
 
-  // ── Revenue / invoice-volume trend ───────────────────────────────────────
-  const invoiceCountByYear: Record<number, number> = {};
-  const revenueByYear: Record<number, number> = {};
-  for (const inv of qbInvoices) {
-    const d = typeof inv.txn_date === 'string' ? new Date(inv.txn_date) : null;
-    if (!d || isNaN(d.getTime())) continue;
-    const y = d.getFullYear();
-    invoiceCountByYear[y] = (invoiceCountByYear[y] ?? 0) + 1;
-    revenueByYear[y] = (revenueByYear[y] ?? 0) + (Number(inv.total_amt) || 0);
-  }
-  const invoiceCountTrend = years.map(y => ({ label: String(y), value: invoiceCountByYear[y] ?? 0 }));
-  const revenueTrend = years.map(y => ({ label: String(y), value: Math.round((revenueByYear[y] ?? 0) / 1000) }));
-
-  // ── PIC workload — open (not yet filed) AR/AGM cycles only, same fields
-  //    My Tasks already reads (SEC/ACC/TAX PIC dropdowns hold plain staff
-  //    names, not emails — no resolution step needed). ────────────────────
-  const picCount: Record<string, number> = {};
-  for (const r of arRows) {
-    if (r.filling_date) continue;
-    for (const name of [r.pic, r.acc_pic, r.tax_pic]) {
-      if (!name || name === 'Client') continue;
-      picCount[name as string] = (picCount[name as string] ?? 0) + 1;
-    }
-  }
-  const picWorkload = Object.entries(picCount)
-    .map(([label, value]) => ({ label, value }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 12);
+  // ── Revenue / invoice-volume trend + PIC workload — extracted 2026-09-09
+  //    into lib/reports-data.ts (computeRevenueTrend/computePicWorkload) so
+  //    a chat-assistant tool can reuse the exact same computation; behavior
+  //    here is unchanged. ────────────────────────────────────────────────
+  const { invoiceCountTrend, revenueTrendThousands: revenueTrend } = computeRevenueTrend(qbInvoices, years);
+  const picWorkload = computePicWorkload(arRows);
 
   return NextResponse.json({
     generatedAt: new Date().toISOString().slice(0, 10),

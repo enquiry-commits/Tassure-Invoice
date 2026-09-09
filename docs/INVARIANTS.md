@@ -989,12 +989,41 @@ again.
   a variety of goods without a dominant product" (12 companies) are the
   SAME industry, split into two entries by any grouping that keys on the
   raw string. `lib/customer-profile-lookup.ts` groups on
-  `.trim().toUpperCase()` instead. This same risk applies to
-  `app/reports/page.tsx`'s own "Explore" section pivot (client-side
-  grouping straight off `ssicDescription1`) and `app/api/reports/
-  export/route.ts` — neither has been fixed as part of this entry (out of
-  scope for the chat-assistant work that found it), but both should
-  normalize the same way before this is relied on for anything precise.
+  `.trim().toUpperCase()` instead. `app/reports/page.tsx`'s own "Explore"
+  section pivot (its `ssic` `DIMENSIONS` entry) got the same fix the same
+  day, once Vincent asked for the whole list of found gaps to be closed
+  ("全部都要做"). `app/api/reports/export/route.ts` was checked and
+  deliberately left unnormalized — it's a flat per-company row export with
+  no grouping/aggregation at all, so the casing inconsistency doesn't
+  silently split any count there; showing the true raw value is arguably
+  more useful for someone who wants to go clean up the source data. Any
+  FUTURE code that groups/counts by `ssic_description_1` needs the same
+  `.trim().toUpperCase()` normalization; a per-row read of the raw value
+  does not.
+- **INV-DATA-028** — A chat tool that surfaces a company's real
+  director/secretary/shareholder roster (`lib/company-deep-lookup.ts`,
+  reusing `getCompany360()`) must NEVER hand an LLM their NRIC/passport
+  number, date of birth, home address, or personal mobile/telephone —
+  `teamwork_company_officials`/`teamwork_shareholder_shares` carry all of
+  that (real, synced data, already used elsewhere for real purposes like
+  Post Incorporate auto-fill), but a casual "who's on the board" chat
+  question only needs names and roles. `lookupCompanyDeep()` curates this
+  down to `{ name, role }`/`{ name, numberOfShares, shareType }` only —
+  any future chat tool touching this same personal-data source must apply
+  the same minimization, not just pass the raw row through because the
+  data happens to already be in Supabase.
+- **INV-DATA-029** — A pure, dependency-free business-logic function used
+  by BOTH a client page and a server-side chat tool (no I/O of its own —
+  e.g. `categorizeLateFilingRow()`, moved from `app/late-filing/page.tsx`'s
+  own local `categorize()`) must live in its own small module with no
+  `server-only` marker and no heavy imports — putting it in an existing
+  `server-only`-marked lib file (e.g. `lib/late-filing-lookup.ts`, which
+  needs `server-only` because it queries Supabase) would break the CLIENT
+  page's build the moment it tried to import it, the same class of mistake
+  INV-DOC-006 already documents for `formatDisplayDate()`/`lib/date.ts` —
+  confirmed as a real, recurring risk now that it's happened twice in the
+  same session. `lib/late-filing-categorize.ts` is the model to follow: one
+  tiny, framework-free file, importable from anywhere.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

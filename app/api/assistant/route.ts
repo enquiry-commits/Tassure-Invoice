@@ -13,8 +13,13 @@ import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import { previewInvoiceEdit, type InvoiceEditPreview, type InvoiceEditChange } from '@/lib/invoice-edit-lookup';
 import { lookupOutstandingBalance, summarizeOutstandingBalance } from '@/lib/outstanding-lookup';
-import { lookupEmailStatus } from '@/lib/email-status-lookup';
+import { lookupEmailStatus, getCommunicationsSummary } from '@/lib/email-status-lookup';
 import { getCustomerProfileSummary } from '@/lib/customer-profile-lookup';
+import { lookupCompanyDeep } from '@/lib/company-deep-lookup';
+import { getTrademarkSummary } from '@/lib/trademark-lookup';
+import { getLateFilingSummary } from '@/lib/late-filing-lookup';
+import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
+import { pageAll } from '@/lib/page-all';
 import { formatSgtDateTime } from '@/lib/date';
 import type { QbCompany } from '@/lib/quickbooks';
 import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
@@ -337,6 +342,130 @@ async function customerProfileSummary(account: ApprovedAccount | null) {
     by_industry: summary.byIndustry,
     industry_data_coverage_pct: Math.round(summary.industryDataCoverage * 100),
     note: 'Real, current counts across every active client (companies.is_active = true), same computation and same "active" definition as the Reports page\'s own KPIs. by_company_type is LEGAL ENTITY STRUCTURE (Private Limited / Sole Proprietorship / LLP, etc.) — NOT an industry. by_industry is real SSIC industry classification, top 15 by count; industry_data_coverage_pct is what share of active clients actually have an SSIC on file (the rest are "Unspecified" and excluded from by_industry, not silently assumed to be any particular industry) — mention that coverage figure if it is meaningfully below 100%, so the industry breakdown is not read as more complete than it is.',
+  };
+}
+
+// Added 2026-09-09 — the single highest-leverage gap found in a full
+// review of what data exists vs. what chat can reach: search_company only
+// ever exposed a thin slice of what Company 360 actually knows. See
+// lib/company-deep-lookup.ts's own header comment for the full reasoning
+// (including why officials/shareholders are deliberately stripped of
+// ID/DOB/address/contact detail before reaching an LLM). No permission
+// gate beyond being logged in — same as search_company, this is ordinary
+// company-record data every staff account can already see on Company 360
+// itself, unlike the management-only aggregates below.
+async function companyDeepLookup(companyQuery: string) {
+  const result = await lookupCompanyDeep(companyQuery);
+  if (!result.found) return result;
+  return {
+    ...result,
+    note: 'Real, current data pulled live from the same computation Company 360 itself renders from. Use this for ANY question about a specific company beyond basic status/FYE — directors/secretary/shareholders, trademarks, invoice/document history, ND appointments, communications. For a precise outstanding-balance figure specifically, prefer check_outstanding_balance (this result\'s own outstanding total is the same number, just without the per-invoice breakdown/SOA link).',
+  };
+}
+
+// Added 2026-09-09 — Trademark had ZERO chat coverage before this (one of
+// the gaps found in the same review as company_deep_lookup above). See
+// lib/trademark-lookup.ts's own header comment.
+async function trademarkSummaryTool() {
+  const summary = await getTrademarkSummary();
+  return {
+    total_registered: summary.totalRegistered,
+    total_in_progress: summary.totalInProgress,
+    expiring_soon_days: summary.expiringSoonDays,
+    expiring_soon: summary.expiringSoon,
+    in_progress_list: summary.inProgressList,
+    note: `Real counts from trademark_records. "expiring_soon" is every REGISTERED mark whose expiry date falls within the next ${summary.expiringSoonDays} days — a real, checkable renewal-planning window, not a guess. For one specific company's own trademark(s), prefer company_deep_lookup instead (it also has the exact same data, scoped to that company).`,
+  };
+}
+
+// Added 2026-09-09 — Late Filing chat coverage could only ever preview ONE
+// named company; no way to answer "目前一共有多少家迟报"/"谁PIC压的最多"
+// without opening the real page. See lib/late-filing-lookup.ts's own
+// getLateFilingSummary() header comment.
+async function lateFilingSummaryTool() {
+  const summary = await getLateFilingSummary();
+  return {
+    active_overdue: summary.activeOverdue,
+    by_category: summary.byCategory,
+    by_pic: summary.byPic,
+    note: 'Real, current counts from the exact same "still relevant" set the Late Filing page\'s own default view shows, classified into the same serious/recent/review/resolved buckets its own metric cards use. active_overdue excludes already-resolved rows (a resolved row is no longer really "on someone\'s plate"). by_pic is who currently has the most ACTIVE (non-resolved) overdue companies — "Unassigned" means no Secretary PIC is set on that cycle. For one specific company, use preview_late_filing_resolve instead.',
+  };
+}
+
+// Added 2026-09-09 — Client Communications had no company-wide view; only
+// one-company-at-a-time via check_email_status. See lib/email-status-
+// lookup.ts's own getCommunicationsSummary() header comment.
+async function communicationsSummaryTool(days?: number) {
+  const rangeDays = days && days > 0 ? Math.min(days, 365) : 30;
+  const summary = await getCommunicationsSummary(rangeDays);
+  return {
+    range_days: summary.rangeDays,
+    sent_in_range: summary.sentInRange,
+    by_status: summary.byStatus,
+    by_campaign_type: summary.byCampaignType,
+    note: `sent_in_range is a real count of emails with a real sent_at within the last ${summary.rangeDays} day(s). by_status/by_campaign_type are ALL-TIME counts (not limited to the range) — this is deliberate: "how many are still pending" needs the true current state, not just a recent window. For one specific company, use check_email_status instead.`,
+  };
+}
+
+// Added 2026-09-09 — nd_lookup (above) can only answer "which companies is
+// person X appointed to"; there was no way to see the roster's overall
+// spare capacity. Same query pattern nd_lookup already uses, run for every
+// person on the roster instead of a name-matched few. No hard "max slots
+// per person" exists anywhere in this system (never invented one here) —
+// this reports each person's real current ACTIVE appointment count,
+// sorted so the person with the fewest appointments (most likely to have
+// real bandwidth) sorts first, rather than claiming a specific "N slots
+// free" figure nothing in the data actually supports.
+async function ndRosterCapacity() {
+  const sb = createAdminClient();
+  const { data: people } = await sb.from('nominee_directors').select('id, name').order('name');
+  const roster = people ?? [];
+  if (!roster.length) return { error: true as const, message: 'No nominee director roster found.' };
+  const { data: appts } = await sb.from('nd_appointments')
+    .select('nd_id, company_name')
+    .eq('sub_role', 'Nominee Director').is('cessation_date', null)
+    .in('nd_id', roster.map(p => p.id));
+  const countByNdId = new Map<number, number>();
+  for (const a of appts ?? []) countByNdId.set(a.nd_id, (countByNdId.get(a.nd_id) ?? 0) + 1);
+  const byPerson = roster
+    .map(p => ({ name: p.name, active_appointment_count: countByNdId.get(p.id) ?? 0 }))
+    .sort((a, b) => a.active_appointment_count - b.active_appointment_count);
+  return {
+    roster_size: roster.length,
+    total_active_appointments: [...countByNdId.values()].reduce((a, b) => a + b, 0),
+    by_person: byPerson,
+    note: 'Real current active-appointment counts, sorted fewest-first (most likely to have real bandwidth). There is no fixed "max appointments per person" rule stored anywhere in this system — never state a specific number of "free slots" as fact; describe relative bandwidth from these real counts instead.',
+  };
+}
+
+// Added 2026-09-09 — Reports already computes revenue/invoice-volume trend
+// and PIC workload (app/api/reports/route.ts); neither was reachable from
+// chat. Reuses lib/reports-data.ts's computeRevenueTrend()/
+// computePicWorkload() directly (extracted from that route's own inline
+// code the same day, specifically so this tool and the page could never
+// diverge) — never a second, re-derived computation. Gated on
+// canViewReports, same as Reports itself and customer_profile_summary
+// above.
+async function revenueWorkloadSummary(account: ApprovedAccount | null) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  if (!account.canViewReports) {
+    return { error: true as const, message: `${account.name}'s account cannot view Reports analytics — that is limited to management accounts (Vincent, Cindy, Samuell, Tan Yee Soon). Tell the user plainly this isn't available to their account.` };
+  }
+  const sb = createAdminClient();
+  const thisYear = new Date().getFullYear();
+  const years = Array.from({ length: 5 }, (_, i) => thisYear - 5 + 1 + i);
+  const [arRows, qbInvoices] = await Promise.all([
+    pageAll<Record<string, unknown>>(() => sb.from('ar_reminder').select('pic, acc_pic, tax_pic, filling_date').or('status.is.null,status.neq.Excluded')),
+    pageAll<Record<string, unknown>>(() => sb.from('quickbooks_invoices').select('txn_date, total_amt')),
+  ]);
+  const { invoiceCountTrend, revenueTrendThousands } = computeRevenueTrend(qbInvoices, years);
+  const picWorkload = computePicWorkload(arRows);
+  return {
+    years: years.map(String),
+    invoice_count_by_year: invoiceCountTrend,
+    revenue_thousands_by_year: revenueTrendThousands,
+    pic_workload: picWorkload,
+    note: 'Real, current figures — the exact same computation the Reports page\'s own Revenue/Invoice Volume chart and PIC Workload chart use. Revenue is in thousands of dollars (SGD), summed across ALL QuickBooks companies (TAB/TAC/TAO combined) by real transaction date, not attributed to any one company (per-company revenue is deliberately not offered — see Reports\' own note on why). pic_workload counts OPEN (not yet filed) AR/AGM cycles only, across Secretary/Accounts/Tax PIC fields — a name appearing high here has the most open cycles across those roles, not literal headcount.',
   };
 }
 
@@ -875,6 +1004,10 @@ Use active_users_today when the user asks who else is using/has used the system 
 
 Use check_email_status whenever the user asks whether an email, invoice, or reminder was actually SENT to a company (e.g. "XX 的Email 发送出去了吗") — this is real, checkable data (the same records the Email Activity page shows), not something to defer to "go check that page yourself" without first trying the tool.
 
+Use company_deep_lookup for ANY question about a specific named company that goes beyond basic status/FYE — directors, secretary, shareholders, trademarks, invoice history, Post Incorporate documents generated, ND appointments, Client Communications activity. search_company only has a thin slice of what this system actually knows about a company; company_deep_lookup has the real depth. Never tell the user a company-specific question "can't be checked" or point them to go look at Company 360 themselves without trying this tool first — it reads the exact same data that page does. It deliberately never returns personal ID numbers, date of birth, home address, or personal contact numbers for directors/shareholders — if asked for those specifically, say plainly this system doesn't surface that level of personal detail through chat, don't guess or fabricate them.
+
+For company-WIDE (not one-company) questions, four more real tools exist — never say "no such capability" for these without calling the matching tool first: trademark_summary (how many trademarks registered/in-progress, which are expiring soon), late_filing_summary (how many companies overdue in total, broken down by severity and by which staff member has the most), communications_summary (how many emails sent recently, all-time status/campaign-type breakdown), nd_roster_capacity (each nominee director's current active-appointment count — there is NO fixed "max slots per person" rule anywhere in this system, never invent one). revenue_workload_summary (revenue/invoice-volume trend by year, PIC workload) is the same canViewReports-gated management tier as customer_profile_summary.
+
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
 
@@ -902,6 +1035,12 @@ const CLAUDE_TOOLS = [
   { name: 'active_users_today', description: 'REAL, live list of which staff have actually used the system recently (real recorded page-view/action events, tracking since 2026-09-08) — management-only. Use this for "who else is using the system today/this week" style questions. Returns each active person\'s email, how many events they generated, and their most-visited page. Default (days omitted or 1) is the real Singapore calendar day — "today", not a rolling 24-hour window; pass a larger `days` for a genuine rolling multi-day window instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Number of days — 1 (default) means the real SGT calendar day "today"; a larger value is a genuine rolling N-day window, max 30' } } } },
   { name: 'check_email_status', description: 'REAL email send status for one company — the exact same data the Email Activity/Delivery History page shows (email_drafts, joined with its campaign). Use this whenever the user asks whether an email/invoice/reminder was actually sent to a company (e.g. "XX 的Email 发送出去了吗"). Returns each real draft/campaign record for the company (status: pending/opened/sent/skipped, subject, recipient, when and by whom it was sent if it was) — never guess whether something was sent, always check this.', input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
   { name: 'customer_profile_summary', description: 'REAL, live breakdown of ALL active clients by legal entity type (Private Limited/Sole Proprietorship/LLP/...) and by real SSIC industry classification — the exact same computation the Reports page\'s own "Explore" section uses. Management-only (canViewReports — Vincent, Cindy, Samuell, Tan Yee Soon). Use this whenever the user asks what TYPE or INDUSTRY our clients/customers are, which type/industry is biggest, or for a customer-profile breakdown (e.g. "客户最大是什么类型的客户？从事什么行业的？") — never say there is no such tool without calling this first. Returns counts for each type/industry sorted largest-first, plus what share of clients actually have an industry on file.', input_schema: { type: 'object', properties: {} } },
+  { name: 'company_deep_lookup', description: "REAL, live, DEEP data for ONE specific company — everything Company 360 itself shows: directors/secretary/shareholders (names + roles only), trademark records, invoice history (generated + QuickBooks), Post Incorporate documents generated, ND appointments, outstanding balance, Client Communications draft count, AR Reminder cycles. Use this for ANY question about a specific named company beyond basic status/FYE (e.g. \"这家公司有商标吗\", \"董事是谁\", \"最近生成过什么文件\", \"股东有哪些\") — search_company only has a thin slice of this; never say a company-specific question can't be answered without trying this tool first. Does NOT include personal ID numbers/DOB/home address/personal contact info for directors/shareholders — deliberately never surfaced through chat.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
+  { name: 'trademark_summary', description: 'REAL, live company-WIDE trademark counts and lists — how many trademarks are registered vs. still in progress (application filed, not yet granted), and which registered marks are expiring soon. Use this for any trademark question that is NOT about one specific company (e.g. "现在有多少个商标在处理中", "哪些商标快到期了") — for ONE specific company\'s own trademark(s), use company_deep_lookup instead, which has the exact same data already scoped to that company.', input_schema: { type: 'object', properties: {} } },
+  { name: 'late_filing_summary', description: 'REAL, live company-WIDE Late Filing counts — how many companies are currently overdue in total, broken down by severity (serious/recent/review) and by which staff member (PIC) currently has the most active overdue companies. Use this for any Late Filing question that is NOT about one specific company (e.g. "目前一共有多少家迟报", "谁PIC压的最多") — for one specific company, use preview_late_filing_resolve instead.', input_schema: { type: 'object', properties: {} } },
+  { name: 'communications_summary', description: 'REAL, live company-WIDE email/campaign counts from Client Communications — how many emails were actually sent in a recent window, plus the all-time breakdown by status (pending/opened/sent/skipped) and by campaign type. Use this for any Client Communications question that is NOT about one specific company (e.g. "这个月一共发了多少封邮件", "还有哪些campaign没处理完") — for one specific company, use check_email_status instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many recent days to count real sends over — default 30, max 365' } } } },
+  { name: 'nd_roster_capacity', description: "REAL, live nominee-director roster with each person's current ACTIVE appointment count, sorted fewest-first (most likely to have real bandwidth). Use this whenever the user asks about ND capacity/availability across the roster (e.g. \"还有哪个ND有空位\", \"谁appointment最少\") — never say this can't be checked without trying this tool first. There is NO fixed \"max appointments per person\" rule anywhere in this system — never state a specific number of free slots as fact.", input_schema: { type: 'object', properties: {} } },
+  { name: 'revenue_workload_summary', description: 'REAL, live revenue/invoice-volume trend (by year, summed across TAB/TAC/TAO) and PIC workload (open AR/AGM cycles per staff member across Secretary/Accounts/Tax roles) — the exact same computation the Reports page\'s own charts use. Management-only (canViewReports). Use this whenever the user asks about revenue trend, invoice volume over time, or which staff member has the most open cycles (e.g. "收入趋势怎么样", "谁工作量最大") — never say there is no such tool without calling this first.', input_schema: { type: 'object', properties: {} } },
   { name: 'ar_batch', description: 'AR Reminder batch for a FYE month+year: totals and company names.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'English month name, e.g. April' }, year: { type: 'number' } }, required: ['month', 'year'] } },
   { name: 'nd_lookup', description: 'Look up a nominee director by person name: their active company appointments.', input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } },
   { name: 'automation_health', description: 'Read live automation job health and the open integration-exception count.', input_schema: { type: 'object', properties: {} } },
@@ -979,6 +1118,12 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'active_users_today') return activeUsersToday(account, typeof input.days === 'number' ? input.days : undefined);
   if (name === 'check_email_status') return checkEmailStatus(String(input.company ?? ''));
   if (name === 'customer_profile_summary') return customerProfileSummary(account);
+  if (name === 'company_deep_lookup') return companyDeepLookup(String(input.company ?? ''));
+  if (name === 'trademark_summary') return trademarkSummaryTool();
+  if (name === 'late_filing_summary') return lateFilingSummaryTool();
+  if (name === 'communications_summary') return communicationsSummaryTool(typeof input.days === 'number' ? input.days : undefined);
+  if (name === 'nd_roster_capacity') return ndRosterCapacity();
+  if (name === 'revenue_workload_summary') return revenueWorkloadSummary(account);
   if (name === 'ar_batch') return arBatch(String(input.month ?? ''), Number(input.year ?? 0));
   if (name === 'nd_lookup') return ndLookup(String(input.name ?? ''));
   if (name === 'automation_health') return automationHealth();
