@@ -164,3 +164,21 @@ export function fmtMonth(input: string | Date | null | undefined): string {
   if (isNaN(d.getTime())) return '—';
   return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
+
+// Moved here from lib/docx-post-incorporate.ts (its own original home) so
+// app/post-incorporate/page.tsx (a client component) could show the same
+// "21 August 2026" format Post Incorporate's generated documents already
+// use, without importing docx-post-incorporate.ts itself — that module
+// pulls in `fs`/`pizzip` for real document generation and can never be
+// imported from client code (confirmed: doing so broke `next build` with a
+// "Module not found: fs" client-bundle error). This is the ONLY reason for
+// the move; behavior is byte-for-byte the same as before.
+/** Format an ISO date as "D MMMM YYYY" (full month name), e.g. "21 August 2026". */
+export function formatDisplayDate(isoDate: string): string {
+  if (!isoDate) return '';
+  const d = new Date(isoDate + 'T00:00:00Z');
+  if (Number.isNaN(d.getTime())) return isoDate;
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  const month = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
+  return `${day} ${month} ${d.getUTCFullYear()}`;
+}

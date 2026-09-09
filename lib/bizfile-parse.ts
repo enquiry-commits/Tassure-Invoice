@@ -110,22 +110,35 @@ function labelValueActivity(lines: string[], label: string): string {
 // ever read ONE line after the heading (`after[1]`) and split it by tab
 // assuming exactly 4 cells, so a wrapped currency silently truncated
 // mid-word and Share Type — which wrapped onto the next line along with it —
-// came back empty. Confirmed against a real Bizfile PDF (LAKEFILL VENTURES,
-// 2026-09-09): Currency showed "UNITED STATES OF" and Share Type showed
-// blank, when the real values were "UNITED STATES OF AMERICA DOLLAR" /
-// "ORDINARY".
+// came back empty.
 //
-// Fixed by reading forward across up to a handful of lines after the
-// heading (stopping at the next real "Label\t:value" field or known section
-// heading, whichever comes first) as one continuous stream of
+// Fixed by reading forward across multiple lines as one continuous stream of
 // whitespace-separated tokens rather than trusting a single line's tab
-// boundaries: the first 2 tokens are Amount and Number of Shares (plain
+// boundaries — but a first version of this fix (reading up to 5 lines,
+// stopping only at the next "Label\t:value" field or known section heading)
+// was ALSO wrong: confirmed against the real Bizfile PDF (LAKEFILL VENTURES,
+// 2026-09-09) that ACRA prints an explanatory footnote sentence directly
+// below the table's own last row ("Number of Shares includes number of
+// Treasury Shares" / "Company has the following Ordinary Shares held as
+// Treasury Shares") — neither a `Label\t:` field nor a known heading, so
+// that first version happily swallowed it as more cell data too (real
+// symptom: Currency came back as "UNITED STATES OF AMERICA DOLLAR ORDINARY
+// Number of Shares includes number of Treasury", Share Type as "Shares").
+// Real cell values (however many lines the Currency name wraps across) are
+// always ALL-CAPS ("UNITED STATES OF", "AMERICA DOLLAR", "ORDINARY" each on
+// their own line in the real sample); the footnote sentence that follows
+// always has lowercase connector words ("includes", "of", "the",
+// "following"). That's the actual stop signal — checked from the second data
+// line onward (the first is always numbers/tabs, never lowercase letters,
+// so nothing has been collected yet for the length check to gate on).
+//
+// The first 2 tokens collected are Amount and Number of Shares (plain
 // numbers, never wrap), the LAST token is the Share Type (a single word on
-// every real sample seen so far — "ORDINARY"), and everything in between,
-// however many lines it took to print, is the Currency name. A Share Type
-// with its own multi-word qualifier (e.g. ACRA's "PREFERENCE (REDEEMABLE)")
-// is a known remaining gap this doesn't handle — no worse than before, just
-// not yet fixed; flag it if a real sample of one ever turns up.
+// every real sample seen so far — "ORDINARY"), and everything in between is
+// the Currency name. A Share Type with its own multi-word qualifier (e.g.
+// ACRA's "PREFERENCE (REDEEMABLE)") is a known remaining gap this doesn't
+// handle — no worse than before, just not yet fixed; flag it if a real
+// sample of one ever turns up.
 const CAPITAL_TABLE_STOP_RE = /\t:|^(Issued Share Capital|Paid-Up Capital|Registered Office Address|Officer\(s\)|Shareholder\(s\))$/;
 
 function parseCapitalTable(text: string, heading: string): CapitalInfo {
@@ -136,8 +149,10 @@ function parseCapitalTable(text: string, heading: string): CapitalInfo {
   // "Currency" / "Type"); real data starts at after[1].
   const dataLines: string[] = [];
   for (let i = 1; i < after.length && dataLines.length < 5; i++) {
-    if (CAPITAL_TABLE_STOP_RE.test(after[i])) break;
-    dataLines.push(after[i]);
+    const line = after[i];
+    if (CAPITAL_TABLE_STOP_RE.test(line)) break;
+    if (dataLines.length > 0 && /[a-z]/.test(line)) break;
+    dataLines.push(line);
   }
   const tokens = dataLines.join(' ').replace(/\t/g, ' ').split(/\s+/).filter(Boolean);
   const amount = tokens[0] || '';
@@ -260,7 +275,19 @@ function sectionBand(items: Item[], headingLabel: string, nextHeadingLabels: str
   if (!heading) return null;
   let bottom = -Infinity;
   for (const nextLabel of nextHeadingLabels) {
-    const next = items.find(it => it.str.trim().startsWith(nextLabel) && it.y < heading.y);
+    // A next-heading/footnote label can legitimately repeat on EVERY PDF
+    // page a multi-page table spans — confirmed on a real 2-page
+    // Shareholder(s) table (LAKEFILL VENTURES, 2026-09-09): "Includes
+    // nationality and citizenship" is reprinted at the bottom of BOTH
+    // pages, not just the true last one. Taking the FIRST match (as this
+    // used to) anchors `bottom` to the FIRST page's own copy, which then
+    // wrongly excludes every row on a later merged page (its Y, offset well
+    // below the first page's, reads as "past the boundary"). The correct
+    // bound is the LOWEST (smallest y — i.e. the one nearest the table's
+    // real end) among every occurrence of this label.
+    const matches = items.filter(it => it.str.trim().startsWith(nextLabel) && it.y < heading.y);
+    if (!matches.length) continue;
+    const lowestY = Math.min(...matches.map(it => it.y));
     // The footnote text this often anchors to ("Includes nationality and
     // citizenship", "Includes place of incorporation...") has its own
     // reference-number superscript ("²"/"³") floating ~4.5pt above it, same
@@ -268,7 +295,7 @@ function sectionBand(items: Item[], headingLabel: string, nextHeadingLabels: str
     // buffer used for row boundaries, that stray digit sits just inside the
     // table's own band and gets read as trailing data on the LAST row
     // (confirmed in production: a real address ending in ", 2").
-    if (next && next.y + ROW_BOUNDARY_EPSILON > bottom) bottom = next.y + ROW_BOUNDARY_EPSILON;
+    if (lowestY + ROW_BOUNDARY_EPSILON > bottom) bottom = lowestY + ROW_BOUNDARY_EPSILON;
   }
   // No next section heading found on THIS page — either genuinely the last
   // table in the document, or this table's last few rows continue onto the
@@ -283,6 +310,22 @@ function sectionBand(items: Item[], headingLabel: string, nextHeadingLabels: str
   return { top: heading.y, bottom };
 }
 
+// The header row's OWN reference-number superscripts (e.g. "Number of
+// Shares³") sit ~4.5pt above whichever of their column header's own text
+// lines they're attached to — which is safely excluded by a fixed `Name`-Y
+// - 5 buffer ONLY when the header block is a single line. Several of this
+// table's own headers wrap onto a SECOND line ("Number of" / "Shares",
+// "Identification" / "Number", "Nationality /" / "Place of origin") sitting
+// well BELOW "Name"'s own Y — a superscript on one of those wrapped words
+// can then sit BELOW `nameY - 5` and slip through as if it were real row
+// data (confirmed in production: a real Currency value ended up with a
+// stray "3" appended). The true bottom of the header block is the LOWEST Y
+// among every column-header label actually present, not just "Name"'s own.
+function headerBlockBottomY(items: Item[], band: { top: number; bottom: number }): number {
+  const headerItems = items.filter(it => TABLE_HEADER_LABELS.has(it.str.trim()) && it.y < band.top && it.y > band.bottom);
+  return Math.min(...headerItems.map(it => it.y));
+}
+
 function extractOfficersFromItems(items: Item[]): ParsedOfficer[] {
   const band = sectionBand(items, 'Officer(s)', ['Shareholder(s)']);
   if (!band) return [];
@@ -293,7 +336,7 @@ function extractOfficersFromItems(items: Item[]): ParsedOfficer[] {
   const dateX = findHeaderX(items, 'Date of', band.top, band.bottom);
   if (nameX == null || idX == null || natX == null || posX == null || dateX == null) return [];
 
-  const headerY = items.find(it => it.str.trim() === 'Name' && it.y < band.top && it.y > band.bottom)!.y;
+  const headerY = headerBlockBottomY(items, band);
   // Used to also drop any bare single digit here, meant to catch the
   // superscript footnote-reference numbers ACRA attaches to some column
   // headers (e.g. "Number of Shares³") — but that same filter also drops a
@@ -342,21 +385,25 @@ function extractShareholdersFromItems(items: Item[]): ParsedShareholder[] {
   const sharesX = findHeaderX(items, 'Number of', band.top, band.bottom);
   if (nameX == null || idX == null || natX == null || sharesX == null) return [];
 
-  const headerY = items.find(it => it.str.trim() === 'Name' && it.y < band.top && it.y > band.bottom)!.y;
   // "Address" (the first word of the wrapped "Address Changed" column header)
-  // appears TWICE in this table: once on the header's own first line (same Y
+  // appears TWICE in this table: once on the header's OWN TOP line (same Y
   // as "Name"/"Number of", the real "Address Changed" column this needs) and
   // again as the Name column's own sub-header two lines further down ("Name"
-  // / "Address" stacked, like every other column here). Scoping to headerY's
-  // own Y disambiguates them — a plain first/last match picked whichever
-  // happened to come first in the PDF's content-stream order, which isn't
-  // guaranteed to be the header line and in production picked the wrong one
-  // (confirmed: real "Number of Shares" data came back corrupted with the
-  // neighboring "Address Changed" column's date glued on, because nothing
-  // bounded the shares column's right edge without this).
-  const changedHit = items.find(it => it.str.trim() === 'Address' && Math.abs(it.y - headerY) < 2);
+  // / "Address" stacked, like every other column here). Scoping to the
+  // header's top-line Y disambiguates them — a plain first/last match picked
+  // whichever happened to come first in the PDF's content-stream order,
+  // which isn't guaranteed to be the header line and in production picked
+  // the wrong one (confirmed: real "Number of Shares" data came back
+  // corrupted with the neighboring "Address Changed" column's date glued
+  // on, because nothing bounded the shares column's right edge without
+  // this). This must stay anchored to the TOP line specifically — not the
+  // header block's overall lowest line used for `dataUpperBoundY` below —
+  // since "Address" only appears once, on that top line.
+  const topHeaderY = items.find(it => it.str.trim() === 'Name' && it.y < band.top && it.y > band.bottom)!.y;
+  const changedHit = items.find(it => it.str.trim() === 'Address' && Math.abs(it.y - topHeaderY) < 2);
   const changedX = changedHit ? changedHit.x : null;
-  const dataItems = items.filter(it => it.y < headerY - 5 && it.y > band.bottom && it.str.trim() && !isNomineeDirectorAnnotation(it.str));
+  const dataUpperBoundY = headerBlockBottomY(items, band);
+  const dataItems = items.filter(it => it.y < dataUpperBoundY - 5 && it.y > band.bottom && it.str.trim() && !isNomineeDirectorAnnotation(it.str));
   const idItems = dataItems.filter(it => it.x >= idX - NAME_COLUMN_MAX_X_GAP && it.x < natX - NAME_COLUMN_MAX_X_GAP && ID_ANCHOR_RE.test(it.str.trim()));
   const rowStartYs = [...new Set(idItems.map(it => it.y))].sort((a, b) => b - a);
 
@@ -412,64 +459,138 @@ export function parseBizfileText(rawText: string): { company: ParsedCompany } {
 }
 
 // A Bizfile Officer(s)/Shareholder(s) table that doesn't fit on one PDF page
-// continues onto the next page WITHOUT repeating its own section heading —
-// confirmed against a real Bizfile (LAKEFILL VENTURES, 2026-09-09, 5
-// shareholders with long overseas addresses): the table split 2 rows on the
-// heading's own page and 3 rows on the page after, and the old per-page-only
-// loop below (`if (nonEmpty.some(... === 'Shareholder(s)')) shareholders =
-// extractShareholdersFromItems(nonEmpty)`) only ever looked at the ONE page
-// where the heading text itself appeared, silently discarding every row that
-// spilled onto a continuation page — the 2 rows it found looked like a
-// complete (if oddly small) result, not an obvious failure.
+// continues onto the next page — confirmed against a real Bizfile (LAKEFILL
+// VENTURES, 2026-09-09): its 5-shareholder table split 3 rows on the
+// heading's own page and 2 rows on the page after, and the old per-page-only
+// loop below only ever looked at the ONE page where the heading text itself
+// appeared, silently discarding every row that spilled onto a continuation
+// page — the rows it did find looked like a complete (if oddly small)
+// result, not an obvious failure.
 //
-// Fixed by walking forward from the heading's page and merging in every
-// following page that doesn't itself start a different known section, until
-// hitting this section's own real terminator (the next section's heading, or
-// — for Shareholder(s) specifically — the "Includes nationality.../
-// Abbreviation" footnote ACRA always prints right after the table). Each
-// later page's Y is offset down by a fixed step far larger than any real
-// page height, so the existing Y-based row/column logic (which only ever
-// compares relative Y within one flat item list) keeps working unmodified
-// across the page boundary — row 1 of page 2 sorts as "below" the last row
-// of page 1, exactly like a row that wrapped within a single page already
-// does. A continuation page's own footer boilerplate is stripped before
-// merging (except on the LAST page of the run, which still needs it as the
-// final floor when no explicit terminator is ever found) so it can never be
-// mistaken for a mid-table row or wrongly cut off later rows.
-const KNOWN_SECTION_HEADINGS = ['Officer(s)', 'Shareholder(s)'];
-const SECTION_TERMINATORS: Record<string, string[]> = {
-  'Officer(s)': ['Shareholder(s)'],
-  'Shareholder(s)': ['Includes nationality', 'Abbreviation'],
-};
-const PAGE_Y_STEP = 100000;
-
-function pageHasTerminator(items: Item[], heading: string): boolean {
-  const terminators = SECTION_TERMINATORS[heading] ?? [];
-  return items.some(it => {
+// Fixed by walking forward from the heading's own page and merging in every
+// following page that REPEATS the exact same heading text — this is the one
+// signal confirmed reliable on a real multi-page table: ACRA reprints
+// "Shareholder(s)" (and its column headers, and even its closing "Includes
+// nationality..." footnote) at the top/bottom of EVERY page that table
+// spans, not just once. The walk stops as soon as a page does NOT repeat the
+// heading — which correctly also covers the single-page case (Officer(s) on
+// this same real document sat entirely on one page; the very next page
+// starts a different section, 'Shareholder(s)', with no continuation at
+// all — trying to use "does the NEXT page contain a DIFFERENT known
+// section" as the stop signal instead was tried first and rejected: it
+// wrongly walked into that next, unrelated page anyway).
+//
+// Each later page's Y is offset down by a fixed step far larger than any
+// real page height, so the existing Y-based row/column logic (which only
+// ever compares relative Y within one flat item list) keeps working
+// unmodified across the page boundary — row 1 of page 2 sorts as "below" the
+// last row of page 1, exactly like a row that wrapped within a single page
+// already does. Every page's own repeated header/disclaimer block (printed
+// at the TOP of every single Bizfile page, not just continuation ones —
+// "ACCOUNTING AND CORPORATE REGULATORY AUTHORITY", "Business Profile
+// (Company) of...", the document's own print date) and footer boilerplate
+// are stripped from every page EXCEPT the section's own first/last page
+// respectively — otherwise, once offset, that junk sorts as if it were more
+// data for whichever real row sits nearest the page boundary (confirmed in
+// production: a real director's ID/nationality/appointment-date fields got
+// corrupted with fragments of the NEXT page's header block).
+const HEADER_ITEM_PATTERNS = [
+  /^ACCOUNTING AND CORPORATE REGULATORY AUTHORITY$/i,
+  /^\(ACRA\)$/i,
+  /^Whilst every endeavor/i,
+  /^liability for any damage/i,
+  /^Business Profile \(Company\) of/i,
+  /^\([0-9]{8,10}[A-Z]\)$/, // the company's own UEN in parens, repeated under the header line above
+  /^Date:\s*\d{1,2}\s+\w+\s+\d{4}$/i, // the header's own print date, e.g. "Date: 21 Aug 2026"
+];
+// ACRA ALSO reprints the table's own column-header row (Name/Address/
+// Identification Number/Nationality/.../Currency/...) and the section
+// heading itself at the top of every continuation page, immediately below
+// the disclaimer block above — confirmed on the same real document: a
+// shareholder whose row happened to be the last one on a non-final merged
+// page had her address/ID/nationality/currency each end up with the NEXT
+// page's repeated "Shareholder(s)"/"Name"/"Identification Number"/
+// "Nationality / Place of origin"/"Currency" column labels appended, since
+// nothing excluded them either. A small fixed, exact-match vocabulary — none
+// of these words is a plausible genuine data value on their own — covers
+// both tables' column headers plus the two section headings themselves.
+// `findHeaderX`/`headerY` still work off the FIRST page's own (never
+// stripped) copy, so removing the repeats elsewhere costs nothing real.
+const TABLE_HEADER_LABELS = new Set([
+  'Officer(s)', 'Shareholder(s)',
+  'Name', 'Address', 'Identification', 'Number', 'Nationality/', 'Citizenship',
+  'Position', 'Date of', 'Appointment',
+  'Nationality /', 'Place of origin', 'Number of', 'Shares', 'Currency', 'Changed',
+]);
+// The Shareholder(s) table's own closing footnote ("Includes nationality
+// and citizenship" / "Includes place of incorporation...") reprints at the
+// bottom of EVERY page the table spans — same repeating-boilerplate
+// behavior as the header/footer blocks above, but this one sits MID-page
+// (right after that page's own last row), so — unlike header/footer, which
+// only ever need stripping on non-first/non-last pages — this must be
+// stripped from EVERY page: even the section's own first page has a real
+// copy of it that isn't the table's true end when more pages follow.
+// Confirmed on the real document: without this, the row immediately above a
+// non-final page's own footnote got it appended to its address/currency.
+// Both the footnote line AND the table's own column headers ("Number of
+// Shares³") carry a bare 1-2-digit reference-number superscript floating
+// ~4.5pt just above whichever line they annotate (the same superscript-
+// offset pattern `ROW_BOUNDARY_EPSILON` already documents elsewhere in this
+// file). On a single-page table `headerBlockBottomY`'s upper bound already
+// excludes the header's own copy — but that bound is anchored to the
+// FIRST page's header Y specifically, so it does nothing for a REPEATED
+// header's own superscript reprinted on a later merged page (confirmed on
+// the real document: a shareholder whose row was the last one on a
+// non-final page ended up with the NEXT page's own "Number of Shares³"-
+// style superscripts appended to her Currency value, well past where her
+// own real row data ends). Stripped uniformly, on every page, gated
+// tightly to "a bare short digit sitting within 10pt above a KNOWN
+// footnote OR header-label line on this SAME page" so it can never remove
+// a genuine short data value (e.g. a real 1-2 share count) anywhere else —
+// the header LABEL text itself is left untouched here (still needed by
+// `findHeaderX`/`headerBlockBottomY`); its own selective non-first-page
+// removal happens separately, below.
+const FOOTNOTE_ITEM_PATTERNS = [
+  /^Includes nationality and citizenship$/i,
+  /^Includes place of incorporation, place of origin and place of registration$/i,
+];
+function stripSuperscriptNoise(items: Item[]): Item[] {
+  const anchorYs = items
+    .filter(it => {
+      const s = it.str.trim();
+      return FOOTNOTE_ITEM_PATTERNS.some(re => re.test(s)) || TABLE_HEADER_LABELS.has(s);
+    })
+    .map(it => it.y);
+  if (!anchorYs.length) return items;
+  return items.filter(it => {
     const s = it.str.trim();
-    return terminators.some(t => s.startsWith(t)) || (KNOWN_SECTION_HEADINGS.includes(s) && s !== heading);
+    if (FOOTNOTE_ITEM_PATTERNS.some(re => re.test(s))) return false;
+    if (/^\d{1,2}$/.test(s) && anchorYs.some(ay => it.y > ay && it.y <= ay + 10)) return false;
+    return true;
   });
 }
+const PAGE_Y_STEP = 100000;
 
 function collectSectionItems(pageItems: Item[][], heading: string): Item[] {
   const startPage = pageItems.findIndex(items => items.some(it => it.str.trim() === heading));
   if (startPage === -1) return [];
 
   let endPage = startPage;
-  if (!pageHasTerminator(pageItems[startPage], heading)) {
-    for (let p = startPage + 1; p < pageItems.length; p++) {
-      endPage = p;
-      if (pageHasTerminator(pageItems[p], heading)) break;
-    }
+  for (let p = startPage + 1; p < pageItems.length; p++) {
+    if (!pageItems[p].some(it => it.str.trim() === heading)) break;
+    endPage = p;
   }
 
   const merged: Item[] = [];
   for (let p = startPage; p <= endPage; p++) {
+    const isFirstPage = p === startPage;
     const isLastPage = p === endPage;
     const offset = (p - startPage) * PAGE_Y_STEP;
-    for (const it of pageItems[p]) {
+    for (const it of stripSuperscriptNoise(pageItems[p])) {
       const s = it.str.trim();
       if (!s) continue;
+      if (!isFirstPage && HEADER_ITEM_PATTERNS.some(re => re.test(s))) continue;
+      if (!isFirstPage && TABLE_HEADER_LABELS.has(s)) continue;
       if (!isLastPage && FOOTER_ITEM_PATTERNS.some(re => re.test(s))) continue;
       merged.push({ str: it.str, x: it.x, y: it.y - offset });
     }

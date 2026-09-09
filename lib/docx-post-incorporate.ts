@@ -39,6 +39,7 @@ import {
   replaceAllPlaceholders, repeatSection, pairRepeatSection, keepSectionIf,
   findSection, extractBodyChildren, blockText, stripMarkerText, replaceTextPattern,
 } from './docx-xml';
+import { formatDisplayDate } from './date';
 
 const TEMPLATE_DIR = path.join(process.cwd(), 'templates', 'post-incorporate');
 
@@ -209,15 +210,6 @@ function calcSecServiceEndDate(isoDate: string): string {
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const monthName = new Date(Date.UTC(year, month - 1, 1)).toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
   return `${String(lastDay).padStart(2, '0')} ${monthName}`;
-}
-
-function formatDisplayDate(isoDate: string): string {
-  if (!isoDate) return '';
-  const d = new Date(isoDate + 'T00:00:00Z');
-  if (Number.isNaN(d.getTime())) return isoDate;
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  const month = d.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' });
-  return `${day} ${month} ${d.getUTCFullYear()}`;
 }
 
 function safeToken(value: string): string {

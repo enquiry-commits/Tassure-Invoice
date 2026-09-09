@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, Loader2, FileSignature, Download } from 'lucide-react';
 import type { PostIncorporateCompany, PostIncorporateDirector, PostIncorporateShareholder } from '@/lib/docx-post-incorporate';
+import { formatDisplayDate } from '@/lib/date';
 
 const ID_TYPES_DIRECTOR = ['NRIC', 'PASSPORT', 'FIN'];
 const ID_TYPES_SHAREHOLDER = ['NRIC', 'PASSPORT', 'FIN', 'UEN'];
@@ -235,6 +236,11 @@ export default function PostIncorporatePage() {
 
   const [bizfileLoading, setBizfileLoading] = useState(false);
   const [bizfileMessage, setBizfileMessage] = useState<string | null>(null);
+  // Drag-and-drop for the Bizfile PDF, alongside the existing click-to-
+  // upload — same dragActive/onDragOver/onDragLeave/onDrop pattern already
+  // used for My Tasks chat's own attachment drop zone
+  // (app/my-tasks/page.tsx), reused here rather than re-derived.
+  const [bizfileDragActive, setBizfileDragActive] = useState(false);
 
   async function handleBizfileUpload(file: File) {
     setBizfileLoading(true);
@@ -535,12 +541,26 @@ export default function PostIncorporatePage() {
           Upload the company&apos;s ACRA Bizfile Business Profile (text-based PDF, not a scan) to pre-fill company info,
           Directors, and Shareholders directly from the official registry extract.
         </p>
-        <label className="flex items-center gap-2 rounded-md bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium px-4 py-2 w-fit cursor-pointer">
-          {bizfileLoading ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
-          {bizfileLoading ? 'Parsing…' : 'Upload Bizfile PDF'}
-          <input type="file" accept="application/pdf" className="hidden" disabled={bizfileLoading}
-            onChange={e => { const f = e.target.files?.[0]; if (f) handleBizfileUpload(f); e.target.value = ''; }} />
-        </label>
+        <div
+          onDragOver={e => { e.preventDefault(); if (!bizfileLoading) setBizfileDragActive(true); }}
+          onDragLeave={e => { e.preventDefault(); setBizfileDragActive(false); }}
+          onDrop={e => {
+            e.preventDefault();
+            setBizfileDragActive(false);
+            if (bizfileLoading) return;
+            const f = e.dataTransfer.files?.[0];
+            if (f) handleBizfileUpload(f);
+          }}
+          className={`rounded-md border-2 border-dashed p-4 w-fit transition-colors ${bizfileDragActive ? 'border-blue-400 bg-blue-50' : 'border-transparent'}`}
+        >
+          <label className="flex items-center gap-2 rounded-md bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium px-4 py-2 w-fit cursor-pointer">
+            {bizfileLoading ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
+            {bizfileLoading ? 'Parsing…' : 'Upload Bizfile PDF'}
+            <input type="file" accept="application/pdf" className="hidden" disabled={bizfileLoading}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleBizfileUpload(f); e.target.value = ''; }} />
+          </label>
+          <p className="text-xs text-slate-400 mt-1.5">{bizfileDragActive ? 'Drop the PDF to upload' : 'or drag a PDF file here'}</p>
+        </div>
         {bizfileMessage && <p className="text-sm text-slate-500 mt-2">{bizfileMessage}</p>}
       </section>
 
@@ -550,7 +570,20 @@ export default function PostIncorporatePage() {
         <div className="grid grid-cols-2 gap-4">
           <Field label="Company Name 企业名称"><input className={inputClass} value={company.name} onChange={e => setCompany({ ...company, name: e.target.value })} /></Field>
           <Field label="Company UEN 公司注册编号"><input className={inputClass} value={company.uen} onChange={e => setCompany({ ...company, uen: e.target.value })} /></Field>
-          <Field label="Incorporation Date 成立日期"><input type="date" className={inputClass} value={company.regDate} onChange={e => setCompany({ ...company, regDate: e.target.value })} /></Field>
+          <Field label="Incorporation Date 成立日期">
+            <div className="flex items-center gap-2">
+              <input type="date" className={inputClass} value={company.regDate} onChange={e => setCompany({ ...company, regDate: e.target.value })} />
+              {/* The native date picker's own displayed format is entirely
+                  browser/OS-locale-controlled (no way for app code to make
+                  it show a spelled-out month) — this label shows the actual
+                  format used everywhere else in the system and in generated
+                  documents ("21 August 2026"), matching what Vincent
+                  expects to see, while the picker underneath stays ISO for
+                  editing and downstream date math (formatDisplayDate /
+                  calcSecServiceEndDate both require it). */}
+              {company.regDate && <span className="text-xs text-slate-500 whitespace-nowrap">{formatDisplayDate(company.regDate)}</span>}
+            </div>
+          </Field>
           <Field label="Company Type 公司类型"><input className={inputClass} value={companyExtra.companyType} onChange={e => setCompanyExtra({ ...companyExtra, companyType: e.target.value })} /></Field>
         </div>
 

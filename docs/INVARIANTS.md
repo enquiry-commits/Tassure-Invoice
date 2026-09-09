@@ -146,42 +146,85 @@ again.
   one-off regex somewhere else.
   *(source: 2026-09-07.)*
 - **INV-TW-019** — A Bizfile Officer(s)/Shareholder(s) table that doesn't fit
-  on one PDF page continues onto the next page WITHOUT repeating its own
-  section heading — the old per-page loop in `parseBizfilePages()` only ever
-  looked at the ONE page containing the heading text and used `shareholders =
-  extractShareholdersFromItems(...)` (assignment, not merge), so every row
-  that spilled onto a continuation page was silently dropped. Confirmed on a
-  real Bizfile (LAKEFILL VENTURES PTE. LTD., 2026-09-09, 5 shareholders with
-  long overseas addresses): only 2 of 5 shareholders were detected, and the
-  result looked like a complete (if small) table, not an obvious failure —
-  this is the kind of bug that passes a casual glance. Fixed by
-  `collectSectionItems()`, which walks forward from the heading's page,
-  merging in every following page that doesn't start a different known
-  section, until hitting the section's own real terminator (the next
-  section's heading, or — for Shareholder(s) — the "Includes
-  nationality.../Abbreviation" footnote ACRA always prints after the table);
-  each later page's Y is offset by a large fixed step so the existing
+  on one PDF page continues onto the next page — the old per-page loop in
+  `parseBizfilePages()` only ever looked at the ONE page containing the
+  heading text and used `shareholders = extractShareholdersFromItems(...)`
+  (assignment, not merge), so every row that spilled onto a continuation page
+  was silently dropped. Confirmed on a real Bizfile (LAKEFILL VENTURES PTE.
+  LTD., 2026-09-09, 5 shareholders with long overseas addresses): only 2 of 5
+  shareholders were detected, and the result looked like a complete (if
+  small) table, not an obvious failure — this is the kind of bug that passes
+  a casual glance. The actual page-continuation signal took TWO attempts to
+  get right against the real document: a first version walked forward until
+  hitting the section's own "terminator" (the next section's heading, or —
+  for Shareholder(s) — the "Includes nationality.../Abbreviation" footnote)
+  — but ACRA reprints BOTH the section heading AND that footnote on EVERY
+  page a multi-page table spans, not just once at the true end, so that
+  version stopped one page too early (found only 3 of 5). The reliable
+  signal, confirmed against the real document: a page belongs to the same
+  table's continuing run if and only if it REPEATS the exact same section
+  heading text; the run ends at the first page that doesn't (this also
+  correctly handles a table that fits on ONE page with no continuation at
+  all — the very next page starting a different, unrelated section is never
+  mistaken for a continuation). `collectSectionItems()` implements this,
+  offsetting each later page's Y by a large fixed step so the existing
   Y-based row/column logic keeps working unmodified across the page
   boundary. Any future Bizfile table extractor must go through this same
   page-merging helper, never assume a table's heading page is the whole
-  table. *(source: 2026-09-09, `lib/bizfile-parse.ts`.)*
+  table, and never assume a page's own repeated heading/footnote text means
+  the table ends there. *(source: 2026-09-09, `lib/bizfile-parse.ts`.)*
 - **INV-TW-020** — The Capital table's Currency cell can wrap onto its own
   PDF line when the currency's full name is long ("UNITED STATES OF AMERICA
   DOLLAR" vs. the shorter "SINGAPORE DOLLAR" `parseCapitalTable()` was
   originally written against) — the old code read exactly ONE line after the
   heading and split it by tab assuming 4 cells, so a wrapped currency
   silently truncated mid-word and Share Type (whichever line it wrapped onto)
-  came back empty. Confirmed on the same real Bizfile as INV-TW-019: Currency
-  showed "UNITED STATES OF", Share Type showed blank; correct values were
-  "UNITED STATES OF AMERICA DOLLAR" / "ORDINARY". Fixed by reading forward
-  across up to 5 lines (stopping at the next real `Label\t:value` field or
-  known section heading) as one continuous stream of whitespace-separated
-  tokens: first 2 tokens are Amount/Number of Shares (plain numbers, never
-  wrap), the LAST token is Share Type (a single word on every real sample
-  seen so far), everything between is Currency. A Share Type with its own
-  multi-word qualifier (e.g. ACRA's "PREFERENCE (REDEEMABLE)") is a known
-  remaining gap — flag it if a real sample ever turns up.
-  *(source: 2026-09-09, `lib/bizfile-parse.ts`.)*
+  came back empty. A first fix (read forward up to 5 lines, stop at the next
+  `Label\t:value` field or known heading) was ALSO wrong against the real
+  document: ACRA prints an explanatory footnote sentence directly below the
+  table ("Number of Shares includes number of Treasury Shares") that matches
+  neither stop condition, so that version swallowed it as more cell data too
+  (Currency came back as "...DOLLAR ORDINARY Number of Shares includes
+  number of Treasury", Share Type as "Shares"). The real, reliable stop
+  signal: every genuine cell value (however many lines it wraps across) is
+  ALL-CAPS; the footnote sentence that follows always has lowercase
+  connector words ("includes", "of", "the") — checked from the second data
+  line onward, since the first is always numbers/tabs. First 2 tokens
+  collected are Amount/Number of Shares, the LAST token is Share Type (a
+  single word on every real sample seen so far — "ORDINARY"), everything
+  between is Currency. A Share Type with its own multi-word qualifier (e.g.
+  ACRA's "PREFERENCE (REDEEMABLE)") is a known remaining gap — flag it if a
+  real sample ever turns up. *(source: 2026-09-09, `lib/bizfile-parse.ts`.)*
+- **INV-TW-021** — Every ACRA Bizfile PDF page repeats a fixed disclaimer/
+  print-date header block at its TOP ("ACCOUNTING AND CORPORATE REGULATORY
+  AUTHORITY", "Business Profile (Company) of...", the document's own print
+  date) and, on a continuation page of a multi-page Officer(s)/Shareholder(s)
+  table, ALSO repeats that table's own column-header row (Name/Address/
+  Identification Number/Nationality/.../Currency) — none of it is real row
+  data, but nothing excluded it once INV-TW-019's page-merging started
+  pulling continuation pages' items into the same coordinate space: whichever
+  row sits nearest a page boundary got this junk appended to its
+  address/ID/nationality/currency (confirmed on a real document: a director's
+  ID/nationality/date fields, and a shareholder's currency value, each ended
+  up with fragments of the adjoining page's header). Column headers ALSO
+  carry their own reference-number superscripts ("Number of Shares³") that
+  float ~4.5pt above whichever line they annotate (same offset
+  `ROW_BOUNDARY_EPSILON` already documents for row-level superscripts) — and
+  a table's own closing footnote (see INV-TW-020's "Number of Shares
+  includes...") carries the same kind of superscript too. Fixed with 3
+  distinct exclusion mechanisms in `lib/bizfile-parse.ts`, each necessary
+  (removing any one reintroduced real contamination when tested against the
+  real document): `HEADER_ITEM_PATTERNS` (the disclaimer block, stripped from
+  every page except the section's own first) + `TABLE_HEADER_LABELS` (the
+  repeated column-header words, stripped from every page except the first)
+  + `stripSuperscriptNoise()` (the bare 1-2-digit superscripts near either a
+  footnote or a header label, stripped from EVERY page including the first —
+  unlike the other two, a table's own footnote/header superscript on its OWN
+  first page is ALSO not real data when more pages follow). Any future
+  change to this page-merging logic must re-verify against a real multi-page
+  sample, not just a synthetic one — every one of these 3 exclusions was
+  found by testing the actual LAKEFILL VENTURES PDF, not by reasoning about
+  the code alone. *(source: 2026-09-09, `lib/bizfile-parse.ts`.)*
 
 ## AR/AGM cycle & ar_reminder data lifecycle (INV-AR)
 
@@ -374,6 +417,22 @@ again.
   already one of them), never a blind default. *(source: 2026-09-09,
   confirmed on a real company, LAKEFILL VENTURES PTE. LTD. — Vincent: "我之
   前一直误解了我把ND 当成是 NOMINATOR".)*
+- **INV-DOC-006** — `lib/docx-post-incorporate.ts` (and `lib/docx-xml.ts`
+  underneath it) is a SERVER-ONLY module (`import fs from 'fs'`, `PizZip`) —
+  importing even ONE plain value from it (not a `type`-only import) into a
+  client component pulls the whole module, `fs` included, into the browser
+  bundle and breaks `next build` with "Module not found: fs". Confirmed
+  real: `app/post-incorporate/page.tsx` needed `formatDisplayDate()` (a
+  small, pure, dependency-free function) purely for on-screen display, which
+  broke the build the moment it was imported this way. Fixed by moving that
+  one function to `lib/date.ts` (already browser-safe, already imported by
+  several client pages) instead of trying to import it from
+  `docx-post-incorporate.ts`. Any future helper needed by BOTH a Post
+  Incorporate client page and the server-side document generator must live
+  in a dependency-free shared module (`lib/date.ts` or a new one), never be
+  pulled through `docx-post-incorporate.ts`/`docx-xml.ts` itself — `import
+  type { ... }` from those two files is fine (erased at compile time), a
+  real value import is not.
 
 ## Automation & cron reliability (INV-CRON)
 

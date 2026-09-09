@@ -83,9 +83,8 @@ export async function GET(req: NextRequest) {
   // Company 360's own FYE display) — that this route never queried before,
   // so the field always came back month-only ("DEC") even though the day was
   // already sitting in Supabase. Confirmed real bug (LAKEFILL VENTURES,
-  // 2026-09-09): field should show "31/12", showed "DEC". Falls back to
-  // month-only when no day is on record (a real, if less common, case),
-  // rather than blanking the whole field.
+  // 2026-09-09). Falls back to month-only when no day is on record (a real,
+  // if less common, case), rather than blanking the whole field.
   const fyeMonthRaw = ((masterRow as { fye?: string } | null)?.fye || (companyRow as { fye_month?: string } | null)?.fye_month || '').trim();
   const fyeMonthOnly = /^[A-Za-z]+$/.test(fyeMonthRaw) ? fyeMonthRaw : '';
   const fyeDay = (companyRow as { fye_day?: number | null } | null)?.fye_day ?? null;
@@ -99,8 +98,16 @@ export async function GET(req: NextRequest) {
   const fyeMonthIndex = fyeMonthOnly
     ? MONTH_NAMES.findIndex(m => m.toLowerCase().slice(0, 3) === fyeMonthOnly.toLowerCase().slice(0, 3))
     : -1;
+  // The field's own label says "(DD/MM)" but the format Vincent actually
+  // wants matches the rest of this form's spelled-out dates ("21 August
+  // 2026" for Incorporation Date) — "31 December", day-number space
+  // full-month-name, not a "31/12" slash format. Zero-padded day to match
+  // `lib/docx-post-incorporate.ts`'s own `formatDisplayDate()` convention.
+  // This value is used VERBATIM in generated documents
+  // (`finperiod_enddate`/`first_finperiod_enddate`), not just shown on
+  // screen, so the format matters beyond this page.
   const financialYearEndDayMonth = fyeDay && fyeMonthIndex !== -1
-    ? `${String(fyeDay).padStart(2, '0')}/${String(fyeMonthIndex + 1).padStart(2, '0')}`
+    ? `${String(fyeDay).padStart(2, '0')} ${MONTH_NAMES[fyeMonthIndex]}`
     : fyeMonthOnly;
 
   const ndNameById = new Map(((ndPeople ?? []) as { id: number; name: string }[]).map(p => [p.id, p.name]));
