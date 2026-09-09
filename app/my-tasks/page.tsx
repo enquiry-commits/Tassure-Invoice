@@ -1338,7 +1338,7 @@ export default function MyTasksPage() {
                         <picture>
                           <source media="(prefers-reduced-motion: reduce)" srcSet="/my-tasks-thinking-still.png" />
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src="/my-tasks-thinking.gif" alt="" width={82} height={97} style={{ display: 'block', objectFit: 'contain' }} />
+                          <img src="/my-tasks-thinking.gif" alt="" width={160} height={96} style={{ display: 'block', objectFit: 'contain' }} />
                         </picture>
                       </div>
                     )}
