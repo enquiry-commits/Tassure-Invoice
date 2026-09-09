@@ -1,5 +1,7 @@
 # TASSURE Invoice - Shared Project Status
 
+Local UI sizing (2026-09-09): increased querying GIF display to 240x144 (1.5x), with responsive width. Original playback speed unchanged. White-background removal is not included and remains pending.
+
 Local UI replacement (2026-09-09): replaced the querying-state robot with supplied Mid-Autumn Festival (3).gif, preserving the complete robot-and-person artwork and original background. Optimized to 320x192, displayed at 160x96, looping at original speed (12 seconds per cycle), per Vincent's latest clarification. Updated reduced-motion still; empty-chat robot unchanged. Not yet pushed.
 
 Local UI adjustment (2026-09-09): moved the empty-chat robot 16px upward using a visual transform, keeping the My Tasks heading and subtitle in their original positions. Querying animation unchanged. Not yet pushed.
