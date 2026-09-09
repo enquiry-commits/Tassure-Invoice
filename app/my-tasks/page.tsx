@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   AlertTriangle, CalendarClock, Clock, ListChecks, RefreshCw, Sparkles,
-  Plus, Pin, Trash2, Send, Bot, MessageSquare, Activity, FileCheck2, X,
+  Plus, Pin, Trash2, Send, MessageSquare, Activity, FileCheck2, X,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { RichText } from '@/components/assistant/ChatRichText';
@@ -1246,7 +1246,12 @@ export default function MyTasksPage() {
                       right for the floating widget (matches every other
                       page's guide there), just not for this page's own new,
                       deliberately minimal empty state. */}
-                  <Bot size={28} color="#94a3b8" style={{ marginBottom: 10 }} />
+                  <picture style={{ display: 'block', width: 80, height: 97, marginBottom: 10 }}>
+                    <source media="(prefers-reduced-motion: reduce)" srcSet="/my-tasks-robot-still.png" />
+                    {/* Animated WebP preserves the source animation and transparent background. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/my-tasks-robot.webp" alt="" width={80} height={97} style={{ display: 'block', objectFit: 'contain' }} />
+                  </picture>
                   <div style={{ fontSize: 15, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
                   <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20 }}>Ready when you are.</div>
                   <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 560 }}>
