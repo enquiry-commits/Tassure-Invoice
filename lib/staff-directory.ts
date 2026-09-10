@@ -32,6 +32,36 @@ export type StaffTeam =
   | 'Partners' | 'Management' | 'Corporate Secretarial' | 'Corporate Secretarial (Malaysia)'
   | 'Accounting' | 'Tax' | 'Audit';
 
+// Rank governs ONE thing: who may ask the assistant about a person's own
+// activity / whereabouts / operations (Vincent's spec, 2026-09-10). It does
+// NOT gate client data, invoicing, arrears or any other feature — those are
+// open to everyone. See lib/person-visibility.ts.
+//   owner       — Vincent. Visible to no one but himself.
+//   partner     — visible only to the owner (partners cannot see each other).
+//   leader      — visible to owner + partners + other leaders.
+//   staff       — visible to every other staff/leader/partner/owner.
+// (Chelsea was briefly a separate 'transparent' tier; Vincent 2026-09-10:
+// "还是把 Chelsea 放进去 Staff 吧" — she is plain staff.)
+export type PersonRank = 'owner' | 'partner' | 'leader' | 'staff';
+const RANK_BY_EMAIL: Record<string, PersonRank> = {
+  'vincent@tassure.com': 'owner',
+  'cindyzhang@tassure.com': 'partner',
+  'samuellng@tassure.com': 'partner',
+  'yeesoon@tassure.com': 'partner',
+  'leonard.lee@tassure.com': 'partner',
+  'siokfieng@tassure.com': 'partner',
+  'jaytay@tassure.com': 'leader',
+  'hoechyi@tassure.com': 'leader',
+  'sengxin@tassure.com': 'leader',
+  'clarencesaw@tassure.com': 'leader',
+  'lina@tassure.com': 'leader',
+  'felicia@tassure.com': 'leader',
+};
+export function rankForEmail(email: string | null | undefined): PersonRank {
+  if (!email) return 'staff';
+  return RANK_BY_EMAIL[email.toLowerCase()] ?? 'staff';
+}
+
 interface StaffEntry {
   name: string;
   email: string;

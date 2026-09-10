@@ -1,6 +1,6 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase';
-import { staffByTeam, formatStaffNameList, type StaffTeam } from '@/lib/staff-directory';
+import { staffByTeam, formatStaffNameList, rankForEmail, type StaffTeam, type PersonRank } from '@/lib/staff-directory';
 import { pageAll } from '@/lib/page-all';
 
 /**
@@ -19,6 +19,7 @@ import { pageAll } from '@/lib/page-all';
 export type RosterMember = {
   name: string;
   email: string;
+  rank: PersonRank;
   // Companies currently assigned to this person in the column that matches
   // their team (Secretary → pic, Accounting → acc_pic, Tax → tax_pic).
   // null for teams with no AR column (Partners, Management, Audit).
@@ -71,6 +72,7 @@ export async function getTeamRoster(): Promise<TeamRosterResult> {
       members: members.map(m => ({
         name: m.name,
         email: m.email,
+        rank: rankForEmail(m.email),
         companyLoad: col ? (load[col].get(m.name) ?? 0) : null,
       })),
     };

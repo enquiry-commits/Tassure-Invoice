@@ -28,6 +28,7 @@ import { previewCompanyUpdate, type CompanyUpdatePreview, type CompanyUpdateFiel
 import { previewTaoBilling, type TaoPreview } from '@/lib/tao-lookup';
 import { getTeamActivity } from '@/lib/team-activity';
 import { getTeamRoster } from '@/lib/team-roster';
+import { canSeePersonActivity, personActivityFilter, callerRank } from '@/lib/person-visibility';
 import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
@@ -515,9 +516,8 @@ async function arUpdatePreviewTool(account: ApprovedAccount | null, input: Recor
 // (verified: Vincent gets everAssigned=false). See lib/firm-pulse.ts.
 async function firmPulseTool(account: ApprovedAccount | null) {
   if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
-  if (!account.canViewAsOthers) {
-    return { error: true as const, message: `${account.name}'s account only has visibility of their own work — use my_tasks_summary for that. A firm-wide overview is limited to management accounts.` };
-  }
+  // Open to every account (2026-09-10): this is deadlines and money owed —
+  // client-facing data, which Vincent's permission model leaves unrestricted.
   const pulse = await getFirmPulse();
   return {
     ...pulse,
@@ -613,13 +613,24 @@ async function taoBillingTool(account: ApprovedAccount | null, input: Record<str
 // enriches it with live per-person load from ar_reminder. See lib/team-roster.ts.
 async function teamRosterTool(account: ApprovedAccount | null) {
   if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
-  if (!account.canViewAsOthers) {
-    return { error: true as const, message: `${account.name}'s account only has visibility of their own work — the firm's team roster is limited to management accounts.` };
-  }
   const roster = await getTeamRoster();
+  // The org structure (names, teams) is open to everyone. But companyLoad is
+  // "what a person is responsible for" — for a caller below leader rank,
+  // redact it on leader-and-above members (Vincent's model: staff cannot
+  // learn what a Leader/Partner handles at the person level).
+  const rank = callerRank(account.email);
+  const seesLoad = rank === 'owner' || rank === 'partner' || rank === 'leader';
+  const redacted = !seesLoad;
+  if (redacted) {
+    for (const t of roster.teams) {
+      for (const m of t.members) {
+        if (m.rank === 'leader' || m.rank === 'partner' || m.rank === 'owner') m.companyLoad = null;
+      }
+    }
+  }
   return {
     ...roster,
-    note: 'The department roster is AUTHORITATIVE — hand-maintained by Vincent, not guessed from who does what. The team names are: Partners, Management, Corporate Secretarial, Corporate Secretarial (Malaysia), Accounting, Tax, Audit. companyLoad next to a Secretary/Accounts/Tax person is roughly how many AR cycles they currently carry (a size cue, not a formal caseload). Partners/Management/Audit have no companyLoad — do not invent one. The nomineeDirectorRoster is a SEPARATE thing: people who act as a nominee director for clients (mostly not staff), with their active appointment count — only bring it up if the user asked about ND / nominee directors specifically. Answer per HOW TO ANSWER: lead with a one-line shape of the org, then a bold heading per team with its members (and load where it means something), and only spell out Audit/Partners as plain name lists.',
+    note: (redacted ? 'This caller is below leader rank: companyLoad has been removed for every leader/partner/owner — do NOT state or estimate what any of them is responsible for or how much they carry; just list who is in each team. ' : '') + 'The department roster is AUTHORITATIVE — hand-maintained by Vincent, not guessed from who does what. The team names are: Partners, Management, Corporate Secretarial, Corporate Secretarial (Malaysia), Accounting, Tax, Audit. companyLoad next to a Secretary/Accounts/Tax person is roughly how many AR cycles they currently carry (a size cue, not a formal caseload). Partners/Management/Audit have no companyLoad — do not invent one. The nomineeDirectorRoster is a SEPARATE thing: people who act as a nominee director for clients (mostly not staff), with their active appointment count — only bring it up if the user asked about ND / nominee directors specifically. Answer per HOW TO ANSWER: lead with a one-line shape of the org, then a bold heading per team with its members (and load where it means something), and only spell out Audit/Partners as plain name lists.',
   };
 }
 
@@ -630,14 +641,27 @@ async function teamRosterTool(account: ApprovedAccount | null) {
 // 真正在干嘛 做了什么".
 async function teamActivityTool(account: ApprovedAccount | null, input: Record<string, unknown>) {
   if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
-  if (!account.canViewAsOthers) {
-    return { error: true as const, message: `${account.name}'s account can only see their own activity — a team-wide view is limited to management accounts. Use my_activity_pattern or recent_activity_summary for themselves.` };
-  }
   const days = typeof input.days === 'number' && input.days > 0 ? Math.min(Math.round(input.days), 90) : 1;
   // The asker is excluded by default: a manager asking what the team did
   // does not mean themselves. includeMe:true overrides it.
   const excludeEmail = input.includeMe === true ? null : account.email;
-  const result = await getTeamActivity(days, excludeEmail);
+  const raw = await getTeamActivity(days, excludeEmail);
+  // No hard gate — instead, drop the people this caller is not allowed to
+  // see (Vincent's model: staff still get a real answer, just without the
+  // higher-ranked people). A management caller loses nobody.
+  const canSee = personActivityFilter(account.email);
+  const visibleItems = raw.items.filter(i => canSee(i.email));
+  const hiddenPeople = new Set(raw.items.filter(i => !canSee(i.email)).map(i => i.person));
+  const result = {
+    ...raw,
+    items: visibleItems,
+    totalItems: visibleItems.length,
+    byPerson: raw.byPerson.filter(p => canSee(p.email)),
+    quiet: visibleItems.length === 0,
+  };
+  const hiddenNote = hiddenPeople.size
+    ? ` ${hiddenPeople.size} other ${hiddenPeople.size === 1 ? 'person was' : 'people were'} active in this window but are above ${account.name}'s visibility — do NOT name them or hint at what they did; if the user asks, say only that some activity is not visible to their account. The companies/changes themselves are still open to ask about individually.`
+    : '';
   return {
     ...result,
     note: `REAL work the team did, now FIELD-LEVEL. Each item has a \`detail\` string already written for a human ("SILVER RIVER TECHNOLOGY — Received back → 2026-09-10, XBRL → NO, Remarks LATE → AR COMPLETED") and a \`changes\` array behind it — AR Reminder edits come from ar_reminder_audit, Master List / Trademark from audit_log, both with the actual before → after per field. Invoices / sent emails / campaigns / Post Incorporate are creations, so their detail is the invoice number / amount / name. This is NOT page-view tracking; never mix visit counts in, never present a visit as work. ${excludeEmail ? `${account.name} (the person asking) is deliberately EXCLUDED — do not mention their own activity or note their absence, it is intentional. ` : ''}${result.automatedItems > 0 ? `${result.automatedItems} further writes came from automated syncs and were filtered out — not anyone's work; mention only if the user asks why a number looks low. ` : ''}${result.quiet ? 'NOBODY produced anything in this window: say that plainly. ' : ''}Follow HOW TO ANSWER in the system prompt: read all of this, work out what each person was actually DOING (the pattern — clearing annual returns, chasing AGMs, onboarding — not the field names), and say it in plain sentences. Lead with the one-line takeaway. Name what is notable (a PIC reassigned, a company handled differently from the rest). Do NOT reproduce this result's per-person counts or "（N 项，最新 HH:MM）" style headers — that is transcription, not an answer. Go field-by-field only when the user asked about one specific company or one specific person.`,
@@ -934,8 +958,9 @@ async function myTasksSummary(account: ApprovedAccount | null, personQuery?: str
       return { signed_in: true as const, staff_name: account.name, person_not_found: true as const, message: `Could not match "${personQuery}" to a known staff account — tell the user plainly you don't recognize that name rather than guessing whose tasks to show.` };
     }
     if (mentioned.email !== account.email) {
-      if (!account.canViewAsOthers) {
-        return { signed_in: true as const, staff_name: account.name, permission_denied: true as const, message: `${account.name} does not have permission to view another staff member's tasks — that is limited to management accounts. Tell the user plainly they can only ask about their own tasks, do not reveal ${mentioned.name}'s data.` };
+      const vis = canSeePersonActivity(account.email, mentioned.email);
+      if (!vis.allowed) {
+        return { signed_in: true as const, staff_name: account.name, permission_denied: true as const, message: `${vis.reason} Do not reveal ${mentioned.name}'s personal task list — but if the user actually wants status on a specific company, answer that.` };
       }
       target = mentioned;
     }
@@ -986,11 +1011,14 @@ async function myActivityPattern(account: ApprovedAccount | null) {
 // PAGE only — a narrower, admin-only UI, not this general capability).
 async function activeUsersToday(account: ApprovedAccount | null, days?: number) {
   if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
-  if (!account.canViewAsOthers) {
-    return { error: true as const, message: `${account.name} does not have permission to see company-wide activity — that is limited to management accounts. Tell the user plainly they can only see their own activity (my_activity_pattern).` };
-  }
   const rangeDays = days && days > 0 ? Math.min(days, 30) : 1;
   const summary = await getCompanyActivitySummary(rangeDays);
+  // Same treatment as team_activity: no hard gate, just drop the people this
+  // caller may not see. These are page-visit counts, not real work, but a
+  // higher-ranked person's presence is still "行踪".
+  const canSee = personActivityFilter(account.email);
+  const hiddenCount = summary.byPerson.filter(p => !canSee(p.email)).length;
+  summary.byPerson = summary.byPerson.filter(p => canSee(p.email));
   if (!summary.totalEvents) {
     return { no_data: true as const, range_days: rangeDays, message: `No activity recorded in the last ${rangeDays} day(s) — tracking only started 2026-09-08, so this could mean genuinely nobody used the system, or just that nothing was tracked yet. Say so honestly, don't guess.` };
   }
@@ -1003,6 +1031,7 @@ async function activeUsersToday(account: ApprovedAccount | null, days?: number) 
     // given only "hoechyi@tassure.com" the model rendered the colleague as
     // "Ho Echyi" instead of "Lim Hoe Chyi". A name is a fact we hold
     // (lib/approved-accounts.ts), never something to rebuild from an address.
+    hidden_higher_rank_count: hiddenCount || undefined,
     active_users: summary.byPerson.map(p => ({
       name: getApprovedAccount(p.email)?.name ?? p.email,
       email: p.email,
@@ -1032,8 +1061,9 @@ async function recentActivitySummary(account: ApprovedAccount | null, personQuer
       return { signed_in: true as const, staff_name: account.name, person_not_found: true as const, message: `Could not match "${personQuery}" to a known staff account — tell the user plainly you don't recognize that name rather than guessing whose activity to show.` };
     }
     if (mentioned.email !== account.email) {
-      if (!account.canViewAsOthers) {
-        return { signed_in: true as const, staff_name: account.name, permission_denied: true as const, message: `${account.name} does not have permission to view another staff member's activity — that is limited to management accounts. Tell the user plainly they can only ask about their own activity, do not reveal ${mentioned.name}'s data.` };
+      const vis = canSeePersonActivity(account.email, mentioned.email);
+      if (!vis.allowed) {
+        return { signed_in: true as const, staff_name: account.name, permission_denied: true as const, message: `${vis.reason} Do not describe what ${mentioned.name} personally did — but the specific companies and changes are open: if the user names a company, or asks "what changed on X", answer that.` };
       }
       target = mentioned;
     }
@@ -1363,7 +1393,9 @@ ${PAGES.map(p => `- ${p.label}: ${p.href}`).join('\n')}
 
 When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location given in the next message.
 
-Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. If it returns counts.total 0, check everAssigned before answering: everAssigned false means this account has NEVER been PIC on anything (typical for management/owner accounts who aren't caseworkers) — say that plainly, don't say "you're all caught up" (which wrongly implies work existed and got done). everAssigned true with total 0 means genuinely caught up. If the user asks about a DIFFERENT staff member's tasks instead of their own (e.g. "如果我是HC，我要做什么今天？", "Show me Cindy's tasks", "HC 今天有什么任务") pass that person's name/nickname/initials as the tool's optional "person" argument — ALWAYS actually call the tool for this, every single time a different person's name comes up, even a second/third name in the same conversation right after a previous person's query — never answer "no permission" (or anything else) from memory of how a similar-looking request went earlier; the tool itself, not your own guess, is what determines whether this account is allowed to see someone else's tasks (a management-only permission) and returns an explicit refusal or "not found" message when it can't proceed — relay THAT message honestly and do not fall back to answering about the caller instead, and never invent or guess another person's task data (or a permission refusal) yourself. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Use recent_activity_summary for "what has X actually been doing" / "what's Chelsea been up to" style questions, INCLUDING open-ended ones like "根据她最近做的东西，判断她接下来会做什么" (based on her recent activity, predict what she'll likely do next) — call the tool to get the real data, then reason over it yourself; don't just recite the raw counts back. It reads real audit-trail history (invoices, AR edits, campaigns, Master List, sent emails, ...) that predates today, unlike my_activity_pattern's page-view tracking; it also accepts an optional "person" argument with the same management-only permission as my_tasks_summary. Never guess whose tasks or habits are whose from name alone.
+WHO MAY ASK ABOUT WHOM (personal activity only — this restricts NOTHING about client data, companies, invoicing, arrears, SOA, deadlines; every account can use all of that in full). It applies only to questions about a PERSON's own tasks / activity / whereabouts / "what did X do" / "what is X responsible for". Ranks: Vincent (owner) — no one may look up his activity. Partners (Cindy, Samuell, Yee Soon, Leonard, Teo Siok Fieng) — only Vincent may; partners cannot see each other. Leaders (Jay Tay, Lim Hoe Chyi, Hoo Seng Xin, Clarence Saw, Lina Chan, Felicia Chee) — Vincent, partners and OTHER leaders may. Everyone else (all remaining staff, including Chelsea) — any of them may look up any other, they can see each other freely. The TOOLS enforce this; when one returns permission_denied, relay its message and STOP trying to get that person's activity another way — but the same request rephrased as a company question ("what changed on <company>") is fine and you should offer it. team_activity / active_users_today silently drop people the caller may not see and tell you how many were hidden — never name a hidden person or hint at what they did.
+
+Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. If it returns counts.total 0, check everAssigned before answering: everAssigned false means this account has NEVER been PIC on anything (typical for management/owner accounts who aren't caseworkers) — say that plainly, don't say "you're all caught up" (which wrongly implies work existed and got done). everAssigned true with total 0 means genuinely caught up. If the user asks about a DIFFERENT staff member's tasks instead of their own (e.g. "如果我是HC，我要做什么今天？", "Show me Cindy's tasks", "HC 今天有什么任务") pass that person's name/nickname/initials as the tool's optional "person" argument — ALWAYS actually call the tool for this, every single time a different person's name comes up, even a second/third name in the same conversation right after a previous person's query — never answer "no permission" (or anything else) from memory of how a similar-looking request went earlier; the tool itself, not your own guess, is what determines whether this account is allowed to see someone else's tasks (the rank rules in WHO MAY ASK ABOUT WHOM above) and returns an explicit refusal or "not found" message when it can't proceed — relay THAT message honestly and do not fall back to answering about the caller instead, and never invent or guess another person's task data (or a permission refusal) yourself. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Use recent_activity_summary for "what has X actually been doing" / "what's Chelsea been up to" style questions, INCLUDING open-ended ones like "根据她最近做的东西，判断她接下来会做什么" (based on her recent activity, predict what she'll likely do next) — call the tool to get the real data, then reason over it yourself; don't just recite the raw counts back. It reads real audit-trail history (invoices, AR edits, campaigns, Master List, sent emails, ...) that predates today, unlike my_activity_pattern's page-view tracking; it also accepts an optional "person" argument, gated by the WHO MAY ASK ABOUT WHOM ranks above (not a flat management-only check). Never guess whose tasks or habits are whose from name alone.
 
 Use the remember_this tool ONLY when the user EXPLICITLY asks you to remember, note, or keep in mind something for the future (e.g. "记住...", "以后都...", "remember that I..."). Never call it just because something seems noteworthy from the conversation's tone — a single passing remark is not a durable preference, and this tool writes something that will keep influencing future conversations.
 
@@ -1462,7 +1494,7 @@ const CLAUDE_TOOLS = [
   { name: 'search_company', description: 'NARROW quick lookup by (partial) name — returns ONLY: status, FYE month, 3 service flags, PIC, active nominee directors, and the last 2 AR reminder rows, for up to 5 name matches. Use it ONLY to disambiguate a name or answer exactly those basics. For ANYTHING else about a specific company — directors/secretary/shareholders, trademarks, invoice or document history, contact email, whether they are still a client, how far their annual return has got — use company_deep_lookup instead, which has all of it; do NOT answer "I don\'t have that" off this tool\'s thin result. To find WHICH companies match a filter (a PIC\'s portfolio, a service, an FYE month), use list_companies. NOTE: the ar_reminders field this returns is Annual Return FILING status ("Pending"/"Filed") — it has nothing to do with whether the company owes money. Never use it to answer an outstanding-balance/arrears question; use check_outstanding_balance for that instead.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
   { name: 'check_outstanding_balance', description: "REAL, live QuickBooks outstanding-balance / arrears check for ONE SPECIFIC company (TAB + TAC + TAO combined) — the exact same computation Company 360's own Outstanding section and the /billing/soa pages use. Use this whenever the user names a company and asks whether IT owes money / has arrears / has an outstanding balance (欠款/未付/outstanding), or wants to generate/download/send an SOA (Statement of Account) for it — never answer from search_company or any other tool, and never guess. For a COMPANY-WIDE total across all customers (e.g. \"TAB 的欠款总数是多少\"), use outstanding_balance_summary instead — this tool cannot answer that. Returns hasOutstanding, the real total, and a breakdown per QuickBooks company (total, invoice count, oldest aging bucket, the real unpaid invoice numbers/due dates, who owns chasing it, and a real soa_link to that company's own SOA book — the real page to download the SOA PDF and draft the client email, NOT Billing Drafts).", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
   { name: 'outstanding_balance_summary', description: "REAL, live QuickBooks outstanding-balance total ACROSS ALL CUSTOMERS for one or more QuickBooks companies (TAB/TAC/TAO) — the exact same computation the real /billing/soa pages use, summed. Use this for a company-WIDE question like \"TAB 的欠款总数是多少\"/\"how much is outstanding on TAC overall\" — NOT for a question about one specific company (use check_outstanding_balance for that). Returns, per requested QB company, the real total, how many customers have a balance, and the top 5 largest debtors with their own totals and oldest aging bucket.", input_schema: { type: 'object', properties: { qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks companies to summarize — omit to summarize all 3' } } } },
-  { name: 'active_users_today', description: 'REAL, live list of which staff have actually been LOGGED IN AND CLICKING recently (recorded page-view events, tracking since 2026-09-08) — management-only. These are VISIT COUNTS, not work done: a person with 18 visits has not necessarily completed anything. For what was actually done/changed, use recent_changes (company-wide) or recent_activity_summary (one person). Use this for "who else is using the system today/this week" style questions. Returns each active person\'s email, how many events they generated, and their most-visited page. Default (days omitted or 1) is the real Singapore calendar day — "today", not a rolling 24-hour window; pass a larger `days` for a genuine rolling multi-day window instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Number of days — 1 (default) means the real SGT calendar day "today"; a larger value is a genuine rolling N-day window, max 30' } } } },
+  { name: 'active_users_today', description: 'REAL, live list of which staff have actually been LOGGED IN AND CLICKING recently (recorded page-view events, tracking since 2026-09-08). Any account may call it; people above that caller in rank are omitted. These are VISIT COUNTS, not work done: a person with 18 visits has not necessarily completed anything. For what was actually done/changed, use recent_changes (company-wide) or recent_activity_summary (one person). Use this for "who else is using the system today/this week" style questions. Returns each active person\'s email, how many events they generated, and their most-visited page. Default (days omitted or 1) is the real Singapore calendar day — "today", not a rolling 24-hour window; pass a larger `days` for a genuine rolling multi-day window instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Number of days — 1 (default) means the real SGT calendar day "today"; a larger value is a genuine rolling N-day window, max 30' } } } },
   { name: 'check_email_status', description: 'REAL email send status for one company — the exact same data the Email Activity/Delivery History page shows (email_drafts, joined with its campaign). Use this whenever the user asks whether an email/invoice/reminder was actually sent to a company (e.g. "XX 的Email 发送出去了吗"). Returns each real draft/campaign record for the company (status: pending/opened/sent/skipped, subject, recipient, when and by whom it was sent if it was) — never guess whether something was sent, always check this.', input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
   { name: 'customer_profile_summary', description: 'REAL, live breakdown of ALL active clients by legal entity type (Private Limited/Sole Proprietorship/LLP/...) and by real SSIC industry classification — the exact same computation the Reports page\'s own "Explore" section uses. Management-only (canViewReports — Vincent, Cindy, Samuell, Tan Yee Soon). Use this whenever the user asks what TYPE or INDUSTRY our clients/customers are, which type/industry is biggest, or for a customer-profile breakdown (e.g. "客户最大是什么类型的客户？从事什么行业的？") — never say there is no such tool without calling this first. Returns counts for each type/industry sorted largest-first, plus what share of clients actually have an industry on file.', input_schema: { type: 'object', properties: {} } },
   { name: 'company_deep_lookup', description: "REAL, live, DEEP data for ONE specific company — everything Company 360 itself shows: directors/secretary/shareholders (names + roles only), trademark records, invoice history (generated + QuickBooks), Post Incorporate documents generated, ND appointments, outstanding balance, Client Communications draft count, AR Reminder cycles. Use this for ANY question about a specific named company beyond basic status/FYE (e.g. \"这家公司有商标吗\", \"董事是谁\", \"最近生成过什么文件\", \"股东有哪些\") — search_company only has a thin slice of this; never say a company-specific question can't be answered without trying this tool first. Does NOT include personal ID numbers/DOB/home address/personal contact info for directors/shareholders — deliberately never surfaced through chat. ALSO finds FORMER clients: a struck-off/terminated company is often deleted from the live company table entirely, so this falls back to its Master List history and returns recordSource:'master_list_only' with what it WAS (lifecycle status, join date, secretary, directors) — check recordSource before describing anything as current.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
@@ -1497,12 +1529,12 @@ const CLAUDE_TOOLS = [
     value: { description: "For a service field: true (force ON), false (force OFF) or null (clear the override). For customer_source: one of referral/website/advertising/existing_client/walk_in/other, or null. For parent_company: the parent company's NAME, or null to clear." },
   }, required: ['company', 'field'] } },
   { name: 'tao_billing_history', description: "REAL TAO (ACC's own QuickBooks book) billing history for ONE customer — every distinct Accounts/Tax product ever billed to them, the rate last charged, and their last TAO invoice. TAO is ACC's separate book for accounting/tax work and is NOT the same as TAB/TAC invoicing. Use it whenever the user asks what a client was charged for accounts/tax/GST/personal tax before, or is about to raise a TAO invoice and wants the prior services (e.g. \"XX 之前的 Accounts 收多少\", \"XX 的 TAO 开过什么\", \"ACC 那边给 XX 开过什么单\"). It does NOT draft anything — Accounts/Tax have no renewal cycle in this system, so ACC hand-builds every TAO invoice; the card gives the user a button that opens the real TAO builder with these services pre-filled. ACC's client book is separate from the corporate-secretarial roster, so a customer here may have no company record at all.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Customer name, partial match is fine' } }, required: ['company'] } },
-  { name: 'team_roster', description: "The firm's DEPARTMENT roster — who is in Partners, Management, Corporate Secretarial (incl. the Malaysia team), Accounting, Tax and Audit, with roughly how many AR cycles each Secretary/Accounts/Tax person currently carries. Management-only. Use for \"各部门人员有谁\", \"秘书部/会计部有哪些人\", \"团队怎么分工的\", \"谁在哪个组\". Also returns the separate Nominee Director roster (people who act as a client's nominee director) with active-appointment counts.", input_schema: { type: 'object', properties: {} } },
-  { name: 'team_activity', description: "What the TEAM actually DID over a window, FIELD-LEVEL: which company, which field, from what value to what — for AR Reminder / Master List / Trademark edits, plus invoices, sent emails, campaigns and Post Incorporate as creations, each with company name and SGT time. Management-only. This is the right tool for \"今天大家做了什么\", \"这几天团队在忙什么\", \"其他人在干嘛\" — NOT active_users_today, whose numbers are page visits rather than work. The person asking is excluded by default (a manager asking about the team does not mean themselves); pass includeMe:true to include them. days defaults to 1 = today in Singapore.", input_schema: { type: 'object', properties: {
+  { name: 'team_roster', description: "The firm's DEPARTMENT roster — who is in Partners, Management, Corporate Secretarial (incl. the Malaysia team), Accounting, Tax and Audit, with roughly how many AR cycles each Secretary/Accounts/Tax person currently carries. The names/teams are open to everyone; the workload numbers for leaders and partners are hidden from lower-ranked callers. Use for \"各部门人员有谁\", \"秘书部/会计部有哪些人\", \"团队怎么分工的\", \"谁在哪个组\". Also returns the separate Nominee Director roster (people who act as a client's nominee director) with active-appointment counts.", input_schema: { type: 'object', properties: {} } },
+  { name: 'team_activity', description: "What the TEAM actually DID over a window, FIELD-LEVEL: which company, which field, from what value to what — for AR Reminder / Master List / Trademark edits, plus invoices, sent emails, campaigns and Post Incorporate as creations, each with company name and SGT time. Any account may call it — it returns only the people that caller is allowed to see. This is the right tool for \"今天大家做了什么\", \"这几天团队在忙什么\", \"其他人在干嘛\" — NOT active_users_today, whose numbers are page visits rather than work. The person asking is excluded by default (a manager asking about the team does not mean themselves); pass includeMe:true to include them. days defaults to 1 = today in Singapore.", input_schema: { type: 'object', properties: {
     days: { type: 'number', description: 'Days to look back; 1 (default) = the real SGT calendar day today. Max 90.' },
     includeMe: { type: 'boolean', description: "Include the asker's own activity. Default false." },
   } } },
-  { name: 'firm_pulse', description: "REAL firm-WIDE 'what needs attention right now' overview in one call — overdue AR filings and AGMs, what's due in the next 14 days, active late filers, and total money owed with the biggest debtors. Management-only. Use for \"今天最要紧的是什么\", \"现在有什么要注意的\", \"What should I prioritize today\" when the user means the FIRM rather than their own task list (my_tasks_summary answers the personal version, and legitimately returns nothing for an owner/management account who is not a caseworker).", input_schema: { type: 'object', properties: {} } },
+  { name: 'firm_pulse', description: "REAL firm-WIDE 'what needs attention right now' overview in one call — overdue AR filings and AGMs, what's due in the next 14 days, active late filers, and total money owed with the biggest debtors. Open to every account (deadlines and money, not personal data). Use for \"今天最要紧的是什么\", \"现在有什么要注意的\", \"What should I prioritize today\" when the user means the FIRM rather than their own task list (my_tasks_summary answers the personal version, and legitimately returns nothing for an owner/management account who is not a caseworker).", input_schema: { type: 'object', properties: {} } },
   { name: 'collections_worklist', description: "REAL list of which companies a given person has to CHASE for unpaid invoices, with each one's amount and how old the oldest unpaid invoice is — the same owner filter the SOA page itself is built around. Use for \"我手上有哪些欠款要催\", \"Chelsea 要催哪些公司\", \"我的欠款清单\". Pass owner:'me' for the caller's own list. Omit owner for the whole firm. This is the LIST view; outstanding_balance_summary answers 'how big is the book' and check_outstanding_balance answers about ONE named company.", input_schema: { type: 'object', properties: { owner: { type: 'string', description: "Collections owner's name, or 'me' for the caller. Omit for the whole firm." }, qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks books — omit for all 3' } } } },
   { name: 'recent_changes', description: 'REAL field-level change history from the audit log — who changed which field on which company, from what value to what, and when. Use for "最近谁改了什么", "这家公司最近被改了什么", "谁动过这个". Most changes are AUTOMATED nightly syncs (changed_by "system:..."); pass humanOnly:true when the user means a person. Different from recent_activity_summary, which describes what a person has been DOING across features rather than the field-level diff trail.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days back, default 7, max 365' }, humanOnly: { type: 'boolean', description: 'Exclude automated system syncs' }, company: { type: 'string', description: 'Only changes for this company' }, limit: { type: 'number', description: 'How many change rows to return, default 30, max 100' } } } },
   { name: 'trademark_summary', description: 'REAL, live company-WIDE trademark counts and lists — how many trademarks are registered vs. still in progress (application filed, not yet granted), and which registered marks are expiring soon. Use this for any trademark question that is NOT about one specific company (e.g. "现在有多少个商标在处理中", "哪些商标快到期了") — for ONE specific company\'s own trademark(s), use company_deep_lookup instead, which has the exact same data already scoped to that company.', input_schema: { type: 'object', properties: {} } },
@@ -1673,8 +1705,8 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     if (mentionsOutstandingBalance(out) && !outstandingToolCalled) {
       out = `⚠️ 系统提示：这条回复提到了欠款/outstanding，但本次没有检测到真正调用 check_outstanding_balance（单个公司）或 outstanding_balance_summary（整体汇总）查询实时数据——内容可能不准确，请换个更明确的问法重新提问（例如直接说"查一下 XX 公司的欠款"或"TAB 的欠款总数是多少"），不要直接采信。\n\n${out}`;
     }
-    if (account?.canViewAsOthers && claimsPermissionDenied(out) && !crossPersonToolCalled) {
-      out = `⚠️ 系统提示：这条回复说没有权限，但你的账号（${account.name}）实际上是可以查看其他员工任务/活动的管理账户——这个拒绝是错的，本次没有检测到真正调用查询工具。请换个更明确的问法重新提问（例如给出完整姓名，如"Chelsea Ang 今天要做什么"）。\n\n${out}`;
+    if (account && callerRank(account.email) !== 'staff' && claimsPermissionDenied(out) && !crossPersonToolCalled) {
+      out = `⚠️ 系统提示：这条回复说没有权限，但你的账号（${account.name}）对下级同事是有查看权限的——如果被问到的是下级或平级，这个拒绝就是错的，本次没有检测到真正调用查询工具。请换个更明确的问法重新提问（例如给出完整姓名，如"Chelsea Ang 今天要做什么"）。\n\n${out}`;
     }
     return out;
   };
@@ -1865,8 +1897,9 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
       return '我在系统里找不到你说的这位同事，请用完整姓名或已知的简称再试一次（例如 "Lim Hoe Chyi" 或 "HC"）。\n\n[打开 My Tasks](/my-tasks)';
     }
     if (mentioned && mentioned.email !== account.email) {
-      if (!account.canViewAsOthers) {
-        return `你的账号只能查询自己的任务，无法查看 ${mentioned.name} 的任务——这项权限仅开放给管理层。\n\n[打开 My Tasks](/my-tasks)`;
+      const vis = canSeePersonActivity(account.email, mentioned.email);
+      if (!vis.allowed) {
+        return `${vis.reason}\n\n[打开 My Tasks](/my-tasks)`;
       }
       target = mentioned;
     }
@@ -1909,9 +1942,8 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
     let target = account;
     const mentioned = findMentionedAccount(text);
     if (mentioned && mentioned.email !== account.email) {
-      if (!account.canViewAsOthers) {
-        return `你的账号只能查询自己的活动记录，无法查看 ${mentioned.name} 的——这项权限仅开放给管理层。`;
-      }
+      const vis = canSeePersonActivity(account.email, mentioned.email);
+      if (!vis.allowed) return vis.reason;
       target = mentioned;
     }
     const items = await getRecentActivity(target.email, 25);
