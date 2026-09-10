@@ -127,3 +127,65 @@ export function findUniqueBestMatch<T>(
 
   return { value: tied ? null : best, score: bestScore, ambiguous: tied };
 }
+
+// Resolve a user-typed company query into a decision a caller can act on.
+// Added 2026-09-10 after a real usability failure: findUniqueBestMatch()
+// already reports `ambiguous: true` when several names tie, but every caller
+// only read `.value` and then told the user "No company matched" — which is
+// factually WRONG. Confirmed on production: typing "remobie" (3 real
+// companies: REMOBIE COMPANY / ENTERPRISES / TECHNOLOGIES) produced "No
+// company matched \"remobie\"". People type partial names constantly, so a
+// dead end there reads as "the system doesn't have my client".
+//
+// 'ambiguous' is the case that matters: the right response is to ASK which
+// one, not to give up. Candidates are de-duplicated by normalized name so a
+// company appearing in two source tables is never offered twice.
+export type CompanyResolution<T> =
+  | { kind: 'exact'; value: T }
+  | { kind: 'best'; value: T; score: number }
+  | { kind: 'ambiguous'; candidates: T[] }
+  | { kind: 'none'; suggestions: T[] };
+
+export function resolveCompany<T>(
+  query: string,
+  candidates: readonly T[],
+  getName: (candidate: T) => string,
+  minimumScore = 70,
+): CompanyResolution<T> {
+  const q = normalize(query);
+  if (!q) return { kind: 'none', suggestions: [] };
+
+  const dedupe = (list: T[]): T[] => {
+    const seen = new Set<string>();
+    const out: T[] = [];
+    for (const c of list) {
+      const key = normalize(getName(c));
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(c);
+    }
+    return out;
+  };
+
+  const exact = candidates.find(c => normalize(getName(c)) === q);
+  if (exact) return { kind: 'exact', value: exact };
+
+  let bestScore = 0;
+  let topScorers: T[] = [];
+  for (const c of candidates) {
+    const score = matchScore(query, getName(c));
+    if (score < minimumScore) continue;
+    if (score > bestScore) { bestScore = score; topScorers = [c]; }
+    else if (score === bestScore) topScorers.push(c);
+  }
+  const tops = dedupe(topScorers);
+  if (tops.length === 1) return { kind: 'best', value: tops[0], score: bestScore };
+  if (tops.length > 1) return { kind: 'ambiguous', candidates: tops.slice(0, 8) };
+
+  // Nothing scored high enough — fall back to plain substring hits, which is
+  // what a person typing a short brand name ("remobie") usually means.
+  const substring = dedupe(candidates.filter(c => normalize(getName(c)).includes(q)));
+  if (substring.length === 1) return { kind: 'best', value: substring[0], score: minimumScore };
+  if (substring.length > 1) return { kind: 'ambiguous', candidates: substring.slice(0, 8) };
+  return { kind: 'none', suggestions: [] };
+}

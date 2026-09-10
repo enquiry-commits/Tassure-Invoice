@@ -8,7 +8,7 @@ import {
 import MetricCard from '@/components/MetricCard';
 import { RichText } from '@/components/assistant/ChatRichText';
 import {
-  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard,
+  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard,
   AttachmentChips, AttachmentThumbnails, AttachmentLightbox,
   toApiMessage, storedMessageToChatMsg,
   type ChatAttachment, type ChatMsg,
@@ -507,7 +507,7 @@ export default function MyTasksPage() {
         body: JSON.stringify({ messages: next.map(toApiMessage), context: { pathname: '/my-tasks', page: 'My Tasks' }, conversationId, viewAs: viewAsEmail || undefined }),
       });
       const json = await res.json();
-      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined, postIncorporatePreview: json.postIncorporatePreview ?? undefined, arUpdatePreview: json.arUpdatePreview ?? undefined }]);
+      setChatMessages(current => [...current, { role: 'assistant', content: json.reply ?? json.error ?? '出错了，请重试。', invoicePreview: json.invoicePreview ?? undefined, lateFilingPreview: json.lateFilingPreview ?? undefined, invoiceEditPreview: json.invoiceEditPreview ?? undefined, postIncorporatePreview: json.postIncorporatePreview ?? undefined, arUpdatePreview: json.arUpdatePreview ?? undefined, exportOffer: json.exportOffer ?? undefined }]);
       loadConversations(); // pick up the auto-derived title / updated_at reorder
     } catch {
       setChatMessages(current => [...current, { role: 'assistant', content: '网络错误，请重试。' }]);
@@ -731,7 +731,15 @@ export default function MyTasksPage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center', marginTop: 14, maxWidth: 560 }}>
-                    {['What should I prioritize today?', 'Any overdue AR?', 'How does this work?'].map(s => (
+                    {/* Discoverability, rewritten 2026-09-10 — see the same-day
+                        rationale on PAGE_GUIDES in components/AssistantWidget.tsx
+                        (clicks send verbatim; every one must really be answerable).
+                        'What should I prioritize today?' is kept because it IS this
+                        page's own subject, but it routes to my_tasks_summary, which
+                        legitimately returns nothing for an owner/management account
+                        who was never a caseworker — so the firm-wide version sits
+                        next to it rather than leaving that headline a dead end. */}
+                    {['What should I prioritize today?', "What needs the firm's attention today?", "Which of my clients haven't paid?", 'What can you help me with?'].map(s => (
                       <button key={s} onClick={() => void sendChatMessage(s)} disabled={chatBusy}
                         style={{ border: '1px solid #d7e1eb', borderRadius: 999, background: '#fff', color: '#31506f', padding: '6px 12px', fontSize: 12, fontWeight: 650, cursor: chatBusy ? 'wait' : 'pointer' }}>
                         {s}
@@ -775,6 +783,9 @@ export default function MyTasksPage() {
                                   preview={message.lateFilingPreview}
                                   onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
                                 />
+                              )}
+                              {message.exportOffer && (
+                                <ListExportCard offer={message.exportOffer} />
                               )}
                               {message.arUpdatePreview && (
                                 <ArUpdateCard

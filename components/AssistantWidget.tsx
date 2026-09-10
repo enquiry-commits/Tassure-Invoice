@@ -42,7 +42,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Bot, MessageCircle, Send, Sparkles, X, Minus, Paperclip } from 'lucide-react';
 import { RichText } from '@/components/assistant/ChatRichText';
 import {
-  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard,
+  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard,
   AttachmentChips, AttachmentThumbnails, AttachmentLightbox,
   toApiMessage, type ChatMsg, type ChatAttachment,
 } from '@/components/assistant/ChatCards';
@@ -53,10 +53,26 @@ export type PageGuide = {
   suggestions: string[];
 };
 
+// Suggested prompts are the ONLY discoverability surface this assistant has
+// — nothing else tells a person what it can be asked. Rewritten 2026-09-10
+// (Vincent: "怎么样让AI chat 更简单易懂人类的提问"): the originals were all
+// documentation questions ("怎么开单？", "数据什么时候更新？") dating from
+// when the assistant could only explain the system, so nobody could tell
+// from the UI that it now answers REAL data questions across 29 tools.
+//
+// Two hard rules for anything added here:
+// 1. A click SENDS THE TEXT VERBATIM (see the onClick below) — so every
+//    suggestion must work standing alone. Never a placeholder like
+//    "XX 公司的欠款": clicking it literally asks about a company called XX.
+// 2. It must be a question a tool can really answer. A suggestion that
+//    returns "我不知道" teaches the user the assistant is useless, which is
+//    worse than showing no suggestion at all.
+// Each page leads with data questions and keeps at most one how-it-works
+// question, which is the reverse of the original ordering.
 const DEFAULT_GUIDE: PageGuide = {
   label: '系统总览',
-  summary: '我会结合你目前所在的页面，协助查询资料、解释状态、指引操作。',
-  suggestions: ['今天有哪些自动化需要处理？', '30天内有什么到期？', '系统各页面有什么用途？'],
+  summary: '可以直接问我公司资料、欠款、到期、迟报、任务，也能帮你预览开单和改动（都要你点确认才执行）。',
+  suggestions: ['今天最要紧的是什么？', '现在一共欠我们多少钱？', '你能帮我做什么？'],
 };
 
 const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide }> = [
@@ -65,7 +81,7 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     guide: {
       label: 'Dashboard',
       summary: '可解释自动化健康、待处理项目、QuickBooks 状态与总览数字。',
-      suggestions: ['自动化健康怎么看？', '今天有哪些项目需要处理？', 'QuickBooks 多久更新一次？'],
+      suggestions: ['今天最要紧的是什么？', '最近有哪些自动化失败了？', '今年开单和收入趋势怎么样？'],
     },
   },
   {
@@ -73,7 +89,7 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     guide: {
       label: 'Companies',
       summary: '可查询公司、UEN / ROC、Internal CSS Status、Client 类型及现有服务。',
-      suggestions: ['CSS Client 和 Shareholder 怎么判断？', 'Active ND Companies 是什么？', '输入公司名或 UEN / ROC 查询'],
+      suggestions: ['哪些客户是12月FYE？', '有哪些公司用我们的注册地址？', '现在客户类型的分布是怎样的？'],
     },
   },
   {
@@ -81,7 +97,7 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     guide: {
       label: 'Active Client',
       summary: '可说明客户资料、TeamWork 对照、服务标记、FYE 与公司详情。',
-      suggestions: ['Active Client 的来源是什么？', '服务格子怎么判断？', 'FYE mismatch 是什么？'],
+      suggestions: ['现在一共有多少家在营客户？', '哪些客户有 XBRL 服务？', 'Active Client 的来源是什么？'],
     },
   },
   {
@@ -89,7 +105,7 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     guide: {
       label: 'Nominee Directors',
       summary: '可查询指定 ND 的在任公司、异常提醒及 TeamWork 同步规则。',
-      suggestions: ['ND 数据什么时候更新？', '为什么 ND 数量会不同？', '输入 ND 名字查询在任公司'],
+      suggestions: ['哪位 ND 在任公司最多？', '有哪些公司用 ND 服务？', 'ND 数据什么时候更新？'],
     },
   },
   {
@@ -97,7 +113,7 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     guide: {
       label: 'Address Service',
       summary: '可说明地址服务名单、来源与公司资料的对照方式。',
-      suggestions: ['地址服务怎么判断？', '数据什么时候更新？', '如何查某家公司？'],
+      suggestions: ['有哪些公司用我们的注册地址？', '一共有多少家用注册地址？', '地址服务怎么判断？'],
     },
   },
   {
@@ -105,7 +121,7 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     guide: {
       label: 'Late Filing',
       summary: '可解释迟报判定、每日更新、异常状态与需要人工复核的原因。',
-      suggestions: ['Late Filing 怎么判断？', '什么时候自动更新？', '目前有几家迟报？'],
+      suggestions: ['现在有几家迟报？最严重的是哪几家？', '谁手上压的迟报最多？', 'Late Filing 怎么判断？'],
     },
   },
   {
@@ -113,7 +129,7 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     guide: {
       label: 'AR Reminder / Billing Drafts',
       summary: '可说明 AR 批次、历史发票、服务期间、开单、QB 草稿及 PDF 保存流程。',
-      suggestions: ['怎么开单？', '服务期间怎么更新？', '开单后为什么不会自动发送？'],
+      suggestions: ['谁欠钱最多？', '未来30天有哪些 AR 到期？', '怎么开单？'],
     },
   },
   {
@@ -121,7 +137,7 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     guide: {
       label: 'Email Drafts',
       summary: '可说明模板、To/CC、发票附件、Ready 状态及 Outlook Helper 操作。',
-      suggestions: ['为什么这行还不能 Ready？', 'Outlook Helper 怎么使用？', 'To 和 CC 的规则是什么？'],
+      suggestions: ['最近30天发了多少封邮件？', '为什么这行还不能 Ready？', 'To 和 CC 的规则是什么？'],
     },
   },
   {
@@ -129,7 +145,7 @@ const PAGE_GUIDES: Array<{ test: (pathname: string) => boolean; guide: PageGuide
     guide: {
       label: 'Email Activity',
       summary: '可说明已准备邮件的查看、重开 Outlook 草稿、状态记录与删除范围。',
-      suggestions: ['Prepared 后去哪里查看？', '怎么重新打开 Outlook 草稿？', '删除记录会影响 Outlook 吗？'],
+      suggestions: ['最近30天发了多少封邮件？', '怎么重新打开 Outlook 草稿？', '删除记录会影响 Outlook 吗？'],
     },
   },
 ];
@@ -353,6 +369,7 @@ export default function AssistantWidget() {
         invoicePreview: json.invoicePreview ?? undefined,
         lateFilingPreview: json.lateFilingPreview ?? undefined,
         arUpdatePreview: json.arUpdatePreview ?? undefined,
+        exportOffer: json.exportOffer ?? undefined,
         invoiceEditPreview: json.invoiceEditPreview ?? undefined,
         postIncorporatePreview: json.postIncorporatePreview ?? undefined,
       }]);
@@ -507,6 +524,9 @@ export default function AssistantWidget() {
                         )}
                         {message.lateFilingPreview && (
                           <LateFilingResolveCard preview={message.lateFilingPreview} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
+                        )}
+                        {message.exportOffer && (
+                          <ListExportCard offer={message.exportOffer} />
                         )}
                         {message.arUpdatePreview && (
                           <ArUpdateCard preview={message.arUpdatePreview} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />

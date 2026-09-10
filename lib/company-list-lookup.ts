@@ -28,6 +28,12 @@ export type CompanyListFilters = {
   status?: string;            // tw_status substring, e.g. "Active", "Striking"
   activeOnly?: boolean;       // default true — companies.is_active
   limit?: number;             // default 50, max 200
+  // Lifts the 200-row cap. NEVER settable from chat: companyListTool()
+  // builds CompanyListFilters field-by-field from an allow-list, so the
+  // model cannot reach this. Only lib/chat-export.ts sets it, because an
+  // .xlsx whose whole purpose is "give me the list to work from" must not
+  // silently stop at 200 of 947.
+  unlimited?: boolean;
 };
 
 export type CompanyListResult = {
@@ -124,8 +130,8 @@ export async function listCompanies(filters: CompanyListFilters): Promise<Compan
     });
   }
 
-  const limit = Math.min(Math.max(filters.limit ?? 50, 1), 200);
   const sorted = rows.slice().sort((a, b) => a.companyName.localeCompare(b.companyName));
+  const limit = filters.unlimited ? sorted.length : Math.min(Math.max(filters.limit ?? 50, 1), 200);
   return {
     totalMatched: sorted.length,
     returned: Math.min(sorted.length, limit),

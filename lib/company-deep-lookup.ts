@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { createAdminClient } from './supabase';
-import { normalize, findUniqueBestMatch } from './company-name';
+import { normalize, resolveCompany } from './company-name';
 import { getCompany360 } from './company-360';
 
 // Added 2026-09-09 — the single highest-leverage chat-assistant gap found
@@ -119,7 +119,11 @@ export type CompanyDeepLookupResult =
       communicationsDraftCount: number;
       warnings: string[];
     }
-  | { found: false; message: string; suggestions: string[] };
+  // Several real companies plausibly match what the user typed — the right
+  // response is to ASK which one, never to report "not found" (see
+  // resolveCompany's own comment on the real failure this fixes).
+  | { found: false; ambiguous: true; message: string; candidates: string[] }
+  | { found: false; ambiguous?: false; message: string; suggestions: string[] };
 
 // Where an AR cycle has actually reached, derived from which workflow dates
 // are filled. Deliberately reports the FURTHEST stage reached rather than
@@ -142,11 +146,15 @@ export async function lookupCompanyDeep(companyQuery: string): Promise<CompanyDe
 
   const { data: companies } = await sb.from('companies').select('id, company_name');
   const rows = companies ?? [];
-  let match = rows.find(c => normalize(c.company_name as string) === normalize(trimmed));
-  if (!match) {
-    const best = findUniqueBestMatch(trimmed, rows, r => r.company_name as string, 70).value;
-    if (best) match = best;
+  const resolved = resolveCompany(trimmed, rows, r => r.company_name as string, 70);
+  if (resolved.kind === 'ambiguous') {
+    return {
+      found: false, ambiguous: true,
+      message: `"${companyQuery}" matches ${resolved.candidates.length} companies — ask the user which one they mean, do NOT say it wasn't found.`,
+      candidates: resolved.candidates.map(c => c.company_name as string),
+    };
   }
+  const match = resolved.kind === 'exact' || resolved.kind === 'best' ? resolved.value : undefined;
   // No live `companies` row — before giving up, check master_list, which
   // keeps a struck-off/terminated client's full historical record even after
   // the live row is gone (see this type's own comment above).
@@ -154,11 +162,15 @@ export async function lookupCompanyDeep(companyQuery: string): Promise<CompanyDe
     const { data: mlRows } = await sb.from('master_list')
       .select('company_name, roc_no, list_type, status, join_date, update_date, fye, internal_code, contact_window, email, directors, shareholders, nominee_director, secretary');
     const ml = mlRows ?? [];
-    let mlMatch = ml.find(m => normalize(m.company_name as string) === normalize(trimmed));
-    if (!mlMatch) {
-      const best = findUniqueBestMatch(trimmed, ml, m => m.company_name as string, 70).value;
-      if (best) mlMatch = best;
+    const mlResolved = resolveCompany(trimmed, ml, m => m.company_name as string, 70);
+    if (mlResolved.kind === 'ambiguous') {
+      return {
+        found: false, ambiguous: true,
+        message: `"${companyQuery}" matches ${mlResolved.candidates.length} former/inactive companies in Master List history — ask the user which one they mean.`,
+        candidates: mlResolved.candidates.map(m => m.company_name as string),
+      };
     }
+    const mlMatch = mlResolved.kind === 'exact' || mlResolved.kind === 'best' ? mlResolved.value : undefined;
     if (mlMatch) {
       const categories = [...new Set(ml
         .filter(m => normalize(m.company_name as string) === normalize(mlMatch!.company_name as string))

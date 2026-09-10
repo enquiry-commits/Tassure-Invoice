@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { createAdminClient } from './supabase';
-import { normalize, findUniqueBestMatch } from './company-name';
+import { normalize, resolveCompany } from './company-name';
 import { computeSoaRows, effectiveOwner, type SoaCompanyRow } from './soa-data';
 import { significantWord } from './company-360';
 import { AGING_BUCKETS, oldestAgingBucket } from './soa';
@@ -37,7 +37,8 @@ export type OutstandingLine = {
 
 export type OutstandingLookupResult =
   | { found: true; companyName: string; hasOutstanding: boolean; totalOutstanding: number; lines: OutstandingLine[] }
-  | { found: false; message: string; suggestions: string[] };
+  | { found: false; ambiguous: true; message: string; candidates: string[] }
+  | { found: false; ambiguous?: false; message: string; suggestions: string[] };
 
 const bucketLabel = (bucket: ReturnType<typeof oldestAgingBucket>) =>
   bucket ? (AGING_BUCKETS.find(b => b.key === bucket)?.label ?? null) : null;
@@ -53,16 +54,20 @@ export async function lookupOutstandingBalance(companyQuery: string): Promise<Ou
   // lib/invoice-edit-lookup.ts) rather than a fragile ilike-substring guess.
   const { data: companies } = await sb.from('companies').select('id, company_name');
   const rows = companies ?? [];
-  let match = rows.find(c => normalize(c.company_name as string) === normalize(trimmed));
-  if (!match) {
-    const best = findUniqueBestMatch(trimmed, rows, r => r.company_name as string, 70).value;
-    if (best) match = best;
+  // Ambiguity is ASKED about, never reported as "not found" — see
+  // resolveCompany()'s own comment on the real failure that motivated this.
+  const resolved = resolveCompany(trimmed, rows, r => r.company_name as string, 70);
+  if (resolved.kind === 'ambiguous') {
+    return {
+      found: false, ambiguous: true,
+      message: `"${companyQuery}" matches ${resolved.candidates.length} companies — ask the user which one they mean, do NOT say it wasn't found.`,
+      candidates: resolved.candidates.map(c => c.company_name as string),
+    };
   }
-  if (!match) {
-    const q = normalize(trimmed);
-    const suggestions = rows.filter(c => normalize(c.company_name as string).includes(q)).slice(0, 5).map(c => c.company_name as string);
-    return { found: false, message: `No company matched "${companyQuery}".`, suggestions };
+  if (resolved.kind === 'none') {
+    return { found: false, message: `No company matched "${companyQuery}".`, suggestions: [] };
   }
+  const match = resolved.value;
 
   const companyId = match.id as number;
   const companyName = match.company_name as string;
@@ -123,4 +128,70 @@ export async function summarizeOutstandingBalance(qbCompanies: QbCompany[]): Pro
     }),
   );
   return results;
+}
+
+// Added 2026-09-10 — a collections person's single most common question
+// ("我手上有哪些欠款要催" / "Chelsea 要催哪些公司") had no answer, even
+// though it is the SOA page's own headline feature. Vincent, in that page's
+// own code comment: "我选择某个PIC,她就能看到和自己相关的所有欠款公司".
+// summarizeOutstandingBalance's topDebtors deliberately carries no owner
+// (it answers "how big is the book"), so this is a separate, owner-centric
+// view over the SAME computeSoaRows() every other outstanding view uses —
+// with effectiveOwner() (soa_owners override → Class/Location suggestion →
+// sole PIC fallback), the exact ownership rule the page itself applies.
+export type CollectionsWorklistRow = {
+  qbCompany: QbCompany;
+  companyName: string;
+  totalOutstanding: number;
+  invoiceCount: number;
+  oldestAgingBucketLabel: string | null;
+  owner: string | null;
+};
+
+export type CollectionsWorklist = {
+  owner: string | null; // null = every owner (whole-firm view)
+  totalOutstanding: number;
+  companyCount: number;
+  rows: CollectionsWorklistRow[];
+  unassignedCount: number;
+};
+
+export async function getCollectionsWorklist(ownerQuery: string | null, qbCompanies: QbCompany[], limit = 40): Promise<CollectionsWorklist> {
+  const perBook = await Promise.all(
+    qbCompanies.map(async qbCompany => {
+      const rows = await computeSoaRows(qbCompany).catch(() => [] as SoaCompanyRow[]);
+      return rows.filter(r => r.totalOutstanding > 0).map(r => ({
+        qbCompany,
+        companyName: r.companyName,
+        totalOutstanding: r.totalOutstanding,
+        invoiceCount: r.invoiceCount,
+        oldestAgingBucketLabel: bucketLabel(oldestAgingBucket(r.aging)),
+        owner: effectiveOwner(r),
+      }));
+    }),
+  );
+  const all = perBook.flat();
+
+  // Owner names are stored inconsistently across this system's own fields
+  // ("Kah Ye Chin" vs "Chin Kah Ye" vs initials), so match on any word
+  // overlap rather than an exact string — same reasoning as
+  // lib/company-list-lookup.ts's PIC filter.
+  let scoped = all;
+  if (ownerQuery && ownerQuery.trim()) {
+    const wanted = normalize(ownerQuery).split(' ').filter(w => w.length > 1);
+    scoped = all.filter(r => {
+      if (!r.owner) return false;
+      const have = normalize(r.owner);
+      return wanted.some(w => have.includes(w));
+    });
+  }
+
+  const sorted = scoped.slice().sort((a, b) => b.totalOutstanding - a.totalOutstanding);
+  return {
+    owner: ownerQuery?.trim() || null,
+    totalOutstanding: sorted.reduce((sum, r) => sum + r.totalOutstanding, 0),
+    companyCount: sorted.length,
+    rows: sorted.slice(0, limit),
+    unassignedCount: all.filter(r => !r.owner).length,
+  };
 }

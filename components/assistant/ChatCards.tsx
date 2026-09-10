@@ -9,7 +9,7 @@
 // `git diff` that app/my-tasks/page.tsx's own rendered behavior is
 // unchanged after it switches to importing from here.
 import { useState, useRef } from 'react';
-import { FileCheck2, X, ExternalLink, FileText, AlertTriangle } from 'lucide-react';
+import { FileCheck2, X, ExternalLink, FileText, AlertTriangle, Download } from 'lucide-react';
 import type { InvoicePreview } from '@/lib/billing-lookup';
 import type { EditableLine } from '@/lib/billing-draft';
 import type { LateFilingResolvePreview } from '@/lib/late-filing-lookup';
@@ -17,6 +17,8 @@ import type { InvoiceEditPreview } from '@/lib/invoice-edit-lookup';
 import type { PostIncorporatePreview } from '@/lib/docx-post-incorporate';
 // type-only (lib/ar-update-lookup.ts is server-only — see INV-DOC-006)
 import type { ArUpdatePreview } from '@/lib/ar-update-lookup';
+// type-only for the same reason (lib/chat-export.ts is server-only)
+import type { ChatExportOffer } from '@/lib/chat-export';
 import { billingDeepLink, lateFilingDeepLink } from '@/lib/deep-links';
 import { logActivity } from '@/lib/activity-client';
 
@@ -44,6 +46,7 @@ export type ChatMsg = {
   invoiceEditPreview?: InvoiceEditPreview;
   postIncorporatePreview?: PostIncorporatePreview;
   arUpdatePreview?: ArUpdatePreview;
+  exportOffer?: ChatExportOffer;
 };
 
 // Turns a local ChatMsg back into what /api/assistant expects — content
@@ -947,6 +950,86 @@ function ArUpdateConfirmModal({ preview, outcome, onCancel, onConfirm }: {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// "把名单给我" — the download behind a list answer (2026-09-10).
+//
+// Vincent's own framing of the gap: chat could finally answer list
+// questions, but a person cannot work from "16 家逾期" or from the first 40
+// of 419 names in a chat bubble — they need the real list in Excel, which
+// meant going to the page and re-applying the filter by hand, i.e. exactly
+// the work chat was supposed to remove.
+//
+// The offer carries only the QUERY (kind + parameters), never rows: the
+// click POSTs it to /api/assistant/export, which RE-RUNS the same tested
+// lookup server-side and builds the sheet from that. So nothing the model
+// wrote can reach the file, and the export is never truncated the way the
+// chat reply is. Same discipline as the preview→confirm cards above: the
+// user's own click is what produces anything.
+//
+// Deliberately session-only (not persisted with the conversation): an
+// offer reopened days later would silently rebuild against TODAY's data
+// under yesterday's headline number, which is worse than asking again.
+export function ListExportCard({ offer }: { offer: ChatExportOffer }) {
+  const [state, setState] = useState<'idle' | 'working' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+
+  const download = async () => {
+    setState('working');
+    try {
+      const res = await fetch('/api/assistant/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(offer.spec),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setMessage(json.error || `下载失败 (${res.status})`);
+        setState('error');
+        return;
+      }
+      // Filename comes from the server's Content-Disposition — the same
+      // name the equivalent page export would produce, not one guessed here.
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const named = /filename="([^"]+)"/.exec(disposition)?.[1];
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = named || 'export.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      logActivity('chat_list_export', { kind: offer.spec.kind, count: offer.count });
+      setState('idle');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : '网络错误，请重试。');
+      setState('error');
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, background: '#fff', width: '100%', maxWidth: 420, padding: '10px 12px' }}>
+      <button
+        type="button"
+        onClick={() => void download()}
+        disabled={state === 'working'}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+          border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, fontWeight: 750,
+          background: state === 'working' ? '#f1f5f9' : '#fff', color: '#173b61',
+          cursor: state === 'working' ? 'wait' : 'pointer',
+        }}
+      >
+        <Download size={13} />
+        {state === 'working' ? '正在生成…' : offer.label}
+      </button>
+      {state === 'error' && (
+        <div style={{ marginTop: 6, fontSize: 10.5, color: '#b91c1c' }}>{message}</div>
+      )}
     </div>
   );
 }

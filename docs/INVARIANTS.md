@@ -1067,6 +1067,37 @@ again.
   writable field list deliberately NARROWER than the endpoint's own
   allowlist, so chat is a workflow shortcut rather than a way to rewrite
   any column of a compliance record by typing a sentence.
+- **INV-DATA-034** — A file handed to the user from a chat answer must be
+  built by RE-RUNNING the query server-side, never assembled from anything
+  the model produced, and must never be truncated. `/api/assistant/export`
+  therefore accepts only a KIND plus its parameters (`lib/chat-export.ts`'s
+  `ChatExportSpec`), parsed field-by-field against an allow-list, and calls
+  the same tested lookup the chat tool called — so a company the model
+  hallucinated into its prose still cannot reach the spreadsheet. The
+  no-truncation half matters just as much: the chat tool's own row cap
+  exists to keep a reply readable, and reusing it for the export would
+  silently hand over 40 of 419 rows under a headline that says 419
+  (`CompanyListFilters.unlimited` and the unbounded collections limit exist
+  only for this path, and are deliberately unreachable from the model's
+  tool input). The export offer is also stripped from the tool result
+  before it is serialised for the model — a model that can see an export
+  descriptor narrates it ("I've exported it for you"), which is the same
+  false claim INV-DATA-033 exists to prevent. *(source: 2026-09-10,
+  Vincent: chat could answer list questions but a person cannot work from
+  "16 家逾期" or the first 40 of 419 names.)*
+- **INV-DATA-035** — A chat surface's suggested prompts are its only
+  discoverability affordance, and a click SENDS THE TEXT VERBATIM — so a
+  suggestion containing a placeholder ("XX 公司的欠款") literally asks about
+  a company named XX, and one no tool can answer teaches the user the
+  assistant is useless. Every suggestion must stand alone and be really
+  answerable. Related: never make a headline suggestion out of a tool that
+  legitimately returns nothing for the person most likely to click it —
+  "What should I prioritize today?" routed only to `my_tasks_summary`,
+  which returns `everAssigned:false, total:0` for an owner/management
+  account who was never a caseworker, so the app's most prominent prompt
+  answered "you have never been assigned anything" (`lib/firm-pulse.ts` /
+  `firm_pulse` is the firm-wide counterpart that now sits beside it).
+  *(source: 2026-09-10, Vincent: "怎么样让AI chat 更简单易懂人类的提问".)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

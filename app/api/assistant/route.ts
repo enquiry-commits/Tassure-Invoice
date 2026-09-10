@@ -12,7 +12,7 @@ import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, type A
 import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import { previewInvoiceEdit, type InvoiceEditPreview, type InvoiceEditChange } from '@/lib/invoice-edit-lookup';
-import { lookupOutstandingBalance, summarizeOutstandingBalance } from '@/lib/outstanding-lookup';
+import { lookupOutstandingBalance, summarizeOutstandingBalance, getCollectionsWorklist } from '@/lib/outstanding-lookup';
 import { lookupEmailStatus, getCommunicationsSummary } from '@/lib/email-status-lookup';
 import { getCustomerProfileSummary } from '@/lib/customer-profile-lookup';
 import { lookupCompanyDeep } from '@/lib/company-deep-lookup';
@@ -20,6 +20,8 @@ import { listCompanies, type CompanyListFilters } from '@/lib/company-list-looku
 import { getTrademarkSummary } from '@/lib/trademark-lookup';
 import { getUpcomingDeadlines } from '@/lib/deadlines-lookup';
 import { getRecentChanges } from '@/lib/audit-lookup';
+import { getFirmPulse } from '@/lib/firm-pulse';
+import type { ChatExportOffer } from '@/lib/chat-export';
 import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
@@ -273,7 +275,12 @@ async function searchCompany(q: string) {
 // reports what's already true in QuickBooks, never changes anything.
 async function checkOutstandingBalance(companyQuery: string) {
   const result = await lookupOutstandingBalance(companyQuery);
-  if (!result.found) return { found: false as const, message: result.message, suggestions: result.suggestions };
+  if (!result.found) {
+    // Ambiguous is NOT "not found": several real companies matched, so ask
+    // which one rather than telling the user we don't have their client.
+    if (result.ambiguous) return { found: false as const, ambiguous: true as const, message: result.message, candidates: result.candidates };
+    return { found: false as const, message: result.message, suggestions: result.suggestions };
+  }
   return {
     found: true as const,
     companyName: result.companyName,
@@ -401,6 +408,13 @@ async function companyListTool(input: Record<string, unknown>) {
   const result = await listCompanies(filters);
   return {
     ...result,
+    // See the _export convention in claudeAnswer()'s tool loop — stripped
+    // before the model ever sees it.
+    _export: {
+      spec: { kind: 'company_list' as const, filters },
+      label: `完整名单 Excel（${result.totalMatched} 家公司）`,
+      count: result.totalMatched,
+    },
     note: `Real, current list — same companies+master_list data the Reports page's own drill-down uses, filtered to ACTIVE clients unless includeInactive was set. totalMatched is the REAL full count; only the first ${result.returned} are listed${result.truncated ? ' (truncated)' : ''} — always state the real total, and never imply the listed names are all of them when truncated is true. PIC matching is deliberately loose (staff names are stored inconsistently in this system, e.g. "Kah Ye Chin" vs "Chin Kah Ye"), so double-check a surprising match rather than treating it as exact.`,
   };
 }
@@ -414,6 +428,11 @@ async function upcomingDeadlinesTool(days?: number) {
   const result = await getUpcomingDeadlines(rangeDays);
   return {
     ...result,
+    _export: {
+      spec: { kind: 'deadlines' as const, rangeDays },
+      label: `完整到期名单 Excel（${result.overdue.length + result.upcoming.length} 项）`,
+      count: result.overdue.length + result.upcoming.length,
+    },
     note: `Real deadlines from ar_reminder (AR filing + AGM, only cycles not yet filed / AGMs not yet held) and trademark_records (registered marks' expiry). daysUntilDue is negative for something already overdue. extendedFrom being set means that deadline was formally EXTENDED (EOT) from that original date — say so rather than just quoting the later date. IMPORTANT: the overdue AR count here will NOT match late_filing_summary's, and that is correct, not a contradiction — the Late Filing page applies its own additional rules (excludes struck-off/terminated companies and already-resolved rows) and is the authoritative "who do we actually chase" list; this is the raw deadline view. If the user is asking who to chase, prefer late_filing_summary and say which one you used.`,
   };
 }
@@ -442,6 +461,44 @@ async function arUpdatePreviewTool(account: ApprovedAccount | null, input: Recor
     found: true as const,
     preview: result.preview,
     note: 'READ-ONLY preview — NOTHING has been changed yet, and you have no tool that can write this directly. The user sees a card with the real before/after and a Confirm button; only their click performs the update. Present the change plainly (company, which FYE cycle, which field, current value → new value) and tell them to confirm on the card. Never say or imply you have already made, or are making, the change. If alreadyThatValue is true, say it is already set to that. If cycleAlreadyFiled is true, point that out before they change a workflow date on an already-filed cycle.',
+  };
+}
+
+// Added 2026-09-10 — the chat UI's own top suggested prompt is "What should
+// I prioritize today?", but the only tool behind it showed the CALLER's own
+// AR/Late Filing rows, which for a management account is legitimately empty
+// (verified: Vincent gets everAssigned=false). See lib/firm-pulse.ts.
+async function firmPulseTool(account: ApprovedAccount | null) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  if (!account.canViewAsOthers) {
+    return { error: true as const, message: `${account.name}'s account only has visibility of their own work — use my_tasks_summary for that. A firm-wide overview is limited to management accounts.` };
+  }
+  const pulse = await getFirmPulse();
+  return {
+    ...pulse,
+    note: 'Firm-WIDE overview composed from the same computations the individual tools own (upcoming_deadlines, late_filing_summary, outstanding_balance_summary), so these numbers always agree with those tools. Use it for "今天/现在最要紧的是什么" — then point the user at the specific tool for detail. Two things to be careful about when summarising: (1) biggestDebtors routinely includes Tassure GROUP entities (e.g. TASSURE PAC, TASSURE ASIA OUTSOURCEZ) — those are intercompany balances, NOT client debt, so do not present them as the worst-paying clients without saying so; (2) the worst overdue AR filings are years old and typically belong to companies already being struck off — late_filing_summary is the list of who is actually worth chasing. Amounts are SGD.',
+  };
+}
+
+// Added 2026-09-10 — a collections person's most common question ("我手上
+// 有哪些欠款要催" / "Chelsea 要催哪些公司") had no answer, though it is the
+// SOA page's own headline filter. See getCollectionsWorklist's comment.
+async function collectionsWorklistTool(account: ApprovedAccount | null, input: Record<string, unknown>) {
+  const rawOwner = typeof input.owner === 'string' ? input.owner.trim() : '';
+  // "my list" resolves to the caller's own name — the natural phrasing.
+  const owner = rawOwner && rawOwner.toLowerCase() !== 'me' ? rawOwner : (rawOwner.toLowerCase() === 'me' ? (account?.name ?? '') : '');
+  const requested = Array.isArray(input.qbCompanies)
+    ? input.qbCompanies.filter((c): c is QbCompany => c === 'TAB' || c === 'TAC' || c === 'TAO')
+    : [];
+  const result = await getCollectionsWorklist(owner || null, requested.length ? requested : ['TAB', 'TAC', 'TAO']);
+  return {
+    ...result,
+    _export: {
+      spec: { kind: 'collections' as const, owner: result.owner },
+      label: `完整欠款名单 Excel（${result.companyCount} 家）`,
+      count: result.companyCount,
+    },
+    note: `Real unpaid-invoice list from the same computeSoaRows() the SOA pages use, grouped by the collections OWNER the SOA page itself assigns (a confirmed soa_owners pick, else the Class/Location-derived suggestion, else a sole PIC). ${result.owner ? `Scoped to "${result.owner}" — owner names are stored inconsistently in this system, so a surprising match is worth double-checking.` : 'Whole firm (no owner filter).'} companyCount/totalOutstanding are the REAL totals; rows lists only the largest few, so never imply the listed companies are all of them. Amounts are SGD.`,
   };
 }
 
@@ -486,6 +543,11 @@ async function lateFilingSummaryTool() {
     active_overdue: summary.activeOverdue,
     by_category: summary.byCategory,
     by_pic: summary.byPic,
+    _export: {
+      spec: { kind: 'late_filing' as const },
+      label: `完整迟报名单 Excel（${summary.totalRows} 行）`,
+      count: summary.totalRows,
+    },
     note: 'Real, current counts from the exact same "still relevant" set the Late Filing page\'s own default view shows, classified into the same serious/recent/review/resolved buckets its own metric cards use. active_overdue excludes already-resolved rows (a resolved row is no longer really "on someone\'s plate"). by_pic is who currently has the most ACTIVE (non-resolved) overdue companies — "Unassigned" means no Secretary PIC is set on that cycle. For one specific company, use preview_late_filing_resolve instead.',
   };
 }
@@ -1093,6 +1155,16 @@ function staticSystemPrompt(): string {
 
 Never translate a person's name or a company's name into Chinese characters, even when the rest of your reply is in Chinese — e.g. "Shi Ming" stays "Shi Ming", never guessed into "石明". These are stored and used system-wide exactly as romanized/English text (see the staff and company data itself); inventing a Chinese rendering is a fabrication the system has no real source for, not a translation. Keep names exactly as they appear in the data you're given.
 
+WHEN ASKED WHAT YOU CAN DO ("你能做什么", "有什么功能", "help", "怎么用你"): do NOT recite tool names and do NOT be vague. Answer with a short, grouped list of the QUESTIONS a person can actually ask, in their language, using the phrasing they would use — pick 2-3 examples per group, not everything:
+- 查一家公司: 资料、UEN、FYE、服务、股东董事、年报进度、欠款、发票、商标、邮件记录 ("XX 公司现在什么情况")
+- 找一批公司: 按 PIC / FYE 月份 / 服务 / 行业 / 公司类型筛选名单 ("哪些客户是12月FYE", "有哪些公司用我们的注册地址")
+- 钱: 单家欠款、整个账套欠款、按负责人分的催款名单 ("谁欠钱最多", "我负责的客户有哪些还没付款")
+- 时间: 今天最要紧的事、未来N天到期、迟报名单 ("今天最要紧的是什么", "下个月有什么到期")
+- 人: 自己的任务、同事的任务和近期动向（管理层账号）、ND 在任数量、工作量分布
+- 帮你操作（都需要你点确认才真正执行）: 开单草稿预览、改发票、标记 AR 进度/指派 PIC、标记迟报已处理、生成 Post Incorporate 文件
+- 名单可以下载成 Excel 拿去用
+End by inviting one concrete next question. Never claim an ability you do not have — you cannot send emails, create QuickBooks invoices by yourself, or change data without the user's click.
+
 System map (link pages with markdown, e.g. [开单草稿](/billing?tab=billing)):
 ${PAGES.map(p => `- ${p.label}: ${p.href}`).join('\n')}
 
@@ -1131,6 +1203,10 @@ Use active_users_today when the user asks who else is using/has used the system 
 Use check_email_status whenever the user asks whether an email, invoice, or reminder was actually SENT to a company (e.g. "XX 的Email 发送出去了吗") — this is real, checkable data (the same records the Email Activity page shows), not something to defer to "go check that page yourself" without first trying the tool.
 
 Use company_deep_lookup for ANY question about a specific named company that goes beyond basic status/FYE — directors, secretary, shareholders, trademarks, invoice history, Post Incorporate documents generated, ND appointments, Client Communications activity. search_company only has a thin slice of what this system actually knows about a company; company_deep_lookup has the real depth. Never tell the user a company-specific question "can't be checked" or point them to go look at Company 360 themselves without trying this tool first — it reads the exact same data that page does. It deliberately never returns personal ID numbers, date of birth, home address, or personal contact numbers for directors/shareholders — if asked for those specifically, say plainly this system doesn't surface that level of personal detail through chat, don't guess or fabricate them.
+
+When a lookup comes back with ambiguous:true and a candidates list, that means SEVERAL REAL COMPANIES matched what the user typed — it is NOT "not found". Ask which one they mean and list the candidates; never tell the user the company doesn't exist, and never silently pick one yourself. People type partial names ("remobie", "inventa") constantly, and this is the normal, expected outcome for a shared brand word.
+
+HANDING OVER A FULL LIST: after list_companies, collections_worklist, upcoming_deadlines or late_filing_summary returns anything, the UI automatically shows the user a real "download the complete list as Excel" button under your reply — built by re-running the same query server-side, so it contains every row, not just the ones you named. Whenever your answer is a list you had to shorten (or a count the user will obviously want the names behind), finish by pointing at that button in one short sentence, e.g. "完整名单可以点下面的按钮下载 Excel". Never say YOU exported, generated, attached or sent a file — you cannot; only their click downloads anything.
 
 TOOL ROUTING — pick by the SHAPE of the question first, then the topic. Several tools look similar; these are the distinctions that actually matter:
 - About ONE named company → company_deep_lookup (the full picture). search_company is only for disambiguating a name or the few basics it lists; never conclude "I don't have that" from search_company alone.
@@ -1197,6 +1273,8 @@ const CLAUDE_TOOLS = [
     value: { type: 'string', description: "New value — a date like '03 Apr 2026' for date fields, a staff name for PIC fields. Omit or empty to clear the field." },
     fyeYear: { type: 'number', description: 'Which FYE cycle year — defaults to the most recent not-yet-filed cycle' },
   }, required: ['company', 'field'] } },
+  { name: 'firm_pulse', description: "REAL firm-WIDE 'what needs attention right now' overview in one call — overdue AR filings and AGMs, what's due in the next 14 days, active late filers, and total money owed with the biggest debtors. Management-only. Use for \"今天最要紧的是什么\", \"现在有什么要注意的\", \"What should I prioritize today\" when the user means the FIRM rather than their own task list (my_tasks_summary answers the personal version, and legitimately returns nothing for an owner/management account who is not a caseworker).", input_schema: { type: 'object', properties: {} } },
+  { name: 'collections_worklist', description: "REAL list of which companies a given person has to CHASE for unpaid invoices, with each one's amount and how old the oldest unpaid invoice is — the same owner filter the SOA page itself is built around. Use for \"我手上有哪些欠款要催\", \"Chelsea 要催哪些公司\", \"我的欠款清单\". Pass owner:'me' for the caller's own list. Omit owner for the whole firm. This is the LIST view; outstanding_balance_summary answers 'how big is the book' and check_outstanding_balance answers about ONE named company.", input_schema: { type: 'object', properties: { owner: { type: 'string', description: "Collections owner's name, or 'me' for the caller. Omit for the whole firm." }, qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks books — omit for all 3' } } } },
   { name: 'recent_changes', description: 'REAL field-level change history from the audit log — who changed which field on which company, from what value to what, and when. Use for "最近谁改了什么", "这家公司最近被改了什么", "谁动过这个". Most changes are AUTOMATED nightly syncs (changed_by "system:..."); pass humanOnly:true when the user means a person. Different from recent_activity_summary, which describes what a person has been DOING across features rather than the field-level diff trail.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days back, default 7, max 365' }, humanOnly: { type: 'boolean', description: 'Exclude automated system syncs' }, company: { type: 'string', description: 'Only changes for this company' }, limit: { type: 'number', description: 'How many change rows to return, default 30, max 100' } } } },
   { name: 'trademark_summary', description: 'REAL, live company-WIDE trademark counts and lists — how many trademarks are registered vs. still in progress (application filed, not yet granted), and which registered marks are expiring soon. Use this for any trademark question that is NOT about one specific company (e.g. "现在有多少个商标在处理中", "哪些商标快到期了") — for ONE specific company\'s own trademark(s), use company_deep_lookup instead, which has the exact same data already scoped to that company.', input_schema: { type: 'object', properties: {} } },
   { name: 'late_filing_summary', description: 'REAL, live company-WIDE Late Filing counts — how many companies are currently overdue in total, broken down by severity (serious/recent/review) and by which staff member (PIC) currently has the most active overdue companies. Use this for any Late Filing question that is NOT about one specific company (e.g. "目前一共有多少家迟报", "谁PIC压的最多") — for one specific company, use preview_late_filing_resolve instead.', input_schema: { type: 'object', properties: {} } },
@@ -1284,6 +1362,8 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'list_companies') return companyListTool(input);
   if (name === 'upcoming_deadlines') return upcomingDeadlinesTool(typeof input.days === 'number' ? input.days : undefined);
   if (name === 'preview_ar_update') return arUpdatePreviewTool(account, input);
+  if (name === 'firm_pulse') return firmPulseTool(account);
+  if (name === 'collections_worklist') return collectionsWorklistTool(account, input);
   if (name === 'recent_changes') return recentChangesTool(input);
   if (name === 'trademark_summary') return trademarkSummaryTool();
   if (name === 'late_filing_summary') return lateFilingSummaryTool();
@@ -1308,7 +1388,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview }> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview; exportOffer?: ChatExportOffer }> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -1329,6 +1409,15 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   let lastArUpdatePreview: ArUpdatePreview | undefined;
   let lastInvoiceEditPreview: InvoiceEditPreview | undefined;
   let lastPostIncorporatePreview: PostIncorporatePreview | undefined;
+  // The _export convention (2026-09-10): a list-shaped tool may attach an
+  // `_export` offer describing how to REBUILD its list as a full .xlsx. It
+  // is captured here and DELETED from the result before serialising for the
+  // model, for two reasons — it would otherwise burn tokens on every list
+  // answer, and a model that can see an export descriptor tends to narrate
+  // it ("I've exported it for you"), which is exactly the false claim the
+  // preview→confirm pattern exists to prevent. The user's own click on the
+  // card is what downloads anything.
+  let lastExportOffer: ChatExportOffer | undefined;
   // INV-DATA-022 deterministic safety net — see mentionsOutstandingBalance's
   // own comment on why this checks the REPLY, not the question.
   // outstandingToolCalled flips true the instant check_outstanding_balance
@@ -1362,7 +1451,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview };
+      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -1395,6 +1484,11 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
         if (tu.name === 'preview_post_incorporate' && result && typeof result === 'object' && (result as { complete?: boolean }).complete) {
           lastPostIncorporatePreview = (result as { preview: PostIncorporatePreview }).preview;
         }
+        if (result && typeof result === 'object' && '_export' in result) {
+          const holder = result as { _export?: ChatExportOffer };
+          if (holder._export && holder._export.count > 0) lastExportOffer = holder._export;
+          delete holder._export;
+        }
       } catch (err) {
         result = { error: err instanceof Error ? err.message : 'tool failed' };
       }
@@ -1402,7 +1496,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -1808,9 +1902,9 @@ export async function POST(req: NextRequest) {
       // than the other, single-shot preview tools ever did; losing an
       // earlier-collected director's details off the back of an 8-message
       // window would make Claude re-ask for them or, worse, guess.
-      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview } = await claudeAnswer(messages.slice(-24), context, account);
+      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer } = await claudeAnswer(messages.slice(-24), context, account);
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage, toStoredPreview(invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview));
-      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview });
+      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer });
     }
     // The rule-based intent router only ever understands plain text — an
     // attached image/PDF is real content only Claude can actually look at,
