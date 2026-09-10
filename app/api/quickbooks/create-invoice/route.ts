@@ -5,6 +5,8 @@ import {
   nextDocNumber, invoiceDocNumberExists, getNet7TermId, findPicClass,
   findCustomer, getItemMap, findLocation, buildInvoiceLineArray,
   resolveParentBillAddr,
+  resolveCareOfBillAddr,
+  loadCareOfSettings,
   type DraftLineItem,
 } from '@/lib/qb-invoice-conventions';
 import { createAdminClient } from '@/lib/supabase';
@@ -34,6 +36,12 @@ interface CompanyResult {
   // with overlapConfirmed:true (same idempotencyKey, so it reuses this same
   // reservation) proceeds instead of erroring again.
   overlapConfirmationRequired?: boolean;
+  // Non-blocking notes about how the Bill To block was composed — a c/o
+  // party whose address could not be looked up, a line-count overflow, or a
+  // parent-company link that the c/o deliberately overrode. These describe
+  // what the CLIENT will see on a real invoice, so they must reach the user
+  // rather than only the server log.
+  billToNotes?: string[];
   overlapWarnings?: string[];
 }
 
@@ -129,6 +137,7 @@ async function createInvoiceInCompany(
   pic: string | undefined, docNumber: string | undefined,
   numberMode: InvoiceNumberMode, requestId: string,
   locationName: string | undefined, overlapConfirmed: boolean,
+  billToOverride: { careOf?: string | null; addrSource?: 'b' | 'a' | 'custom' | null; addrCustom?: string | null; attn?: string | null } | undefined,
 ): Promise<CompanyResult> {
   const tokenRow = await getValidToken(company);
   if (!tokenRow) return { error: `QuickBooks ${company} not connected` };
@@ -137,8 +146,47 @@ async function createInvoiceInCompany(
   const customer = await findCustomer(token, realmId, companyName);
   if (!customer) return { error: `Customer not found in QB ${company}: "${companyName}"` };
 
-  const parentBillAddr = await resolveParentBillAddr(token, realmId, company, companyId, companyName);
-  if (parentBillAddr.kind === 'error') return { error: parentBillAddr.error };
+  // Bill To composition. Two features can write this block and they mean
+  // opposite things, so the precedence is explicit (Vincent, 2026-09-10:
+  // "c/o 优先...但是要小心"):
+  //   c/o   — bill the CLIENT, care of someone else; the client's own name
+  //           and UEN stay on the invoice.
+  //   parent — bill the PARENT instead; the client's name is replaced.
+  // c/o is the more specific instruction and preserves the client's
+  // identity, so it wins — and when both are configured that is surfaced as
+  // a note rather than resolved silently, because it changes who the client
+  // sees the invoice addressed to.
+  const billToNotes: string[] = [];
+  let billAddrToSend: Record<string, unknown> | null = null;
+
+  // A per-invoice override replaces the stored default outright rather than
+  // merging field-by-field: a half-merged Bill To (this invoice's c/o with
+  // the company's old address source) is a shape nobody chose.
+  const careOfSettings = billToOverride
+    ? {
+        careOf: billToOverride.careOf ?? null,
+        addrSource: billToOverride.addrSource ?? null,
+        addrCustom: billToOverride.addrCustom ?? null,
+        attn: billToOverride.attn ?? null,
+      }
+    : await loadCareOfSettings(companyId, companyName);
+  const careOf = await resolveCareOfBillAddr(token, realmId, careOfSettings, customer.name, customer.billAddr);
+
+  if (careOf.kind === 'ok') {
+    billAddrToSend = careOf.billAddr;
+    billToNotes.push(...careOf.notes);
+    const supabase = createAdminClient();
+    const { data: parentCheck } = companyId
+      ? await supabase.from('companies').select('parent_company_id').eq('id', companyId).maybeSingle()
+      : await supabase.from('companies').select('parent_company_id').eq('company_name', companyName).maybeSingle();
+    if (parentCheck?.parent_company_id) {
+      billToNotes.push(`"${companyName}" has BOTH a parent-company Bill-To link and a c/o setting. The c/o was used, so the invoice is addressed to ${companyName} c/o ${careOfSettings.careOf}, not to the parent company. Clear one of the two if that is not what you want.`);
+    }
+  } else {
+    const parentBillAddr = await resolveParentBillAddr(token, realmId, company, companyId, companyName);
+    if (parentBillAddr.kind === 'error') return { error: parentBillAddr.error };
+    if (parentBillAddr.kind === 'ok') billAddrToSend = parentBillAddr.billAddr;
+  }
 
   const { blocking, overlapWarnings } = await validateRenewalPeriods(company, customer.name, lines);
   if (blocking.length) {
@@ -176,7 +224,7 @@ async function createInvoiceInCompany(
     PrintStatus: 'NeedToPrint',
     // Default: create as a draft for review in QB — do NOT queue for sending.
     EmailStatus: sendEmail && email ? 'NeedToSend' : 'NotSet',
-    ...(parentBillAddr.kind === 'ok' ? { BillAddr: parentBillAddr.billAddr } : {}),
+    ...(billAddrToSend ? { BillAddr: billAddrToSend } : {}),
   };
   // Both TAB and TAC enable CustomTxnNumbers. In that mode QuickBooks treats
   // every supplied DocNumber literally; "AUTO_GENERATE" is not a sentinel.
@@ -225,6 +273,7 @@ async function createInvoiceInCompany(
     numberAdjusted: numberMode === 'sequential' && invoiceNo !== docNumber,
     expectedInvoiceNo: docNumber,
     numberMode,
+    ...(billToNotes.length ? { billToNotes } : {}),
   };
 }
 
@@ -249,7 +298,7 @@ export async function POST(req: NextRequest) {
     companyName, companyId, email, txnDate, sendEmail, pic,
     tabLines, tacLines, taoLines,
     fyeMonth, fyeYear, fyeCycle, docNumbers, expectedNextNumbers, idempotencyKey,
-    overlapConfirmed,
+    overlapConfirmed, billTo,
   } = body as {
     companyName: string;
     companyId?: number; // real companies.id — resolves a parent-company Bill-To override, if linked
@@ -262,6 +311,12 @@ export async function POST(req: NextRequest) {
     taoLines?: DraftLineItem[]; // Accounts/Tax lines, billed by ACC via /billing/tao
     fyeMonth?: string;
     fyeYear?: number;
+    // Per-invoice Bill To override. Omitted (the normal case) → the stored
+    // per-company default is used. Supplied → it wins for THIS invoice only
+    // and nothing is written back to the company, which is what makes the
+    // draft's Bill To fields editable without changing the client's default
+    // (Vincent, 2026-09-10: "又要跟着客户走，又要每单选").
+    billTo?: { careOf?: string | null; addrSource?: 'b' | 'a' | 'custom' | null; addrCustom?: string | null; attn?: string | null };
     fyeCycle?: string; // "dd.mm.yyyy"
     docNumbers?: Partial<Record<QbCompany, string>>;
     expectedNextNumbers?: Partial<Record<QbCompany, string>>;
@@ -445,7 +500,7 @@ export async function POST(req: NextRequest) {
         company, companyName, companyId ?? null, lines, email, date, sendEmail, pic,
         resolvedNumbers[company], numberModes[company] ?? 'sequential',
         quickBooksRequestId(company, idempotencyKey), account.qbLocations?.[company],
-        overlapConfirmed === true,
+        overlapConfirmed === true, billTo,
       );
     } catch (error) {
       return {
@@ -527,6 +582,7 @@ export async function POST(req: NextRequest) {
       numberAdjusted: tab.numberAdjusted,
       expectedInvoiceNo: tab.expectedInvoiceNo,
       numberMode: tab.numberMode,
+      billToNotes: tab.billToNotes ?? [],
     } : null,
     tac: tac && !tac.error ? {
       invoiceNo: tac.invoiceNo,
@@ -535,6 +591,7 @@ export async function POST(req: NextRequest) {
       numberAdjusted: tac.numberAdjusted,
       expectedInvoiceNo: tac.expectedInvoiceNo,
       numberMode: tac.numberMode,
+      billToNotes: tac.billToNotes ?? [],
     } : null,
     tao: tao && !tao.error ? {
       invoiceNo: tao.invoiceNo,
@@ -543,10 +600,14 @@ export async function POST(req: NextRequest) {
       numberAdjusted: tao.numberAdjusted,
       expectedInvoiceNo: tao.expectedInvoiceNo,
       numberMode: tao.numberMode,
+      billToNotes: tao.billToNotes ?? [],
     } : null,
     // Distinct from `errors` below — a human decision pending, not a
     // failure. The caller re-submits the identical request (same
     // idempotencyKey) with overlapConfirmed:true to proceed.
+    // Every Bill To note across the books that were created, so a caller
+    // showing one confirmation panel does not have to dig per book.
+    billToNotes: [...(tab?.billToNotes ?? []), ...(tac?.billToNotes ?? []), ...(tao?.billToNotes ?? [])],
     overlapConfirmationRequired,
     overlapWarnings: {
       ...(tab?.overlapConfirmationRequired ? { tab: tab.overlapWarnings } : {}),

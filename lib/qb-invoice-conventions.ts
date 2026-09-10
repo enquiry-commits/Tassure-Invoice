@@ -316,3 +316,130 @@ export function buildInvoiceLineArray(
     };
   });
 }
+
+// ── Bill-To "c/o" + "Attn" ──────────────────────────────────────────────────
+// Vincent/Cindy, 2026-09-10. QuickBooks has always supported this — it is
+// just free text in the invoice's Bill To block — but this system never
+// wrote BillAddr for an ordinary invoice, so staff generated the invoice
+// here and then retyped the c/o inside QuickBooks every cycle (confirmed on
+// Kelun Health TAB #02610648 and 吉木锌国际贸易（上海）).
+//
+// Target shape, taken verbatim from a real invoice staff typed themselves
+// (TAC #02680288):
+//   Line1: AI Node Global Pte. Ltd.        <- the client's own name
+//   Line2: C/O Novix Ai Global Pte. Ltd    <- the care-of party
+//   Line3: 33 Ubi Avenue 3, #07-31, ...    <- an address
+//   (Attn goes LAST, per TAO #02660639: "... | 409051 | Attn: Mr Li")
+//
+// BE CAREFUL HERE. QuickBooks REPLACES BillAddr wholesale; it never merges.
+// The moment this returns anything, we own every line the client sees on a
+// real invoice — so this degrades rather than guesses at each step, and
+// returns 'none' unless a c/o or an Attn is genuinely configured, leaving
+// the ~99.9% of invoices with neither byte-identical to today.
+export type CareOfSettings = {
+  careOf: string | null;
+  addrSource: 'b' | 'a' | 'custom' | null; // null is treated as 'b'
+  addrCustom: string | null;
+  attn: string | null;
+};
+
+export type CareOfBillAddrResult =
+  | { kind: 'none' }
+  | { kind: 'ok'; billAddr: Record<string, unknown>; notes: string[] };
+
+// QuickBooks stores these two ways in the real data: a customer record keeps
+// a structured {Line1, City, PostalCode}, while an invoice keeps flat
+// {Line1..Line5}. Flatten to printable lines in the order QuickBooks itself
+// prints them.
+function addrToLines(addr: Record<string, unknown> | null | undefined): string[] {
+  if (!addr) return [];
+  const keys = ['Line1', 'Line2', 'Line3', 'Line4', 'Line5', 'City', 'CountrySubDivisionCode', 'PostalCode', 'Country'];
+  return keys
+    .map(k => (typeof addr[k] === 'string' ? (addr[k] as string).trim() : ''))
+    .filter(Boolean);
+}
+
+export async function resolveCareOfBillAddr(
+  token: string, realmId: string,
+  settings: CareOfSettings,
+  clientName: string,
+  clientBillAddr: Record<string, unknown> | null,
+): Promise<CareOfBillAddrResult> {
+  const careOf = settings.careOf?.trim() || null;
+  const attn = settings.attn?.trim() || null;
+  if (!careOf && !attn) return { kind: 'none' };
+
+  const notes: string[] = [];
+  const source = settings.addrSource ?? 'b';
+  let addressLines: string[] = [];
+
+  if (!careOf) {
+    // Attn only — never move the address; just annotate the client's own.
+    addressLines = addrToLines(clientBillAddr);
+  } else if (source === 'custom') {
+    addressLines = (settings.addrCustom ?? '').split('\n').map(s => s.trim()).filter(Boolean);
+    if (!addressLines.length) {
+      addressLines = addrToLines(clientBillAddr);
+      notes.push(`The custom c/o address for "${clientName}" is empty, so the client's own address was printed instead.`);
+    }
+  } else if (source === 'a') {
+    addressLines = addrToLines(clientBillAddr);
+  } else {
+    // 'b' — the care-of party's own address, looked up in this QuickBooks
+    // book. It is often NOT one of our customers (a law firm, an overseas
+    // entity), which is a normal miss, not an error: fall back to the
+    // client's own address and SAY SO rather than printing a c/o with no
+    // address under it.
+    const b = await findCustomer(token, realmId, careOf);
+    addressLines = addrToLines(b?.billAddr);
+    if (!addressLines.length) {
+      addressLines = addrToLines(clientBillAddr);
+      notes.push(
+        b
+          ? `"${careOf}" exists in QuickBooks but has no address on file, so ${clientName}'s own address was printed under the c/o line.`
+          : `"${careOf}" is not a QuickBooks customer in this book, so its address could not be looked up — ${clientName}'s own address was printed under the c/o line. Set the address to Custom if it should show the c/o party's address.`,
+      );
+    }
+  }
+
+  const lines = [
+    clientName,
+    ...(careOf ? [`c/o ${careOf}`] : []),
+    ...addressLines,
+    ...(attn ? [`Attn: ${attn}`] : []),
+  ];
+
+  // QuickBooks only prints Line1..Line5. Fold any overflow into the last
+  // line rather than silently dropping it — losing the postal code or the
+  // Attn off the end of a real invoice is the worst outcome here.
+  const billAddr: Record<string, unknown> = {};
+  const capped = lines.length <= 5 ? lines : [...lines.slice(0, 4), lines.slice(4).join(', ')];
+  capped.forEach((l, i) => { billAddr[`Line${i + 1}`] = l; });
+  if (lines.length > 5) notes.push(`The Bill To block for "${clientName}" needed ${lines.length} lines; QuickBooks prints 5, so the last ${lines.length - 4} were combined into one line.`);
+
+  return { kind: 'ok', billAddr, notes };
+}
+
+// Reads the stored per-company defaults. Returns all-null (→ 'none' from
+// resolveCareOfBillAddr) for a company that has none, which is almost all of
+// them. Kept separate from the composition so the draft UI can prefill the
+// same values and pass an EDITED copy per invoice.
+export async function loadCareOfSettings(companyId: number | null, companyName: string): Promise<CareOfSettings> {
+  const supabase = createAdminClient();
+  const cols = 'bill_to_care_of, bill_to_care_of_addr_source, bill_to_care_of_addr_custom, bill_to_attn';
+  let row: Record<string, unknown> | null = null;
+  if (companyId) {
+    const { data } = await supabase.from('companies').select(cols).eq('id', companyId).maybeSingle();
+    row = data ?? null;
+  }
+  if (!row) {
+    const { data } = await supabase.from('companies').select(cols).eq('company_name', companyName).maybeSingle();
+    row = data ?? null;
+  }
+  return {
+    careOf: (row?.bill_to_care_of as string | null) ?? null,
+    addrSource: (row?.bill_to_care_of_addr_source as 'b' | 'a' | 'custom' | null) ?? null,
+    addrCustom: (row?.bill_to_care_of_addr_custom as string | null) ?? null,
+    attn: (row?.bill_to_attn as string | null) ?? null,
+  };
+}

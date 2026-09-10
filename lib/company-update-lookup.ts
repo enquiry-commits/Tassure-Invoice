@@ -51,7 +51,30 @@ export const GRADE_VALUES = ['A', 'B', 'C'] as const;
 export const TRADEMARK_CHAT_FIELDS = ['mark_expired_date', 'status_text', 'updates_note', 'remarks'] as const;
 export type TrademarkChatField = typeof TRADEMARK_CHAT_FIELDS[number];
 
-export type CompanyUpdateField = `service:${CompanyServiceField}` | `master:${MasterListChatField}` | `trademark:${TrademarkChatField}` | 'customer_source' | 'parent_company';
+// Invoice Bill To defaults — see scripts/add-companies-bill-to-care-of.sql.
+// These print on a real invoice the CLIENT receives, so the address source
+// is a fixed choice, never free text.
+export const BILL_TO_CHAT_FIELDS = ['care_of', 'addr_source', 'addr_custom', 'attn'] as const;
+export type BillToChatField = typeof BILL_TO_CHAT_FIELDS[number];
+const BILL_TO_COLUMN: Record<BillToChatField, string> = {
+  care_of: 'bill_to_care_of',
+  addr_source: 'bill_to_care_of_addr_source',
+  addr_custom: 'bill_to_care_of_addr_custom',
+  attn: 'bill_to_attn',
+};
+const BILL_TO_LABEL: Record<BillToChatField, string> = {
+  care_of: '发票 Bill To 的 c/o 公司',
+  addr_source: 'c/o 下面印谁的地址',
+  addr_custom: 'c/o 自定义地址',
+  attn: '发票 Bill To 的 Attn 收件人',
+};
+const ADDR_SOURCE_LABEL: Record<string, string> = {
+  b: 'B — c/o 那家公司的地址（默认）',
+  a: 'A — 客户自己的地址',
+  custom: 'Custom — 用自定义地址',
+};
+
+export type CompanyUpdateField = `service:${CompanyServiceField}` | `master:${MasterListChatField}` | `trademark:${TrademarkChatField}` | `billto:${BillToChatField}` | 'customer_source' | 'parent_company';
 
 export type CompanyUpdatePreview = {
   companyId: number;
@@ -221,6 +244,43 @@ export async function previewCompanyUpdate(
         endpoint: '/api/master-list',
         alreadyThatValue: current === value,
         warning: null,
+      },
+    };
+  }
+
+  if (field.startsWith('billto:')) {
+    const bf = field.slice('billto:'.length) as BillToChatField;
+    if (!BILL_TO_CHAT_FIELDS.includes(bf)) {
+      return { found: false, message: `Bill To field must be one of: ${BILL_TO_CHAT_FIELDS.join(', ')}.` };
+    }
+    const next = rawValue === null || rawValue === '' ? null : String(rawValue).trim();
+    if (bf === 'addr_source' && next !== null && !['b', 'a', 'custom'].includes(next)) {
+      return { found: false, message: "The address source must be 'b' (the c/o party's own address), 'a' (the client's own address) or 'custom' (a typed address) — ask the user which rather than guessing, because it decides where the invoice is actually sent." };
+    }
+    const col = BILL_TO_COLUMN[bf];
+    const { data: cur } = await sb.from('companies').select(col).eq('id', company.id).maybeSingle();
+    // The columns may not exist yet (migration pending) — treat that as
+    // "not set" rather than an error, matching how invoicing degrades.
+    const current = (cur as Record<string, string | null> | null)?.[col] ?? null;
+    const display = (v: string | null) =>
+      v === null ? '（未设定）' : bf === 'addr_source' ? (ADDR_SOURCE_LABEL[v] ?? v) : v;
+
+    return {
+      found: true,
+      preview: {
+        companyId: company.id, companyName: company.company_name,
+        field, fieldLabel: BILL_TO_LABEL[bf],
+        autoValue: null,
+        currentDisplay: display(current),
+        proposedDisplay: display(next),
+        proposedValue: next,
+        endpoint: '/api/companies/bill-to',
+        alreadyThatValue: current === next,
+        warning: bf === 'care_of' && next
+          ? '这会改变客户收到的发票抬头：发票会印成「客户名 / c/o ' + next + ' / 地址」。设定后每次开单都会自动带上，直到清空。'
+          : bf === 'addr_source'
+            ? '这决定发票实际寄到哪里——选 B 是寄给 c/o 那家公司，选 A 是寄给客户自己。'
+            : null,
       },
     };
   }

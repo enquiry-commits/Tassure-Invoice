@@ -1208,6 +1208,33 @@ again.
   rather than imported statically — adding one innocuous value import
   silently undid the code-splitting once already. Verify by checking that
   the only remaining reference is `import type`. *(source: 2026-09-10.)*
+- **INV-QB-0CO** — QuickBooks REPLACES `BillAddr` wholesale; it never
+  merges. So the moment this system sends one, it owns every line the client
+  reads on a real invoice. Two consequences that are load-bearing: (1) an
+  ordinary invoice with no c/o and no parent link must keep sending NO
+  `BillAddr` at all — that omission is what lets QuickBooks refill from the
+  customer default and is also what stops an invoice EDIT from wiping a c/o
+  someone typed by hand in QuickBooks; (2) composing a Bill To means
+  rebuilding the whole block (client name → `c/o X` → address → `Attn: Y`),
+  so every lookup inside it must DEGRADE to the client's own address with a
+  visible note rather than print a c/o line with nothing under it.
+  Confirmed against live data: "Novix Ai Global Pte. Ltd" exists as a
+  QuickBooks customer but has no address on file, which is exactly why the
+  real staff-typed invoice (TAC #02680288) printed the client's own address
+  under the c/o line. QuickBooks prints only Line1–Line5, so overflow is
+  folded into the last line, never dropped. *(source: 2026-09-10.)*
+- **INV-QB-0CO2** — Two features can write the invoice Bill To and they mean
+  OPPOSITE things: the parent-company override (`parent_company_id`) bills
+  the PARENT and replaces the client's name, while c/o bills the CLIENT and
+  keeps its name. c/o wins, per Vincent ("c/o 优先...但是要小心"), and when
+  both are configured on one company the invoice result carries an explicit
+  note saying which was used — never resolve that silently, because it
+  changes who the client sees the invoice addressed to. A new column read by
+  invoicing must also survive its own migration not having run yet:
+  `loadCareOfSettings()` swallows the missing-column error and returns
+  all-null, so deploying ahead of the SQL leaves invoicing byte-identical
+  (verified against production before the migration). *(source:
+  2026-09-10.)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

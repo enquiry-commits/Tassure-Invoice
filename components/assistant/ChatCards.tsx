@@ -1412,7 +1412,9 @@ export function CompanyUpdateCard({ preview, onDone }: { preview: CompanyUpdateP
         ? { id: preview.rowId, field: preview.field.replace(/^(?:master|trademark):/, ''), value: preview.proposedValue, previousValue: preview.previousValue ?? null }
         : preview.field === 'parent_company'
           ? { companyId: preview.companyId, parentCompanyId: preview.proposedValue }
-          : preview.field === 'customer_source'
+          : preview.field.startsWith('billto:')
+          ? { companyId: preview.companyId, field: `bill_to_${preview.field.slice('billto:'.length) === 'care_of' ? 'care_of' : preview.field.slice('billto:'.length) === 'attn' ? 'attn' : preview.field.slice('billto:'.length) === 'addr_source' ? 'care_of_addr_source' : 'care_of_addr_custom'}`, value: preview.proposedValue }
+        : preview.field === 'customer_source'
             ? { companyId: preview.companyId, value: preview.proposedValue }
             : { companyId: preview.companyId, service: preview.field.slice('service:'.length), value: preview.proposedValue };
 

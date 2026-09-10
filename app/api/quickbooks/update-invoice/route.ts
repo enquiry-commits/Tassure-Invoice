@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount } from '@/lib/approved-accounts';
 import { createAdminClient } from '@/lib/supabase';
 import { getValidToken, qbQuery, type QbCompany } from '@/lib/quickbooks';
-import { getItemMap, findPicClass, buildInvoiceLineArray, resolveParentBillAddr, type DraftLineItem } from '@/lib/qb-invoice-conventions';
+import { getItemMap, findPicClass, buildInvoiceLineArray, resolveParentBillAddr, resolveCareOfBillAddr, loadCareOfSettings, findCustomer, type DraftLineItem } from '@/lib/qb-invoice-conventions';
 import { normalize } from '@/lib/company-name';
 import { syncQuickBooksInvoiceChanges } from '@/lib/quickbooks-invoice-incremental';
 import type { InvoiceRef } from '@/lib/email-merge';
@@ -122,17 +122,36 @@ export async function PATCH(req: NextRequest) {
     }, { status: 409 });
   }
 
-  const [itemMap, picClass, parentBillAddr] = await Promise.all([
+  const [itemMap, picClass] = await Promise.all([
     getItemMap(token, realmId),
     qbCompany === 'TAB' && pic ? findPicClass(token, realmId, pic) : Promise.resolve(null),
-    // Vincent, 2026-08-20: a parent-company Bill-To link set AFTER this
-    // invoice was already created never took effect — create-invoice only
-    // writes BillAddr at creation time, and this route's sparse update never
-    // touched it. Re-resolved fresh here too, so saving an edit also brings
-    // BillAddr up to date with whatever's currently linked.
-    resolveParentBillAddr(token, realmId, qbCompany, null, genInv.company_name),
   ]);
-  if (parentBillAddr.kind === 'error') return NextResponse.json({ error: parentBillAddr.error }, { status: 409 });
+
+  // Same Bill-To precedence as create-invoice (c/o over parent link — see
+  // that route's comment). Re-resolved on every save for the reason Vincent
+  // gave 2026-08-20: a link set AFTER the invoice was created otherwise
+  // never took effect, since create-invoice writes BillAddr only once and
+  // this sparse update never touched it.
+  //
+  // The no-c/o, no-parent path still omits BillAddr entirely, which is what
+  // keeps editing an ordinary invoice from wiping a c/o somebody typed by
+  // hand inside QuickBooks.
+  const billToNotes: string[] = [];
+  let billAddrToSend: Record<string, unknown> | null = null;
+  const careOfSettings = await loadCareOfSettings(null, genInv.company_name);
+
+  if (careOfSettings.careOf?.trim() || careOfSettings.attn?.trim()) {
+    const customer = await findCustomer(token, realmId, genInv.company_name);
+    const careOf = await resolveCareOfBillAddr(
+      token, realmId, careOfSettings,
+      customer?.name ?? genInv.company_name, customer?.billAddr ?? null,
+    );
+    if (careOf.kind === 'ok') { billAddrToSend = careOf.billAddr; billToNotes.push(...careOf.notes); }
+  } else {
+    const parentBillAddr = await resolveParentBillAddr(token, realmId, qbCompany, null, genInv.company_name);
+    if (parentBillAddr.kind === 'error') return NextResponse.json({ error: parentBillAddr.error }, { status: 409 });
+    if (parentBillAddr.kind === 'ok') billAddrToSend = parentBillAddr.billAddr;
+  }
   const invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass);
 
   // Sparse update — CustomerRef/TxnDate/DocNumber are deliberately never
@@ -148,7 +167,7 @@ export async function PATCH(req: NextRequest) {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
       Id: qbInvoiceId, SyncToken: syncToken, sparse: true, Line: invoiceLines,
-      ...(parentBillAddr.kind === 'ok' ? { BillAddr: parentBillAddr.billAddr } : {}),
+      ...(billAddrToSend ? { BillAddr: billAddrToSend } : {}),
     }),
   });
   if (!updateRes.ok) {
@@ -189,5 +208,7 @@ export async function PATCH(req: NextRequest) {
     total: inv.TotalAmt,
     syncToken: inv.SyncToken,
     persistenceWarning: recordError ? recordError.message : null,
+    // How the Bill To block was composed — see create-invoice's own comment.
+    billToNotes,
   });
 }
