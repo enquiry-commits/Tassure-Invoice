@@ -1,3 +1,4 @@
+import { todaySGT } from '@/lib/date';
 import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import type { QbCompany } from '@/lib/quickbooks';
@@ -80,7 +81,7 @@ export async function GET() {
   buildInternalSheet(workbook, internalGroups);
 
   const bytes = Buffer.from(await workbook.xlsx.writeBuffer());
-  const fileName = `SOA - Full Workbook - ${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fileName = `SOA - Full Workbook - ${todaySGT()}.xlsx`;
   return new Response(bytes, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

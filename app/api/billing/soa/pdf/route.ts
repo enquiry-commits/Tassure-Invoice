@@ -1,3 +1,4 @@
+import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument } from 'pdf-lib';
 import { createAdminClient } from '@/lib/supabase';
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
   }
 
   const bytes = Buffer.from(await merged.save());
-  const fileName = `SOA - ${companyName} - ${new Date().toISOString().slice(0, 10)}.pdf`;
+  const fileName = `SOA - ${companyName} - ${todaySGT()}.pdf`;
   return new Response(bytes, {
     headers: {
       'Content-Type': 'application/pdf',

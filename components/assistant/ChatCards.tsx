@@ -8,8 +8,8 @@
 // Every line below is a mechanical move (not retyped) — verify with
 // `git diff` that app/my-tasks/page.tsx's own rendered behavior is
 // unchanged after it switches to importing from here.
-import { useState, useRef } from 'react';
-import { FileCheck2, X, ExternalLink, FileText, AlertTriangle, Download } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { FileCheck2, X, ExternalLink, FileText, AlertTriangle, Download, Send } from 'lucide-react';
 import type { InvoicePreview } from '@/lib/billing-lookup';
 import type { EditableLine } from '@/lib/billing-draft';
 import type { LateFilingResolvePreview } from '@/lib/late-filing-lookup';
@@ -19,7 +19,12 @@ import type { PostIncorporatePreview } from '@/lib/docx-post-incorporate';
 import type { ArUpdatePreview } from '@/lib/ar-update-lookup';
 // type-only for the same reason (lib/chat-export.ts is server-only)
 import type { ChatExportOffer } from '@/lib/chat-export';
-import { billingDeepLink, lateFilingDeepLink } from '@/lib/deep-links';
+// type-only (lib/outstanding-lookup.ts is server-only — see INV-DOC-006)
+import type { SoaPreview } from '@/lib/outstanding-lookup';
+import type { DraftLike } from '@/lib/draft-helper-client';
+import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
+import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender } from '@/lib/soa-actions-client';
+import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
 import { logActivity } from '@/lib/activity-client';
 
 // Drag-drop/paste attachments (2026-09-09) — Vincent: "我希望可以优化便
@@ -47,6 +52,7 @@ export type ChatMsg = {
   postIncorporatePreview?: PostIncorporatePreview;
   arUpdatePreview?: ArUpdatePreview;
   exportOffer?: ChatExportOffer;
+  soaPreview?: SoaPreview;
 };
 
 // Turns a local ChatMsg back into what /api/assistant expects — content
@@ -1029,6 +1035,125 @@ export function ListExportCard({ offer }: { offer: ChatExportOffer }) {
       </button>
       {state === 'error' && (
         <div style={{ marginTop: 6, fontSize: 10.5, color: '#b91c1c' }}>{message}</div>
+      )}
+    </div>
+  );
+}
+
+// Real SOA actions in chat (2026-09-10). Vincent, on the previous SOA
+// answer: "还是非常简陋，功能不齐全" — it printed the balance as prose plus
+// two markdown links telling him to go to the SOA page and press the
+// buttons himself. Since he had already defined the SOA flow as "download
+// the PDF, then send it to the client", handing over a link left most of
+// the job undone.
+//
+// This card runs the SOA page's OWN actions (lib/soa-actions-client.ts,
+// extracted from that page so there is one implementation, not two):
+// Download SOA PDF really downloads the merged statement, and Draft Email
+// really builds the campaign draft with that PDF attached and opens the
+// same OutlookStyleSendModal the page opens. Sending still happens inside
+// that modal, by the user — chat never sends (INV-DATA-033).
+export function SoaCard({ preview }: { preview: SoaPreview }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DraftLike | null>(null);
+  const [actor, setActor] = useState<{ me: SoaActor; sender: SoaSender } | null>(null);
+
+  useEffect(() => { void loadSoaActor().then(setActor); }, []);
+
+  const run = async (key: string, fn: () => Promise<void>) => {
+    setBusy(key); setError(null); setDone(null);
+    try { await fn(); } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally { setBusy(null); }
+  };
+
+  const money = (n: number) => `S$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 460 }}>
+      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+        <div style={{ fontSize: 10.5, color: '#94a3b8' }}>Statement of Account · 欠款合计 {money(preview.totalOutstanding)}</div>
+      </div>
+
+      {preview.lines.map(line => (
+        <div key={line.qbCompany} style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#0f766e', background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: 4, padding: '1px 5px' }}>{line.qbCompany}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61' }}>{money(line.totalOutstanding)}</span>
+            <span style={{ fontSize: 10.5, color: '#94a3b8' }}>
+              {line.invoiceCount} 张未付{line.oldestAgingBucketLabel ? ` · 最老 ${line.oldestAgingBucketLabel}` : ''}{line.owner ? ` · ${line.owner}` : ''}
+            </span>
+          </div>
+          {line.unpaidInvoices.length > 0 && (
+            <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 7 }}>
+              {line.unpaidInvoices.slice(0, 4).map(i => `#${i.invoiceNo}`).join('、')}
+              {line.unpaidInvoices.length > 4 ? ` 等 ${line.unpaidInvoices.length} 张` : ''}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 7 }}>
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() => void run(`pdf-${line.qbCompany}`, async () => {
+                await downloadSoaPdf(preview.companyName, line.qbCompany);
+                logActivity('chat_soa_pdf', { companyName: preview.companyName, qbCompany: line.qbCompany });
+                setDone(`${line.qbCompany} 的 SOA PDF 已下载。`);
+              })}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                border: '1px solid #cbd5e1', borderRadius: 7, padding: '7px 10px', fontSize: 11, fontWeight: 700,
+                background: '#fff', color: '#173b61', cursor: busy ? 'wait' : 'pointer',
+              }}
+            >
+              <Download size={12} />
+              {busy === `pdf-${line.qbCompany}` ? '合并中…' : '下载 SOA PDF'}
+            </button>
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() => void run(`mail-${line.qbCompany}`, async () => {
+                const built = await buildSoaDraft(preview.companyName, line.qbCompany, actor?.me ?? null, actor?.sender ?? null);
+                logActivity('chat_soa_draft', { companyName: preview.companyName, qbCompany: line.qbCompany });
+                setDraft(built);
+              })}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                border: 'none', borderRadius: 7, padding: '7px 10px', fontSize: 11, fontWeight: 700,
+                background: busy ? '#94a3b8' : '#0f766e', color: '#fff', cursor: busy ? 'wait' : 'pointer',
+              }}
+            >
+              <Send size={12} />
+              {busy === `mail-${line.qbCompany}` ? '准备中…' : '起草邮件'}
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {(error || done) && (
+        <div style={{ padding: '8px 14px', fontSize: 10.5, color: error ? '#b91c1c' : '#15803d', fontWeight: 650 }}>
+          {error ?? done}
+        </div>
+      )}
+
+      {preview.lines.length > 0 && (
+        <div style={{ padding: '8px 14px', borderTop: '1px solid #eef2f7' }}>
+          <a href={soaDeepLink(preview.lines[0].qbCompany, preview.companyName)} style={deepLinkStyle}>
+            <ExternalLink size={13} /> Open in SOA
+          </a>
+        </div>
+      )}
+
+      {draft && (
+        <OutlookStyleSendModal
+          draft={draft}
+          sender={actor?.sender ?? null}
+          me={actor?.me ?? null}
+          onClose={() => setDraft(null)}
+          onSent={() => { setDraft(null); setDone('邮件草稿已在 Outlook 中打开。'); }}
+        />
       )}
     </div>
   );

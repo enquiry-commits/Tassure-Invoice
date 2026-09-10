@@ -1,3 +1,4 @@
+import { todaySGT, thisYearSGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
@@ -89,7 +90,7 @@ export async function GET(req: NextRequest) {
   if (!account.canViewReports) return NextResponse.json({ error: 'Your account cannot view Reports.' }, { status: 403 });
 
   const sb = createAdminClient();
-  const thisYear = new Date().getFullYear();
+  const thisYear = thisYearSGT();
   const YEARS_BACK = 5;
   const years = Array.from({ length: YEARS_BACK }, (_, i) => thisYear - YEARS_BACK + 1 + i);
 
@@ -176,7 +177,7 @@ export async function GET(req: NextRequest) {
   const picWorkload = computePicWorkload(arRows);
 
   return NextResponse.json({
-    generatedAt: new Date().toISOString().slice(0, 10),
+    generatedAt: todaySGT(),
     kpis: {
       activeClients: active.length,
       newThisYear: newByYear[thisYear] ?? 0,

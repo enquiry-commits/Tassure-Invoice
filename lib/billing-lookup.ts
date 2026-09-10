@@ -1,3 +1,4 @@
+import { thisYearSGT } from '@/lib/date';
 import 'server-only';
 
 import { computeAllCompanyBilling } from '@/app/api/billing/renewals/route';
@@ -66,7 +67,7 @@ export async function previewInvoiceDraft(companyQuery: string, fyeYear?: number
     return { found: false, suggestions };
   }
 
-  const currentYear = fyeYear ?? new Date().getFullYear();
+  const currentYear = fyeYear ?? thisYearSGT();
   const cycleFye = company.fyeMonth ? fyeDateString(company.fyeMonth, currentYear) : undefined;
   const lines = computeDraftLines(company, currentYear, cycleFye);
   const totals = computeDraftTotals(lines);

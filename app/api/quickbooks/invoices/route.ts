@@ -1,9 +1,10 @@
+import { thisYearSGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { qbQuery } from '@/lib/quickbooks';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const year = searchParams.get('year') ?? new Date().getFullYear().toString();
+  const year = searchParams.get('year') ?? thisYearSGT().toString();
 
   const result = await qbQuery(
     `SELECT * FROM Invoice WHERE TxnDate >= '${year}-01-01' AND TxnDate <= '${year}-12-31' MAXRESULTS 1000`

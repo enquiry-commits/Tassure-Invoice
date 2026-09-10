@@ -1,3 +1,4 @@
+import { thisYearSGT } from '@/lib/date';
 import 'server-only';
 
 import { computeAllCompanyBilling } from '@/app/api/billing/renewals/route';
@@ -75,7 +76,7 @@ export async function previewInvoiceEdit(
     return { found: false, message: `No company matched "${companyQuery}".`, suggestions };
   }
 
-  const currentYear = new Date().getFullYear();
+  const currentYear = thisYearSGT();
   const cycleFye = company.fyeMonth ? fyeDateString(company.fyeMonth, currentYear) : undefined;
   const thisCycleInvoices = (company.generatedInvoices ?? []).filter(g => g.fyeCycle === cycleFye);
   if (!thisCycleInvoices.length) {

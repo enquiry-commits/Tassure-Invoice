@@ -1098,6 +1098,37 @@ again.
   answered "you have never been assigned anything" (`lib/firm-pulse.ts` /
   `firm_pulse` is the firm-wide counterpart that now sits beside it).
   *(source: 2026-09-10, Vincent: "怎么样让AI chat 更简单易懂人类的提问".)*
+- **INV-DATA-036** — The assistant's system prompt must state the CURRENT
+  SGT date and time on every call, in the DYNAMIC (uncached) half. A model
+  cannot read a clock: with no date given, it infers "today" from the
+  newest timestamp in its own tool results and narrates that as today.
+  Confirmed real 2026-09-10 — asked what everyone did today at 12:24 SGT,
+  it answered "今天（2026-09-09）", because the newest audit row it saw was
+  from the 9th. Nothing about the data or the timezone conversion was
+  wrong; the prompt simply never said what day it was. Related: this whole
+  system runs on Singapore time, so anything computing "now" must use
+  `todaySGT()`/`thisYearSGT()`, never `new Date().toISOString().slice(0,10)`
+  or `getFullYear()` — Vercel functions run in UTC, which is still the
+  PREVIOUS day until 08:00 SGT, and the previous YEAR until 08:00 on 1
+  January. That had reached a real financial record: an invoice raised
+  before 08:00 SGT was dated the previous day in QuickBooks
+  (`create-invoice`'s txnDate default). *(source: 2026-09-10, Vincent:
+  "一切以新加坡时间为准".)*
+- **INV-DATA-037** — When chat can answer a question about a real feature,
+  the reply must carry that feature's REAL actions, not a link telling the
+  user to go and press the buttons themselves. Vincent, repeatedly and
+  finally bluntly: "我已经说很多次了要有实际功能，只是在每次真正要操作实际
+  功能的时候，敏感操作，需要跳出弹窗获得用户点击同意AI助手协助执行" — real
+  execution is the requirement; the confirm popup is the safeguard, not a
+  reason to stop at a preview. The SOA answer had been prose plus two
+  markdown links, which left the actual job (download the statement, send
+  it to the client) entirely undone. The pattern that satisfies both: the
+  card runs the FEATURE PAGE'S OWN action code, extracted into a shared
+  client module so there is one implementation rather than a chat copy
+  that can drift (`lib/soa-actions-client.ts`, extracted from
+  `app/billing/soa/_components.tsx`), and anything client-facing still
+  terminates in the same human-confirmed send window the page uses —
+  chat prepares, the human sends. *(source: 2026-09-10.)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

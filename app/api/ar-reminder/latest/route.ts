@@ -1,3 +1,4 @@
+import { thisYearSGT } from '@/lib/date';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 
@@ -50,7 +51,7 @@ export async function GET() {
     .select('fye_month, fye_year');
 
   if (!data?.length) {
-    return NextResponse.json({ month: 'January', year: new Date().getFullYear() });
+    return NextResponse.json({ month: 'January', year: thisYearSGT() });
   }
 
   const pairs = [...new Map(data.map(r => [`${r.fye_year}-${r.fye_month}`, r])).values()];

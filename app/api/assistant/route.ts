@@ -22,12 +22,13 @@ import { getUpcomingDeadlines } from '@/lib/deadlines-lookup';
 import { getRecentChanges } from '@/lib/audit-lookup';
 import { getFirmPulse } from '@/lib/firm-pulse';
 import type { ChatExportOffer } from '@/lib/chat-export';
+import type { SoaPreview } from '@/lib/outstanding-lookup';
 import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
 import { fyeDateString } from '@/lib/invoice-templates';
 import { pageAll } from '@/lib/page-all';
-import { formatSgtDateTime } from '@/lib/date';
+import { formatSgtDateTime, todaySGT, nowSgtHuman, thisYearSGT } from '@/lib/date';
 import type { QbCompany } from '@/lib/quickbooks';
 import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
 import {
@@ -292,6 +293,12 @@ async function checkOutstandingBalance(companyQuery: string) {
     // feature from Billing Drafts (confirmed real confusion: the assistant
     // once offered to preview a NEW billing draft when asked to "开SOA").
     byQbCompany: result.lines.map(l => ({ ...l, soa_link: soaDeepLink(l.qbCompany, result.companyName) })),
+    // Stripped before the model sees it (same convention as _export) — see
+    // the tool loop in claudeAnswer(). Only present when there is really a
+    // balance: an SOA of nothing is not a thing.
+    ...(result.hasOutstanding
+      ? { _soa: { companyName: result.companyName, totalOutstanding: result.totalOutstanding, lines: result.lines } satisfies SoaPreview }
+      : {}),
     note: result.hasOutstanding
       ? 'Real, current outstanding balance from QuickBooks — tell the user the total and, if useful, the breakdown by TAB/TAC/TAO, the oldest aging bucket, and which invoices are unpaid. If the user wants the SOA (Statement of Account) PDF or wants to send it to the client, present each line\'s soa_link as a clickable markdown link — that page has the real "Download SOA PDF" and "Draft Email" buttons, already open to this company; never suggest Billing Drafts for this.'
       : 'No unpaid invoice found for this company across TAB/TAC/TAO — safe to tell the user there is no outstanding balance on file, but this is a live QuickBooks check, not an inference from AR Reminder/filing status. An SOA/statement only exists where there is an outstanding balance — say so plainly if asked for one here.',
@@ -612,7 +619,7 @@ async function revenueWorkloadSummary(account: ApprovedAccount | null) {
     return { error: true as const, message: `${account.name}'s account cannot view Reports analytics — that is limited to management accounts (Vincent, Cindy, Samuell, Tan Yee Soon). Tell the user plainly this isn't available to their account.` };
   }
   const sb = createAdminClient();
-  const thisYear = new Date().getFullYear();
+  const thisYear = thisYearSGT();
   const years = Array.from({ length: 5 }, (_, i) => thisYear - 5 + 1 + i);
   const [arRows, qbInvoices] = await Promise.all([
     pageAll<Record<string, unknown>>(() => sb.from('ar_reminder').select('pic, acc_pic, tax_pic, filling_date').or('status.is.null,status.neq.Excluded')),
@@ -1239,7 +1246,17 @@ async function dynamicSystemPrompt(context?: AssistantContext, account?: Approve
   const memoryBlock = memories.length
     ? `\nThings this user has explicitly asked to be remembered (treat as durable context, not absolute fact if it conflicts with live system data):\n${memories.map(m => `- [${m.memory_type}] ${m.content}`).join('\n')}\n`
     : '';
-  return `Current user location:
+  // The date MUST be stated here, every call. Confirmed real (2026-09-10):
+  // with no current date in the prompt, the assistant answered "今天
+  // (2026-09-09)" at noon SGT on the 10th — it had inferred "today" from
+  // the newest timestamp in its own tool results. Nothing about the data
+  // was wrong; the model simply had no clock. This block is in the DYNAMIC
+  // half of the system prompt on purpose: the static half carries
+  // cache_control, and a cached "today" would be worse than none.
+  return `RIGHT NOW it is ${nowSgtHuman()} in Singapore. Today's date is ${todaySGT()} (SGT) and the current year is ${thisYearSGT()}.
+This system runs entirely on Singapore time (SGT, UTC+8) — every date and time you state, and every relative expression you resolve ("today", "yesterday", "this week", "this month", "本月", "上个月"), must be worked out from the SGT date above and nothing else. NEVER infer today's date from a timestamp you saw in tool output: the newest record in a result is simply the newest record, not proof of what day it is. If a tool result's own dates disagree with today's date above, the tool is telling you about the past — say so, don't quietly redate today.
+
+Current user location:
 - Page: ${context?.page ?? 'unknown'}
 - Path: ${context?.pathname ?? 'unknown'}
 
@@ -1388,7 +1405,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview; exportOffer?: ChatExportOffer }> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview; exportOffer?: ChatExportOffer; soaPreview?: SoaPreview }> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -1418,6 +1435,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   // preview→confirm pattern exists to prevent. The user's own click on the
   // card is what downloads anything.
   let lastExportOffer: ChatExportOffer | undefined;
+  let lastSoaPreview: SoaPreview | undefined;
   // INV-DATA-022 deterministic safety net — see mentionsOutstandingBalance's
   // own comment on why this checks the REPLY, not the question.
   // outstandingToolCalled flips true the instant check_outstanding_balance
@@ -1451,7 +1469,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer };
+      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -1484,6 +1502,11 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
         if (tu.name === 'preview_post_incorporate' && result && typeof result === 'object' && (result as { complete?: boolean }).complete) {
           lastPostIncorporatePreview = (result as { preview: PostIncorporatePreview }).preview;
         }
+        if (result && typeof result === 'object' && '_soa' in result) {
+          const holder = result as { _soa?: SoaPreview };
+          if (holder._soa) lastSoaPreview = holder._soa;
+          delete holder._soa;
+        }
         if (result && typeof result === 'object' && '_export' in result) {
           const holder = result as { _export?: ChatExportOffer };
           if (holder._export && holder._export.count > 0) lastExportOffer = holder._export;
@@ -1496,7 +1519,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -1685,7 +1708,7 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
   const monthKey = Object.keys(MONTH_MAP).sort((a, b) => b.length - a.length).find(k => t.includes(k));
   if (monthKey && /(ar|年报|开单|开票|reminder|billing|batch|批次|几家|多少|名单|清单)/.test(t)) {
     const yearMatch = t.match(/20\d{2}/);
-    const year = yearMatch ? +yearMatch[0] : new Date().getFullYear();
+    const year = yearMatch ? +yearMatch[0] : thisYearSGT();
     const b = await arBatch(MONTH_MAP[monthKey], year);
     if (!b.total) return `${MONTH_MAP[monthKey]} ${year} 还没有 AR Reminder 批次。\n\n[AR Reminder](/billing?tab=ar) 可切换月份查看或生成。`;
     return [
@@ -1709,8 +1732,8 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
   if (/(到期|due|快到了|截止)/.test(t)) {
     const days = +(t.match(/(\d+)\s*天/)?.[1] ?? 45);
     const sb = createAdminClient();
-    const today = new Date().toISOString().slice(0, 10);
-    const until = new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+    const today = todaySGT();
+    const until = new Date(new Date(`${today}T00:00:00Z`).getTime() + days * 86400000).toISOString().slice(0, 10);
     const { data } = await sb.from('ar_reminder')
       .select('entity_name, due_date, fye_month, fye_year')
       .gte('due_date', today).lte('due_date', until)
@@ -1902,9 +1925,9 @@ export async function POST(req: NextRequest) {
       // than the other, single-shot preview tools ever did; losing an
       // earlier-collected director's details off the back of an 8-message
       // window would make Claude re-ask for them or, worse, guess.
-      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer } = await claudeAnswer(messages.slice(-24), context, account);
+      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview } = await claudeAnswer(messages.slice(-24), context, account);
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage, toStoredPreview(invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview));
-      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer });
+      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview });
     }
     // The rule-based intent router only ever understands plain text — an
     // attached image/PDF is real content only Claude can actually look at,

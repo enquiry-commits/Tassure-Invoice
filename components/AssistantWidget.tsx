@@ -42,7 +42,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Bot, MessageCircle, Send, Sparkles, X, Minus, Paperclip } from 'lucide-react';
 import { RichText } from '@/components/assistant/ChatRichText';
 import {
-  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard,
+  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard, SoaCard,
   AttachmentChips, AttachmentThumbnails, AttachmentLightbox,
   toApiMessage, type ChatMsg, type ChatAttachment,
 } from '@/components/assistant/ChatCards';
@@ -370,6 +370,7 @@ export default function AssistantWidget() {
         lateFilingPreview: json.lateFilingPreview ?? undefined,
         arUpdatePreview: json.arUpdatePreview ?? undefined,
         exportOffer: json.exportOffer ?? undefined,
+        soaPreview: json.soaPreview ?? undefined,
         invoiceEditPreview: json.invoiceEditPreview ?? undefined,
         postIncorporatePreview: json.postIncorporatePreview ?? undefined,
       }]);
@@ -524,6 +525,9 @@ export default function AssistantWidget() {
                         )}
                         {message.lateFilingPreview && (
                           <LateFilingResolveCard preview={message.lateFilingPreview} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
+                        )}
+                        {message.soaPreview && (
+                          <SoaCard preview={message.soaPreview} />
                         )}
                         {message.exportOffer && (
                           <ListExportCard offer={message.exportOffer} />

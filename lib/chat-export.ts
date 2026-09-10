@@ -6,6 +6,7 @@ import { getLateFilingList } from '@/app/api/late-filing/route';
 import { categorizeLateFilingRow } from '@/lib/late-filing-categorize';
 import { type DataRow, type ExportColumn } from '@/lib/export-columns';
 import type { QbCompany } from '@/lib/quickbooks';
+import { todaySGT } from '@/lib/date';
 
 /**
  * "Hand me the list" — the .xlsx behind a chat answer (2026-09-10).
@@ -108,7 +109,9 @@ const DEADLINE_KIND_LABEL: Record<string, string> = {
 };
 
 // A filename a person can find again a week later, not "export(3).xlsx".
-const stamp = () => new Date().toISOString().slice(0, 10);
+// SGT — a file a Singapore office generates at 9am must not be stamped
+// with yesterday's date (UTC is still the previous day until 08:00 SGT).
+const stamp = () => todaySGT();
 const safe = (s: string) => s.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'list';
 
 function describeFilters(filters: CompanyListFilters): string {

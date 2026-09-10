@@ -1,3 +1,4 @@
+import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
 import {
@@ -291,7 +292,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Every invoice line requires a description, finite rate and positive quantity.' }, { status: 400 });
   }
 
-  const date = txnDate ?? new Date().toISOString().slice(0, 10);
+  // SGT, not UTC (2026-09-10). An invoice raised between 00:00 and 08:00
+  // Singapore time was being dated the PREVIOUS day, because UTC has not
+  // rolled over yet — this is the invoice's own transaction date in
+  // QuickBooks, so it was a real wrong value on a real financial record,
+  // not a display quirk. Only the DEFAULT changes; an explicitly supplied
+  // txnDate is still honoured exactly as passed.
+  const date = txnDate ?? todaySGT();
   const supabase = createAdminClient();
 
   const activeCompanies: QbCompany[] = [

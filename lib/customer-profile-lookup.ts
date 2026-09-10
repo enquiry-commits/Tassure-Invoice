@@ -1,3 +1,4 @@
+import { thisYearSGT } from '@/lib/date';
 import 'server-only';
 
 import { createAdminClient } from './supabase';
@@ -109,7 +110,7 @@ export async function getCustomerProfileSummary(): Promise<CustomerProfileSummar
     locationCounts.set(loc, (locationCounts.get(loc) ?? 0) + 1);
   }
 
-  const thisYear = new Date().getFullYear();
+  const thisYear = thisYearSGT();
   const { newByYear, churnedByYear } = computeClientFlow(masterList);
 
   return {

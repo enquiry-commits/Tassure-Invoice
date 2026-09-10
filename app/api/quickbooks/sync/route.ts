@@ -1,3 +1,4 @@
+import { thisYearSGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { qbQuery, correctedCustomerName, type QbCompany } from '@/lib/quickbooks';
 import { createAdminClient } from '@/lib/supabase';
@@ -115,7 +116,7 @@ export const maxDuration = 300; // full-year sync pages through 1500+ invoices (
 // already got before it was connected, now extended to TAO.
 async function syncRecentYears(run: AutomationRun) {
   const webhookChanges = await processQuickBooksWebhookQueue(run);
-  const thisYear = new Date().getFullYear();
+  const thisYear = thisYearSGT();
   const results: Record<string, unknown>[] = [];
   for (const company of ['TAB', 'TAC', 'TAO'] as QbCompany[]) {
     for (const year of [String(thisYear - 2), String(thisYear - 1), String(thisYear)]) {
@@ -135,7 +136,7 @@ export async function GET(req: NextRequest) {
 // ── POST /api/quickbooks/sync ─────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   return withAutomationRun(req, 'quickbooks', async run => {
-    const { year = new Date().getFullYear().toString(), company = 'TAB' } = await req.json().catch(() => ({}));
+    const { year = thisYearSGT().toString(), company = 'TAB' } = await req.json().catch(() => ({}));
     const qbCompany: QbCompany = company === 'TAC' || company === 'TAO' ? company : 'TAB';
     const result = await syncYear(String(year), qbCompany, run.id);
     const ok = !result.error && !result.invoice_error && Number(result.items_error ?? 0) === 0;

@@ -1,3 +1,4 @@
+import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import type { QbCompany } from '@/lib/quickbooks';
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
   buildCompanySheet(workbook, company, rows);
 
   const bytes = Buffer.from(await workbook.xlsx.writeBuffer());
-  const fileName = `${company} A-R Ageing - ${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fileName = `${company} A-R Ageing - ${todaySGT()}.xlsx`;
   return new Response(bytes, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

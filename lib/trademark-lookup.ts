@@ -1,3 +1,4 @@
+import { todaySGT } from '@/lib/date';
 import 'server-only';
 
 import { createAdminClient } from './supabase';
@@ -26,8 +27,11 @@ export async function getTrademarkSummary(expiringSoonDays = 180): Promise<Trade
   const master = rows.filter(r => r.category === 'master');
   const inProgress = rows.filter(r => r.category === 'in_progress');
 
-  const cutoff = new Date(Date.now() + expiringSoonDays * 86_400_000).toISOString().slice(0, 10);
-  const today = new Date().toISOString().slice(0, 10);
+  // SGT, not UTC: an expiry "today" must mean today in Singapore. Before
+  // 08:00 SGT a UTC date is still yesterday, which silently shifted this
+  // whole renewal window by a day.
+  const today = todaySGT();
+  const cutoff = new Date(new Date(`${today}T00:00:00Z`).getTime() + expiringSoonDays * 86_400_000).toISOString().slice(0, 10);
   const expiringSoon = master
     .filter(r => r.mark_expired_date && r.mark_expired_date >= today && r.mark_expired_date <= cutoff)
     .sort((a, b) => String(a.mark_expired_date).localeCompare(String(b.mark_expired_date)))

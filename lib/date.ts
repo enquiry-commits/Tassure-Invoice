@@ -24,6 +24,25 @@ export function formatSgtDateTime(value: string | null | undefined): string {
   });
 }
 
+/**
+ * The authoritative "right now" for anything a human reads, as
+ * "Thursday, 10 September 2026, 12:04 (SGT)".
+ *
+ * Added 2026-09-10 after the chat assistant told Vincent "今天
+ * (2026-09-09)" at noon on the 10th. The cause was not a broken
+ * conversion — it was that NOTHING in the assistant's prompt ever stated
+ * the current date, so the model inferred "today" from the newest
+ * timestamp in its tool results (a real 09-09 audit row) and narrated
+ * that as today. A model cannot read a clock; if the date matters, the
+ * date has to be given to it.
+ */
+export function nowSgtHuman(): string {
+  return new Date().toLocaleString('en-GB', {
+    timeZone: SGT, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+}
+
 export function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
 }

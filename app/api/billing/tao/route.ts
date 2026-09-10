@@ -1,3 +1,4 @@
+import { thisYearSGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { createAdminClient } from '@/lib/supabase';
@@ -35,7 +36,7 @@ function wordMatch<T>(target: string, map: Map<string, T>): T | null {
 
 export async function GET() {
   const supabase = createAdminClient();
-  const currentYear = new Date().getFullYear();
+  const currentYear = thisYearSGT();
 
   const [companiesRes, qbItemsRes, taoInvoicesRes] = await Promise.all([
     supabase.from('companies').select('id, company_name, has_accounts, has_tax, services_manual'),

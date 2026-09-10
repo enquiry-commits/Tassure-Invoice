@@ -1,3 +1,4 @@
+import { todaySGT } from '@/lib/date';
 import { NextRequest } from 'next/server';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
 import { nextDocNumber } from '@/lib/qb-invoice-conventions';
@@ -12,7 +13,7 @@ async function getNext(company: QbCompany, txnDate: string) {
 }
 
 export async function GET(req: NextRequest) {
-  const txnDate = req.nextUrl.searchParams.get('txnDate') ?? new Date().toISOString().slice(0, 10);
+  const txnDate = req.nextUrl.searchParams.get('txnDate') ?? todaySGT();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(txnDate)) {
     return Response.json({ error: 'txnDate must be YYYY-MM-DD' }, { status: 400 });
   }

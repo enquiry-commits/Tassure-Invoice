@@ -35,6 +35,18 @@ export type OutstandingLine = {
   unpaidInvoices: { invoiceNo: string; dueDate: string }[];
 };
 
+// What the chat's SOA card renders. Added 2026-09-10 — Vincent, looking at
+// a chat SOA answer: "还是非常简陋，功能不齐全". The reply was prose plus two
+// markdown links telling him to go to the page and press the buttons
+// himself, which is the manual work chat was supposed to remove. The card
+// carries the same per-book breakdown and runs the page's OWN Download SOA
+// PDF / Draft Email actions (lib/soa-actions-client.ts).
+export type SoaPreview = {
+  companyName: string;
+  totalOutstanding: number;
+  lines: OutstandingLine[];
+};
+
 export type OutstandingLookupResult =
   | { found: true; companyName: string; hasOutstanding: boolean; totalOutstanding: number; lines: OutstandingLine[] }
   | { found: false; ambiguous: true; message: string; candidates: string[] }
