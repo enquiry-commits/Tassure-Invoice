@@ -41,7 +41,17 @@ export const MASTER_LIST_CHAT_FIELDS = ['remark', 'grade'] as const;
 export type MasterListChatField = typeof MASTER_LIST_CHAT_FIELDS[number];
 export const GRADE_VALUES = ['A', 'B', 'C'] as const;
 
-export type CompanyUpdateField = `service:${CompanyServiceField}` | `master:${MasterListChatField}` | 'customer_source' | 'parent_company';
+// Trademark record fields chat may touch. Deliberately the NOTES plus the
+// expiry date, not the identity: sn / company_name / application_number /
+// application_date identify the record and are historical facts, and a
+// sentence should never be able to rewrite which mark a row is about.
+// mark_expired_date IS included because updating it after a renewal is
+// real work — but it drives trademark_summary's "expiring soon" window and
+// upcoming_deadlines, so it carries a warning.
+export const TRADEMARK_CHAT_FIELDS = ['mark_expired_date', 'status_text', 'updates_note', 'remarks'] as const;
+export type TrademarkChatField = typeof TRADEMARK_CHAT_FIELDS[number];
+
+export type CompanyUpdateField = `service:${CompanyServiceField}` | `master:${MasterListChatField}` | `trademark:${TrademarkChatField}` | 'customer_source' | 'parent_company';
 
 export type CompanyUpdatePreview = {
   companyId: number;
@@ -95,10 +105,23 @@ export async function previewCompanyUpdate(
   companyQuery: string,
   field: CompanyUpdateField,
   rawValue: unknown,
+  // Only meaningful for trademark:* — a company can hold several marks, so
+  // this picks one. Omitted with several on file returns `ambiguous` with
+  // the real application numbers, the same "ask, never guess" shape the
+  // company matcher uses.
+  applicationNumber?: string,
 ): Promise<CompanyUpdateResult> {
   const sb = createAdminClient();
   const trimmed = companyQuery.trim();
   if (!trimmed) return { found: false, message: 'A company name is required.' };
+
+  // Trademark records resolve against their OWN company names, not the
+  // `companies` roster — a mark can belong to a company that was never (or
+  // is no longer) a live client, and trademark_records is its own table
+  // joined by name (INV-DATA-040's family, hence normalize()).
+  if (field.startsWith('trademark:')) {
+    return previewTrademarkUpdate(sb, trimmed, field as `trademark:${TrademarkChatField}`, rawValue, applicationNumber);
+  }
 
   const { data: rows } = await sb.from('companies')
     .select('id, company_name, has_accounts, has_tax, has_xbrl, services_manual, customer_source, parent_company_id')
@@ -261,6 +284,96 @@ export async function previewCompanyUpdate(
       endpoint: '/api/companies/parent',
       alreadyThatValue: (company.parent_company_id ?? null) === parentId,
       warning: null,
+    },
+  };
+}
+
+type TrademarkRow = {
+  id: number; category: string; company_name: string;
+  application_number: string | null; mark_expired_date: string | null;
+  status_text: string | null; updates_note: string | null; remarks: string | null;
+};
+
+const TRADEMARK_LABEL: Record<TrademarkChatField, string> = {
+  mark_expired_date: '商标到期日',
+  status_text: '商标状态',
+  updates_note: '商标进度备注',
+  remarks: '商标备注',
+};
+
+async function previewTrademarkUpdate(
+  sb: ReturnType<typeof createAdminClient>,
+  companyQuery: string,
+  field: `trademark:${TrademarkChatField}`,
+  rawValue: unknown,
+  applicationNumber?: string,
+): Promise<CompanyUpdateResult> {
+  const tf = field.slice('trademark:'.length) as TrademarkChatField;
+  if (!TRADEMARK_CHAT_FIELDS.includes(tf)) {
+    return { found: false, message: `Only these trademark fields can be changed from chat: ${TRADEMARK_CHAT_FIELDS.join(', ')}. The serial number, company name, application number and application date identify the record and are not editable here.` };
+  }
+
+  const { data } = await sb.from('trademark_records')
+    .select('id, category, company_name, application_number, mark_expired_date, status_text, updates_note, remarks');
+  const all = (data ?? []) as TrademarkRow[];
+  if (!all.length) return { found: false, message: 'There are no trademark records on file at all.' };
+
+  const resolution = resolveCompany(companyQuery, all, r => r.company_name);
+  if (resolution.kind === 'ambiguous') {
+    return {
+      found: false, ambiguous: true,
+      message: `Several companies with trademark records match "${companyQuery}" — ask which one.`,
+      candidates: [...new Set(resolution.candidates.map(r => r.company_name))],
+    };
+  }
+  if (resolution.kind === 'none') {
+    return { found: false, message: `No trademark record found for "${companyQuery}". Not every client has one — say so plainly rather than assuming the record is missing.` };
+  }
+  const matchedName = (resolution.kind === 'exact' ? resolution.value : resolution.value).company_name;
+  const marks = all.filter(r => normalize(r.company_name) === normalize(matchedName));
+
+  let row: TrademarkRow | undefined;
+  if (applicationNumber) {
+    const wantedApp = applicationNumber.trim().toUpperCase();
+    row = marks.find(r => (r.application_number ?? '').trim().toUpperCase() === wantedApp);
+    if (!row) {
+      return { found: false, message: `"${matchedName}" has no trademark with application number ${applicationNumber}. On file: ${marks.map(m => m.application_number ?? '(no number)').join(', ')}.` };
+    }
+  } else if (marks.length === 1) {
+    row = marks[0];
+  } else {
+    // Several marks, none named — ask, never pick one. Editing the wrong
+    // mark's expiry date would move a renewal deadline silently.
+    return {
+      found: false, ambiguous: true,
+      message: `"${matchedName}" has ${marks.length} trademark records — ask which application number before changing anything.`,
+      candidates: marks.map(m => `${m.application_number ?? '(no number)'} · 到期 ${m.mark_expired_date ?? '—'}${m.status_text ? ` · ${m.status_text}` : ''}`),
+    };
+  }
+
+  const next = rawValue === null || rawValue === '' ? null : String(rawValue).trim();
+  if (tf === 'mark_expired_date' && next !== null && !/^\d{4}-\d{2}-\d{2}$/.test(next)) {
+    return { found: false, message: 'A trademark expiry date must be an ISO date like 2027-04-26 — ask the user for the exact date rather than reformatting a vague one.' };
+  }
+  const current = row[tf] ?? null;
+
+  return {
+    found: true,
+    preview: {
+      companyId: row.id,
+      companyName: row.company_name,
+      field, fieldLabel: `${TRADEMARK_LABEL[tf]}（${row.application_number ?? '无申请号'}）`,
+      autoValue: null,
+      currentDisplay: current ?? '（空）',
+      proposedDisplay: next ?? '（清空）',
+      proposedValue: next,
+      rowId: row.id,
+      previousValue: current,
+      endpoint: '/api/trademark',
+      alreadyThatValue: current === next,
+      warning: tf === 'mark_expired_date'
+        ? '到期日会驱动商标续期提醒（trademark_summary 的「即将到期」和 upcoming_deadlines），改错会让续期窗口整个错位。'
+        : null,
     },
   };
 }

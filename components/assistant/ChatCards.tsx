@@ -1391,8 +1391,8 @@ export function CompanyUpdateCard({ preview, onDone }: { preview: CompanyUpdateP
       // Master List's PATCH is conflict-safe and refuses a request with no
       // previousValue (428), so it gets a different body shape: the row id
       // plus exactly the value this preview saw.
-      const body = preview.field.startsWith('master:')
-        ? { id: preview.rowId, field: preview.field.slice('master:'.length), value: preview.proposedValue, previousValue: preview.previousValue ?? null }
+      const body = preview.field.startsWith('master:') || preview.field.startsWith('trademark:')
+        ? { id: preview.rowId, field: preview.field.replace(/^(?:master|trademark):/, ''), value: preview.proposedValue, previousValue: preview.previousValue ?? null }
         : preview.field === 'parent_company'
           ? { companyId: preview.companyId, parentCompanyId: preview.proposedValue }
           : preview.field === 'customer_source'

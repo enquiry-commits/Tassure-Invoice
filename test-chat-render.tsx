@@ -137,5 +137,21 @@ check('TAO card offers the real builder', tao.includes('打开 TAO 建单器'));
 const taoOutside = renderToStaticMarkup(<TaoBillingCard preview={{ ...taoBase, inCompanyRoster: false }} />);
 check('TAO card explains an ACC-only customer is still a real client', taoOutside.includes('不代表不是我们的客户'));
 
+
+const tmCard = renderToStaticMarkup(
+  <CompanyUpdateCard
+    preview={{
+      companyId: 1, companyName: 'GRAND GOLDEN COAST (SINGAPORE) PTE. LTD.',
+      field: 'trademark:mark_expired_date', fieldLabel: '商标到期日（40201707400Y）', autoValue: null,
+      currentDisplay: '2027-04-26', proposedDisplay: '2030-01-01', proposedValue: '2030-01-01',
+      rowId: 1, previousValue: '2027-04-26', endpoint: '/api/trademark', alreadyThatValue: false,
+      warning: '到期日会驱动商标续期提醒，改错会让续期窗口整个错位。',
+    }}
+    onDone={() => {}}
+  />,
+);
+check('trademark card names the specific mark', tmCard.includes('40201707400Y'));
+check('trademark card warns the date drives renewal reminders', tmCard.includes('续期窗口整个错位'));
+
 console.log(fail === 0 ? '\n=== ALL PASSED ===' : `\n=== ${fail} FAILED ===`);
 process.exit(fail === 0 ? 0 : 1);

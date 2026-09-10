@@ -1,6 +1,16 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-10 (Assistant — 互通 phase 5: TAO (ACC) billing reaches chat, and two real data findings.
+Last updated: 2026-09-10 (Assistant — 互通 phase 6: trademark records editable from chat.
+
+`preview_company_update` extended again rather than adding a 33rd tool. It now edits a trademark record's expiry date, status, progress note and remarks. Deliberately NOT the identity fields (sn / company_name / application_number / application_date): those say WHICH mark a row is about, and a sentence must never be able to rewrite that.
+
+`mark_expired_date` is included because updating it after a renewal is real work, but it drives `trademark_summary`'s "expiring soon" window and `upcoming_deadlines`, so it carries a warning in both the card and the confirm popup, and a vague date is refused outright ("明年" → asks for the exact ISO date rather than guessing a year).
+
+A company can hold several marks (WAN JIA CATERING holds 3), so with no `applicationNumber` given the tool returns `ambiguous` listing the real application numbers and their expiry dates — the same ask-never-guess shape the company matcher uses. Editing the wrong mark's expiry would move a renewal deadline silently. Trademark records also resolve against their OWN company names, not the `companies` roster: a mark can belong to a company that is no longer a live client.
+
+Verified against production (71 records, 65 registered / 6 in progress): single-mark company previews directly with the application number in the label; the 3-mark company asks which; identity fields and vague dates are refused. `test-chat-render.tsx` now 33 checks, all passing; `npm run build` clean.
+
+Previous entry: Assistant — 互通 phase 5: TAO (ACC) billing reaches chat, and two real data findings.
 
 TAO was the last billing path with zero chat coverage. New `tao_billing_history` tool (32 tools) + `TaoBillingCard`, and the page's own `TaoInvoiceBuilder` moved to `components/billing/` as a pure move (both extracted blocks verified byte-identical) so the card opens the REAL builder in a modal, same as the TAB/TAC editor in phase 1.
 
