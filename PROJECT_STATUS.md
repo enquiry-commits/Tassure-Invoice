@@ -1,6 +1,18 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-10 (Assistant — 互通 phase 4: Master List edits, and a browserless render guard.
+Last updated: 2026-09-10 (Assistant — 互通 phase 5: TAO (ACC) billing reaches chat, and two real data findings.
+
+TAO was the last billing path with zero chat coverage. New `tao_billing_history` tool (32 tools) + `TaoBillingCard`, and the page's own `TaoInvoiceBuilder` moved to `components/billing/` as a pure move (both extracted blocks verified byte-identical) so the card opens the REAL builder in a modal, same as the TAB/TAC editor in phase 1.
+
+The tool is named for the QUESTION, not for 开单, on purpose: TAO cannot be auto-drafted (Accounts/Tax have no periodicity model, which is exactly why ACC hand-builds every invoice), and 开单 already routes to TAB/TAC — the 开SOA mis-route showed what an ambiguous verb costs on a 30+ tool surface. So it answers "what have we billed them before, and how much", then hands over the builder with those services as candidates.
+
+**Finding 1 — ACC's client base is not a subset of ours.** 154 of 359 real TAO customers have NO row in `companies` at all; some are individuals billed for personal tax ("Wu Yan"). My first version resolved against active companies and answered "No active company matched" for 43% of ACC's real book. The TAO page already had this right, so its eligibility computation was extracted (`computeTaoCompanies()`) and reused rather than re-derived. INV-DATA-041.
+
+**Finding 2 — a confidently wrong S$0.** Older TAO line items store a NULL rate, so summing them with `?? 0` reported "S$0 to repeat everything" for Galaxia Capital, really billed S$1,200. The total now travels with `servicesWithoutRate` and the card says "实际更高" instead of quoting a clean number. INV-DATA-042.
+
+Verified against production: NASTURTIUM 5 prior services, 1V CAPITAL's TAO history (S$2,650) agrees with its SOA balance, Galaxia Capital and Wu Yan (both outside the roster) now resolve correctly. `test-chat-render.tsx` extended to 31 checks, all passing; `npm run build` / `test-orchestrator.ts` clean. The TAO builder's Generate button has NOT been clicked.
+
+Previous entry: Assistant — 互通 phase 4: Master List edits, and a browserless render guard.
 
 **Master List, deliberately narrow.** `preview_company_update` was EXTENDED rather than a new tool added — tool count matters, and 31 tools is already why "我要开SOA" mis-routed to invoice drafting. It now also edits the Master List remark and grade. Two fields out of ~45, chosen from the real data rather than the schema: `grade` is clean and structured (A 277 / B 88 / C 35), `remark` is free text nobody can corrupt. Everything else is excluded on purpose — compliance dates belong to `preview_ar_update`, directors/shareholders/secretary/status are written by the TeamWork sync, and `kyc_year` is already so dirty in production (18 rows hold a postal ADDRESS in a year field) that letting a sentence write into it would only add to the mess. The card sends the conflict-safe `previousValue` the endpoint demands (428 without it) and surfaces a 409 as "someone else just changed this" instead of retrying over their edit.
 

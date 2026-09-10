@@ -25,6 +25,7 @@ import type { ChatExportOffer } from '@/lib/chat-export';
 import type { SoaPreview } from '@/lib/outstanding-lookup';
 import { previewEmailDraft, type EmailDraftPreview, type EmailDraftType } from '@/lib/email-draft-lookup';
 import { previewCompanyUpdate, type CompanyUpdatePreview, type CompanyUpdateField } from '@/lib/company-update-lookup';
+import { previewTaoBilling, type TaoPreview } from '@/lib/tao-lookup';
 import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
@@ -546,6 +547,28 @@ async function companyUpdatePreviewTool(account: ApprovedAccount | null, input: 
     ...result.preview,
     _companyUpdate: result.preview,
     note: 'READ-ONLY preview — NOTHING has been changed, and you have no tool that can write this. The user sees a card with the real before/after and a Confirm popup; only their click saves it. Relay the change plainly (company, which setting, current → new). For a SERVICE OVERRIDE specifically, say what the warning says: services_manual is written only by this one endpoint and no automatic sync ever corrects it, so a wrong value stays wrong until a human fixes it, and it affects billing — do not encourage toggling one casually. If alreadyThatValue is true, say it is already set that way instead of urging a pointless change. Never say or imply you made the change.',
+  };
+}
+
+// Added 2026-09-10 — TAO (ACC's own QuickBooks book) was the one billing
+// path with no chat coverage at all. Deliberately named for the QUESTION
+// rather than 开单: TAO cannot be auto-drafted (no periodicity model for
+// Accounts/Tax), and 开单 already routes to TAB/TAC. See lib/tao-lookup.ts.
+async function taoBillingTool(account: ApprovedAccount | null, input: Record<string, unknown>) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  const company = typeof input.company === 'string' ? input.company.trim() : '';
+  if (!company) return { error: true as const, message: 'A company name is required.' };
+  const result = await previewTaoBilling(company);
+  if (!result.found) {
+    if (result.ambiguous) return { found: false as const, ambiguous: true as const, message: result.message, candidates: result.candidates };
+    return { found: false as const, message: result.message };
+  }
+  const p = result.preview;
+  return {
+    found: true as const,
+    ...p,
+    _tao: p,
+    note: `Real TAO (ACC) billing history from QuickBooks — every DISTINCT product/service this customer has ever been billed under a TAO invoice, most recent occurrence of each, with the rate last charged. This is NOT a draft and NOT a due-date list: Accounts/Tax services have no periodicity model in this system, which is why ACC hand-builds every TAO invoice. Present it as "what we billed them before, and how much", then tell the user the card has a button that opens the real TAO invoice builder with these services pre-filled as candidates to tick on or off. ${p.servicesWithoutRate > 0 ? `IMPORTANT for this company: ${p.servicesWithoutRate} of the ${p.priorServices.length} prior services have NO rate stored (older QuickBooks line items), so totalIfAllRepeated (${p.totalIfAllRepeated}) is only the priced ones — say the total is incomplete rather than quoting it as the full amount. ` : ''}${p.inCompanyRoster ? '' : 'NOTE: this customer has no row in the corporate-secretarial company roster — that is normal (154 of 359 TAO customers are accounting/tax-only clients, some are individuals), so never describe them as "not our client". '}Amounts are SGD. Never claim you created a TAO invoice.`,
   };
 }
 
@@ -1367,6 +1390,7 @@ const CLAUDE_TOOLS = [
     field: { type: 'string', enum: ['service:secretary', 'service:accounts', 'service:tax', 'service:xbrl', 'master:remark', 'master:grade', 'customer_source', 'parent_company'] },
     value: { description: "For a service field: true (force ON), false (force OFF) or null (clear the override). For customer_source: one of referral/website/advertising/existing_client/walk_in/other, or null. For parent_company: the parent company's NAME, or null to clear." },
   }, required: ['company', 'field'] } },
+  { name: 'tao_billing_history', description: "REAL TAO (ACC's own QuickBooks book) billing history for ONE customer — every distinct Accounts/Tax product ever billed to them, the rate last charged, and their last TAO invoice. TAO is ACC's separate book for accounting/tax work and is NOT the same as TAB/TAC invoicing. Use it whenever the user asks what a client was charged for accounts/tax/GST/personal tax before, or is about to raise a TAO invoice and wants the prior services (e.g. \"XX 之前的 Accounts 收多少\", \"XX 的 TAO 开过什么\", \"ACC 那边给 XX 开过什么单\"). It does NOT draft anything — Accounts/Tax have no renewal cycle in this system, so ACC hand-builds every TAO invoice; the card gives the user a button that opens the real TAO builder with these services pre-filled. ACC's client book is separate from the corporate-secretarial roster, so a customer here may have no company record at all.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Customer name, partial match is fine' } }, required: ['company'] } },
   { name: 'firm_pulse', description: "REAL firm-WIDE 'what needs attention right now' overview in one call — overdue AR filings and AGMs, what's due in the next 14 days, active late filers, and total money owed with the biggest debtors. Management-only. Use for \"今天最要紧的是什么\", \"现在有什么要注意的\", \"What should I prioritize today\" when the user means the FIRM rather than their own task list (my_tasks_summary answers the personal version, and legitimately returns nothing for an owner/management account who is not a caseworker).", input_schema: { type: 'object', properties: {} } },
   { name: 'collections_worklist', description: "REAL list of which companies a given person has to CHASE for unpaid invoices, with each one's amount and how old the oldest unpaid invoice is — the same owner filter the SOA page itself is built around. Use for \"我手上有哪些欠款要催\", \"Chelsea 要催哪些公司\", \"我的欠款清单\". Pass owner:'me' for the caller's own list. Omit owner for the whole firm. This is the LIST view; outstanding_balance_summary answers 'how big is the book' and check_outstanding_balance answers about ONE named company.", input_schema: { type: 'object', properties: { owner: { type: 'string', description: "Collections owner's name, or 'me' for the caller. Omit for the whole firm." }, qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks books — omit for all 3' } } } },
   { name: 'recent_changes', description: 'REAL field-level change history from the audit log — who changed which field on which company, from what value to what, and when. Use for "最近谁改了什么", "这家公司最近被改了什么", "谁动过这个". Most changes are AUTOMATED nightly syncs (changed_by "system:..."); pass humanOnly:true when the user means a person. Different from recent_activity_summary, which describes what a person has been DOING across features rather than the field-level diff trail.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days back, default 7, max 365' }, humanOnly: { type: 'boolean', description: 'Exclude automated system syncs' }, company: { type: 'string', description: 'Only changes for this company' }, limit: { type: 'number', description: 'How many change rows to return, default 30, max 100' } } } },
@@ -1458,6 +1482,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'preview_ar_update') return arUpdatePreviewTool(account, input);
   if (name === 'preview_email_draft') return emailDraftPreviewTool(account, input);
   if (name === 'preview_company_update') return companyUpdatePreviewTool(account, input);
+  if (name === 'tao_billing_history') return taoBillingTool(account, input);
   if (name === 'firm_pulse') return firmPulseTool(account);
   if (name === 'collections_worklist') return collectionsWorklistTool(account, input);
   if (name === 'recent_changes') return recentChangesTool(input);
@@ -1484,7 +1509,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview; exportOffer?: ChatExportOffer; soaPreview?: SoaPreview; emailDraftPreview?: EmailDraftPreview; companyUpdatePreview?: CompanyUpdatePreview }> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview; exportOffer?: ChatExportOffer; soaPreview?: SoaPreview; emailDraftPreview?: EmailDraftPreview; companyUpdatePreview?: CompanyUpdatePreview; taoPreview?: TaoPreview }> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -1517,6 +1542,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   let lastSoaPreview: SoaPreview | undefined;
   let lastEmailDraftPreview: EmailDraftPreview | undefined;
   let lastCompanyUpdatePreview: CompanyUpdatePreview | undefined;
+  let lastTaoPreview: TaoPreview | undefined;
   // INV-DATA-022 deterministic safety net — see mentionsOutstandingBalance's
   // own comment on why this checks the REPLY, not the question.
   // outstandingToolCalled flips true the instant check_outstanding_balance
@@ -1550,7 +1576,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview };
+      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -1583,6 +1609,11 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
         if (tu.name === 'preview_post_incorporate' && result && typeof result === 'object' && (result as { complete?: boolean }).complete) {
           lastPostIncorporatePreview = (result as { preview: PostIncorporatePreview }).preview;
         }
+        if (result && typeof result === 'object' && '_tao' in result) {
+          const holder = result as { _tao?: TaoPreview };
+          if (holder._tao) lastTaoPreview = holder._tao;
+          delete holder._tao;
+        }
         if (result && typeof result === 'object' && '_companyUpdate' in result) {
           const holder = result as { _companyUpdate?: CompanyUpdatePreview };
           if (holder._companyUpdate) lastCompanyUpdatePreview = holder._companyUpdate;
@@ -1610,7 +1641,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -2016,9 +2047,9 @@ export async function POST(req: NextRequest) {
       // than the other, single-shot preview tools ever did; losing an
       // earlier-collected director's details off the back of an 8-message
       // window would make Claude re-ask for them or, worse, guess.
-      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview, companyUpdatePreview } = await claudeAnswer(messages.slice(-24), context, account);
+      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview, companyUpdatePreview, taoPreview } = await claudeAnswer(messages.slice(-24), context, account);
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage, toStoredPreview(invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview));
-      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview, companyUpdatePreview });
+      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview, companyUpdatePreview, taoPreview });
     }
     // The rule-based intent router only ever understands plain text — an
     // attached image/PDF is real content only Claude can actually look at,

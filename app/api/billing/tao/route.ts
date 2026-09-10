@@ -34,7 +34,17 @@ function wordMatch<T>(target: string, map: Map<string, T>): T | null {
   return match.value?.[1] ?? null;
 }
 
-export async function GET() {
+// Extracted 2026-09-10 so lib/tao-lookup.ts's single-company chat preview
+// reuses this EXACT eligibility computation instead of re-deriving a second,
+// divergent one. That matters more here than almost anywhere else: 154 of
+// 359 real TAO customers have NO row in `companies` at all (ACC bills
+// accounting/tax clients who were never corporate-secretarial clients, and
+// even individuals for personal tax), so a naive "resolve against active
+// companies" lookup silently reports "no such client" for 43% of ACC's real
+// book. This function already gets that right — see the eligibleNames /
+// displayNameByNorm comments below — and the chat path must not re-invent it.
+// Verbatim body, mechanically moved out of GET().
+export async function computeTaoCompanies(): Promise<TaoCompanyRow[]> {
   const supabase = createAdminClient();
   const currentYear = thisYearSGT();
 
@@ -51,7 +61,7 @@ export async function GET() {
       .eq('qb_company', 'TAO')
       .order('txn_date', { ascending: false })) as Promise<QbInvoice[]>,
   ]);
-  if (companiesRes.error) return NextResponse.json({ error: companiesRes.error.message }, { status: 503 });
+  if (companiesRes.error) throw new Error(companiesRes.error.message);
 
   const companies = companiesRes.data ?? [];
   const companyByNormName = new Map(companies.map(c => [normalize(c.company_name), c]));
@@ -107,7 +117,15 @@ export async function GET() {
     })
     .sort((a, b) => a.companyName.localeCompare(b.companyName));
 
-  return NextResponse.json({ companies: rows });
+  return rows;
+}
+
+export async function GET() {
+  try {
+    return NextResponse.json({ companies: await computeTaoCompanies() });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 503 });
+  }
 }
 
 // POST /api/billing/tao — add a genuinely new company, one never synced from

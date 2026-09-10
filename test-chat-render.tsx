@@ -8,7 +8,7 @@
 // Run: npx tsx test-chat-render.tsx
 import { renderToStaticMarkup } from 'react-dom/server';
 import { RichText } from './components/assistant/ChatRichText';
-import { ListExportCard, SoaCard, EmailDraftCard, CompanyUpdateCard } from './components/assistant/ChatCards';
+import { ListExportCard, SoaCard, EmailDraftCard, CompanyUpdateCard, TaoBillingCard } from './components/assistant/ChatCards';
 
 const render = (t: string) => renderToStaticMarkup(<RichText text={t} onNav={() => {}} />);
 
@@ -116,6 +116,26 @@ const noop = renderToStaticMarkup(
   />,
 );
 check('company card disables a no-op change', noop.includes('已经是这个值') && noop.includes('disabled='), noop.slice(0, 200));
+
+
+const taoBase = {
+  companyName: 'NASTURTIUM PTE. LTD.', companyId: 42, inCompanyRoster: true,
+  hasAccounts: true, hasTax: true,
+  lastInvoice: { invoiceNo: '02660089', txnDate: '2026-02-09', totalAmt: 50 },
+  priorServices: [
+    { productService: 'Accounts:Yearly Accounts Services', service: 'Accounts', description: null, rate: 800, qty: 1, lastInvoiceNo: '02660071', lastTxnDate: '2026-02-02' },
+    { productService: 'Tax:Personal Tax Services', service: 'Tax', description: null, rate: null, qty: 1, lastInvoiceNo: '2560072', lastTxnDate: '2025-02-14' },
+  ],
+  totalIfAllRepeated: 800, servicesWithoutRate: 1,
+};
+const tao = renderToStaticMarkup(<TaoBillingCard preview={taoBase} />);
+check('TAO card lists prior services with their last rate', tao.includes('Accounts:Yearly Accounts Services') && tao.includes('S$800.00'));
+check('TAO card marks an unpriced service instead of showing S$0', tao.includes('未记录'), tao.slice(0, 300));
+check('TAO card says the repeat total is incomplete', tao.includes('实际更高'), tao.slice(0, 300));
+check('TAO card offers the real builder', tao.includes('打开 TAO 建单器'));
+
+const taoOutside = renderToStaticMarkup(<TaoBillingCard preview={{ ...taoBase, inCompanyRoster: false }} />);
+check('TAO card explains an ACC-only customer is still a real client', taoOutside.includes('不代表不是我们的客户'));
 
 console.log(fail === 0 ? '\n=== ALL PASSED ===' : `\n=== ${fail} FAILED ===`);
 process.exit(fail === 0 ? 0 : 1);

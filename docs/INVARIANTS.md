@@ -1169,6 +1169,26 @@ again.
   client on a UEN join — a name/key join across these tables that looks
   like it works will still be quietly missing rows. *(source: 2026-09-10,
   `lib/company-update-lookup.ts`.)*
+- **INV-DATA-041** — TAO (ACC's QuickBooks book) has its own client base
+  that is NOT a subset of the corporate-secretarial roster: 154 of 359 real
+  TAO customers have no row in `companies` at all, and some are
+  individuals billed for personal tax. Any TAO lookup must resolve against
+  ACC's actual book (`computeTaoCompanies()`, extracted from
+  `/api/billing/tao`'s GET), never against `companies` — a first version of
+  `lib/tao-lookup.ts` resolved against active companies and answered "No
+  active company matched" for 43% of ACC's real customers. The TAO page
+  itself already had this right; the lesson is to reuse its computation
+  rather than re-derive one. Related: TAO cannot be auto-drafted at all —
+  Accounts/Tax have no periodicity model in this system, which is why ACC
+  hand-builds every TAO invoice, so nothing may present a TAO "draft" or
+  "due" list. *(source: 2026-09-10.)*
+- **INV-DATA-042** — A total computed over rows with missing values must
+  travel with the count of what it could not price, and that count must be
+  stated whenever it is non-zero. Older TAO line items in QuickBooks store
+  a NULL rate, so summing with `?? 0` produced a confident "S$0 to repeat
+  everything" for a customer really billed S$1,200 (Galaxia Capital, 2024).
+  A silently-incomplete number is worse than an obviously incomplete one.
+  *(source: 2026-09-10, `TaoPreview.servicesWithoutRate`.)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

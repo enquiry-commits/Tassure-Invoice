@@ -31,6 +31,10 @@ import { buildCampaignDraft, loadCampaignActor, type CampaignActor, type Campaig
 import type { EmailDraftPreview } from '@/lib/email-draft-lookup';
 // type-only (lib/company-update-lookup.ts is server-only)
 import type { CompanyUpdatePreview } from '@/lib/company-update-lookup';
+// type-only (lib/tao-lookup.ts is server-only)
+import type { TaoPreview } from '@/lib/tao-lookup';
+import TaoInvoiceBuilder from '@/components/billing/TaoInvoiceBuilder';
+import type { TaoCompanyRow } from '@/app/api/billing/tao/route';
 import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
 import { logActivity } from '@/lib/activity-client';
 
@@ -62,6 +66,7 @@ export type ChatMsg = {
   soaPreview?: SoaPreview;
   emailDraftPreview?: EmailDraftPreview;
   companyUpdatePreview?: CompanyUpdatePreview;
+  taoPreview?: TaoPreview;
 };
 
 // Turns a local ChatMsg back into what /api/assistant expects — content
@@ -1495,6 +1500,117 @@ export function CompanyUpdateCard({ preview, onDone }: { preview: CompanyUpdateP
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// TAO (ACC) billing history + the REAL builder in a modal (2026-09-10).
+//
+// TAO is the one billing path that cannot be auto-drafted — Accounts/Tax
+// have no periodicity model, which is why ACC hand-builds every invoice.
+// So the card answers the question they actually have first ("what did we
+// bill them before, and how much"), then hands over the page's OWN builder
+// rather than a chat lookalike of it.
+function TaoBuilderModal({ company, onClose }: { company: TaoCompanyRow; onClose: () => void }) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 2000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 24, overflowY: 'auto' }}
+      onClick={onClose}
+    >
+      <div style={{ background: '#fff', borderRadius: 12, width: 1000, maxWidth: '96vw', boxShadow: '0 20px 60px rgba(15,23,42,0.25)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: '13px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FileCheck2 size={16} color="#1e3a5f" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b' }}>TAO 开单 — {company.companyName}</div>
+            <div style={{ fontSize: 10.5, color: '#94a3b8' }}>与 Billing Drafts › TAO 页面完全相同的建单器</div>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={17} /></button>
+        </div>
+        <div style={{ maxHeight: '78vh', overflowY: 'auto' }}>
+          <TaoInvoiceBuilder company={company} onGenerated={onClose} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function TaoBillingCard({ preview }: { preview: TaoPreview }) {
+  const [open, setOpen] = useState(false);
+  const money = (n: number | null | undefined) =>
+    n === null || n === undefined ? '—' : `S$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 460 }}>
+      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+        <div style={{ fontSize: 10.5, color: '#94a3b8' }}>
+          TAO (ACC) 开单记录
+          {preview.lastInvoice ? ` · 最近 #${preview.lastInvoice.invoiceNo} ${preview.lastInvoice.txnDate ?? ''}` : ' · 尚无 TAO 发票'}
+        </div>
+      </div>
+
+      {!preview.inCompanyRoster && (
+        <div style={{ padding: '7px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', fontSize: 10.5, color: '#64748b' }}>
+          这是 ACC 独立的客户（不在公司秘书部名单里）——正常情况，不代表不是我们的客户。
+        </div>
+      )}
+
+      {preview.priorServices.length === 0 ? (
+        <div style={{ padding: '14px', fontSize: 11.5, color: '#94a3b8', textAlign: 'center' }}>没有查到过往 TAO 品项。</div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11.5 }}>
+          <thead>
+            <tr style={{ background: '#fbfcfd' }}>
+              <th style={{ textAlign: 'left', padding: '6px 14px', color: '#94a3b8', fontWeight: 700, fontSize: 10 }}>过往品项</th>
+              <th style={{ textAlign: 'right', padding: '6px 14px', color: '#94a3b8', fontWeight: 700, fontSize: 10 }}>上次收费</th>
+            </tr>
+          </thead>
+          <tbody>
+            {preview.priorServices.map((s, i) => (
+              <tr key={i} style={{ borderTop: '1px solid #f1f5f9' }}>
+                <td style={{ padding: '7px 14px', color: '#334155' }}>
+                  {s.productService}
+                  <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 1 }}>#{s.lastInvoiceNo}{s.lastTxnDate ? ` · ${s.lastTxnDate}` : ''}</div>
+                </td>
+                <td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 700, color: s.rate === null ? '#94a3b8' : '#173b61', fontVariantNumeric: 'tabular-nums' }}>
+                  {s.rate === null ? '未记录' : money(s.rate)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {preview.priorServices.length > 0 && (
+        <div style={{ padding: '8px 14px', borderTop: '1px solid #eef2f7', fontSize: 11 }}>
+          <span style={{ color: '#64748b' }}>全部重开合计 </span>
+          <span style={{ fontWeight: 800, color: '#173b61' }}>{money(preview.totalIfAllRepeated)}</span>
+          {preview.servicesWithoutRate > 0 && (
+            <span style={{ color: '#92400e' }}>（不含 {preview.servicesWithoutRate} 项没有记录金额的，实际更高）</span>
+          )}
+        </div>
+      )}
+
+      <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7' }}>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+            background: '#0f766e', color: '#fff', cursor: 'pointer',
+          }}
+        >
+          <Pencil size={13} /> 打开 TAO 建单器
+        </button>
+      </div>
+
+      {open && (
+        <TaoBuilderModal
+          company={{ companyId: preview.companyId, companyName: preview.companyName, lastInvoice: preview.lastInvoice }}
+          onClose={() => setOpen(false)}
+        />
       )}
     </div>
   );
