@@ -1283,6 +1283,7 @@ again.
   2026-09-10, Vincent: "为什么...不能像 chatgpt 和 claude 那样智能的理解...
   明明都接了 Anthropic 的 api".)*
 - **INV-DATA-048** — A person's name is data we already hold (`lib/approved-accounts.ts`), never something to reconstruct from an email local-part. Confirmed live 2026-09-10: `active_users_today` returned bare emails and the model rendered `hoechyi@tassure.com` as "Ho Echyi" (her name is "Lim Hoe Chyi") — it guessed a word split. Every assistant tool that surfaces a staff member now resolves the real name server-side before the payload reaches the model, and the prompt forbids inventing one. If an email has no matching account, show the email — do not guess a spelling of a real person. *(source: 2026-09-10.)*
+- **INV-DATA-049** — Late Filing's PIC column was empty for every row because `lateFy` is the OLDEST unfiled cycle (often years old, e.g. INVENTA FY2018), and `ar_reminder.pic` on those ancient rows is an EMPTY STRING, not null — so `lateFy.pic ?? fallback` never fell through (`??` only catches null/undefined). Two fixes, both needed: guard with `.trim() ||` not `??`, and fall back to `companies.pic` (the TeamWork-synced current Secretary PIC) matched via `normalize()` not `.toLowerCase()` (INV-DATA-040). All 16 late filers resolved a PIC after both. Vincent: "TW 应该是有记录的才对啊" — it was, the page just wasn't reading it. *(source: 2026-09-10.)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

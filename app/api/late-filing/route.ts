@@ -141,9 +141,17 @@ export async function getLateFilingList(): Promise<LateRow[]> {
   // 2. Companies master (for UEN + Strike Off status)
   const { data: companies } = await sb
     .from('companies')
-    .select('company_name, registration_no, fye_month, is_active, tw_status');
+    .select('company_name, registration_no, fye_month, is_active, tw_status, pic');
 
   const uenMap = new Map<string, string>();
+  // Current Secretary PIC from `companies` (TeamWork-synced). Used as a
+  // fallback below: `lateFy` is the OLDEST unfiled cycle — often years old,
+  // from before ar_reminder.pic was populated — so lateFy.pic is null for
+  // most rows even though the company plainly has a current secretary.
+  // Vincent, 2026-09-10: "TW 应该是有记录的才对啊". Keyed by both name and
+  // UEN, same as every other companies lookup in this route.
+  const companyPicByNorm = new Map<string, string>();
+  const companyPicByUen = new Map<string, string>();
   // Vincent: "有一些公司已经是STRIKE OFF了的，或者TERMINATED了的，就不需要出现
   // 在这个页面了，这个页面只显示还ACTIVE 但是late filling的公司" — this route
   // re-derives "late" fresh from ar_reminder on every load and never checked
@@ -155,6 +163,10 @@ export async function getLateFilingList(): Promise<LateRow[]> {
   const inactiveNames = new Set<string>();
   for (const c of companies ?? []) {
     uenMap.set(c.company_name.toLowerCase(), c.registration_no ?? '');
+    if (c.pic) {
+      companyPicByNorm.set(normalize(c.company_name), c.pic);
+      if (c.registration_no) companyPicByUen.set(c.registration_no.toUpperCase(), c.pic);
+    }
     if (c.is_active === false || c.tw_status === 'Striking Off' || c.tw_status === 'Terminated') {
       inactiveNames.add(c.company_name.toLowerCase());
     }
@@ -266,7 +278,7 @@ export async function getLateFilingList(): Promise<LateRow[]> {
       next_agm_due_date:       manual?.next_agm_due_date       ?? nextAgm,
       remarks:                 manual?.remarks                  ?? null,
       late_fy:                 lateFy.year,
-      pic:                     lateFy.pic ?? null,
+      pic:                     (lateFy.pic?.trim() || (uen && companyPicByUen.get(uen.toUpperCase())) || companyPicByNorm.get(normalize(entityName)) || null),
       source:                  manual ? 'manual' : 'auto',
       updated_at:              manual?.updated_at ?? null,
       manual_fields:           manual?.manual_fields ?? null,
@@ -295,7 +307,7 @@ export async function getLateFilingList(): Promise<LateRow[]> {
         next_agm_due_date:       m.next_agm_due_date,
         remarks:                 m.remarks,
         late_fy:                 0,
-        pic:                     null,
+        pic:                     (m.uen && companyPicByUen.get(m.uen.toUpperCase())) ?? companyPicByNorm.get(normalize(m.company_name)) ?? null,
         source:                  'manual',
         updated_at:              m.updated_at ?? null,
         manual_fields:           m.manual_fields ?? null,
