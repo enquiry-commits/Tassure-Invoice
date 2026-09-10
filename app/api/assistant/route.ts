@@ -27,6 +27,7 @@ import { previewEmailDraft, type EmailDraftPreview, type EmailDraftType } from '
 import { previewCompanyUpdate, type CompanyUpdatePreview, type CompanyUpdateField } from '@/lib/company-update-lookup';
 import { previewTaoBilling, type TaoPreview } from '@/lib/tao-lookup';
 import { getTeamActivity } from '@/lib/team-activity';
+import { getTeamRoster } from '@/lib/team-roster';
 import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
@@ -604,6 +605,21 @@ async function taoBillingTool(account: ApprovedAccount | null, input: Record<str
     ...p,
     _tao: p,
     note: `Real TAO (ACC) billing history from QuickBooks — every DISTINCT product/service this customer has ever been billed under a TAO invoice, most recent occurrence of each, with the rate last charged. This is NOT a draft and NOT a due-date list: Accounts/Tax services have no periodicity model in this system, which is why ACC hand-builds every TAO invoice. Present it as "what we billed them before, and how much", then tell the user the card has a button that opens the real TAO invoice builder with these services pre-filled as candidates to tick on or off. ${p.servicesWithoutRate > 0 ? `IMPORTANT for this company: ${p.servicesWithoutRate} of the ${p.priorServices.length} prior services have NO rate stored (older QuickBooks line items), so totalIfAllRepeated (${p.totalIfAllRepeated}) is only the priced ones — say the total is incomplete rather than quoting it as the full amount. ` : ''}${p.inCompanyRoster ? '' : 'NOTE: this customer has no row in the corporate-secretarial company roster — that is normal (154 of 359 TAO customers are accounting/tax-only clients, some are individuals), so never describe them as "not our client". '}Amounts are SGD. Never claim you created a TAO invoice.`,
+  };
+}
+
+// Added 2026-09-10 — "你可以分出各部门人员有谁吗" got "no such tool". The
+// roster is hand-maintained on lib/staff-directory.ts's `team` field; this
+// enriches it with live per-person load from ar_reminder. See lib/team-roster.ts.
+async function teamRosterTool(account: ApprovedAccount | null) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  if (!account.canViewAsOthers) {
+    return { error: true as const, message: `${account.name}'s account only has visibility of their own work — the firm's team roster is limited to management accounts.` };
+  }
+  const roster = await getTeamRoster();
+  return {
+    ...roster,
+    note: 'The department roster is AUTHORITATIVE — hand-maintained by Vincent, not guessed from who does what. The team names are: Partners, Management, Corporate Secretarial, Corporate Secretarial (Malaysia), Accounting, Tax, Audit. companyLoad next to a Secretary/Accounts/Tax person is roughly how many AR cycles they currently carry (a size cue, not a formal caseload). Partners/Management/Audit have no companyLoad — do not invent one. The nomineeDirectorRoster is a SEPARATE thing: people who act as a nominee director for clients (mostly not staff), with their active appointment count — only bring it up if the user asked about ND / nominee directors specifically. Answer per HOW TO ANSWER: lead with a one-line shape of the org, then a bold heading per team with its members (and load where it means something), and only spell out Audit/Partners as plain name lists.',
   };
 }
 
@@ -1310,7 +1326,7 @@ async function rememberThis(account: ApprovedAccount | null, memoryType: string,
 function staticSystemPrompt(): string {
   return `You are the in-app assistant of the Tassure Corporate Services System (a Singapore corporate-services billing dashboard used by Tassure Asia staff). Answer in the user's language (usually Chinese). Be concise and concrete.
 
-HOW TO ANSWER — read this first. A tool result is raw material, not your reply. Do NOT transcribe it row by row. Read the whole result, work out what it actually MEANS, then tell the user in the way a sharp colleague would over their shoulder:
+HOW TO ANSWER — read this first. Never name a tool or function in your reply — the user does not know or care that one called list_companies exists; say "I can pull that list", not the function name. A tool result is raw material, not your reply. Do NOT transcribe it row by row. Read the whole result, work out what it actually MEANS, then tell the user in the way a sharp colleague would over their shoulder:
 - Lead with the takeaway. One or two sentences that answer the question directly ("今天秘书部两个人都在集中清年报，节奏差不多"), THEN the supporting detail.
 - Write flowing sentences, not a field dump. "把 SILVER RIVER、HELDER TRADING、ARK PARTNERS 三家的年报都收回来标记完成了" reads better than listing "Remarks → AR COMPLETED, Received back → 2026-09-10" for each. Keep the specific values only where they carry meaning.
 - Call out what's notable or unusual on its own — a PIC reassigned, a value that looks wrong, someone doing something different from everyone else. That is the analysis a person actually wants.
@@ -1481,6 +1497,7 @@ const CLAUDE_TOOLS = [
     value: { description: "For a service field: true (force ON), false (force OFF) or null (clear the override). For customer_source: one of referral/website/advertising/existing_client/walk_in/other, or null. For parent_company: the parent company's NAME, or null to clear." },
   }, required: ['company', 'field'] } },
   { name: 'tao_billing_history', description: "REAL TAO (ACC's own QuickBooks book) billing history for ONE customer — every distinct Accounts/Tax product ever billed to them, the rate last charged, and their last TAO invoice. TAO is ACC's separate book for accounting/tax work and is NOT the same as TAB/TAC invoicing. Use it whenever the user asks what a client was charged for accounts/tax/GST/personal tax before, or is about to raise a TAO invoice and wants the prior services (e.g. \"XX 之前的 Accounts 收多少\", \"XX 的 TAO 开过什么\", \"ACC 那边给 XX 开过什么单\"). It does NOT draft anything — Accounts/Tax have no renewal cycle in this system, so ACC hand-builds every TAO invoice; the card gives the user a button that opens the real TAO builder with these services pre-filled. ACC's client book is separate from the corporate-secretarial roster, so a customer here may have no company record at all.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Customer name, partial match is fine' } }, required: ['company'] } },
+  { name: 'team_roster', description: "The firm's DEPARTMENT roster — who is in Partners, Management, Corporate Secretarial (incl. the Malaysia team), Accounting, Tax and Audit, with roughly how many AR cycles each Secretary/Accounts/Tax person currently carries. Management-only. Use for \"各部门人员有谁\", \"秘书部/会计部有哪些人\", \"团队怎么分工的\", \"谁在哪个组\". Also returns the separate Nominee Director roster (people who act as a client's nominee director) with active-appointment counts.", input_schema: { type: 'object', properties: {} } },
   { name: 'team_activity', description: "What the TEAM actually DID over a window, FIELD-LEVEL: which company, which field, from what value to what — for AR Reminder / Master List / Trademark edits, plus invoices, sent emails, campaigns and Post Incorporate as creations, each with company name and SGT time. Management-only. This is the right tool for \"今天大家做了什么\", \"这几天团队在忙什么\", \"其他人在干嘛\" — NOT active_users_today, whose numbers are page visits rather than work. The person asking is excluded by default (a manager asking about the team does not mean themselves); pass includeMe:true to include them. days defaults to 1 = today in Singapore.", input_schema: { type: 'object', properties: {
     days: { type: 'number', description: 'Days to look back; 1 (default) = the real SGT calendar day today. Max 90.' },
     includeMe: { type: 'boolean', description: "Include the asker's own activity. Default false." },
@@ -1577,6 +1594,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'preview_email_draft') return emailDraftPreviewTool(account, input);
   if (name === 'preview_company_update') return companyUpdatePreviewTool(account, input);
   if (name === 'tao_billing_history') return taoBillingTool(account, input);
+  if (name === 'team_roster') return teamRosterTool(account);
   if (name === 'team_activity') return teamActivityTool(account, input);
   if (name === 'firm_pulse') return firmPulseTool(account);
   if (name === 'collections_worklist') return collectionsWorklistTool(account, input);

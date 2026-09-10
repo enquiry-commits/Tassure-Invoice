@@ -23,10 +23,20 @@
 import { resolveTeamworkPic } from './teamwork-pic';
 import { titleCase } from './text-case';
 
+// `team` makes the grouping Vincent already keeps as section comments below
+// into queryable data (asked "各部门人员有谁", the assistant had no answer).
+// Cross-checked 2026-09-10 against the real PIC distribution: everyone in
+// 'Accounting' does appear in ar_reminder.acc_pic, 'Tax' in tax_pic, and
+// 'Corporate Secretarial' in companies.pic — the labels match the work.
+export type StaffTeam =
+  | 'Partners' | 'Management' | 'Corporate Secretarial' | 'Corporate Secretarial (Malaysia)'
+  | 'Accounting' | 'Tax' | 'Audit';
+
 interface StaffEntry {
   name: string;
   email: string;
   aliases?: string[];
+  team?: StaffTeam;
 }
 
 const STAFF_DIRECTORY: StaffEntry[] = [
@@ -37,16 +47,16 @@ const STAFF_DIRECTORY: StaffEntry[] = [
   // Seow" did, unlike Samuell/Esther/Chelsea below who already had their
   // own bare-first-name alias. These two are exactly the people most likely
   // to be referred to by first name alone in this system.
-  { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', aliases: ['Cindy'] },
-  { name: 'Samuell Ng', email: 'samuellng@tassure.com', aliases: ['Samuell'] },
-  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', aliases: ['Yee Soon'] },
-  { name: 'Leonard Lee', email: 'leonard.lee@tassure.com' },
-  { name: 'Teo Siok Fieng', email: 'siokfieng@tassure.com' },
+  { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', aliases: ['Cindy'], team: 'Partners' },
+  { name: 'Samuell Ng', email: 'samuellng@tassure.com', aliases: ['Samuell'], team: 'Partners' },
+  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', aliases: ['Yee Soon'], team: 'Partners' },
+  { name: 'Leonard Lee', email: 'leonard.lee@tassure.com', team: 'Partners' },
+  { name: 'Teo Siok Fieng', email: 'siokfieng@tassure.com', team: 'Partners' },
   // Internal
-  { name: 'Esther Loo', email: 'esther@tassure.com', aliases: ['Esther'] },
-  { name: 'Chelsea Ang', email: 'chelsea@tassure.com', aliases: ['Chelsea'] },
-  { name: 'Vincent Seow', email: 'vincent@tassure.com', aliases: ['Vincent'] },
-  { name: 'Yuna Lai', email: 'yuna@tassure.com' },
+  { name: 'Esther Loo', email: 'esther@tassure.com', aliases: ['Esther'], team: 'Management' },
+  { name: 'Chelsea Ang', email: 'chelsea@tassure.com', aliases: ['Chelsea'], team: 'Management' },
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', aliases: ['Vincent'], team: 'Management' },
+  { name: 'Yuna Lai', email: 'yuna@tassure.com', team: 'Management' },
   // Corporate Secretarial — LHC/HSX/ASM/CKY/JL confirmed 2026-09-06 against
   // Vincent's real collections spreadsheet ("Individual outstanding
   // billing"), which uses these as its own PIC-column shorthand — same
@@ -56,38 +66,38 @@ const STAFF_DIRECTORY: StaffEntry[] = [
   // 要做什么今天？") used this shorthand for her; same ad hoc-initials
   // pattern as LHC/HSX/etc. above, just the last two letters of LHC on
   // their own.
-  { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', aliases: ['Hoe Chyi', 'LHC', 'HC'] },
-  { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', aliases: ['Seng Xin', 'HSX'] },
-  { name: 'Jenny Lai', email: 'jennylai@tassure.com', aliases: ['Jenny', 'JL'] },
-  { name: 'Chin Kah Ye', email: 'kahye@tassure.com', aliases: ['Kah Ye', 'CKY'] },
-  { name: 'Ang Shi Ming', email: 'shiming@tassure.com', aliases: ['Shi Ming', 'ASM'] },
+  { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', aliases: ['Hoe Chyi', 'LHC', 'HC'], team: 'Corporate Secretarial' },
+  { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', aliases: ['Seng Xin', 'HSX'], team: 'Corporate Secretarial' },
+  { name: 'Jenny Lai', email: 'jennylai@tassure.com', aliases: ['Jenny', 'JL'], team: 'Corporate Secretarial' },
+  { name: 'Chin Kah Ye', email: 'kahye@tassure.com', aliases: ['Kah Ye', 'CKY'], team: 'Corporate Secretarial' },
+  { name: 'Ang Shi Ming', email: 'shiming@tassure.com', aliases: ['Shi Ming', 'ASM'], team: 'Corporate Secretarial' },
   // Malaysia Staff
-  { name: 'Tey Shemin', email: 'shemin@tassure.com', aliases: ['Shemin', 'TSM'] },
-  { name: 'Tan Min Quan', email: 'minquan@tassure.com', aliases: ['Min Quan'] },
+  { name: 'Tey Shemin', email: 'shemin@tassure.com', aliases: ['Shemin', 'TSM'], team: 'Corporate Secretarial (Malaysia)' },
+  { name: 'Tan Min Quan', email: 'minquan@tassure.com', aliases: ['Min Quan'], team: 'Corporate Secretarial (Malaysia)' },
   // Audit
-  { name: 'Lina Chan', email: 'lina@tassure.com' },
-  { name: 'Felicia Chee', email: 'felicia@tassure.com' },
-  { name: 'Jane Lee', email: 'jane@tassure.com' },
-  { name: 'Chua Xi Qing', email: 'xiqing@tassure.com' },
-  { name: 'Yeoh Qing Ching', email: 'qingching@tassure.com' },
-  { name: 'Alex Wong', email: 'alex@tassure.com' },
-  { name: 'Soh Zhi Kai', email: 'zhikai@tassure.com' },
-  { name: 'Alice Wong', email: 'alicewong@tassure.com' },
-  { name: 'Ooi Kai Xin', email: 'kaixin.ooi@tassure.com' },
-  { name: 'Jason Lee', email: 'chiasheng@tassure.com' },
+  { name: 'Lina Chan', email: 'lina@tassure.com', team: 'Audit' },
+  { name: 'Felicia Chee', email: 'felicia@tassure.com', team: 'Audit' },
+  { name: 'Jane Lee', email: 'jane@tassure.com', team: 'Audit' },
+  { name: 'Chua Xi Qing', email: 'xiqing@tassure.com', team: 'Audit' },
+  { name: 'Yeoh Qing Ching', email: 'qingching@tassure.com', team: 'Audit' },
+  { name: 'Alex Wong', email: 'alex@tassure.com', team: 'Audit' },
+  { name: 'Soh Zhi Kai', email: 'zhikai@tassure.com', team: 'Audit' },
+  { name: 'Alice Wong', email: 'alicewong@tassure.com', team: 'Audit' },
+  { name: 'Ooi Kai Xin', email: 'kaixin.ooi@tassure.com', team: 'Audit' },
+  { name: 'Jason Lee', email: 'chiasheng@tassure.com', team: 'Audit' },
   // Accounting — YH/WE/JF confirmed against the real spread of ar_reminder.acc_pic values
-  { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', aliases: ['JF'] },
-  { name: 'Jay Tay', email: 'jaytay@tassure.com', aliases: ['Jay', 'JAY', 'JT'] },
-  { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', aliases: ['YH'] },
+  { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', aliases: ['JF'], team: 'Accounting' },
+  { name: 'Jay Tay', email: 'jaytay@tassure.com', aliases: ['Jay', 'JAY', 'JT'], team: 'Accounting' },
+  { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', aliases: ['YH'], team: 'Accounting' },
   // "VC" confirmed by Vincent 2026-09-07, surfaced by the SOA per-company
   // owner backfill (5 real companies in his Google Sheet use it, e.g.
   // "Meishan Silk Road Trading", "Lebese International").
-  { name: 'Vernice Chai', email: 'vernice@tassure.com', aliases: ['Vernice', 'VC'] },
-  { name: 'Chee Wei En', email: 'weien@tassure.com', aliases: ['WE'] },
+  { name: 'Vernice Chai', email: 'vernice@tassure.com', aliases: ['Vernice', 'VC'], team: 'Accounting' },
+  { name: 'Chee Wei En', email: 'weien@tassure.com', aliases: ['WE'], team: 'Accounting' },
   // Tax — QT/VY/CS confirmed against the real spread of ar_reminder.tax_pic values
-  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', aliases: ['CS'] },
-  { name: 'Quinnie Tan', email: 'quinnietan@tassure.com', aliases: ['QT'] },
-  { name: 'Victoria Yap', email: 'victoriayap@tassure.com', aliases: ['VY'] },
+  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', aliases: ['CS'], team: 'Tax' },
+  { name: 'Quinnie Tan', email: 'quinnietan@tassure.com', aliases: ['QT'], team: 'Tax' },
+  { name: 'Victoria Yap', email: 'victoriayap@tassure.com', aliases: ['VY'], team: 'Tax' },
 ];
 
 function normalizeName(name: string): string {
@@ -130,6 +140,23 @@ function resolveOne(raw: string): StaffEntry | null {
  * (initials that don't match, "Client", "dormant", "Waiver", ...) are
  * silently dropped — no CC is added for them, rather than guessing.
  */
+// The staff roster grouped by team — authoritative (hand-maintained by
+// Vincent), not derived. Order is the org's own: partners, management, then
+// the delivery teams.
+const TEAM_ORDER: StaffTeam[] = ['Partners', 'Management', 'Corporate Secretarial', 'Corporate Secretarial (Malaysia)', 'Accounting', 'Tax', 'Audit'];
+export function staffByTeam(): { team: StaffTeam; members: { name: string; email: string }[] }[] {
+  const grouped = new Map<StaffTeam, { name: string; email: string }[]>();
+  for (const s of STAFF_DIRECTORY) {
+    if (!s.team) continue;
+    (grouped.get(s.team) ?? grouped.set(s.team, []).get(s.team)!).push({ name: s.name, email: s.email });
+  }
+  return TEAM_ORDER.filter(t => grouped.has(t)).map(team => ({ team, members: grouped.get(team)! }));
+}
+export function teamForEmail(email: string | null | undefined): StaffTeam | null {
+  if (!email) return null;
+  return STAFF_DIRECTORY.find(s => s.email.toLowerCase() === email.toLowerCase())?.team ?? null;
+}
+
 export function findStaffEmails(rawValue: string | null | undefined): string[] {
   if (!rawValue) return [];
   const emails: string[] = [];
