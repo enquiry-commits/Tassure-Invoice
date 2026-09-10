@@ -20,7 +20,7 @@
  * so it must never be forked into a second copy.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, AlertTriangle, FileText, Plus, Check, X, Pencil, Building2 } from 'lucide-react';
+import { RefreshCw, AlertTriangle, FileText, Plus, Check, X, Pencil, Building2, ChevronRight } from 'lucide-react';
 import type { CompanyBilling } from '@/app/api/billing/renewals/route';
 import { logActivity } from '@/lib/activity-client';
 import { fmtDate } from '@/lib/date';
@@ -208,6 +208,11 @@ function BillToFields({ company, value, onChange, parentName }: {
   // which has BELTROAD linked.
   parentName: string | null;
 }) {
+  // Collapsed by default (Vincent, 2026-09-10): ~99.9% of companies have no
+  // c/o, so an always-open four-field panel was noise on every row. It must
+  // never HIDE a configured value though — see `summary` below, which the
+  // closed header shows.
+  const [open, setOpen] = useState(false);
   const [savingDefault, setSavingDefault] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
 
@@ -249,16 +254,34 @@ function BillToFields({ company, value, onChange, parentName }: {
     }
   };
 
+  // What the closed header shows. Built from the CURRENT field values, not
+  // the stored default, so an unsaved per-invoice edit is still visible
+  // while collapsed — collapsing must never make a configured c/o look
+  // like nothing is set.
+  const summary = [
+    value.careOf.trim() ? `c/o ${value.careOf.trim()}` : '',
+    value.attn.trim() ? `ATTN ${value.attn.trim()}` : '',
+  ].filter(Boolean).join(' · ');
+
   const label: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 3, display: 'block' };
   const input: React.CSSProperties = { width: '100%', fontSize: 12, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', color: '#334155', background: '#fff' };
 
   return (
-    <div style={{ border: '1px solid #eef2f7', borderRadius: 8, padding: '10px 12px', marginBottom: 16, background: '#fbfcfd' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+    <div style={{ border: '1px solid #eef2f7', borderRadius: 8, padding: open ? '10px 12px' : '7px 12px', marginBottom: 28, background: '#fbfcfd' }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: 'none', background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', marginBottom: open ? 8 : 0 }}
+      >
+        <ChevronRight size={12} color="#94a3b8" style={{ flexShrink: 0, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 120ms' }} />
         <span style={{ fontSize: 10.5, fontWeight: 800, color: '#31506f' }}>Bill To (optional)</span>
-        <span style={{ fontSize: 10, color: '#94a3b8' }}>Leave empty and QuickBooks uses the customer's own address, exactly as today</span>
-      </div>
+        {summary
+          ? <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: 999, padding: '1px 8px' }}>{summary}</span>
+          : <span style={{ fontSize: 10, color: '#94a3b8' }}>{open ? "Leave empty and QuickBooks uses the customer's own address, exactly as today" : "Not set — QuickBooks uses the customer's own address"}</span>}
+      </button>
 
+      {!open ? null : (
+      <>
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 1fr', gap: 10 }}>
         <div>
           <label style={label}>C/O (care of)</label>
@@ -325,6 +348,8 @@ function BillToFields({ company, value, onChange, parentName }: {
         </div>
       )}
       {savedNote && <div style={{ marginTop: 6, fontSize: 10.5, color: /failed|cannot/i.test(savedNote) ? '#b91c1c' : '#15803d' }}>{savedNote}</div>}
+      </>
+      )}
     </div>
   );
 }
