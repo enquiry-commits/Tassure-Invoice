@@ -287,6 +287,21 @@ function BillToFields({ company, value, onChange, parentName }: {
           <label style={label}>C/O (care of)</label>
           <input style={input} value={value.careOf} placeholder="e.g. Novix Ai Global Pte. Ltd"
             onChange={e => onChange({ ...value, careOf: e.target.value })} />
+          {/* A one-click fill when this row already has a Bill-To parent —
+              Vincent asked whether the c/o "is generally the parent". The
+              real data says no: of the 7 clients who have ever had a c/o
+              printed, NONE had a parent link, 3 of the c/o parties are not
+              companies of ours at all (a law firm, overseas affiliates), and
+              only 1 of 947 companies has a parent link set. So the
+              placeholder stays a neutral example rather than asserting
+              c/o = parent — but where a parent IS linked, offering it saves
+              retyping. */}
+          {parentName && !value.careOf.trim() && (
+            <button type="button" onClick={() => onChange({ ...value, careOf: parentName })}
+              style={{ marginTop: 5, fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Use Bill-To parent: {parentName}
+            </button>
+          )}
         </div>
         <div>
           <label style={label}>Address under the C/O line</label>
