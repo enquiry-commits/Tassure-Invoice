@@ -1158,6 +1158,17 @@ again.
   already emailed. Sending a client's statement to an address chat guessed
   is the failure this prevents, and it is not recoverable. *(source:
   2026-09-10.)*
+- **INV-DATA-040** — `companies` and `master_list` are joined BY NAME and
+  their spellings genuinely differ, so any lookup across the two must go
+  through `normalize()` — never an exact compare, `.eq()` or `.ilike()` on
+  the raw name. Confirmed real 2026-09-10: `companies` stores
+  "1V CAPITAL PTE. LTD." and `master_list` stores "1V CAPITAL PTE. LTD"
+  (one trailing dot apart), so an `.ilike()` match reported "has no Master
+  List row" for a company that plainly has one. This is the same failure
+  family as the address-service count that silently dropped an active
+  client on a UEN join — a name/key join across these tables that looks
+  like it works will still be quietly missing rows. *(source: 2026-09-10,
+  `lib/company-update-lookup.ts`.)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

@@ -1383,16 +1383,28 @@ export function CompanyUpdateCard({ preview, onDone }: { preview: CompanyUpdateP
   const submit = async () => {
     setState('saving');
     try {
-      const body = preview.field === 'parent_company'
-        ? { companyId: preview.companyId, parentCompanyId: preview.proposedValue }
-        : preview.field === 'customer_source'
-          ? { companyId: preview.companyId, value: preview.proposedValue }
-          : { companyId: preview.companyId, service: preview.field.slice('service:'.length), value: preview.proposedValue };
+      // Master List's PATCH is conflict-safe and refuses a request with no
+      // previousValue (428), so it gets a different body shape: the row id
+      // plus exactly the value this preview saw.
+      const body = preview.field.startsWith('master:')
+        ? { id: preview.rowId, field: preview.field.slice('master:'.length), value: preview.proposedValue, previousValue: preview.previousValue ?? null }
+        : preview.field === 'parent_company'
+          ? { companyId: preview.companyId, parentCompanyId: preview.proposedValue }
+          : preview.field === 'customer_source'
+            ? { companyId: preview.companyId, value: preview.proposedValue }
+            : { companyId: preview.companyId, service: preview.field.slice('service:'.length), value: preview.proposedValue };
 
       const res = await fetch(preview.endpoint, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       const json = await res.json().catch(() => ({}));
+      if (res.status === 409) {
+        // Someone else changed this cell between the preview and the click
+        // — say so instead of retrying, which would clobber their edit.
+        setMessage(json.error || '这一格刚刚被其他人改过了，请重新问一次以看到最新的值。');
+        setState('error');
+        return;
+      }
       if (!res.ok) { setMessage(json.error || `Request failed (${res.status})`); setState('error'); return; }
       logActivity('chat_company_update', { companyName: preview.companyName, field: preview.field });
       setState('done');

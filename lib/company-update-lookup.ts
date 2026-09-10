@@ -1,6 +1,6 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase';
-import { resolveCompany } from '@/lib/company-name';
+import { resolveCompany, normalize } from '@/lib/company-name';
 import { CUSTOMER_SOURCE_OPTIONS, customerSourceLabel } from '@/lib/customer-source';
 
 /**
@@ -28,7 +28,20 @@ import { CUSTOMER_SOURCE_OPTIONS, customerSourceLabel } from '@/lib/customer-sou
 
 export const COMPANY_SERVICE_FIELDS = ['secretary', 'accounts', 'tax', 'xbrl'] as const;
 export type CompanyServiceField = typeof COMPANY_SERVICE_FIELDS[number];
-export type CompanyUpdateField = `service:${CompanyServiceField}` | 'customer_source' | 'parent_company';
+// Master List fields chat may touch — deliberately TWO out of ~45, the
+// same narrowing principle as AR_CHAT_EDITABLE_FIELDS. Chosen from the
+// real data, not from the schema: `grade` is clean and structured (A 277 /
+// B 88 / C 35), `remark` is free text nobody can corrupt. Everything else
+// is excluded on purpose — the compliance dates belong to AR Reminder and
+// have their own tool, directors/shareholders/secretary/status are written
+// by the TeamWork sync, and `kyc_year` is already so dirty in production
+// (18 rows contain a postal ADDRESS in a year field) that letting a
+// sentence write into it would only add to the mess.
+export const MASTER_LIST_CHAT_FIELDS = ['remark', 'grade'] as const;
+export type MasterListChatField = typeof MASTER_LIST_CHAT_FIELDS[number];
+export const GRADE_VALUES = ['A', 'B', 'C'] as const;
+
+export type CompanyUpdateField = `service:${CompanyServiceField}` | `master:${MasterListChatField}` | 'customer_source' | 'parent_company';
 
 export type CompanyUpdatePreview = {
   companyId: number;
@@ -43,6 +56,12 @@ export type CompanyUpdatePreview = {
   // The raw value the endpoint will receive, so the card never re-parses
   // the user's words.
   proposedValue: boolean | string | number | null;
+  // Master List's PATCH is conflict-safe and REFUSES a request without the
+  // previous value (HTTP 428) — the card must send back exactly what this
+  // preview saw, so a value someone else changed meanwhile is rejected
+  // instead of silently overwritten. Only set for master:* fields.
+  rowId?: number;
+  previousValue?: string | null;
   endpoint: string;
   alreadyThatValue: boolean;
   warning: string | null;
@@ -130,6 +149,55 @@ export async function previewCompanyUpdate(
         warning: rawValue !== null
           ? 'services_manual 只由这个接口写入，任何自动同步都不会再纠正它——设错了要人工改回来。这个开关会影响开单。'
           : null,
+      },
+    };
+  }
+
+  if (field.startsWith('master:')) {
+    const mf = field.slice('master:'.length) as MasterListChatField;
+    if (!MASTER_LIST_CHAT_FIELDS.includes(mf)) {
+      return { found: false, message: `Only these Master List fields can be changed from chat: ${MASTER_LIST_CHAT_FIELDS.join(', ')}. Everything else is either owned by the TeamWork sync or belongs to AR Reminder — say so plainly instead of trying another field name.` };
+    }
+    const next = rawValue === null || rawValue === '' ? null : String(rawValue).trim();
+    if (mf === 'grade' && next !== null && !GRADE_VALUES.includes(next.toUpperCase() as typeof GRADE_VALUES[number])) {
+      return { found: false, message: `Grade must be one of: ${GRADE_VALUES.join(', ')}, or empty to clear it.` };
+    }
+    const value = mf === 'grade' && next ? next.toUpperCase() : next;
+
+    // Match master_list through normalize(), NOT an exact name compare.
+    // Confirmed real: companies stores "1V CAPITAL PTE. LTD." and
+    // master_list stores "1V CAPITAL PTE. LTD" — one trailing dot apart —
+    // so an exact/ilike match reported "no Master List row" for a company
+    // that plainly has one. The two tables are joined by name everywhere
+    // in this codebase and their spellings genuinely differ; normalize()
+    // exists for exactly this and must not be bypassed.
+    const { data: mlRows } = await sb.from('master_list')
+      .select('id, company_name, list_type, remark, grade');
+    const all = (mlRows ?? []) as { id: number; company_name: string; list_type: string; remark: string | null; grade: string | null }[];
+    const wanted = normalize(company.company_name);
+    const rows = all.filter(r => normalize(r.company_name) === wanted);
+    // A company can have rows under more than one list_type; the live one
+    // is what a person means, with a fallback so a former client stays
+    // editable.
+    const row = rows.find(r => r.list_type === 'active_client') ?? rows[0];
+    if (!row) return { found: false, message: `"${company.company_name}" has no Master List row, so there is nothing to edit there.` };
+
+    const current = (row[mf] ?? null) as string | null;
+    return {
+      found: true,
+      preview: {
+        companyId: company.id,
+        companyName: company.company_name,
+        field, fieldLabel: mf === 'grade' ? 'Master List 等级 (Grade)' : 'Master List 备注 (Remark)',
+        autoValue: null,
+        currentDisplay: current ?? '（空）',
+        proposedDisplay: value ?? '（清空）',
+        proposedValue: value,
+        rowId: row.id,
+        previousValue: current,
+        endpoint: '/api/master-list',
+        alreadyThatValue: current === value,
+        warning: null,
       },
     };
   }

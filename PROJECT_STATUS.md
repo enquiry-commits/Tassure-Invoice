@@ -1,6 +1,16 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-10 (Assistant — 互通 phase 3: company settings editable from chat, plus two unauthenticated endpoints closed.
+Last updated: 2026-09-10 (Assistant — 互通 phase 4: Master List edits, and a browserless render guard.
+
+**Master List, deliberately narrow.** `preview_company_update` was EXTENDED rather than a new tool added — tool count matters, and 31 tools is already why "我要开SOA" mis-routed to invoice drafting. It now also edits the Master List remark and grade. Two fields out of ~45, chosen from the real data rather than the schema: `grade` is clean and structured (A 277 / B 88 / C 35), `remark` is free text nobody can corrupt. Everything else is excluded on purpose — compliance dates belong to `preview_ar_update`, directors/shareholders/secretary/status are written by the TeamWork sync, and `kyc_year` is already so dirty in production (18 rows hold a postal ADDRESS in a year field) that letting a sentence write into it would only add to the mess. The card sends the conflict-safe `previousValue` the endpoint demands (428 without it) and surfaces a 409 as "someone else just changed this" instead of retrying over their edit.
+
+**A bug in my own new code, caught before shipping.** The first version matched `master_list` with `.ilike()` on the company name and reported "no Master List row" for a company that has one: `companies` stores "1V CAPITAL PTE. LTD." and `master_list` stores "1V CAPITAL PTE. LTD" — one trailing dot apart. Fixed to go through `normalize()`, the matcher this codebase already has for exactly this. INV-DATA-040.
+
+**Verification without a browser.** Production login is Google OAuth, so an automated browser cannot sign in (and handling Vincent's Google credentials would be wrong regardless) — confirmed by navigating to production and being bounced to /login. But the chat components are plain functions of their props, so `test-chat-render.tsx` renders them with react-dom/server: 26 checks covering the `---`→"• --" fix and its regressions (real bullets, tables and negative numbers still work) plus every action card's safety-critical state — the email button disabled with no recipient, the fallback-recipient and "Already sent this cycle" warnings, and a no-op company change disabled. This machine cannot afford a dev server + browser, so this is the durable substitute.
+
+**Found in production data, not fixed (Vincent's call):** 1V CAPITAL's Master List remark is `latency-test-1785859810679` — leftover test data from some latency check, still live.
+
+Previous entry: Assistant — 互通 phase 3: company settings editable from chat, plus two unauthenticated endpoints closed.
 
 New `preview_company_update` (31 tools now) + `CompanyUpdateCard` cover the three real edits the `companies` table exposes, each of which previously existed only on its own page: the service override (secretary/accounts/tax/xbrl), the customer source, and the parent company link. Same preview → Confirm-popup → execute shape as every other write.
 
