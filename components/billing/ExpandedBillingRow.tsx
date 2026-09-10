@@ -180,6 +180,143 @@ function AutoTextarea({ value, onChange, style }: { value: string; onChange: (v:
   );
 }
 
+export type BillToDraft = {
+  careOf: string;
+  addrSource: 'b' | 'a' | 'custom';
+  addrCustom: string;
+  attn: string;
+};
+
+// Invoice Bill To: "c/o" + "Attn" (2026-09-10).
+//
+// Two levels, per Vincent — "又要跟着客户走，又要每单选": the fields open
+// prefilled from the company's stored default, and editing them here
+// changes THIS invoice only. "设为默认" is the separate, explicit act of
+// writing the value back to the company so future invoices inherit it.
+//
+// Left empty this sends nothing at all, and QuickBooks fills Bill To from
+// the customer record exactly as it always has — which is why ~99.9% of
+// invoices are untouched by this feature.
+function BillToFields({ company, value, onChange }: {
+  company: CompanyBilling;
+  value: BillToDraft;
+  onChange: (next: BillToDraft) => void;
+}) {
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+
+  const stored: BillToDraft = {
+    careOf: company.billToCareOf ?? '',
+    addrSource: company.billToCareOfAddrSource ?? 'b',
+    addrCustom: company.billToCareOfAddrCustom ?? '',
+    attn: company.billToAttn ?? '',
+  };
+  const differsFromStored =
+    value.careOf.trim() !== stored.careOf.trim() ||
+    value.attn.trim() !== stored.attn.trim() ||
+    (value.careOf.trim() ? value.addrSource !== stored.addrSource : false) ||
+    (value.careOf.trim() && value.addrSource === 'custom' ? value.addrCustom.trim() !== stored.addrCustom.trim() : false);
+
+  const saveAsDefault = async () => {
+    if (!company.resolvedCompanyId) { setSavedNote('这行没有对应的公司档案，无法存成默认值。'); return; }
+    setSavingDefault(true); setSavedNote(null);
+    try {
+      const writes: [string, string | null][] = [
+        ['bill_to_care_of', value.careOf.trim() || null],
+        ['bill_to_care_of_addr_source', value.careOf.trim() ? value.addrSource : null],
+        ['bill_to_care_of_addr_custom', value.careOf.trim() && value.addrSource === 'custom' ? (value.addrCustom.trim() || null) : null],
+        ['bill_to_attn', value.attn.trim() || null],
+      ];
+      for (const [field, v] of writes) {
+        const res = await fetch('/api/companies/bill-to', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companyId: company.resolvedCompanyId, field, value: v }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `保存失败 (${res.status})`);
+      }
+      logActivity('bill_to_default_saved', { companyName: company.companyName });
+      setSavedNote('已存为这家公司的默认值，以后开单会自动带上。');
+    } catch (err) {
+      setSavedNote(err instanceof Error ? err.message : '保存失败，请重试。');
+    } finally {
+      setSavingDefault(false);
+    }
+  };
+
+  const label: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 3, display: 'block' };
+  const input: React.CSSProperties = { width: '100%', fontSize: 12, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', color: '#334155', background: '#fff' };
+
+  return (
+    <div style={{ border: '1px solid #eef2f7', borderRadius: 8, padding: '10px 12px', marginBottom: 16, background: '#fbfcfd' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ fontSize: 10.5, fontWeight: 800, color: '#31506f' }}>发票抬头 Bill To（选填）</span>
+        <span style={{ fontSize: 10, color: '#94a3b8' }}>留空 = 用 QuickBooks 客户档案的地址，跟现在完全一样</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 1fr', gap: 10 }}>
+        <div>
+          <label style={label}>c/o（经由哪家公司）</label>
+          <input style={input} value={value.careOf} placeholder="例：Novix Ai Global Pte. Ltd"
+            onChange={e => onChange({ ...value, careOf: e.target.value })} />
+        </div>
+        <div>
+          <label style={label}>c/o 下面印谁的地址</label>
+          <select style={{ ...input, cursor: value.careOf.trim() ? 'pointer' : 'not-allowed', color: value.careOf.trim() ? '#334155' : '#cbd5e1' }}
+            value={value.addrSource} disabled={!value.careOf.trim()}
+            onChange={e => onChange({ ...value, addrSource: e.target.value as BillToDraft['addrSource'] })}>
+            <option value="b">B — c/o 那家公司的地址</option>
+            <option value="a">A — 客户自己的地址</option>
+            <option value="custom">Custom — 自己填</option>
+          </select>
+        </div>
+        <div>
+          <label style={label}>Attn（指定收件人）</label>
+          <input style={input} value={value.attn} placeholder="例：Mr Li"
+            onChange={e => onChange({ ...value, attn: e.target.value })} />
+        </div>
+      </div>
+
+      {value.careOf.trim() && value.addrSource === 'custom' && (
+        <div style={{ marginTop: 10 }}>
+          <label style={label}>自定义地址（一行一段）</label>
+          <textarea style={{ ...input, minHeight: 54, resize: 'vertical', fontFamily: 'inherit' }}
+            value={value.addrCustom} placeholder={'12 Marina Boulevard\n#25-01 MBFC Tower 3\nSingapore 018982'}
+            onChange={e => onChange({ ...value, addrCustom: e.target.value })} />
+        </div>
+      )}
+
+      {(value.careOf.trim() || value.attn.trim()) && (
+        <div style={{ marginTop: 9, padding: '7px 9px', background: '#fff', border: '1px dashed #dbe3ec', borderRadius: 6, fontSize: 11, color: '#475569', lineHeight: 1.6 }}>
+          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>客户会看到</div>
+          <div>{company.companyName}</div>
+          {value.careOf.trim() && <div>c/o {value.careOf.trim()}</div>}
+          <div style={{ color: '#94a3b8' }}>
+            {!value.careOf.trim() || value.addrSource === 'a' ? '（客户自己的地址）'
+              : value.addrSource === 'b' ? `（${value.careOf.trim()} 的地址，查不到就用客户自己的）`
+              : (value.addrCustom.trim() ? value.addrCustom.trim().split('\n').map((l, i) => <div key={i}>{l}</div>) : '（自定义地址还没填 — 会退回客户自己的地址）')}
+          </div>
+          {value.attn.trim() && <div>Attn: {value.attn.trim()}</div>}
+        </div>
+      )}
+
+      {differsFromStored && (
+        <div style={{ marginTop: 9, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 10.5, color: '#b45309' }}>这次的改动只影响这一张发票。</span>
+          <button type="button" onClick={() => void saveAsDefault()} disabled={savingDefault}
+            style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#31506f', cursor: savingDefault ? 'wait' : 'pointer' }}>
+            {savingDefault ? '保存中…' : '设为这家公司的默认'}
+          </button>
+          <button type="button" onClick={() => onChange(stored)}
+            style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', cursor: 'pointer' }}>
+            还原默认
+          </button>
+        </div>
+      )}
+      {savedNote && <div style={{ marginTop: 6, fontSize: 10.5, color: /失败|无法/.test(savedNote) ? '#b91c1c' : '#15803d' }}>{savedNote}</div>}
+    </div>
+  );
+}
+
 export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling; cycleFye?: string }) {
   const invoiceRequestKey = useRef(globalThis.crypto.randomUUID()).current;
   const [drafting, setDrafting] = useState(false);
@@ -203,6 +340,15 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
   const [savingPdfs, setSavingPdfs] = useState(false);
   const [pdfResult, setPdfResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [parentOverride, setParentOverride] = useState<{ id: number | null; name: string | null }>({ id: c.parentCompanyId, name: c.parentCompanyName });
+  // Prefilled from the company's stored Bill To default; edits here apply to
+  // THIS invoice only unless explicitly saved back (see BillToFields).
+  const [billToNotes, setBillToNotes] = useState<string[]>([]);
+  const [billTo, setBillTo] = useState<BillToDraft>({
+    careOf: c.billToCareOf ?? '',
+    addrSource: c.billToCareOfAddrSource ?? 'b',
+    addrCustom: c.billToCareOfAddrCustom ?? '',
+    attn: c.billToAttn ?? '',
+  });
 
   // Edit mode (Vincent, 2026-08-18): once an invoice already exists for a
   // company+cycle, this section switches to editing that real QB invoice
@@ -512,6 +658,12 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           docNumbers: invoiceNumbers,
           expectedNextNumbers: suggestedNumbers,
           overlapConfirmed,
+          // Only sent when something is actually filled in — an all-empty
+          // billTo would make create-invoice compose a Bill To block for a
+          // company that never asked for one.
+          ...(billTo.careOf.trim() || billTo.attn.trim()
+            ? { billTo: { careOf: billTo.careOf.trim() || null, addrSource: billTo.addrSource, addrCustom: billTo.addrCustom.trim() || null, attn: billTo.attn.trim() || null } }
+            : {}),
         }),
       });
       const json = await res.json();
@@ -566,6 +718,11 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
         if (numberAdjustments.length) {
           setNumberWarning(`QuickBooks assigned the latest available number: ${numberAdjustments.join(' · ')}. No duplicate invoice number was created.`);
         }
+        // How the Bill To block actually came out — a c/o party whose
+        // address could not be looked up, an overflowed line, or a parent
+        // link the c/o overrode. These describe what the CLIENT sees on the
+        // invoice that was just created, so they must be shown, not logged.
+        setBillToNotes(json.billToNotes ?? []);
         const pdfs: GeneratedPdf[] = [
           ...(json.tab?.qbId && json.tab?.invoiceNo ? [{ company: 'TAB' as const, qbId: String(json.tab.qbId), invoiceNo: String(json.tab.invoiceNo), total: json.tab.total ?? 0 }] : []),
           ...(json.tac?.qbId && json.tac?.invoiceNo ? [{ company: 'TAC' as const, qbId: String(json.tac.qbId), invoiceNo: String(json.tac.invoiceNo), total: json.tac.total ?? 0 }] : []),
@@ -841,6 +998,12 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           onChange={(id, name) => setParentOverride({ id, name })}
         />
       </div>
+      <BillToFields company={c} value={billTo} onChange={setBillTo} />
+      {billToNotes.length > 0 && (
+        <div style={{ marginBottom: 16, padding: '9px 11px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 11.5, color: '#92400e' }}>
+          {billToNotes.map((n, i) => <div key={i} style={{ marginBottom: i === billToNotes.length - 1 ? 0 : 4 }}>⚠ {n}</div>)}
+        </div>
+      )}
       {/* Header: contact + PIC + invoice date */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

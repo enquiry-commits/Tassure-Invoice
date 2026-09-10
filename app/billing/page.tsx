@@ -1458,6 +1458,13 @@ function arToBillingRow(ar: ARCompany, matched: CompanyBilling | undefined, mont
     resolvedCompanyId: matched?.companyId ?? null,
     parentCompanyId: matched?.parentCompanyId ?? null,
     parentCompanyName: matched?.parentCompanyName ?? null,
+    // Carried straight through from the matched renewals row — an AR row
+    // with no companies-table match has no stored Bill To defaults, which
+    // correctly means "no c/o" rather than an error.
+    billToCareOf: matched?.billToCareOf ?? null,
+    billToCareOfAddrSource: matched?.billToCareOfAddrSource ?? null,
+    billToCareOfAddrCustom: matched?.billToCareOfAddrCustom ?? null,
+    billToAttn: matched?.billToAttn ?? null,
   };
 }
 

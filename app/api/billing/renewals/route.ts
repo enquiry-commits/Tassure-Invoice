@@ -81,6 +81,14 @@ export interface CompanyBilling {
   resolvedCompanyId: number | null; // the real companies.id — see app/billing/page.tsx's arToBillingRow (companyId there is the AR Reminder row's own id, not this)
   parentCompanyId: number | null; // Vincent's Bill-To-override link: invoice this company, but show this parent's name/address to the client
   parentCompanyName: string | null;
+  // Stored invoice Bill To defaults (scripts/add-companies-bill-to-care-of.sql).
+  // Carried on the billing row so the draft can PREFILL its Bill To fields
+  // and let staff edit them for one invoice without changing the client's
+  // default — Vincent, 2026-09-10: "又要跟着客户走，又要每单选".
+  billToCareOf: string | null;
+  billToCareOfAddrSource: 'b' | 'a' | 'custom' | null;
+  billToCareOfAddrCustom: string | null;
+  billToAttn: string | null;
 }
 
 export interface GeneratedInvoice {
@@ -159,7 +167,7 @@ export async function computeAllCompanyBilling(withinDays: number): Promise<{ to
   ] = await Promise.all([
     supabase
       .from('companies')
-      .select('id, company_name, registration_no, fye_month, pic, sec_pic, has_nd, uses_address, has_xbrl, tw_status, client_type, is_active, best_email, primary_contact, parent_company_id')
+      .select('id, company_name, registration_no, fye_month, pic, sec_pic, has_nd, uses_address, has_xbrl, tw_status, client_type, is_active, best_email, primary_contact, parent_company_id, bill_to_care_of, bill_to_care_of_addr_source, bill_to_care_of_addr_custom, bill_to_attn')
       .eq('client_type', 'CSS Client')
       .eq('tw_status', 'Active'),
     supabase
@@ -581,6 +589,10 @@ export async function computeAllCompanyBilling(withinDays: number): Promise<{ to
       resolvedCompanyId: company.id,
       parentCompanyId: company.parent_company_id ?? null,
       parentCompanyName: company.parent_company_id ? (parentNameById.get(company.parent_company_id) ?? null) : null,
+      billToCareOf: (company.bill_to_care_of as string | null) ?? null,
+      billToCareOfAddrSource: (company.bill_to_care_of_addr_source as 'b' | 'a' | 'custom' | null) ?? null,
+      billToCareOfAddrCustom: (company.bill_to_care_of_addr_custom as string | null) ?? null,
+      billToAttn: (company.bill_to_attn as string | null) ?? null,
     };
   });
   return { today, results };

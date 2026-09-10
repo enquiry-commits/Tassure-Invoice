@@ -1,6 +1,18 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-10 (Invoicing — Bill To "c/o" and "Attn" (server side complete; SQL migration NOT yet run).
+Last updated: 2026-09-10 (Invoicing — Bill To "c/o" and "Attn", COMPLETE and live.
+
+Vincent ran `scripts/add-companies-bill-to-care-of.sql`; verified on production that the columns exist and the CHECK constraint really rejects an invalid address source (a typo there would silently decide where a real invoice is sent).
+
+The Billing Drafts row now has a "发票抬头 Bill To" section: c/o party, an address-source dropdown (B = the c/o party's address, default / A = the client's own / Custom), a custom-address box, and Attn — each prefilled from the company's stored default. Editing them applies to THAT invoice only; "设为这家公司的默认" is a separate explicit act that writes back. A live preview shows exactly what the client will see, and after generating, any composition note (address fell back, lines overflowed, a parent link was overridden) is shown in the row rather than only logged.
+
+End-to-end verified against real production data, with the cleanup in a `finally` block: stored default → read by invoicing → carried onto the billing row for prefill → composed into a real Bill To block; a per-invoice override wins without changing the stored default; clearing it returns invoicing to sending no BillAddr at all. Production was left with zero companies configured.
+
+A mistake worth recording: the first version of that test wrote to production and threw before its cleanup line, leaving a real client tagged with a c/o. Cleared immediately, and the test rewritten so the cleanup cannot be skipped. Any test that writes to production must put the cleanup in `finally`.
+
+Previous entry text follows.
+
+Original entry: Invoicing — Bill To "c/o" and "Attn" (server side).
 
 Cindy asked for the c/o ("care of") line QuickBooks already supports on an invoice's Bill To. Researched against the real QuickBooks data before designing anything: of 4,722 customers across TAB/TAC/TAO, 5 carry a c/o on the customer record and 7 have one printed on at least one invoice — 12 invoices, ~0.1%, but recurring for the same clients, in three real patterns (a Singapore law firm acting as a foreign client's agent; a Chinese parent billed through its Singapore entity; another corporate-services firm managing the client). "Attn: <person>" is the same mechanism, on 33 TAO invoices.
 
