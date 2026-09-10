@@ -23,6 +23,7 @@ import { getRecentChanges } from '@/lib/audit-lookup';
 import { getFirmPulse } from '@/lib/firm-pulse';
 import type { ChatExportOffer } from '@/lib/chat-export';
 import type { SoaPreview } from '@/lib/outstanding-lookup';
+import { previewEmailDraft, type EmailDraftPreview, type EmailDraftType } from '@/lib/email-draft-lookup';
 import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
@@ -484,6 +485,38 @@ async function firmPulseTool(account: ApprovedAccount | null) {
   return {
     ...pulse,
     note: 'Firm-WIDE overview composed from the same computations the individual tools own (upcoming_deadlines, late_filing_summary, outstanding_balance_summary), so these numbers always agree with those tools. Use it for "今天/现在最要紧的是什么" — then point the user at the specific tool for detail. Two things to be careful about when summarising: (1) biggestDebtors routinely includes Tassure GROUP entities (e.g. TASSURE PAC, TASSURE ASIA OUTSOURCEZ) — those are intercompany balances, NOT client debt, so do not present them as the worst-paying clients without saying so; (2) the worst overdue AR filings are years old and typically belong to companies already being struck off — late_filing_summary is the list of who is actually worth chasing. Amounts are SGD.',
+  };
+}
+
+// Added 2026-09-10 — Client Communications was the biggest feature still
+// locked inside its own page: chat could say whether an email had been
+// SENT (check_email_status) but could not draft one, which is the actual
+// daily work. READ-ONLY, like every other action tool — see
+// lib/email-draft-lookup.ts. The card's button builds the real draft and
+// opens the same Outlook review window the pages use; the send is the
+// user's click inside it.
+async function emailDraftPreviewTool(account: ApprovedAccount | null, input: Record<string, unknown>) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  const company = typeof input.company === 'string' ? input.company.trim() : '';
+  if (!company) return { error: true as const, message: 'A company name is required.' };
+  const rawType = typeof input.type === 'string' ? input.type : '';
+  if (!['letter', 'ar', 'soa'].includes(rawType)) {
+    return { error: true as const, message: "type must be one of 'ar' (annual return / renewal reminder), 'soa' (statement of account) or 'letter' (general document reminder). Ask the user which kind of email they mean rather than guessing." };
+  }
+  const type = rawType as EmailDraftType;
+  const fyeMonth = typeof input.fyeMonth === 'string' && input.fyeMonth.trim() ? input.fyeMonth.trim() : undefined;
+  const fyeYear = typeof input.fyeYear === 'number' && Number.isFinite(input.fyeYear) ? input.fyeYear : undefined;
+
+  const result = await previewEmailDraft(company, type, fyeMonth, fyeYear);
+  if (!result.found) {
+    if (result.ambiguous) return { found: false as const, ambiguous: true as const, message: result.message, candidates: result.candidates };
+    return { found: false as const, message: result.message };
+  }
+  return {
+    found: true as const,
+    ...result.preview,
+    _emailDraft: result.preview,
+    note: 'READ-ONLY preview — NO email has been created or sent, and you have no tool that can send one. The recipient/CC shown is resolved by the SAME code Campaign Centre uses (TeamWork report recipients, then the company fallback, plus the staff CCs derived from the SEC/ACC/TAX PIC), so relay it as given and never invent, add or "correct" an address. The user sees a card with the real To/CC and a button that creates the draft and opens the normal Outlook review window, where THEY send it. Things worth pointing out in your reply if present: recipientSource "company_fallback" means the TeamWork report recipients were unavailable and the address is a fallback worth eyeballing; autoIncluded:false with autoReason tells the user what Campaign Centre itself would flag (e.g. "Already sent this cycle" — say so plainly rather than letting them double-send, or "No invoice found", which for an AR/SOA mail means there is nothing to attach); canDraft:false means the button will be disabled and blockedReason says why. Never claim you drafted or sent anything.',
   };
 }
 
@@ -1213,6 +1246,8 @@ Use company_deep_lookup for ANY question about a specific named company that goe
 
 When a lookup comes back with ambiguous:true and a candidates list, that means SEVERAL REAL COMPANIES matched what the user typed — it is NOT "not found". Ask which one they mean and list the candidates; never tell the user the company doesn't exist, and never silently pick one yourself. People type partial names ("remobie", "inventa") constantly, and this is the normal, expected outcome for a shared brand word.
 
+DRAFTING A CLIENT EMAIL: when the user wants to email/remind/chase a CLIENT (e.g. "给 XX 发年报提醒", "催一下 XX 的款", "draft the SOA email for XX", "发个文件提醒给 XX"), use preview_email_draft. Pick the type from what they are chasing, and say which you picked: 'ar' = the annual return / renewal reminder, 'soa' = the statement of account for money owed, 'letter' = a general document reminder. 'ar' is always about ONE specific FYE cycle — if they have not said which, ASK for the FYE month and year instead of guessing one. The user sees a card with the REAL To/CC and a button that creates the draft and opens the normal Outlook review window, where they send it. You cannot send email — never say you sent, drafted or scheduled one. If check_outstanding_balance already showed a balance and they then say "send it to them", that means the SOA email for that company. Do not paste recipient addresses you were not given by the tool, and never suggest a different address than the one it resolved.
+
 HANDING OVER A FULL LIST: after list_companies, collections_worklist, upcoming_deadlines or late_filing_summary returns anything, the UI automatically shows the user a real "download the complete list as Excel" button under your reply — built by re-running the same query server-side, so it contains every row, not just the ones you named. Whenever your answer is a list you had to shorten (or a count the user will obviously want the names behind), finish by pointing at that button in one short sentence, e.g. "完整名单可以点下面的按钮下载 Excel". Never say YOU exported, generated, attached or sent a file — you cannot; only their click downloads anything.
 
 TOOL ROUTING — pick by the SHAPE of the question first, then the topic. Several tools look similar; these are the distinctions that actually matter:
@@ -1290,6 +1325,12 @@ const CLAUDE_TOOLS = [
     value: { type: 'string', description: "New value — a date like '03 Apr 2026' for date fields, a staff name for PIC fields. Omit or empty to clear the field." },
     fyeYear: { type: 'number', description: 'Which FYE cycle year — defaults to the most recent not-yet-filed cycle' },
   }, required: ['company', 'field'] } },
+  { name: 'preview_email_draft', description: "Preview the REAL client email this system would draft for ONE company — the annual-return/renewal reminder ('ar'), the statement of account ('soa'), or a general document-reminder letter ('letter'). READ-ONLY: it resolves the real To/CC (the same recipient policy Campaign Centre uses), the real template and the real invoice attachments, and the user gets a button that creates the draft and opens the normal Outlook review window where THEY send it. Use whenever the user asks to draft/send/prepare an email or reminder to a client (e.g. \"给 XX 发年报提醒\", \"draft the SOA email for XX\", \"催一下 XX\"). type 'ar' ALWAYS needs the specific FYE month and year — ask which cycle rather than guessing. Never claim you sent anything yourself.", input_schema: { type: 'object', properties: {
+    company: { type: 'string', description: 'Company name, partial match is fine' },
+    type: { type: 'string', enum: ['ar', 'soa', 'letter'], description: "'ar' = annual return / renewal reminder (needs fyeMonth+fyeYear); 'soa' = statement of account; 'letter' = general document reminder" },
+    fyeMonth: { type: 'string', description: "Required for type 'ar' — e.g. 'December'" },
+    fyeYear: { type: 'number', description: "Required for type 'ar' — e.g. 2025" },
+  }, required: ['company', 'type'] } },
   { name: 'firm_pulse', description: "REAL firm-WIDE 'what needs attention right now' overview in one call — overdue AR filings and AGMs, what's due in the next 14 days, active late filers, and total money owed with the biggest debtors. Management-only. Use for \"今天最要紧的是什么\", \"现在有什么要注意的\", \"What should I prioritize today\" when the user means the FIRM rather than their own task list (my_tasks_summary answers the personal version, and legitimately returns nothing for an owner/management account who is not a caseworker).", input_schema: { type: 'object', properties: {} } },
   { name: 'collections_worklist', description: "REAL list of which companies a given person has to CHASE for unpaid invoices, with each one's amount and how old the oldest unpaid invoice is — the same owner filter the SOA page itself is built around. Use for \"我手上有哪些欠款要催\", \"Chelsea 要催哪些公司\", \"我的欠款清单\". Pass owner:'me' for the caller's own list. Omit owner for the whole firm. This is the LIST view; outstanding_balance_summary answers 'how big is the book' and check_outstanding_balance answers about ONE named company.", input_schema: { type: 'object', properties: { owner: { type: 'string', description: "Collections owner's name, or 'me' for the caller. Omit for the whole firm." }, qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks books — omit for all 3' } } } },
   { name: 'recent_changes', description: 'REAL field-level change history from the audit log — who changed which field on which company, from what value to what, and when. Use for "最近谁改了什么", "这家公司最近被改了什么", "谁动过这个". Most changes are AUTOMATED nightly syncs (changed_by "system:..."); pass humanOnly:true when the user means a person. Different from recent_activity_summary, which describes what a person has been DOING across features rather than the field-level diff trail.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days back, default 7, max 365' }, humanOnly: { type: 'boolean', description: 'Exclude automated system syncs' }, company: { type: 'string', description: 'Only changes for this company' }, limit: { type: 'number', description: 'How many change rows to return, default 30, max 100' } } } },
@@ -1379,6 +1420,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'list_companies') return companyListTool(input);
   if (name === 'upcoming_deadlines') return upcomingDeadlinesTool(typeof input.days === 'number' ? input.days : undefined);
   if (name === 'preview_ar_update') return arUpdatePreviewTool(account, input);
+  if (name === 'preview_email_draft') return emailDraftPreviewTool(account, input);
   if (name === 'firm_pulse') return firmPulseTool(account);
   if (name === 'collections_worklist') return collectionsWorklistTool(account, input);
   if (name === 'recent_changes') return recentChangesTool(input);
@@ -1405,7 +1447,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview; exportOffer?: ChatExportOffer; soaPreview?: SoaPreview }> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview; exportOffer?: ChatExportOffer; soaPreview?: SoaPreview; emailDraftPreview?: EmailDraftPreview }> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -1436,6 +1478,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   // card is what downloads anything.
   let lastExportOffer: ChatExportOffer | undefined;
   let lastSoaPreview: SoaPreview | undefined;
+  let lastEmailDraftPreview: EmailDraftPreview | undefined;
   // INV-DATA-022 deterministic safety net — see mentionsOutstandingBalance's
   // own comment on why this checks the REPLY, not the question.
   // outstandingToolCalled flips true the instant check_outstanding_balance
@@ -1469,7 +1512,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview };
+      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -1502,6 +1545,11 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
         if (tu.name === 'preview_post_incorporate' && result && typeof result === 'object' && (result as { complete?: boolean }).complete) {
           lastPostIncorporatePreview = (result as { preview: PostIncorporatePreview }).preview;
         }
+        if (result && typeof result === 'object' && '_emailDraft' in result) {
+          const holder = result as { _emailDraft?: EmailDraftPreview };
+          if (holder._emailDraft) lastEmailDraftPreview = holder._emailDraft;
+          delete holder._emailDraft;
+        }
         if (result && typeof result === 'object' && '_soa' in result) {
           const holder = result as { _soa?: SoaPreview };
           if (holder._soa) lastSoaPreview = holder._soa;
@@ -1519,7 +1567,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -1925,9 +1973,9 @@ export async function POST(req: NextRequest) {
       // than the other, single-shot preview tools ever did; losing an
       // earlier-collected director's details off the back of an 8-message
       // window would make Claude re-ask for them or, worse, guess.
-      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview } = await claudeAnswer(messages.slice(-24), context, account);
+      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview } = await claudeAnswer(messages.slice(-24), context, account);
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage, toStoredPreview(invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview));
-      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview });
+      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview });
     }
     // The rule-based intent router only ever understands plain text — an
     // attached image/PDF is real content only Claude can actually look at,

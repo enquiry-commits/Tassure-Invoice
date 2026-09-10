@@ -1,6 +1,16 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-10 (Assistant — 互通 phase 1: the REAL Billing Drafts editor now opens inside chat.
+Last updated: 2026-09-10 (Assistant — 互通 phase 2: drafting real client emails from chat.
+
+Client Communications was the largest feature still locked inside its own page — chat could report whether an email had been SENT (check_email_status) but could not draft one, which is the actual daily work. New `preview_email_draft` tool (30 tools now) + `EmailDraftCard` cover all three campaign types: 'ar' (annual return / renewal reminder), 'soa' (statement of account) and 'letter' (document reminder).
+
+The card shows the REAL resolved To/CC BEFORE anything is created — sending a client's statement to a guessed address is the failure that matters here and is not recoverable — then its button creates the real campaign draft and opens the same `OutlookStyleSendModal` Campaign Centre and the Billing page open. The send stays a human click inside that window.
+
+Nothing about recipients is re-derived: `previewEmailDraft()` calls `lib/client-comms-resolve.ts`'s own `buildRow()` server-side, and passes that function's verdict through verbatim (`autoIncluded`/`autoReason`) rather than reinterpreting it, so chat can never disagree with Campaign Centre about whether a client was already emailed. The SOA-only client helper was generalised into `lib/campaign-draft-client.ts` and `buildSoaDraft` now delegates to it, so there is still one implementation of the client-facing email flow. INV-DATA-039.
+
+Verified against production: 1V CAPITAL soa → real recipient + 3 staff CCs, template "SOA1 - Statement of Account", canDraft; 1V CAPITAL ar Dec 2025 → correctly flags "No invoice found"; LAKEFILL letter → 5 real TeamWork recipients, template "Document Reminder"; "remobie" → correctly asks which of 2 companies. `npx tsc --noEmit` / `npm run build` / `test-orchestrator.ts` clean. The draft button itself has NOT been clicked in a browser — no campaign row has been created by this code yet.
+
+Previous entry: Assistant — 互通 phase 1: the REAL Billing Drafts editor now opens inside chat.
 
 Vincent's architectural complaint, after seeing the chat's own simplified confirm dialog: "我更想要...我选择了这些按钮会弹出我真正在 Billing Drafts 那边看到的弹窗是一模一样的，就是现在这些功能都锁死了在各自的功能页内，却没有互通到这个AI CHAT内...还是很像只是一个聊天chat". He is right — every chat action so far was a purpose-built lookalike of a feature, which is why chat still felt like a chat rather than the system.
 

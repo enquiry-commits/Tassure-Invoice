@@ -26,6 +26,9 @@ import OutlookStyleSendModal from '@/components/client-communications/OutlookSty
 import ExpandedBillingRow from '@/components/billing/ExpandedBillingRow';
 import type { CompanyBilling } from '@/app/api/billing/renewals/route';
 import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender } from '@/lib/soa-actions-client';
+import { buildCampaignDraft, loadCampaignActor, type CampaignActor, type CampaignSender } from '@/lib/campaign-draft-client';
+// type-only (lib/email-draft-lookup.ts is server-only)
+import type { EmailDraftPreview } from '@/lib/email-draft-lookup';
 import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
 import { logActivity } from '@/lib/activity-client';
 
@@ -55,6 +58,7 @@ export type ChatMsg = {
   arUpdatePreview?: ArUpdatePreview;
   exportOffer?: ChatExportOffer;
   soaPreview?: SoaPreview;
+  emailDraftPreview?: EmailDraftPreview;
 };
 
 // Turns a local ChatMsg back into what /api/assistant expects — content
@@ -1237,6 +1241,125 @@ function BillingDraftsModal({ companyName, cycleFye, onClose }: { companyName: s
           {company && <ExpandedBillingRow c={company} cycleFye={cycleFye} />}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Draft a real client email from chat (2026-09-10) — the last big daily
+// workflow that was locked inside Client Communications. Chat could
+// previously only report whether an email had been SENT.
+//
+// Shows the real resolved To/CC before anything is created (getting a
+// client's statement to the wrong address is the failure that matters
+// here), then the button creates the real campaign draft and opens the
+// SAME OutlookStyleSendModal both Campaign Centre and the Billing page
+// open. The send itself is the user's click inside that window.
+export function EmailDraftCard({ preview }: { preview: EmailDraftPreview }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DraftLike | null>(null);
+  const [actor, setActor] = useState<{ me: CampaignActor; sender: CampaignSender } | null>(null);
+
+  useEffect(() => { void loadCampaignActor().then(setActor); }, []);
+
+  const TYPE_LABEL: Record<string, string> = {
+    ar: '年报 / 续费提醒 (AR)',
+    soa: '对账单 (SOA)',
+    letter: '文件提醒 (Letter)',
+  };
+
+  const create = async () => {
+    setBusy(true); setError(null); setDone(null);
+    try {
+      const built = await buildCampaignDraft({
+        companyName: preview.companyName,
+        type: preview.type,
+        fyeMonth: preview.fyeMonth,
+        fyeYear: preview.fyeYear,
+        me: actor?.me ?? null,
+        sender: actor?.sender ?? null,
+      });
+      logActivity('chat_email_draft', { companyName: preview.companyName, type: preview.type });
+      setDraft(built);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 460 }}>
+      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7' }}>
+        <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+        <div style={{ fontSize: 10.5, color: '#94a3b8' }}>
+          {TYPE_LABEL[preview.type] ?? preview.type}
+          {preview.fyeMonth ? ` · FYE ${preview.fyeMonth} ${preview.fyeYear ?? ''}` : ''}
+          {preview.templateName ? ` · ${preview.templateName}` : ''}
+        </div>
+      </div>
+
+      <div style={{ padding: '10px 14px', fontSize: 11.5 }}>
+        <div style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, marginBottom: 2 }}>TO</div>
+        <div style={{ color: preview.toEmail ? '#173b61' : '#b91c1c', fontWeight: 650, marginBottom: 7, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+          {preview.toEmail ?? '（没有可用的收件邮箱）'}
+        </div>
+        {preview.ccEmail && (
+          <>
+            <div style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, marginBottom: 2 }}>CC</div>
+            <div style={{ color: '#64748b', marginBottom: 7, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>{preview.ccEmail}</div>
+          </>
+        )}
+        {preview.invoiceCount > 0 && (
+          <div style={{ color: '#64748b', marginBottom: 4 }}>
+            附件发票 {preview.invoiceCount} 张{preview.invoiceNumbers.length ? `：${preview.invoiceNumbers.map(n => `#${n}`).join('、')}` : ''}
+            {preview.totalAmount > 0 ? ` · 合计 S$${preview.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+          </div>
+        )}
+        {preview.recipientSource === 'company_fallback' && (
+          <div style={{ marginTop: 6, fontSize: 10.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '6px 8px' }}>
+            ⚠ 收件人来自公司资料的备用邮箱（TeamWork Report 的收件人取不到），发送前请确认。
+          </div>
+        )}
+        {!preview.autoIncluded && preview.autoReason && (
+          <div style={{ marginTop: 6, fontSize: 10.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '6px 8px' }}>
+            ⚠ Campaign Centre 会把这家标记为：{preview.autoReason}
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7' }}>
+        <button
+          type="button"
+          disabled={busy || !preview.canDraft}
+          onClick={() => void create()}
+          title={preview.blockedReason ?? undefined}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+            background: !preview.canDraft ? '#e2e8f0' : busy ? '#94a3b8' : '#0f766e',
+            color: !preview.canDraft ? '#94a3b8' : '#fff',
+            cursor: !preview.canDraft ? 'not-allowed' : busy ? 'wait' : 'pointer',
+          }}
+        >
+          <Send size={13} />
+          {busy ? '准备中…' : '起草邮件并打开发送窗口'}
+        </button>
+        {preview.blockedReason && (
+          <div style={{ marginTop: 6, fontSize: 10.5, color: '#b91c1c' }}>{preview.blockedReason}</div>
+        )}
+        {error && <div style={{ marginTop: 6, fontSize: 10.5, color: '#b91c1c' }}>{error}</div>}
+        {done && <div style={{ marginTop: 6, fontSize: 10.5, color: '#15803d', fontWeight: 650 }}>{done}</div>}
+      </div>
+
+      {draft && (
+        <OutlookStyleSendModal
+          draft={draft}
+          sender={actor?.sender ?? null}
+          me={actor?.me ?? null}
+          onClose={() => setDraft(null)}
+          onSent={() => { setDraft(null); setDone('邮件已在 Outlook 中处理完成。'); }}
+        />
+      )}
     </div>
   );
 }

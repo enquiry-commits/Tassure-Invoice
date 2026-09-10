@@ -1144,6 +1144,20 @@ again.
   page has — `/api/billing/renewals/company` re-runs
   `computeAllCompanyBilling()`, resolves the name exactly as the page does,
   and refuses restricted accounts. *(source: 2026-09-10.)*
+- **INV-DATA-039** — Chat must never form its own opinion about who a
+  client email goes to. Recipient/CC policy lives in exactly one place
+  (`lib/client-comms-resolve.ts`: TeamWork report recipients → company
+  fallback → the staff CCs derived from SEC/ACC/TAX PIC), and every chat
+  path — preview and draft alike — goes through it: `previewEmailDraft()`
+  calls `buildRow()` server-side, and `buildCampaignDraft()` re-resolves
+  through the same `/campaigns/preview` endpoint the pages use rather than
+  trusting the preview it was shown. It also passes `buildRow`'s own
+  verdict through verbatim (`autoIncluded`/`autoReason` — "Already sent
+  this cycle", "No invoice found", …) instead of re-deriving it, so chat
+  and Campaign Centre can never disagree about whether a client was
+  already emailed. Sending a client's statement to an address chat guessed
+  is the failure this prevents, and it is not recoverable. *(source:
+  2026-09-10.)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
