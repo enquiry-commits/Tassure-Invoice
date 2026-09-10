@@ -1281,6 +1281,7 @@ again.
   "dumb answer", check what model is actually serving it. *(source:
   2026-09-10, Vincent: "为什么...不能像 chatgpt 和 claude 那样智能的理解...
   明明都接了 Anthropic 的 api".)*
+- **INV-DATA-048** — A person's name is data we already hold (`lib/approved-accounts.ts`), never something to reconstruct from an email local-part. Confirmed live 2026-09-10: `active_users_today` returned bare emails and the model rendered `hoechyi@tassure.com` as "Ho Echyi" (her name is "Lim Hoe Chyi") — it guessed a word split. Every assistant tool that surfaces a staff member now resolves the real name server-side before the payload reaches the model, and the prompt forbids inventing one. If an email has no matching account, show the email — do not guess a spelling of a real person. *(source: 2026-09-10.)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

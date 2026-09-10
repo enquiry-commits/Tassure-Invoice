@@ -8,7 +8,7 @@ import { getPersonActivitySummary, getCompanyActivitySummary } from '@/lib/activ
 import { getRecentActivity, summarizeByKind } from '@/lib/recent-activity';
 import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories';
 import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation, type StoredPreview } from '@/lib/ai-conversations';
-import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, type ApprovedAccount } from '@/lib/approved-accounts';
+import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import { previewInvoiceEdit, type InvoiceEditPreview, type InvoiceEditChange } from '@/lib/invoice-edit-lookup';
@@ -117,17 +117,27 @@ function attachmentSummary(content: string | ContentBlock[]): string {
 // old version would have missed.
 export function mentionsOutstandingBalance(text: string): boolean {
   const t = text.toLowerCase();
-  const keywords = ['欠款', '欠钱', '未付', '未结', '挂账', '尚欠', '还欠', 'outstanding', 'arrears', 'owe', 'owing', 'unpaid'];
-  if (!keywords.some(k => t.includes(k))) return false;
+  const KW = /(欠款|欠钱|欠錢|未付|未结|未結|挂账|掛賬|尚欠|拖欠)/;
+  const zhHit = KW.test(text);
+  const enHit = /(outstanding|arrears|unpaid|owing|(^|[^a-z])owe[sd]?([^a-z]|$))/i.test(t);
+  if (!zhHit && !enHit) return false;
 
-  // A money figure anywhere in the reply — "S$3,650", "$0", "3,650.00".
-  const hasAmount = /(s\$|sgd|\$)\s?[\d,]/i.test(t) || /\d[\d,]*\.\d{2}/.test(t);
-  if (hasAmount) return true;
+  // The guard fires by DEFAULT once an arrears word appears — it exists
+  // because Haiku fabricated "目前没有欠款（$0）" for a company that owed
+  // S$3,650, with no tool call. Narrowed repeatedly since; the final rule is
+  // three well-defined shapes that are NOT a fabricated balance and suppress
+  // it, and everything else with an arrears word is treated as a claim:
+  //  1. a question — a fabricated result states a number, it never asks;
+  //  2. an offer to look it up ("帮你查一下…", "tell me the company");
+  //  3. an enumeration — the word sits immediately after "、" or right before
+  //     "等" ("开单、年报、欠款等"), the real 2026-09-10 false positive.
+  // (INV-DATA-044)
+  if (/[？?]/.test(text)) return false;
+  if (/(请问|請問|告诉我|告訴我|帮你查|帮您查|幫你查|要我帮|要我幫|想查一下|需要我|which company|tell me the|let me check|i can check|would you like me)/i.test(t)) return false;
+  if (/、[ 　]*(欠款|欠钱|欠錢|未付|未结|未結|挂账|掛賬|尚欠|拖欠)/.test(text)) return false;
+  if (/(欠款|欠钱|欠錢|未付|未结|未結|挂账|掛賬|尚欠|拖欠)[^。！？]{0,2}等/.test(text)) return false;
 
-  // Or an assertion adjacent to the keyword, within a clause.
-  const zhClaim = /(没有|沒有|无|沒|有|共|合计|總計|总计|总共|目前|尚|还|已结清|结清)[^，。；、\r\n]{0,8}?(欠款|欠钱|未付|未结|挂账|尚欠|还欠)/;
-  const enClaim = /\b(no|any|has|have|had|owes?|owing|zero|nil|cleared?|settled|total)\b[^.;\r\n]{0,24}?\b(outstanding|arrears|unpaid|balance)\b/i;
-  return zhClaim.test(t) || enClaim.test(t);
+  return true;
 }
 
 // Same failure family, caught the same day: Vincent (real canViewAsOthers:
@@ -973,7 +983,16 @@ async function activeUsersToday(account: ApprovedAccount | null, days?: number) 
     note: rangeDays === 1
       ? 'This is the real Singapore-time calendar day (00:00 SGT to now), matching "today" exactly — say "today", not "the last 24 hours".'
       : `Rolling ${rangeDays}-day window from right now.`,
-    active_users: summary.byPerson.map(p => ({ email: p.email, event_count: p.totalEvents, most_visited_page: p.topPage })),
+    // Resolve to the real staff name server-side. Confirmed live 2026-09-10:
+    // given only "hoechyi@tassure.com" the model rendered the colleague as
+    // "Ho Echyi" instead of "Lim Hoe Chyi". A name is a fact we hold
+    // (lib/approved-accounts.ts), never something to rebuild from an address.
+    active_users: summary.byPerson.map(p => ({
+      name: getApprovedAccount(p.email)?.name ?? p.email,
+      email: p.email,
+      event_count: p.totalEvents,
+      most_visited_page: p.topPage,
+    })),
     company_top_pages: summary.topPages.slice(0, 5).map(p => ({ page: p.pathname, visits: p.visits })),
   };
 }
@@ -1290,6 +1309,8 @@ async function rememberThis(account: ApprovedAccount | null, memoryType: string,
 // person with the exact same memories.
 function staticSystemPrompt(): string {
   return `You are the in-app assistant of the Tassure Corporate Services System (a Singapore corporate-services billing dashboard used by Tassure Asia staff). Answer in the user's language (usually Chinese). Be concise and concrete.
+
+Never invent or reconstruct a person's name from their email address. Tools that involve staff give you the real name field — use it verbatim. Confirmed real (2026-09-10): given only "hoechyi@tassure.com" a reply called the colleague "Ho Echyi" when her name is "Lim Hoe Chyi". If a tool gives an email with no name, say the email; do not guess a real person's spelling.
 
 Never translate a person's name or a company's name into Chinese characters, even when the rest of your reply is in Chinese — e.g. "Shi Ming" stays "Shi Ming", never guessed into "石明". These are stored and used system-wide exactly as romanized/English text (see the staff and company data itself); inventing a Chinese rendering is a fabrication the system has no real source for, not a translation. Keep names exactly as they appear in the data you're given.
 
