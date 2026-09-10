@@ -28,11 +28,17 @@ export async function PATCH(req: NextRequest) {
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
 
   const body = await req.json();
-  const { qbCompany, qbInvoiceId, pic, lines } = body as {
+  const { qbCompany, qbInvoiceId, pic, lines, billTo } = body as {
     qbCompany: QbCompany;
     qbInvoiceId: string;
     pic?: string;
     lines: DraftLineItem[];
+    // Same per-invoice Bill To override create-invoice accepts. Added
+    // 2026-09-10: without it, the draft's Bill To fields silently did
+    // nothing on a row that was EDITING an existing invoice — which is a
+    // normal state for any company already invoiced this cycle, and the
+    // fields are visible and editable there just the same.
+    billTo?: { careOf?: string | null; addrSource?: 'b' | 'a' | 'custom' | null; addrCustom?: string | null; attn?: string | null };
   };
 
   if (qbCompany !== 'TAB' && qbCompany !== 'TAC') {
@@ -138,7 +144,9 @@ export async function PATCH(req: NextRequest) {
   // hand inside QuickBooks.
   const billToNotes: string[] = [];
   let billAddrToSend: Record<string, unknown> | null = null;
-  const careOfSettings = await loadCareOfSettings(null, genInv.company_name);
+  const careOfSettings = billTo
+    ? { careOf: billTo.careOf ?? null, addrSource: billTo.addrSource ?? null, addrCustom: billTo.addrCustom ?? null, attn: billTo.attn ?? null }
+    : await loadCareOfSettings(null, genInv.company_name);
 
   if (careOfSettings.careOf?.trim() || careOfSettings.attn?.trim()) {
     const customer = await findCustomer(token, realmId, genInv.company_name);

@@ -197,10 +197,16 @@ export type BillToDraft = {
 // Left empty this sends nothing at all, and QuickBooks fills Bill To from
 // the customer record exactly as it always has — which is why ~99.9% of
 // invoices are untouched by this feature.
-function BillToFields({ company, value, onChange }: {
+function BillToFields({ company, value, onChange, parentName }: {
   company: CompanyBilling;
   value: BillToDraft;
   onChange: (next: BillToDraft) => void;
+  // The parent-company Bill-To link currently set on this row, if any — the
+  // two features write the same block and mean opposite things, so a user
+  // typing a c/o on a company that has a parent link must be told BEFORE
+  // generating, not by a note afterwards. Seen live on FUTAI RENOVATION,
+  // which has BELTROAD linked.
+  parentName: string | null;
 }) {
   const [savingDefault, setSavingDefault] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
@@ -282,6 +288,12 @@ function BillToFields({ company, value, onChange }: {
           <textarea style={{ ...input, minHeight: 54, resize: 'vertical', fontFamily: 'inherit' }}
             value={value.addrCustom} placeholder={'12 Marina Boulevard\n#25-01 MBFC Tower 3\nSingapore 018982'}
             onChange={e => onChange({ ...value, addrCustom: e.target.value })} />
+        </div>
+      )}
+
+      {parentName && value.careOf.trim() && (
+        <div style={{ marginTop: 9, padding: '7px 9px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 11, color: '#92400e', lineHeight: 1.6 }}>
+          ⚠ 这家公司已经设了母公司 Bill-To（<strong>{parentName}</strong>）。填了 c/o 之后<strong>以 c/o 为准</strong>——发票抬头会是「{company.companyName} c/o {value.careOf.trim()}」，不会印成母公司。要走母公司就把 c/o 清空。
         </div>
       )}
 
@@ -777,7 +789,15 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       });
       const res = await fetch('/api/quickbooks/update-invoice', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ qbCompany: company, qbInvoiceId: invoice.qbId, pic: c.pic ?? undefined, lines: companyLines.map(toApiLine) }),
+        body: JSON.stringify({
+          qbCompany: company, qbInvoiceId: invoice.qbId, pic: c.pic ?? undefined, lines: companyLines.map(toApiLine),
+          // Same rule as generating: only sent when something is filled in,
+          // so saving an edit on an ordinary invoice still touches no
+          // BillAddr at all.
+          ...(billTo.careOf.trim() || billTo.attn.trim()
+            ? { billTo: { careOf: billTo.careOf.trim() || null, addrSource: billTo.addrSource, addrCustom: billTo.addrCustom.trim() || null, attn: billTo.attn.trim() || null } }
+            : {}),
+        }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -788,6 +808,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
         return;
       }
       setGeneratedPdfs(prev => prev.map(pdf => pdf.company === company ? { ...pdf, total: json.total ?? pdf.total } : pdf));
+      setBillToNotes(json.billToNotes ?? []);
       setEditResult(prev => ({ ...prev, [company]: { ok: true, msg: `Saved — ${company} invoice #${displayInvoiceNo(json.invoiceNo)} updated in QuickBooks.` } }));
     } catch (error) {
       setEditResult(prev => ({ ...prev, [company]: { ok: false, msg: error instanceof Error ? error.message : 'Request failed.' } }));
@@ -998,7 +1019,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           onChange={(id, name) => setParentOverride({ id, name })}
         />
       </div>
-      <BillToFields company={c} value={billTo} onChange={setBillTo} />
+      <BillToFields company={c} value={billTo} onChange={setBillTo} parentName={parentOverride.name} />
       {billToNotes.length > 0 && (
         <div style={{ marginBottom: 16, padding: '9px 11px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 11.5, color: '#92400e' }}>
           {billToNotes.map((n, i) => <div key={i} style={{ marginBottom: i === billToNotes.length - 1 ? 0 : 4 }}>⚠ {n}</div>)}
