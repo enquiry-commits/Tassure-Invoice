@@ -224,7 +224,7 @@ function BillToFields({ company, value, onChange, parentName }: {
     (value.careOf.trim() && value.addrSource === 'custom' ? value.addrCustom.trim() !== stored.addrCustom.trim() : false);
 
   const saveAsDefault = async () => {
-    if (!company.resolvedCompanyId) { setSavedNote('这行没有对应的公司档案，无法存成默认值。'); return; }
+    if (!company.resolvedCompanyId) { setSavedNote("This row has no company record, so it cannot be saved as a default."); return; }
     setSavingDefault(true); setSavedNote(null);
     try {
       const writes: [string, string | null][] = [
@@ -238,12 +238,12 @@ function BillToFields({ company, value, onChange, parentName }: {
           method: 'PATCH', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ companyId: company.resolvedCompanyId, field, value: v }),
         });
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `保存失败 (${res.status})`);
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `Save failed (${res.status})`);
       }
       logActivity('bill_to_default_saved', { companyName: company.companyName });
-      setSavedNote('已存为这家公司的默认值，以后开单会自动带上。');
+      setSavedNote("Saved as this company's default — future invoices will use it.");
     } catch (err) {
-      setSavedNote(err instanceof Error ? err.message : '保存失败，请重试。');
+      setSavedNote(err instanceof Error ? err.message : 'Save failed — please try again.');
     } finally {
       setSavingDefault(false);
     }
@@ -255,36 +255,36 @@ function BillToFields({ company, value, onChange, parentName }: {
   return (
     <div style={{ border: '1px solid #eef2f7', borderRadius: 8, padding: '10px 12px', marginBottom: 16, background: '#fbfcfd' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <span style={{ fontSize: 10.5, fontWeight: 800, color: '#31506f' }}>发票抬头 Bill To（选填）</span>
-        <span style={{ fontSize: 10, color: '#94a3b8' }}>留空 = 用 QuickBooks 客户档案的地址，跟现在完全一样</span>
+        <span style={{ fontSize: 10.5, fontWeight: 800, color: '#31506f' }}>Bill To (optional)</span>
+        <span style={{ fontSize: 10, color: '#94a3b8' }}>Leave empty and QuickBooks uses the customer's own address, exactly as today</span>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.1fr 1fr', gap: 10 }}>
         <div>
-          <label style={label}>c/o（经由哪家公司）</label>
-          <input style={input} value={value.careOf} placeholder="例：Novix Ai Global Pte. Ltd"
+          <label style={label}>C/O (care of)</label>
+          <input style={input} value={value.careOf} placeholder="e.g. Novix Ai Global Pte. Ltd"
             onChange={e => onChange({ ...value, careOf: e.target.value })} />
         </div>
         <div>
-          <label style={label}>c/o 下面印谁的地址</label>
+          <label style={label}>Address under the C/O line</label>
           <select style={{ ...input, cursor: value.careOf.trim() ? 'pointer' : 'not-allowed', color: value.careOf.trim() ? '#334155' : '#cbd5e1' }}
             value={value.addrSource} disabled={!value.careOf.trim()}
             onChange={e => onChange({ ...value, addrSource: e.target.value as BillToDraft['addrSource'] })}>
-            <option value="b">B — c/o 那家公司的地址</option>
-            <option value="a">A — 客户自己的地址</option>
-            <option value="custom">Custom — 自己填</option>
+            <option value="b">B — the c/o party's address</option>
+            <option value="a">A — the client's own address</option>
+            <option value="custom">Custom — type it below</option>
           </select>
         </div>
         <div>
-          <label style={label}>Attn（指定收件人）</label>
-          <input style={input} value={value.attn} placeholder="例：Mr Li"
+          <label style={label}>ATTN (attention to)</label>
+          <input style={input} value={value.attn} placeholder="e.g. Mr Li"
             onChange={e => onChange({ ...value, attn: e.target.value })} />
         </div>
       </div>
 
       {value.careOf.trim() && value.addrSource === 'custom' && (
         <div style={{ marginTop: 10 }}>
-          <label style={label}>自定义地址（一行一段）</label>
+          <label style={label}>Custom address (one line each)</label>
           <textarea style={{ ...input, minHeight: 54, resize: 'vertical', fontFamily: 'inherit' }}
             value={value.addrCustom} placeholder={'12 Marina Boulevard\n#25-01 MBFC Tower 3\nSingapore 018982'}
             onChange={e => onChange({ ...value, addrCustom: e.target.value })} />
@@ -293,19 +293,19 @@ function BillToFields({ company, value, onChange, parentName }: {
 
       {parentName && value.careOf.trim() && (
         <div style={{ marginTop: 9, padding: '7px 9px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 11, color: '#92400e', lineHeight: 1.6 }}>
-          ⚠ 这家公司已经设了母公司 Bill-To（<strong>{parentName}</strong>）。填了 c/o 之后<strong>以 c/o 为准</strong>——发票抬头会是「{company.companyName} c/o {value.careOf.trim()}」，不会印成母公司。要走母公司就把 c/o 清空。
+          ⚠ This company already has a Bill-To parent (<strong>{parentName}</strong>). A c/o <strong>overrides it</strong> — the invoice will be addressed to &ldquo;{company.companyName} c/o {value.careOf.trim()}&rdquo;, not to the parent. Clear the c/o to bill the parent instead.
         </div>
       )}
 
       {(value.careOf.trim() || value.attn.trim()) && (
         <div style={{ marginTop: 9, padding: '7px 9px', background: '#fff', border: '1px dashed #dbe3ec', borderRadius: 6, fontSize: 11, color: '#475569', lineHeight: 1.6 }}>
-          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>客户会看到</div>
+          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>What the client will see</div>
           <div>{company.companyName}</div>
           {value.careOf.trim() && <div>c/o {value.careOf.trim()}</div>}
           <div style={{ color: '#94a3b8' }}>
-            {!value.careOf.trim() || value.addrSource === 'a' ? '（客户自己的地址）'
-              : value.addrSource === 'b' ? `（${value.careOf.trim()} 的地址，查不到就用客户自己的）`
-              : (value.addrCustom.trim() ? value.addrCustom.trim().split('\n').map((l, i) => <div key={i}>{l}</div>) : '（自定义地址还没填 — 会退回客户自己的地址）')}
+            {!value.careOf.trim() || value.addrSource === 'a' ? "(the client's own address)"
+              : value.addrSource === 'b' ? `(${value.careOf.trim()}'s address — falls back to the client's own if none is on file)`
+              : (value.addrCustom.trim() ? value.addrCustom.trim().split('\n').map((l, i) => <div key={i}>{l}</div>) : "(no custom address typed — falls back to the client's own)")}
           </div>
           {value.attn.trim() && <div>Attn: {value.attn.trim()}</div>}
         </div>
@@ -313,18 +313,18 @@ function BillToFields({ company, value, onChange, parentName }: {
 
       {differsFromStored && (
         <div style={{ marginTop: 9, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 10.5, color: '#b45309' }}>这次的改动只影响这一张发票。</span>
+          <span style={{ fontSize: 10.5, color: '#b45309' }}>This change applies to this invoice only.</span>
           <button type="button" onClick={() => void saveAsDefault()} disabled={savingDefault}
             style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#31506f', cursor: savingDefault ? 'wait' : 'pointer' }}>
-            {savingDefault ? '保存中…' : '设为这家公司的默认'}
+            {savingDefault ? 'Saving…' : 'Save as company default'}
           </button>
           <button type="button" onClick={() => onChange(stored)}
             style={{ fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', cursor: 'pointer' }}>
-            还原默认
+            Reset to default
           </button>
         </div>
       )}
-      {savedNote && <div style={{ marginTop: 6, fontSize: 10.5, color: /失败|无法/.test(savedNote) ? '#b91c1c' : '#15803d' }}>{savedNote}</div>}
+      {savedNote && <div style={{ marginTop: 6, fontSize: 10.5, color: /failed|cannot/i.test(savedNote) ? '#b91c1c' : '#15803d' }}>{savedNote}</div>}
     </div>
   );
 }
