@@ -12,7 +12,6 @@ import { useState, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { FileCheck2, X, ExternalLink, FileText, AlertTriangle, Download, Send, Pencil } from 'lucide-react';
 import type { InvoicePreview } from '@/lib/billing-lookup';
-import type { EditableLine } from '@/lib/billing-draft';
 import type { LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import type { InvoiceEditPreview } from '@/lib/invoice-edit-lookup';
 import type { PostIncorporatePreview } from '@/lib/docx-post-incorporate';
@@ -133,81 +132,17 @@ const deepLinkStyle: React.CSSProperties = {
 // send from Billing Drafts, and requires an explicit click on a real
 // button before sending it — the AI itself can never trigger this call,
 // it only ever produces the preview data the card renders.
-function draftLinesToApiLines(lines: EditableLine[]) {
-  const included = lines.filter(l => l.include);
-  const toApiLine = (l: EditableLine) => ({
-    service: l.service, productService: l.productService, description: l.description,
-    rate: l.rate, qty: l.qty, periodConfirmed: l.periodReviewed === true,
-  });
-  return {
-    tabLines: included.filter(l => l.service !== 'ND').map(toApiLine),
-    tacLines: included.filter(l => l.service === 'ND').map(toApiLine),
-  };
-}
 
-type GenerateOutcome =
-  | { state: 'idle' }
-  | { state: 'confirming' }
-  | { state: 'submitting' }
-  | { state: 'overlap'; warnings: string[] }
-  | { state: 'success'; tab?: { invoiceNo: string | null; total: number }; tac?: { invoiceNo: string | null; total: number } }
-  | { state: 'error'; message: string };
-
-export function InvoiceDraftCard({ preview, onGenerated }: { preview: InvoicePreview; onGenerated: (summary: string) => void }) {
-  const [outcome, setOutcome] = useState<GenerateOutcome>({ state: 'idle' });
-  // Opens the page's REAL row editor in a modal — see BillingDraftsModal.
+export function InvoiceDraftCard({ preview }: { preview: InvoicePreview; onGenerated?: (summary: string) => void }) {
+  // The chat card is a preview; generation happens in the real editor it
+  // opens (BillingDraftsModal). It had its own simplified confirm dialog
+  // and POST path here — Vincent asked for the real popup, so that path is
+  // gone and only `fullEditor` remains.
   const [fullEditor, setFullEditor] = useState(false);
-  // One idempotency key per confirmation attempt (fresh each time the card
-  // moves from idle -> confirming), reused across an overlap-confirm retry
-  // of the SAME logical request — matches app/billing/page.tsx's own
-  // per-row key, which also stays stable across its retries.
-  const idempotencyKeyRef = useRef<string | null>(null);
 
   const included = preview.lines.filter(l => l.include);
   const { tab: totalTab, tac: totalTac } = preview.totals;
   const blocked = included.length === 0 || preview.alreadyInvoicedThisCycle;
-
-  const submit = async (overlapConfirmed: boolean) => {
-    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = globalThis.crypto.randomUUID();
-    setOutcome({ state: 'submitting' });
-    const { tabLines, tacLines } = draftLinesToApiLines(preview.lines);
-    const fyeYear = preview.fyeCycle ? parseInt(preview.fyeCycle.split('.')[2] ?? '', 10) : undefined;
-    try {
-      const res = await fetch('/api/quickbooks/create-invoice', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          companyName: preview.companyName,
-          companyId: preview.companyId ?? undefined,
-          email: preview.email ?? undefined,
-          pic: preview.pic ?? undefined,
-          sendEmail: false,
-          tabLines, tacLines,
-          fyeMonth: preview.fyeMonth ?? undefined,
-          fyeYear: fyeYear && Number.isFinite(fyeYear) ? fyeYear : undefined,
-          fyeCycle: preview.fyeCycle || undefined,
-          idempotencyKey: idempotencyKeyRef.current,
-          overlapConfirmed,
-        }),
-      });
-      const json = await res.json();
-      if (res.status === 409 && json.overlapConfirmationRequired && !overlapConfirmed) {
-        const warnings = [...(json.overlapWarnings?.tab ?? []), ...(json.overlapWarnings?.tac ?? [])];
-        setOutcome({ state: 'overlap', warnings: warnings.length ? warnings : ['This invoice period overlaps one already on file.'] });
-        return;
-      }
-      if (!res.ok) {
-        setOutcome({ state: 'error', message: json.error || `Request failed (${res.status})` });
-        return;
-      }
-      const summaryParts: string[] = [];
-      if (json.tab) summaryParts.push(`TAB #${json.tab.invoiceNo ?? '?'} · S$${(json.tab.total ?? 0).toLocaleString()}`);
-      if (json.tac) summaryParts.push(`TAC #${json.tac.invoiceNo ?? '?'} · S$${(json.tac.total ?? 0).toLocaleString()}`);
-      setOutcome({ state: 'success', tab: json.tab, tac: json.tac });
-      onGenerated(`已生成 ${preview.companyName} 的发票：${summaryParts.join(' · ') || '无新增品项'}`);
-    } catch (err) {
-      setOutcome({ state: 'error', message: err instanceof Error ? err.message : '网络错误，请重试。' });
-    }
-  };
 
   return (
     <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 460 }}>
@@ -257,113 +192,37 @@ export function InvoiceDraftCard({ preview, onGenerated }: { preview: InvoicePre
         </div>
       )}
 
-      <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7' }}>
-        {outcome.state === 'success' ? (
-          <div style={{ fontSize: 11.5, color: '#15803d', fontWeight: 700 }}>
-            ✓ Generated{outcome.tab ? ` — TAB #${outcome.tab.invoiceNo ?? '?'}` : ''}{outcome.tac ? ` — TAC #${outcome.tac.invoiceNo ?? '?'}` : ''}
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setOutcome({ state: 'confirming' })}
-            disabled={blocked}
-            title={preview.alreadyInvoicedThisCycle ? 'Already invoiced this cycle' : included.length === 0 ? 'Nothing due this cycle' : undefined}
-            style={{
-              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
-              cursor: blocked ? 'not-allowed' : 'pointer',
-              background: blocked ? '#e2e8f0' : '#0f766e',
-              color: blocked ? '#94a3b8' : '#fff',
-            }}
-          >
-            Generate Invoice
-          </button>
-        )}
-        {outcome.state !== 'success' && (
-          <button
-            type="button"
-            onClick={() => setFullEditor(true)}
-            style={{ ...deepLinkStyle, width: '100%', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer' }}
-          >
-            <Pencil size={13} /> 在 Billing Drafts 编辑器中打开
-          </button>
-        )}
-        {outcome.state !== 'success' && (
-          <a href={billingDeepLink(preview.companyName, preview.fyeMonth, preview.fyeCycle)} style={deepLinkStyle}>
-            <ExternalLink size={13} /> Open in Billing Drafts (整页)
-          </a>
-        )}
+      {/* The card above is a read-only PREVIEW. The action opens the SAME
+          Billing Drafts row editor the page uses (BillingDraftsModal →
+          ExpandedBillingRow) — full line descriptions, periods, QB item
+          names, invoice numbers, the real overlap-confirm and the real
+          Generate button all live there. Vincent, 2026-09-10: "这个弹窗都
+          不是我真正的完整的弹窗内容" — the chat used to pop its own thin
+          confirm dialog; that lookalike is gone. */}
+      <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <button
+          type="button"
+          onClick={() => setFullEditor(true)}
+          disabled={blocked}
+          title={preview.alreadyInvoicedThisCycle ? '本周期已开单 — 打开可查看/编辑那张发票' : included.length === 0 ? 'Nothing due this cycle' : undefined}
+          style={{
+            width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+            cursor: blocked ? 'not-allowed' : 'pointer',
+            background: blocked ? '#e2e8f0' : '#0f766e',
+            color: blocked ? '#94a3b8' : '#fff',
+          }}
+        >
+          <Pencil size={13} style={{ marginRight: 5, verticalAlign: '-2px' }} />
+          查看完整发票并生成
+        </button>
+        <a href={billingDeepLink(preview.companyName, preview.fyeMonth, preview.fyeCycle)} style={deepLinkStyle}>
+          <ExternalLink size={13} /> Open in Billing Drafts (整页)
+        </a>
       </div>
 
       {fullEditor && (
         <BillingDraftsModal companyName={preview.companyName} cycleFye={preview.fyeCycle || undefined} onClose={() => setFullEditor(false)} />
       )}
-
-      {(outcome.state === 'confirming' || outcome.state === 'submitting' || outcome.state === 'overlap' || outcome.state === 'error') && (
-        <GenerateConfirmModal
-          preview={preview}
-          outcome={outcome}
-          onCancel={() => setOutcome({ state: 'idle' })}
-          onConfirm={() => void submit(outcome.state === 'overlap')}
-        />
-      )}
-    </div>
-  );
-}
-
-function GenerateConfirmModal({ preview, outcome, onCancel, onConfirm }: {
-  preview: InvoicePreview;
-  outcome: Extract<GenerateOutcome, { state: 'confirming' | 'submitting' | 'overlap' | 'error' }>;
-  onCancel: () => void;
-  onConfirm: () => void;
-}) {
-  const included = preview.lines.filter(l => l.include);
-  const submitting = outcome.state === 'submitting';
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }} onClick={submitting ? undefined : onCancel}>
-      <div style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <FileCheck2 size={16} color="#1e3a5f" />
-          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b', flex: 1 }}>
-            {outcome.state === 'overlap' ? 'Period overlap — confirm anyway?' : 'Confirm invoice generation'}
-          </div>
-          {!submitting && <button onClick={onCancel} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={16} /></button>}
-        </div>
-
-        <div style={{ padding: '14px 18px' }}>
-          <div style={{ fontSize: 12.5, color: '#334155', marginBottom: 10 }}>
-            This will create a real invoice in QuickBooks for <strong>{preview.companyName}</strong> — FYE {preview.fyeCycle || preview.fyeMonth}.
-          </div>
-
-          {outcome.state === 'overlap' && (
-            <div style={{ marginBottom: 10, padding: '9px 11px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 11.5, color: '#92400e' }}>
-              {outcome.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
-              <div style={{ marginTop: 4, fontWeight: 700 }}>Generate anyway?</div>
-            </div>
-          )}
-
-          {outcome.state === 'error' && (
-            <div style={{ marginBottom: 10, padding: '9px 11px', background: '#fff7f7', border: '1px solid #fecaca', borderRadius: 8, fontSize: 11.5, color: '#b91c1c' }}>
-              {outcome.message}
-            </div>
-          )}
-
-          <div style={{ border: '1px solid #eef2f7', borderRadius: 8, overflow: 'hidden' }}>
-            {included.map((line, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '7px 11px', borderTop: i > 0 ? '1px solid #f1f5f9' : 'none', fontSize: 11.5 }}>
-                <span style={{ color: '#475569' }}>{line.service}</span>
-                <span style={{ fontWeight: 700, color: '#173b61', fontVariantNumeric: 'tabular-nums' }}>S${(line.qty * line.rate).toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, padding: '12px 18px', borderTop: '1px solid #eef2f7' }}>
-          <button onClick={onCancel} disabled={submitting} style={{ flex: 1, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer' }}>Cancel</button>
-          <button onClick={onConfirm} disabled={submitting} style={{ flex: 1, border: 'none', background: submitting ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 750, cursor: submitting ? 'wait' : 'pointer' }}>
-            {submitting ? 'Generating…' : outcome.state === 'overlap' ? 'Confirm anyway' : 'Confirm & Generate'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

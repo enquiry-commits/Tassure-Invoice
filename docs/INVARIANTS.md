@@ -1129,6 +1129,7 @@ again.
   `app/billing/soa/_components.tsx`), and anything client-facing still
   terminates in the same human-confirmed send window the page uses —
   chat prepares, the human sends. *(source: 2026-09-10.)*
+- **INV-DATA-038b** — Follow-through on INV-DATA-038: a chat card must not ALSO keep its own lookalike of the feature's action dialog. The invoice card had both a real-editor modal AND a chat-built "Confirm invoice generation" popup (thin: company + line totals + Confirm). Vincent: "这个弹窗都不是我真正的完整的弹窗内容". The chat popup and its own POST path are gone; the card is a read-only preview whose single action opens the real `ExpandedBillingRow` editor, where the full line detail, the real overlap-confirm and the real Generate button live. If a real editor exists to open, do not also ship a second confirm step beside it. *(source: 2026-09-10.)*
 - **INV-DATA-038** — When chat needs to offer a feature's FULL interaction
   (not a summary), render the feature page's OWN component in a modal —
   never a chat lookalike of it. Vincent: "现在这些功能都锁死了在各自的功能
