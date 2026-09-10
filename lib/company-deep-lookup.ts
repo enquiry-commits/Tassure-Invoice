@@ -84,7 +84,29 @@ export type CompanyDeepLookupResult =
       bestEmail: string | null;
       primaryContactName: string | null;
       services: { address: boolean; nd: boolean; xbrl: boolean; accounts: boolean; tax: boolean; agm: boolean };
-      arReminder: { totalCycles: number; pendingCycles: number; mostRecent: { fyeMonth: string; fyeYear: number; status: string | null; dueDate: string | null }[] };
+      // The AR workflow pipeline (prepared → sent → received → AGM held →
+      // filed) and any extension of time. Added 2026-09-10 to close a real
+      // coherence gap: preview_ar_update lets chat WRITE these exact fields,
+      // but this read side only exposed status/dueDate — so "这家公司的年报
+      // 做到哪一步了" failed even though chat could set the very next stage.
+      arReminder: {
+        totalCycles: number;
+        pendingCycles: number;
+        mostRecent: {
+          fyeMonth: string;
+          fyeYear: number;
+          status: string | null;
+          dueDate: string | null;
+          preparedDate: string | null;
+          sentDate: string | null;
+          receivedDate: string | null;
+          agmHeldDate: string | null;
+          filingDate: string | null;
+          stage: string;
+          extendedFrom: string | null;
+          pic: string | null;
+        }[];
+      };
       invoices: { generatedCount: number; quickbooksMatchedCount: number; mostRecentGenerated: { qbCompany: string | null; totalAmt: number | null; createdAt: string | null }[] };
       outstanding: { hasOutstanding: boolean; total: number; byQbCompany: { qbCompany: string; total: number }[] };
       nomineeDirectors: { name: string; subRole: string | null; appointmentDate: string | null; isActive: boolean }[];
@@ -98,6 +120,21 @@ export type CompanyDeepLookupResult =
       warnings: string[];
     }
   | { found: false; message: string; suggestions: string[] };
+
+// Where an AR cycle has actually reached, derived from which workflow dates
+// are filled. Deliberately reports the FURTHEST stage reached rather than
+// assuming the dates were filled in order — real rows are sparsely
+// populated (of 867 open cycles on a production check: 43 prepared, 23
+// sent, 3 received, 1 AGM held), so a cycle can legitimately have a later
+// date set without the earlier ones.
+function arStage(r: Record<string, unknown>): string {
+  if (r.filling_date) return 'Filed';
+  if (r.agm_held_date) return 'AGM held, not yet filed';
+  if (r.received_date) return 'Received back from client';
+  if (r.sent_date) return 'Sent to client';
+  if (r.prepared_date) return 'Prepared';
+  return 'Not started';
+}
 
 export async function lookupCompanyDeep(companyQuery: string): Promise<CompanyDeepLookupResult> {
   const sb = createAdminClient();
@@ -188,6 +225,17 @@ export async function lookupCompanyDeep(companyQuery: string): Promise<CompanyDe
       pendingCycles: c360.arReminderCycles.filter(r => (r.status as string | null) !== 'Filed').length,
       mostRecent: c360.arReminderCycles.slice(0, 3).map(r => ({
         fyeMonth: r.fye_month as string, fyeYear: r.fye_year as number, status: (r.status as string | null) ?? 'Pending', dueDate: r.due_date as string | null,
+        preparedDate: (r.prepared_date as string | null) ?? null,
+        sentDate: (r.sent_date as string | null) ?? null,
+        receivedDate: (r.received_date as string | null) ?? null,
+        agmHeldDate: (r.agm_held_date as string | null) ?? null,
+        filingDate: (r.filling_date as string | null) ?? null,
+        stage: arStage(r),
+        // due_date already carries the revised date where an EOT was
+        // granted (verified against production), so the ORIGINAL is what
+        // makes the extension visible.
+        extendedFrom: r.ar_original_due_date && r.ar_original_due_date !== r.due_date ? (r.ar_original_due_date as string) : null,
+        pic: (r.pic as string | null) ?? null,
       })),
     },
     invoices: {

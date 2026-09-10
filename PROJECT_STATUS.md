@@ -1,6 +1,14 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-09 (Assistant — deep-analysis round 2 + real execution. Vincent asked for a hard think about what was still missing ("最少要思考30分钟"), then "全部都要做" on the findings, and separately settled the open design question on write access: "可以真正执行只是每次执行要提前获得用户点击同意才真正执行操作".
+Last updated: 2026-09-10 (Assistant — finishing the round-2 sweep: the AR read/write coherence gap, and tool routing.
+
+1. **AR pipeline was writable but not readable.** The previous entry gave chat the ability to CHANGE an AR cycle's workflow fields (preview_ar_update), but company_deep_lookup's AR section still exposed only status/dueDate — so "这家公司的年报做到哪一步了" failed even though chat could set the very next stage. Each cycle now carries the real workflow dates plus a derived `stage` (Not started / Prepared / Sent to client / Received back from client / AGM held, not yet filed / Filed) and `extendedFrom` for EOT-extended deadlines. `arStage()` reports the FURTHEST stage reached rather than assuming the dates were filled in order — real rows are sparsely populated (of 867 open cycles: 43 prepared, 23 sent, 3 received, 1 AGM held), so a later date can legitimately be set without the earlier ones. Verified against real companies that actually have pipeline dates.
+
+2. **Tool routing.** The tool surface reached 27 tools (~26KB of definitions + ~17KB of prompt guidance) with genuinely confusable clusters — 3 company tools, 4 activity tools, 2 outstanding, 2 deadline. The concrete risk is Claude answering off the old thin `search_company` and concluding "I don't have that" when company_deep_lookup has the answer — i.e. the exact "chat 不能理解" failure this whole round was about. `search_company`'s description now states plainly that it is the NARROW one, lists what it does return, and routes onward; and a compact routing block was added to the static prompt that disambiguates by the SHAPE of the question (one company / which companies / how many / one company's money / a whole book's money / due soon / who to chase / what a person did / what field changed) rather than by topic.
+
+Judgment calls worth recording: a dedicated company-wide Post Incorporate tool was NOT added — only 8 operations exist in total, and company_deep_lookup (per company) plus recent_activity_summary (per person) already read that table. Sending the SOA email from chat was also deliberately not built: it is client-facing and irreversible, the SOA page already has a working, tested Draft Email flow, and check_outstanding_balance's soa_link already lands the user on that exact company's page in one click — a parallel chat path would add real risk for little gain.
+
+Previous entry: Assistant — deep-analysis round 2 + real execution. Vincent asked for a hard think about what was still missing ("最少要思考30分钟"), then "全部都要做" on the findings, and separately settled the open design question on write access: "可以真正执行只是每次执行要提前获得用户点击同意才真正执行操作".
 
 Verified every finding against production before building. Two turned out to be CORRECTNESS bugs, not gaps:
 
