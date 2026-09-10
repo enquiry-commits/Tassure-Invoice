@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { getRequestAccount } from '@/lib/request-account';
 
 // Manual per-service override on a company (see add-services-manual-override.sql).
 // PATCH { companyId, service, value }:
@@ -11,6 +12,13 @@ import { createAdminClient } from '@/lib/supabase';
 const OVERRIDABLE = new Set(['secretary', 'accounts', 'tax', 'xbrl']);
 
 export async function PATCH(req: NextRequest) {
+  // Added 2026-09-10: this endpoint had no auth check at all, while its
+  // sibling /api/companies/customer-source did — an inconsistency found
+  // while routing chat traffic here. Every real caller is an authenticated
+  // same-origin browser fetch, so this only closes the hole.
+  const account = await getRequestAccount(req);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+
   const { companyId, service, value } = await req.json();
   if (!companyId || !service) return NextResponse.json({ error: 'companyId and service required' }, { status: 400 });
   if (!OVERRIDABLE.has(service)) return NextResponse.json({ error: `service must be one of: ${[...OVERRIDABLE].join(', ')} (ND/Address follow TeamWork)` }, { status: 400 });

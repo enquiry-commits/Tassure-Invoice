@@ -29,6 +29,8 @@ import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSen
 import { buildCampaignDraft, loadCampaignActor, type CampaignActor, type CampaignSender } from '@/lib/campaign-draft-client';
 // type-only (lib/email-draft-lookup.ts is server-only)
 import type { EmailDraftPreview } from '@/lib/email-draft-lookup';
+// type-only (lib/company-update-lookup.ts is server-only)
+import type { CompanyUpdatePreview } from '@/lib/company-update-lookup';
 import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
 import { logActivity } from '@/lib/activity-client';
 
@@ -59,6 +61,7 @@ export type ChatMsg = {
   exportOffer?: ChatExportOffer;
   soaPreview?: SoaPreview;
   emailDraftPreview?: EmailDraftPreview;
+  companyUpdatePreview?: CompanyUpdatePreview;
 };
 
 // Turns a local ChatMsg back into what /api/assistant expects — content
@@ -1359,6 +1362,127 @@ export function EmailDraftCard({ preview }: { preview: EmailDraftPreview }) {
           onClose={() => setDraft(null)}
           onSent={() => { setDraft(null); setDone('邮件已在 Outlook 中处理完成。'); }}
         />
+      )}
+    </div>
+  );
+}
+
+// Company settings changes from chat (2026-09-10) — service override,
+// customer source, parent company. These lived on Company 360 and the
+// Billing page and had no chat path at all.
+//
+// The service override is the one that carries weight: services_manual is
+// written ONLY by its endpoint and no sync ever corrects it, and billing
+// reads the result. So the card shows the automatic judgement, the current
+// override and the resulting effective value separately, and repeats that
+// warning in the confirm step — a wrong toggle here is not self-healing.
+export function CompanyUpdateCard({ preview, onDone }: { preview: CompanyUpdatePreview; onDone: (summary: string) => void }) {
+  const [state, setState] = useState<'idle' | 'confirming' | 'saving' | 'done' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+
+  const submit = async () => {
+    setState('saving');
+    try {
+      const body = preview.field === 'parent_company'
+        ? { companyId: preview.companyId, parentCompanyId: preview.proposedValue }
+        : preview.field === 'customer_source'
+          ? { companyId: preview.companyId, value: preview.proposedValue }
+          : { companyId: preview.companyId, service: preview.field.slice('service:'.length), value: preview.proposedValue };
+
+      const res = await fetch(preview.endpoint, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setMessage(json.error || `Request failed (${res.status})`); setState('error'); return; }
+      logActivity('chat_company_update', { companyName: preview.companyName, field: preview.field });
+      setState('done');
+      onDone(`已把 ${preview.companyName} 的${preview.fieldLabel}改为：${preview.proposedDisplay}`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : '网络错误，请重试。');
+      setState('error');
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 440 }}>
+      <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Pencil size={14} color="#1e3a5f" style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+          <div style={{ fontSize: 10.5, color: '#94a3b8' }}>{preview.fieldLabel}</div>
+        </div>
+        {preview.alreadyThatValue && (
+          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#15803d', background: '#f0fdf7', border: '1px solid #bae6d3', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>已经是这个值</span>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px', fontSize: 11.5 }}>
+        <div style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, marginBottom: 3 }}>现在</div>
+        <div style={{ color: '#64748b', marginBottom: 8 }}>{preview.currentDisplay}</div>
+        <div style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, marginBottom: 3 }}>会变成</div>
+        <div style={{ color: '#173b61', fontWeight: 700 }}>{preview.proposedDisplay}</div>
+        {preview.warning && (
+          <div style={{ marginTop: 8, fontSize: 10.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '6px 8px' }}>
+            ⚠ {preview.warning}
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7' }}>
+        {state === 'done' ? (
+          <div style={{ fontSize: 11.5, color: '#15803d', fontWeight: 700 }}>✓ 已保存</div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setState('confirming')}
+            disabled={preview.alreadyThatValue}
+            title={preview.alreadyThatValue ? '当前已经是这个值' : undefined}
+            style={{
+              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+              cursor: preview.alreadyThatValue ? 'not-allowed' : 'pointer',
+              background: preview.alreadyThatValue ? '#e2e8f0' : '#0f766e',
+              color: preview.alreadyThatValue ? '#94a3b8' : '#fff',
+            }}
+          >
+            修改
+          </button>
+        )}
+      </div>
+
+      {(state === 'confirming' || state === 'saving' || state === 'error') && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}
+             onClick={state === 'saving' ? undefined : () => setState('idle')}>
+          <div style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Pencil size={16} color="#1e3a5f" />
+              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b', flex: 1 }}>确认修改公司设定</div>
+              {state !== 'saving' && <button onClick={() => setState('idle')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={16} /></button>}
+            </div>
+            <div style={{ padding: '14px 18px', fontSize: 12.5, color: '#334155' }}>
+              这会真正修改 <strong>{preview.companyName}</strong> 的<strong>{preview.fieldLabel}</strong>。
+              <div style={{ marginTop: 10, border: '1px solid #eef2f7', borderRadius: 8, padding: '9px 11px', fontSize: 11.5 }}>
+                <div style={{ color: '#64748b' }}>{preview.currentDisplay}</div>
+                <div style={{ color: '#0f766e', fontWeight: 750, marginTop: 4 }}>↓ {preview.proposedDisplay}</div>
+              </div>
+              {preview.warning && (
+                <div style={{ marginTop: 10, padding: '9px 11px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 11.5, color: '#92400e' }}>
+                  ⚠ {preview.warning}
+                </div>
+              )}
+              {state === 'error' && (
+                <div style={{ marginTop: 10, padding: '9px 11px', background: '#fff7f7', border: '1px solid #fecaca', borderRadius: 8, fontSize: 11.5, color: '#b91c1c' }}>{message}</div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, padding: '12px 18px', borderTop: '1px solid #eef2f7' }}>
+              <button onClick={() => setState('idle')} disabled={state === 'saving'}
+                style={{ flex: 1, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: state === 'saving' ? 'not-allowed' : 'pointer' }}>取消</button>
+              <button onClick={() => void submit()} disabled={state === 'saving'}
+                style={{ flex: 1, border: 'none', background: state === 'saving' ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 750, cursor: state === 'saving' ? 'wait' : 'pointer' }}>
+                {state === 'saving' ? '保存中…' : '确认修改'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

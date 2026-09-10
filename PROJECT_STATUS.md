@@ -1,6 +1,16 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-10 (Assistant — 互通 phase 2: drafting real client emails from chat.
+Last updated: 2026-09-10 (Assistant — 互通 phase 3: company settings editable from chat, plus two unauthenticated endpoints closed.
+
+New `preview_company_update` (31 tools now) + `CompanyUpdateCard` cover the three real edits the `companies` table exposes, each of which previously existed only on its own page: the service override (secretary/accounts/tax/xbrl), the customer source, and the parent company link. Same preview → Confirm-popup → execute shape as every other write.
+
+The service override gets extra care because it is not self-healing: `services_manual` is written ONLY by its endpoint and no sync ever corrects it, and billing reads the result. So the card shows the automatic judgement, the current override and the resulting effective value as three separate facts, and repeats that warning inside the confirm popup. Parent company is resolved from a NAME to a real id server-side, so the card can never send something the endpoint rejects.
+
+**Security fix found while doing this**: `/api/companies/service-override` and `/api/companies/parent` had NO auth check at all, while their sibling `/api/companies/customer-source` did. Both now call `getRequestAccount` like the sibling. Every real caller is an authenticated same-origin browser fetch, so this only closes the hole — but it is a behavior change to existing endpoints, flagged rather than slipped in.
+
+Verified against production: 1V CAPITAL xbrl→ON shows "OFF（自动判断：OFF，人工覆盖：无）" → "强制 ON"; POWERGUARD's real existing `{"secretary":false}` override reads back correctly; customer_source "bogus" is rejected with the valid list; parent "lakefill" resolves to the real id 1779; "remobie" correctly asks which of 2 companies. `npx tsc --noEmit` / `npm run build` / `test-orchestrator.ts` clean. No Confirm button in this batch has been clicked in a browser.
+
+Previous entry: Assistant — 互通 phase 2: drafting real client emails from chat.
 
 Client Communications was the largest feature still locked inside its own page — chat could report whether an email had been SENT (check_email_status) but could not draft one, which is the actual daily work. New `preview_email_draft` tool (30 tools now) + `EmailDraftCard` cover all three campaign types: 'ar' (annual return / renewal reminder), 'soa' (statement of account) and 'letter' (document reminder).
 

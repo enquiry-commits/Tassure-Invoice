@@ -24,6 +24,7 @@ import { getFirmPulse } from '@/lib/firm-pulse';
 import type { ChatExportOffer } from '@/lib/chat-export';
 import type { SoaPreview } from '@/lib/outstanding-lookup';
 import { previewEmailDraft, type EmailDraftPreview, type EmailDraftType } from '@/lib/email-draft-lookup';
+import { previewCompanyUpdate, type CompanyUpdatePreview, type CompanyUpdateField } from '@/lib/company-update-lookup';
 import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
@@ -517,6 +518,34 @@ async function emailDraftPreviewTool(account: ApprovedAccount | null, input: Rec
     ...result.preview,
     _emailDraft: result.preview,
     note: 'READ-ONLY preview — NO email has been created or sent, and you have no tool that can send one. The recipient/CC shown is resolved by the SAME code Campaign Centre uses (TeamWork report recipients, then the company fallback, plus the staff CCs derived from the SEC/ACC/TAX PIC), so relay it as given and never invent, add or "correct" an address. The user sees a card with the real To/CC and a button that creates the draft and opens the normal Outlook review window, where THEY send it. Things worth pointing out in your reply if present: recipientSource "company_fallback" means the TeamWork report recipients were unavailable and the address is a fallback worth eyeballing; autoIncluded:false with autoReason tells the user what Campaign Centre itself would flag (e.g. "Already sent this cycle" — say so plainly rather than letting them double-send, or "No invoice found", which for an AR/SOA mail means there is nothing to attach); canDraft:false means the button will be disabled and blockedReason says why. Never claim you drafted or sent anything.',
+  };
+}
+
+// Added 2026-09-10 — the `companies` table's three real edits (service
+// override, customer source, parent company) each had their own narrow
+// endpoint and lived only on Company 360 / the Billing page. READ-ONLY:
+// see lib/company-update-lookup.ts, and note that a service override is
+// never healed by a later sync.
+async function companyUpdatePreviewTool(account: ApprovedAccount | null, input: Record<string, unknown>) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  const company = typeof input.company === 'string' ? input.company.trim() : '';
+  if (!company) return { error: true as const, message: 'A company name is required.' };
+  const field = typeof input.field === 'string' ? input.field : '';
+  const allowed = ['service:secretary', 'service:accounts', 'service:tax', 'service:xbrl', 'customer_source', 'parent_company'];
+  if (!allowed.includes(field)) {
+    return { error: true as const, message: `field must be one of: ${allowed.join(', ')}. ND and Address service flags follow TeamWork and cannot be changed here — say so plainly rather than trying another field name.` };
+  }
+  const value = 'value' in input ? input.value : null;
+  const result = await previewCompanyUpdate(company, field as CompanyUpdateField, value === undefined ? null : value);
+  if (!result.found) {
+    if (result.ambiguous) return { found: false as const, ambiguous: true as const, message: result.message, candidates: result.candidates };
+    return { found: false as const, message: result.message };
+  }
+  return {
+    found: true as const,
+    ...result.preview,
+    _companyUpdate: result.preview,
+    note: 'READ-ONLY preview — NOTHING has been changed, and you have no tool that can write this. The user sees a card with the real before/after and a Confirm popup; only their click saves it. Relay the change plainly (company, which setting, current → new). For a SERVICE OVERRIDE specifically, say what the warning says: services_manual is written only by this one endpoint and no automatic sync ever corrects it, so a wrong value stays wrong until a human fixes it, and it affects billing — do not encourage toggling one casually. If alreadyThatValue is true, say it is already set that way instead of urging a pointless change. Never say or imply you made the change.',
   };
 }
 
@@ -1331,6 +1360,11 @@ const CLAUDE_TOOLS = [
     fyeMonth: { type: 'string', description: "Required for type 'ar' — e.g. 'December'" },
     fyeYear: { type: 'number', description: "Required for type 'ar' — e.g. 2025" },
   }, required: ['company', 'type'] } },
+  { name: 'preview_company_update', description: "Preview a change to ONE company's settings — force a service ON/OFF or clear that override ('service:secretary' | 'service:accounts' | 'service:tax' | 'service:xbrl', value true/false/null), set the customer source ('customer_source'), or set/clear the parent company ('parent_company', value = the parent's company name or null). READ-ONLY: it shows the real current value and what it would become; the user gets a Confirm popup and ONLY their click saves it. Use for e.g. \"把 XX 的 XBRL 服务打开\", \"XX 的客户来源是转介绍\", \"把 XX 设为 YY 的子公司\". ND and Address flags follow TeamWork and are NOT changeable here. Never claim you performed the change yourself.", input_schema: { type: 'object', properties: {
+    company: { type: 'string', description: 'Company name, partial match is fine' },
+    field: { type: 'string', enum: ['service:secretary', 'service:accounts', 'service:tax', 'service:xbrl', 'customer_source', 'parent_company'] },
+    value: { description: "For a service field: true (force ON), false (force OFF) or null (clear the override). For customer_source: one of referral/website/advertising/existing_client/walk_in/other, or null. For parent_company: the parent company's NAME, or null to clear." },
+  }, required: ['company', 'field'] } },
   { name: 'firm_pulse', description: "REAL firm-WIDE 'what needs attention right now' overview in one call — overdue AR filings and AGMs, what's due in the next 14 days, active late filers, and total money owed with the biggest debtors. Management-only. Use for \"今天最要紧的是什么\", \"现在有什么要注意的\", \"What should I prioritize today\" when the user means the FIRM rather than their own task list (my_tasks_summary answers the personal version, and legitimately returns nothing for an owner/management account who is not a caseworker).", input_schema: { type: 'object', properties: {} } },
   { name: 'collections_worklist', description: "REAL list of which companies a given person has to CHASE for unpaid invoices, with each one's amount and how old the oldest unpaid invoice is — the same owner filter the SOA page itself is built around. Use for \"我手上有哪些欠款要催\", \"Chelsea 要催哪些公司\", \"我的欠款清单\". Pass owner:'me' for the caller's own list. Omit owner for the whole firm. This is the LIST view; outstanding_balance_summary answers 'how big is the book' and check_outstanding_balance answers about ONE named company.", input_schema: { type: 'object', properties: { owner: { type: 'string', description: "Collections owner's name, or 'me' for the caller. Omit for the whole firm." }, qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks books — omit for all 3' } } } },
   { name: 'recent_changes', description: 'REAL field-level change history from the audit log — who changed which field on which company, from what value to what, and when. Use for "最近谁改了什么", "这家公司最近被改了什么", "谁动过这个". Most changes are AUTOMATED nightly syncs (changed_by "system:..."); pass humanOnly:true when the user means a person. Different from recent_activity_summary, which describes what a person has been DOING across features rather than the field-level diff trail.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days back, default 7, max 365' }, humanOnly: { type: 'boolean', description: 'Exclude automated system syncs' }, company: { type: 'string', description: 'Only changes for this company' }, limit: { type: 'number', description: 'How many change rows to return, default 30, max 100' } } } },
@@ -1421,6 +1455,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'upcoming_deadlines') return upcomingDeadlinesTool(typeof input.days === 'number' ? input.days : undefined);
   if (name === 'preview_ar_update') return arUpdatePreviewTool(account, input);
   if (name === 'preview_email_draft') return emailDraftPreviewTool(account, input);
+  if (name === 'preview_company_update') return companyUpdatePreviewTool(account, input);
   if (name === 'firm_pulse') return firmPulseTool(account);
   if (name === 'collections_worklist') return collectionsWorklistTool(account, input);
   if (name === 'recent_changes') return recentChangesTool(input);
@@ -1447,7 +1482,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview; exportOffer?: ChatExportOffer; soaPreview?: SoaPreview; emailDraftPreview?: EmailDraftPreview }> {
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview; exportOffer?: ChatExportOffer; soaPreview?: SoaPreview; emailDraftPreview?: EmailDraftPreview; companyUpdatePreview?: CompanyUpdatePreview }> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -1479,6 +1514,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   let lastExportOffer: ChatExportOffer | undefined;
   let lastSoaPreview: SoaPreview | undefined;
   let lastEmailDraftPreview: EmailDraftPreview | undefined;
+  let lastCompanyUpdatePreview: CompanyUpdatePreview | undefined;
   // INV-DATA-022 deterministic safety net — see mentionsOutstandingBalance's
   // own comment on why this checks the REPLY, not the question.
   // outstandingToolCalled flips true the instant check_outstanding_balance
@@ -1512,7 +1548,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview };
+      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -1545,6 +1581,11 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
         if (tu.name === 'preview_post_incorporate' && result && typeof result === 'object' && (result as { complete?: boolean }).complete) {
           lastPostIncorporatePreview = (result as { preview: PostIncorporatePreview }).preview;
         }
+        if (result && typeof result === 'object' && '_companyUpdate' in result) {
+          const holder = result as { _companyUpdate?: CompanyUpdatePreview };
+          if (holder._companyUpdate) lastCompanyUpdatePreview = holder._companyUpdate;
+          delete holder._companyUpdate;
+        }
         if (result && typeof result === 'object' && '_emailDraft' in result) {
           const holder = result as { _emailDraft?: EmailDraftPreview };
           if (holder._emailDraft) lastEmailDraftPreview = holder._emailDraft;
@@ -1567,7 +1608,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -1973,9 +2014,9 @@ export async function POST(req: NextRequest) {
       // than the other, single-shot preview tools ever did; losing an
       // earlier-collected director's details off the back of an 8-message
       // window would make Claude re-ask for them or, worse, guess.
-      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview } = await claudeAnswer(messages.slice(-24), context, account);
+      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview, companyUpdatePreview } = await claudeAnswer(messages.slice(-24), context, account);
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage, toStoredPreview(invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview));
-      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview });
+      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview, companyUpdatePreview });
     }
     // The rule-based intent router only ever understands plain text — an
     // attached image/PDF is real content only Claude can actually look at,

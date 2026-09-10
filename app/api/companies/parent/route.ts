@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { getRequestAccount } from '@/lib/request-account';
 
 // GET: the full company picklist for the parent-company picker
 // (app/billing/page.tsx's ParentCompanyPicker) — unfiltered, since a parent
@@ -14,6 +15,13 @@ export async function GET() {
 // PATCH { companyId, parentCompanyId }: set (or, with parentCompanyId:null,
 // clear) the persistent parent-company link. Written ONLY here.
 export async function PATCH(req: NextRequest) {
+  // Added 2026-09-10: this endpoint had no auth check at all, while its
+  // sibling /api/companies/customer-source did — an inconsistency found
+  // while routing chat traffic here. Every real caller is an authenticated
+  // same-origin browser fetch, so this only closes the hole.
+  const account = await getRequestAccount(req);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+
   const { companyId, parentCompanyId } = await req.json();
   if (!companyId) return NextResponse.json({ error: 'companyId required' }, { status: 400 });
   if (parentCompanyId !== null && typeof parentCompanyId !== 'number') {

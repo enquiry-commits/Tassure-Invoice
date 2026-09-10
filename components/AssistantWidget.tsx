@@ -42,7 +42,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Bot, MessageCircle, Send, Sparkles, X, Minus, Paperclip } from 'lucide-react';
 import { RichText } from '@/components/assistant/ChatRichText';
 import {
-  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard, SoaCard, EmailDraftCard,
+  InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard, SoaCard, EmailDraftCard, CompanyUpdateCard,
   AttachmentChips, AttachmentThumbnails, AttachmentLightbox,
   toApiMessage, type ChatMsg, type ChatAttachment,
 } from '@/components/assistant/ChatCards';
@@ -372,6 +372,7 @@ export default function AssistantWidget() {
         exportOffer: json.exportOffer ?? undefined,
         soaPreview: json.soaPreview ?? undefined,
         emailDraftPreview: json.emailDraftPreview ?? undefined,
+        companyUpdatePreview: json.companyUpdatePreview ?? undefined,
         invoiceEditPreview: json.invoiceEditPreview ?? undefined,
         postIncorporatePreview: json.postIncorporatePreview ?? undefined,
       }]);
@@ -526,6 +527,9 @@ export default function AssistantWidget() {
                         )}
                         {message.lateFilingPreview && (
                           <LateFilingResolveCard preview={message.lateFilingPreview} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
+                        )}
+                        {message.companyUpdatePreview && (
+                          <CompanyUpdateCard preview={message.companyUpdatePreview} onDone={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
                         )}
                         {message.emailDraftPreview && (
                           <EmailDraftCard preview={message.emailDraftPreview} />
