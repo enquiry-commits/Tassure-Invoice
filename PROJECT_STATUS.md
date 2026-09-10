@@ -1,6 +1,16 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-10 (Assistant — Singapore time everywhere, and real SOA actions in chat.
+Last updated: 2026-09-10 (Assistant — 互通 phase 1: the REAL Billing Drafts editor now opens inside chat.
+
+Vincent's architectural complaint, after seeing the chat's own simplified confirm dialog: "我更想要...我选择了这些按钮会弹出我真正在 Billing Drafts 那边看到的弹窗是一模一样的，就是现在这些功能都锁死了在各自的功能页内，却没有互通到这个AI CHAT内...还是很像只是一个聊天chat". He is right — every chat action so far was a purpose-built lookalike of a feature, which is why chat still felt like a chat rather than the system.
+
+The enabling discovery: `ExpandedBillingRow` (the ~950-line Billing Drafts row editor — line items, rates, periods, TAB/TAC split, live QB numbers, Generate, overlap confirmation, PDF list) was already a MODULE-LEVEL component taking only `{ c, cycleFye }`, so it closed over none of the Billing page's state machine. It moved to `components/billing/ExpandedBillingRow.tsx` as a pure move (all three moved blocks verified byte-identical against `git show HEAD:` — the page renders exactly what it did), with `SVC_CONFIG` split into `components/billing/service-config.tsx` and `displayInvoiceNo` re-exported to avoid a circular import.
+
+The chat card now has "在 Billing Drafts 编辑器中打开", which opens that same component in a modal. Its data comes from the new `/api/billing/renewals/company`, which re-runs `computeAllCompanyBilling()` server-side and resolves the name with the page's own two-step matcher (verified: "1V CAPITAL" / "1v capital pte ltd" / "lakefill" all resolve correctly) — the chat preview is never fed into the editor, and the route carries the same restricted-account gate the Billing tools have. It returns 1 company instead of the page's 792-company payload. INV-DATA-038.
+
+The compact card stays as the quick answer; the modal is the escape hatch into the full feature. Verified: `npx tsc --noEmit` / `npm run build` clean. The modal itself has NOT been opened in a browser yet.
+
+Previous entry: Assistant — Singapore time everywhere, and real SOA actions in chat.
 
 **1. The assistant had no clock.** Asked "今天大家在系统做了什么" at 12:24 SGT on the 10th, it answered "今天（2026-09-09）". Root cause was NOT a broken conversion — grepping the whole prompt found ZERO statements of the current date, so the model inferred "today" from the newest timestamp in its own tool results (a real 09-09 audit row). The dynamic (uncached) half of the system prompt now opens with the real SGT date/time and an explicit instruction never to infer today from tool output. Verified: `Thursday, 10 September 2026 at 12:24`.
 

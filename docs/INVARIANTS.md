@@ -1129,6 +1129,21 @@ again.
   `app/billing/soa/_components.tsx`), and anything client-facing still
   terminates in the same human-confirmed send window the page uses —
   chat prepares, the human sends. *(source: 2026-09-10.)*
+- **INV-DATA-038** — When chat needs to offer a feature's FULL interaction
+  (not a summary), render the feature page's OWN component in a modal —
+  never a chat lookalike of it. Vincent: "现在这些功能都锁死了在各自的功能
+  页内，却没有互通到这个AI CHAT内...还是很像只是一个聊天chat". The move
+  that makes this possible is that these editors are already module-level
+  components taking plain props (`ExpandedBillingRow({ c, cycleFye })`
+  closes over none of the Billing page's state), so extracting one to
+  `components/<feature>/` is a pure move the page keeps using unchanged —
+  verify byte-identity of the moved block rather than trusting a diff to
+  look right. Two rules for the chat side: fetch the component's real data
+  from a server route that RE-RUNS the real computation (never feed it the
+  chat preview), and give that route the same permission gate the feature
+  page has — `/api/billing/renewals/company` re-runs
+  `computeAllCompanyBilling()`, resolves the name exactly as the page does,
+  and refuses restricted accounts. *(source: 2026-09-10.)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

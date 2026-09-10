@@ -9,7 +9,7 @@
 // `git diff` that app/my-tasks/page.tsx's own rendered behavior is
 // unchanged after it switches to importing from here.
 import { useState, useRef, useEffect } from 'react';
-import { FileCheck2, X, ExternalLink, FileText, AlertTriangle, Download, Send } from 'lucide-react';
+import { FileCheck2, X, ExternalLink, FileText, AlertTriangle, Download, Send, Pencil } from 'lucide-react';
 import type { InvoicePreview } from '@/lib/billing-lookup';
 import type { EditableLine } from '@/lib/billing-draft';
 import type { LateFilingResolvePreview } from '@/lib/late-filing-lookup';
@@ -23,6 +23,8 @@ import type { ChatExportOffer } from '@/lib/chat-export';
 import type { SoaPreview } from '@/lib/outstanding-lookup';
 import type { DraftLike } from '@/lib/draft-helper-client';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
+import ExpandedBillingRow from '@/components/billing/ExpandedBillingRow';
+import type { CompanyBilling } from '@/app/api/billing/renewals/route';
 import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender } from '@/lib/soa-actions-client';
 import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
 import { logActivity } from '@/lib/activity-client';
@@ -135,6 +137,8 @@ type GenerateOutcome =
 
 export function InvoiceDraftCard({ preview, onGenerated }: { preview: InvoicePreview; onGenerated: (summary: string) => void }) {
   const [outcome, setOutcome] = useState<GenerateOutcome>({ state: 'idle' });
+  // Opens the page's REAL row editor in a modal — see BillingDraftsModal.
+  const [fullEditor, setFullEditor] = useState(false);
   // One idempotency key per confirmation attempt (fresh each time the card
   // moves from idle -> confirming), reused across an overlap-confirm retry
   // of the SAME logical request — matches app/billing/page.tsx's own
@@ -257,11 +261,24 @@ export function InvoiceDraftCard({ preview, onGenerated }: { preview: InvoicePre
           </button>
         )}
         {outcome.state !== 'success' && (
+          <button
+            type="button"
+            onClick={() => setFullEditor(true)}
+            style={{ ...deepLinkStyle, width: '100%', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer' }}
+          >
+            <Pencil size={13} /> 在 Billing Drafts 编辑器中打开
+          </button>
+        )}
+        {outcome.state !== 'success' && (
           <a href={billingDeepLink(preview.companyName, preview.fyeMonth, preview.fyeCycle)} style={deepLinkStyle}>
-            <ExternalLink size={13} /> Open in Billing Drafts
+            <ExternalLink size={13} /> Open in Billing Drafts (整页)
           </a>
         )}
       </div>
+
+      {fullEditor && (
+        <BillingDraftsModal companyName={preview.companyName} cycleFye={preview.fyeCycle || undefined} onClose={() => setFullEditor(false)} />
+      )}
 
       {(outcome.state === 'confirming' || outcome.state === 'submitting' || outcome.state === 'overlap' || outcome.state === 'error') && (
         <GenerateConfirmModal
@@ -1155,6 +1172,71 @@ export function SoaCard({ preview }: { preview: SoaPreview }) {
           onSent={() => { setDraft(null); setDone('邮件草稿已在 Outlook 中打开。'); }}
         />
       )}
+    </div>
+  );
+}
+
+// "在 Billing Drafts 中打开" — the REAL editor, in a chat modal (2026-09-10).
+//
+// Vincent: "我更想要...我选择了这些按钮会弹出我真正在 Billing Drafts 那边看到
+// 的弹窗是一模一样的，就是现在这些功能都锁死了在各自的功能页内，却没有互通到
+// 这个 AI CHAT 内...还是很像只是一个聊天 chat".
+//
+// So this renders the page's OWN ExpandedBillingRow component — the same
+// line-item editor, the same rate/period/QB-number fields, the same
+// Generate button and the same overlap confirmation dialog — not a chat
+// lookalike. The card above it stays as the quick summary (that is what a
+// chat answer should be); this is the escape hatch into the full feature
+// for when the summary is not enough.
+//
+// The row comes from /api/billing/renewals/company, which re-runs the real
+// computation server-side and resolves the name the same way the Billing
+// page does, so the editor is driven by the page's own data — the chat
+// preview is never fed into it.
+function BillingDraftsModal({ companyName, cycleFye, onClose }: { companyName: string; cycleFye?: string; onClose: () => void }) {
+  const [company, setCompany] = useState<CompanyBilling | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/billing/renewals/company?name=${encodeURIComponent(companyName)}`);
+        const json = await res.json();
+        if (cancelled) return;
+        if (!res.ok || json.error) { setError(json.error ?? `Request failed (${res.status})`); return; }
+        setCompany(json.company as CompanyBilling);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : '网络错误，请重试。');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [companyName]);
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 2000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 24, overflowY: 'auto' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ background: '#fff', borderRadius: 12, width: 1080, maxWidth: '96vw', boxShadow: '0 20px 60px rgba(15,23,42,0.25)', overflow: 'hidden' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ padding: '13px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <FileCheck2 size={16} color="#1e3a5f" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b' }}>Billing Drafts — {companyName}</div>
+            <div style={{ fontSize: 10.5, color: '#94a3b8' }}>与 Billing Drafts 页面完全相同的编辑器{cycleFye ? ` · FYE ${cycleFye}` : ''}</div>
+          </div>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={17} /></button>
+        </div>
+
+        <div style={{ maxHeight: '78vh', overflowY: 'auto' }}>
+          {error && <div style={{ padding: 18, fontSize: 12.5, color: '#b91c1c' }}>{error}</div>}
+          {!error && !company && <div style={{ padding: 24, textAlign: 'center', fontSize: 12.5, color: '#94a3b8' }}>Loading…</div>}
+          {company && <ExpandedBillingRow c={company} cycleFye={cycleFye} />}
+        </div>
+      </div>
     </div>
   );
 }
