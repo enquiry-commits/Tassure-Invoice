@@ -9,6 +9,7 @@
 // `git diff` that app/my-tasks/page.tsx's own rendered behavior is
 // unchanged after it switches to importing from here.
 import { useState, useRef, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { FileCheck2, X, ExternalLink, FileText, AlertTriangle, Download, Send, Pencil } from 'lucide-react';
 import type { InvoicePreview } from '@/lib/billing-lookup';
 import type { EditableLine } from '@/lib/billing-draft';
@@ -35,6 +36,11 @@ import type { CompanyUpdatePreview } from '@/lib/company-update-lookup';
 import type { TaoPreview } from '@/lib/tao-lookup';
 import TaoInvoiceBuilder from '@/components/billing/TaoInvoiceBuilder';
 import type { TaoCompanyRow } from '@/app/api/billing/tao/route';
+// type-only on purpose: a VALUE import here would pull app/billing/page
+// into every bundle that renders ChatCards (i.e. every page), defeating the
+// dynamic import below. recomputeArRecord is taken off the same lazily
+// loaded module instead — see ArFullRecordModal.
+import type { ARRecord } from '@/app/billing/page';
 import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
 import { logActivity } from '@/lib/activity-client';
 
@@ -854,6 +860,8 @@ type ArUpdateOutcome =
 
 export function ArUpdateCard({ preview, onGenerated }: { preview: ArUpdatePreview; onGenerated: (summary: string) => void }) {
   const [outcome, setOutcome] = useState<ArUpdateOutcome>({ state: 'idle' });
+  // Opens the page's own full AR record modal — see ArFullRecordModal.
+  const [fullRecord, setFullRecord] = useState(false);
   const cycle = preview.fyeMonth && preview.fyeYear ? `FYE ${preview.fyeMonth} ${preview.fyeYear}` : '';
 
   const submit = async () => {
@@ -933,7 +941,16 @@ export function ArUpdateCard({ preview, onGenerated }: { preview: ArUpdatePrevie
             更新 {preview.fieldLabel}
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => setFullRecord(true)}
+          style={{ ...deepLinkStyle, width: '100%', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer' }}
+        >
+          <Pencil size={13} /> 打开完整 AR 记录（含历史）
+        </button>
       </div>
+
+      {fullRecord && <ArFullRecordModal preview={preview} onClose={() => setFullRecord(false)} />}
 
       {(outcome.state === 'confirming' || outcome.state === 'submitting' || outcome.state === 'error') && (
         <ArUpdateConfirmModal
@@ -1613,5 +1630,111 @@ export function TaoBillingCard({ preview }: { preview: TaoPreview }) {
         />
       )}
     </div>
+  );
+}
+
+// The REAL AR Reminder detail modal, opened from chat (2026-09-10).
+//
+// preview_ar_update already covers nine workflow fields with a confirm
+// popup, but the page's own modal shows the whole record — every date, the
+// service overrides, the invoice references, the period info and the real
+// audit history. Vincent: "现在这些功能都锁死了在各自的功能页内".
+//
+// Loaded with next/dynamic so app/billing/page.tsx (and its ~1225-line
+// modal closure) is only fetched when someone actually opens this — every
+// page in the app renders ChatCards, and none of them should pay for it.
+//
+// Deliberately NOT wired: delete. The page's own onDelete opens a
+// destructive confirm that removes a compliance cycle row; that is a
+// different class of action from editing a field, and it stays on the page.
+// The button here explains that rather than silently doing nothing.
+const ARDetailModalLazy = dynamic(
+  () => import('@/app/billing/page').then(m => ({ default: m.ARDetailModal })),
+  { ssr: false, loading: () => <div style={{ padding: 24, textAlign: 'center', fontSize: 12.5, color: '#94a3b8' }}>Loading…</div> },
+);
+
+function ArFullRecordModal({ preview, onClose }: { preview: ArUpdatePreview; onClose: () => void }) {
+  const [record, setRecord] = useState<ARRecord | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  // Held from the same lazily-imported module as the modal itself, so the
+  // Billing page never enters the eager bundle.
+  const recomputeRef = useRef<((r: ARRecord) => ARRecord) | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!preview.fyeMonth || !preview.fyeYear) {
+        setError('这条记录没有 FYE 周期信息，无法打开完整记录。');
+        return;
+      }
+      try {
+        // The page's own endpoint and shape — json.companies is ARRecord[].
+        const [mod, res] = await Promise.all([
+          import('@/app/billing/page'),
+          fetch(`/api/ar-reminder?month=${encodeURIComponent(preview.fyeMonth)}&year=${preview.fyeYear}`),
+        ]);
+        recomputeRef.current = mod.recomputeArRecord;
+        const json = await res.json();
+        if (cancelled) return;
+        if (!res.ok) { setError(json.error ?? `Request failed (${res.status})`); return; }
+        const found = (json.companies ?? []).find((c: ARRecord) => c.id === preview.rowId) ?? null;
+        if (!found) { setError('在这个 FYE 周期里找不到该记录，可能刚刚被其他人改动过。'); return; }
+        setRecord(found);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : '网络错误，请重试。');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [preview.rowId, preview.fyeMonth, preview.fyeYear]);
+
+  // Mirrors the page's own handleSave byte for byte: EditField performs the
+  // real PATCH (with its own 409 conflict UI), so this only keeps the
+  // displayed copy in step. Both halves matter — the `_manual` flag flip
+  // drives the blue auto-fill dot, and recomputeArRecord() refreshes the
+  // derived stage flags the workflow bar reads. A plain spread here left
+  // that bar showing the pre-edit state.
+  const onSave = (id: number, field: string, val: string) => {
+    const extra = (field === 'date_of_agm' || field === 'filling_date' || field === 'reminder_note' || field === 'acc_pic' || field === 'tax_pic')
+      ? { [`${field}_manual`]: !!val } : {};
+    setRecord(current => {
+      if (!current || current.id !== id) return current;
+      const next = { ...current, [field]: val || null, ...extra } as ARRecord;
+      return recomputeRef.current ? recomputeRef.current(next) : next;
+    });
+  };
+
+  if (error) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+        <div style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 420, fontSize: 12.5, color: '#b91c1c' }} onClick={e => e.stopPropagation()}>{error}</div>
+      </div>
+    );
+  }
+  if (!record) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={onClose}>
+        <div style={{ background: '#fff', borderRadius: 12, padding: 24, fontSize: 12.5, color: '#94a3b8' }} onClick={e => e.stopPropagation()}>Loading…</div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <ARDetailModalLazy
+        r={record}
+        onSave={onSave}
+        onClose={onClose}
+        onDelete={() => setNotice('删除年报周期记录只能在 AR Reminder 页面进行——那是会移除整条合规记录的操作，聊天里不开放。')}
+      />
+      {notice && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 2100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }} onClick={() => setNotice(null)}>
+          <div style={{ background: '#fff', borderRadius: 12, padding: 20, maxWidth: 420, boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 12.5, color: '#334155', marginBottom: 12 }}>{notice}</div>
+            <a href="/billing?tab=ar" style={deepLinkStyle}><ExternalLink size={13} /> 打开 AR Reminder</a>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

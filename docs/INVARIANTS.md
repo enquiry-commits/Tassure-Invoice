@@ -1189,6 +1189,25 @@ again.
   everything" for a customer really billed S$1,200 (Galaxia Capital, 2024).
   A silently-incomplete number is worse than an obviously incomplete one.
   *(source: 2026-09-10, `TaoPreview.servicesWithoutRate`.)*
+- **INV-DATA-043** — When chat reuses a page component that keeps DERIVED
+  state, it must reuse the page's recompute function too, not just spread
+  the changed field. `ARDetailModal` renders a workflow bar off
+  `record.stages`, which the Billing page refreshes through
+  `recomputeArRecord()` (plus the `_manual` flag flip that drives the blue
+  auto-fill dot) inside its own `handleSave`. A plain `{...record, [field]:
+  value}` in the chat copy left that bar showing the pre-edit state while
+  the value itself had already been saved. If a component's props carry
+  derived fields, copying the component without its derivation is a
+  half-reuse. *(source: 2026-09-10.)*
+- **INV-DOC-007** — Reusing a page component in chat is a bundle decision
+  as much as a code one. `ChatCards.tsx` renders on every page, so a
+  top-level VALUE import from `app/billing/page` pulls that ~3,500-line
+  module into every bundle; only `import type` is erased. The AR modal is
+  therefore loaded with `next/dynamic`, and the helper it needs
+  (`recomputeArRecord`) is taken off that SAME lazily-imported module
+  rather than imported statically — adding one innocuous value import
+  silently undid the code-splitting once already. Verify by checking that
+  the only remaining reference is `import type`. *(source: 2026-09-10.)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

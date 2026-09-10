@@ -1,6 +1,18 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-10 (Assistant — 互通 phase 6: trademark records editable from chat.
+Last updated: 2026-09-10 (Assistant — 互通 phase 7: the full AR Reminder record opens in chat.
+
+The AR card's nine confirm-gated fields now sit beside a "打开完整 AR 记录（含历史）" button that opens the page's OWN `ARDetailModal` — every date, the service overrides, invoice references, period info and the real audit history.
+
+**Deliberately exported in place, not extracted.** `ARDetailModal`'s closure is 34 symbols / ~1225 lines threaded through a 3,533-line page, and AR Reminder is the most-used screen in the system. The two earlier extractions (the Billing row, the TAO builder) were safe because each was a self-contained module-level component; this one is not, and it cannot be click-tested here (production login is Google OAuth). So `page.tsx` gained exactly two `export` keywords and no code moved — an 11-line diff. The cost is bundle size, paid off with `next/dynamic`.
+
+**Two bugs caught in my own work before shipping.** (1) I first imported `recomputeArRecord` as a VALUE at the top of `ChatCards.tsx`, which pulls the whole Billing page into every bundle that renders chat — silently undoing the code-splitting the dynamic import existed for. Now taken off the same lazily-imported module; only `import type` remains. INV-DOC-007. (2) The chat `onSave` first did a plain spread, but the page's own `handleSave` also flips the `_manual` flag and calls `recomputeArRecord()` — without it the modal's workflow bar showed the pre-edit state after a save. INV-DATA-043.
+
+**Not wired: delete.** The modal's `onDelete` opens a destructive confirm that removes a whole compliance cycle row. That is a different class of action from editing a field, so the chat copy explains it and links to the page instead of doing it.
+
+New `test-ar-modal.tsx` renders the real modal against a real production `ar_reminder` row (HIGO HOLDINGS, FYE February 2026) — proving the 1,225-line closure actually executes, which the build alone does not — and asserts `recomputeArRecord` flips `arFiled` when `filling_date` is set. `test-chat-render.tsx` (33 checks) and `test-orchestrator.ts` also clean.
+
+Previous entry: Assistant — 互通 phase 6: trademark records editable from chat.
 
 `preview_company_update` extended again rather than adding a 33rd tool. It now edits a trademark record's expiry date, status, progress note and remarks. Deliberately NOT the identity fields (sn / company_name / application_number / application_date): those say WHICH mark a row is about, and a sentence must never be able to rewrite that.
 

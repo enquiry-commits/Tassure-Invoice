@@ -291,7 +291,16 @@ interface Stages { accountsReady: boolean; sentToClient: boolean; docsReceived: 
 interface Invoice { invoice_no: string; txn_date: string; total_amt: number; status: string; }
 interface PeriodInfo { periodEnd: string | null; periodStart: string | null; rate: number | null; invoiceNo: string | null; ndName?: string | null; }
 interface ServicePeriods { secretary: PeriodInfo | null; address: PeriodInfo | null; nd: PeriodInfo | null; }
-interface ARRecord {
+// Exported (2026-09-10) so the chat assistant can open THIS modal — see
+// ArFullRecordModal in components/assistant/ChatCards.tsx. Deliberately
+// exported in place rather than moved out: ARDetailModal's closure is 34
+// symbols / ~1225 lines threaded through this page, and AR Reminder is the
+// most-used screen in the system, so a scattered extraction carries real
+// regression risk that cannot be click-tested here (production login is
+// Google OAuth). The chat side pays for the bundle with a dynamic import,
+// so this module only loads when someone actually opens the modal. Moving
+// it properly is worth doing later, on its own, with a browser.
+export interface ARRecord {
   id: number; entity_name: string; uen: string;
   fye_date: string | null; due_date: string | null; daysUntilDue: number | null;
   fye_month: string; fye_year: number; isStaleOverdue?: boolean;
@@ -313,7 +322,11 @@ interface ARRecord {
   updated_at?: string | null; updated_by_email?: string | null; updated_by_name?: string | null; version?: number;
 }
 
-function recomputeArRecord(record: ARRecord): ARRecord {
+// Exported alongside ARDetailModal (2026-09-10) — the chat modal must
+// recompute the derived stage flags after an edit exactly as this page's
+// own handleSave does, or the workflow bar inside the modal goes stale the
+// moment someone changes a date there.
+export function recomputeArRecord(record: ARRecord): ARRecord {
   const stages = {
     accountsReady: !!record.prepared_date,
     sentToClient: !!record.sent_date,
@@ -2181,7 +2194,7 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
 }
 
 // ── AR Detail Modal ───────────────────────────────────────────────────────────
-function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARRecord; onSave: (id: number, field: string, val: string) => void; onClose: () => void; onDelete: (id: number) => void; onServices?: (id: number, services: Services, manual: Partial<Record<string, boolean>>) => void }) {
+export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r: ARRecord; onSave: (id: number, field: string, val: string) => void; onClose: () => void; onDelete: (id: number) => void; onServices?: (id: number, services: Services, manual: Partial<Record<string, boolean>>) => void }) {
   const [showHistory, setShowHistory] = useState(false);
   const [historyRows, setHistoryRows] = useState<AuditEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
