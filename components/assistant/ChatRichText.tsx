@@ -158,7 +158,20 @@ export function RichText({ text, onNav }: { text: string; onNav: (href: string) 
       continue;
     }
 
+    // A horizontal rule (`---`, `***`, `___`) must be caught BEFORE the
+    // bullet rule below, which would otherwise read the first `-` as the
+    // bullet marker and the remaining `--` as its text — the literal
+    // "• --" Vincent screenshotted twice. The table-separator branch above
+    // only fires when the PREVIOUS line was a table row, so a standalone
+    // rule fell straight through to bullets.
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      elements.push(<div key={i} style={{ height: 1, background: '#eef2f6', margin: '10px 0' }} />);
+      continue;
+    }
+
     const bullet = line.match(/^[·\-•]\s*(.*)$/);
+    // An empty bullet ("- " with nothing after it) is noise, not content.
+    if (bullet && !bullet[1].trim()) continue;
     if (bullet) {
       elements.push(
         <div key={i} style={{ display: 'flex', gap: 7, margin: '4px 0', paddingLeft: 2 }}>
