@@ -95,6 +95,13 @@ export type CompanyUpdatePreview = {
   // instead of silently overwritten. Only set for master:* fields.
   rowId?: number;
   previousValue?: string | null;
+  // The exact field name the endpoint expects, resolved HERE rather than
+  // re-derived in the card. An earlier version mapped 'billto:*' to column
+  // names with a nested ternary in the browser, whose fallthrough sent any
+  // unrecognised field to bill_to_care_of_addr_custom — wrong by
+  // construction, and only caught because the endpoint validates names.
+  // The client must never guess a column name.
+  apiField?: string;
   endpoint: string;
   alreadyThatValue: boolean;
   warning: string | null;
@@ -234,7 +241,7 @@ export async function previewCompanyUpdate(
       preview: {
         companyId: company.id,
         companyName: company.company_name,
-        field, fieldLabel: mf === 'grade' ? 'Master List 等级 (Grade)' : 'Master List 备注 (Remark)',
+        field, fieldLabel: mf === 'grade' ? 'Master List 等级 (Grade)' : 'Master List 备注 (Remark)', apiField: mf,
         autoValue: null,
         currentDisplay: current ?? '（空）',
         proposedDisplay: value ?? '（清空）',
@@ -269,7 +276,7 @@ export async function previewCompanyUpdate(
       found: true,
       preview: {
         companyId: company.id, companyName: company.company_name,
-        field, fieldLabel: BILL_TO_LABEL[bf],
+        field, fieldLabel: BILL_TO_LABEL[bf], apiField: col,
         autoValue: null,
         currentDisplay: display(current),
         proposedDisplay: display(next),
@@ -422,7 +429,7 @@ async function previewTrademarkUpdate(
     preview: {
       companyId: row.id,
       companyName: row.company_name,
-      field, fieldLabel: `${TRADEMARK_LABEL[tf]}（${row.application_number ?? '无申请号'}）`,
+      field, fieldLabel: `${TRADEMARK_LABEL[tf]}（${row.application_number ?? '无申请号'}）`, apiField: tf,
       autoValue: null,
       currentDisplay: current ?? '（空）',
       proposedDisplay: next ?? '（清空）',

@@ -1408,15 +1408,18 @@ export function CompanyUpdateCard({ preview, onDone }: { preview: CompanyUpdateP
       // Master List's PATCH is conflict-safe and refuses a request with no
       // previousValue (428), so it gets a different body shape: the row id
       // plus exactly the value this preview saw.
+      // Every field name comes from the preview (apiField) — the browser
+      // never derives a column name. Master List and Trademark are
+      // conflict-safe and demand the value this preview actually saw.
       const body = preview.field.startsWith('master:') || preview.field.startsWith('trademark:')
-        ? { id: preview.rowId, field: preview.field.replace(/^(?:master|trademark):/, ''), value: preview.proposedValue, previousValue: preview.previousValue ?? null }
+        ? { id: preview.rowId, field: preview.apiField, value: preview.proposedValue, previousValue: preview.previousValue ?? null }
+        : preview.field.startsWith('billto:')
+          ? { companyId: preview.companyId, field: preview.apiField, value: preview.proposedValue }
         : preview.field === 'parent_company'
           ? { companyId: preview.companyId, parentCompanyId: preview.proposedValue }
-          : preview.field.startsWith('billto:')
-          ? { companyId: preview.companyId, field: `bill_to_${preview.field.slice('billto:'.length) === 'care_of' ? 'care_of' : preview.field.slice('billto:'.length) === 'attn' ? 'attn' : preview.field.slice('billto:'.length) === 'addr_source' ? 'care_of_addr_source' : 'care_of_addr_custom'}`, value: preview.proposedValue }
         : preview.field === 'customer_source'
-            ? { companyId: preview.companyId, value: preview.proposedValue }
-            : { companyId: preview.companyId, service: preview.field.slice('service:'.length), value: preview.proposedValue };
+          ? { companyId: preview.companyId, value: preview.proposedValue }
+        : { companyId: preview.companyId, service: preview.field.slice('service:'.length), value: preview.proposedValue };
 
       const res = await fetch(preview.endpoint, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),

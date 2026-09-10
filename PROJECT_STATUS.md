@@ -10,6 +10,8 @@ End-to-end verified against real production data, with the cleanup in a `finally
 
 A mistake worth recording: the first version of that test wrote to production and threw before its cleanup line, leaving a real client tagged with a c/o. Cleared immediately, and the test rewritten so the cleanup cannot be skipped. Any test that writes to production must put the cleanup in `finally`.
 
+Follow-up self-review found and fixed one bug of my own: moving column-name resolution out of the browser (the card had been deriving DB column names with a nested ternary whose fallthrough sent any unrecognised billto:* field to bill_to_care_of_addr_custom — wrong by construction) silently dropped `apiField` on the trademark branch, which would have PATCHed `field: undefined` and broken trademark edits entirely. Caught by writing `test-chat-write-fields.tsx`, which now asserts every chat-writeable field carries the exact field name and endpoint its API expects, and that the fixed-body endpoints carry none.
+
 Previous entry text follows.
 
 Original entry: Invoicing — Bill To "c/o" and "Attn" (server side).
