@@ -1235,6 +1235,28 @@ again.
   all-null, so deploying ahead of the SQL leaves invoicing byte-identical
   (verified against production before the migration). *(source:
   2026-09-10.)*
+- **INV-DATA-044** — A deterministic reply guard must fire on a CLAIM, not
+  on a keyword. The outstanding-balance guard (INV-DATA-022) matched any
+  mention of 欠款/outstanding, so a reply describing the Billing page as
+  "（开单、年报、欠款等）" got the full "⚠️ 系统提示 ... 内容可能不准确" banner
+  stapled to an otherwise correct answer. A guard that cries wolf on
+  ordinary prose gets ignored, which costs more than the guard saves. It now
+  requires the keyword AND either a money figure or an assertion adjacent to
+  it (没有/有/共/目前… or the English equivalents) — strictly narrower, and
+  `test-reply-guards.ts` pins both directions: the seven real fabrications
+  it must still catch, and the five ordinary sentences it must leave alone.
+  *(source: 2026-09-10.)*
+- **INV-DATA-045** — Page-view counts are not work. "今天大家做了什么" must
+  be answered from the real audit trail (`recent_changes`, the only
+  company-wide source of what was actually changed and on which company),
+  never from `active_users_today`, whose numbers are visits. Presenting
+  "Vincent — 18 次" as what someone did is a category error, and a quiet day
+  is a real answer: verified 2026-09-10, when `humanChanges` was 0 of 9
+  (all automated syncs) and every human-output table —
+  `generated_invoices`, `email_drafts`, `email_campaigns`,
+  `post_incorporate_operations` — was genuinely empty for the SGT day. Say
+  that plainly rather than dressing visits up as activity. *(source:
+  2026-09-10.)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

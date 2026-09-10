@@ -100,10 +100,33 @@ function attachmentSummary(content: string | ContentBlock[]): string {
 // IS one or there ISN'T) without the tool having actually been called this
 // turn? That catches the failure regardless of how obliquely the question
 // was phrased. Applied to the reply text at both return points below.
-function mentionsOutstandingBalance(text: string): boolean {
+// Narrowed 2026-09-10 after a real false positive: asked "今天大家做了什么",
+// the reply described the Billing page as "（开单、年报、欠款等）" — a list of
+// what that page covers, containing no claim about anyone's balance — and
+// this guard prepended its scary warning to a perfectly good answer. A guard
+// that cries wolf on ordinary prose teaches people to ignore it, which
+// costs more than it saves.
+//
+// What the guard actually exists to catch is a STATED BALANCE. Every real
+// instance of the failure carried one of two things: a money figure, or an
+// explicit 有/没有-style assertion sitting next to the keyword ("目前没有欠
+// 款（$0，0张未付发票）"). An incidental mention in an enumeration has
+// neither. So a keyword alone is no longer enough — it must come with a
+// claim. This is strictly narrower than before and never flags anything the
+// old version would have missed.
+export function mentionsOutstandingBalance(text: string): boolean {
   const t = text.toLowerCase();
-  const keywords = ['欠款', '欠钱', '未付', '未结', '挂账', '尚欠', '还欠', '有没有欠', '有欠', 'outstanding', 'arrears', 'owe', 'owing', 'unpaid'];
-  return keywords.some(k => t.includes(k));
+  const keywords = ['欠款', '欠钱', '未付', '未结', '挂账', '尚欠', '还欠', 'outstanding', 'arrears', 'owe', 'owing', 'unpaid'];
+  if (!keywords.some(k => t.includes(k))) return false;
+
+  // A money figure anywhere in the reply — "S$3,650", "$0", "3,650.00".
+  const hasAmount = /(s\$|sgd|\$)\s?[\d,]/i.test(t) || /\d[\d,]*\.\d{2}/.test(t);
+  if (hasAmount) return true;
+
+  // Or an assertion adjacent to the keyword, within a clause.
+  const zhClaim = /(没有|沒有|无|沒|有|共|合计|總計|总计|总共|目前|尚|还|已结清|结清)[^，。；、\r\n]{0,8}?(欠款|欠钱|未付|未结|挂账|尚欠|还欠)/;
+  const enClaim = /\b(no|any|has|have|had|owes?|owing|zero|nil|cleared?|settled|total)\b[^.;\r\n]{0,24}?\b(outstanding|arrears|unpaid|balance)\b/i;
+  return zhClaim.test(t) || enClaim.test(t);
 }
 
 // Same failure family, caught the same day: Vincent (real canViewAsOthers:
@@ -119,7 +142,7 @@ function mentionsOutstandingBalance(text: string): boolean {
 // 清楚权限". Only meaningful when the CALLER's own account genuinely does
 // have canViewAsOthers — for an account that really doesn't, a "no
 // permission" reply can be completely correct and must never be flagged.
-function claimsPermissionDenied(text: string): boolean {
+export function claimsPermissionDenied(text: string): boolean {
   const t = text.toLowerCase();
   const keywords = ['没有权限', '无权限', '权限限制', '权限不足', 'permission denied', 'no permission', "don't have permission", 'not have permission'];
   return keywords.some(k => t.includes(k));
@@ -1310,6 +1333,7 @@ TOOL ROUTING — pick by the SHAPE of the question first, then the topic. Severa
 - WHICH companies match something → list_companies. HOW MANY / what's the mix → customer_profile_summary.
 - Money owed by one company → check_outstanding_balance. Owed across a whole QuickBooks book → outstanding_balance_summary.
 - What's due soon / overdue across everyone → upcoming_deadlines. Who to chase for late filing specifically → late_filing_summary (authoritative, applies extra rules).
+- "今天大家/团队做了什么" (what did everyone do today) → recent_changes with days=1 and humanOnly=true. That is the real audit trail — which record on which COMPANY was actually edited, by whom, at what time — and it is the only tool that answers this company-wide. active_users_today counts PAGE VISITS, not work: never present "18 次" as what a person did, and never answer this question with click counts alone. If you also want to say who was around, call active_users_today as well and clearly label it as who was logged in, after the real work. recent_changes also splits humanChanges from automatedChanges: a day where totalInRange is non-zero but humanChanges is 0 means the only activity was the automated syncs, and saying exactly that ("今天的 N 条都是自动同步，还没有人改动过记录") is a real, correct and useful answer — verified on 2026-09-10, when every human-work table (generated_invoices, email_drafts, email_campaigns, post_incorporate_operations) was genuinely empty too. Never paper over a quiet day by dressing visit counts up as work.
 - What a PERSON has been doing → recent_activity_summary. Which FIELD changed on a record → recent_changes. Who used the system today → active_users_today. The caller's own habits → my_activity_pattern.
 - Anything that CHANGES data → the preview_* tools only, never claim you did it yourself.
 If two tools could fit, say which one you used when you answer, so a surprising number can be traced.
@@ -1358,7 +1382,7 @@ const CLAUDE_TOOLS = [
   { name: 'search_company', description: 'NARROW quick lookup by (partial) name — returns ONLY: status, FYE month, 3 service flags, PIC, active nominee directors, and the last 2 AR reminder rows, for up to 5 name matches. Use it ONLY to disambiguate a name or answer exactly those basics. For ANYTHING else about a specific company — directors/secretary/shareholders, trademarks, invoice or document history, contact email, whether they are still a client, how far their annual return has got — use company_deep_lookup instead, which has all of it; do NOT answer "I don\'t have that" off this tool\'s thin result. To find WHICH companies match a filter (a PIC\'s portfolio, a service, an FYE month), use list_companies. NOTE: the ar_reminders field this returns is Annual Return FILING status ("Pending"/"Filed") — it has nothing to do with whether the company owes money. Never use it to answer an outstanding-balance/arrears question; use check_outstanding_balance for that instead.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
   { name: 'check_outstanding_balance', description: "REAL, live QuickBooks outstanding-balance / arrears check for ONE SPECIFIC company (TAB + TAC + TAO combined) — the exact same computation Company 360's own Outstanding section and the /billing/soa pages use. Use this whenever the user names a company and asks whether IT owes money / has arrears / has an outstanding balance (欠款/未付/outstanding), or wants to generate/download/send an SOA (Statement of Account) for it — never answer from search_company or any other tool, and never guess. For a COMPANY-WIDE total across all customers (e.g. \"TAB 的欠款总数是多少\"), use outstanding_balance_summary instead — this tool cannot answer that. Returns hasOutstanding, the real total, and a breakdown per QuickBooks company (total, invoice count, oldest aging bucket, the real unpaid invoice numbers/due dates, who owns chasing it, and a real soa_link to that company's own SOA book — the real page to download the SOA PDF and draft the client email, NOT Billing Drafts).", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
   { name: 'outstanding_balance_summary', description: "REAL, live QuickBooks outstanding-balance total ACROSS ALL CUSTOMERS for one or more QuickBooks companies (TAB/TAC/TAO) — the exact same computation the real /billing/soa pages use, summed. Use this for a company-WIDE question like \"TAB 的欠款总数是多少\"/\"how much is outstanding on TAC overall\" — NOT for a question about one specific company (use check_outstanding_balance for that). Returns, per requested QB company, the real total, how many customers have a balance, and the top 5 largest debtors with their own totals and oldest aging bucket.", input_schema: { type: 'object', properties: { qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks companies to summarize — omit to summarize all 3' } } } },
-  { name: 'active_users_today', description: 'REAL, live list of which staff have actually used the system recently (real recorded page-view/action events, tracking since 2026-09-08) — management-only. Use this for "who else is using the system today/this week" style questions. Returns each active person\'s email, how many events they generated, and their most-visited page. Default (days omitted or 1) is the real Singapore calendar day — "today", not a rolling 24-hour window; pass a larger `days` for a genuine rolling multi-day window instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Number of days — 1 (default) means the real SGT calendar day "today"; a larger value is a genuine rolling N-day window, max 30' } } } },
+  { name: 'active_users_today', description: 'REAL, live list of which staff have actually been LOGGED IN AND CLICKING recently (recorded page-view events, tracking since 2026-09-08) — management-only. These are VISIT COUNTS, not work done: a person with 18 visits has not necessarily completed anything. For what was actually done/changed, use recent_changes (company-wide) or recent_activity_summary (one person). Use this for "who else is using the system today/this week" style questions. Returns each active person\'s email, how many events they generated, and their most-visited page. Default (days omitted or 1) is the real Singapore calendar day — "today", not a rolling 24-hour window; pass a larger `days` for a genuine rolling multi-day window instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'Number of days — 1 (default) means the real SGT calendar day "today"; a larger value is a genuine rolling N-day window, max 30' } } } },
   { name: 'check_email_status', description: 'REAL email send status for one company — the exact same data the Email Activity/Delivery History page shows (email_drafts, joined with its campaign). Use this whenever the user asks whether an email/invoice/reminder was actually sent to a company (e.g. "XX 的Email 发送出去了吗"). Returns each real draft/campaign record for the company (status: pending/opened/sent/skipped, subject, recipient, when and by whom it was sent if it was) — never guess whether something was sent, always check this.', input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
   { name: 'customer_profile_summary', description: 'REAL, live breakdown of ALL active clients by legal entity type (Private Limited/Sole Proprietorship/LLP/...) and by real SSIC industry classification — the exact same computation the Reports page\'s own "Explore" section uses. Management-only (canViewReports — Vincent, Cindy, Samuell, Tan Yee Soon). Use this whenever the user asks what TYPE or INDUSTRY our clients/customers are, which type/industry is biggest, or for a customer-profile breakdown (e.g. "客户最大是什么类型的客户？从事什么行业的？") — never say there is no such tool without calling this first. Returns counts for each type/industry sorted largest-first, plus what share of clients actually have an industry on file.', input_schema: { type: 'object', properties: {} } },
   { name: 'company_deep_lookup', description: "REAL, live, DEEP data for ONE specific company — everything Company 360 itself shows: directors/secretary/shareholders (names + roles only), trademark records, invoice history (generated + QuickBooks), Post Incorporate documents generated, ND appointments, outstanding balance, Client Communications draft count, AR Reminder cycles. Use this for ANY question about a specific named company beyond basic status/FYE (e.g. \"这家公司有商标吗\", \"董事是谁\", \"最近生成过什么文件\", \"股东有哪些\") — search_company only has a thin slice of this; never say a company-specific question can't be answered without trying this tool first. Does NOT include personal ID numbers/DOB/home address/personal contact info for directors/shareholders — deliberately never surfaced through chat. ALSO finds FORMER clients: a struck-off/terminated company is often deleted from the live company table entirely, so this falls back to its Master List history and returns recordSource:'master_list_only' with what it WAS (lifecycle status, join date, secretary, directors) — check recordSource before describing anything as current.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
