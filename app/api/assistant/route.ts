@@ -26,6 +26,7 @@ import type { SoaPreview } from '@/lib/outstanding-lookup';
 import { previewEmailDraft, type EmailDraftPreview, type EmailDraftType } from '@/lib/email-draft-lookup';
 import { previewCompanyUpdate, type CompanyUpdatePreview, type CompanyUpdateField } from '@/lib/company-update-lookup';
 import { previewTaoBilling, type TaoPreview } from '@/lib/tao-lookup';
+import { getTeamActivity } from '@/lib/team-activity';
 import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
@@ -593,6 +594,27 @@ async function taoBillingTool(account: ApprovedAccount | null, input: Record<str
     ...p,
     _tao: p,
     note: `Real TAO (ACC) billing history from QuickBooks — every DISTINCT product/service this customer has ever been billed under a TAO invoice, most recent occurrence of each, with the rate last charged. This is NOT a draft and NOT a due-date list: Accounts/Tax services have no periodicity model in this system, which is why ACC hand-builds every TAO invoice. Present it as "what we billed them before, and how much", then tell the user the card has a button that opens the real TAO invoice builder with these services pre-filled as candidates to tick on or off. ${p.servicesWithoutRate > 0 ? `IMPORTANT for this company: ${p.servicesWithoutRate} of the ${p.priorServices.length} prior services have NO rate stored (older QuickBooks line items), so totalIfAllRepeated (${p.totalIfAllRepeated}) is only the priced ones — say the total is incomplete rather than quoting it as the full amount. ` : ''}${p.inCompanyRoster ? '' : 'NOTE: this customer has no row in the corporate-secretarial company roster — that is normal (154 of 359 TAO customers are accounting/tax-only clients, some are individuals), so never describe them as "not our client". '}Amounts are SGD. Never claim you created a TAO invoice.`,
+  };
+}
+
+// Added 2026-09-10 — the answer to "今天大家做了什么" was a table of page
+// views, because that plus audit_log were the only company-wide sources
+// the assistant could reach. See lib/team-activity.ts: the real work data
+// existed but only one person at a time. Vincent: "重点的是我要知道其他人
+// 真正在干嘛 做了什么".
+async function teamActivityTool(account: ApprovedAccount | null, input: Record<string, unknown>) {
+  if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
+  if (!account.canViewAsOthers) {
+    return { error: true as const, message: `${account.name}'s account can only see their own activity — a team-wide view is limited to management accounts. Use my_activity_pattern or recent_activity_summary for themselves.` };
+  }
+  const days = typeof input.days === 'number' && input.days > 0 ? Math.min(Math.round(input.days), 90) : 1;
+  // The asker is excluded by default: a manager asking what the team did
+  // does not mean themselves. includeMe:true overrides it.
+  const excludeEmail = input.includeMe === true ? null : account.email;
+  const result = await getTeamActivity(days, excludeEmail);
+  return {
+    ...result,
+    note: `REAL work the team actually did — invoices generated, AR Reminder cycles moved, campaigns created, client emails sent, Master List / Trademark edits, Post Incorporate documents — with the real company name and SGT time for each. This is NOT page-view tracking; never mix visit counts in here, and never present a visit as work. ${excludeEmail ? `${account.name} (the person asking) is deliberately EXCLUDED — do not mention their own activity or note their absence, it is intentional. ` : ''}${result.automatedItems > 0 ? `${result.automatedItems} further writes in this window came from automated syncs/backfills and were filtered out — they are not anyone's work; mention them only if the user asks why a number looks low. ` : ''}${result.quiet ? 'NOBODY produced anything in this window: say that plainly. ' : ''}Answer like a colleague reporting what happened — lead with who did what on which company, grouped by person, newest first. Do not pad it into a table of counts when there are only a handful of real items; just say them.`,
   };
 }
 
@@ -1333,7 +1355,7 @@ TOOL ROUTING — pick by the SHAPE of the question first, then the topic. Severa
 - WHICH companies match something → list_companies. HOW MANY / what's the mix → customer_profile_summary.
 - Money owed by one company → check_outstanding_balance. Owed across a whole QuickBooks book → outstanding_balance_summary.
 - What's due soon / overdue across everyone → upcoming_deadlines. Who to chase for late filing specifically → late_filing_summary (authoritative, applies extra rules).
-- "今天大家/团队做了什么" (what did everyone do today) → recent_changes with days=1 and humanOnly=true. That is the real audit trail — which record on which COMPANY was actually edited, by whom, at what time — and it is the only tool that answers this company-wide. active_users_today counts PAGE VISITS, not work: never present "18 次" as what a person did, and never answer this question with click counts alone. If you also want to say who was around, call active_users_today as well and clearly label it as who was logged in, after the real work. recent_changes also splits humanChanges from automatedChanges: a day where totalInRange is non-zero but humanChanges is 0 means the only activity was the automated syncs, and saying exactly that ("今天的 N 条都是自动同步，还没有人改动过记录") is a real, correct and useful answer — verified on 2026-09-10, when every human-work table (generated_invoices, email_drafts, email_campaigns, post_incorporate_operations) was genuinely empty too. Never paper over a quiet day by dressing visit counts up as work.
+- "今天大家/团队做了什么" / "其他人在干嘛" (what did the team do) → team_activity. It returns the REAL work — who moved which company's AR cycle, who raised which invoice, who emailed which client — and it already excludes the person asking, on purpose. Do NOT answer this with active_users_today: those are page VISITS, and "Vincent — 21 次" is not something anyone did. recent_changes is the narrower field-level audit view, useful for "什么字段被改了", but it MISSES most real work (verified 2026-09-10: audit_log showed 0 human changes for the day while team_activity correctly showed 6 real AR edits by 2 people). If team_activity is quiet, say so plainly instead of filling the gap with clicks.
 - What a PERSON has been doing → recent_activity_summary. Which FIELD changed on a record → recent_changes. Who used the system today → active_users_today. The caller's own habits → my_activity_pattern.
 - Anything that CHANGES data → the preview_* tools only, never claim you did it yourself.
 If two tools could fit, say which one you used when you answer, so a surprising number can be traced.
@@ -1378,6 +1400,9 @@ Current logged-in staff member: ${account ? `${account.name} (${account.email})`
 ${memoryBlock}`;
 }
 
+// Overridable without a deploy if the cost/latency trade needs revisiting.
+const ASSISTANT_MODEL = process.env.ASSISTANT_MODEL || 'claude-sonnet-5';
+
 const CLAUDE_TOOLS = [
   { name: 'search_company', description: 'NARROW quick lookup by (partial) name — returns ONLY: status, FYE month, 3 service flags, PIC, active nominee directors, and the last 2 AR reminder rows, for up to 5 name matches. Use it ONLY to disambiguate a name or answer exactly those basics. For ANYTHING else about a specific company — directors/secretary/shareholders, trademarks, invoice or document history, contact email, whether they are still a client, how far their annual return has got — use company_deep_lookup instead, which has all of it; do NOT answer "I don\'t have that" off this tool\'s thin result. To find WHICH companies match a filter (a PIC\'s portfolio, a service, an FYE month), use list_companies. NOTE: the ar_reminders field this returns is Annual Return FILING status ("Pending"/"Filed") — it has nothing to do with whether the company owes money. Never use it to answer an outstanding-balance/arrears question; use check_outstanding_balance for that instead.', input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } },
   { name: 'check_outstanding_balance', description: "REAL, live QuickBooks outstanding-balance / arrears check for ONE SPECIFIC company (TAB + TAC + TAO combined) — the exact same computation Company 360's own Outstanding section and the /billing/soa pages use. Use this whenever the user names a company and asks whether IT owes money / has arrears / has an outstanding balance (欠款/未付/outstanding), or wants to generate/download/send an SOA (Statement of Account) for it — never answer from search_company or any other tool, and never guess. For a COMPANY-WIDE total across all customers (e.g. \"TAB 的欠款总数是多少\"), use outstanding_balance_summary instead — this tool cannot answer that. Returns hasOutstanding, the real total, and a breakdown per QuickBooks company (total, invoice count, oldest aging bucket, the real unpaid invoice numbers/due dates, who owns chasing it, and a real soa_link to that company's own SOA book — the real page to download the SOA PDF and draft the client email, NOT Billing Drafts).", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Company name, partial match is fine' } }, required: ['company'] } },
@@ -1417,6 +1442,10 @@ const CLAUDE_TOOLS = [
     value: { description: "For a service field: true (force ON), false (force OFF) or null (clear the override). For customer_source: one of referral/website/advertising/existing_client/walk_in/other, or null. For parent_company: the parent company's NAME, or null to clear." },
   }, required: ['company', 'field'] } },
   { name: 'tao_billing_history', description: "REAL TAO (ACC's own QuickBooks book) billing history for ONE customer — every distinct Accounts/Tax product ever billed to them, the rate last charged, and their last TAO invoice. TAO is ACC's separate book for accounting/tax work and is NOT the same as TAB/TAC invoicing. Use it whenever the user asks what a client was charged for accounts/tax/GST/personal tax before, or is about to raise a TAO invoice and wants the prior services (e.g. \"XX 之前的 Accounts 收多少\", \"XX 的 TAO 开过什么\", \"ACC 那边给 XX 开过什么单\"). It does NOT draft anything — Accounts/Tax have no renewal cycle in this system, so ACC hand-builds every TAO invoice; the card gives the user a button that opens the real TAO builder with these services pre-filled. ACC's client book is separate from the corporate-secretarial roster, so a customer here may have no company record at all.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Customer name, partial match is fine' } }, required: ['company'] } },
+  { name: 'team_activity', description: "What the TEAM actually DID over a window — the real work: invoices generated, AR Reminder cycles moved, email campaigns created, client emails sent, Master List / Trademark edits, Post Incorporate documents, with the real company name and time for each. Management-only. This is the right tool for \"今天大家做了什么\", \"这几天团队在忙什么\", \"其他人在干嘛\" — NOT active_users_today, whose numbers are page visits rather than work. The person asking is excluded by default (a manager asking about the team does not mean themselves); pass includeMe:true to include them. days defaults to 1 = today in Singapore.", input_schema: { type: 'object', properties: {
+    days: { type: 'number', description: 'Days to look back; 1 (default) = the real SGT calendar day today. Max 90.' },
+    includeMe: { type: 'boolean', description: "Include the asker's own activity. Default false." },
+  } } },
   { name: 'firm_pulse', description: "REAL firm-WIDE 'what needs attention right now' overview in one call — overdue AR filings and AGMs, what's due in the next 14 days, active late filers, and total money owed with the biggest debtors. Management-only. Use for \"今天最要紧的是什么\", \"现在有什么要注意的\", \"What should I prioritize today\" when the user means the FIRM rather than their own task list (my_tasks_summary answers the personal version, and legitimately returns nothing for an owner/management account who is not a caseworker).", input_schema: { type: 'object', properties: {} } },
   { name: 'collections_worklist', description: "REAL list of which companies a given person has to CHASE for unpaid invoices, with each one's amount and how old the oldest unpaid invoice is — the same owner filter the SOA page itself is built around. Use for \"我手上有哪些欠款要催\", \"Chelsea 要催哪些公司\", \"我的欠款清单\". Pass owner:'me' for the caller's own list. Omit owner for the whole firm. This is the LIST view; outstanding_balance_summary answers 'how big is the book' and check_outstanding_balance answers about ONE named company.", input_schema: { type: 'object', properties: { owner: { type: 'string', description: "Collections owner's name, or 'me' for the caller. Omit for the whole firm." }, qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks books — omit for all 3' } } } },
   { name: 'recent_changes', description: 'REAL field-level change history from the audit log — who changed which field on which company, from what value to what, and when. Use for "最近谁改了什么", "这家公司最近被改了什么", "谁动过这个". Most changes are AUTOMATED nightly syncs (changed_by "system:..."); pass humanOnly:true when the user means a person. Different from recent_activity_summary, which describes what a person has been DOING across features rather than the field-level diff trail.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days back, default 7, max 365' }, humanOnly: { type: 'boolean', description: 'Exclude automated system syncs' }, company: { type: 'string', description: 'Only changes for this company' }, limit: { type: 'number', description: 'How many change rows to return, default 30, max 100' } } } },
@@ -1509,6 +1538,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'preview_email_draft') return emailDraftPreviewTool(account, input);
   if (name === 'preview_company_update') return companyUpdatePreviewTool(account, input);
   if (name === 'tao_billing_history') return taoBillingTool(account, input);
+  if (name === 'team_activity') return teamActivityTool(account, input);
   if (name === 'firm_pulse') return firmPulseTool(account);
   if (name === 'collections_worklist') return collectionsWorklistTool(account, input);
   if (name === 'recent_changes') return recentChangesTool(input);
@@ -1595,7 +1625,18 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, system, tools: CLAUDE_TOOLS, messages: convo }),
+      // Sonnet, not Haiku (2026-09-10). Vincent: "为什么你的回答模式一直很
+      // 奇怪，也不能像 chatgpt 和 claude 那样智能的理解...明明都接了
+      // Anthropic 的 api". He was right, and it was not a prompting problem:
+      // this assistant had been running on Haiku 4.5 the whole time, with a
+      // 32-tool surface and ~40KB of routing guidance on top of it — past
+      // what the small model handles well, which is why answers came out
+      // mechanical and mis-routed (开SOA → invoice drafts). max_tokens 1024
+      // also hard-capped every reply, which is why they read clipped and
+      // table-ish. The static prompt already carries cache_control, so the
+      // large cached prefix keeps the cost difference far smaller than the
+      // per-token rates suggest.
+      body: JSON.stringify({ model: ASSISTANT_MODEL, max_tokens: 4096, system, tools: CLAUDE_TOOLS, messages: convo }),
     });
     if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const data = await res.json();

@@ -1257,6 +1257,30 @@ again.
   `post_incorporate_operations` — was genuinely empty for the SGT day. Say
   that plainly rather than dressing visits up as activity. *(source:
   2026-09-10.)*
+- **INV-DATA-046** — `audit_log` is NOT the record of what people did. It
+  captures field-level changes only, and misses most real work: verified
+  2026-09-10, when `recent_changes` reported 0 human changes for the day
+  while six real AR Reminder edits by two staff had happened (they live in
+  `ar_reminder.updated_at`/`updated_by_email`, never reaching audit_log).
+  An answer built on audit_log alone will confidently tell a manager the
+  team did nothing. `lib/team-activity.ts` is the company-wide truth,
+  reading the eight tables staff actually write. Two rules it encodes:
+  automated writers (`system:*`, `*@internal`) share those same
+  `updated_by_email` columns and must be filtered — `backfill@internal`
+  alone was 199 of 263 items over a week — and the ASKER is excluded by
+  default, because a manager asking what the team did does not mean
+  themselves. *(source: 2026-09-10, Vincent: "重点的是我要知道其他人真正在
+  干嘛".)*
+- **INV-DATA-047** — The assistant's answer quality is bounded by its
+  MODEL, and no amount of prompt engineering substitutes. It ran on
+  `claude-haiku-4-5` with `max_tokens: 1024` while carrying 33 tools and
+  ~40KB of routing guidance — past what the small model handles, which is
+  what produced mechanical, table-padded replies and mis-routing (开SOA →
+  invoice drafts). Now `claude-sonnet-5` at 4096, overridable via
+  `ASSISTANT_MODEL`. Before adding yet another prompt rule to fix a
+  "dumb answer", check what model is actually serving it. *(source:
+  2026-09-10, Vincent: "为什么...不能像 chatgpt 和 claude 那样智能的理解...
+  明明都接了 Anthropic 的 api".)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
