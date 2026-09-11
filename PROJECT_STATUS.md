@@ -1,5 +1,17 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (Enriched the service catalog with real PROCESS detail from 3 more source documents; found another pricing conflict, flagged not guessed.
+
+Vincent: "可以继续深入" — three more documents, this time mostly process-rich rather than pricing-rich: Strike Off's real Gazette-notification timeline (30 days to First Gazette, +60 days to Final Gazette) plus two genuinely new required fees never captured before (Account Clearance from $500, Tax Clearance from $300 — the realistic total for a full striking off is From SGD 1,400, not just the $600 application fee); a full EP post-approval activation flowchart (two activation methods with real tradeoffs, required documents, the physical EPSC visit address, 5-working-day card turnaround, post-activation payroll/SDL/no-CPF obligations); and the Trade Mark application's actual 4-step process + IPOS timeline (4-6 months review + 2 months publication ≈ 6-8 months total, 10-year validity).
+
+New `scripts/add-service-pricing-updates-2.sql` (needs Vincent to run it — same as always, no DDL access from this sandbox): UPDATEs that APPEND this process detail onto the existing descriptions (never discarding what was there), plus 2 new fee rows (PC7-c Account Clearance, PC7-d Tax Clearance). Found the same semicolon-inside-string-literal trap as the first pricing script before sending it — fixed the same way (em-dashes) before handing off, not after another failed run.
+
+Deliberately did NOT touch the Trade Mark row's price: the new document states SGD 1,000/class (+SGD 500/extra), conflicting with the existing SGD 900 (+SGD 400) from the 11 Sep proposal — and unlike the first conflict, neither of these newest 3 documents prints a date, so there's no way to judge which is more recent. Flagged in the row's own remarks and asked Vincent directly rather than picking one.
+
+Verified: SQL checked for balanced quoting/parens/dollar-blocks and exactly 4 real statement terminators before handoff.
+
+Previous entry follows.
+
 Last updated: 2026-09-11 (Wired the standard service catalog + pricing into the AI assistant (`service_pricing_lookup`).
 
 Vincent: "现在接到去助手上" — the "later" step from the previous entry. New `lib/service-pricing-lookup.ts` (`getServicePricing()`, optional `section`/`search` filters over the 64-row catalog + 3 company_service_terms rows) and a new `service_pricing_lookup` tool in `app/api/assistant/route.ts`, following the same shape as `trademark_summary`. Routing guidance added for "我们有什么服务" / "XX多少钱" / "付款条款是什么" style questions.
