@@ -1326,6 +1326,19 @@ again.
 - **INV-DATA-050** — Field-level edit history lives in TWO tables and any "what changed" answer must read both. `ar_reminder` edits are written to `ar_reminder_audit` by DB triggers (field_name / old_value / new_value / changed_by_*), NOT to `audit_log` — the AR Reminder PATCH endpoint has no logFieldChange() call, unlike the Master List and Trademark PATCHes, whose diffs DO go to `audit_log`. So `recent_changes` (audit_log only) never shows a human AR edit, and `team_activity` reads `ar_reminder_audit` + `audit_log` together. A burst of edits to one company by one person within a minute is collapsed to a single item so "filled in 6 fields" reads as one action. *(source: 2026-09-10, Vincent: "这些可以优化到更细的层面吗".)*
 - **INV-DATA-051** — The assistant's person-activity permission model is a RANK ladder, not a binary management flag, and it gates ONLY person-centric questions (my_tasks_summary / recent_activity_summary with a `person`, team_activity, active_users_today, team_roster load figures). Client data, invoicing, arrears, deadlines, company lookups stay open to every account. Ranks (lib/staff-directory.ts RANK_BY_EMAIL, lib/person-visibility.ts): owner (Vincent — visible to no one else) > partner (visible only to owner; partners cannot see each other) > leader (visible to owner/partner/other leaders) > staff (visible to any staff+; staff see each other; Chelsea is plain staff). team_activity / active_users_today FILTER out people the caller may not see and report the hidden count rather than refusing — a blocked person-level query never blocks the underlying company facts, and the refusal message says so. test-person-visibility.ts pins the matrix. *(source: 2026-09-10, Vincent's spec.)*
 - **INV-DATA-052** — Hiding a section client-side (`{data && <Section/>}`) is a display choice, not an access boundary — the API route behind it must enforce the restriction itself, or any authenticated account can still read the data by hitting the endpoint directly. `/api/automation/health` (the Dashboard's Automation Health panel — cron status, TeamWork batch timings, integration exceptions) had no per-account check at all, only the blanket "must be logged in" the proxy middleware already applies to every route; any approved account could fetch it even though the page only ever rendered it for the one email checked client-side. Restricted to Vincent at the route (`getRequestAccount` + an explicit email check, 403 for everyone else) rather than only in `app/page.tsx`. *(source: 2026-09-11, Vincent: "这个板块只开放给Vincent显示，其他人看不到".)*
+- **INV-DATA-053** — Any loader keyed on My Tasks' `viewAsEmail` (identity
+  substitution — `load()` for `/api/my-tasks`, `loadConversations()` for
+  `/api/ai/conversations`, both in `app/my-tasks/page.tsx`) must discard its
+  result if the identity has moved on by the time the request resolves —
+  switching View As twice in quick succession fires two overlapping
+  requests with no guaranteed resolution order, so the OLDER identity's
+  response can land after the newer one and silently overwrite it with the
+  wrong person's data. Guarded with a `viewAsEmailRef` each loader checks
+  against its own captured target before calling `setData`/
+  `setConversations`. Any future loader added under this identity-switch
+  pattern needs the same guard — this is not specific to these two calls.
+  *(source: 2026-09-11, Vincent: "来回切换身份的时候有点信息更新延迟卡顿的
+  情况".)*
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

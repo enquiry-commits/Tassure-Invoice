@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (My Tasks: fixed a real race condition when switching "View As" back and forth quickly.
+
+Vincent reported a one-off "网络错误，请重试" on My Tasks (fixed itself on refresh — likely an unrelated transient blip, not chased further) and, separately, "当我来回切换身份的时候有点信息更新延迟卡顿的情况" (info feels laggy/stuck when switching View As back and forth). The second one was real: `load()` (`/api/my-tasks`) and `loadConversations()` (`/api/ai/conversations`) each fire fresh on every `viewAsEmail` change, but nothing stopped an OLDER in-flight request from resolving AFTER a newer switch and overwriting it with the wrong person's data — a genuine out-of-order response race, not just visual latency, whenever he switched again before the first request landed.
+
+Fixed with a `viewAsEmailRef` both loaders check against their own captured request target before committing `setData`/`setUser`/`setConversations` — a stale response is now silently discarded instead of clobbering the current identity's view. INV-DATA-053. Scoped to `app/my-tasks/page.tsx` only; `AssistantWidget.tsx` (the floating widget on other pages) has no View As switching, so it isn't affected.
+
+Verified: `npx tsc --noEmit` / `npm run build` clean. Could not reproduce the rapid-switch timing locally (no browser in this sandbox) — worth Vincent trying the same back-and-forth switch again in production to confirm it feels solid now.
+
+Previous entry follows.
+
 Last updated: 2026-09-11 (Invoice number chips ("TAB #02610938" etc.) now open the real QuickBooks PDF.
 
 Vincent, looking at AR Reminder's Invoice column: "这些Invoice 可以直接点开到实际的PDF吗？可以实现吗？" Every caller of the shared `BillingInvoiceReference` chip (AR Reminder's Invoice column, Billing Drafts' own invoice history displays) only ever has the human-readable DocNumber shown on screen, never QuickBooks' internal invoice Id that the existing `/api/quickbooks/invoice-pdf?id=` route required (the one Billing Drafts' "Save PDF" button already used). Extended that route to also accept `?invoiceNo=`, resolved via a LIVE `qbQuery()` DocNumber lookup (not the synced `quickbooks_invoices` snapshot, which can lag a manually-entered invoice by up to a day — INV-QB-014) before falling into the same PDF fetch. The chip is now a button: click opens a blank tab immediately (before the fetch, so Chrome's popup blocker doesn't eat the tab once the network round-trip loses the click's transient activation — same trick `ExpandedBillingRow`'s Save-As flow already uses), fetches the PDF, navigates the tab to it. Covers manually-entered QuickBooks invoices too, since resolution is live QBO, not a snapshot join.

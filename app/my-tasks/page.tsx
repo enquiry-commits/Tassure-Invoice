@@ -286,8 +286,20 @@ export default function MyTasksPage() {
   // resolveViewAsAccount / the relaxed ownership checks in the ai/
   // conversations routes) — this client-side value is never trusted alone.
   const [viewAsEmail, setViewAsEmail] = useState('');
+  // Vincent, 2026-09-11: "来回切换身份的时候有点信息更新延迟卡顿" — switching
+  // View As fires a fresh load() (and loadConversations() below) per
+  // change, but nothing stopped an OLDER in-flight request from resolving
+  // AFTER a newer switch and clobbering it with stale data — a real race,
+  // not just visual latency, if he switches again before the first request
+  // lands. This ref always holds the CURRENT desired identity regardless of
+  // which promise resolves when; each loader captures its own request's
+  // target and discards its result if that ref has moved on by the time it
+  // resolves.
+  const viewAsEmailRef = useRef('');
+  useEffect(() => { viewAsEmailRef.current = viewAsEmail; }, [viewAsEmail]);
 
   const load = useCallback(async () => {
+    const requestedViewAs = viewAsEmail;
     setLoading(true);
     setError(null);
     try {
@@ -297,16 +309,19 @@ export default function MyTasksPage() {
         fetch(tasksUrl),
       ]);
       const meJson = meRes.ok ? await meRes.json() : { user: null };
-      setUser(meJson.user ?? null);
       if (!tasksRes.ok) {
         const j = await tasksRes.json().catch(() => ({}));
         throw new Error(j.error || 'Failed to load My Tasks');
       }
-      setData(await tasksRes.json());
+      const tasksJson = await tasksRes.json();
+      if (viewAsEmailRef.current !== requestedViewAs) return; // a newer switch already happened — discard
+      setUser(meJson.user ?? null);
+      setData(tasksJson);
     } catch (e) {
+      if (viewAsEmailRef.current !== requestedViewAs) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      if (viewAsEmailRef.current === requestedViewAs) setLoading(false);
     }
   }, [viewAsEmail]);
 
@@ -390,11 +405,13 @@ export default function MyTasksPage() {
   const chatListRef = useRef<HTMLDivElement>(null);
 
   const loadConversations = useCallback(async () => {
+    const requestedViewAs = viewAsEmail;
     try {
       const url = viewAsEmail ? `/api/ai/conversations?viewAs=${encodeURIComponent(viewAsEmail)}` : '/api/ai/conversations';
       const res = await fetch(url);
       if (!res.ok) return;
       const json = await res.json();
+      if (viewAsEmailRef.current !== requestedViewAs) return; // a newer switch already happened — discard
       setConversations(json.conversations ?? []);
     } catch {
       // Conversation history is a convenience layer on top of a working
