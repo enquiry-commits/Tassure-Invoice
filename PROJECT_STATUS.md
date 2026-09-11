@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (Fixed a real "网络错误，请重试" root cause on My Tasks chat — a genuine 60s server timeout, not a client blip.
+
+Vincent reported the chat kept failing with "网络错误，请重试" and sent a Vercel log screenshot once the (new, working) token let him see one: `POST /api/assistant  504  Vercel Runtime Timeout Error: Task timed out after 60 seconds`. A 504 with a non-JSON body is exactly what makes `sendChatMessage()`'s `res.json()` throw client-side into that generic message — the client-side error text was never the real story.
+
+Traced it to "今天秘书部做了什么"-style department-scoped questions needing 3 full sequential Claude API round trips inside ONE request (team_roster to find department members, team_activity to get everyone's activity, then the model cross-referencing them itself) — all sharing the same 60s `maxDuration` budget. Fixed two real, confirmed causes: (1) gave `team_activity` an optional `department` parameter so this resolves in a single round trip (`teamForEmail()` reused from the same authoritative source `team_roster` already reads — no duplicated/guessed membership data), with the system prompt's routing guidance updated to use it directly instead of calling `team_roster` first; (2) the route had NO `preferredRegion` at all, a real INV-PERF-001 violation — its tool handlers fire 5+ Supabase queries routinely (`getTeamActivity` alone does 9), every one of which was crossing the Pacific to Vercel's default region instead of staying near Supabase's Tokyo host. Added `preferredRegion = 'sin1'`. INV-PERF-004.
+
+Verified: `npx tsc --noEmit` / `npm run build` clean. Could not reproduce the exact timing from this sandbox (no browser); worth Vincent re-testing "今天秘书部/会计部做了什么" a few times in production to confirm it lands reliably now.
+
+Previous entry follows.
+
 Last updated: 2026-09-11 (My Tasks: fixed a real race condition when switching "View As" back and forth quickly.
 
 Vincent reported a one-off "网络错误，请重试" on My Tasks (fixed itself on refresh — likely an unrelated transient blip, not chased further) and, separately, "当我来回切换身份的时候有点信息更新延迟卡顿的情况" (info feels laggy/stuck when switching View As back and forth). The second one was real: `load()` (`/api/my-tasks`) and `loadConversations()` (`/api/ai/conversations`) each fire fresh on every `viewAsEmail` change, but nothing stopped an OLDER in-flight request from resolving AFTER a newer switch and overwriting it with the wrong person's data — a genuine out-of-order response race, not just visual latency, whenever he switched again before the first request landed.

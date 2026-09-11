@@ -28,6 +28,7 @@ import { previewCompanyUpdate, type CompanyUpdatePreview, type CompanyUpdateFiel
 import { previewTaoBilling, type TaoPreview } from '@/lib/tao-lookup';
 import { getTeamActivity } from '@/lib/team-activity';
 import { getTeamRoster } from '@/lib/team-roster';
+import { teamForEmail, type StaffTeam } from '@/lib/staff-directory';
 import { canSeePersonActivity, personActivityFilter, callerRank } from '@/lib/person-visibility';
 import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
@@ -54,6 +55,14 @@ import {
  */
 
 export const maxDuration = 60;
+// INV-PERF-001: this route's tool handlers routinely fire 5+ Supabase
+// queries per call (getTeamActivity alone does 9) — without a region pin
+// every one of those round-trips crosses the Pacific to Vercel's default
+// region instead of staying near Supabase's Tokyo host, adding real latency
+// on top of the multi-round-trip Anthropic tool-use loop below. Found
+// missing 2026-09-11 while chasing a real "Task timed out after 60 seconds"
+// production 504 on this exact route.
+export const preferredRegion = 'sin1';
 
 // Added 2026-09-09 — Vincent: "我希望可以优化便利功能就是可以直接拖拽图
 // 片或者文件到对话框，或者可以在聊天框复制粘贴图片（作为此次对话的附带
@@ -650,13 +659,25 @@ async function teamActivityTool(account: ApprovedAccount | null, input: Record<s
   // see (Vincent's model: staff still get a real answer, just without the
   // higher-ranked people). A management caller loses nobody.
   const canSee = personActivityFilter(account.email);
-  const visibleItems = raw.items.filter(i => canSee(i.email));
-  const hiddenPeople = new Set(raw.items.filter(i => !canSee(i.email)).map(i => i.person));
+  // Department filter (2026-09-11): a department-scoped question ("今天秘书
+  // 部做了什么") used to need team_roster (find members) THEN team_activity
+  // (get everyone's activity) THEN the model cross-referencing them itself —
+  // 3 full model round trips in one request, which was pushing some real
+  // requests past Vercel's 60s function timeout (confirmed via a real
+  // production log: "Vercel Runtime Timeout Error: Task timed out after 60
+  // seconds" on POST /api/assistant). Resolving the department server-side
+  // here, in the SAME call, cuts that to one round trip. teamForEmail()
+  // reads the same authoritative `team` field team_roster itself uses —
+  // this does not duplicate or guess at department membership.
+  const department = typeof input.department === 'string' ? (input.department as StaffTeam) : null;
+  const inDept = (email: string) => !department || teamForEmail(email) === department;
+  const visibleItems = raw.items.filter(i => canSee(i.email) && inDept(i.email));
+  const hiddenPeople = new Set(raw.items.filter(i => !canSee(i.email) && inDept(i.email)).map(i => i.person));
   const result = {
     ...raw,
     items: visibleItems,
     totalItems: visibleItems.length,
-    byPerson: raw.byPerson.filter(p => canSee(p.email)),
+    byPerson: raw.byPerson.filter(p => canSee(p.email) && inDept(p.email)),
     quiet: visibleItems.length === 0,
   };
   const hiddenNote = hiddenPeople.size
@@ -1442,7 +1463,7 @@ TOOL ROUTING — pick by the SHAPE of the question first, then the topic. Severa
 - WHICH companies match something → list_companies. HOW MANY / what's the mix → customer_profile_summary.
 - Money owed by one company → check_outstanding_balance. Owed across a whole QuickBooks book → outstanding_balance_summary.
 - What's due soon / overdue across everyone → upcoming_deadlines. Who to chase for late filing specifically → late_filing_summary (authoritative, applies extra rules).
-- "今天大家/团队做了什么" / "其他人在干嘛" / "具体改了什么" (what did the team do, at any level of detail) → team_activity. It now returns FIELD-LEVEL detail — which company, which field, from what value to what value — for AR Reminder, Master List and Trademark edits, plus invoices/emails/campaigns/Post Incorporate as creations. It excludes the person asking, on purpose. Do NOT answer with active_users_today (page VISITS, not work) and do NOT stop at recent_changes (audit_log only — it misses every human AR edit, which lives in ar_reminder_audit; team_activity reads both). If team_activity is quiet, say so plainly.
+- "今天大家/团队做了什么" / "其他人在干嘛" / "具体改了什么" (what did the team do, at any level of detail) → team_activity. It now returns FIELD-LEVEL detail — which company, which field, from what value to what value — for AR Reminder, Master List and Trademark edits, plus invoices/emails/campaigns/Post Incorporate as creations. It excludes the person asking, on purpose. Do NOT answer with active_users_today (page VISITS, not work) and do NOT stop at recent_changes (audit_log only — it misses every human AR edit, which lives in ar_reminder_audit; team_activity reads both). If team_activity is quiet, say so plainly. "今天秘书部/会计部/税务部做了什么" (department-scoped) → team_activity with its department parameter set directly, in the SAME call — do NOT call team_roster first to look up members and filter yourself; that extra round trip has caused real timeouts.
 - What a PERSON has been doing → recent_activity_summary. Which FIELD changed on a record → recent_changes. Who used the system today → active_users_today. The caller's own habits → my_activity_pattern.
 - Anything that CHANGES data → the preview_* tools only, never claim you did it yourself.
 If two tools could fit, say which one you used when you answer, so a surprising number can be traced.
@@ -1530,9 +1551,10 @@ const CLAUDE_TOOLS = [
   }, required: ['company', 'field'] } },
   { name: 'tao_billing_history', description: "REAL TAO (ACC's own QuickBooks book) billing history for ONE customer — every distinct Accounts/Tax product ever billed to them, the rate last charged, and their last TAO invoice. TAO is ACC's separate book for accounting/tax work and is NOT the same as TAB/TAC invoicing. Use it whenever the user asks what a client was charged for accounts/tax/GST/personal tax before, or is about to raise a TAO invoice and wants the prior services (e.g. \"XX 之前的 Accounts 收多少\", \"XX 的 TAO 开过什么\", \"ACC 那边给 XX 开过什么单\"). It does NOT draft anything — Accounts/Tax have no renewal cycle in this system, so ACC hand-builds every TAO invoice; the card gives the user a button that opens the real TAO builder with these services pre-filled. ACC's client book is separate from the corporate-secretarial roster, so a customer here may have no company record at all.", input_schema: { type: 'object', properties: { company: { type: 'string', description: 'Customer name, partial match is fine' } }, required: ['company'] } },
   { name: 'team_roster', description: "The firm's DEPARTMENT roster — who is in Partners, Management, Corporate Secretarial (incl. the Malaysia team), Accounting, Tax and Audit, with roughly how many AR cycles each Secretary/Accounts/Tax person currently carries. The names/teams are open to everyone; the workload numbers for leaders and partners are hidden from lower-ranked callers. Use for \"各部门人员有谁\", \"秘书部/会计部有哪些人\", \"团队怎么分工的\", \"谁在哪个组\". Also returns the separate Nominee Director roster (people who act as a client's nominee director) with active-appointment counts.", input_schema: { type: 'object', properties: {} } },
-  { name: 'team_activity', description: "What the TEAM actually DID over a window, FIELD-LEVEL: which company, which field, from what value to what — for AR Reminder / Master List / Trademark edits, plus invoices, sent emails, campaigns and Post Incorporate as creations, each with company name and SGT time. Any account may call it — it returns only the people that caller is allowed to see. This is the right tool for \"今天大家做了什么\", \"这几天团队在忙什么\", \"其他人在干嘛\" — NOT active_users_today, whose numbers are page visits rather than work. The person asking is excluded by default (a manager asking about the team does not mean themselves); pass includeMe:true to include them. days defaults to 1 = today in Singapore.", input_schema: { type: 'object', properties: {
+  { name: 'team_activity', description: "What the TEAM actually DID over a window, FIELD-LEVEL: which company, which field, from what value to what — for AR Reminder / Master List / Trademark edits, plus invoices, sent emails, campaigns and Post Incorporate as creations, each with company name and SGT time. Any account may call it — it returns only the people that caller is allowed to see. This is the right tool for \"今天大家做了什么\", \"这几天团队在忙什么\", \"其他人在干嘛\" — NOT active_users_today, whose numbers are page visits rather than work. The person asking is excluded by default (a manager asking about the team does not mean themselves); pass includeMe:true to include them. days defaults to 1 = today in Singapore. For a DEPARTMENT-scoped question (\"今天秘书部做了什么\", \"会计部这几天在忙什么\") pass `department` directly — do NOT call team_roster first to find members and then filter yourself; that costs a full extra round trip and has caused real request timeouts. This tool already resolves department membership from the same authoritative source team_roster uses.", input_schema: { type: 'object', properties: {
     days: { type: 'number', description: 'Days to look back; 1 (default) = the real SGT calendar day today. Max 90.' },
     includeMe: { type: 'boolean', description: "Include the asker's own activity. Default false." },
+    department: { type: 'string', enum: ['Partners', 'Management', 'Corporate Secretarial', 'Corporate Secretarial (Malaysia)', 'Accounting', 'Tax', 'Audit'], description: 'Scope to just this department (matches team_roster\'s team names exactly). Omit for the whole firm.' },
   } } },
   { name: 'firm_pulse', description: "REAL firm-WIDE 'what needs attention right now' overview in one call — overdue AR filings and AGMs, what's due in the next 14 days, active late filers, and total money owed with the biggest debtors. Open to every account (deadlines and money, not personal data). Use for \"今天最要紧的是什么\", \"现在有什么要注意的\", \"What should I prioritize today\" when the user means the FIRM rather than their own task list (my_tasks_summary answers the personal version, and legitimately returns nothing for an owner/management account who is not a caseworker).", input_schema: { type: 'object', properties: {} } },
   { name: 'collections_worklist', description: "REAL list of which companies a given person has to CHASE for unpaid invoices, with each one's amount and how old the oldest unpaid invoice is — the same owner filter the SOA page itself is built around. Use for \"我手上有哪些欠款要催\", \"Chelsea 要催哪些公司\", \"我的欠款清单\". Pass owner:'me' for the caller's own list. Omit owner for the whole firm. This is the LIST view; outstanding_balance_summary answers 'how big is the book' and check_outstanding_balance answers about ONE named company.", input_schema: { type: 'object', properties: { owner: { type: 'string', description: "Collections owner's name, or 'me' for the caller. Omit for the whole firm." }, qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks books — omit for all 3' } } } },

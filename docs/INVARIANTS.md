@@ -1411,3 +1411,24 @@ again.
   `'use client'` + `useEffect`, which gets a loading state for free; the
   one server-rendered exception (Company 360) didn't, until this was
   found live. *(source: 2026-09-02, `app/companies/[id]/loading.tsx`.)*
+- **INV-PERF-004** — `/api/assistant`'s agentic tool-use loop (up to 4
+  rounds, each a full Claude API HTTP call) shares ONE `maxDuration = 60`
+  Vercel budget across every round — a query needing several sequential
+  tool calls before it can answer can genuinely exceed 60s and 504 with a
+  non-JSON body (client sees a generic "网络错误，请重试", not the real
+  cause). Confirmed real via a production log: "Vercel Runtime Timeout
+  Error: Task timed out after 60 seconds" on POST /api/assistant, traced to
+  "今天秘书部做了什么"-style questions needing team_roster (find members)
+  THEN team_activity (get everyone's activity) THEN the model
+  cross-referencing them itself — 3 full round trips in one request. Two
+  fixes, both real causes, not guesses: (1) `team_activity` gained an
+  optional `department` parameter so this exact pattern resolves in ONE
+  round trip instead of three (see `teamActivityTool` in
+  `app/api/assistant/route.ts`); (2) the route had NO `preferredRegion` at
+  all (violates INV-PERF-001 above — its tool handlers routinely fire 5+
+  Supabase queries per call, `getTeamActivity` alone does 9), added
+  `preferredRegion = 'sin1'`. When a NEW multi-tool-call question pattern
+  is added, check whether it can be answered in fewer round trips before
+  assuming the 60s ceiling (Vercel's max for this plan) is the fix. *(source:
+  2026-09-11, Vincent: "然后具体一直显示网络错误", confirmed via a Vercel log
+  screenshot.)*
