@@ -12,7 +12,7 @@
 -- $1,500 vs $1,800/every 2 years, DP renewal $500 vs $600/every 2 years,
 -- personal tax filing $400/individual vs $300/year incl. Singpass setup):
 -- "数字以9月11日的为准，然后内容可以分析两边的内容和描述" — the 11 Sep
--- proposal's NUMBERS are authoritative throughout this script; service
+-- proposal's NUMBERS are authoritative throughout this script — service
 -- DESCRIPTIONS were synthesized from both documents where they overlap
 -- (they mostly restate each other) and from the 11 Sep proposal alone
 -- where only it has the content (the whole post-incorporation schedule,
@@ -20,9 +20,9 @@
 --
 -- This is STANDARD / LIST price reference data only — never the source of
 -- truth for what a real client is actually billed (that stays
--- QuickBooks/generated_invoices; real client agreements, discounts, and
+-- QuickBooks/generated_invoices — real client agreements, discounts, and
 -- packages can and do differ, as this proposal's own "Goodwill Discount"
--- line shows). Do not wire this into any billing calculation; it is
+-- line shows). Do not wire this into any billing calculation — it is
 -- read-only reference data for understanding the business.
 -- Safe to run more than once in Supabase SQL Editor (upserts by natural key).
 
@@ -138,7 +138,7 @@ VALUES
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 
 ('First-Year Package', 'T1-5', 'Local Nominee Director Service — Yearly', '本地挂名董事服务（年费）',
- $$- Being named local director in ACRA; a local Singaporean director is provided, with no operational involvement.
+ $$- Being named local director in ACRA — a local Singaporean director is provided, with no operational involvement.
 - Detailed terms refer to the Nominee Director Agreement drafted and finalized by Tassure's lawyer.
 - Lawyer review and consultation on the agreement is available where the client has special conditions or requirements, based on mutual agreement.$$,
  $$- 在公司注册局上显示本地董事，以符合公司法基本要求，不涉及公司运营。
@@ -211,7 +211,7 @@ VALUES
 
 ('First-Year Package', null, 'Goodwill Discount', '折扣-整体配套',
  null, null, 'SGD 0.00', 0, 0, null, false, false,
- 'Printed as SGD 0.00 in this specific proposal — a discount line exists in the template but was not applied here; real client proposals may carry a nonzero value.',
+ 'Printed as SGD 0.00 in this specific proposal — a discount line exists in the template but was not applied here — real client proposals may carry a nonzero value.',
  '本次提案中此项为$0.00——折扣栏位存在于模板中但本次未使用；实际给客户的提案可能会有非零折扣。', false, 15,
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 
@@ -257,7 +257,7 @@ VALUES
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 
 ('Ongoing Maintenance (From Year 2)', 'T2-6', 'Unaudited Report', '非审计报告',
- $$- Compile the company's financial statements, including directors' statement, statement of financial position, statement of comprehensive income, statement of changes in equity and statement of cash flows, with notes to accounts. No audit and/or review procedures are carried out; consequently no assurance is expressed on the financial statements.$$,
+ $$- Compile the company's financial statements, including directors' statement, statement of financial position, statement of comprehensive income, statement of changes in equity and statement of cash flows, with notes to accounts. No audit and/or review procedures are carried out — consequently no assurance is expressed on the financial statements.$$,
  $$- 编制公司财务报表，包括董事报表、财务状况表、综合收益表、权益变动表和现金流量表以及账目说明；不执行审计和/或审查程序，因此不会对财务报表作出任何意见。$$,
  'SGD 700.00/year', 700, 700, 'per year', false, false, null, null, false, 22,
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
@@ -283,7 +283,7 @@ VALUES
  false, 24, 'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 
 ('Ongoing Maintenance (From Year 2)', 'T2-9', 'Payroll Service', '工资服务',
- $$- Assisting with monthly payroll processing: salary computation, preparation and issuance of payslips, CPF and Skills Development Levy (SDL) submission, and administrative support for payroll records and statutory compliance. For up to 2 persons; SGD 30 per additional headcount per month.$$,
+ $$- Assisting with monthly payroll processing: salary computation, preparation and issuance of payslips, CPF and Skills Development Levy (SDL) submission, and administrative support for payroll records and statutory compliance. For up to 2 persons — SGD 30 per additional headcount per month.$$,
  $$- 协助公司处理每月薪资事务，包括薪资计算、薪水单出具、公积金（CPF）及技能发展税（SDL）申报，以及薪资记录及法定合规相关行政支持；适用于最多2名员工，每增加1名员工加收$30/人/月。$$,
  'From SGD 600.00/year', 600, 600, 'per year (up to 2 staff), plus SGD 30/additional headcount/month', false, false, null, null, false, 25,
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
@@ -295,13 +295,13 @@ VALUES
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 
 ('Ongoing Maintenance (From Year 2)', 'T2-11', 'Auditing Services', '公司审计',
- $$- Auditing standards Singapore will be complied with; the auditor will express an opinion in the audit report. A company under a "small group" can be exempt from audit — Tassure's accountant will confirm with the client once year end accounts are done. To qualify as a "small group", the group must fulfil 2 of 3 conditions in the immediately preceding financial year: (1) consolidated revenue not exceeding S$10 million; (2) consolidated total assets not exceeding S$10 million; (3) total group employees not exceeding 50.$$,
+ $$- Auditing standards Singapore will be complied with — the auditor will express an opinion in the audit report. A company under a "small group" can be exempt from audit — Tassure's accountant will confirm with the client once year end accounts are done. To qualify as a "small group", the group must fulfil 2 of 3 conditions in the immediately preceding financial year: (1) consolidated revenue not exceeding S$10 million, (2) consolidated total assets not exceeding S$10 million, (3) total group employees not exceeding 50.$$,
  $$- 将遵循新加坡审计标准，审计师将在审计报告中表达意见。小集团公司可以免除审计，每年年底会计师将与客户联系确认。"小集团"须满足以下3个条件中的2个：1）总收入不超过1000万新币；2）总资产不超过1000万新币；3）总人数不超过50名员工。$$,
  'On Quote (once yearly accounts are done)', null, null, null, true, false, null, null, false, 27,
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 
 ('Ongoing Maintenance (From Year 2)', 'T2-12', 'AIS/IR8A Services', '员工年收入申报',
- $$- AIS (Auto-Inclusion Scheme) is IRAS's electronic employment income submission scheme. Employers with 5+ employees must participate in AIS; for employers not participating, IR8A forms are prepared and issued to employees for individual income tax filing.$$,
+ $$- AIS (Auto-Inclusion Scheme) is IRAS's electronic employment income submission scheme. Employers with 5+ employees must participate in AIS — for employers not participating, IR8A forms are prepared and issued to employees for individual income tax filing.$$,
  $$- AIS（自动纳入计划）是新加坡税务局的电子雇佣收入申报制度；拥有5名或以上员工的雇主必须参加。如未参与AIS，则须准备并向员工发出IR8A表格。$$,
  'F.O.C. (included in package)', null, null, 'per year', false, true, null, null, false, 28,
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
@@ -336,7 +336,7 @@ VALUES
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 
 ('Other / Government Fees', 'T3-5', 'EP Monthly SDL', '技能发展税（SDL）',
- null, null, 'SGD 135.00/year', 135, 135, 'per year (SGD 11.25/month; payable half-yearly)', false, false, null, null, false, 34,
+ null, null, 'SGD 135.00/year', 135, 135, 'per year (SGD 11.25/month — payable half-yearly)', false, false, null, null, false, 34,
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 
 -- ===================== Work Pass Renewal (narrative-only in the proposal, no separate price row) =====================
@@ -360,13 +360,13 @@ VALUES
  null, null, 'F.O.C.', null, null, 'per transaction', false, true, null, null, false, 39,
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 ('Post-Incorporation Changes — Company Changes & ACRA Lodgements', 'PC1-e', 'Change of Auditor', '审计师变更',
- null, null, 'F.O.C. if Tassure''s own auditor; SGD 50.00 if an external auditor', 0, 50, 'per transaction', false, false,
- 'FOC if the client uses Tassure''s appointed auditor; SGD 50 applies if the client appoints an outside auditor.',
+ null, null, 'F.O.C. if Tassure''s own auditor — SGD 50.00 if an external auditor', 0, 50, 'per transaction', false, false,
+ 'FOC if the client uses Tassure''s appointed auditor — SGD 50 applies if the client appoints an outside auditor.',
  '如果聘用Tassure指定的审计师则免费；如聘用外部审计师，此变更收费$50。', false, 40,
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 ('Post-Incorporation Changes — Company Changes & ACRA Lodgements', 'PC1-f', 'AGM and Annual Return', '股东大会及年检申报',
  null, null, 'F.O.C. (government fee SGD 60 separate)', 0, 0, 'per transaction', false, true,
- 'No additional service fee for existing clients; the SGD 60 ACRA government fee is separate.',
+ 'No additional service fee for existing clients — the SGD 60 ACRA government fee is separate.',
  '现有客户无额外服务费用；不包含政府费用$60。', false, 41,
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 ('Post-Incorporation Changes — Company Changes & ACRA Lodgements', 'PC1-g', 'Appointment and Resignation of Officer', '管理人员的任命及辞职',
@@ -385,7 +385,7 @@ VALUES
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 ('Post-Incorporation Changes — Special Resolutions', 'PC2-b', 'Amendment of Company Constitution', '修改公司章程',
  null, null, 'SGD 300.00', 300, 300, 'per transaction', false, false,
- 'Based on complexity level; a lawyer will be involved for more complex amendments.',
+ 'Based on complexity level — a lawyer will be involved for more complex amendments.',
  '根据复杂程度，需要请律师。', false, 46,
  'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 ('Post-Incorporation Changes — Special Resolutions', 'PC2-c', 'Split / Replace Share Certificate', '补股份证书',
@@ -484,7 +484,7 @@ ON CONFLICT (section, item_code, service_name_en) DO UPDATE SET
 INSERT INTO public.company_service_terms (topic, content_en, content_cn, display_order, source_document, source_updated_on)
 VALUES
 ('Payment Terms',
- 'The Company shall pay the applicable service fees in accordance with the quotation, invoice, or service package agreed between the parties. Unless otherwise agreed in writing, all service fees shall be payable in advance before commencement of the relevant service. Government fees, filing fees, application fees, statutory charges, courier fees, translation fees, notarisation fees, and any third-party disbursements are not included in the service fees unless expressly stated, and shall be borne by the Company separately. The Company shall provide all required information and supporting documents in a timely, accurate, and complete manner; any delay caused by the Company, a government authority, or a third party is not deemed a delay or default by Tassure as the service provider.',
+ 'The Company shall pay the applicable service fees in accordance with the quotation, invoice, or service package agreed between the parties. Unless otherwise agreed in writing, all service fees shall be payable in advance before commencement of the relevant service. Government fees, filing fees, application fees, statutory charges, courier fees, translation fees, notarisation fees, and any third-party disbursements are not included in the service fees unless expressly stated, and shall be borne by the Company separately. The Company shall provide all required information and supporting documents in a timely, accurate, and complete manner — any delay caused by the Company, a government authority, or a third party is not deemed a delay or default by Tassure as the service provider.',
  '客户须根据双方确认的报价、账单或服务配套支付相应服务费用。除非双方另有书面约定，所有服务费用须在相关服务开始前预先支付。除非另有明确说明，政府费用、申报费用、申请费用、法定收费、快递费、翻译费、公证费及任何第三方代垫费用均不包含在服务费内，并应由客户另行承担。客户须及时、准确、完整地提供所需资料及文件；因客户、政府机构或第三方原因导致的延误，不视为服务提供方延误或违约。',
  1, 'Tassure_Proposal__20260911001.docx', '2026-09-11'),
 ('Service Termination & Refund',
