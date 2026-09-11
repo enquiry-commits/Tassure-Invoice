@@ -143,6 +143,21 @@ function nominatorFillFrom(c: NominatorCandidate): NominatorFillTarget {
   };
 }
 
+// Mirrors lib/docx-post-incorporate.ts's largestShareholder() exactly (same
+// tie-break: highest Number of Shares, ties broken by entry order) so the
+// "自动" dropdown option can show the actual name it would pick, not just
+// the word "auto".
+function autoLargestShareholderNameFrom(rows: ShareholderRow[]): string {
+  const named = rows.filter(s => s.name.trim());
+  let best: ShareholderRow | undefined;
+  let bestShares = -Infinity;
+  for (const s of named) {
+    const shares = Number(s.numberOfShares.replace(/,/g, '').trim());
+    if (Number.isFinite(shares) && shares > bestShares) { best = s; bestShares = shares; }
+  }
+  return (best ?? named[0])?.name.trim() || '';
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
@@ -440,7 +455,15 @@ export default function PostIncorporatePage() {
         }
       }
       if (bfShareholders.length) {
-        setShareholders(bfShareholders.map(s => {
+        // Vincent, 2026-09-11: "Share Certificate No.这边其实已经有排列大到小
+        // 一般001就是最大的（Number of Shares）...所以名字其实应该按照
+        // 001/002/003/004/005 来从左到右排列的" — biggest shareholder first,
+        // matching how Share Certificate numbers already get assigned.
+        // Sorted here (once, right after Bizfile parse) rather than at
+        // render time, since the tabs below and every edit/delete action
+        // address a shareholder by its plain array INDEX — sorting only the
+        // tab display order would desync editing from what's shown.
+        const sorted = bfShareholders.map(s => {
           const match = officialByName.get(s.name.trim().toUpperCase());
           // Paid-Up Capital / Share Certificate No. have no Bizfile source
           // at all — Bizfile's own Number of Shares/currency stay
@@ -454,7 +477,15 @@ export default function PostIncorporatePage() {
             paidUpCapital: shareDetail?.paidUpCapital || '', shareCertificateNo: shareDetail?.shareCertificateNo || '',
             dateOfBirth: teamworkDateToIso(match?.dob || ''), email: match?.email || '', phone: match?.mobile || '',
           };
-        }));
+        }).sort((a, b) => {
+          const sharesA = Number(a.numberOfShares.replace(/,/g, '').trim());
+          const sharesB = Number(b.numberOfShares.replace(/,/g, '').trim());
+          const validA = Number.isFinite(sharesA);
+          const validB = Number.isFinite(sharesB);
+          if (validA && validB) return sharesB - sharesA;
+          return validA ? -1 : validB ? 1 : 0;
+        });
+        setShareholders(sorted);
         setActiveShareholderTab(0);
       }
       if (enrichedFye) setCompany(current => ({ ...current, financialYearEndDayMonth: enrichedFye }));
@@ -678,7 +709,12 @@ export default function PostIncorporatePage() {
           {company.needNdService && (
             <Field label="最大股东 Largest Shareholder">
               <select className={inputClass} value={company.largestShareholderName || ''} onChange={e => setCompany({ ...company, largestShareholderName: e.target.value })}>
-                <option value="">自动（持股最多的股东）</option>
+                {/* Shows the name it would actually auto-pick, not just the
+                    word "auto" — mirrors lib/docx-post-incorporate.ts's
+                    largestShareholder() (highest Number of Shares, ties
+                    broken by entry order) so what's on screen matches what
+                    generation will actually use. */}
+                <option value="">{`自动（${autoLargestShareholderNameFrom(shareholders) || '尚无股东数据'}）`}</option>
                 {shareholders.filter(s => s.name.trim()).map(s => (
                   <option key={s.name} value={s.name.trim()}>{s.name.trim()}</option>
                 ))}

@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (Post Incorporate: Largest Shareholder dropdown shows the real auto-pick; Bizfile shareholder tabs now sort by Number of Shares.
+
+Two small follow-ups on the same thread. (1) The new "最大股东 Largest Shareholder" dropdown's "auto" option used to just say "自动（持股最多的股东）" — added `autoLargestShareholderNameFrom()` in `app/post-incorporate/page.tsx`, mirroring `lib/docx-post-incorporate.ts`'s server-side `largestShareholder()` tie-break exactly, so the option now shows the actual name it would pick (e.g. "自动（ZHANG WEIZENG）") — what's on screen matches what generation will use, not an abstract placeholder.
+
+(2) Vincent: "Share Certificate No.这边其实已经有排列大到小...所以名字其实应该按照001/002/003/004/005来从左到右排列的" — the Shareholders tabs after a Bizfile parse were coming out alphabetically (an accident of how the parser returns names), while Share Certificate numbers (from TeamWork, independent of Bizfile) already run largest-shares-first. Sorted `bfShareholders` by descending Number of Shares once, right after parsing, rather than only at render time — every edit/delete/add action addresses a shareholder by its plain array index, so sorting only the tab *display* order would have desynced editing from what's shown.
+
+Verified: `npx tsc --noEmit` / `npm run build` clean; `test-orchestrator.ts` unaffected (neither change touches the generation engine).
+
+Previous entry follows.
+
 Last updated: 2026-09-11 (Engagement Letter: proper indent-based fix + found and fixed a real, systemic "blank field" bug across 5 templates.
 
 Vincent's screenshot of the first attempt (space-count reduction) showed two problems: still visually off, AND the "Name:" field was completely blank. Redid the position fix properly this time — replaced the 82-literal-spaces hack with a real paragraph left-indent (`<w:ind w:left="4513"/>`, calculated from the signature underline's own absolute page position minus the page's left margin) on all three signature lines (Name:/Designation:/Dated:), removing the leading-space runs entirely. Unlike spaces, an indent keeps a WRAPPED line hanging at the same left position instead of jumping to the page's left margin — the real reason a long name colliding with the floating Sign box looked so broken before.
