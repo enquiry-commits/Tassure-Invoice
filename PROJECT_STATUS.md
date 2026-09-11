@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (Bizfile parsing confirmed already fixed against the real PDF; attempted the Engagement Letter wrap fix (unverified, needs Vincent's eyes).
+
+Two follow-ups on the same Post Incorporate report. (1) Ran `parseBizfilePdf()` directly against the real LAKEFILL VENTURES Bizfile PDF Vincent supplied — 5/5 shareholders detected, full currency strings ("UNITED STATES OF AMERICA DOLLAR"), Share Type populated. The 2026-09-09 multi-page-table fix already covers this exact document; what he saw in his screenshots predates that fix or was a stale deployment/cache — told him to re-test live rather than assume the old report still applies, no code change here.
+
+(2) The Engagement Letter signature-block wrap: re-diagnosed from XML, not the floating "⬅ Sign / 签字" text box's position (it's absolutely positioned and unrelated to the wrap) — the "Name:"/"Designation:"/"Dated:" lines are each manually padded with 82 literal space characters (not a tab or indent) to visually align under the signature line above, and that padding alone eats enough of the page width that a longer name like "ZHANG WEIZENG" has nowhere left to fit on one line. Reduced all three space-runs from 82 to 41 in `templates/post-incorporate/05 Engagement_Letter...docx`. **This is an estimate, not a verified fix** — no way to render Word here to confirm the visual result, so a sample doc was generated with a ZHANG WEIZENG fixture and saved to Vincent's Desktop (`05 Engagement Letter - SAMPLE (space-fix check).docx`) for him to actually open and check; may need another pass if 41 over- or under-shoots.
+
+Verified: `npx tsc --noEmit` / `npm run build` clean; `test-orchestrator.ts` all passing (the space-count change doesn't touch any template marker/placeholder, confirmed by the existing "no unresolved placeholders" checks still passing on this template).
+
+Previous entry follows.
+
 Last updated: 2026-09-11 (Post Incorporate: ND Agreement generation bugs — root-caused to a stale template plus a real engine gap, not guessed at.
 
 Vincent uploaded a problem-report docx ("这是生成文件层面的问题了") with 13 screenshots comparing the current system's output against what it should be, then the old desktop tool's Python source and his Desktop's master template folder ("从旧程序找出答案"). Investigated properly rather than patching symptoms:
