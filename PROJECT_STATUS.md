@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (Dashboard Automation Health restricted to Vincent, Post Incorporate drop zone widened to the whole page.
+
+Automation Health panel (Dashboard, `/api/automation/health`): Vincent — "这个板块只开放给Vincent显示，其他人看不到". The client already hid the section when its fetch returned nothing, but the route itself had no per-account check, only the proxy middleware's blanket "must be logged in" — any approved account could still read the cron-status/TeamWork-batch/integration-exception JSON by hitting the endpoint directly. Fixed at the route: `getRequestAccount` + an explicit email check, 403 for everyone but Vincent. INV-DATA-052 (hiding client-side is a display choice, not a boundary — enforce at the route).
+
+Post Incorporate's Bizfile PDF drag-and-drop: Vincent — "不是只有第一板块 Drag PDF，而是整个页面...没有限制是背景还是什么板块" (drop anywhere on the page, not just the upload card). Moved the drag handlers from the small upload box onto the page's own top-level wrapper, with a dragenter/dragleave depth counter (a plain onDragLeave flickers once the drop target spans nested children — it fires on every boundary crossing, not just when the pointer truly leaves the page) and a full-page overlay while dragging, since dropping on the bare background would otherwise give no visual feedback at all. Drop still only accepts a PDF; a non-PDF file shows the existing error message instead of silently doing nothing.
+
+Verified: `npx tsc --noEmit` / `npm run build` clean; `test-orchestrator.ts` (Post Incorporate doc generation) still all-passing, unaffected by the upload-flow change. Both changes are small and independent, shipped together.
+
+Previous entry follows.
+
 Last updated: 2026-09-10 (Invoicing — Bill To "c/o" and "Attn", COMPLETE and live.
 
 Vincent ran `scripts/add-companies-bill-to-care-of.sql`; verified on production that the columns exist and the CHECK constraint really rejects an invalid address source (a typo there would silently decide where a real invoice is sent).

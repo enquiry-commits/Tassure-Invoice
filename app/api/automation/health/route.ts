@@ -1,5 +1,6 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { getRequestAccount } from '@/lib/request-account';
 
 const SOURCES = [
   'teamwork_nd_1',
@@ -22,7 +23,22 @@ const SOURCES = [
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+// Vincent, 2026-09-11: "这个板块只开放给Vincent显示，其他人看不到" — the
+// Dashboard's Automation Health panel (cron job status, TeamWork batch
+// timings, integration exceptions, unknown-PIC anomalies) is operational
+// detail meant for the owner, not client data any staff member needs. The
+// client already hides the section when this returns nothing
+// (`{automationHealth && <AutomationHealthBar .../>}` in app/page.tsx), but
+// hiding it client-side is not a real boundary — the route itself had no
+// auth check beyond "logged in", so any authenticated account could read
+// this by hitting the endpoint directly. Gate it here instead.
+export async function GET(req: NextRequest) {
+  const account = await getRequestAccount(req);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+  if (account.email.toLowerCase() !== 'vincent@tassure.com') {
+    return NextResponse.json({ error: 'This is only available to Vincent.' }, { status: 403 });
+  }
+
   const supabase = createAdminClient();
   const [
     { data: runs, error },

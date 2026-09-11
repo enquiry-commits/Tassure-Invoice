@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Plus, Trash2, Loader2, FileSignature, Download } from 'lucide-react';
 import type { PostIncorporateCompany, PostIncorporateDirector, PostIncorporateShareholder } from '@/lib/docx-post-incorporate';
 import { formatDisplayDate } from '@/lib/date';
@@ -236,11 +236,45 @@ export default function PostIncorporatePage() {
 
   const [bizfileLoading, setBizfileLoading] = useState(false);
   const [bizfileMessage, setBizfileMessage] = useState<string | null>(null);
-  // Drag-and-drop for the Bizfile PDF, alongside the existing click-to-
-  // upload — same dragActive/onDragOver/onDragLeave/onDrop pattern already
-  // used for My Tasks chat's own attachment drop zone
-  // (app/my-tasks/page.tsx), reused here rather than re-derived.
+  // Drag-and-drop for the Bizfile PDF — Vincent, 2026-09-11: "不是只有第一
+  // 板块 Drag PDF，而是整个页面，只要拖到这个页面就可以了没有限制是背景还是
+  // 什么板块" (not just the upload card — the WHOLE page, background
+  // included, is a drop target). The handlers live on the page's own
+  // top-level wrapper below, not on the small upload card.
+  //
+  // A plain onDragLeave (the pattern My Tasks' own attachment drop zone
+  // uses, fine for one small box) flickers badly once the drop target is
+  // the whole page: it fires every time the pointer crosses into a nested
+  // child element, not just when it actually leaves the page. A dragenter/
+  // dragleave counter is the standard fix — increment on enter, decrement
+  // on leave, only clear the active state at zero.
   const [bizfileDragActive, setBizfileDragActive] = useState(false);
+  const bizfileDragDepth = useRef(0);
+  const onPageDragEnter = (e: React.DragEvent) => {
+    if (bizfileLoading || !e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    bizfileDragDepth.current += 1;
+    setBizfileDragActive(true);
+  };
+  const onPageDragOver = (e: React.DragEvent) => {
+    if (bizfileLoading || !e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault(); // required on every dragover, or the browser refuses the drop
+  };
+  const onPageDragLeave = (e: React.DragEvent) => {
+    if (bizfileLoading) return;
+    e.preventDefault();
+    bizfileDragDepth.current = Math.max(0, bizfileDragDepth.current - 1);
+    if (bizfileDragDepth.current === 0) setBizfileDragActive(false);
+  };
+  const onPageDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    bizfileDragDepth.current = 0;
+    setBizfileDragActive(false);
+    if (bizfileLoading) return;
+    const f = [...e.dataTransfer.files].find(file => file.type === 'application/pdf');
+    if (f) handleBizfileUpload(f);
+    else if (e.dataTransfer.files?.[0]) setBizfileMessage('That file is not a PDF — drop the Bizfile PDF instead.');
+  };
 
   async function handleBizfileUpload(file: File) {
     setBizfileLoading(true);
@@ -523,7 +557,25 @@ export default function PostIncorporatePage() {
 
   return (
     <>
-    <div className="p-6 max-w-[1500px] mx-auto flex flex-col gap-7">
+    <div
+      className="p-6 max-w-[1500px] mx-auto flex flex-col gap-7 relative"
+      onDragEnter={onPageDragEnter}
+      onDragOver={onPageDragOver}
+      onDragLeave={onPageDragLeave}
+      onDrop={onPageDrop}
+    >
+      {/* Whole-page drop overlay — Vincent: drop the Bizfile PDF anywhere on
+          the page, background included, not just the upload card. This is
+          the only visible feedback once the drop target isn't one small
+          box anymore, so it has to say plainly that anywhere is fine. */}
+      {bizfileDragActive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-blue-900/10 border-4 border-dashed border-blue-400 pointer-events-none">
+          <div className="bg-white rounded-lg shadow-xl px-6 py-4 flex items-center gap-3">
+            <FileSignature size={20} className="text-blue-600" />
+            <span className="text-sm font-medium text-slate-700">松开即可上传 Bizfile PDF（页面任意位置均可拖放）</span>
+          </div>
+        </div>
+      )}
       <div className="mb-1 text-sm text-slate-500">Dashboard › Post Incorporate</div>
       <div className="flex items-center gap-2">
         <FileSignature size={22} className="text-blue-600" />
@@ -541,25 +593,14 @@ export default function PostIncorporatePage() {
           Upload the company&apos;s ACRA Bizfile Business Profile (text-based PDF, not a scan) to pre-fill company info,
           Directors, and Shareholders directly from the official registry extract.
         </p>
-        <div
-          onDragOver={e => { e.preventDefault(); if (!bizfileLoading) setBizfileDragActive(true); }}
-          onDragLeave={e => { e.preventDefault(); setBizfileDragActive(false); }}
-          onDrop={e => {
-            e.preventDefault();
-            setBizfileDragActive(false);
-            if (bizfileLoading) return;
-            const f = e.dataTransfer.files?.[0];
-            if (f) handleBizfileUpload(f);
-          }}
-          className={`rounded-md border-2 border-dashed p-4 w-fit transition-colors ${bizfileDragActive ? 'border-blue-400 bg-blue-50' : 'border-transparent'}`}
-        >
+        <div className="w-fit">
           <label className="flex items-center gap-2 rounded-md bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium px-4 py-2 w-fit cursor-pointer">
             {bizfileLoading ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />}
             {bizfileLoading ? 'Parsing…' : 'Upload Bizfile PDF'}
             <input type="file" accept="application/pdf" className="hidden" disabled={bizfileLoading}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleBizfileUpload(f); e.target.value = ''; }} />
           </label>
-          <p className="text-xs text-slate-400 mt-1.5">{bizfileDragActive ? 'Drop the PDF to upload' : 'or drag a PDF file here'}</p>
+          <p className="text-xs text-slate-400 mt-1.5">or drag a PDF anywhere on this page</p>
         </div>
         {bizfileMessage && <p className="text-sm text-slate-500 mt-2">{bizfileMessage}</p>}
       </section>
