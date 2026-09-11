@@ -1248,6 +1248,40 @@ again.
   rather than imported statically — adding one innocuous value import
   silently undid the code-splitting once already. Verify by checking that
   the only remaining reference is `import type`. *(source: 2026-09-10.)*
+- **INV-DOC-008** — `loadTemplate()`/`renderDoc()` in `lib/docx-post-
+  incorporate.ts` only ever touched `word/document.xml` — a placeholder
+  living in a Word HEADER or FOOTER part (`word/header*.xml`,
+  `word/footer*.xml`) was copied into every generated document byte-for-byte
+  unresolved, no matter what `data` the caller passed. Confirmed real:
+  template 12 (ND_AGREEMENT)'s `footer1.xml` has a bare `{{ND_name}}` that
+  survived generation as literal text on every page. `renderDoc()` now also
+  runs `replaceAllPlaceholders`/`stripMarkerText` on every `word/header*.xml`
+  / `word/footer*.xml` part it finds, for every caller (not just the one
+  template known to need it today) — a future template edit that adds a
+  footer/header placeholder is covered automatically. `test-orchestrator.ts`'s
+  `fullText()` now scans header/footer parts too, since it previously could
+  not have caught this class of bug at all (it only ever read
+  `word/document.xml`). *(source: 2026-09-11, Vincent's problem-report docx,
+  screenshot of an unresolved "{{ND_name}}" table.)*
+- **INV-DOC-009** — When Vincent reports a Post Incorporate GENERATED-FILE
+  bug (wrong content, not a form/UI issue), check whether the relevant
+  template file in `templates/post-incorporate/` still matches HIS working
+  copy before assuming it's a code bug — `md5sum` every same-named file
+  against his Desktop `Post Incorporate - Tassure` folder (or wherever he
+  says the current master copies live). Confirmed real: templates 12
+  (ND_AGREEMENT) and 05 (Engagement Letter) had silently drifted; the ND
+  Agreement template had been deliberately rewritten to name only the
+  LARGEST shareholder as "the Shareholder" party (new `largest_shareholder_*`
+  placeholders — ported from the old desktop tool's "最大股东" selector,
+  `PostIncorporateCompany.largestShareholderName`, `largestShareholder()` in
+  `lib/docx-post-incorporate.ts`) instead of listing every shareholder —
+  a real, intentional business/legal change, not a parsing bug, that the
+  code had no way to know about until the templates were diffed. Default
+  (no explicit selection): whoever holds the most shares, tie broken by
+  entry order — deliberately NOT the old tool's random tie-break, since a
+  document generator re-run on identical input should never name a
+  different legal party. *(source: 2026-09-11, Vincent: "在我小程序里面是有
+  一个这个东西的，但是在我系统不见了".)*
 - **INV-QB-0CO** — QuickBooks REPLACES `BillAddr` wholesale; it never
   merges. So the moment this system sends one, it owns every line the client
   reads on a real invoice. Two consequences that are load-bearing: (1) an

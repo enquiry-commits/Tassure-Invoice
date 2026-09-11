@@ -139,6 +139,13 @@ export type PostIncorporateCompany = {
   currency: string;
   financialYearEndDayMonth: string; // e.g. "31 December"
   needNdService: boolean;
+  // ND Agreement (template 12) names only the LARGEST shareholder as "the
+  // Shareholder" party, not every shareholder — ported from the old desktop
+  // tool's "最大股东" selector (Operation_Docxs_Generator, 2026-09).
+  // Optional: leave blank to auto-pick the shareholder with the most shares
+  // (see largestShareholderName() below); set it to override that pick.
+  // Only meaningful when needNdService is true.
+  largestShareholderName?: string;
 };
 
 export type PostIncorporateInput = {
@@ -228,9 +235,21 @@ function loadTemplate(filename: string): { zip: PizZip; xml: string } {
   return { zip, xml };
 }
 
-function renderDoc(templateFilename: string, xml: string): Buffer {
+// Word stores header/footer content in separate parts from the main body
+// (word/header*.xml, word/footer*.xml) — this used to leave those parts
+// completely untouched, so a placeholder inside a footer (e.g. template
+// 12's footer1.xml, which carries a bare {{ND_name}}) was NEVER filled in,
+// no matter what the caller passed for the body. Found 2026-09-11 via a
+// real generated document with a literal "{{ND_name}}" left in its footer.
+// Applied to every caller (not just the one template known to need it
+// today) so a future template edit that adds a footer/header placeholder
+// doesn't silently reproduce this.
+function renderDoc(templateFilename: string, xml: string, data: Record<string, string>): Buffer {
   const { zip } = loadTemplate(templateFilename);
   zip.file('word/document.xml', xml);
+  for (const part of zip.file(/^word\/(header|footer)\d*\.xml$/)) {
+    zip.file(part.name, stripMarkerText(replaceAllPlaceholders(part.asText(), data)));
+  }
   return zip.generate({ type: 'nodebuffer' });
 }
 
@@ -299,6 +318,25 @@ function chairmanDirector(input: PostIncorporateInput): PostIncorporateDirector 
   return input.directors.find(d => d.name.trim().toUpperCase() === name);
 }
 
+// ND Agreement's "the Shareholder" party (see PostIncorporateCompany.
+// largestShareholderName above). An explicit selection always wins; with
+// none set, defaults to whoever holds the most shares — same rule as the
+// old tool's "最大股东" default, except a tie picks the FIRST tied
+// shareholder in entry order rather than at random: a document generator
+// re-run on identical input should never produce a different legal party.
+function largestShareholder(input: PostIncorporateInput): PostIncorporateShareholder | undefined {
+  const named = input.company.largestShareholderName?.trim().toUpperCase();
+  const withNames = input.shareholders.filter(s => s.name.trim());
+  if (named) return withNames.find(s => s.name.trim().toUpperCase() === named);
+  let best: PostIncorporateShareholder | undefined;
+  let bestShares = -Infinity;
+  for (const s of withNames) {
+    const shares = Number(s.numberOfShares.replace(/,/g, '').trim());
+    if (Number.isFinite(shares) && shares > bestShares) { best = s; bestShares = shares; }
+  }
+  return best ?? withNames[0];
+}
+
 function directorIdFields(d: PostIncorporateDirector | undefined, fallbackName: string): Record<string, string> {
   return {
     director_name: (d?.name || fallbackName).trim().toUpperCase(),
@@ -341,7 +379,7 @@ function generateFirstBoardResolution(input: PostIncorporateInput): GeneratedDoc
   xml = replaceAllPlaceholders(xml, { ...data, ND_name: (nomineeDirector?.name || '').trim().toUpperCase() });
   xml = stripMarkerText(xml);
 
-  return { filename: outputName(TEMPLATE_FILES.firstBoardResolution, 'strip'), buffer: renderDoc(TEMPLATE_FILES.firstBoardResolution, xml) };
+  return { filename: outputName(TEMPLATE_FILES.firstBoardResolution, 'strip'), buffer: renderDoc(TEMPLATE_FILES.firstBoardResolution, xml, data) };
 }
 
 // --- 02 Consent to Act as Director (one per director) -------------------
@@ -364,7 +402,7 @@ function generateConsentDirector(input: PostIncorporateInput): GeneratedDoc[] {
     };
     const xml = stripMarkerText(replaceAllPlaceholders(templateXml, merged));
     const token = d.isNomineeDirector ? 'ND' : safeToken(d.name.trim().toUpperCase());
-    return { filename: outputName(TEMPLATE_FILES.consentDirector, { token }), buffer: renderDoc(TEMPLATE_FILES.consentDirector, xml) };
+    return { filename: outputName(TEMPLATE_FILES.consentDirector, { token }), buffer: renderDoc(TEMPLATE_FILES.consentDirector, xml, data) };
   });
 }
 
@@ -378,7 +416,7 @@ function generateSecretaryAppointment(input: PostIncorporateInput): GeneratedDoc
     appoint_secretary_address: '',
   };
   const xml = stripMarkerText(replaceAllPlaceholders(templateXml, data));
-  return { filename: outputName(TEMPLATE_FILES.secretaryAppointment, 'strip'), buffer: renderDoc(TEMPLATE_FILES.secretaryAppointment, xml) };
+  return { filename: outputName(TEMPLATE_FILES.secretaryAppointment, 'strip'), buffer: renderDoc(TEMPLATE_FILES.secretaryAppointment, xml, data) };
 }
 
 // --- 04 Share Certificate (one per fully-paid-up shareholder) -----------
@@ -412,7 +450,7 @@ function generateShareCertificates(input: PostIncorporateInput): GeneratedDoc[] 
     };
     const xml = stripMarkerText(replaceAllPlaceholders(templateXml, merged));
     const token = safeToken((s.shareCertificateNo || '').trim() || 'ShareCertificate');
-    return { filename: outputName(TEMPLATE_FILES.shareCertificate, { token }), buffer: renderDoc(TEMPLATE_FILES.shareCertificate, xml) };
+    return { filename: outputName(TEMPLATE_FILES.shareCertificate, { token }), buffer: renderDoc(TEMPLATE_FILES.shareCertificate, xml, merged) };
   });
 }
 
@@ -422,15 +460,16 @@ function generateEngagementLetter(input: PostIncorporateInput): GeneratedDoc {
   const { xml: templateXml } = loadTemplate(TEMPLATE_FILES.engagementLetter);
   const data = { ...baseData(input), secservice_end_date: calcSecServiceEndDate(input.company.regDate) };
   const xml = stripMarkerText(replaceAllPlaceholders(templateXml, data));
-  return { filename: outputName(TEMPLATE_FILES.engagementLetter, 'strip'), buffer: renderDoc(TEMPLATE_FILES.engagementLetter, xml) };
+  return { filename: outputName(TEMPLATE_FILES.engagementLetter, 'strip'), buffer: renderDoc(TEMPLATE_FILES.engagementLetter, xml, data) };
 }
 
 // --- 06 RORC/ROND/RONS Authorisation Letter ------------------------------
 
 function generateRorcAuthorisation(input: PostIncorporateInput): GeneratedDoc {
   const { xml: templateXml } = loadTemplate(TEMPLATE_FILES.rorcAuthorisation);
-  const xml = stripMarkerText(replaceAllPlaceholders(templateXml, baseData(input)));
-  return { filename: outputName(TEMPLATE_FILES.rorcAuthorisation, 'strip'), buffer: renderDoc(TEMPLATE_FILES.rorcAuthorisation, xml) };
+  const data = baseData(input);
+  const xml = stripMarkerText(replaceAllPlaceholders(templateXml, data));
+  return { filename: outputName(TEMPLATE_FILES.rorcAuthorisation, 'strip'), buffer: renderDoc(TEMPLATE_FILES.rorcAuthorisation, xml, data) };
 }
 
 // --- 07 Declaration of RORC (signed by Chairman) -------------------------
@@ -440,7 +479,7 @@ function generateRorcDeclaration(input: PostIncorporateInput): GeneratedDoc {
   const chairman = chairmanDirector(input);
   const data = { ...baseData(input), ...directorIdFields(chairman, input.company.chairmanName) };
   const xml = stripMarkerText(replaceAllPlaceholders(templateXml, data));
-  return { filename: outputName(TEMPLATE_FILES.rorcDeclaration, 'strip'), buffer: renderDoc(TEMPLATE_FILES.rorcDeclaration, xml) };
+  return { filename: outputName(TEMPLATE_FILES.rorcDeclaration, 'strip'), buffer: renderDoc(TEMPLATE_FILES.rorcDeclaration, xml, data) };
 }
 
 // --- shared: nominee-director/-shareholder item builders -----------------
@@ -569,7 +608,7 @@ function generateRondMaintenance(input: PostIncorporateInput): GeneratedDoc {
     });
   }
   xml = stripMarkerText(xml);
-  return { filename: outputName(TEMPLATE_FILES.rondMaintenance, 'strip'), buffer: renderDoc(TEMPLATE_FILES.rondMaintenance, xml) };
+  return { filename: outputName(TEMPLATE_FILES.rondMaintenance, 'strip'), buffer: renderDoc(TEMPLATE_FILES.rondMaintenance, xml, data) };
 }
 
 // --- 09 Declaration of Maintenance of RONS -------------------------------
@@ -654,7 +693,7 @@ function generateRonsMaintenance(input: PostIncorporateInput): GeneratedDoc {
     });
   }
   xml = stripMarkerText(xml);
-  return { filename: outputName(TEMPLATE_FILES.ronsMaintenance, 'strip'), buffer: renderDoc(TEMPLATE_FILES.ronsMaintenance, xml) };
+  return { filename: outputName(TEMPLATE_FILES.ronsMaintenance, 'strip'), buffer: renderDoc(TEMPLATE_FILES.ronsMaintenance, xml, data) };
 }
 
 // --- 10 S156 Declaration of Directorship (one per director) -------------
@@ -666,7 +705,7 @@ function generateS156(input: PostIncorporateInput): GeneratedDoc[] {
     const merged = { ...data, director_name: d.name.trim().toUpperCase(), director_address: d.address.trim() };
     const xml = stripMarkerText(replaceAllPlaceholders(templateXml, merged));
     const token = d.isNomineeDirector ? 'ND' : safeToken(d.name.trim().toUpperCase());
-    return { filename: outputName(TEMPLATE_FILES.s156Directorship, { token }), buffer: renderDoc(TEMPLATE_FILES.s156Directorship, xml) };
+    return { filename: outputName(TEMPLATE_FILES.s156Directorship, { token }), buffer: renderDoc(TEMPLATE_FILES.s156Directorship, xml, merged) };
   });
 }
 
@@ -692,6 +731,7 @@ function generateNdAgreement(input: PostIncorporateInput): GeneratedDoc | null {
 
   const chairman = chairmanDirector(input) || input.directors.find(d => d.name.trim() && !d.isNomineeDirector) || input.directors[0];
   const ndResidency = (nd.nationality || '').trim().toUpperCase() === 'SINGAPORE CITIZEN' ? 'SINGAPORE CITIZEN' : 'PERMANENT RESIDENT';
+  const largest = largestShareholder(input);
 
   const data: Record<string, string> = {
     ...baseData(input),
@@ -705,6 +745,15 @@ function generateNdAgreement(input: PostIncorporateInput): GeneratedDoc | null {
     director_id_type: (chairman?.identificationType || '').trim(),
     director_identification_number: (chairman?.identificationNumber || '').trim().toUpperCase(),
     director_address: (chairman?.address || '').trim(),
+    // Vincent, 2026-09-11: the template's "we, the Company and the
+    // shareholder(s) of the Company" clause now names only the LARGEST
+    // shareholder as "the Shareholder" party (ported from the old tool's
+    // "最大股东" selector), not every shareholder — the per-shareholder
+    // repeat sections below (signature blocks / proxy forms) still cover
+    // everyone, unaffected.
+    largest_shareholder_name: (largest?.name || '').trim().toUpperCase(),
+    largest_shareholder_identification_number: (largest?.identificationNumber || '').trim().toUpperCase(),
+    largest_shareholder_address: (largest?.address || '').trim(),
   };
 
   const shareholderItems = input.shareholders.filter(s => s.name.trim()).map(s => {
@@ -734,13 +783,16 @@ function generateNdAgreement(input: PostIncorporateInput): GeneratedDoc | null {
 
   const { xml: templateXml } = loadTemplate(TEMPLATE_FILES.ndAgreement);
   let xml = templateXml;
-  xml = repeatSection(xml, 'shareholderlist', shareholderItems, data);
+  // The old template repeated a bulleted list of EVERY shareholder here
+  // (marker "shareholderlist"); the current template names only the
+  // largest one inline instead (largest_shareholder_* above), so that
+  // marker no longer exists — this call is deliberately gone, not missing.
   xml = repeatSection(xml, 'shareholdersignature', shareholderItems, data);
   xml = replaceTextPattern(xml, CORP_REP_PHRASE_RE, '{{shareholder_display_name}}');
   xml = repeatSection(xml, 'shareholder', shareholderItems, data);
   xml = replaceAllPlaceholders(xml, data);
   xml = stripMarkerText(xml);
-  return { filename: outputName(TEMPLATE_FILES.ndAgreement, { token: safeToken(input.company.name.trim().toUpperCase()) }), buffer: renderDoc(TEMPLATE_FILES.ndAgreement, xml) };
+  return { filename: outputName(TEMPLATE_FILES.ndAgreement, { token: safeToken(input.company.name.trim().toUpperCase()) }), buffer: renderDoc(TEMPLATE_FILES.ndAgreement, xml, data) };
 }
 
 // --- 13 / 14: one pair per corporate (UEN) shareholder -------------------
@@ -778,7 +830,7 @@ function generateCorpRepresentativeDocs(input: PostIncorporateInput): GeneratedD
       let xml = pairRepeatSection(templateXml, 'signaturedirector', directorNames, 'director_name_1', 'director_name_2', merged);
       xml = replaceAllPlaceholders(xml, merged);
       xml = stripMarkerText(xml);
-      docs.push({ filename: outputName(TEMPLATE_FILES[key], { token }), buffer: renderDoc(TEMPLATE_FILES[key], xml) });
+      docs.push({ filename: outputName(TEMPLATE_FILES[key], { token }), buffer: renderDoc(TEMPLATE_FILES[key], xml, merged) });
     }
   }
   return docs;
@@ -804,7 +856,7 @@ function generateNomineeDirectorDeclarations(input: PostIncorporateInput): Gener
     xml = repeatSection(xml, 'corpnomdirector', corpItems, data);
     xml = replaceAllPlaceholders(xml, { ...data, ND_name: nomineeDirectors[0].name.trim().toUpperCase(), nominee_director_name: nomineeDirectors[0].name.trim().toUpperCase() });
     xml = stripMarkerText(xml);
-    docs.push({ filename: outputName(TEMPLATE_FILES.localDirectorDeclarationRond, 'strip'), buffer: renderDoc(TEMPLATE_FILES.localDirectorDeclarationRond, xml) });
+    docs.push({ filename: outputName(TEMPLATE_FILES.localDirectorDeclarationRond, 'strip'), buffer: renderDoc(TEMPLATE_FILES.localDirectorDeclarationRond, xml, data) });
   }
 
   // 17: single document using the first nominee director's own data.
@@ -822,7 +874,7 @@ function generateNomineeDirectorDeclarations(input: PostIncorporateInput): Gener
     };
     const { xml: templateXml } = loadTemplate(TEMPLATE_FILES.ndFitProperDeclaration);
     const xml = stripMarkerText(replaceAllPlaceholders(templateXml, merged));
-    docs.push({ filename: outputName(TEMPLATE_FILES.ndFitProperDeclaration, 'strip'), buffer: renderDoc(TEMPLATE_FILES.ndFitProperDeclaration, xml) });
+    docs.push({ filename: outputName(TEMPLATE_FILES.ndFitProperDeclaration, 'strip'), buffer: renderDoc(TEMPLATE_FILES.ndFitProperDeclaration, xml, merged) });
   }
 
   return docs;

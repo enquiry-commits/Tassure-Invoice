@@ -1275,6 +1275,7 @@ function normalizePostIncorporateInput(raw: Record<string, unknown>): PostIncorp
     secretaryCompanyAddress: str(rc.secretaryCompanyAddress),
     currency: str(rc.currency) || 'SGD', financialYearEndDayMonth: str(rc.financialYearEndDayMonth),
     needNdService: bool(rc.needNdService),
+    largestShareholderName: str(rc.largestShareholderName),
   };
 
   const nominatorFields = (r: Record<string, unknown>) => ({
@@ -1599,6 +1600,7 @@ const CLAUDE_TOOLS = [
       currency: { type: 'string', description: 'Defaults to SGD if omitted' },
       financialYearEndDayMonth: { type: 'string', description: 'e.g. "31 December"' },
       needNdService: { type: 'boolean', description: 'Whether this company needs Nominee Director service' },
+      largestShareholderName: { type: 'string', description: "Only relevant when needNdService is true — the ND Agreement names just this ONE shareholder as \"the Shareholder\" party (must exactly match one shareholder's name). Omit to let it auto-pick whoever holds the most shares." },
     } },
     directors: { type: 'array', description: 'At least one director with a non-empty name is required.', items: { type: 'object', properties: {
       name: { type: 'string' }, address: { type: 'string' }, identificationType: { type: 'string', description: 'e.g. NRIC / PASSPORT / FIN' },

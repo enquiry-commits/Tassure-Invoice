@@ -13,10 +13,17 @@ function check(label: string, cond: boolean) {
   if (!cond) failures++;
 }
 
+// Includes header/footer parts, not just the body — a real bug (template
+// 12's footer1.xml had a bare {{ND_name}} that survived generation
+// untouched, see lib/docx-post-incorporate.ts's renderDoc) went undetected
+// here for a while because this only ever looked at word/document.xml.
 function fullText(buf: Buffer): string {
   const zip = new PizZip(buf);
   const xml = zip.file('word/document.xml')!.asText();
-  return extractBodyChildren(xml).map(c => blockText(c.xml)).join('\n');
+  const bodyText = extractBodyChildren(xml).map(c => blockText(c.xml)).join('\n');
+  const footerParts = zip.file(/^word\/(header|footer)\d*\.xml$/);
+  const footerText = footerParts.map(f => blockText(f.asText())).join('\n');
+  return bodyText + '\n' + footerText;
 }
 
 // A rich scenario exercising every conditional branch at once: 3 directors
@@ -138,6 +145,20 @@ if (ndAgreement) {
   const ndText = fullText(ndAgreement.buffer);
   check('ND agreement: individual shareholder shows own name (no dangling corprep phrase)', ndText.includes('TAN AH KOW') && !/\(Corporate Representative of TAN AH KOW\).*\(Corporate Representative of TAN AH KOW\)/.test(ndText));
   check('ND agreement: corporate shareholder shows corp rep phrase', ndText.includes('CORP REP NAME') && ndText.includes('Corporate Representative of BETA HOLDINGS'));
+
+  // Vincent, 2026-09-11: "we, the Company and the shareholder(s) of the
+  // Company" now names only the LARGEST shareholder (ported from the old
+  // tool's "最大股东" selector), not everyone — TAN AH KOW and BETA HOLDINGS
+  // are tied at 5000 shares each in this fixture, so the deterministic
+  // (first-in-list) tie-break should pick TAN AH KOW specifically for that
+  // clause, identified by his own ID number right next to "the Shareholder".
+  check('ND agreement: largest-shareholder clause names the tie-break winner with his own ID', /TAN AH KOW,\s*S1234567A\s+and\b[\s\S]*?\(the\s*[“”"]Shareholder[“”"]\)/.test(ndText));
+  check('ND agreement: footer placeholder is filled, not left as literal {{ND_name}}', (() => {
+    const zip = new PizZip(ndAgreement!.buffer);
+    const footerParts = zip.file(/^word\/(header|footer)\d*\.xml$/);
+    const footerText = footerParts.map(f => blockText(f.asText())).join('\n');
+    return footerText.includes('NOMINEE DIRECTOR ONE') && !footerText.includes('{{');
+  })());
 }
 
 const certDocs = docs.filter(d => d.filename.includes('Cert of corp representative') || d.filename.includes('Appointment of company representative'));

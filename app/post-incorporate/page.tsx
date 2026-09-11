@@ -667,6 +667,24 @@ export default function PostIncorporatePage() {
           <Field label="Currency (for documents)"><input className={inputClass} value={company.currency} onChange={e => setCompany({ ...company, currency: e.target.value })} /></Field>
           <Field label="Financial Year End Day and Month(DD/MM)"><input className={inputClass} value={company.financialYearEndDayMonth} onChange={e => setCompany({ ...company, financialYearEndDayMonth: e.target.value })} /></Field>
           <YesNoField label="是否需提供ND服务" value={company.needNdService} onChange={v => setCompany({ ...company, needNdService: v })} />
+          {/* Vincent, 2026-09-11: "在我小程序里面是有一个这个东西的，但是在我
+              系统不见了" — the ND Agreement template names only this ONE
+              shareholder as "the Shareholder" party (ported from the old
+              desktop tool's "最大股东" selector); the other shareholders are
+              unaffected, they still each get their own signature block.
+              Leaving this on "自动" keeps the old tool's default (whoever
+              holds the most shares) computed server-side at generation time
+              — pick a name here only to override that default. */}
+          {company.needNdService && (
+            <Field label="最大股东 Largest Shareholder">
+              <select className={inputClass} value={company.largestShareholderName || ''} onChange={e => setCompany({ ...company, largestShareholderName: e.target.value })}>
+                <option value="">自动（持股最多的股东）</option>
+                {shareholders.filter(s => s.name.trim()).map(s => (
+                  <option key={s.name} value={s.name.trim()}>{s.name.trim()}</option>
+                ))}
+              </select>
+            </Field>
+          )}
         </div>
       </section>
 
