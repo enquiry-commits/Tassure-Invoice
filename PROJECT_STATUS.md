@@ -1,12 +1,10 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-11 (AR Reminder — XBRL exemption-criteria breakdown.
+Last updated: 2026-09-11 (AR Reminder XBRL exemption-criteria breakdown — shipped then fully reverted.
 
-Vincent sent the actual bilingual compliance form his team fills in for XBRL: "For the immediate past two consecutive financial years, whole group (parent and subsidiary): 1. total annual revenue ≤$10m; 2. total assets ≤$10m" — each a separate Yes/No. His ask was "这个是AR REMINDER TABLE的 XBRL 的东西 就是要可以细化不同的情况" (the flat XBRL status needs to break down into these situations).
+Built and deployed a breakdown of AR Reminder's XBRL status into the two Yes/No criteria from Vincent's compliance form (revenue ≤$10m / total assets ≤$10m), including a live migration Vincent ran on production (`ar_reminder.xbrl_revenue_le_10m` / `xbrl_assets_le_10m`). After seeing it live, Vincent clarified the request was never meant to add this into this system at all ("刚才那个XBRL不是加在这个系统内的") and asked for a full revert — code, UI, and the new columns.
 
-Added the two criteria as their own fields — `ar_reminder.xbrl_revenue_le_10m` / `xbrl_assets_le_10m` (new migration `scripts/add-ar-reminder-xbrl-exemption-criteria.sql`, **Vincent needs to run this in the Supabase SQL Editor** — no DB credential available in this sandbox to run it directly) — rendered as a small bilingual block right under the existing XBRL status dropdown in AR Reminder's DetailPanel (`XBRL_YES_NO_OPTIONS`, `app/billing/page.tsx`). Deliberately does NOT auto-derive the NO/SIMPLIFIED/FULL classification from the two answers — that mapping rule doesn't exist anywhere in the codebase and wasn't given, so staff keep setting `xbrl` manually; the two new fields are captured for reference/audit only. INV-AR-013. Because `DetailPanel` was already exported in place for the chat assistant's `ARDetailModal` (2026-09-10), this surfaces automatically in both the page and the chat's full-record view with no extra wiring.
-
-Verified: `npx tsc --noEmit` / `npm run build` clean.
+Reverted via `git revert` of both commits (feature + its follow-up spacing fix), restoring `app/billing/page.tsx`, `app/api/ar-reminder/route.ts`, and `docs/INVARIANTS.md` (INV-AR-013 removed) to their pre-feature state. New migration `scripts/drop-ar-reminder-xbrl-exemption-criteria.sql` added for Vincent to run in the Supabase SQL Editor to drop the two columns — no DB credential available in this sandbox to run DDL directly. AR Reminder's XBRL field is back to being the single flat status dropdown it always was.
 
 Previous entry follows.
 
