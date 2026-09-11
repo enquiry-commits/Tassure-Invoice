@@ -1,5 +1,17 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (Engagement Letter: proper indent-based fix + found and fixed a real, systemic "blank field" bug across 5 templates.
+
+Vincent's screenshot of the first attempt (space-count reduction) showed two problems: still visually off, AND the "Name:" field was completely blank. Redid the position fix properly this time — replaced the 82-literal-spaces hack with a real paragraph left-indent (`<w:ind w:left="4513"/>`, calculated from the signature underline's own absolute page position minus the page's left margin) on all three signature lines (Name:/Designation:/Dated:), removing the leading-space runs entirely. Unlike spaces, an indent keeps a WRAPPED line hanging at the same left position instead of jumping to the page's left margin — the real reason a long name colliding with the floating Sign box looked so broken before.
+
+The blank "Name:" turned out to be a separate, real, and much bigger bug — not the positioning fix's fault. Inspected the actual generated file byte-for-byte: `{{Chairman}}` WAS correctly resolved to "ZHANG WEIZENG" in the XML, yet WPS (Vincent's screenshot shows the WPS toolbar) rendered it blank. Root cause: that run carried `w:hint="eastAsia"` (Word silently tags a run this way whenever the author's IME was set to Chinese at the moment of typing, regardless of whether the typed text is actually CJK), and this template set's theme has an EMPTY East Asian font slot — Word tolerates that gracefully, WPS apparently doesn't. Swept all 16 templates for the exact same pattern (a run whose ENTIRE content is a bare `{{placeholder}}`, carrying that hint) and found it on 13 runs across 5 files, not just this one — `01 First Board Resolution` alone had 9 affected fields (company_name, company_UEN, both finperiod dates, secretary_name, company_address, ND_name, company_reg_date). Stripped the hint from all 13, touching nothing that mixes in real CJK prose. INV-DOC-010.
+
+Generated a fresh sample (`05 Engagement Letter - SAMPLE v3 (final).docx`, saved to Vincent's Desktop, replacing the two earlier attempts) for him to actually check — still can't render Word/WPS here to confirm visually myself.
+
+Verified: `npx tsc --noEmit` / `npm run build` clean; `test-orchestrator.ts` all still passing across every affected template.
+
+Previous entry follows.
+
 Last updated: 2026-09-11 (Bizfile parsing confirmed already fixed against the real PDF; attempted the Engagement Letter wrap fix (unverified, needs Vincent's eyes).
 
 Two follow-ups on the same Post Incorporate report. (1) Ran `parseBizfilePdf()` directly against the real LAKEFILL VENTURES Bizfile PDF Vincent supplied — 5/5 shareholders detected, full currency strings ("UNITED STATES OF AMERICA DOLLAR"), Share Type populated. The 2026-09-09 multi-page-table fix already covers this exact document; what he saw in his screenshots predates that fix or was a stale deployment/cache — told him to re-test live rather than assume the old report still applies, no code change here.

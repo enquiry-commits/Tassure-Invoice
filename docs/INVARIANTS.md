@@ -1282,6 +1282,33 @@ again.
   document generator re-run on identical input should never name a
   different legal party. *(source: 2026-09-11, Vincent: "在我小程序里面是有
   一个这个东西的，但是在我系统不见了".)*
+- **INV-DOC-010** — A template run whose ENTIRE text content is a bare
+  `{{placeholder}}` must never carry `w:hint="eastAsia"` on its `w:rFonts` —
+  this document set's theme (`word/theme/theme1.xml`) has an EMPTY East
+  Asian font slot (`<a:ea typeface=""/>`) on both major and minor fonts, so
+  a run hinted to render via that slot has no font Word/WPS is told to use;
+  Microsoft Word tends to fall back gracefully, but WPS (confirmed:
+  Vincent's own screenshots show the WPS toolbar) can render the substituted
+  text as genuinely blank even though the real value is 100% present in the
+  XML — confirmed directly: a generated Engagement Letter's `{{Chairman}}`
+  field inspected byte-for-byte had "ZHANG WEIZENG" correctly filled, yet
+  Vincent's WPS screenshot showed the "Name:" line empty. Root cause: Word
+  auto-tags a run with `w:hint="eastAsia"` whenever the author's input
+  method was set to Chinese at the moment of typing, EVEN when the typed
+  text itself is pure Latin (e.g. typing "{{Chairman}}" while a CJK IME was
+  active) — a common accident in these bilingual EN/CN templates, unrelated
+  to whether the run's actual content needs CJK rendering at all. A one-time
+  sweep across all 16 templates found this exact pattern on 13 runs across 5
+  files (`01 First Board Resolution` alone had 9: company_name, company_UEN
+  x2, first_finperiod_enddate, finperiod_enddate, secretary_name,
+  company_address, ND_name, company_reg_date; `03`, `04`, `05`, `06`, `12`
+  had one each) — stripped the hint from every one (never from a run mixing
+  in real CJK prose, which legitimately needs it). Check for this pattern
+  first — before assuming a "missing data" report is a data-binding bug —
+  whenever a placeholder's `{{name}}` is confirmed present in the raw XML
+  but Vincent reports the printed value blank. *(source: 2026-09-11, traced
+  from Vincent's screenshot of a blank "Name:" field on the very sample file
+  generated to prove the data WAS there.)*
 - **INV-QB-0CO** — QuickBooks REPLACES `BillAddr` wholesale; it never
   merges. So the moment this system sends one, it owns every line the client
   reads on a real invoice. Two consequences that are load-bearing: (1) an
