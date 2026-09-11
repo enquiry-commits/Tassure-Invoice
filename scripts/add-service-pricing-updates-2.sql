@@ -40,8 +40,16 @@ UPDATE public.service_pricing
 SET
   description_en = description_en || E'\n\nApplication process: (1) select and confirm the goods/services class(es) (Tassure provides a goods/services classification reference) — (2) supply the logo/wordmark as a JPG (tell Tassure if applying for a series of marks) — (3) Tassure searches the Singapore trade mark register for existing identical/similar marks, particularly within the applicant''s own business area — (4) file the application — the goods/services listed must conform to the international goods/services classification. After filing, IPOS takes 4-6 months to examine the application, followed by a 2-month publication period — if there is no opposition, the mark proceeds to registration and a certificate is issued. A registered mark is valid for 10 years and can be renewed. The whole process typically takes about 6-8 months when it goes smoothly.',
   description_cn = description_cn || E'\n\n申请流程：1）选择并确认商品/服务类别（Tassure提供商品/服务分类参考文件）；2）提供jpg格式的Logo/文字（如希望申请一系列商标，请告知Tassure）；3）在新加坡商标注册局记录中搜索现有相同或相似商标，尤其是在申请人自己的业务领域内；4）提交申请——申请中列出的商品和服务须符合国际商品和服务分类。提交申请后，IPOS需要4-6个月审核，审核后进入2个月的公示（Publication）阶段；如无任何异议，商标将完成注册并获得注册证书。商标有效期为十年，之后可以续展。顺利的话，整个过程大概需要6-8个月。',
-  remarks_en = 'CONFLICTING PRICE FOUND, NOT YET RESOLVED — "____TASSURE_2026_V1.pdf" (a trademark-specific document, no date printed) states SGD 1,000 for one class, plus SGD 500 per additional class, which differs from this row''s current SGD 900 / +SGD 400 from the 11 Sep 2026 client proposal. Neither new document is dated, so recency could not be judged — asked Vincent directly rather than guessing which number is current. Process/timeline detail above is safe to use regardless of which price is correct.',
-  remarks_cn = '发现价格冲突，尚未解决——"____TASSURE_2026_V1.pdf"（商标专项文件，未印刷日期）注明商标注册费用为1000新币/类别，多一个类别加收500新币，与本行当前数据（源自2026年9月11日客户提案的900新币/+400新币）不一致。两份新文件均未标注日期，无法判断哪个更新——已直接询问Vincent，不会自行猜测采用哪个数字。以上流程/时间说明不受价格冲突影响，可以直接使用。',
+  -- Vincent confirmed (2026-09-11, same day, in chat): go with SGD 1,000
+  -- per class plus SGD 500 per additional class, over the 11 Sep proposal's
+  -- SGD 900 / +SGD 400. Resolved directly here rather than
+  -- as a separate follow-up script, since this one had not been run yet.
+  price_display = 'SGD 1,000.00',
+  price_sgd_min = 1000,
+  price_sgd_max = 1000,
+  remarks_en = 'Extra SGD 500 per additional class. Confirmed by Vincent (11 Sep 2026) as the authoritative figure, superseding the earlier SGD 900 (+SGD 400) from the client proposal.',
+  remarks_cn = '每多一个类别，另加$500。Vincent已确认（2026年9月11日）以此为准，取代此前客户提案中900新币（+400新币）的数字。',
+  source_document = '____TASSURE_2026_V1.pdf (price confirmed by Vincent 2026-09-11)',
   updated_at = now()
 WHERE section = 'Post-Incorporation Changes — Trade Mark' AND item_code = 'PC5-a';
 
