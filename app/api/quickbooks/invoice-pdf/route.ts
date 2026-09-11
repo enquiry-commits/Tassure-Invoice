@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { getValidToken, type QbCompany } from '@/lib/quickbooks';
+import { getValidToken, qbQuery, type QbCompany } from '@/lib/quickbooks';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -8,6 +8,7 @@ const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
 export const dynamic = 'force-dynamic';
 
 const VALID_COMPANIES = new Set<QbCompany>(['TAB', 'TAC', 'TAO']);
+const ID_PATTERN = /^[A-Za-z0-9-]+$/;
 
 export async function GET(req: NextRequest) {
   // Was `=== 'TAC' ? 'TAC' : 'TAB'` — a real bug: any other value (including
@@ -18,8 +19,27 @@ export async function GET(req: NextRequest) {
   if (!VALID_COMPANIES.has(company)) {
     return Response.json({ error: 'A valid QuickBooks company (TAB, TAC, or TAO) is required.' }, { status: 400 });
   }
-  const invoiceId = req.nextUrl.searchParams.get('id')?.trim() ?? '';
-  if (!/^[A-Za-z0-9-]+$/.test(invoiceId)) {
+
+  let invoiceId = req.nextUrl.searchParams.get('id')?.trim() ?? '';
+  // Vincent, 2026-09-11: AR Reminder/Billing Drafts only ever have the
+  // DocNumber shown on screen (e.g. "02610938"), never QuickBooks' own
+  // internal invoice Id — a callsite that only knows the DocNumber can pass
+  // ?invoiceNo= instead, resolved here with a live QBO query (not the
+  // synced `quickbooks_invoices` snapshot, which can lag a manually-entered
+  // invoice by up to a day) before falling into the same PDF fetch below.
+  if (!invoiceId) {
+    const invoiceNo = req.nextUrl.searchParams.get('invoiceNo')?.trim() ?? '';
+    if (!ID_PATTERN.test(invoiceNo)) {
+      return Response.json({ error: 'A valid QuickBooks invoice id or invoice number is required.' }, { status: 400 });
+    }
+    const lookup = await qbQuery(`SELECT Id FROM Invoice WHERE DocNumber = '${invoiceNo}'`, company);
+    const resolvedId = lookup?.rows[0]?.Id as string | undefined;
+    if (!resolvedId) {
+      return Response.json({ error: `No ${company} invoice found with number ${invoiceNo}.` }, { status: 404 });
+    }
+    invoiceId = resolvedId;
+  }
+  if (!ID_PATTERN.test(invoiceId)) {
     return Response.json({ error: 'A valid QuickBooks invoice id is required.' }, { status: 400 });
   }
 

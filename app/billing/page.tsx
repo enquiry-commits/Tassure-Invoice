@@ -209,21 +209,58 @@ function BillingStatusPill({ label, color, background, border, title, muted = fa
   );
 }
 
+// Vincent, 2026-09-11: "这些Invoice 可以直接点开到实际的PDF吗" — click the
+// chip, fetch the real PDF from QuickBooks by DocNumber (see
+// /api/quickbooks/invoice-pdf's ?invoiceNo= path), open it in a new tab.
+// Every caller of this component only ever has the DocNumber shown on
+// screen, never QuickBooks' own internal invoice Id, so resolution happens
+// server-side — this stays a plain click handler with no extra prop.
 function BillingInvoiceReference({ company, invoiceNo, title, muted = false }: {
   company: 'TAB' | 'TAC'; invoiceNo?: string | null; title?: string; muted?: boolean;
 }) {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
   if (!invoiceNo) {
     return <span style={{ color: '#94a3b8', fontSize: 10, whiteSpace: 'nowrap' }}>No system invoice</span>;
   }
+  const openPdf = async () => {
+    if (status === 'loading') return;
+    // Open the tab synchronously on the click, before the await below —
+    // same reasoning as ExpandedBillingRow's PDF save flow: waiting for the
+    // fetch first loses the click's transient user activation, so
+    // window.open() after an await gets silently popup-blocked in Chrome.
+    const tab = window.open('', '_blank');
+    setStatus('loading');
+    try {
+      const res = await fetch(`/api/quickbooks/invoice-pdf?company=${company}&invoiceNo=${encodeURIComponent(displayInvoiceNo(invoiceNo))}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? `Unable to open ${company} invoice ${invoiceNo}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      if (tab) tab.location.href = url; else window.open(url, '_blank');
+      setStatus('idle');
+    } catch {
+      tab?.close();
+      setStatus('error');
+      setTimeout(() => setStatus('idle'), 2500);
+    }
+  };
   return (
-    <span title={title} style={{
-      display: 'inline-flex', alignItems: 'center', width: 'fit-content', maxWidth: '100%',
-      padding: '2px 5px', borderRadius: 4, background: '#f2f6f8', color: '#31506f',
-      fontSize: 9.5, fontWeight: 800, lineHeight: 1.25, whiteSpace: 'nowrap',
-      opacity: muted ? 0.72 : 1,
-    }}>
+    <button type="button" onClick={openPdf} disabled={status === 'loading'}
+      title={status === 'error' ? 'Could not open the PDF — click to retry' : (title ?? 'Click to open the PDF')}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3, width: 'fit-content', maxWidth: '100%',
+        padding: '2px 5px', borderRadius: 4,
+        background: status === 'error' ? '#fee2e2' : '#f2f6f8',
+        color: status === 'error' ? '#b91c1c' : '#31506f',
+        fontSize: 9.5, fontWeight: 800, lineHeight: 1.25, whiteSpace: 'nowrap',
+        opacity: muted ? 0.72 : 1, border: 'none', cursor: status === 'loading' ? 'wait' : 'pointer',
+        fontFamily: 'inherit',
+      }}>
+      {status === 'loading' && <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} />}
       {company} #{displayInvoiceNo(invoiceNo)}
-    </span>
+    </button>
   );
 }
 

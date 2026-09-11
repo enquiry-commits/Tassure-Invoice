@@ -676,6 +676,17 @@ again.
   whichever invoices only ever pass through that one path (a brand-new
   invoice is only ever seen by the incremental path until the next
   day's full sync catches up to it).
+- **INV-QB-014** — `/api/quickbooks/invoice-pdf` can be asked for a PDF by
+  either QuickBooks' own internal invoice `Id` (`?id=`) or by the
+  human-readable DocNumber shown on screen (`?invoiceNo=`, e.g. AR
+  Reminder/Billing Drafts' "TAB #02610938" chip) — every UI caller only
+  ever has the DocNumber, never the internal Id. DocNumber resolution is a
+  LIVE `qbQuery()` call, never a lookup against the synced
+  `quickbooks_invoices` snapshot table — a manually-entered QuickBooks
+  invoice (not created through this system) can lag the daily sync by up
+  to a day, so a snapshot lookup would 404 on exactly the invoices most in
+  need of this feature. *(source: 2026-09-11, Vincent: "这些Invoice 可以直接
+  点开到实际的PDF吗".)*
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

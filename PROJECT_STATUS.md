@@ -1,5 +1,13 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (Invoice number chips ("TAB #02610938" etc.) now open the real QuickBooks PDF.
+
+Vincent, looking at AR Reminder's Invoice column: "这些Invoice 可以直接点开到实际的PDF吗？可以实现吗？" Every caller of the shared `BillingInvoiceReference` chip (AR Reminder's Invoice column, Billing Drafts' own invoice history displays) only ever has the human-readable DocNumber shown on screen, never QuickBooks' internal invoice Id that the existing `/api/quickbooks/invoice-pdf?id=` route required (the one Billing Drafts' "Save PDF" button already used). Extended that route to also accept `?invoiceNo=`, resolved via a LIVE `qbQuery()` DocNumber lookup (not the synced `quickbooks_invoices` snapshot, which can lag a manually-entered invoice by up to a day — INV-QB-014) before falling into the same PDF fetch. The chip is now a button: click opens a blank tab immediately (before the fetch, so Chrome's popup blocker doesn't eat the tab once the network round-trip loses the click's transient activation — same trick `ExpandedBillingRow`'s Save-As flow already uses), fetches the PDF, navigates the tab to it. Covers manually-entered QuickBooks invoices too, since resolution is live QBO, not a snapshot join.
+
+Verified: `npx tsc --noEmit` / `npm run build` clean. QuickBooks TAB/TAC/TAO tokens confirmed live in production. Could not click-test end to end from this sandbox (no browser, no authenticated session) — worth a real click in production once deployed.
+
+Previous entry follows.
+
 Last updated: 2026-09-11 (AR Reminder XBRL exemption-criteria breakdown — shipped then fully reverted.
 
 Built and deployed a breakdown of AR Reminder's XBRL status into the two Yes/No criteria from Vincent's compliance form (revenue ≤$10m / total assets ≤$10m), including a live migration Vincent ran on production (`ar_reminder.xbrl_revenue_le_10m` / `xbrl_assets_le_10m`). After seeing it live, Vincent clarified the request was never meant to add this into this system at all ("刚才那个XBRL不是加在这个系统内的") and asked for a full revert — code, UI, and the new columns.
