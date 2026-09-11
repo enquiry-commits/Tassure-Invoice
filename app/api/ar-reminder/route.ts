@@ -11,7 +11,7 @@ import { syncPicToActiveClient, loadCarriedForwardPics, type PicField } from '@/
 const EDITABLE_FIELDS = new Set([
   'reminder_note', 'prepared_date', 'date_of_agm', 'agm_held_date',
   'sent_date', 'received_date', 'filling_date',
-  'ar_status', 'xbrl', 'software_update', 'dpo', 'ond_ron',
+  'ar_status', 'xbrl', 'xbrl_revenue_le_10m', 'xbrl_assets_le_10m', 'software_update', 'dpo', 'ond_ron',
   'pic', 'acc_pic', 'tax_pic', 'remarks', 'billing_remarks',
   'accounts_status', 'fin_stmt_status', 'audited_fs', 'agm_documents', 'dormant',
 ]);

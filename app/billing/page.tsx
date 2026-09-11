@@ -309,7 +309,9 @@ export interface ARRecord {
   date_of_agm: string | null; agm_held_date: string | null; filling_date: string | null;
   date_of_agm_manual?: boolean | null; filling_date_manual?: boolean | null; reminder_note_manual?: boolean | null;
   acc_pic_manual?: boolean | null; tax_pic_manual?: boolean | null;
-  ar_status: string | null; xbrl: string | null; software_update: string | null;
+  ar_status: string | null; xbrl: string | null;
+  xbrl_revenue_le_10m: string | null; xbrl_assets_le_10m: string | null;
+  software_update: string | null;
   tab_invoice_no: string | null; tac_invoice_no: string | null;
   dpo: string | null; ond_ron: string | null; dormant: string | null;
   accounts_status: string | null; fin_stmt_status: string | null;
@@ -690,6 +692,18 @@ export const XBRL_OPTIONS: SelectOption[] = [
   { label: 'NO',         ...C.red   },
   { label: 'SIMPLIFIED', ...C.amber },
   { label: 'FULL',       ...C.green },
+];
+
+// XBRL exemption-criteria breakdown (Vincent, 2026-09-11): the two Yes/No
+// questions from the actual compliance form ("for the immediate past two
+// consecutive financial years, whole group (parent and subsidiary): 1.
+// total annual revenue <=$10m, 2. total assets <=$10m"). These are captured
+// as their own fields alongside the XBRL status above, not merged into it —
+// staff still set NO/SIMPLIFIED/FULL manually; this does not auto-derive
+// that classification from the two answers below.
+export const XBRL_YES_NO_OPTIONS: SelectOption[] = [
+  { label: 'Yes', ...C.green },
+  { label: 'No',  ...C.red   },
 ];
 
 // SEC/ACC/TAX PIC dropdowns (Vincent, 2026-08-17) — every option uses the
@@ -1260,6 +1274,28 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
             <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, minWidth: 110 }}>XBRL</span>
             <div style={{ flex: 1 }}>
               <SelectField id={r.id} field="xbrl" value={r.xbrl} onSave={onSave} options={XBRL_OPTIONS} />
+            </div>
+          </div>
+          <div style={{ padding: '6px 8px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+            <div style={{ fontSize: 9.5, color: '#94a3b8', lineHeight: 1.4, marginBottom: 6 }}>
+              For the immediate past two consecutive financial years, whole group (parent and subsidiary):<br />
+              在刚刚过去的连续两个财政年度，集团公司是否达到以下条件：
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 10.5, color: '#64748b', fontWeight: 600, minWidth: 110, lineHeight: 1.3 }}>
+                Revenue ≤$10m<br /><span style={{ fontWeight: 400 }}>年总收入≤1000万新币</span>
+              </span>
+              <div style={{ flex: 1 }}>
+                <SelectField id={r.id} field="xbrl_revenue_le_10m" value={r.xbrl_revenue_le_10m} onSave={onSave} options={XBRL_YES_NO_OPTIONS} customLabel="Custom…" dateHelper={false} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 10.5, color: '#64748b', fontWeight: 600, minWidth: 110, lineHeight: 1.3 }}>
+                Total Assets ≤$10m<br /><span style={{ fontWeight: 400 }}>总资产≤1000万新币</span>
+              </span>
+              <div style={{ flex: 1 }}>
+                <SelectField id={r.id} field="xbrl_assets_le_10m" value={r.xbrl_assets_le_10m} onSave={onSave} options={XBRL_YES_NO_OPTIONS} customLabel="Custom…" dateHelper={false} />
+              </div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>

@@ -321,6 +321,14 @@ again.
   **mode** (most common fye_month/year) of the last 30 invoices, never
   simply "most recently created" — one out-of-sequence invoice can
   otherwise hijack the whole page's default.
+- **INV-AR-013** — `ar_reminder.xbrl_revenue_le_10m` / `xbrl_assets_le_10m`
+  (the two Yes/No exemption-criteria answers from the actual compliance
+  form) are captured fields only — they do NOT feed any computation of the
+  `xbrl` NO/SIMPLIFIED/FULL status. The mapping rule from the two answers
+  to that classification was never supplied and is not invented here; staff
+  still set `xbrl` manually. If that derivation is ever added, it needs the
+  actual rule from Vincent first. *(source: 2026-09-11, Vincent's XBRL form
+  screenshot.)*
 
 ## PIC / staff assignment (INV-PIC)
 
