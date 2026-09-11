@@ -1,6 +1,16 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-09-11 (Dashboard Automation Health restricted to Vincent, Post Incorporate drop zone widened to the whole page.
+Last updated: 2026-09-11 (Fixed a real duplicate-company bug and its root cause in TeamWork sync.
+
+Vincent's colleague flagged the Active Client Master List's "TW Total Client" card reading 792 against TeamWork's own filter showing 791. Traced it to a genuine duplicate `companies` row: GOLDEN BRIDGE MARTEC PTE. LTD. (UEN 202633763E) had TWO rows, because TeamWork had reissued its internal `company_id` (1827 → 1837) between two sync runs, and `app/api/teamwork/sync/route.ts`'s match cascade (internal_id, then name-only-for-rows-with-no-internal_id) had no way to recognize the old and new TeamWork ids as the same real company — it inserted a second row instead of updating the first. Worse than a display glitch: a real AR Reminder cycle (id 946) was pointed at the now-stale, no-longer-synced row (PIC still "Seng Xin Hoo" instead of the current "Min Quan Tan").
+
+Fixed both the instance and the cause, with Vincent's explicit go-ahead to also prevent recurrence:
+- **This company**: repointed AR Reminder id 946 to the current company row, then deactivated (not deleted) the stale duplicate. Verified: the count reads 791 again.
+- **The sync logic**: added a third match tier keyed on UEN (`byRegNo`), checked whenever internal_id and name both miss — this is exactly the case a reissued internal_id produces, since UEN is the one identity TeamWork never changes. A match here re-keys the existing row's `internal_id` to the new one rather than creating a duplicate, and the sync's response now reports `internal_id_reregistered` (plus which companies) so this class of event is visible going forward instead of silently repeating. INV-TW-022.
+
+Scanned the full 947-row `companies` table for other duplicate UENs before and after — this was the only one.
+
+Dashboard Automation Health restricted to Vincent, Post Incorporate drop zone widened to the whole page.
 
 Automation Health panel (Dashboard, `/api/automation/health`): Vincent — "这个板块只开放给Vincent显示，其他人看不到". The client already hid the section when its fetch returned nothing, but the route itself had no per-account check, only the proxy middleware's blanket "must be logged in" — any approved account could still read the cron-status/TeamWork-batch/integration-exception JSON by hitting the endpoint directly. Fixed at the route: `getRequestAccount` + an explicit email check, 403 for everyone but Vincent. INV-DATA-052 (hiding client-side is a display choice, not a boundary — enforce at the route).
 

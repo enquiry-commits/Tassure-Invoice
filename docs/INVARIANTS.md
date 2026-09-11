@@ -226,6 +226,34 @@ again.
   found by testing the actual LAKEFILL VENTURES PDF, not by reasoning about
   the code alone. *(source: 2026-09-09, `lib/bizfile-parse.ts`.)*
 
+- **INV-TW-022** — TeamWork can REISSUE a company's internal `company_id`
+  for a company we already track (confirmed real, 2026-09-11: GOLDEN
+  BRIDGE MARTEC PTE. LTD., UEN 202633763E, went from internal_id 1827 to
+  1837 between two sync runs — the same real client, same UEN, just a new
+  TeamWork-side id). `app/api/teamwork/sync/route.ts`'s match cascade was
+  `byInternal` (exact id) → `byName`, but `byName` only indexes rows with
+  NO internal_id at all (a one-time healing path for legacy rows), so a row
+  that already has an internal_id is invisible to it once TeamWork reissues
+  a different one — the sync found no match and INSERTED A DUPLICATE
+  `companies` row for the same UEN. This silently inflated every "active
+  CSS Client" count by one (confirmed live: the Active Client Master List
+  page showed 792 against TeamWork's own real 791) and left a real AR
+  Reminder cycle (id 946) pointed at the now-stale, no-longer-synced row.
+  Fixed with a third match tier — `byRegNo`, keyed on UEN, checked whenever
+  internal_id and name both miss — which re-keys the existing row's
+  `internal_id` to the new one instead of creating a second row; a non-zero
+  `internal_id_reregistered` count in the sync's own response is the signal
+  this happened again. Any future change to this route's matching cascade
+  must preserve UEN as a match key, not just internal_id and name — UEN is
+  the one identity TeamWork does not change. Also worth remembering:
+  because this class of bug creates a real duplicate row rather than a
+  wrong value on an existing one, its symptom shows up somewhere else
+  entirely (a headcount metric on a different page) before anyone would
+  think to look at `companies` itself — when a count is off by a small,
+  exact number like this, check for a duplicate UEN before assuming a
+  filter or a sync-timing issue. *(source: 2026-09-11, Vincent: "这种的要
+  修复，避免下次出现一样的情况".)*
+
 ## AR/AGM cycle & ar_reminder data lifecycle (INV-AR)
 
 - **INV-AR-001** — `ar_reminder` rows are **immutable snapshots** keyed by

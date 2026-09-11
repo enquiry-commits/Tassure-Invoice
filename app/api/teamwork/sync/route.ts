@@ -158,6 +158,24 @@ async function syncTeamworkCompanies() {
     const n = normalize(r.company_name);
     byName.set(n, byName.has(n) ? (AMBIG as never) : (r as never));
   }
+  // UEN fallback — catches TeamWork REISSUING a company's internal `company_id`
+  // (confirmed real, 2026-09-11: GOLDEN BRIDGE MARTEC PTE. LTD., UEN
+  // 202633763E, went from internal_id 1827 to 1837; our old row still had
+  // 1827 set, so it was invisible to byName's healing path above — that one
+  // only looks at rows with NO internal_id at all — and a real duplicate
+  // `companies` row got inserted for the same UEN, silently inflating every
+  // "active CSS Client" count by one and leaving a real AR Reminder cycle
+  // pointed at the now-stale row). UEN is the one identity that does not
+  // change when TeamWork reissues an internal id, so it is checked whenever
+  // internal_id and name both miss. Keyed on whichever row is seen last if
+  // more than one somehow shares a UEN (defensive only — that state is
+  // exactly the bug this closes, not something this map should ever need to
+  // arbitrate between correctly).
+  const byRegNo = new Map<string, typeof rows extends (infer R)[] | null ? R : never>();
+  for (const r of rows ?? []) {
+    const uen = (r.registration_no ?? '').trim().toUpperCase();
+    if (uen) byRegNo.set(uen, r as never);
+  }
 
   const now = new Date().toISOString();
   // UEN -> TeamWork's registered office address, collected in the loop below
@@ -179,7 +197,8 @@ async function syncTeamworkCompanies() {
   const inserts: Record<string, unknown>[] = [];
   const unknownPicIds: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
   const ambiguousNames: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
-  let matched = 0, backfilled = 0, skippedAmbiguous = 0;
+  let matched = 0, backfilled = 0, skippedAmbiguous = 0, reregistered = 0;
+  const reregisteredCompanies: Array<{ name: string; old_internal_id: string; new_internal_id: string }> = [];
 
   for (const tw of twList) {
     // Uppercased at the source — TeamWork's own API sometimes returns a
@@ -191,7 +210,9 @@ async function syncTeamworkCompanies() {
     // here, see this file's own docstring), so this can't clobber a
     // manual typo fix on an existing row.
     const twName = (tw.company_name ?? '').trim().toUpperCase();
+    const regNo   = (tw.company_registration_Num ?? '').trim() || null;
     let row = byInternal.get(tw.company_id) ?? null;
+    let matchedViaRegNo = false;
 
     if (!row && twName) {
       const cand = byName.get(normalize(twName));
@@ -203,7 +224,20 @@ async function syncTeamworkCompanies() {
       if (cand) { row = cand; backfilled++; }
     }
 
-    const regNo   = (tw.company_registration_Num ?? '').trim() || null;
+    // UEN fallback — see byRegNo's own comment above. Only reached when the
+    // row already has a DIFFERENT internal_id on file (otherwise byInternal
+    // would already have matched), so this is specifically the "TeamWork
+    // reissued this company's internal id" case, not a normal first match.
+    if (!row && regNo) {
+      const cand = byRegNo.get(regNo.toUpperCase());
+      if (cand && cand.internal_id && cand.internal_id !== tw.company_id) {
+        row = cand;
+        matchedViaRegNo = true;
+        reregistered++;
+        reregisteredCompanies.push({ name: twName, old_internal_id: cand.internal_id, new_internal_id: tw.company_id });
+      }
+    }
+
     const clientCode = (tw.client_id ?? '').trim() || null;
     const type    = (tw.type ?? '').trim() || null;
     const status  = (tw.status ?? '').trim() || null;
@@ -227,7 +261,11 @@ async function syncTeamworkCompanies() {
     if (row) {
       matched++;
       const patch: Record<string, unknown> = {};
-      if (!row.internal_id)                                          patch.internal_id = tw.company_id;
+      // Re-key on a UEN-fallback match too (matchedViaRegNo), not only on
+      // first population — TeamWork's new id for this company replaces the
+      // stale one we had on file, so byInternal finds it directly next run
+      // instead of relying on the UEN fallback every time.
+      if (!row.internal_id || matchedViaRegNo)                       patch.internal_id = tw.company_id;
       if (regNo  && regNo  !== (row.registration_no ?? '').trim())   patch.registration_no = regNo;
       if (clientCode && clientCode !== row.internal_code)            patch.internal_code = clientCode;
       if (type   && type   !== row.company_type)                     patch.company_type = type;
@@ -611,6 +649,12 @@ async function syncTeamworkCompanies() {
     tw_total: twList.length,
     matched,
     internal_id_backfilled: backfilled,
+    // A non-zero count here means TeamWork reissued a company's internal
+    // id and this sync re-keyed our existing row instead of creating a
+    // duplicate — worth a glance whenever it's non-zero (see byRegNo's
+    // own comment for the real incident this closes).
+    internal_id_reregistered: reregistered,
+    ...(reregisteredCompanies.length ? { internal_id_reregistered_companies: reregisteredCompanies } : {}),
     updated: updatedCount,
     nd_flag_updates: ndFlagUpdates,
     nd_active_updates: ndActiveUpdates,
