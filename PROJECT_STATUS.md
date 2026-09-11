@@ -1,5 +1,17 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (New: standard service catalog + pricing reference data, for the AI assistant to draw on later.
+
+Vincent supplied two source documents and asked for the content in the database first, so the AI assistant can eventually "更准确更专业" answer questions about the business/services/pricing rather than guessing: `proposal_cost_Standard_2026_V2026.0226.pdf` (26 Feb 2026, a plain standard price sheet) and `Tassure_Proposal__20260911001.docx` (11 Sep 2026, a full client proposal — richer prose service descriptions, three pricing tables, and an entire "post-incorporation changes" fee schedule the Feb sheet never had).
+
+The two disagreed on several real numbers (EP application $5,000 vs $4,000; EP renewal $1,500 vs $1,800/2 years; DP renewal $500 vs $600/2 years; personal tax filing $400/individual vs $300/year incl. Singpass setup) — flagged this to Vincent rather than silently picking one. His answer: "数字以9月11日的为准，然后内容可以分析两边的内容和描述" (11 Sep's numbers are authoritative; descriptions can draw on both).
+
+New `scripts/add-service-pricing.sql` (needs Vincent to run it in the Supabase SQL Editor — no DB credential available in this sandbox to run DDL directly): creates `public.service_pricing` (64 rows — First-Year Package, Ongoing Maintenance from Year 2, Other/Government Fees, and 9 Post-Incorporation-Changes groups, each with bilingual name/description, price, unit, FOC/quote-required flags, and remarks noting the Feb-vs-Sep discrepancies where they exist) and `public.company_service_terms` (3 rows — Payment Terms, Termination & Refund, Confidentiality & Indemnity, also bilingual). Every row is tagged with its source document and date for provenance. This is explicitly READ-ONLY reference data — not wired into any billing/invoice calculation, and not yet wired into the assistant itself: Vincent's own phasing was "先...以后" (database first, assistant integration later, as a separate step he'll greenlight).
+
+Verified: the SQL was checked for balanced quoting/parens and a complete, gap-free display_order sequence (1–64) before handing off, since there's no way to test-run DDL from this sandbox.
+
+Previous entry follows.
+
 Last updated: 2026-09-11 (Post Incorporate: Largest Shareholder dropdown shows the real auto-pick; Bizfile shareholder tabs now sort by Number of Shares.
 
 Two small follow-ups on the same thread. (1) The new "最大股东 Largest Shareholder" dropdown's "auto" option used to just say "自动（持股最多的股东）" — added `autoLargestShareholderNameFrom()` in `app/post-incorporate/page.tsx`, mirroring `lib/docx-post-incorporate.ts`'s server-side `largestShareholder()` tie-break exactly, so the option now shows the actual name it would pick (e.g. "自动（ZHANG WEIZENG）") — what's on screen matches what generation will use, not an abstract placeholder.
