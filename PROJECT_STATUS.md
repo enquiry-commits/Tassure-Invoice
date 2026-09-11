@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (Post Incorporate: every date field now shows the spelled-out format, not just Incorporation Date.
+
+Vincent, on Post Incorporate: "全部的日期只显示这种格式：21 August 2026，不显示这种格式：21/8/2026". Checked every date field on the page — only Incorporation Date had the "21 August 2026" spelled-out label already added (2026-08-11 or earlier); the other 11 (Date of birth x3, Date of Appointment, Nominator Birth Date x2, Date Became Nominator x4) were bare `<input type="date">` with nothing but the browser's own native format showing. Pulled the existing pattern into a shared `DateField` component and applied it to all 12 fields uniformly. Note for Vincent: the native picker's own text ("21/08/2026") is entirely browser/OS-locale-controlled — no way for app code to reformat or hide it while keeping the calendar-click UI — so both will always show side by side; only a full custom date-picker rebuild could remove it, not attempted here since it wasn't asked for and is a much bigger job.
+
+Also answered his two other questions on the same page: the generated DOCX output already uses `formatDisplayDate()` (same "21 August 2026" format) for every date field via `lib/docx-post-incorporate.ts` — confirmed consistent, no code change needed. And "Date Became Nominator 还是没有读取到" is expected, not a bug: per the 2026-09 ND-vs-Nominator conceptual fix (see below), the real Nominator is a separate legal party never tracked anywhere in this system (`nominatorFillFrom()`'s own comment: "Date Became Nominator has no source anywhere... always left for manual entry") — there is no data source that could ever auto-fill it.
+
+Verified: `npx tsc --noEmit` / `npm run build` clean; `test-orchestrator.ts` (Post Incorporate doc generation, unaffected by this UI-only change) still all-passing.
+
+Previous entry follows.
+
 Last updated: 2026-09-11 (Fixed a real "网络错误，请重试" root cause on My Tasks chat — a genuine 60s server timeout, not a client blip.
 
 Vincent reported the chat kept failing with "网络错误，请重试" and sent a Vercel log screenshot once the (new, working) token let him see one: `POST /api/assistant  504  Vercel Runtime Timeout Error: Task timed out after 60 seconds`. A 504 with a non-JSON body is exactly what makes `sendChatMessage()`'s `res.json()` throw client-side into that generic message — the client-side error text was never the real story.

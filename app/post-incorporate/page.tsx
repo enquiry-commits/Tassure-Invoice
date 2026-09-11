@@ -152,6 +152,26 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+// Vincent, 2026-09-11: "全部的日期只显示...21 August 2026...不显示...21/8/2026"
+// — the native <input type="date"> picker's own displayed text is entirely
+// browser/OS-locale-controlled, no way for app code to reformat it (that
+// was already true for Incorporation Date, previously the only field with
+// this treatment). Every date field on this page now shows the same
+// spelled-out format used everywhere else in the system and in the
+// generated documents right next to the native picker — the picker itself
+// stays, since it's still needed for calendar-click editing and every date
+// field/formula/generated document requires the underlying ISO value.
+function DateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <Field label={label}>
+      <div className="flex items-center gap-2">
+        <input type="date" className={inputClass} value={value} onChange={e => onChange(e.target.value)} />
+        {value && <span className="text-xs text-slate-500 whitespace-nowrap">{formatDisplayDate(value)}</span>}
+      </div>
+    </Field>
+  );
+}
+
 const inputClass = 'rounded-md border border-slate-300 bg-white px-2.5 py-2.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400';
 const cardClass = 'rounded-xl border border-slate-200 bg-[#fafafa] p-5 shadow-md';
 const sectionTitleClass = 'text-base font-semibold text-slate-800 mb-4';
@@ -611,20 +631,7 @@ export default function PostIncorporatePage() {
         <div className="grid grid-cols-2 gap-4">
           <Field label="Company Name 企业名称"><input className={inputClass} value={company.name} onChange={e => setCompany({ ...company, name: e.target.value })} /></Field>
           <Field label="Company UEN 公司注册编号"><input className={inputClass} value={company.uen} onChange={e => setCompany({ ...company, uen: e.target.value })} /></Field>
-          <Field label="Incorporation Date 成立日期">
-            <div className="flex items-center gap-2">
-              <input type="date" className={inputClass} value={company.regDate} onChange={e => setCompany({ ...company, regDate: e.target.value })} />
-              {/* The native date picker's own displayed format is entirely
-                  browser/OS-locale-controlled (no way for app code to make
-                  it show a spelled-out month) — this label shows the actual
-                  format used everywhere else in the system and in generated
-                  documents ("21 August 2026"), matching what Vincent
-                  expects to see, while the picker underneath stays ISO for
-                  editing and downstream date math (formatDisplayDate /
-                  calcSecServiceEndDate both require it). */}
-              {company.regDate && <span className="text-xs text-slate-500 whitespace-nowrap">{formatDisplayDate(company.regDate)}</span>}
-            </div>
-          </Field>
+          <DateField label="Incorporation Date 成立日期" value={company.regDate} onChange={v => setCompany({ ...company, regDate: v })} />
           <Field label="Company Type 公司类型"><input className={inputClass} value={companyExtra.companyType} onChange={e => setCompanyExtra({ ...companyExtra, companyType: e.target.value })} /></Field>
         </div>
 
@@ -713,7 +720,7 @@ export default function PostIncorporatePage() {
                   </Field>
                   <Field label="Identification Number"><input className={inputClass} value={d.identificationNumber} onChange={e => updateDirector(di, { identificationNumber: e.target.value })} /></Field>
                   <Field label="Nationality"><input className={inputClass} value={d.nationality} onChange={e => updateDirector(di, { nationality: e.target.value })} /></Field>
-                  <Field label="Date of birth"><input type="date" className={inputClass} value={d.dateOfBirth} onChange={e => updateDirector(di, { dateOfBirth: e.target.value })} /></Field>
+                  <DateField label="Date of birth" value={d.dateOfBirth} onChange={v => updateDirector(di, { dateOfBirth: v })} />
                   <Field label="Gender">
                     <select className={inputClass} value={d.gender} onChange={e => updateDirector(di, { gender: e.target.value })}>
                       <option value="">—</option>
@@ -759,10 +766,10 @@ export default function PostIncorporatePage() {
                         <Field label="Nominator Address"><input className={inputClass} value={d.nominatorIndAddress || ''} onChange={e => updateDirector(di, { nominatorIndAddress: e.target.value })} /></Field>
                         <Field label="Nominator Nationality"><input className={inputClass} value={d.nominatorIndNationality || ''} onChange={e => updateDirector(di, { nominatorIndNationality: e.target.value })} /></Field>
                         <Field label="Nominator ID Number"><input className={inputClass} value={d.nominatorIndIdentificationNumber || ''} onChange={e => updateDirector(di, { nominatorIndIdentificationNumber: e.target.value })} /></Field>
-                        <Field label="Nominator Birth Date"><input type="date" className={inputClass} value={d.nominatorIndBirthDate || ''} onChange={e => updateDirector(di, { nominatorIndBirthDate: e.target.value })} /></Field>
+                        <DateField label="Nominator Birth Date" value={d.nominatorIndBirthDate || ''} onChange={v => updateDirector(di, { nominatorIndBirthDate: v })} />
                         <Field label="Nominator Email"><input className={inputClass} value={d.nominatorIndEmail || ''} onChange={e => updateDirector(di, { nominatorIndEmail: e.target.value })} /></Field>
                         <Field label="Nominator Contact No."><input className={inputClass} value={d.nominatorIndContactNumber || ''} onChange={e => updateDirector(di, { nominatorIndContactNumber: e.target.value })} /></Field>
-                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={d.nominatorIndDateBecameNominator || ''} onChange={e => updateDirector(di, { nominatorIndDateBecameNominator: e.target.value })} /></Field>
+                        <DateField label="Date Became Nominator" value={d.nominatorIndDateBecameNominator || ''} onChange={v => updateDirector(di, { nominatorIndDateBecameNominator: v })} />
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
@@ -773,7 +780,7 @@ export default function PostIncorporatePage() {
                         <Field label="Corp Representative"><input className={inputClass} value={d.nominatorCorpRepresentative || ''} onChange={e => updateDirector(di, { nominatorCorpRepresentative: e.target.value })} /></Field>
                         <Field label="Corp Email"><input className={inputClass} value={d.nominatorCorpEmail || ''} onChange={e => updateDirector(di, { nominatorCorpEmail: e.target.value })} /></Field>
                         <Field label="Corp Contact No."><input className={inputClass} value={d.nominatorCorpContactNumber || ''} onChange={e => updateDirector(di, { nominatorCorpContactNumber: e.target.value })} /></Field>
-                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={d.nominatorCorpDateBecameNominator || ''} onChange={e => updateDirector(di, { nominatorCorpDateBecameNominator: e.target.value })} /></Field>
+                        <DateField label="Date Became Nominator" value={d.nominatorCorpDateBecameNominator || ''} onChange={v => updateDirector(di, { nominatorCorpDateBecameNominator: v })} />
                       </div>
                     )}
                   </div>
@@ -839,8 +846,8 @@ export default function PostIncorporatePage() {
                   </Field>
                   <Field label="Identification Number"><input className={inputClass} value={s.identificationNumber} onChange={e => updateSecretary(si, { identificationNumber: e.target.value })} /></Field>
                   <Field label="Nationality"><input className={inputClass} value={s.nationality} onChange={e => updateSecretary(si, { nationality: e.target.value })} /></Field>
-                  <Field label="Date of Appointment"><input type="date" className={inputClass} value={s.dateOfAppointment} onChange={e => updateSecretary(si, { dateOfAppointment: e.target.value })} /></Field>
-                  <Field label="Date of birth"><input type="date" className={inputClass} value={s.dateOfBirth} onChange={e => updateSecretary(si, { dateOfBirth: e.target.value })} /></Field>
+                  <DateField label="Date of Appointment" value={s.dateOfAppointment} onChange={v => updateSecretary(si, { dateOfAppointment: v })} />
+                  <DateField label="Date of birth" value={s.dateOfBirth} onChange={v => updateSecretary(si, { dateOfBirth: v })} />
                   <Field label="Email Address"><input className={inputClass} value={s.email} onChange={e => updateSecretary(si, { email: e.target.value })} /></Field>
                   <Field label="Contact Number"><input className={inputClass} value={s.phone} onChange={e => updateSecretary(si, { phone: e.target.value })} /></Field>
                 </div>
@@ -903,7 +910,7 @@ export default function PostIncorporatePage() {
                   <YesNoField label="是否fully paid-up" value={s.fullyPaidUp} onChange={v => updateShareholder(si, { fullyPaidUp: v })} />
                   <Field label="Share Certificate No."><input className={inputClass} value={s.shareCertificateNo || ''} onChange={e => updateShareholder(si, { shareCertificateNo: e.target.value })} /></Field>
                   <YesNoField label="是否为Registrable Controller" value={s.isRorc} onChange={v => updateShareholder(si, { isRorc: v })} />
-                  <Field label="Date of birth"><input type="date" className={inputClass} value={s.dateOfBirth} onChange={e => updateShareholder(si, { dateOfBirth: e.target.value })} /></Field>
+                  <DateField label="Date of birth" value={s.dateOfBirth} onChange={v => updateShareholder(si, { dateOfBirth: v })} />
                   <Field label="Email Address"><input className={inputClass} value={s.email} onChange={e => updateShareholder(si, { email: e.target.value })} /></Field>
                   <Field label="Contact Number"><input className={inputClass} value={s.phone} onChange={e => updateShareholder(si, { phone: e.target.value })} /></Field>
                 </div>
@@ -959,10 +966,10 @@ export default function PostIncorporatePage() {
                         <Field label="Nominator Address"><input className={inputClass} value={s.nominatorIndAddress || ''} onChange={e => updateShareholder(si, { nominatorIndAddress: e.target.value })} /></Field>
                         <Field label="Nominator Nationality"><input className={inputClass} value={s.nominatorIndNationality || ''} onChange={e => updateShareholder(si, { nominatorIndNationality: e.target.value })} /></Field>
                         <Field label="Nominator ID Number"><input className={inputClass} value={s.nominatorIndIdentificationNumber || ''} onChange={e => updateShareholder(si, { nominatorIndIdentificationNumber: e.target.value })} /></Field>
-                        <Field label="Nominator Birth Date"><input type="date" className={inputClass} value={s.nominatorIndBirthDate || ''} onChange={e => updateShareholder(si, { nominatorIndBirthDate: e.target.value })} /></Field>
+                        <DateField label="Nominator Birth Date" value={s.nominatorIndBirthDate || ''} onChange={v => updateShareholder(si, { nominatorIndBirthDate: v })} />
                         <Field label="Nominator Email"><input className={inputClass} value={s.nominatorIndEmail || ''} onChange={e => updateShareholder(si, { nominatorIndEmail: e.target.value })} /></Field>
                         <Field label="Nominator Contact No."><input className={inputClass} value={s.nominatorIndContactNumber || ''} onChange={e => updateShareholder(si, { nominatorIndContactNumber: e.target.value })} /></Field>
-                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={s.nominatorIndDateBecameNominator || ''} onChange={e => updateShareholder(si, { nominatorIndDateBecameNominator: e.target.value })} /></Field>
+                        <DateField label="Date Became Nominator" value={s.nominatorIndDateBecameNominator || ''} onChange={v => updateShareholder(si, { nominatorIndDateBecameNominator: v })} />
                       </div>
                     ) : (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
@@ -973,7 +980,7 @@ export default function PostIncorporatePage() {
                         <Field label="Corp Representative"><input className={inputClass} value={s.nominatorCorpRepresentative || ''} onChange={e => updateShareholder(si, { nominatorCorpRepresentative: e.target.value })} /></Field>
                         <Field label="Corp Email"><input className={inputClass} value={s.nominatorCorpEmail || ''} onChange={e => updateShareholder(si, { nominatorCorpEmail: e.target.value })} /></Field>
                         <Field label="Corp Contact No."><input className={inputClass} value={s.nominatorCorpContactNumber || ''} onChange={e => updateShareholder(si, { nominatorCorpContactNumber: e.target.value })} /></Field>
-                        <Field label="Date Became Nominator"><input type="date" className={inputClass} value={s.nominatorCorpDateBecameNominator || ''} onChange={e => updateShareholder(si, { nominatorCorpDateBecameNominator: e.target.value })} /></Field>
+                        <DateField label="Date Became Nominator" value={s.nominatorCorpDateBecameNominator || ''} onChange={v => updateShareholder(si, { nominatorCorpDateBecameNominator: v })} />
                       </div>
                     )}
                   </div>
