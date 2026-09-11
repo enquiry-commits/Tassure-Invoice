@@ -32,6 +32,7 @@ import { teamForEmail, type StaffTeam } from '@/lib/staff-directory';
 import { canSeePersonActivity, personActivityFilter, callerRank } from '@/lib/person-visibility';
 import { previewArUpdate, isArEditableField, AR_CHAT_EDITABLE_FIELDS, type ArUpdatePreview } from '@/lib/ar-update-lookup';
 import { getLateFilingSummary } from '@/lib/late-filing-lookup';
+import { getServicePricing } from '@/lib/service-pricing-lookup';
 import { computeRevenueTrend, computePicWorkload } from '@/lib/reports-data';
 import { fyeDateString } from '@/lib/invoice-templates';
 import { pageAll } from '@/lib/page-all';
@@ -739,6 +740,25 @@ async function trademarkSummaryTool() {
     expiring_soon: summary.expiringSoon,
     in_progress_list: summary.inProgressList,
     note: `Real counts from trademark_records. "expiring_soon" is every REGISTERED mark whose expiry date falls within the next ${summary.expiringSoonDays} days — a real, checkable renewal-planning window, not a guess. For one specific company's own trademark(s), prefer company_deep_lookup instead (it also has the exact same data, scoped to that company).`,
+  };
+}
+
+// Added 2026-09-11 — Vincent: "现在接到去助手上", after loading Tassure's own
+// standard service catalog + pricing into service_pricing/company_
+// service_terms (scripts/add-service-pricing.sql). See lib/service-
+// pricing-lookup.ts's own header comment for the two source documents and
+// why the 11 Sep 2026 proposal's numbers win over the 26 Feb 2026 sheet's
+// wherever they disagreed (Vincent's explicit call, not a guess).
+async function servicePricingTool(input: Record<string, unknown>) {
+  const section = typeof input.section === 'string' ? input.section : undefined;
+  const search = typeof input.search === 'string' ? input.search : undefined;
+  const result = await getServicePricing({ section, search });
+  return {
+    sections: result.sections,
+    rows: result.rows,
+    company_terms: result.terms,
+    total_rows: result.totalRows,
+    note: `STANDARD/LIST price reference from Tassure's own 11 Sep 2026 client proposal (some rows note a differing 26 Feb 2026 figure in "remarksEn/remarksCn" — always defer to the 11 Sep number, per Vincent). This is NOT what any specific real client is actually being charged — real invoices live in QuickBooks/generated_invoices (use check_outstanding_balance / preview_invoice_draft for that), and real client agreements, discounts and bundled packages can differ from this list (the source proposal's own "Goodwill Discount" line is proof of that). When answering a pricing question: quote the priceDisplay field verbatim (do not do your own arithmetic on priceSgdMin/Max beyond what's already printed), mention when a row is quote_required ("On Quote") or is_foc ("F.O.C. / included") rather than stating a number, and if the user seems to be asking what a specific existing client's real invoice will be, redirect to the actual billing tools instead of this catalog. ${result.totalRows === 0 ? 'No rows matched — try without a section/search filter to see the whole catalog and its section names.' : ''}`,
   };
 }
 
@@ -1479,6 +1499,8 @@ Use recent_changes for "最近谁改了什么" / "这家公司最近被改了什
 
 For company-WIDE (not one-company) questions, four more real tools exist — never say "no such capability" for these without calling the matching tool first: trademark_summary (how many trademarks registered/in-progress, which are expiring soon), late_filing_summary (how many companies overdue in total, broken down by severity and by which staff member has the most), communications_summary (how many emails sent recently, all-time status/campaign-type breakdown), nd_roster_capacity (each nominee director's current active-appointment count — there is NO fixed "max slots per person" rule anywhere in this system, never invent one). revenue_workload_summary (revenue/invoice-volume trend by year, PIC workload) is the same canViewReports-gated management tier as customer_profile_summary.
 
+"我们有什么服务", "XX服务多少钱", "做XX大概多少费用", "你们的付款条款是什么" (what Tassure offers, or what it standardly charges/how it operates) → service_pricing_lookup, NEVER invented from memory — this is real reference data (Tassure's own 11 Sep 2026 proposal), not a guess, but it is a STANDARD/LIST price, never a specific client's actual invoice. Quote its priceDisplay field verbatim rather than doing your own math on the min/max numbers, say plainly when a row is quote_required ("按实报价，需要看实际情况") or is_foc ("这个是免费/包含在配套内的，不收费"), and if the question is really "what does THIS client owe/get billed" redirect to check_outstanding_balance/preview_invoice_draft instead of this catalog.
+
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
 
@@ -1561,6 +1583,10 @@ const CLAUDE_TOOLS = [
   { name: 'collections_worklist', description: "REAL list of which companies a given person has to CHASE for unpaid invoices, with each one's amount and how old the oldest unpaid invoice is — the same owner filter the SOA page itself is built around. Use for \"我手上有哪些欠款要催\", \"Chelsea 要催哪些公司\", \"我的欠款清单\". Pass owner:'me' for the caller's own list. Omit owner for the whole firm. This is the LIST view; outstanding_balance_summary answers 'how big is the book' and check_outstanding_balance answers about ONE named company.", input_schema: { type: 'object', properties: { owner: { type: 'string', description: "Collections owner's name, or 'me' for the caller. Omit for the whole firm." }, qbCompanies: { type: 'array', items: { type: 'string', enum: ['TAB', 'TAC', 'TAO'] }, description: 'Which QuickBooks books — omit for all 3' } } } },
   { name: 'recent_changes', description: 'REAL field-level change history from the audit log — who changed which field on which company, from what value to what, and when. Use for "最近谁改了什么", "这家公司最近被改了什么", "谁动过这个". Most changes are AUTOMATED nightly syncs (changed_by "system:..."); pass humanOnly:true when the user means a person. Different from recent_activity_summary, which describes what a person has been DOING across features rather than the field-level diff trail.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days back, default 7, max 365' }, humanOnly: { type: 'boolean', description: 'Exclude automated system syncs' }, company: { type: 'string', description: 'Only changes for this company' }, limit: { type: 'number', description: 'How many change rows to return, default 30, max 100' } } } },
   { name: 'trademark_summary', description: 'REAL, live company-WIDE trademark counts and lists — how many trademarks are registered vs. still in progress (application filed, not yet granted), and which registered marks are expiring soon. Use this for any trademark question that is NOT about one specific company (e.g. "现在有多少个商标在处理中", "哪些商标快到期了") — for ONE specific company\'s own trademark(s), use company_deep_lookup instead, which has the exact same data already scoped to that company.', input_schema: { type: 'object', properties: {} } },
+  { name: 'service_pricing_lookup', description: 'Tassure\'s own STANDARD service catalog and price list (company incorporation, secretarial services, EP/DP applications, accounting/tax/audit, and a full post-incorporation-changes fee schedule), plus company policy text (payment terms, termination/refund, confidentiality). Use for "你们提供什么服务", "XX多少钱/费用是多少", "做XX大概要多少费用", "你们的付款方式是什么" — anything about what Tassure offers or what it standardly charges. This is a LIST price reference, NOT a specific client\'s real invoice — never use it to answer "how much does THIS client owe" or "what was THIS company billed" (use check_outstanding_balance / preview_invoice_draft for that). Omit both filters to see the whole catalog grouped by section; pass `search` to find one service by name/keyword (English or Chinese); pass `section` to browse one group (e.g. "First-Year Package", "Ongoing Maintenance", "Post-Incorporation Changes").', input_schema: { type: 'object', properties: {
+    section: { type: 'string', description: 'Filter to one section by (partial, case-insensitive) name, e.g. "First-Year Package", "Ongoing Maintenance", "Post-Incorporation Changes — Trade Mark".' },
+    search: { type: 'string', description: 'Free-text match against service name or description, either language, e.g. "trademark", "商标", "audit", "payroll".' },
+  } } },
   { name: 'late_filing_summary', description: 'REAL, live company-WIDE Late Filing counts — how many companies are currently overdue in total, broken down by severity (serious/recent/review) and by which staff member (PIC) currently has the most active overdue companies. Use this for any Late Filing question that is NOT about one specific company (e.g. "目前一共有多少家迟报", "谁PIC压的最多") — for one specific company, use preview_late_filing_resolve instead.', input_schema: { type: 'object', properties: {} } },
   { name: 'communications_summary', description: 'REAL, live company-WIDE email/campaign counts from Client Communications — how many emails were actually sent in a recent window, plus the all-time breakdown by status (pending/opened/sent/skipped) and by campaign type. Use this for any Client Communications question that is NOT about one specific company (e.g. "这个月一共发了多少封邮件", "还有哪些campaign没处理完") — for one specific company, use check_email_status instead.', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many recent days to count real sends over — default 30, max 365' } } } },
   { name: 'nd_roster_capacity', description: "REAL, live nominee-director roster with each person's current ACTIVE appointment count, sorted fewest-first (most likely to have real bandwidth). Use this whenever the user asks about ND capacity/availability across the roster (e.g. \"还有哪个ND有空位\", \"谁appointment最少\") — never say this can't be checked without trying this tool first. There is NO fixed \"max appointments per person\" rule anywhere in this system — never state a specific number of free slots as fact.", input_schema: { type: 'object', properties: {} } },
@@ -1656,6 +1682,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'collections_worklist') return collectionsWorklistTool(account, input);
   if (name === 'recent_changes') return recentChangesTool(input);
   if (name === 'trademark_summary') return trademarkSummaryTool();
+  if (name === 'service_pricing_lookup') return servicePricingTool(input);
   if (name === 'late_filing_summary') return lateFilingSummaryTool();
   if (name === 'communications_summary') return communicationsSummaryTool(typeof input.days === 'number' ? input.days : undefined);
   if (name === 'nd_roster_capacity') return ndRosterCapacity();

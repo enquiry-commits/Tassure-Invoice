@@ -1,5 +1,17 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-11 (Wired the standard service catalog + pricing into the AI assistant (`service_pricing_lookup`).
+
+Vincent: "现在接到去助手上" — the "later" step from the previous entry. New `lib/service-pricing-lookup.ts` (`getServicePricing()`, optional `section`/`search` filters over the 64-row catalog + 3 company_service_terms rows) and a new `service_pricing_lookup` tool in `app/api/assistant/route.ts`, following the same shape as `trademark_summary`. Routing guidance added for "我们有什么服务" / "XX多少钱" / "付款条款是什么" style questions.
+
+The tool's own `note` carries the same caveat every time: this is Tassure's STANDARD/LIST price (11 Sep 2026 proposal), never a specific client's real invoice — quote `priceDisplay` verbatim rather than doing arithmetic on the min/max numbers, say plainly when a row is `quote_required` or `is_foc`, and redirect to `check_outstanding_balance`/`preview_invoice_draft` if the question is really about what an existing client owes.
+
+Caught one real bug before shipping by actually testing against production data (not just type-checking): the first version's DB-side `ILIKE` search for "trademark" returned nothing, because the data is spelled "Trade Mark" (with a space, matching the source proposal's own spelling) — a plain substring match can't bridge that. Switched `search` to in-memory matching (the whole table is 64 rows, so fetching it in full costs nothing) with both sides normalized (lowercased, spaces/hyphens stripped) before comparing — verified "trademark", "audit", and a Chinese term ("公积金" → correctly finds Payroll Service, which mentions CPF) all now resolve correctly, and a genuinely-absent term returns zero rows rather than something wrong.
+
+Verified: `npx tsc --noEmit` / `npm run build` clean; `getServicePricing()` smoke-tested directly against production Supabase (not just types) before wiring it into the tool.
+
+Previous entry follows.
+
 Last updated: 2026-09-11 (New: standard service catalog + pricing reference data, for the AI assistant to draw on later.
 
 Vincent supplied two source documents and asked for the content in the database first, so the AI assistant can eventually "更准确更专业" answer questions about the business/services/pricing rather than guessing: `proposal_cost_Standard_2026_V2026.0226.pdf` (26 Feb 2026, a plain standard price sheet) and `Tassure_Proposal__20260911001.docx` (11 Sep 2026, a full client proposal — richer prose service descriptions, three pricing tables, and an entire "post-incorporation changes" fee schedule the Feb sheet never had).
