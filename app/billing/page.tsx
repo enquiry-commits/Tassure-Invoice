@@ -1276,26 +1276,22 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
               <SelectField id={r.id} field="xbrl" value={r.xbrl} onSave={onSave} options={XBRL_OPTIONS} />
             </div>
           </div>
-          <div style={{ padding: '6px 8px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: 9.5, color: '#94a3b8', lineHeight: 1.4, marginBottom: 6 }}>
+          <div style={{ padding: '10px 8px 12px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
+            <div style={{ fontSize: 9.5, color: '#94a3b8', lineHeight: 1.5, marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #f1f5f9' }}>
               For the immediate past two consecutive financial years, whole group (parent and subsidiary):<br />
               在刚刚过去的连续两个财政年度，集团公司是否达到以下条件：
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ fontSize: 10.5, color: '#64748b', fontWeight: 600, minWidth: 110, lineHeight: 1.3 }}>
-                Revenue ≤$10m<br /><span style={{ fontWeight: 400 }}>年总收入≤1000万新币</span>
-              </span>
-              <div style={{ flex: 1 }}>
-                <SelectField id={r.id} field="xbrl_revenue_le_10m" value={r.xbrl_revenue_le_10m} onSave={onSave} options={XBRL_YES_NO_OPTIONS} customLabel="Custom…" dateHelper={false} />
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, color: '#475569', fontWeight: 600, marginBottom: 6 }}>
+                Revenue ≤$10m <span style={{ fontWeight: 400, color: '#94a3b8' }}>年总收入≤1000万新币</span>
               </div>
+              <SelectField id={r.id} field="xbrl_revenue_le_10m" value={r.xbrl_revenue_le_10m} onSave={onSave} options={XBRL_YES_NO_OPTIONS} customLabel="Custom…" dateHelper={false} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 10.5, color: '#64748b', fontWeight: 600, minWidth: 110, lineHeight: 1.3 }}>
-                Total Assets ≤$10m<br /><span style={{ fontWeight: 400 }}>总资产≤1000万新币</span>
-              </span>
-              <div style={{ flex: 1 }}>
-                <SelectField id={r.id} field="xbrl_assets_le_10m" value={r.xbrl_assets_le_10m} onSave={onSave} options={XBRL_YES_NO_OPTIONS} customLabel="Custom…" dateHelper={false} />
+            <div>
+              <div style={{ fontSize: 11, color: '#475569', fontWeight: 600, marginBottom: 6 }}>
+                Total Assets ≤$10m <span style={{ fontWeight: 400, color: '#94a3b8' }}>总资产≤1000万新币</span>
               </div>
+              <SelectField id={r.id} field="xbrl_assets_le_10m" value={r.xbrl_assets_le_10m} onSave={onSave} options={XBRL_YES_NO_OPTIONS} customLabel="Custom…" dateHelper={false} />
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', marginBottom: 2, background: '#fff', borderRadius: 5, border: '1px solid #f1f5f9' }}>
