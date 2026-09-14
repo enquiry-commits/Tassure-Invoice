@@ -7,6 +7,11 @@ import { logFieldChange } from '@/lib/audit-log';
 import { syncPicToArReminder, type PicField } from '@/lib/pic-sync';
 import { toIsoDateValue } from '@/lib/date';
 
+// See app/api/ar-reminder/route.ts's identical comment (2026-09-14) — this
+// route was also missing region pinning next to Supabase's Tokyo project,
+// same fix, same already-established pattern (app/api/reports/route.ts).
+export const preferredRegion = 'sin1';
+
 const EDITABLE_FIELDS = new Set([
   'update_date', 'internal_code', 'company_name', 'roc_no', 'status',
   'join_date', 'sec_agent', 'kyc_year', 'register_of_controllers', 'corporate_tax',

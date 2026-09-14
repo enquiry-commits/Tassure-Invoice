@@ -8,6 +8,18 @@ import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { getRequestAccount } from '@/lib/request-account';
 import { syncPicToActiveClient, loadCarriedForwardPics, type PicField } from '@/lib/pic-sync';
 
+// Was missing region pinning while 12 other routes already had it (see
+// app/api/reports/route.ts) — without it Vercel runs this function in
+// whatever its default deployment region is, which is NOT next to
+// Supabase's Tokyo project, so every one of this route's several
+// sequential/parallel queries pays extra cross-region round-trip latency
+// on top of the QB-items cold-cache cost already documented in
+// PROJECT_STATUS.md. Directly implicated in a real "Gateway Timeout"
+// Vincent reported live on production (2026-09-14) — pinning this is the
+// same safe, already-established pattern used elsewhere, no query/matching
+// logic touched.
+export const preferredRegion = 'sin1';
+
 const EDITABLE_FIELDS = new Set([
   'reminder_note', 'prepared_date', 'date_of_agm', 'agm_held_date',
   'sent_date', 'received_date', 'filling_date',
@@ -150,16 +162,32 @@ export async function GET(req: NextRequest) {
 
   if (!arRows?.length && !staleRows?.length) return NextResponse.json({ months, year, total: 0, companies: [], staleOverdue: [] });
 
+  type QbInvoice = {
+    invoice_no: string;
+    txn_date: string | null;
+    customer_name: string;
+    total_amt: number | null;
+    balance: number | null;
+    status: string | null;
+  };
+
   const [
     { data: companies, error: companiesError },
     { data: activeNDs, error: ndError },
-    { data: qbInvoices, error: invoiceError },
+    qbInvoices,
     { data: generatedRows, error: generatedError },
     qbItems,
   ] = await Promise.all([
     supabase.from('companies').select('id, company_name, has_xbrl, has_nd, uses_address, has_accounts, has_tax, services_manual'),
     supabase.from('nd_appointments').select('company_name, appointment_date, nd_id').eq('sub_role', 'Nominee Director').not('appointment_date', 'is', null).is('cessation_date', null).order('appointment_date', { ascending: false }),
-    supabase.from('quickbooks_invoices').select('invoice_no, txn_date, customer_name, total_amt, balance, status').gte('txn_date', `${year}-01-01`).lte('txn_date', `${year}-12-31`),
+    // Was a single unpaginated .select() — Supabase caps that at 1000 rows,
+    // and a single year now genuinely exceeds it (2,252 rows for 2026 alone,
+    // confirmed against production 2026-09-14), so more than half of the
+    // year's invoices were silently missing from AR Reminder's per-company
+    // "Invoice" column with no error, no warning. pageAll fetches every page
+    // in parallel waves instead — pure completeness fix, same matching/
+    // display logic downstream, nothing about WHICH invoices count changes.
+    pageAll<QbInvoice>(() => supabase.from('quickbooks_invoices').select('invoice_no, txn_date, customer_name, total_amt, balance, status').gte('txn_date', `${year}-01-01`).lte('txn_date', `${year}-12-31`)),
     // Our own generated_invoices record (exact — Billing Drafts made it) —
     // same source Billing Drafts' own TAB/TAC Invoice columns read, so AR
     // Reminder's "Invoice" column can show the identical number instead of
@@ -171,7 +199,7 @@ export async function GET(req: NextRequest) {
     getQbItems(supabase, year),
   ]);
 
-  const relatedError = companiesError ?? ndError ?? invoiceError ?? generatedError;
+  const relatedError = companiesError ?? ndError ?? generatedError;
   if (relatedError) return NextResponse.json({ error: relatedError.message }, { status: 500 });
 
   // Same shape/keying Billing Drafts' own renewals route uses for this table
