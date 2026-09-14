@@ -1,5 +1,25 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-14 (FINAL: Vercel Function Region settled on Singapore (`sin1`) — briefly tried Tokyo (`hnd1`) to co-locate with the database, reverted after real data and Vincent's own usage both favored Singapore.
+
+Closes out the region saga from the entries below. Reasoning for trying Tokyo in the first place: Supabase's database is confirmed in Tokyo (ap-northeast-1 — see the correction note below), and this app's routes make several/many sequential Supabase round trips per single user request (AR Reminder alone does 2 sequential + 5 parallel queries, some paginated into multiple waves) — so co-locating the FUNCTION with the DATABASE should in principle beat co-locating it with the USER, since the function-to-database leg repeats far more times per request than the user-to-function leg.
+
+That theory didn't hold up against real data once tried. Also correcting a terminology mistake made throughout this whole investigation: the routes-table number being compared this whole time (20s → 1.83s for `/api/ar-reminder`) is that route's **Active CPU** column, not "P75 Duration" — the real P75 Duration column was locked behind a Pro-plan paywall in every screenshot seen. Active CPU is still a real, meaningful number (time actually spent processing, not idle), just mislabeled in earlier entries.
+
+Comparing the three regions' AGGREGATE Active CPU P75 (across all routes, from Vercel's Observability → Functions → Advanced Metrics — not a controlled experiment, each reading is a different real-traffic window, so treat as directional not exact):
+
+| Region | Active CPU P75 (aggregate) |
+|---|---|
+| Washington D.C. (iad1) | 772ms |
+| **Singapore (sin1)** | **147ms — lowest of the three** |
+| Tokyo (hnd1) | 478ms |
+
+Singapore beat Tokyo on this metric despite Tokyo being co-located with the database — counter to the theory above. Vincent's own subjective real-world usage also felt Singapore was smoother than Tokyo. Given both the data and his lived experience point the same direction, and switching regions is free/instant/fully reversible either way, settled on Singapore rather than chasing the smaller theoretical gain from perfect co-location. Vincent switched the Function Region back to `sin1` and redeployed.
+
+**Final state**: Vercel Function Region = Singapore (`ap-southeast-1`/`sin1`). Database = Supabase Tokyo (`ap-northeast-1`) — not co-located, and that's fine; empirically the better choice anyway. Do not revisit this without new evidence — the Tokyo experiment was genuinely tried and rejected based on real data, not skipped.
+
+Previous entry follows.
+
 Last updated: 2026-09-14 (CONFIRMED FIX, with real before/after numbers: the project's Vercel Function Region was Washington D.C. (iad1) this whole time, not next to Supabase's Tokyo project — this, not any of the code-level fixes, was the actual dominant cause of HC's lag report and the Gateway Timeout.
 
 Closing out the HC lag investigation (see the two entries below for the full path there). The per-route `preferredRegion='sin1'` fix on `ar-reminder`/`master-list` (previous entry) turned out to be a red herring about the ROOT cause, though harmless to keep: a `curl -D-` check of `X-Vercel-Id` on production seemed to show `sin1::...` even on untouched routes, which looked like the project default was already correct — that was WRONG. `X-Vercel-Id`'s region prefix reflects the Vercel Edge Network POP that received the request (always geographically close to the caller), not the actual Lambda execution region — a genuinely misleading signal for this kind of check, worth remembering for next time. The real answer was in Vercel's dashboard: Project Settings → Functions → Function Region, which Vincent screenshotted directly — showed **Washington, D.C. (iad1)** selected, with Hobby plan limiting the project to exactly one region project-wide. Also worth noting: a build log showing "Running build in Washington, D.C." is unrelated — that's where Vercel's build step runs (compiles the code), a separate concept from the deployed function's runtime execution region.
