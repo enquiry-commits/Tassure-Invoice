@@ -13,6 +13,8 @@ Vincent switched the Function Region selection to Singapore (ap-southeast-1, sin
 
 This is now genuinely resolved, confirmed with real production telemetry (not just code review or sandbox estimates). The smaller code-level fixes from the two entries below (Master List search debounce, AR Reminder's QB-invoice pagination truncation bug, the `preferredRegion` pins) are all still real, still worth keeping, but none of them was the actual dominant lever — the region setting was.
 
+**Correction (same day, right after the above):** every mention of Supabase being in "Tokyo" throughout this whole investigation (this entry included) is WRONG — Vincent screenshotted Supabase's own project dashboard directly, which reads "Database deployed in Southeast Asia (Singapore)". The saved cross-session memory note calling it Tokyo was stale/incorrect and has been corrected. Net effect: choosing `sin1` for the Vercel Function Region (done to match the existing 12+2-route convention, not because anyone had confirmed it was the closest option) turned out to be exactly right — Vercel functions and the database are now genuinely co-located in the same region, which is optimal. No further region change needed; do not "helpfully" move this to Tokyo based on older notes.
+
 Previous entry follows.
 
 Last updated: 2026-09-14 (Found the real dominant factor behind HC's lag report: AR Reminder and Master List were both missing Vercel region pinning, and Vincent caught a live Gateway Timeout on AR Reminder that confirms it.
