@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
 import { customerSourceLabel } from '@/lib/customer-source';
 import { buildReportsCompanyRows, computeRevenueTrend, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT } from '@/lib/reports-data';
+import { pageAll } from '@/lib/page-all';
 
 // Reports — customer-profile analytics for leadership (Vincent, Cindy,
 // Samuell, Tan Yee Soon; gated on ApprovedAccount.canViewReports, see
@@ -36,18 +37,6 @@ import { buildReportsCompanyRows, computeRevenueTrend, computePicWorkload, REPOR
 export const preferredRegion = 'sin1';
 
 type Row = Record<string, unknown>;
-async function pageAll(makeQuery: () => PromiseLike<{ data: Row[] | null }>): Promise<Row[]> {
-  const out: Row[] = [];
-  let from = 0;
-  for (;;) {
-    const { data } = await (makeQuery() as unknown as { range: (a: number, b: number) => PromiseLike<{ data: Row[] | null }> }).range(from, from + 999);
-    if (!data?.length) break;
-    out.push(...data);
-    if (data.length < 1000) break;
-    from += 1000;
-  }
-  return out;
-}
 
 const PALETTE = ['#0f766e', '#2563eb', '#7c3aed', '#c026d3', '#0891b2', '#f59e0b', '#dc2626', '#65a30d', '#94a3b8'];
 
@@ -95,10 +84,10 @@ export async function GET(req: NextRequest) {
   const years = Array.from({ length: YEARS_BACK }, (_, i) => thisYear - YEARS_BACK + 1 + i);
 
   const [companies, masterList, arRows, qbInvoices] = await Promise.all([
-    pageAll(() => sb.from('companies').select(REPORTS_COMPANY_SELECT)),
-    pageAll(() => sb.from('master_list').select(`list_type, update_date, company_name, ${REPORTS_MASTER_LIST_SELECT}`)),
-    pageAll(() => sb.from('ar_reminder').select('pic, acc_pic, tax_pic, filling_date').or('status.is.null,status.neq.Excluded')),
-    pageAll(() => sb.from('quickbooks_invoices').select('txn_date, total_amt')),
+    pageAll<Row>(() => sb.from('companies').select(REPORTS_COMPANY_SELECT)),
+    pageAll<Row>(() => sb.from('master_list').select(`list_type, update_date, company_name, ${REPORTS_MASTER_LIST_SELECT}`)),
+    pageAll<Row>(() => sb.from('ar_reminder').select('pic, acc_pic, tax_pic, filling_date').or('status.is.null,status.neq.Excluded')),
+    pageAll<Row>(() => sb.from('quickbooks_invoices').select('txn_date, total_amt')),
   ]);
 
   const companyRows = buildReportsCompanyRows(companies, masterList);

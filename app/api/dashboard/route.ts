@@ -1,22 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { pageAll } from '@/lib/page-all';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-type Row = Record<string, unknown>;
-async function pageAll(makeQuery: () => PromiseLike<{ data: Row[] | null }>): Promise<Row[]> {
-  const out: Row[] = [];
-  let from = 0;
-  for (;;) {
-    const { data } = await (makeQuery() as unknown as { range: (a: number, b: number) => PromiseLike<{ data: Row[] | null }> }).range(from, from + 999);
-    if (!data?.length) break;
-    out.push(...data);
-    if (data.length < 1000) break;
-    from += 1000;
-  }
-  return out;
-}
 
 export async function GET() {
   const sb = createAdminClient();
