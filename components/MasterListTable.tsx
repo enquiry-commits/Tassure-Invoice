@@ -1189,17 +1189,30 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [me, setMe] = useState<{ email: string; name: string } | null>(null);
   useEffect(() => { fetch('/api/auth/me').then(r => r.json()).then(j => setMe(j.user ?? null)).catch(() => {}); }, []);
 
+  // Debounced separately from `search` itself — the input stays wired to
+  // `search` so typing feels instant, but `load()` only fires 300ms after
+  // the user pauses. Before this, every keystroke fired its own /api/master-list
+  // round trip AND blanked the whole table to "Loading…" while it was in
+  // flight (see the `loading` branch below) — reported by HC as the page
+  // feeling laggy/stuttery, confirmed by reading this exact wiring rather
+  // than guessing (2026-09-14).
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ type: listType, search });
+      const params = new URLSearchParams({ type: listType, search: debouncedSearch });
       const res  = await fetch(`/api/master-list?${params}`);
       const json = await res.json();
       setRows(json.data ?? []);
       setMissingCssClients(json.missingCssClients ?? []);
       setTwTotalClientCount(json.twTotalClientCount ?? 0);
     } finally { setLoading(false); }
-  }, [listType, search]);
+  }, [listType, debouncedSearch]);
 
   useEffect(() => { load(); }, [load]);
 
