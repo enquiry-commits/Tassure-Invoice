@@ -1,5 +1,17 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-14 (Diagnosed and fixed a real perceived-lag report from HC (Lim Hoe Chyi) on Master List; found but deliberately did NOT touch a second bottleneck on AR Reminder because it feeds Billing Drafts' invoice generation.
+
+Vincent relayed a real complaint: HC finds the system laggy specifically on AR Reminder and Master List. Investigated both with actual measurements against production, not guesses.
+
+**Master List (fixed)**: `components/MasterListTable.tsx`'s search box had `search` as a direct dependency of the `load()` effect with zero debounce — every single keystroke fired a full `/api/master-list` round trip AND blanked the entire table to "Loading…" while in flight. Affects every Master List sub-page (Active Client, Ad-Hoc, MAS, Strike Off, Terminated, Name Change) for every user, not data-volume-specific to HC. Fixed by debouncing the fetch 300ms after typing pauses (input itself stays wired to instant local state, only the network call is delayed) — pure frontend wiring, no query/matching logic touched. `npx tsc --noEmit` / `npm run build` clean.
+
+**AR Reminder (found, NOT fixed — flagged back to Vincent)**: `app/api/ar-reminder/route.ts`'s `getQbItems()` has a 5-minute in-memory cache, but that cache lives per Vercel serverless instance — on a cold instance (common; Vercel doesn't guarantee routing back to the same warm one) it re-pulls the ENTIRE `quickbooks_invoice_items` table filtered to the last 3 years, which is currently *all* 18,811 rows (no earlier data exists), regardless of the ~35-50 companies actually shown for the browsed month. Measured directly against production: ~1.9s just for this fetch before the rest of the route even starts. Root cause is real and reproducible, but this exact endpoint's output (`qbPeriods`/`services`) is explicitly read by Billing Drafts' own invoice-generation flow (see the route's own comments) — narrowing the query scope or changing the cache TTL touches the same data billing decisions are made from, which is exactly the class of change CLAUDE.md's non-negotiable rules say not to make unilaterally ("never change... billing-calculation logic... without Vincent explicitly stating the new rule"). Reported the measurement and options back to Vincent rather than picking one myself.
+
+Also separately measured and fixed (same day, described in the entry below): Reports/Dashboard API routes' serial-vs-parallel pagination — unrelated root cause, different pages, kept as its own entry.
+
+Previous entry follows.
+
 Last updated: 2026-09-14 (Enriched the last 22 "thin" service_pricing rows using general Singapore Companies Act/ACRA knowledge, explicitly labeled as such — not Tassure-verified process.
 
 Vincent said "可以继续深化" a second time (2026-09-14), with no new source document attached this time — following his first "可以继续深化" and my own earlier position that further enrichment could wait for real internal source material or him dictating the process. Read the repeated request-with-no-attachment as the explicit go-ahead to use my own professional knowledge for the remaining gaps, since he'd already been told that was the alternative to waiting.
