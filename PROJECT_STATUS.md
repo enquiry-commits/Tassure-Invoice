@@ -1,5 +1,20 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-14 (CONFIRMED FIX, with real before/after numbers: the project's Vercel Function Region was Washington D.C. (iad1) this whole time, not next to Supabase's Tokyo project — this, not any of the code-level fixes, was the actual dominant cause of HC's lag report and the Gateway Timeout.
+
+Closing out the HC lag investigation (see the two entries below for the full path there). The per-route `preferredRegion='sin1'` fix on `ar-reminder`/`master-list` (previous entry) turned out to be a red herring about the ROOT cause, though harmless to keep: a `curl -D-` check of `X-Vercel-Id` on production seemed to show `sin1::...` even on untouched routes, which looked like the project default was already correct — that was WRONG. `X-Vercel-Id`'s region prefix reflects the Vercel Edge Network POP that received the request (always geographically close to the caller), not the actual Lambda execution region — a genuinely misleading signal for this kind of check, worth remembering for next time. The real answer was in Vercel's dashboard: Project Settings → Functions → Function Region, which Vincent screenshotted directly — showed **Washington, D.C. (iad1)** selected, with Hobby plan limiting the project to exactly one region project-wide. Also worth noting: a build log showing "Running build in Washington, D.C." is unrelated — that's where Vercel's build step runs (compiles the code), a separate concept from the deployed function's runtime execution region.
+
+Vincent switched the Function Region selection to Singapore (ap-southeast-1, sin1) — matching the convention already used by the 12+2 individually-pinned routes — saved, and redeployed (free, no Pro upgrade needed; Hobby just restricts you to *one* region, not to keeping the default one). Confirmed via Vercel's own Observability → Functions dashboard after a few minutes of real use:
+
+- `/api/ar-reminder` P75 Duration: **20s → 1.83s** (matches this session's own earlier sandbox measurement of the QB-items cold-cache cost, ~1.9s — confirms that leftover cost was real but was never the dominant factor once cross-region latency is removed)
+- Error Rate / Timeout: **5.3% and visible timeouts → 0% / 0%**
+- Cold Start rate: 19.3% → 14.3%
+- "Region SIN1" badge now shown directly in the dashboard's Advanced Metrics panel
+
+This is now genuinely resolved, confirmed with real production telemetry (not just code review or sandbox estimates). The smaller code-level fixes from the two entries below (Master List search debounce, AR Reminder's QB-invoice pagination truncation bug, the `preferredRegion` pins) are all still real, still worth keeping, but none of them was the actual dominant lever — the region setting was.
+
+Previous entry follows.
+
 Last updated: 2026-09-14 (Found the real dominant factor behind HC's lag report: AR Reminder and Master List were both missing Vercel region pinning, and Vincent caught a live Gateway Timeout on AR Reminder that confirms it.
 
 Follow-up to the entry below. Vincent approved fixing "the low-risk stuff" (the QB-invoice pagination fix), and mid-fix he sent a screenshot of a live "Gateway Timeout" on AR Reminder (January 2026, 82 companies) — a real production failure, not just perceived lag, which prompted a deeper look than the earlier analysis covered.
