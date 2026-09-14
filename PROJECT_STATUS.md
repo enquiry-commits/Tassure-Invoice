@@ -1,5 +1,19 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-14 (Found the real dominant factor behind HC's lag report: AR Reminder and Master List were both missing Vercel region pinning, and Vincent caught a live Gateway Timeout on AR Reminder that confirms it.
+
+Follow-up to the entry below. Vincent approved fixing "the low-risk stuff" (the QB-invoice pagination fix), and mid-fix he sent a screenshot of a live "Gateway Timeout" on AR Reminder (January 2026, 82 companies) — a real production failure, not just perceived lag, which prompted a deeper look than the earlier analysis covered.
+
+Found: `app/api/ar-reminder/route.ts` and `app/api/master-list/route.ts` were both missing `export const preferredRegion = 'sin1'`, while 12 other routes in this codebase already have it (established pattern, see `app/api/reports/route.ts`). Without it, Vercel runs the function in whatever its default deployment region is — not next to Supabase's Tokyo project — so every one of these two routes' several sequential/parallel queries pays extra cross-region round-trip latency on every single hop. This is almost certainly the dominant factor behind both the Gateway Timeout and HC's original "feels laggy" report on both pages — bigger than the QB-items cold-cache cost or the search debounce, which were both real but smaller. Fixed by pinning both routes to `sin1`, same zero-behavior-change pattern already used elsewhere in the repo.
+
+Also corrected an overstatement from the previous entry: the AR Reminder realtime subscription's cross-month "noise" claim was wrong on closer re-read — `app/billing/page.tsx`'s payload handler already filters out non-matching months client-side (`months.includes(next.fye_month)`) BEFORE deciding whether to reload, for every event type including INSERT. There is no unnecessary reload triggered by unrelated months; a same-month insert from someone else (e.g. the daily `ar-reminder/generate` cron) can legitimately trigger a reload, which is intended behavior, not a bug.
+
+Also fixed, in the same pass: `quickbooks_invoices` in `ar-reminder/route.ts` was a single unpaginated `.select()`, silently capped at Supabase's 1000-row default — 2026 alone already has 2,252 invoices, so more than half of this year's invoices were missing from AR Reminder's per-company Invoice column with no error. Switched to `pageAll()` — same matching/display logic, just reads the complete set.
+
+`npx tsc --noEmit` / `npm run build` clean after all three changes.
+
+Previous entry follows.
+
 Last updated: 2026-09-14 (Diagnosed and fixed a real perceived-lag report from HC (Lim Hoe Chyi) on Master List; found but deliberately did NOT touch a second bottleneck on AR Reminder because it feeds Billing Drafts' invoice generation.
 
 Vincent relayed a real complaint: HC finds the system laggy specifically on AR Reminder and Master List. Investigated both with actual measurements against production, not guesses.
