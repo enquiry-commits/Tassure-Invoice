@@ -278,7 +278,8 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
 // value "Company"), Aging (the oldest bucket this balance still touches,
 // styled yellow), Total Balance (was "Total", styled to match Invoices'
 // own Amount cell — $-prefixed, no bold), Due Date (was PIC, styled to
-// match Officials/ND's own Appointed cell — bare text, no bold), Owner.
+// match Officials/ND's own Appointed cell — bare text, no bold), Owner
+// (renamed to "Main PIC" 2026-09-15, see below).
 // Per-column styling now deliberately borrows from sibling sections on
 // THIS SAME page rather than a separate "Outstanding page" look, per his
 // own explicit column-by-column asks. A company owing on 2+ systems shows
@@ -297,12 +298,17 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
 // Vincent the same day via XINCONNECT PTE. LTD., see that file's own
 // negativeBucketTag). A plain Invoice line is untagged and looks exactly
 // as it did before.
+//
+// 2026-09-15: "Owner" header renamed to "Main PIC" (Vincent: "换成类似于
+// Main PIC会不会比较好呢" — "Owner" read oddly for what's really "the one
+// person assigned to this company's collections"). Display label only —
+// effectiveOwner() and every underlying field/table name are unchanged.
 
 export function OutstandingSection({ outstanding }: { outstanding: Company360['outstanding'] }) {
   return (
     <DataCard title="Outstanding" icon={<Receipt size={15} color="#fff" />} count={outstanding.length} empty="No outstanding balance on TAB/TAC/TAO for this company.">
       <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px' }}>
-        <div>Invoice No.</div><div>Company</div><div>Aging</div><div>Total Balance</div><div>Due Date</div><div>Owner</div>
+        <div>Invoice No.</div><div>Company</div><div>Aging</div><div>Total Balance</div><div>Due Date</div><div>Main PIC</div>
       </div>
       {outstanding.map((r, i) => {
         // "欠下多久了...主要显示是最久的是欠了多久时间，比如最久的是 91+，
@@ -330,7 +336,12 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
                 return (
                   <div key={`${item.txnType}-${item.docNumber}-${idx}`}>
                     {item.docNumber}
-                    {tag && <span style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, color }}>({tag} {item.amount < 0 ? '-' : ''}${Math.abs(item.amount).toFixed(2)})</span>}
+                    {/* Vincent, 2026-09-15: "这种有简写的好像稍微要有一个窗口
+                        描述到底是什么" — a native title attribute (browser's
+                        own hover tooltip) spelling out the real QuickBooks
+                        Transaction Type behind the abbreviation, so CN/DP/
+                        PM/JE aren't opaque to someone unfamiliar with them. */}
+                    {tag && <span title={item.txnType} style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, color, cursor: 'help' }}>({tag} {item.amount < 0 ? '-' : ''}${Math.abs(item.amount).toFixed(2)})</span>}
                   </div>
                 );
               }) : '—'}

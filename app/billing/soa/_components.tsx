@@ -64,13 +64,17 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
 // "(CN)" (see lib/soa.ts's TXN_TYPE_TAGS comment for the 2026-09-15
 // incident this fixes: XINCONNECT PTE. LTD.'s Deposit-driven -514 showed
 // "(CN)" here while the detail modal correctly said "(Deposit)"). A bucket
-// total is a NET SUM that can combine multiple line items — join distinct
-// tags with "/" on the rare chance more than one negative type lands in
-// the same bucket for the same company. Empty string (no tag) only if the
-// bucket is negative with no line item to explain it, which shouldn't
-// happen — safer to say nothing than to guess wrong again.
-function negativeBucketTag(lineItems: Row['lineItems'], bucketKey: AgingBucket): string {
-  const types = [...new Set(lineItems.filter(item => item.bucket === bucketKey && item.amount < 0).map(item => item.txnType))];
+// total is a NET SUM that can combine multiple line items — the raw type
+// names (for a title tooltip — Vincent: "这种有简写的好像稍微要有一个窗口
+// 描述到底是什么") and the short joined tag (for the cell text itself, "/"-
+// joined on the rare chance more than one negative type lands in the same
+// bucket) are split into two functions so a caller can use both. Empty only
+// if the bucket is negative with no line item to explain it, which
+// shouldn't happen — safer to say nothing than to guess wrong again.
+function negativeBucketTypes(lineItems: Row['lineItems'], bucketKey: AgingBucket): string[] {
+  return [...new Set(lineItems.filter(item => item.bucket === bucketKey && item.amount < 0).map(item => item.txnType))];
+}
+function negativeBucketTag(types: string[]): string {
   return types.length ? ` (${types.map(t => TXN_TYPE_TAGS[t] ?? t).join('/')})` : '';
 }
 
@@ -407,9 +411,18 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
           <div style={{ minWidth: 940 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: soaListColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
+              {/* Vincent, 2026-09-15: "Owner...换成类似于Main PIC会不会比较
+                  好" — "Owner" read oddly next to the "PIC" column right
+                  beside it (PIC = every name associated with this company
+                  per its own QuickBooks Class/Location data; this column =
+                  the ONE person actually assigned to chase it). "Main PIC"
+                  names that relationship directly instead of introducing an
+                  unrelated-sounding term. Internal field/variable names
+                  (soaPic, suggestedOwner, effectiveOwner, soa_owners table)
+                  are unchanged — this is a display-label rename only. */}
               {(qbCompany === 'ALL'
-                ? ['', 'Company Name', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Owner']
-                : ['', 'Company Name', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Owner']
+                ? ['', 'Company Name', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC']
+                : ['', 'Company Name', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC']
               ).map((h, i) => (
                 i >= 2 ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>{h}</div> : <div key={i} style={{ padding: '0 6px' }}>{h}</div>
               ))}
@@ -473,9 +486,10 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   {AGING_BUCKETS.map(b => {
                     const val = c.aging[b.key];
                     const isCredit = val < 0;
+                    const negTypes = isCredit ? negativeBucketTypes(c.lineItems, b.key) : [];
                     return (
-                      <div key={b.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: isCredit ? 'var(--status-danger)' : val > 0 ? '#64748b' : '#cbd5e1' }}>
-                        {val !== 0 ? (isCredit ? `${fmtNum(val)}${negativeBucketTag(c.lineItems, b.key)}` : fmtNum(val)) : '—'}
+                      <div key={b.key} title={negTypes.length ? negTypes.join(', ') : undefined} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: isCredit ? 'var(--status-danger)' : val > 0 ? '#64748b' : '#cbd5e1', cursor: negTypes.length ? 'help' : undefined }}>
+                        {val !== 0 ? (isCredit ? `${fmtNum(val)}${negativeBucketTag(negTypes)}` : fmtNum(val)) : '—'}
                       </div>
                     );
                   })}
@@ -525,7 +539,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                         <select value={displayedOwner ?? ''} onChange={e => updateSoaPic(c, e.target.value)}
                           title={!isConfirmed && c.suggestedOwner ? 'Suggested from QuickBooks — not yet confirmed' : undefined}
                           style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: isConfirmed ? '#1e3a5f' : displayedOwner ? '#0f766e' : '#94a3b8', fontWeight: isConfirmed ? 600 : 400, cursor: 'pointer' }}>
-                          <option value="">Choose owner…</option>
+                          <option value="">Choose Main PIC…</option>
                           {likely.length > 0 ? (
                             <>
                               <optgroup label="Associated with this company">
@@ -670,7 +684,7 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
                 QuickBooks itself counts against this balance — reads red
                 with a tag automatically, no per-type UI change needed the
                 next time a new txn_type shows up in real data. */}
-            <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: inv.balance < 0 ? 'var(--status-danger)' : '#0f766e' }}>
+            <div title={inv.balance < 0 ? inv.rawType : undefined} style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: inv.balance < 0 ? 'var(--status-danger)' : '#0f766e', cursor: inv.balance < 0 ? 'help' : undefined }}>
               {fmtMoney(inv.balance)}{inv.balance < 0 ? ` (${TXN_TYPE_TAGS[inv.rawType] ?? inv.rawType})` : ''}
             </div>
           </div>
