@@ -1,5 +1,27 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-15 (SHIPPED AND VERIFIED: SOA/Outstanding Balance now syncs QuickBooks' own AgedReceivableDetail report directly — all 3 books match QuickBooks' own Grand Total exactly, $0.00 delta, closing out the whole CreditMemo/PAC/currency/entity-completeness investigation from the entries below.
+
+Direct response to Vincent's feedback mid-investigation: reactive entity-by-entity checking (Payment? too small. Old invoices? zero. "Debit note呢?" — already counted correctly) kept missing real gaps one at a time. Queried QuickBooks' own `AgedReceivableDetail` report instead — comprehensive by construction, since Intuit's own accounting engine enumerates every entity type relevant to AR, including ones this business's data had never surfaced to this app before (`Payment`, `Journal Entry`, and TAB's `Deposit`). Full design (`lib/quickbooks-ar-aging.ts`, `syncAgedReceivableDetail()`, `quickbooks_ar_aging_detail`/`quickbooks_ar_aging_sync_state`, `loadArAgingSnapshot()`/`legacyComputeSoaRows()` fallback in `lib/soa-data.ts`, all 3 bypass paths gated on the same freshness check) — see `docs/INVARIANTS.md` INV-QB-017 for the complete incident and architecture.
+
+Vincent ran the migration, a live sync was triggered directly (no login needed — the daily cron's own `CRON_SECRET` auth path), and the result was verified against QuickBooks' own live report, not assumed:
+
+| Book | Rows synced | Parser self-check delta | Our total (incl. PAC) | QuickBooks official | Delta |
+|---|---|---|---|---|---|
+| TAB | 386 | $0.00 | $165,770.40 | $165,770.40 | **$0.00** |
+| TAC | 74 | $0.00 | $114,430.86 | $114,430.86 | **$0.00** |
+| TAO | 241 | ~$0.00 | $169,516.67 | $169,516.67 | **$0.00** |
+
+Exact match, all 3 books — down from the $185,722.57 (~42%) overstatement this whole investigation started from. TASSURE PAC's real net contribution (verified: $300.00 TAB / ~$0 TAC / $5,730.37 TAO — all different, confirming this needed real per-book computation, not a guessed constant) is correctly excluded from every client-facing number. Cyber Quantum Pte Ltd's 2023-12-31 opening Journal Entry (the original $38,171.37 mystery that started the report-based redesign) now shows in full: correct transaction type, date, doc number ("Opening journal"/"OPNG JE"), amount, and aging bucket (`d91_plus`).
+
+One live, unplanned confirmation of the fix's correctness: Ligang Limited (the very first CreditMemo example from this whole thread, TAC, previously netting to -$970) now shows **zero rows** — checked directly against QuickBooks and confirmed real: Invoice 02680170 and CreditMemo CN268021 both now show `Balance: 0` in QuickBooks itself, meaning someone (almost certainly Chelsea, in the accounting team) actually applied that credit note during the course of this investigation. The system tracking that change automatically and correctly (showing $0, not a stale -$970) is exactly the intended behavior — not a bug.
+
+**One verification gap, stated plainly rather than overclaimed**: the automatic fallback to `legacyComputeSoaRows()` when the report snapshot is stale/missing (`quickbooks_ar_aging_sync_state.last_status != 'success'` or `>36h` old) was verified by code review only, not by forcing a live failure through the authenticated UI (that requires a real login session this sandbox doesn't have). The freshness-check logic itself is simple and was read carefully, but a true end-to-end forced-failure test is still open — see `docs/REGRESSION_CHECKLIST.md` REG-017's last paragraph.
+
+Verified: `npx tsc --noEmit` / `npm run build` clean throughout. `docs/INVARIANTS.md` INV-QB-017, `docs/FEATURE_MAP.md`, `docs/REGRESSION_CHECKLIST.md` REG-017 all updated in the same change that shipped the code.
+
+Previous entry follows.
+
 Last updated: 2026-09-15 (Post-fix verification found a real remaining ~$90K gap, root-caused to 2 distinct issues: TASSURE PAC (internal account, now excluded) and multi-currency USD/RMB balances (not yet fixed).
 
 Follow-up to the CreditMemo fix below. Vincent ran the migration, code was manually synced live (all 3 books, 0 errors — credit memo counts matched the earlier direct-API audit exactly: TAB 318/TAC 76/TAO 84), and a display bug was found+fixed along the way: the SOA list's per-bucket aging cells had a `value > 0` gate that hid a legitimate negative (CreditMemo) bucket value behind a dash, even though the Total column was already computing correctly — fixed to show non-zero values regardless of sign, negative ones in red with a "(CN)" tag (Vincent's own requested format).
