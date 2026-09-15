@@ -18,7 +18,7 @@ import type { SoaInvoiceDetail } from '@/app/api/billing/soa/detail/route';
 // app/api/billing/soa/all/route.ts) — absent in single-company mode, where
 // every row is implicitly the page's own qbCompany prop.
 type Row = SoaCompanyRow & { qbCompany?: QbCompany };
-import { AGING_BUCKETS, type AgingBucket } from '@/lib/soa';
+import { AGING_BUCKETS, TXN_TYPE_TAGS, type AgingBucket } from '@/lib/soa';
 
 function fmtMoney(n: number) {
   return `S$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -59,14 +59,20 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
   current: '#64748b', d1_30: '#0f766e', d31_60: '#ca8a04', d61_90: '#ea580c', d91_plus: 'var(--status-danger)',
 };
 
-// Short tag shown next to a negative detail-row amount (see the detail
-// modal's balance cell below) — QuickBooks' own "Transaction Type" wording
-// as a fallback for anything not in this map, so an unrecognized type still
-// gets a real, honest label instead of nothing.
-const CREDIT_TYPE_TAGS: Record<string, string> = {
-  'Credit Note': 'CN',
-  'Credit Memo': 'CN',
-};
+// Which non-Invoice type(s) actually explain a negative aging-bucket cell
+// — e.g. a Deposit netting a bucket negative must read "(DP)", not always
+// "(CN)" (see lib/soa.ts's TXN_TYPE_TAGS comment for the 2026-09-15
+// incident this fixes: XINCONNECT PTE. LTD.'s Deposit-driven -514 showed
+// "(CN)" here while the detail modal correctly said "(Deposit)"). A bucket
+// total is a NET SUM that can combine multiple line items — join distinct
+// tags with "/" on the rare chance more than one negative type lands in
+// the same bucket for the same company. Empty string (no tag) only if the
+// bucket is negative with no line item to explain it, which shouldn't
+// happen — safer to say nothing than to guess wrong again.
+function negativeBucketTag(lineItems: Row['lineItems'], bucketKey: AgingBucket): string {
+  const types = [...new Set(lineItems.filter(item => item.bucket === bucketKey && item.amount < 0).map(item => item.txnType))];
+  return types.length ? ` (${types.map(t => TXN_TYPE_TAGS[t] ?? t).join('/')})` : '';
+}
 
 // Vincent, 2026-09-07: first asked for a distinct color per system on the
 // "All" view's Source badge ("这边稍微用不同的颜色区分 TAB/TAC/TAO"), tried
@@ -461,13 +467,15 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       as "empty" and hid it behind a dash, even though the Total
                       column two cells over already reflected it correctly. Now
                       any non-zero value renders, negative ones in red with a
-                      "(CN)" tag so it reads as a credit line, not a typo. */}
+                      tag naming the real type behind it (negativeBucketTag,
+                      above) — not always "(CN)", since a Payment/Journal
+                      Entry/Deposit can net a bucket negative too. */}
                   {AGING_BUCKETS.map(b => {
                     const val = c.aging[b.key];
                     const isCredit = val < 0;
                     return (
                       <div key={b.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: isCredit ? 'var(--status-danger)' : val > 0 ? '#64748b' : '#cbd5e1' }}>
-                        {val !== 0 ? (isCredit ? `${fmtNum(val)} (CN)` : fmtNum(val)) : '—'}
+                        {val !== 0 ? (isCredit ? `${fmtNum(val)}${negativeBucketTag(c.lineItems, b.key)}` : fmtNum(val)) : '—'}
                       </div>
                     );
                   })}
@@ -663,7 +671,7 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
                 with a tag automatically, no per-type UI change needed the
                 next time a new txn_type shows up in real data. */}
             <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: inv.balance < 0 ? 'var(--status-danger)' : '#0f766e' }}>
-              {fmtMoney(inv.balance)}{inv.balance < 0 ? ` (${CREDIT_TYPE_TAGS[inv.rawType] ?? inv.rawType})` : ''}
+              {fmtMoney(inv.balance)}{inv.balance < 0 ? ` (${TXN_TYPE_TAGS[inv.rawType] ?? inv.rawType})` : ''}
             </div>
           </div>
         ))}

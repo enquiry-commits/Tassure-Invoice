@@ -90,8 +90,14 @@ export interface SoaCompanyRow {
   // Cyber Quantum Pte Ltd's Journal Entry) instead of only ever listing
   // Invoice-type rows while silently folding everything else into the
   // Total Balance number with no visible line for it. Sorted oldest-
-  // due-first, same convention as unpaidInvoices.
-  lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number }[];
+  // due-first, same convention as unpaidInvoices. `bucket` is the exact
+  // same AgingBucket this item was folded into for the row's own `aging`
+  // totals (computed once here, never re-derived in the UI) — lets a
+  // consumer explain WHY a specific bucket cell went negative instead of
+  // just that it did (see lib/soa.ts's TXN_TYPE_TAGS and its own comment on
+  // the 2026-09-15 incident this prevents — a hardcoded "(CN)" tag on every
+  // negative bucket regardless of real type).
+  lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number; bucket: AgingBucket }[];
 }
 
 type UnpaidInvoice = {
@@ -265,7 +271,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
   const byCompany = new Map<string, {
     displayName: string; invoiceCount: number; total: number; aging: AgingTotals; signals: OwnerInvoiceSignal[];
     unpaidInvoices: { invoiceNo: string; dueDate: string }[];
-    lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number }[];
+    lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number; bucket: AgingBucket }[];
   }>();
 
   // Seed from the report snapshot — authoritative for row EXISTENCE and for
@@ -291,6 +297,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
       dueDate: row.dueDate ?? row.txnDate ?? '',
       txnType: row.txnType,
       amount: row.openBalance,
+      bucket: row.agingBucket,
     });
   }
 
@@ -395,7 +402,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
   const byCompany = new Map<string, {
     displayName: string; invoiceCount: number; total: number; aging: AgingTotals; signals: OwnerInvoiceSignal[];
     unpaidInvoices: { invoiceNo: string; dueDate: string }[];
-    lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number }[];
+    lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number; bucket: AgingBucket }[];
   }>();
   for (const inv of invoices) {
     if (!inv.txn_date || !inv.balance) continue;
@@ -405,11 +412,12 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
     const entry = byCompany.get(key)!;
     entry.invoiceCount += 1;
     entry.total += inv.balance;
-    entry.aging[agingBucket(inv.txn_date, today)] += inv.balance;
+    const invBucket = agingBucket(inv.txn_date, today);
+    entry.aging[invBucket] += inv.balance;
     entry.signals.push({ qbInvoiceId: inv.qb_invoice_id, txnDate: inv.txn_date, locationName: inv.location_name });
     const invDueDate = dueDate(inv.txn_date).toISOString().slice(0, 10);
     if (inv.invoice_no) entry.unpaidInvoices.push({ invoiceNo: inv.invoice_no, dueDate: invDueDate });
-    entry.lineItems.push({ docNumber: inv.invoice_no, dueDate: invDueDate, txnType: 'Invoice', amount: inv.balance });
+    entry.lineItems.push({ docNumber: inv.invoice_no, dueDate: invDueDate, txnType: 'Invoice', amount: inv.balance, bucket: invBucket });
   }
 
   // Net unapplied CreditMemos into the SAME customer bucket, keyed the same
@@ -430,8 +438,9 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
     if (!byCompany.has(key)) byCompany.set(key, { displayName: cm.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [], lineItems: [] });
     const entry = byCompany.get(key)!;
     entry.total -= cm.balance;
-    entry.aging[agingBucket(cm.txn_date, today)] -= cm.balance;
-    entry.lineItems.push({ docNumber: cm.doc_number ?? 'Credit Note', dueDate: cm.txn_date, txnType: 'Credit Note', amount: -cm.balance });
+    const cmBucket = agingBucket(cm.txn_date, today);
+    entry.aging[cmBucket] -= cm.balance;
+    entry.lineItems.push({ docNumber: cm.doc_number ?? 'Credit Note', dueDate: cm.txn_date, txnType: 'Credit Note', amount: -cm.balance, bucket: cmBucket });
   }
 
   return [...byCompany.entries()].map(([key, entry]) => {

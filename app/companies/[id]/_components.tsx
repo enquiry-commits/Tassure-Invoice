@@ -2,7 +2,7 @@ import { AlertTriangle, Calendar, FileText, Mail, Receipt, ScrollText, Stamp, Us
 import { fmtDate, toIsoDateValue } from '@/lib/date';
 import { formatStaffName, nameForEmail } from '@/lib/staff-directory';
 import { effectiveOwner } from '@/lib/soa-data';
-import { AGING_BUCKETS, oldestAgingBucket } from '@/lib/soa';
+import { AGING_BUCKETS, TXN_TYPE_TAGS, oldestAgingBucket } from '@/lib/soa';
 import { DataCard } from './DataCard';
 import type { Company360 } from '@/lib/company-360';
 
@@ -290,17 +290,13 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
 // Pte Ltd, docs/INVARIANTS.md INV-QB-017) showed in Total Balance with no
 // line explaining why — now reads r.lineItems, which covers every
 // transaction type behind the total (Vincent, 2026-09-15: "让Company 360
-//也能看到完整明细"). Same tag+sign convention as the SOA detail modal
-// (app/billing/soa/_components.tsx's CREDIT_TYPE_TAGS) so a negative line
-// (Credit Note/Payment/Deposit reducing the balance) reads red with a tag;
-// a plain Invoice line is untagged and looks exactly as it did before.
-const LINE_ITEM_TYPE_TAGS: Record<string, string> = {
-  'Credit Note': 'CN',
-  'Credit Memo': 'CN',
-  'Payment': 'PMT',
-  'Journal Entry': 'JE',
-  'Deposit': 'DEP',
-};
+//也能看到完整明细"). Same tag+sign convention as the SOA detail modal, and
+// the SAME tag map (lib/soa.ts's TXN_TYPE_TAGS, not a locally hand-copied
+// one) — a locally-copied tag map is exactly how the SOA list's own aging
+// cells drifted into always showing "(CN)" even for a Deposit (caught by
+// Vincent the same day via XINCONNECT PTE. LTD., see that file's own
+// negativeBucketTag). A plain Invoice line is untagged and looks exactly
+// as it did before.
 
 export function OutstandingSection({ outstanding }: { outstanding: Company360['outstanding'] }) {
   return (
@@ -329,7 +325,7 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
                 its own tag rather than needing a header rename. */}
             <div>
               {r.lineItems.length ? r.lineItems.map((item, idx) => {
-                const tag = item.txnType === 'Invoice' ? null : (LINE_ITEM_TYPE_TAGS[item.txnType] ?? item.txnType);
+                const tag = item.txnType === 'Invoice' ? null : (TXN_TYPE_TAGS[item.txnType] ?? item.txnType);
                 const color = item.amount < 0 ? 'var(--status-danger)' : '#0f766e';
                 return (
                   <div key={`${item.txnType}-${item.docNumber}-${idx}`}>

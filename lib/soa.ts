@@ -38,6 +38,30 @@ export function agingBucket(txnDate: string, today: Date = new Date()): AgingBuc
   return 'd91_plus';
 }
 
+// Short tag for a non-Invoice transaction type, shown next to a negative
+// line-item amount wherever this business's outstanding-balance UI surfaces
+// one (SOA list's aging-bucket cells, SOA detail modal, Company 360's
+// Outstanding section) — ONE canonical map so all three stay in sync.
+// Before 2026-09-15 each surface hand-maintained its own copy; the SOA
+// list's copy was never updated past its original CreditMemo-only design,
+// so once the AgedReceivableDetail sync started surfacing Payment/Journal
+// Entry/Deposit too, it kept printing "(CN)" on every negative bucket
+// regardless of real type (caught by Vincent via XINCONNECT PTE. LTD. — a
+// Deposit-driven -514 showed "(CN)", while the detail modal correctly said
+// "(Deposit)" since its own fallback prints the raw QuickBooks type).
+// Abbreviations are Vincent's own literal spec (2026-09-15): Deposit→DP,
+// Payment→PM, Journal Entry→JE (kept short since these sit inline next to
+// a number). Falls back to the raw QuickBooks "Transaction Type" wording
+// for anything not in this map, so an unrecognized type still gets a real,
+// honest label instead of nothing or a wrong guess.
+export const TXN_TYPE_TAGS: Record<string, string> = {
+  'Credit Note': 'CN',
+  'Credit Memo': 'CN',
+  'Deposit': 'DP',
+  'Payment': 'PM',
+  'Journal Entry': 'JE',
+};
+
 export type AgingTotals = Record<AgingBucket, number>;
 
 export function emptyAgingTotals(): AgingTotals {
