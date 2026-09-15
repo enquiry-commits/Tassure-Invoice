@@ -73,7 +73,25 @@ export interface SoaCompanyRow {
   // "one shared computation" guarantee as everything else on this row —
   // every existing consumer of SoaCompanyRow ignores an added field it
   // doesn't ask for.
+  //
+  // Deliberately Invoice-only, unchanged since 2026-09-08 — DO NOT widen
+  // this to include Credit Note/Payment/Journal Entry/etc. Two existing
+  // consumers phrase this specifically as "invoices" and would read wrong
+  // with a non-invoice reference mixed in: components/assistant/
+  // ChatCards.tsx renders it as "#X、#Y 等N张" (a classifier that only
+  // makes sense for invoice-shaped documents) via lib/outstanding-lookup.ts
+  // — see `lineItems` below for the full-detail field added for that
+  // purpose instead.
   unpaidInvoices: { invoiceNo: string; dueDate: string }[];
+  // The full line-item detail behind this row's total — EVERY transaction
+  // type (Invoice, Credit Note, Payment, Journal Entry, Deposit, ...), not
+  // just invoices (contrast unpaidInvoices above). Added 2026-09-15 so
+  // Company 360's Outstanding section can show a complete breakdown (e.g.
+  // Cyber Quantum Pte Ltd's Journal Entry) instead of only ever listing
+  // Invoice-type rows while silently folding everything else into the
+  // Total Balance number with no visible line for it. Sorted oldest-
+  // due-first, same convention as unpaidInvoices.
+  lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number }[];
 }
 
 type UnpaidInvoice = {
@@ -88,7 +106,7 @@ type UnpaidInvoice = {
 // docs/INVARIANTS.md for the full incident this fixes. Still used by
 // legacyComputeSoaRows() (the report-unavailable fallback) below.
 type UnappliedCreditMemo = {
-  customer_name: string; qb_company: string; txn_date: string | null; balance: number | null;
+  customer_name: string; qb_company: string; txn_date: string | null; balance: number | null; doc_number: string | null;
 };
 
 // ── QuickBooks Aged Receivable Detail report snapshot ───────────────────
@@ -247,6 +265,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
   const byCompany = new Map<string, {
     displayName: string; invoiceCount: number; total: number; aging: AgingTotals; signals: OwnerInvoiceSignal[];
     unpaidInvoices: { invoiceNo: string; dueDate: string }[];
+    lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number }[];
   }>();
 
   // Seed from the report snapshot — authoritative for row EXISTENCE and for
@@ -256,7 +275,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
   for (const row of snapshot.rows) {
     const key = normalize(row.customerName);
     if (!key || INTERNAL_ACCOUNT_NORM_NAMES.has(key)) continue;
-    if (!byCompany.has(key)) byCompany.set(key, { displayName: row.customerName, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [] });
+    if (!byCompany.has(key)) byCompany.set(key, { displayName: row.customerName, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [], lineItems: [] });
     const entry = byCompany.get(key)!;
     entry.total += row.openBalance;
     entry.aging[row.agingBucket] += row.openBalance;
@@ -266,6 +285,13 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
       entry.invoiceCount += 1;
       if (row.docNumber) entry.unpaidInvoices.push({ invoiceNo: row.docNumber, dueDate: row.dueDate ?? row.txnDate ?? '' });
     }
+    // Every row, every type — see SoaCompanyRow.lineItems' own comment.
+    entry.lineItems.push({
+      docNumber: row.docNumber ?? row.qbTxnId ?? row.txnType,
+      dueDate: row.dueDate ?? row.txnDate ?? '',
+      txnType: row.txnType,
+      amount: row.openBalance,
+    });
   }
 
   // Owner-suggestion signal only — deliberately never creates a byCompany
@@ -294,6 +320,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
       totalOutstanding: Math.round(entry.total * 100) / 100,
       aging: entry.aging,
       unpaidInvoices: entry.unpaidInvoices.sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+      lineItems: entry.lineItems.sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
     };
   }).sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
 }
@@ -320,7 +347,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
     pageAll(() => {
       let query = supabase
         .from('quickbooks_credit_memos')
-        .select('customer_name, qb_company, txn_date, balance')
+        .select('customer_name, qb_company, txn_date, balance, doc_number')
         .eq('qb_company', company)
         .gt('balance', 0);
       if (opts?.customerNamePrefilter) query = query.ilike('customer_name', `%${opts.customerNamePrefilter}%`);
@@ -368,18 +395,21 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
   const byCompany = new Map<string, {
     displayName: string; invoiceCount: number; total: number; aging: AgingTotals; signals: OwnerInvoiceSignal[];
     unpaidInvoices: { invoiceNo: string; dueDate: string }[];
+    lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number }[];
   }>();
   for (const inv of invoices) {
     if (!inv.txn_date || !inv.balance) continue;
     const key = normalize(inv.customer_name);
     if (!key || INTERNAL_ACCOUNT_NORM_NAMES.has(key)) continue;
-    if (!byCompany.has(key)) byCompany.set(key, { displayName: inv.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [] });
+    if (!byCompany.has(key)) byCompany.set(key, { displayName: inv.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [], lineItems: [] });
     const entry = byCompany.get(key)!;
     entry.invoiceCount += 1;
     entry.total += inv.balance;
     entry.aging[agingBucket(inv.txn_date, today)] += inv.balance;
     entry.signals.push({ qbInvoiceId: inv.qb_invoice_id, txnDate: inv.txn_date, locationName: inv.location_name });
-    if (inv.invoice_no) entry.unpaidInvoices.push({ invoiceNo: inv.invoice_no, dueDate: dueDate(inv.txn_date).toISOString().slice(0, 10) });
+    const invDueDate = dueDate(inv.txn_date).toISOString().slice(0, 10);
+    if (inv.invoice_no) entry.unpaidInvoices.push({ invoiceNo: inv.invoice_no, dueDate: invDueDate });
+    entry.lineItems.push({ docNumber: inv.invoice_no, dueDate: invDueDate, txnType: 'Invoice', amount: inv.balance });
   }
 
   // Net unapplied CreditMemos into the SAME customer bucket, keyed the same
@@ -397,10 +427,11 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
     if (!cm.txn_date || !cm.balance) continue;
     const key = normalize(cm.customer_name);
     if (!key || INTERNAL_ACCOUNT_NORM_NAMES.has(key)) continue;
-    if (!byCompany.has(key)) byCompany.set(key, { displayName: cm.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [] });
+    if (!byCompany.has(key)) byCompany.set(key, { displayName: cm.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [], lineItems: [] });
     const entry = byCompany.get(key)!;
     entry.total -= cm.balance;
     entry.aging[agingBucket(cm.txn_date, today)] -= cm.balance;
+    entry.lineItems.push({ docNumber: cm.doc_number ?? 'Credit Note', dueDate: cm.txn_date, txnType: 'Credit Note', amount: -cm.balance });
   }
 
   return [...byCompany.entries()].map(([key, entry]) => {
@@ -421,6 +452,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
       // as the Aging bucket, and gives Company 360's Invoice/Due Date
       // columns a stable, meaningful order (not raw DB fetch order).
       unpaidInvoices: entry.unpaidInvoices.sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+      lineItems: entry.lineItems.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '')),
     };
   }).sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
 }

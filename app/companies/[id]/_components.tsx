@@ -284,6 +284,24 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
 // own explicit column-by-column asks. A company owing on 2+ systems shows
 // as 2+ rows here too, same as Outstanding's own "All" view — never
 // merged.
+//
+// 2026-09-15: this column used to read from r.unpaidInvoices (Invoice-only)
+// which meant a balance made up of e.g. a Journal Entry (see Cyber Quantum
+// Pte Ltd, docs/INVARIANTS.md INV-QB-017) showed in Total Balance with no
+// line explaining why — now reads r.lineItems, which covers every
+// transaction type behind the total (Vincent, 2026-09-15: "让Company 360
+//也能看到完整明细"). Same tag+sign convention as the SOA detail modal
+// (app/billing/soa/_components.tsx's CREDIT_TYPE_TAGS) so a negative line
+// (Credit Note/Payment/Deposit reducing the balance) reads red with a tag;
+// a plain Invoice line is untagged and looks exactly as it did before.
+const LINE_ITEM_TYPE_TAGS: Record<string, string> = {
+  'Credit Note': 'CN',
+  'Credit Memo': 'CN',
+  'Payment': 'PMT',
+  'Journal Entry': 'JE',
+  'Deposit': 'DEP',
+};
+
 export function OutstandingSection({ outstanding }: { outstanding: Company360['outstanding'] }) {
   return (
     <DataCard title="Outstanding" icon={<Receipt size={15} color="#fff" />} count={outstanding.length} empty="No outstanding balance on TAB/TAC/TAO for this company.">
@@ -304,10 +322,22 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
                 again: its Invoice No. cell is bare inherited text with no
                 "#" prefix, so this drops both the earlier custom font-size
                 override and the "#" this column used to add. Still stacks
-                one line per unpaid invoice — a structural necessity, not a
-                styling deviation, same reasoning as Due Date below. */}
+                one line per line item — a structural necessity, not a
+                styling deviation, same reasoning as Due Date below. Header
+                stays "Invoice No." (unchanged) since most rows are still
+                plain invoices; a non-invoice line disambiguates itself with
+                its own tag rather than needing a header rename. */}
             <div>
-              {r.unpaidInvoices.length ? r.unpaidInvoices.map(inv => <div key={inv.invoiceNo}>{inv.invoiceNo}</div>) : '—'}
+              {r.lineItems.length ? r.lineItems.map((item, idx) => {
+                const tag = item.txnType === 'Invoice' ? null : (LINE_ITEM_TYPE_TAGS[item.txnType] ?? item.txnType);
+                const color = item.amount < 0 ? 'var(--status-danger)' : '#0f766e';
+                return (
+                  <div key={`${item.txnType}-${item.docNumber}-${idx}`}>
+                    {item.docNumber}
+                    {tag && <span style={{ marginLeft: 5, fontSize: 10, fontWeight: 700, color }}>({tag} {item.amount < 0 ? '-' : ''}${Math.abs(item.amount).toFixed(2)})</span>}
+                  </div>
+                );
+              }) : '—'}
             </div>
             {/* Vincent, 2026-09-08: "Source 换成 Company（和截图那边一样，
                 包括字体和格式大小）" — points at this exact page's own
@@ -334,11 +364,11 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
               {/* Vincent: "Due Date 列的格式要参考 Appointed 列的字体格式" —
                   Officials/ND's own Appointed cell is bare inherited text,
                   no custom size/line-height. Still stacks one line per
-                  unpaid invoice (Appointed never has more than one date to
-                  show), same order as the Invoice column above (both come
-                  from r.unpaidInvoices, oldest due date first) so line i of
+                  line item (Appointed never has more than one date to
+                  show), same order as the Invoice No. column above (both
+                  come from r.lineItems, oldest due date first) so line i of
                   one lines up with line i of the other. */}
-              {r.unpaidInvoices.length ? r.unpaidInvoices.map(inv => <div key={inv.invoiceNo}>{fmtDate(inv.dueDate)}</div>) : '—'}
+              {r.lineItems.length ? r.lineItems.map((item, idx) => <div key={`${item.txnType}-${item.docNumber}-${idx}`}>{fmtDate(item.dueDate)}</div>) : '—'}
             </div>
             <div style={{ fontSize: 11, color: effectiveOwner(r) ? '#1e3a5f' : '#94a3b8' }}>{effectiveOwner(r) || '—'}</div>
           </div>
