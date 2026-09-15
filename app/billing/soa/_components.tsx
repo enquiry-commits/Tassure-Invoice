@@ -445,12 +445,24 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       two look similar). BUCKET_COLOR itself is untouched —
                       still used by the detail modal's own per-invoice
                       bucket badge below, which he hasn't asked to change. */}
-                  {AGING_BUCKETS.map(b => (
-                    <div key={b.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: c.aging[b.key] > 0 ? '#64748b' : '#cbd5e1' }}>
-                      {c.aging[b.key] > 0 ? fmtNum(c.aging[b.key]) : '—'}
-                    </div>
-                  ))}
-                  <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
+                  {/* Vincent, 2026-09-15: an aging bucket's own net value can go
+                      negative once an unapplied QuickBooks CreditMemo (Credit
+                      Note) is bucketed into it (see lib/soa-data.ts's
+                      computeSoaRows()) — the old `> 0` gate here treated that
+                      as "empty" and hid it behind a dash, even though the Total
+                      column two cells over already reflected it correctly. Now
+                      any non-zero value renders, negative ones in red with a
+                      "(CN)" tag so it reads as a credit line, not a typo. */}
+                  {AGING_BUCKETS.map(b => {
+                    const val = c.aging[b.key];
+                    const isCredit = val < 0;
+                    return (
+                      <div key={b.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: isCredit ? 'var(--status-danger)' : val > 0 ? '#64748b' : '#cbd5e1' }}>
+                        {val !== 0 ? (isCredit ? `${fmtNum(val)} (CN)` : fmtNum(val)) : '—'}
+                      </div>
+                    );
+                  })}
+                  <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: c.totalOutstanding < 0 ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
                   <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                     {c.picOptions.length ? c.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
                   </div>
@@ -634,7 +646,14 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.txnDate)}</div>
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.dueDate)}</div>
             <div style={{ textAlign: 'center', fontSize: 10.5, fontWeight: 700, color: BUCKET_COLOR[inv.bucket] }}>{AGING_BUCKETS.find(b => b.key === inv.bucket)?.label}</div>
-            <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: '#0f766e' }}>{fmtMoney(inv.balance)}</div>
+            {/* Vincent, 2026-09-15: an unapplied QuickBooks CreditMemo row
+                (inv.type === 'credit', see app/api/billing/soa/detail/
+                route.ts) shows its negative balance in red with a "(CN)" tag
+                — same visual language as the outer list's aging-bucket cells
+                — so it reads as a real credit line, not a stray minus sign. */}
+            <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: inv.type === 'credit' ? 'var(--status-danger)' : '#0f766e' }}>
+              {fmtMoney(inv.balance)}{inv.type === 'credit' ? ' (CN)' : ''}
+            </div>
           </div>
         ))}
       </div>
