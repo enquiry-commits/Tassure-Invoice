@@ -13,6 +13,22 @@ import { computeSuggestedOwner, collectInvolvedStaff, type OwnerInvoiceSignal } 
 // silently drift into different totals/owners for the same qbCompany —
 // same reasoning as this repo's other shared-computation libs (INV-QB-012
 // on correctedCustomerName being the one place customer_name gets fixed up).
+
+// Vincent, 2026-09-15, confirming a real discrepancy found while verifying
+// the CreditMemo fix (see docs/INVARIANTS.md INV-QB-015): "PAC是我们公司内部
+// 的交易主要为主，因为TAB/TAO/TAC都是不同的3家公司，有时候会提供PAC去支付一
+// 些公司费用" — TASSURE PAC is an internal inter-company settlement account
+// between TAB/TAC/TAO (one entity covering another's costs), not a real
+// external client, and must never appear as an "outstanding balance" a
+// client owes — showing up in the on-screen Outstanding list, an SOA email,
+// or the AI assistant's collections worklist would all be wrong. Excluded
+// here, the one shared computation (INV-DATA-022), so every consumer
+// inherits the exclusion. Matched on the normalized name (case/whitespace-
+// insensitive) — real production data has both "TASSURE PAC" and "Tassure
+// PAC" spellings across the 3 books. If Vincent identifies another internal
+// account later, add its normalized name here rather than inventing a new
+// mechanism for one more entry.
+const INTERNAL_ACCOUNT_NORM_NAMES = new Set(['tassure pac']);
 export interface SoaCompanyRow {
   companyName: string;
   companyId: number | null;
@@ -157,7 +173,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
   for (const inv of invoices) {
     if (!inv.txn_date || !inv.balance) continue;
     const key = normalize(inv.customer_name);
-    if (!key) continue;
+    if (!key || INTERNAL_ACCOUNT_NORM_NAMES.has(key)) continue;
     if (!byCompany.has(key)) byCompany.set(key, { displayName: inv.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [] });
     const entry = byCompany.get(key)!;
     entry.invoiceCount += 1;
@@ -181,7 +197,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
   for (const cm of creditMemos) {
     if (!cm.txn_date || !cm.balance) continue;
     const key = normalize(cm.customer_name);
-    if (!key) continue;
+    if (!key || INTERNAL_ACCOUNT_NORM_NAMES.has(key)) continue;
     if (!byCompany.has(key)) byCompany.set(key, { displayName: cm.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [] });
     const entry = byCompany.get(key)!;
     entry.total -= cm.balance;

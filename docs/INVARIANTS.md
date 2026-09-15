@@ -726,6 +726,37 @@ again.
   already accepts for Invoice data; real-time CreditMemo sync is a deferred
   follow-up, not done. *(source: 2026-09-15, confirmed via QuickBooks'
   own Aged Receivables report API + a real Excel export Vincent provided.)*
+- **INV-QB-016** — `TASSURE PAC` (both `"TASSURE PAC"` and `"Tassure PAC"`
+  spellings appear in real QuickBooks data across TAB/TAC/TAO) is an
+  internal inter-company settlement account, not a real client, and must
+  be excluded from every outstanding-balance computation
+  (`lib/soa-data.ts`'s `computeSoaRows()`, `INTERNAL_ACCOUNT_NORM_NAMES`)
+  — never shown as a client owing money on the SOA Outstanding list, an SOA
+  collection email, or the AI assistant's arrears/collections tools.
+  Vincent, 2026-09-15, confirming after this account showed up as TAB's
+  single largest post-CreditMemo-fix discrepancy ($27,413.06 overstated):
+  "PAC是我们公司内部的交易主要为主，因为TAB/TAO/TAC都是不同的3家公司，有时候
+  会提供PAC去支付一些公司费用" (PAC is primarily internal transactions —
+  TAB/TAC/TAO are 3 different companies, and PAC sometimes pays company
+  expenses on another's behalf). If a genuinely new internal/related-party
+  account turns up the same way (a customer whose real balance is driven by
+  inter-company settlement, not client billing), add its normalized name to
+  the same set rather than inventing a parallel mechanism for one entry.
+  A SEPARATE, larger, NOT-YET-FIXED issue found the same day via the same
+  investigation: several customers carry real balances in USD or RMB
+  (QuickBooks itself shows some as distinct currency-suffixed customer
+  records, e.g. `"Cyber Quantum Pte Ltd (USD)"` as a separate `Customer`
+  from the SGD `"Cyber Quantum Pte Ltd"`) while `quickbooks_invoices`/
+  `quickbooks_credit_memos` store the raw transaction-currency `balance`
+  with no currency code or SGD conversion captured anywhere — summing these
+  alongside SGD balances is not meaningful arithmetic. Vincent confirmed:
+  "这个就是我们财务说的货币问题，因为我们的记录基本是靠SGD的，但是有一些公司
+  是给美金和人民币的" (a known finance-team issue — our records are
+  basically SGD-based, but some companies pay in USD/RMB). Not fixed as of
+  this entry — needs its own scoped design (capture `CurrencyRef`/
+  `ExchangeRate` at sync time at minimum; decide whether to convert to SGD
+  or keep multi-currency totals visually separate) before touching
+  `computeSoaRows()` again for this reason.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
