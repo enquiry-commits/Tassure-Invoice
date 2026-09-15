@@ -687,6 +687,45 @@ again.
   to a day, so a snapshot lookup would 404 on exactly the invoices most in
   need of this feature. *(source: 2026-09-11, Vincent: "这些Invoice 可以直接
   点开到实际的PDF吗".)*
+- **INV-QB-015** — Any "what does this client owe" computation must net
+  QuickBooks `CreditMemo` balances against `Invoice` balances, never read
+  `Invoice.balance` alone. QuickBooks does NOT automatically reduce an
+  invoice's own `Balance` when a CreditMemo is created against it but left
+  "Unapplied" (applying is a separate manual step inside QuickBooks) — but
+  QuickBooks' own official Aged Receivables report (`/v3/company/{realmId}/
+  reports/AgedReceivables`) DOES net an unapplied CreditMemo's balance into
+  that customer's total, bucketed by the CreditMemo's OWN `TxnDate` (not
+  merged into whichever invoice it's "for"). Before `quickbooks_credit_memos`
+  existed, this app only ever synced `Invoice` objects
+  (`app/api/quickbooks/sync/route.ts`'s `SELECT * FROM Invoice`), so its own
+  outstanding-balance numbers silently drifted from QuickBooks' own truth —
+  confirmed 2026-09-15 via the report API against a real client-provided
+  Excel export: this system was overstating total receivables by
+  $185,722.57 (~42%) across TAB/TAC/TAO combined (real example: Ligang
+  Limited/TAC showed $790 owed; QuickBooks' own report nets it to -$970 once
+  its $1,760 unapplied CreditMemo, memo "CN TAC 02680170", is counted). The
+  fix: sync CreditMemo into its own table (`scripts/add-quickbooks-credit-
+  memos.sql`) and net it into `computeSoaRows()` (`lib/soa-data.ts`) — the
+  one shared computation per INV-DATA-022 — so every consumer inherits the
+  fix. Three independent bypass paths that query `quickbooks_invoices`
+  directly instead of going through `computeSoaRows()` needed their own
+  matching fix: `app/api/billing/soa/detail/route.ts` (the SOA drill-down
+  modal), `app/api/billing/soa/pdf/route.ts` (the actual merged SOA PDF sent
+  to a client — also fetches CreditMemo's own official QuickBooks PDF via
+  the same `/creditmemo/{id}/pdf` endpoint QuickBooks exposes, symmetric to
+  `/invoice/{id}/pdf`, rather than computing a number itself), and
+  `lib/client-comms-resolve.ts`'s `loadAutoTargetNames`/
+  `loadInvoicesByCompany` (SOA collection-email candidate list and line
+  items — without this fix, a client with a net credit could receive a
+  collection email for money they don't actually owe). As of 2026-09-15,
+  CreditMemo sync only runs on the daily full-sync cron, not the webhook/
+  incremental path (`lib/quickbooks-invoice-incremental.ts`,
+  `app/api/quickbooks/webhook/route.ts` — the latter hard-filters to
+  `'invoice'` entity type only and would silently drop a CreditMemo webhook
+  event) — same "up to a day stale until the next cron" tolerance INV-QB-014
+  already accepts for Invoice data; real-time CreditMemo sync is a deferred
+  follow-up, not done. *(source: 2026-09-15, confirmed via QuickBooks'
+  own Aged Receivables report API + a real Excel export Vincent provided.)*
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

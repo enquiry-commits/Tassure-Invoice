@@ -118,15 +118,19 @@ async function syncRecentYears(run: AutomationRun) {
   const webhookChanges = await processQuickBooksWebhookQueue(run);
   const thisYear = thisYearSGT();
   const results: Record<string, unknown>[] = [];
+  const creditMemoResults: Record<string, unknown>[] = [];
   for (const company of ['TAB', 'TAC', 'TAO'] as QbCompany[]) {
     for (const year of [String(thisYear - 2), String(thisYear - 1), String(thisYear)]) {
       const res = await syncYear(year, company, run.id);
       results.push({ company, year, ...res });
+      const cmRes = await syncCreditMemoYear(year, company, run.id);
+      creditMemoResults.push({ company, year, ...cmRes });
     }
   }
   const ok = webhookChanges.failed === 0
-    && results.every(result => !result.error && !result.invoice_error && Number(result.items_error ?? 0) === 0);
-  return NextResponse.json({ ok, webhook_changes: webhookChanges, results }, { status: ok ? 200 : 502 });
+    && results.every(result => !result.error && !result.invoice_error && Number(result.items_error ?? 0) === 0)
+    && creditMemoResults.every(result => !result.error);
+  return NextResponse.json({ ok, webhook_changes: webhookChanges, results, credit_memo_results: creditMemoResults }, { status: ok ? 200 : 502 });
 }
 
 export async function GET(req: NextRequest) {
@@ -139,8 +143,9 @@ export async function POST(req: NextRequest) {
     const { year = thisYearSGT().toString(), company = 'TAB' } = await req.json().catch(() => ({}));
     const qbCompany: QbCompany = company === 'TAC' || company === 'TAO' ? company : 'TAB';
     const result = await syncYear(String(year), qbCompany, run.id);
-    const ok = !result.error && !result.invoice_error && Number(result.items_error ?? 0) === 0;
-    return NextResponse.json({ ok, year, company: qbCompany, ...result }, { status: ok ? 200 : 502 });
+    const creditMemoResult = await syncCreditMemoYear(String(year), qbCompany, run.id);
+    const ok = !result.error && !result.invoice_error && Number(result.items_error ?? 0) === 0 && !creditMemoResult.error;
+    return NextResponse.json({ ok, year, company: qbCompany, ...result, credit_memo_result: creditMemoResult }, { status: ok ? 200 : 502 });
   });
 }
 
@@ -367,4 +372,114 @@ async function syncYear(year: string, company: QbCompany, runId: string) {
     stale_invoices_removed: invoicesRemoved ?? 0,
     stale_items_removed: itemsRemoved ?? 0,
   };
+}
+
+// ── CreditMemo sync ───────────────────────────────────────────────────────
+// Added 2026-09-15 — QuickBooks does NOT reduce an Invoice's own Balance
+// when a CreditMemo is created but left "Unapplied" (applying is a separate
+// manual step), yet QuickBooks' own official Aged Receivables report DOES
+// net an unapplied CreditMemo's balance into that customer's total. Never
+// syncing CreditMemo at all meant this app's own outstanding-balance numbers
+// silently drifted from QuickBooks' own truth — confirmed via QuickBooks'
+// own report API against a real client export: this system was overstating
+// total receivables by $185,722.57 (~42%) across TAB/TAC/TAO combined. See
+// scripts/add-quickbooks-credit-memos.sql and docs/INVARIANTS.md for the
+// full incident. Mirrors syncYear()'s structure (paginate, dedup, batch
+// upsert, stale-row reconcile) but is deliberately much simpler — a
+// CreditMemo's only role here is netting against a customer's balance, not
+// revenue-recognition/period classification, so there is no line-items
+// table and no classify()/parsePeriod() equivalent.
+async function syncCreditMemoYear(year: string, company: QbCompany, runId: string) {
+  const PAGE = 1000;
+  let allRows: Record<string, unknown>[] = [];
+  let realmSeen = false;
+  for (let start = 1; ; start += PAGE) {
+    const page = await qbQuery(
+      `SELECT * FROM CreditMemo WHERE TxnDate >= '${year}-01-01' AND TxnDate <= '${year}-12-31' STARTPOSITION ${start} MAXRESULTS ${PAGE}`,
+      company
+    );
+    if (!page) {
+      // Same OAuth-not-connected/expired handling as syncYear() — if the
+      // realm was never reached this run, treat it as a soft, non-fatal
+      // per-company error rather than throwing.
+      return { error: realmSeen
+        ? `QuickBooks ${company} CreditMemo page failed at STARTPOSITION ${start}; no database writes were made for ${year}.`
+        : `QuickBooks ${company} not connected or token expired` };
+    }
+    realmSeen = true;
+    allRows = allRows.concat(page.rows);
+    if (page.rows.length < PAGE) break;
+  }
+
+  const supabase = createAdminClient();
+  const now = new Date().toISOString();
+
+  const creditMemoRows: Record<string, unknown>[] = [];
+  for (const cm of allRows) {
+    const customer = (cm.CustomerRef as Record<string, unknown>) ?? {};
+    const qbCreditMemoId = String(cm.Id ?? '');
+    const qbCustomerId = String(customer.value ?? '');
+    if (!qbCreditMemoId) continue;
+
+    const totalAmt = Number(cm.TotalAmt ?? 0);
+    const balance  = Number(cm.Balance ?? 0);
+
+    // LinkedTxn — populated by QuickBooks only once this CreditMemo has been
+    // formally "Applied" to an invoice inside QuickBooks itself. Empty for
+    // every currently-unapplied CreditMemo, captured for when that changes.
+    const linkedTxns = (cm.LinkedTxn as Array<Record<string, unknown>> | undefined) ?? [];
+    const linkedInvoice = linkedTxns.find(t => t.TxnType === 'Invoice');
+
+    creditMemoRows.push({
+      qb_credit_memo_id: qbCreditMemoId,
+      doc_number:    (cm.DocNumber as string) ?? null,
+      qb_company:    company,
+      qb_customer_id: qbCustomerId || null,
+      customer_name: correctedCustomerName(company, qbCustomerId, (customer.name as string) ?? ''),
+      txn_date:      (cm.TxnDate as string) ?? null,
+      total_amt:     totalAmt,
+      balance,
+      linked_invoice_qb_id: linkedInvoice ? String(linkedInvoice.TxnId ?? '') || null : null,
+      private_note:  (cm.PrivateNote as string) ?? null,
+      status:        totalAmt === 0 && balance === 0 ? 'Voided' : balance === 0 ? 'Applied' : 'Unapplied',
+      scraped_at:    now,
+      last_seen_sync_run: runId,
+    });
+  }
+
+  // Same identity rule as invoices: QB Id is immutable, DocNumber is not.
+  const byId = new Map<string, Record<string, unknown>>();
+  for (const r of creditMemoRows) byId.set(`${r.qb_company}|${r.qb_credit_memo_id}`, r);
+  const deduped = [...byId.values()];
+
+  let done = 0;
+  let upsertErr: { message: string } | null = null;
+  for (let i = 0; i < deduped.length; i += 200) {
+    const { error } = await supabase
+      .from('quickbooks_credit_memos')
+      .upsert(deduped.slice(i, i + 200), { onConflict: 'qb_company,qb_credit_memo_id' });
+    if (error) { upsertErr = error; break; }
+    done += Math.min(200, deduped.length - i);
+  }
+
+  if (upsertErr) {
+    return {
+      error: `QuickBooks ${company} ${year} CreditMemo upsert was incomplete; stale-row reconciliation was skipped.`,
+      credit_memos_synced: done,
+    };
+  }
+
+  const startDate = `${year}-01-01`;
+  const endDate = `${year}-12-31`;
+  const staleFilter = `last_seen_sync_run.is.null,last_seen_sync_run.neq.${runId}`;
+  const { error: staleError, count: removed } = await supabase
+    .from('quickbooks_credit_memos')
+    .delete({ count: 'exact' })
+    .eq('qb_company', company)
+    .gte('txn_date', startDate)
+    .lte('txn_date', endDate)
+    .or(staleFilter);
+  if (staleError) return { error: `CreditMemo reconciliation failed: ${staleError.message}`, credit_memos_synced: done };
+
+  return { credit_memos_synced: done, stale_credit_memos_removed: removed ?? 0 };
 }

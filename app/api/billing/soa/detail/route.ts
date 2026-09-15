@@ -23,6 +23,11 @@ export interface SoaInvoiceDetail {
   balance: number;
   totalAmt: number;
   bucket: AgingBucket;
+  // 'credit' rows are unapplied QuickBooks CreditMemos (Credit Notes) shown
+  // alongside invoices so Chelsea/ACC can see exactly what's netting the
+  // total before generating the PDF — not silently folded into a number.
+  // See scripts/add-quickbooks-credit-memos.sql / docs/INVARIANTS.md.
+  type: 'invoice' | 'credit';
 }
 
 export async function GET(req: NextRequest) {
@@ -36,14 +41,25 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminClient();
   const target = normalize(companyName);
 
-  const invoices = await pageAll(() => supabase
-    .from('quickbooks_invoices')
-    .select('customer_name, qb_company, qb_invoice_id, invoice_no, txn_date, balance, total_amt')
-    .eq('qb_company', company)
-    .gt('balance', 0)) as Array<{
-      customer_name: string; qb_company: string; qb_invoice_id: string; invoice_no: string;
-      txn_date: string | null; balance: number | null; total_amt: number | null;
-    }>;
+  const [invoices, creditMemos] = await Promise.all([
+    pageAll(() => supabase
+      .from('quickbooks_invoices')
+      .select('customer_name, qb_company, qb_invoice_id, invoice_no, txn_date, balance, total_amt')
+      .eq('qb_company', company)
+      .gt('balance', 0)) as Promise<Array<{
+        customer_name: string; qb_company: string; qb_invoice_id: string; invoice_no: string;
+        txn_date: string | null; balance: number | null; total_amt: number | null;
+      }>>,
+    // Unapplied CreditMemos — see SoaInvoiceDetail's own comment on `type`.
+    pageAll(() => supabase
+      .from('quickbooks_credit_memos')
+      .select('customer_name, qb_company, qb_credit_memo_id, doc_number, txn_date, balance, total_amt')
+      .eq('qb_company', company)
+      .gt('balance', 0)) as Promise<Array<{
+        customer_name: string; qb_company: string; qb_credit_memo_id: string; doc_number: string | null;
+        txn_date: string | null; balance: number | null; total_amt: number | null;
+      }>>,
+  ]);
 
   const byName = new Map<string, typeof invoices>();
   for (const inv of invoices) {
@@ -52,16 +68,28 @@ export async function GET(req: NextRequest) {
     if (!byName.has(key)) byName.set(key, []);
     byName.get(key)!.push(inv);
   }
+  const creditByName = new Map<string, typeof creditMemos>();
+  for (const cm of creditMemos) {
+    const key = normalize(cm.customer_name);
+    if (!key) continue;
+    if (!creditByName.has(key)) creditByName.set(key, []);
+    creditByName.get(key)!.push(cm);
+  }
 
   let matched = byName.get(target);
   if (!matched) {
     const match = findUniqueBestMatch(companyName, [...byName.entries()], entry => entry[0], 70);
     matched = match.value?.[1];
   }
-  if (!matched) return NextResponse.json({ invoices: [] });
+  let matchedCredits = creditByName.get(target);
+  if (!matchedCredits) {
+    const match = findUniqueBestMatch(companyName, [...creditByName.entries()], entry => entry[0], 70);
+    matchedCredits = match.value?.[1];
+  }
+  if (!matched && !matchedCredits) return NextResponse.json({ invoices: [] });
 
   const today = new Date();
-  const result: SoaInvoiceDetail[] = matched
+  const invoiceRows: SoaInvoiceDetail[] = (matched ?? [])
     .filter(inv => inv.txn_date && inv.balance)
     .map(inv => ({
       qbCompany: inv.qb_company,
@@ -72,8 +100,23 @@ export async function GET(req: NextRequest) {
       balance: inv.balance!,
       totalAmt: inv.total_amt ?? inv.balance!,
       bucket: agingBucket(inv.txn_date!, today),
-    }))
-    .sort((a, b) => a.txnDate.localeCompare(b.txnDate));
+      type: 'invoice' as const,
+    }));
+  const creditRows: SoaInvoiceDetail[] = (matchedCredits ?? [])
+    .filter(cm => cm.txn_date && cm.balance)
+    .map(cm => ({
+      qbCompany: cm.qb_company,
+      qbInvoiceId: cm.qb_credit_memo_id,
+      invoiceNo: cm.doc_number ?? cm.qb_credit_memo_id,
+      txnDate: cm.txn_date!,
+      dueDate: dueDate(cm.txn_date!).toISOString().slice(0, 10),
+      balance: -cm.balance!,
+      totalAmt: -(cm.total_amt ?? cm.balance!),
+      bucket: agingBucket(cm.txn_date!, today),
+      type: 'credit' as const,
+    }));
+
+  const result = [...invoiceRows, ...creditRows].sort((a, b) => a.txnDate.localeCompare(b.txnDate));
 
   return NextResponse.json({ invoices: result });
 }

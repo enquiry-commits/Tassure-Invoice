@@ -65,6 +65,15 @@ type UnpaidInvoice = {
   txn_date: string | null; balance: number | null; location_name: string | null;
 };
 
+// An unapplied CreditMemo (Credit Note) — QuickBooks does not reduce an
+// Invoice's own Balance when a CreditMemo is left "Unapplied", but
+// QuickBooks' own official Aged Receivables report nets it into the
+// customer's total anyway. See scripts/add-quickbooks-credit-memos.sql and
+// docs/INVARIANTS.md for the full incident this fixes.
+type UnappliedCreditMemo = {
+  customer_name: string; qb_company: string; txn_date: string | null; balance: number | null;
+};
+
 // The effective "who chases this" shown on screen as Owner: a human's
 // confirmed pick always wins, then the real QB-Class/Location signal, then
 // (only when there's exactly one and no better signal) the sole PIC name —
@@ -83,7 +92,7 @@ export function effectiveOwner(row: Pick<SoaCompanyRow, 'soaPic' | 'suggestedOwn
 export async function computeSoaRows(company: QbCompany, opts?: { customerNamePrefilter?: string }): Promise<SoaCompanyRow[]> {
   const supabase = createAdminClient();
 
-  const [invoices, companiesRes, ownersRes] = await Promise.all([
+  const [invoices, creditMemos, companiesRes, ownersRes] = await Promise.all([
     pageAll(() => {
       let query = supabase
         .from('quickbooks_invoices')
@@ -93,6 +102,15 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
       if (opts?.customerNamePrefilter) query = query.ilike('customer_name', `%${opts.customerNamePrefilter}%`);
       return query;
     }) as Promise<UnpaidInvoice[]>,
+    pageAll(() => {
+      let query = supabase
+        .from('quickbooks_credit_memos')
+        .select('customer_name, qb_company, txn_date, balance')
+        .eq('qb_company', company)
+        .gt('balance', 0);
+      if (opts?.customerNamePrefilter) query = query.ilike('customer_name', `%${opts.customerNamePrefilter}%`);
+      return query;
+    }) as Promise<UnappliedCreditMemo[]>,
     supabase.from('companies').select('id, company_name, pic'),
     supabase.from('soa_owners').select('customer_name_norm, soa_pic').eq('qb_company', company),
   ]);
@@ -147,6 +165,27 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
     entry.aging[agingBucket(inv.txn_date, today)] += inv.balance;
     entry.signals.push({ qbInvoiceId: inv.qb_invoice_id, txnDate: inv.txn_date, locationName: inv.location_name });
     if (inv.invoice_no) entry.unpaidInvoices.push({ invoiceNo: inv.invoice_no, dueDate: dueDate(inv.txn_date).toISOString().slice(0, 10) });
+  }
+
+  // Net unapplied CreditMemos into the SAME customer bucket, keyed the same
+  // way (normalize(customer_name) — no separate matching scheme invented for
+  // CreditMemo). A CreditMemo is bucketed into the aging bucket matching its
+  // OWN txn_date, not merged into whichever invoice it might be "for" — this
+  // exactly matches QuickBooks' own Aged Receivables report (confirmed
+  // 2026-09-15 against a real example: Ligang Limited's $1,760 CreditMemo
+  // landed in the 31-60 bucket, its $790 invoice separately in 91+over, only
+  // the Total column net at -970). A company can appear here with ONLY a
+  // credit and no unpaid invoice at all (net negative total, meaning we owe
+  // them) — shown rather than silently dropped, matching QuickBooks' own
+  // report rather than only ever showing customers who owe us.
+  for (const cm of creditMemos) {
+    if (!cm.txn_date || !cm.balance) continue;
+    const key = normalize(cm.customer_name);
+    if (!key) continue;
+    if (!byCompany.has(key)) byCompany.set(key, { displayName: cm.customer_name, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [] });
+    const entry = byCompany.get(key)!;
+    entry.total -= cm.balance;
+    entry.aging[agingBucket(cm.txn_date, today)] -= cm.balance;
   }
 
   return [...byCompany.entries()].map(([key, entry]) => {

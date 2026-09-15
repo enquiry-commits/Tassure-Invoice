@@ -3,6 +3,7 @@ import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { formatContactName, type InvoiceRef } from '@/lib/email-merge';
 import { applyCampaignRecipientRules, buildDefaultCcList, parseEmailList, recipientLines } from '@/lib/campaign-recipients';
 import { findStaffEmails } from '@/lib/staff-directory';
+import { computeAllSoaRows } from '@/lib/soa-data';
 
 /**
  * Shared company/invoice resolution for Client Communications, used by both
@@ -152,6 +153,27 @@ export async function loadInvoicesByCompany(
       if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
       invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as InvoiceRef['qbCompany'], invoiceNo: r.invoice_no, amount: Number(r.balance ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
     }
+    // Unapplied CreditMemos (Credit Notes) — merged in as negative-amount
+    // lines so the email body's invoice list actually reflects what nets
+    // the total (loadAutoTargetNames already excludes anyone whose net is
+    // <= 0, but someone who owes SOMETHING net of a partial credit should
+    // still see the credit line, not just the gross invoice amount). Deliberately
+    // `qbInvoiceId: null` — it is NOT a real QuickBooks invoice id, and
+    // Draft Review's "download invoice PDF" button (lib/email-merge.ts's own
+    // comment on InvoiceRef.qbInvoiceId) would fetch the wrong QB endpoint
+    // for it if populated.
+    const { data: creditRows } = await supabase.from('quickbooks_credit_memos')
+      .select('customer_name, qb_company, doc_number, qb_credit_memo_id, balance').gt('balance', 0);
+    for (const r of creditRows ?? []) {
+      const key = normalize(r.customer_name);
+      if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
+      invoicesByCompany.get(key)!.push({
+        qbCompany: r.qb_company as InvoiceRef['qbCompany'],
+        invoiceNo: r.doc_number ?? r.qb_credit_memo_id,
+        amount: -Number(r.balance ?? 0),
+        qbInvoiceId: null,
+      });
+    }
   }
   return invoicesByCompany;
 }
@@ -169,9 +191,18 @@ export async function loadAutoTargetNames(
       .or('status.is.null,status.neq.Excluded');
     targetNames = (arRows ?? []).map(r => r.entity_name);
   } else if (type === 'soa') {
-    const { data: unpaid } = await supabase.from('quickbooks_invoices')
-      .select('customer_name').gt('balance', 0);
-    targetNames = [...new Set((unpaid ?? []).map(r => r.customer_name))];
+    // Was a raw `quickbooks_invoices.balance > 0` check — included a company
+    // even when an unapplied QuickBooks CreditMemo (Credit Note) on that same
+    // qb_company already nets their true balance to zero or negative (i.e.
+    // we owe THEM), sending a collection email to someone who doesn't
+    // actually owe money. Switched to the same net computeAllSoaRows() this
+    // repo already uses everywhere else for "what does this client owe" —
+    // see docs/INVARIANTS.md. Checked per (customer, qb_company) row, not
+    // summed across all 3 books first: a real debt on one QB company and an
+    // unrelated credit on a different one are different services/relationships
+    // and should not cancel each other out here.
+    const rows = await computeAllSoaRows();
+    targetNames = [...new Set(rows.filter(r => r.totalOutstanding > 0).map(r => r.companyName))];
   } else {
     targetNames = companyNames ?? [];
   }
