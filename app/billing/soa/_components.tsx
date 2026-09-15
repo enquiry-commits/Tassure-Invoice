@@ -59,25 +59,6 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
   current: '#64748b', d1_30: '#0f766e', d31_60: '#ca8a04', d61_90: '#ea580c', d91_plus: 'var(--status-danger)',
 };
 
-// Which non-Invoice type(s) actually explain a negative aging-bucket cell
-// — e.g. a Deposit netting a bucket negative must read "(DP)", not always
-// "(CN)" (see lib/soa.ts's TXN_TYPE_TAGS comment for the 2026-09-15
-// incident this fixes: XINCONNECT PTE. LTD.'s Deposit-driven -514 showed
-// "(CN)" here while the detail modal correctly said "(Deposit)"). A bucket
-// total is a NET SUM that can combine multiple line items — the raw type
-// names (for a title tooltip — Vincent: "这种有简写的好像稍微要有一个窗口
-// 描述到底是什么") and the short joined tag (for the cell text itself, "/"-
-// joined on the rare chance more than one negative type lands in the same
-// bucket) are split into two functions so a caller can use both. Empty only
-// if the bucket is negative with no line item to explain it, which
-// shouldn't happen — safer to say nothing than to guess wrong again.
-function negativeBucketTypes(lineItems: Row['lineItems'], bucketKey: AgingBucket): string[] {
-  return [...new Set(lineItems.filter(item => item.bucket === bucketKey && item.amount < 0).map(item => item.txnType))];
-}
-function negativeBucketTag(types: string[]): string {
-  return types.length ? ` (${types.map(t => TXN_TYPE_TAGS[t] ?? t).join('/')})` : '';
-}
-
 // Vincent, 2026-09-07: first asked for a distinct color per system on the
 // "All" view's Source badge ("这边稍微用不同的颜色区分 TAB/TAC/TAO"), tried
 // blue/violet/green — then, after seeing the whole row together: "我加多颜
@@ -434,7 +415,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
               return (
                 <div key={rowKey(c)} className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}`}
                   onClick={() => setExpanded(isOpen ? null : rowKey(c))}
-                  style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'center', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer' }}>
+                  style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'start', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer' }}>
                   <div style={{ color: '#94a3b8', display: 'flex' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
                   <div style={{ padding: '0 6px' }}>
                     {/* Vincent, 2026-09-07: "公司名要统一...都大字母" — some
@@ -473,23 +454,36 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       two look similar). BUCKET_COLOR itself is untouched —
                       still used by the detail modal's own per-invoice
                       bucket badge below, which he hasn't asked to change. */}
-                  {/* Vincent, 2026-09-15: an aging bucket's own net value can go
-                      negative once an unapplied QuickBooks CreditMemo (Credit
-                      Note) is bucketed into it (see lib/soa-data.ts's
-                      computeSoaRows()) — the old `> 0` gate here treated that
-                      as "empty" and hid it behind a dash, even though the Total
-                      column two cells over already reflected it correctly. Now
-                      any non-zero value renders, negative ones in red with a
-                      tag naming the real type behind it (negativeBucketTag,
-                      above) — not always "(CN)", since a Payment/Journal
-                      Entry/Deposit can net a bucket negative too. */}
+                  {/* Vincent, 2026-09-15: "当一个列里面出现多过一个单逾期的
+                      时候，这些欠款都应该要出现在List...我一行一个数字" — a
+                      bucket cell used to show only its NET value, which goes
+                      wrong two ways: (1) an unapplied CreditMemo/Payment/
+                      Journal Entry/Deposit netting it negative used to be
+                      hidden behind the old `> 0` gate entirely; (2) even
+                      after that fix, several real line items that happen to
+                      net to exactly the same total (or to $0) still collapse
+                      into ONE number or a dash — e.g. ACCADIA MANAGEMENT
+                      SERVICES's real 7-line 91+ bucket (1,900 / 1,500 /
+                      1,200 / 1,500 / -4,600 (JE) / 1,200 / -2,700 (JE), net
+                      exactly $0) showed nothing at all. Now every line item
+                      in the bucket renders on its own line — one number per
+                      line, oldest-due first (c.lineItems is already sorted
+                      that way) — so nothing with real money behind it is
+                      ever hidden by netting. Total (below) is still the one
+                      place a genuine net makes sense. */}
                   {AGING_BUCKETS.map(b => {
-                    const val = c.aging[b.key];
-                    const isCredit = val < 0;
-                    const negTypes = isCredit ? negativeBucketTypes(c.lineItems, b.key) : [];
+                    const items = c.lineItems.filter(item => item.bucket === b.key);
                     return (
-                      <div key={b.key} title={negTypes.length ? negTypes.join(', ') : undefined} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: isCredit ? 'var(--status-danger)' : val > 0 ? '#64748b' : '#cbd5e1', cursor: negTypes.length ? 'help' : undefined }}>
-                        {val !== 0 ? (isCredit ? `${fmtNum(val)}${negativeBucketTag(negTypes)}` : fmtNum(val)) : '—'}
+                      <div key={b.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif' }}>
+                        {items.length ? items.map((item, idx) => {
+                          const isNeg = item.amount < 0;
+                          const tag = isNeg ? (TXN_TYPE_TAGS[item.txnType] ?? item.txnType) : null;
+                          return (
+                            <div key={`${item.txnType}-${item.docNumber}-${idx}`} title={isNeg ? item.txnType : undefined} style={{ color: isNeg ? 'var(--status-danger)' : '#64748b', cursor: isNeg ? 'help' : undefined }}>
+                              {fmtNum(item.amount)}{tag ? ` (${tag})` : ''}
+                            </div>
+                          );
+                        }) : <span style={{ color: '#cbd5e1' }}>—</span>}
                       </div>
                     );
                   })}
@@ -670,10 +664,29 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
           <div style={{ textAlign: 'right' }}>Balance</div>
         </div>
         {invoices === null && <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>Loading…</div>}
-        {invoices !== null && invoices.map(inv => (
-          <div key={`${inv.qbCompany}-${inv.invoiceNo}`} style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px 90px 100px', gap: 0, alignItems: 'center', padding: '9px 10px', borderTop: '1px solid #f1f5f9' }}>
+        {/* Vincent, 2026-09-15: "这些单都要是可以点开查看PDF的" — every row
+            with a real QuickBooks document (Invoice or Credit Note; both
+            have an official /pdf endpoint, see
+            app/api/quickbooks/invoice-pdf/route.ts's new docType param)
+            opens that document's own PDF in a new tab. Payment/Journal
+            Entry/Deposit rows (type 'other') genuinely have no such
+            document in QuickBooks — same reasoning as the merged PDF's
+            "Other Adjustments" summary page below not trying to fake one —
+            so those stay plain, non-clickable text with a title explaining
+            why, not a dead/broken link. */}
+        {invoices !== null && invoices.map(inv => {
+          const canOpenPdf = inv.type !== 'other' && !!inv.qbInvoiceId;
+          const openPdf = () => {
+            if (!canOpenPdf) return;
+            const docType = inv.type === 'credit' ? '&docType=creditmemo' : '';
+            window.open(`/api/quickbooks/invoice-pdf?company=${inv.qbCompany}&id=${encodeURIComponent(inv.qbInvoiceId!)}${docType}`, '_blank');
+          };
+          return (
+          <div key={`${inv.qbCompany}-${inv.invoiceNo}`} onClick={openPdf}
+            title={canOpenPdf ? `View ${inv.rawType} PDF` : `No PDF document exists for a ${inv.rawType} in QuickBooks`}
+            style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px 90px 100px', gap: 0, alignItems: 'center', padding: '9px 10px', borderTop: '1px solid #f1f5f9', cursor: canOpenPdf ? 'pointer' : 'default' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#31506f' }}>{inv.qbCompany}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>#{inv.invoiceNo}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: canOpenPdf ? '#2563eb' : '#334155', textDecoration: canOpenPdf ? 'underline' : 'none' }}>#{inv.invoiceNo}</div>
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.txnDate)}</div>
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.dueDate)}</div>
             <div style={{ textAlign: 'center', fontSize: 10.5, fontWeight: 700, color: BUCKET_COLOR[inv.bucket] }}>{AGING_BUCKETS.find(b => b.key === inv.bucket)?.label}</div>
@@ -684,11 +697,12 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
                 QuickBooks itself counts against this balance — reads red
                 with a tag automatically, no per-type UI change needed the
                 next time a new txn_type shows up in real data. */}
-            <div title={inv.balance < 0 ? inv.rawType : undefined} style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: inv.balance < 0 ? 'var(--status-danger)' : '#0f766e', cursor: inv.balance < 0 ? 'help' : undefined }}>
+            <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: inv.balance < 0 ? 'var(--status-danger)' : '#0f766e' }}>
               {fmtMoney(inv.balance)}{inv.balance < 0 ? ` (${TXN_TYPE_TAGS[inv.rawType] ?? inv.rawType})` : ''}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {result && (

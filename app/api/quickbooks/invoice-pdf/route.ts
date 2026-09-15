@@ -20,6 +20,19 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: 'A valid QuickBooks company (TAB, TAC, or TAO) is required.' }, { status: 400 });
   }
 
+  // 2026-09-15: SOA detail modal rows can be either type — Vincent: "这些单
+  // 都要是可以点开查看PDF的" (every row [that has a real document] should be
+  // clickable to view its PDF). QuickBooks Online has separate, parallel PDF
+  // endpoints for the two document types (/invoice/{id}/pdf vs
+  // /creditmemo/{id}/pdf) — everything else in this route (auth, DocNumber
+  // resolution, error handling) is identical between them, so one shared
+  // route branches on `docType` rather than duplicating the whole route.
+  // Every EXISTING caller omits ?docType, so this is purely additive.
+  const docTypeParam = req.nextUrl.searchParams.get('docType');
+  const docType: 'invoice' | 'creditmemo' = docTypeParam === 'creditmemo' ? 'creditmemo' : 'invoice';
+  const qbEntity = docType === 'creditmemo' ? 'CreditMemo' : 'Invoice';
+  const qbPath = docType === 'creditmemo' ? 'creditmemo' : 'invoice';
+
   let invoiceId = req.nextUrl.searchParams.get('id')?.trim() ?? '';
   // Vincent, 2026-09-11: AR Reminder/Billing Drafts only ever have the
   // DocNumber shown on screen (e.g. "02610938"), never QuickBooks' own
@@ -30,23 +43,23 @@ export async function GET(req: NextRequest) {
   if (!invoiceId) {
     const invoiceNo = req.nextUrl.searchParams.get('invoiceNo')?.trim() ?? '';
     if (!ID_PATTERN.test(invoiceNo)) {
-      return Response.json({ error: 'A valid QuickBooks invoice id or invoice number is required.' }, { status: 400 });
+      return Response.json({ error: `A valid QuickBooks ${qbEntity.toLowerCase()} id or number is required.` }, { status: 400 });
     }
-    const lookup = await qbQuery(`SELECT Id FROM Invoice WHERE DocNumber = '${invoiceNo}'`, company);
+    const lookup = await qbQuery(`SELECT Id FROM ${qbEntity} WHERE DocNumber = '${invoiceNo}'`, company);
     const resolvedId = lookup?.rows[0]?.Id as string | undefined;
     if (!resolvedId) {
-      return Response.json({ error: `No ${company} invoice found with number ${invoiceNo}.` }, { status: 404 });
+      return Response.json({ error: `No ${company} ${qbEntity.toLowerCase()} found with number ${invoiceNo}.` }, { status: 404 });
     }
     invoiceId = resolvedId;
   }
   if (!ID_PATTERN.test(invoiceId)) {
-    return Response.json({ error: 'A valid QuickBooks invoice id is required.' }, { status: 400 });
+    return Response.json({ error: `A valid QuickBooks ${qbEntity.toLowerCase()} id is required.` }, { status: 400 });
   }
 
   const token = await getValidToken(company);
   if (!token) return Response.json({ error: `QuickBooks ${company} not connected.` }, { status: 503 });
 
-  const response = await fetch(`${QB_BASE}/v3/company/${token.realm_id}/invoice/${invoiceId}/pdf?minorversion=65`, {
+  const response = await fetch(`${QB_BASE}/v3/company/${token.realm_id}/${qbPath}/${invoiceId}/pdf?minorversion=65`, {
     headers: { Authorization: `Bearer ${token.access_token}`, Accept: 'application/pdf' },
     cache: 'no-store',
   });

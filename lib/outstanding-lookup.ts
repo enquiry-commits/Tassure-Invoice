@@ -1,9 +1,8 @@
 import 'server-only';
 
 import { createAdminClient } from './supabase';
-import { normalize, resolveCompany } from './company-name';
+import { normalize, resolveCompany, significantWord } from './company-name';
 import { computeSoaRows, effectiveOwner, type SoaCompanyRow } from './soa-data';
-import { significantWord } from './company-360';
 import { AGING_BUCKETS, oldestAgingBucket } from './soa';
 import type { QbCompany } from './quickbooks';
 

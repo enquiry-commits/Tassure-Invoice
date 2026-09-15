@@ -176,7 +176,26 @@ the SOA detail modal / merged PDF / Client Communications SOA candidate
 list all degrade to the SAME (legacy) mode for that company at the same
 time — never a mix where the total uses one mode and the detail list uses
 the other.
+Also spot-check one real non-SGD customer (e.g. a `CurrencyRef: USD`
+`Customer` — `SELECT * FROM Customer WHERE ... ` for any with a nonzero
+`Balance` and non-SGD `CurrencyRef`): confirm the figure this app stored in
+`quickbooks_ar_aging_detail.open_balance` equals that customer's raw
+transaction amount × its own `ExchangeRate` (both readable on the live
+QuickBooks transaction object), not the raw foreign-currency figure passed
+through unconverted.
 **Guards:** `docs/INVARIANTS.md` INV-QB-015, INV-QB-016, INV-QB-017.
+
+### REG-018 — SOA detail modal / merged PDF resolve for a company whose display name differs from its real QuickBooks customer_name
+Pick a company whose `companies.company_name` (or fuzzy-matched display
+name) differs from its real QuickBooks `customer_name` in more than
+case — different punctuation (`&` vs `and`, `Pte. Ltd.` vs `Pte Ltd`), or
+any spelling variant that still fuzzy-matches via `lib/company-name.ts`'s
+`normalize()`/`matchScore()`. Open that company's SOA detail modal and
+confirm it shows its real invoice/line-item rows (not empty, even though
+the on-screen Outstanding total for the same company is correct) — then
+confirm "Download SOA PDF" for the same company produces a real, non-empty
+merged PDF.
+**Guards:** `docs/INVARIANTS.md` INV-QB-018.
 
 ---
 

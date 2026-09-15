@@ -757,6 +757,26 @@ again.
   `ExchangeRate` at sync time at minimum; decide whether to convert to SGD
   or keep multi-currency totals visually separate) before touching
   `computeSoaRows()` again for this reason.
+  **CLOSED, same day, by the INV-QB-017 report-sync redesign below** — the
+  `AgedReceivableDetail` report is itself always denominated in the home
+  currency (its `Header.Currency` field reads `"SGD"` for TAB/TAC/TAO,
+  confirmed live), so `quickbooks_ar_aging_detail.open_balance` is already
+  SGD-converted for every row, not a raw foreign-currency figure. Vincent
+  asked for this to be re-verified directly rather than re-asserted ("在QB
+  内我们也是有记入 USD/SGD和人民币的，这些不能把全部的货币都当成新币
+  (SGD)") — confirmed with exact arithmetic on 2 independent live
+  transactions, not just the report's own claim: (1) `Cyber Quantum Pte
+  Ltd (USD)`'s Journal Entry 17648 — raw `Line[].Amount` 16,040.26 USD ×
+  its own `ExchangeRate` 1.3740588 = 22,040.26, matching the report's Open
+  Balance and this app's stored figure exactly; (2) `FAITH CAPITAL GLOBAL
+  FUND VCC`'s Invoice 23148 — raw `Balance` 507.55 USD × `ExchangeRate`
+  1.2861 = 652.76, matching QuickBooks' own `HomeBalance` field AND this
+  app's stored `open_balance` exactly. Confirmed live: only USD-denominated
+  customers currently exist (TAB 5, TAC 2, TAO 0) — no RMB/CNY customer
+  currently exists in any of the 3 books, despite Vincent's concern about
+  RMB specifically; the conversion mechanism itself is currency-agnostic
+  (driven by each transaction's own `CurrencyRef`/`ExchangeRate`, not a
+  USD-specific code path), so this holds for RMB the moment one appears.
 - **INV-QB-017** — An entity-by-entity QuickBooks sync (Invoice, then
   CreditMemo, INV-QB-015) can NEVER be assumed complete, no matter how many
   entity types it currently covers — only QuickBooks' own server-side
@@ -803,6 +823,30 @@ again.
   feedback that reactive entity-by-entity investigation wastes time
   rediscovering gaps one at a time; this fix is the structural response,
   not another entity added to the same reactive pattern.)*
+- **INV-QB-018** — A `customerNamePrefilter` passed to
+  `lib/soa-data.ts`'s `loadArAgingSnapshot()`/`legacyComputeSoaRows()` MUST
+  be reduced through `lib/company-name.ts`'s `significantWord()` before use
+  — never passed as a raw, full company display name. Both functions use
+  the prefilter as a literal SQL `ilike '%...%'` substring test against the
+  real QuickBooks `customer_name` column; a resolved/fuzzy-matched display
+  name (e.g. `companies.company_name` = "ACG Interior and Exhibition Pte.
+  Ltd.") can differ from the actual `customer_name` QuickBooks stores (e.g.
+  "ACG Interior & Exhibition Pte Ltd" — "&" vs "and", "Pte. Ltd." vs "Pte
+  Ltd") in ways `normalize()`'s own fuzzy scoring shrugs off everywhere
+  else in this app but a literal substring test cannot — matching zero
+  rows even though the two names are unambiguously the same company. Both
+  functions now reduce internally (idempotent, so a caller that already
+  pre-reduced its own input via `significantWord()` — `lib/company-360.ts`,
+  `lib/outstanding-lookup.ts` — is unaffected), closing this for every
+  current and future caller at the one shared choke point rather than
+  trusting each call site to remember. *(source: 2026-09-15, Vincent found
+  this via ACG Interior & Exhibition Pte Ltd's SOA detail modal — the
+  on-screen Outstanding row showed a real S$4,540.00 total (from
+  `computeSoaRows()`, which is never given a raw prefilter) but the detail
+  modal opened to a completely empty invoice list (`app/api/billing/soa/
+  detail/route.ts` and `app/api/billing/soa/pdf/route.ts` both passed the
+  raw `?companyName=` query param straight through) — "为什么有一些还是看
+  不到单？" (why do some [companies] still show no invoices?).)*
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

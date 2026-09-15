@@ -30,6 +30,29 @@ export function normalize(name: string): string {
   return v;
 }
 
+// The word used to prefilter a large, company_name-only table via ilike
+// before scoring — normalize() already strips "pte ltd"/"sdn bhd"/etc., so
+// the remaining longest word is usually the one distinguishing word a raw
+// company_name column will still literally contain. Moved here from
+// lib/company-360.ts (2026-09-15) so lib/soa-data.ts can use it too without
+// a circular import (company-360.ts itself imports computeSoaRows from
+// soa-data.ts) — this file is THE shared home for company-name utilities,
+// per its own header above. Idempotent (significantWord(significantWord(x))
+// === significantWord(x)), so callers that already reduced their own input
+// and callers that pass a raw full name both get the same safe result — see
+// lib/soa-data.ts's loadArAgingSnapshot()/legacyComputeSoaRows() for why
+// that mattered: passing a full, un-reduced company name (e.g. "ACG
+// Interior and Exhibition Pte. Ltd.") as a raw ilike pattern against a real
+// QuickBooks customer_name that spells it differently (e.g. "ACG Interior &
+// Exhibition Pte Ltd") matches zero rows, even though the same two names
+// fuzzy-match fine everywhere else in this app — a real bug Vincent found
+// via ACG's SOA detail modal coming back completely empty.
+export function significantWord(companyName: string): string | null {
+  const words = normalize(companyName).split(' ').filter(w => w.length > 2);
+  if (!words.length) return null;
+  return words.reduce((a, b) => (b.length > a.length ? b : a));
+}
+
 const wordsCache = new Map<string, Set<string>>();
 function wordsOf(normalized: string): Set<string> {
   let s = wordsCache.get(normalized);

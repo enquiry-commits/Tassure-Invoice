@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createAdminClient } from './supabase';
 import { pageAll } from './page-all';
-import { normalize, findUniqueBestMatch } from './company-name';
+import { normalize, findUniqueBestMatch, significantWord } from './company-name';
 import { formatStaffNameList } from './staff-directory';
 import type { QbCompany } from './quickbooks';
 import { agingBucket, dueDate, emptyAgingTotals, type AgingBucket, type AgingTotals } from './soa';
@@ -159,12 +159,23 @@ export async function loadArAgingSnapshot(
     && (Date.now() - new Date(state.last_synced_at).getTime()) < AR_AGING_FALLBACK_STALE_MS;
   if (!fresh) return { fresh: false };
 
+  // 2026-09-15: MUST reduce to significantWord() here, not use the raw
+  // string as-is — a caller passing a full, already-fuzzy-matched display
+  // name (e.g. "/detail" and "/pdf" routes both pass their ?companyName=
+  // query param verbatim) can differ from the real QuickBooks customer_name
+  // in ways a literal ilike substring won't survive (e.g. "&" vs "and",
+  // "Pte. Ltd." vs "Pte Ltd") even though the two names fuzzy-match fine
+  // everywhere else in this app. significantWord() is idempotent, so a
+  // caller that already pre-reduced its own input (lib/company-360.ts,
+  // lib/outstanding-lookup.ts) is unaffected. Real bug found via ACG
+  // Interior & Exhibition Pte Ltd's SOA detail modal coming back empty.
+  const safePrefilter = customerNamePrefilter ? (significantWord(customerNamePrefilter) ?? customerNamePrefilter) : undefined;
   const rows = await pageAll(() => {
     let query = supabase
       .from('quickbooks_ar_aging_detail')
       .select('txn_type, qb_txn_id, doc_number, customer_name, txn_date, due_date, amount, open_balance, aging_bucket')
       .eq('qb_company', company);
-    if (customerNamePrefilter) query = query.ilike('customer_name', `%${customerNamePrefilter}%`);
+    if (safePrefilter) query = query.ilike('customer_name', `%${safePrefilter}%`);
     return query;
   }) as Array<{
     txn_type: string; qb_txn_id: string | null; doc_number: string | null; customer_name: string;
@@ -197,12 +208,15 @@ export function effectiveOwner(row: Pick<SoaCompanyRow, 'soaPic' | 'suggestedOwn
   return row.soaPic ?? row.suggestedOwner ?? singlePicFallback;
 }
 
-// `customerNamePrefilter`: an ilike substring (e.g. Company 360's own
-// significantWord()) narrowing the initial unpaid-invoices query down to
-// one company's own rows — used by lib/company-360.ts's Outstanding
+// `customerNamePrefilter`: narrows the initial unpaid-invoices query down
+// to one company's own rows — used by lib/company-360.ts's Outstanding
 // section so it isn't scanning every unpaid invoice across all customers
 // just to show one company's own balance. Omitted (the on-screen Outstanding
-// pages' own call), this behaves exactly as before — every company.
+// pages' own call), this behaves exactly as before — every company. Any
+// value passed here is reduced to significantWord() before use, whether or
+// not the caller already did that themselves (idempotent) — see
+// loadArAgingSnapshot() and legacyComputeSoaRows()'s own comments for why
+// that reduction is load-bearing, not cosmetic.
 //
 // Primary path (report fresh): totals/aging come entirely from the
 // AgedReceivableDetail snapshot (loadArAgingSnapshot) — the report is
@@ -341,6 +355,12 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
 async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePrefilter?: string }): Promise<SoaCompanyRow[]> {
   const supabase = createAdminClient();
 
+  // Same significantWord() reduction as loadArAgingSnapshot() above, and
+  // for the exact same reason — this function has its own independent
+  // ilike prefilter usage (not routed through loadArAgingSnapshot at all),
+  // so it needed the identical fix, not just a shared helper call.
+  const safePrefilter = opts?.customerNamePrefilter ? (significantWord(opts.customerNamePrefilter) ?? opts.customerNamePrefilter) : undefined;
+
   const [invoices, creditMemos, companiesRes, ownersRes] = await Promise.all([
     pageAll(() => {
       let query = supabase
@@ -348,7 +368,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
         .select('customer_name, qb_company, qb_invoice_id, invoice_no, txn_date, balance, location_name')
         .eq('qb_company', company)
         .gt('balance', 0);
-      if (opts?.customerNamePrefilter) query = query.ilike('customer_name', `%${opts.customerNamePrefilter}%`);
+      if (safePrefilter) query = query.ilike('customer_name', `%${safePrefilter}%`);
       return query;
     }) as Promise<UnpaidInvoice[]>,
     pageAll(() => {
@@ -357,7 +377,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
         .select('customer_name, qb_company, txn_date, balance, doc_number')
         .eq('qb_company', company)
         .gt('balance', 0);
-      if (opts?.customerNamePrefilter) query = query.ilike('customer_name', `%${opts.customerNamePrefilter}%`);
+      if (safePrefilter) query = query.ilike('customer_name', `%${safePrefilter}%`);
       return query;
     }) as Promise<UnappliedCreditMemo[]>,
     supabase.from('companies').select('id, company_name, pic'),

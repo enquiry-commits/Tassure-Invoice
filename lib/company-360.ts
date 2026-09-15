@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { normalize, matchScore } from './company-name';
+import { normalize, matchScore, significantWord } from './company-name';
 import { computeSoaRows, effectiveOwner, type SoaCompanyRow } from './soa-data';
 import type { QbCompany } from './quickbooks';
 
@@ -27,16 +27,6 @@ import type { QbCompany } from './quickbooks';
 // trademark history onto this page. Kept every match's own score in the
 // response so a borderline hit is still visible, not silently dropped.
 const FUZZY_MATCH_THRESHOLD = 85;
-
-// The word used to prefilter a large, company_name-only table via ilike
-// before scoring — normalize() already strips "pte ltd"/"sdn bhd"/etc., so
-// the remaining longest word is usually the one distinguishing word a raw
-// company_name column will still literally contain.
-export function significantWord(companyName: string): string | null {
-  const words = normalize(companyName).split(' ').filter(w => w.length > 2);
-  if (!words.length) return null;
-  return words.reduce((a, b) => (b.length > a.length ? b : a));
-}
 
 function fuzzyMatch<T>(companyName: string, rows: T[], getName: (r: T) => string): (T & { matchScore: number })[] {
   return rows
