@@ -59,6 +59,15 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
   current: '#64748b', d1_30: '#0f766e', d31_60: '#ca8a04', d61_90: '#ea580c', d91_plus: 'var(--status-danger)',
 };
 
+// Short tag shown next to a negative detail-row amount (see the detail
+// modal's balance cell below) — QuickBooks' own "Transaction Type" wording
+// as a fallback for anything not in this map, so an unrecognized type still
+// gets a real, honest label instead of nothing.
+const CREDIT_TYPE_TAGS: Record<string, string> = {
+  'Credit Note': 'CN',
+  'Credit Memo': 'CN',
+};
+
 // Vincent, 2026-09-07: first asked for a distinct color per system on the
 // "All" view's Source badge ("这边稍微用不同的颜色区分 TAB/TAC/TAO"), tried
 // blue/violet/green — then, after seeing the whole row together: "我加多颜
@@ -646,13 +655,15 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.txnDate)}</div>
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.dueDate)}</div>
             <div style={{ textAlign: 'center', fontSize: 10.5, fontWeight: 700, color: BUCKET_COLOR[inv.bucket] }}>{AGING_BUCKETS.find(b => b.key === inv.bucket)?.label}</div>
-            {/* Vincent, 2026-09-15: an unapplied QuickBooks CreditMemo row
-                (inv.type === 'credit', see app/api/billing/soa/detail/
-                route.ts) shows its negative balance in red with a "(CN)" tag
-                — same visual language as the outer list's aging-bucket cells
-                — so it reads as a real credit line, not a stray minus sign. */}
-            <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: inv.type === 'credit' ? 'var(--status-danger)' : '#0f766e' }}>
-              {fmtMoney(inv.balance)}{inv.type === 'credit' ? ' (CN)' : ''}
+            {/* Vincent, 2026-09-15: sign-based (not inv.type === 'credit')
+                so any negative row — an unapplied CreditMemo, or (since the
+                AgedReceivableDetail report sync, docs/INVARIANTS.md
+                INV-QB-017) a Payment/Journal Entry/Deposit/anything else
+                QuickBooks itself counts against this balance — reads red
+                with a tag automatically, no per-type UI change needed the
+                next time a new txn_type shows up in real data. */}
+            <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 700, color: inv.balance < 0 ? 'var(--status-danger)' : '#0f766e' }}>
+              {fmtMoney(inv.balance)}{inv.balance < 0 ? ` (${CREDIT_TYPE_TAGS[inv.rawType] ?? inv.rawType})` : ''}
             </div>
           </div>
         ))}

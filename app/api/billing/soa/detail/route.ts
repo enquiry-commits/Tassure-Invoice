@@ -4,6 +4,7 @@ import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import type { QbCompany } from '@/lib/quickbooks';
 import { agingBucket, dueDate, type AgingBucket } from '@/lib/soa';
+import { loadArAgingSnapshot } from '@/lib/soa-data';
 
 const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
 
@@ -16,18 +17,23 @@ const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
 // see app/api/billing/soa/route.ts's own comment for why.
 export interface SoaInvoiceDetail {
   qbCompany: string;
-  qbInvoiceId: string;
+  qbInvoiceId: string | null;
   invoiceNo: string;
   txnDate: string;
   dueDate: string;
   balance: number;
   totalAmt: number;
   bucket: AgingBucket;
-  // 'credit' rows are unapplied QuickBooks CreditMemos (Credit Notes) shown
-  // alongside invoices so Chelsea/ACC can see exactly what's netting the
-  // total before generating the PDF — not silently folded into a number.
-  // See scripts/add-quickbooks-credit-memos.sql / docs/INVARIANTS.md.
-  type: 'invoice' | 'credit';
+  // 'invoice'/'credit' cover the two document types Chelsea can actually
+  // open an official PDF for; 'other' (Payment/Journal Entry/Deposit/
+  // anything QuickBooks' own AgedReceivableDetail report enumerates that
+  // isn't one of those two) has no such document — see rawType for what it
+  // actually is. Before 2026-09-15 this list only ever showed Invoice/
+  // CreditMemo rows, so a customer whose balance was driven by e.g. a
+  // Journal Entry (see docs/INVARIANTS.md INV-QB-017 — the Cyber Quantum
+  // Pte Ltd example) showed nothing for that portion at all.
+  type: 'invoice' | 'credit' | 'other';
+  rawType: string;
 }
 
 export async function GET(req: NextRequest) {
@@ -38,8 +44,49 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO' }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
   const target = normalize(companyName);
+  const snapshot = await loadArAgingSnapshot(company, companyName);
+
+  if (snapshot.fresh) {
+    const byName = new Map<string, typeof snapshot.rows>();
+    for (const row of snapshot.rows) {
+      const key = normalize(row.customerName);
+      if (!key) continue;
+      if (!byName.has(key)) byName.set(key, []);
+      byName.get(key)!.push(row);
+    }
+    let matched = byName.get(target);
+    if (!matched) {
+      const match = findUniqueBestMatch(companyName, [...byName.entries()], entry => entry[0], 70);
+      matched = match.value?.[1];
+    }
+    const result: SoaInvoiceDetail[] = (matched ?? [])
+      .filter(row => row.txnDate)
+      .map(row => {
+        const isInvoice = /invoice/i.test(row.txnType);
+        const isCredit = /credit/i.test(row.txnType);
+        return {
+          qbCompany: company,
+          qbInvoiceId: row.qbTxnId,
+          invoiceNo: row.docNumber ?? row.qbTxnId ?? '—',
+          txnDate: row.txnDate!,
+          dueDate: row.dueDate ?? row.txnDate!,
+          balance: row.openBalance,
+          totalAmt: row.amount ?? row.openBalance,
+          bucket: row.agingBucket,
+          type: isInvoice ? 'invoice' as const : isCredit ? 'credit' as const : 'other' as const,
+          rawType: row.txnType,
+        };
+      })
+      .sort((a, b) => a.txnDate.localeCompare(b.txnDate));
+    return NextResponse.json({ invoices: result });
+  }
+
+  // Fallback — report snapshot missing/stale for this company. Today's
+  // pre-report Invoice+CreditMemo query, kept verbatim as the degraded-mode
+  // behavior (see lib/soa-data.ts's legacyComputeSoaRows() for the same
+  // pattern applied to the on-screen list/total).
+  const supabase = createAdminClient();
 
   const [invoices, creditMemos] = await Promise.all([
     pageAll(() => supabase
@@ -50,7 +97,6 @@ export async function GET(req: NextRequest) {
         customer_name: string; qb_company: string; qb_invoice_id: string; invoice_no: string;
         txn_date: string | null; balance: number | null; total_amt: number | null;
       }>>,
-    // Unapplied CreditMemos — see SoaInvoiceDetail's own comment on `type`.
     pageAll(() => supabase
       .from('quickbooks_credit_memos')
       .select('customer_name, qb_company, qb_credit_memo_id, doc_number, txn_date, balance, total_amt')
@@ -101,6 +147,7 @@ export async function GET(req: NextRequest) {
       totalAmt: inv.total_amt ?? inv.balance!,
       bucket: agingBucket(inv.txn_date!, today),
       type: 'invoice' as const,
+      rawType: 'Invoice',
     }));
   const creditRows: SoaInvoiceDetail[] = (matchedCredits ?? [])
     .filter(cm => cm.txn_date && cm.balance)
@@ -114,6 +161,7 @@ export async function GET(req: NextRequest) {
       totalAmt: -(cm.total_amt ?? cm.balance!),
       bucket: agingBucket(cm.txn_date!, today),
       type: 'credit' as const,
+      rawType: 'Credit Note',
     }));
 
   const result = [...invoiceRows, ...creditRows].sort((a, b) => a.txnDate.localeCompare(b.txnDate));

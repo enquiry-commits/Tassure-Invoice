@@ -1,10 +1,11 @@
 import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
+import { loadArAgingSnapshot } from '@/lib/soa-data';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -131,6 +132,57 @@ export async function GET(req: NextRequest) {
   }
   if (merged.getPageCount() === 0) {
     return NextResponse.json({ error: `Could not fetch any invoice PDFs. ${errors.join(' ')}` }, { status: 502 });
+  }
+
+  // Added 2026-09-15 (docs/INVARIANTS.md INV-QB-017) — Payment/Journal
+  // Entry/Deposit/anything else QuickBooks' own AgedReceivableDetail report
+  // counts against this customer's balance has no client-facing document
+  // to merge (unlike Invoice/CreditMemo, which always do) — appending
+  // nothing for these would leave the merged PDF's own total quietly short
+  // of what the rest of the system shows for this customer. When the
+  // report is fresh, list them on one appended summary page instead, so
+  // the merged PDF's total always foots. Omitted entirely when there are
+  // none (today's exact behavior, unchanged for the common case) or when
+  // the report is stale for this company (falls back to exactly today's
+  // behavior, same as the detail modal/collections email paths).
+  const snapshot = await loadArAgingSnapshot(company, companyName);
+  if (snapshot.fresh) {
+    const otherRows = snapshot.rows.filter(row => {
+      const key = normalize(row.customerName);
+      return key === target && !/invoice|credit/i.test(row.txnType);
+    });
+    if (otherRows.length) {
+      const font = await merged.embedFont(StandardFonts.Helvetica);
+      const boldFont = await merged.embedFont(StandardFonts.HelveticaBold);
+      const page = merged.addPage();
+      const { width, height } = page.getSize();
+      let y = height - 60;
+      const left = 50;
+      page.drawText('Other Adjustments', { x: left, y, size: 14, font: boldFont });
+      y -= 20;
+      page.drawText(`Not represented by an individual invoice/credit note document above.`, { x: left, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
+      y -= 24;
+      const cols = { date: left, type: left + 80, doc: left + 220, amount: width - 50 };
+      page.drawText('Date', { x: cols.date, y, size: 9, font: boldFont });
+      page.drawText('Type', { x: cols.type, y, size: 9, font: boldFont });
+      page.drawText('No.', { x: cols.doc, y, size: 9, font: boldFont });
+      page.drawText('Amount', { x: cols.amount - 50, y, size: 9, font: boldFont });
+      y -= 16;
+      let subtotal = 0;
+      for (const row of otherRows.sort((a, b) => (a.txnDate ?? '').localeCompare(b.txnDate ?? ''))) {
+        subtotal += row.openBalance;
+        page.drawText(row.txnDate ?? '—', { x: cols.date, y, size: 9, font });
+        page.drawText(row.txnType, { x: cols.type, y, size: 9, font });
+        page.drawText(row.docNumber ?? row.qbTxnId ?? '—', { x: cols.doc, y, size: 9, font });
+        const amountText = row.openBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        page.drawText(amountText, { x: width - 50 - font.widthOfTextAtSize(amountText, 9), y, size: 9, font });
+        y -= 14;
+      }
+      y -= 6;
+      page.drawText('Subtotal', { x: cols.type, y, size: 10, font: boldFont });
+      const subtotalText = subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      page.drawText(subtotalText, { x: width - 50 - boldFont.widthOfTextAtSize(subtotalText, 10), y, size: 10, font: boldFont });
+    }
   }
 
   const bytes = Buffer.from(await merged.save());

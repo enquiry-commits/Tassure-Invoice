@@ -5,7 +5,7 @@ import { pageAll } from './page-all';
 import { normalize, findUniqueBestMatch } from './company-name';
 import { formatStaffNameList } from './staff-directory';
 import type { QbCompany } from './quickbooks';
-import { agingBucket, dueDate, emptyAgingTotals, type AgingTotals } from './soa';
+import { agingBucket, dueDate, emptyAgingTotals, type AgingBucket, type AgingTotals } from './soa';
 import { computeSuggestedOwner, collectInvolvedStaff, type OwnerInvoiceSignal } from './soa-owner';
 
 // Shared by GET /api/billing/soa (the on-screen list) and
@@ -85,10 +85,84 @@ type UnpaidInvoice = {
 // Invoice's own Balance when a CreditMemo is left "Unapplied", but
 // QuickBooks' own official Aged Receivables report nets it into the
 // customer's total anyway. See scripts/add-quickbooks-credit-memos.sql and
-// docs/INVARIANTS.md for the full incident this fixes.
+// docs/INVARIANTS.md for the full incident this fixes. Still used by
+// legacyComputeSoaRows() (the report-unavailable fallback) below.
 type UnappliedCreditMemo = {
   customer_name: string; qb_company: string; txn_date: string | null; balance: number | null;
 };
+
+// ── QuickBooks Aged Receivable Detail report snapshot ───────────────────
+// Added 2026-09-15 — supersedes Invoice+CreditMemo netting as the TOTAL/
+// aging source. Live verification found the Invoice+CreditMemo approach
+// could never be assumed complete: this business's real QuickBooks data
+// also has Payment, Journal Entry, and (TAB) Deposit transactions
+// affecting AR, none of which this app synced, plus multi-currency
+// balances never converted to SGD. This report is comprehensive BY
+// CONSTRUCTION (QuickBooks' own accounting engine enumerates every entity
+// type relevant to AR, including ones not yet seen in this business's
+// data) and already SGD-converts. See docs/INVARIANTS.md INV-QB-017 and
+// scripts/add-quickbooks-ar-aging-detail.sql for the full incident.
+export interface ArAgingDetailRow {
+  txnType: string;
+  qbTxnId: string | null;
+  docNumber: string | null;
+  customerName: string;
+  txnDate: string | null;
+  dueDate: string | null;
+  amount: number | null;
+  openBalance: number;
+  agingBucket: AgingBucket;
+}
+
+// Matches the daily-cron cadence already tolerated elsewhere (INV-QB-014/
+// 015/017: "up to a day stale until the next sync").
+const AR_AGING_FALLBACK_STALE_MS = 36 * 60 * 60 * 1000;
+
+// Exported so the SOA detail modal / PDF route / Client Communications can
+// each gate their OWN fresh-vs-legacy branch on the exact same check
+// computeSoaRows() uses below — none of them can ever disagree with the
+// total about which mode is active for a given qbCompany.
+export async function loadArAgingSnapshot(
+  company: QbCompany, customerNamePrefilter?: string,
+): Promise<{ fresh: true; rows: ArAgingDetailRow[] } | { fresh: false }> {
+  const supabase = createAdminClient();
+  const { data: state } = await supabase
+    .from('quickbooks_ar_aging_sync_state')
+    .select('last_status, last_synced_at')
+    .eq('qb_company', company)
+    .maybeSingle();
+  const fresh = state?.last_status === 'success' && !!state.last_synced_at
+    && (Date.now() - new Date(state.last_synced_at).getTime()) < AR_AGING_FALLBACK_STALE_MS;
+  if (!fresh) return { fresh: false };
+
+  const rows = await pageAll(() => {
+    let query = supabase
+      .from('quickbooks_ar_aging_detail')
+      .select('txn_type, qb_txn_id, doc_number, customer_name, txn_date, due_date, amount, open_balance, aging_bucket')
+      .eq('qb_company', company);
+    if (customerNamePrefilter) query = query.ilike('customer_name', `%${customerNamePrefilter}%`);
+    return query;
+  }) as Array<{
+    txn_type: string; qb_txn_id: string | null; doc_number: string | null; customer_name: string;
+    txn_date: string | null; due_date: string | null; amount: number | null; open_balance: number;
+    aging_bucket: AgingBucket;
+  }>;
+
+  return {
+    fresh: true,
+    rows: rows.map(r => ({
+      txnType: r.txn_type,
+      qbTxnId: r.qb_txn_id,
+      docNumber: r.doc_number,
+      customerName: r.customer_name,
+      txnDate: r.txn_date,
+      dueDate: r.due_date,
+      amount: r.amount,
+      openBalance: r.open_balance,
+      agingBucket: r.aging_bucket,
+    })),
+  };
+}
 
 // The effective "who chases this" shown on screen as Owner: a human's
 // confirmed pick always wins, then the real QB-Class/Location signal, then
@@ -105,7 +179,132 @@ export function effectiveOwner(row: Pick<SoaCompanyRow, 'soaPic' | 'suggestedOwn
 // section so it isn't scanning every unpaid invoice across all customers
 // just to show one company's own balance. Omitted (the on-screen Outstanding
 // pages' own call), this behaves exactly as before — every company.
+//
+// Primary path (report fresh): totals/aging come entirely from the
+// AgedReceivableDetail snapshot (loadArAgingSnapshot) — the report is
+// authoritative for both the NUMBER and which customers even have a row.
+// Owner-suggestion (picOptions/suggestedOwner) still reads
+// quickbooks_invoices/quickbooks_invoice_items directly, exactly as
+// before — this signal is structurally independent of totals (confirmed
+// by reading the pre-report code: the CreditMemo-netting loop never fed
+// entry.signals either, proving these were always two separate concerns
+// sharing one loop only incidentally).
+//
+// Fallback path (report stale/never synced): legacyComputeSoaRows() below
+// — today's exact pre-report Invoice+CreditMemo computation, kept
+// verbatim as the concrete degraded-mode behavior for a real failure mode
+// (report sync down), so a bad sync run never shows $0 for an entire book.
 export async function computeSoaRows(company: QbCompany, opts?: { customerNamePrefilter?: string }): Promise<SoaCompanyRow[]> {
+  const snapshot = await loadArAgingSnapshot(company, opts?.customerNamePrefilter);
+  if (!snapshot.fresh) return legacyComputeSoaRows(company, opts);
+
+  const supabase = createAdminClient();
+
+  const [invoicesForSignals, companiesRes, ownersRes] = await Promise.all([
+    pageAll(() => {
+      let query = supabase
+        .from('quickbooks_invoices')
+        .select('customer_name, qb_company, qb_invoice_id, txn_date, balance, location_name')
+        .eq('qb_company', company)
+        .gt('balance', 0);
+      if (opts?.customerNamePrefilter) query = query.ilike('customer_name', `%${opts.customerNamePrefilter}%`);
+      return query;
+    }) as Promise<Array<Pick<UnpaidInvoice, 'customer_name' | 'qb_company' | 'qb_invoice_id' | 'txn_date' | 'balance' | 'location_name'>>>,
+    supabase.from('companies').select('id, company_name, pic'),
+    supabase.from('soa_owners').select('customer_name_norm, soa_pic').eq('qb_company', company),
+  ]);
+  if (companiesRes.error) throw new Error(companiesRes.error.message);
+  if (ownersRes.error) throw new Error(ownersRes.error.message);
+
+  const unpaidInvoiceIds = [...new Set(invoicesForSignals.map(inv => inv.qb_invoice_id).filter(Boolean))];
+  const classNamesByInvoice = new Map<string, string[]>();
+  if (unpaidInvoiceIds.length) {
+    const { data: items, error: itemsError } = await supabase
+      .from('quickbooks_invoice_items')
+      .select('qb_invoice_id, class_name')
+      .eq('qb_company', company)
+      .in('qb_invoice_id', unpaidInvoiceIds)
+      .not('class_name', 'is', null);
+    if (itemsError) throw new Error(itemsError.message);
+    for (const item of items ?? []) {
+      if (!item.class_name) continue;
+      const list = classNamesByInvoice.get(item.qb_invoice_id) ?? [];
+      list.push(item.class_name);
+      classNamesByInvoice.set(item.qb_invoice_id, list);
+    }
+  }
+
+  const companies = companiesRes.data ?? [];
+  const companyByNormName = new Map(companies.map(c => [normalize(c.company_name), c]));
+  const wordMatch = (name: string) => {
+    const exact = companyByNormName.get(name);
+    if (exact) return exact;
+    const match = findUniqueBestMatch(name, [...companyByNormName.entries()], entry => entry[0], 70);
+    return match.value?.[1] ?? null;
+  };
+  const ownerByNormName = new Map((ownersRes.data ?? []).map(o => [o.customer_name_norm, o.soa_pic]));
+
+  const byCompany = new Map<string, {
+    displayName: string; invoiceCount: number; total: number; aging: AgingTotals; signals: OwnerInvoiceSignal[];
+    unpaidInvoices: { invoiceNo: string; dueDate: string }[];
+  }>();
+
+  // Seed from the report snapshot — authoritative for row EXISTENCE and for
+  // total/aging. PAC excluded here on the same normalize()'d key the
+  // exclusion has always used (the report supplies customer_name the same
+  // way quickbooks_invoices/quickbooks_credit_memos always did).
+  for (const row of snapshot.rows) {
+    const key = normalize(row.customerName);
+    if (!key || INTERNAL_ACCOUNT_NORM_NAMES.has(key)) continue;
+    if (!byCompany.has(key)) byCompany.set(key, { displayName: row.customerName, invoiceCount: 0, total: 0, aging: emptyAgingTotals(), signals: [], unpaidInvoices: [] });
+    const entry = byCompany.get(key)!;
+    entry.total += row.openBalance;
+    entry.aging[row.agingBucket] += row.openBalance;
+    // Same "CreditMemo/other rows never populate unpaidInvoices" precedent
+    // as before — only genuine Invoice-type report rows count here.
+    if (/invoice/i.test(row.txnType)) {
+      entry.invoiceCount += 1;
+      if (row.docNumber) entry.unpaidInvoices.push({ invoiceNo: row.docNumber, dueDate: row.dueDate ?? row.txnDate ?? '' });
+    }
+  }
+
+  // Owner-suggestion signal only — deliberately never creates a byCompany
+  // entry the report snapshot didn't already seed; the report is
+  // authoritative for existence in this fresh path.
+  for (const inv of invoicesForSignals) {
+    if (!inv.txn_date) continue;
+    const key = normalize(inv.customer_name);
+    const entry = byCompany.get(key);
+    if (!entry) continue;
+    entry.signals.push({ qbInvoiceId: inv.qb_invoice_id, txnDate: inv.txn_date, locationName: inv.location_name });
+  }
+
+  return [...byCompany.entries()].map(([key, entry]) => {
+    const companyMatch = companyByNormName.get(key) ?? wordMatch(key);
+    const picFromCompanies = formatStaffNameList(companyMatch?.pic ?? null);
+    const picFromInvoices = collectInvolvedStaff(entry.signals, classNamesByInvoice);
+    return {
+      companyName: companyMatch?.company_name ?? entry.displayName,
+      companyId: companyMatch?.id ?? null,
+      pic: companyMatch?.pic ?? null,
+      picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
+      soaPic: ownerByNormName.get(key) ?? null,
+      suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice),
+      invoiceCount: entry.invoiceCount,
+      totalOutstanding: Math.round(entry.total * 100) / 100,
+      aging: entry.aging,
+      unpaidInvoices: entry.unpaidInvoices.sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+    };
+  }).sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
+}
+
+// The pre-report (2026-09-15) computation, kept verbatim as
+// computeSoaRows()'s fallback for when the AgedReceivableDetail snapshot
+// is missing/stale for this company (see docs/INVARIANTS.md INV-QB-017) —
+// not a vestige, the named, deliberate degraded-mode behavior for a real
+// failure mode (report sync down), so that scenario shows a real
+// (slightly less complete) number rather than $0 for an entire book.
+async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePrefilter?: string }): Promise<SoaCompanyRow[]> {
   const supabase = createAdminClient();
 
   const [invoices, creditMemos, companiesRes, ownersRes] = await Promise.all([

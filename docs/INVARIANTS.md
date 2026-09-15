@@ -757,6 +757,52 @@ again.
   `ExchangeRate` at sync time at minimum; decide whether to convert to SGD
   or keep multi-currency totals visually separate) before touching
   `computeSoaRows()` again for this reason.
+- **INV-QB-017** — An entity-by-entity QuickBooks sync (Invoice, then
+  CreditMemo, INV-QB-015) can NEVER be assumed complete, no matter how many
+  entity types it currently covers — only QuickBooks' own server-side
+  reports are a reliably-complete source for an aggregate financial total,
+  because Intuit's engine enumerates every entity type relevant to that
+  total, including ones not yet seen in this business's data. Live
+  verification (2026-09-15) against QuickBooks' own `AgedReceivableDetail`
+  report (`GET /v3/company/{realmId}/reports/AgedReceivableDetail`) found
+  that even after INV-QB-015/016, a real ~$90K gap remained — driven by
+  `Payment`, `Journal Entry`, and (TAB only) `Deposit` transactions, none
+  of which this app had ever synced, on top of INV-QB-016's still-open
+  multi-currency gap (this report already SGD-converts, closing that half
+  of INV-QB-016 for free). Concrete example: a single `Journal Entry`
+  dated 2023-12-31, description "Opening journal"/"OPNG JE" — an
+  opening-balance entry from when this QuickBooks file was first set up,
+  entirely outside this app's 3-year rolling sync window — explained a
+  $38,171.37 discrepancy on `Cyber Quantum Pte Ltd`/`Cyber Quantum Pte Ltd
+  (USD)`, a customer with ZERO `Invoice`/`CreditMemo`/`Payment`/
+  `RefundReceipt`/`SalesReceipt` records of any kind, at any date —
+  confirmed directly against live QuickBooks, not assumed. Fix: sync the
+  `AgedReceivableDetail` report itself (`quickbooks_ar_aging_detail`,
+  `lib/quickbooks-ar-aging.ts`, `syncAgedReceivableDetail()` in
+  `app/api/quickbooks/sync/route.ts`) as `computeSoaRows()`'s PRIMARY
+  total/aging source (`lib/soa-data.ts`'s `loadArAgingSnapshot()`) —
+  comprehensive by construction, so a future 6th entity type this
+  business's data has never produced needs zero code changes here.
+  `quickbooks_invoices`/`quickbooks_credit_memos` and their syncs
+  (`syncYear()`, `syncCreditMemoYear()`) are KEPT, not deleted — narrowed
+  to the two jobs the report structurally cannot do: the Class/Location
+  owner-suggestion signal (INV-QB-013 — the report has no line-level
+  detail) and fetching a specific Invoice/CreditMemo's own official PDF by
+  QuickBooks internal Id (`app/api/billing/soa/pdf/route.ts`). The
+  pre-report Invoice+CreditMemo computation is ALSO kept, verbatim, as
+  `legacyComputeSoaRows()` — `computeSoaRows()` and the SOA detail modal/
+  PDF route/`lib/client-comms-resolve.ts` all gate on the same
+  `loadArAgingSnapshot()` freshness check (`quickbooks_ar_aging_sync_state`,
+  success within 36h) and fall back to it together when the report sync is
+  down for a company, so a bad sync run degrades to a real (slightly less
+  complete) number, never a false `$0` for an entire book, and the total/
+  detail/PDF/collections-email paths can never show DIFFERENT modes for
+  the same company at the same time. *(source: 2026-09-15, Vincent: "你每
+  次都很死板的只是看到眼前的东西，而不是全面的了解QB的内部，才导致的理解和创
+  建失误...不要每次漏东漏西白白后面浪费时间去优化本来就有的东西" — direct
+  feedback that reactive entity-by-entity investigation wastes time
+  rediscovering gaps one at a time; this fix is the structural response,
+  not another entity added to the same reactive pattern.)*
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

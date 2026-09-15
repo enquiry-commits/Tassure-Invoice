@@ -154,6 +154,30 @@ account only had `admin: true` at the time).
 permission-flag-independence lesson above is currently only recorded here
 and in `PROJECT_STATUS.md`'s 2026-09-02 entry.
 
+### REG-017 — SOA/Outstanding Balance matches QuickBooks' own AgedReceivableDetail total
+For each of TAB/TAC/TAO: call QuickBooks' own report API directly
+(`GET /v3/company/{realmId}/reports/AgedReceivableDetail?report_date=<today>`),
+read its Grand Total, and compare against `computeAllSoaRows()`/
+`GET /api/billing/soa/all`'s summed total for that company — should be at
+or very near an exact match (small deltas from real activity between the
+two checks are expected; a gap in the thousands or a fixed percentage is
+not). Spot-check the specific customers already implicated in this
+incident: **Cyber Quantum Pte Ltd**/`(USD)` shows its Journal Entry
+correctly (not invisible); **TASSURE PAC** never appears anywhere (SOA
+list, detail modal, PDF, collections email candidate list, assistant
+tools) regardless of how large its raw QuickBooks activity is; **Ligang
+Limited** still nets to its correct CreditMemo-adjusted total (a
+no-regression check on the INV-QB-015 fix, not new functionality).
+Separately, force a degraded-mode check: mark one company's
+`quickbooks_ar_aging_sync_state.last_status` as `'error'` (or backdate
+`last_synced_at` past 36h) and confirm `computeSoaRows()` falls back to a
+real nonzero legacy number for that company only (never `$0`), and that
+the SOA detail modal / merged PDF / Client Communications SOA candidate
+list all degrade to the SAME (legacy) mode for that company at the same
+time — never a mix where the total uses one mode and the detail list uses
+the other.
+**Guards:** `docs/INVARIANTS.md` INV-QB-015, INV-QB-016, INV-QB-017.
+
 ---
 
 ## Automation priority

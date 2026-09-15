@@ -3,7 +3,8 @@ import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { formatContactName, type InvoiceRef } from '@/lib/email-merge';
 import { applyCampaignRecipientRules, buildDefaultCcList, parseEmailList, recipientLines } from '@/lib/campaign-recipients';
 import { findStaffEmails } from '@/lib/staff-directory';
-import { computeAllSoaRows } from '@/lib/soa-data';
+import { computeAllSoaRows, loadArAgingSnapshot } from '@/lib/soa-data';
+import type { QbCompany } from '@/lib/quickbooks';
 
 /**
  * Shared company/invoice resolution for Client Communications, used by both
@@ -146,33 +147,68 @@ export async function loadInvoicesByCompany(
       invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as InvoiceRef['qbCompany'], invoiceNo: r.invoice_no!, amount: Number(r.total_amt ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
     }
   } else if (type === 'soa') {
-    const { data: rows } = await supabase.from('quickbooks_invoices')
-      .select('customer_name, qb_company, invoice_no, balance, qb_invoice_id').gt('balance', 0);
-    for (const r of rows ?? []) {
-      const key = normalize(r.customer_name);
-      if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
-      invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as InvoiceRef['qbCompany'], invoiceNo: r.invoice_no, amount: Number(r.balance ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
-    }
-    // Unapplied CreditMemos (Credit Notes) — merged in as negative-amount
-    // lines so the email body's invoice list actually reflects what nets
-    // the total (loadAutoTargetNames already excludes anyone whose net is
-    // <= 0, but someone who owes SOMETHING net of a partial credit should
-    // still see the credit line, not just the gross invoice amount). Deliberately
-    // `qbInvoiceId: null` — it is NOT a real QuickBooks invoice id, and
-    // Draft Review's "download invoice PDF" button (lib/email-merge.ts's own
-    // comment on InvoiceRef.qbInvoiceId) would fetch the wrong QB endpoint
-    // for it if populated.
-    const { data: creditRows } = await supabase.from('quickbooks_credit_memos')
-      .select('customer_name, qb_company, doc_number, qb_credit_memo_id, balance').gt('balance', 0);
-    for (const r of creditRows ?? []) {
-      const key = normalize(r.customer_name);
-      if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
-      invoicesByCompany.get(key)!.push({
-        qbCompany: r.qb_company as InvoiceRef['qbCompany'],
-        invoiceNo: r.doc_number ?? r.qb_credit_memo_id,
-        amount: -Number(r.balance ?? 0),
-        qbInvoiceId: null,
-      });
+    // Added 2026-09-15 (docs/INVARIANTS.md INV-QB-017): per-company
+    // freshness gate, same loadArAgingSnapshot() the on-screen SOA
+    // total/list and the detail modal/PDF route already use, so this
+    // email body's own line-item list can never disagree with the total
+    // loadAutoTargetNames() (below, already computeAllSoaRows()-based)
+    // used to decide this customer should even be targeted. Looped per
+    // company (not one unscoped query) since freshness is tracked per
+    // qb_company and the pre-report fallback queries need the same
+    // `.eq('qb_company', company)` scoping to match — the OLD unscoped
+    // fallback queries below are narrowed accordingly, a small necessary
+    // tightening of what was previously an unscoped read.
+    for (const company of ['TAB', 'TAC', 'TAO'] as QbCompany[]) {
+      const snapshot = await loadArAgingSnapshot(company);
+      if (snapshot.fresh) {
+        for (const row of snapshot.rows) {
+          const key = normalize(row.customerName);
+          if (!key) continue;
+          if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
+          const isInvoice = /invoice/i.test(row.txnType);
+          invoicesByCompany.get(key)!.push({
+            qbCompany: company,
+            invoiceNo: row.docNumber ?? row.qbTxnId ?? row.txnType,
+            amount: row.openBalance,
+            // Only a real Invoice's qbTxnId is safe to hand to the
+            // "download invoice PDF" button (lib/email-merge.ts's own
+            // comment on InvoiceRef.qbInvoiceId) — everything else
+            // (Credit Note, Payment, Journal Entry, Deposit, ...) would
+            // fetch the wrong QuickBooks endpoint if populated here.
+            qbInvoiceId: isInvoice ? row.qbTxnId : null,
+          });
+        }
+        continue;
+      }
+
+      // Fallback — report snapshot missing/stale for this company. Same
+      // pre-report Invoice+CreditMemo queries as before, now scoped to
+      // this one company (see comment above).
+      const { data: rows } = await supabase.from('quickbooks_invoices')
+        .select('customer_name, qb_company, invoice_no, balance, qb_invoice_id')
+        .eq('qb_company', company).gt('balance', 0);
+      for (const r of rows ?? []) {
+        const key = normalize(r.customer_name);
+        if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
+        invoicesByCompany.get(key)!.push({ qbCompany: r.qb_company as InvoiceRef['qbCompany'], invoiceNo: r.invoice_no, amount: Number(r.balance ?? 0), qbInvoiceId: r.qb_invoice_id ?? null });
+      }
+      // Unapplied CreditMemos (Credit Notes) — merged in as negative-amount
+      // lines so the email body's invoice list actually reflects what nets
+      // the total. Deliberately `qbInvoiceId: null` — see the comment on
+      // the fresh-path push above, same reasoning.
+      const { data: creditRows } = await supabase.from('quickbooks_credit_memos')
+        .select('customer_name, qb_company, doc_number, qb_credit_memo_id, balance')
+        .eq('qb_company', company).gt('balance', 0);
+      for (const r of creditRows ?? []) {
+        const key = normalize(r.customer_name);
+        if (!invoicesByCompany.has(key)) invoicesByCompany.set(key, []);
+        invoicesByCompany.get(key)!.push({
+          qbCompany: r.qb_company as InvoiceRef['qbCompany'],
+          invoiceNo: r.doc_number ?? r.qb_credit_memo_id,
+          amount: -Number(r.balance ?? 0),
+          qbInvoiceId: null,
+        });
+      }
     }
   }
   return invoicesByCompany;
