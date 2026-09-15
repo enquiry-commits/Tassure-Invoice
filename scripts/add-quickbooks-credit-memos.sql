@@ -12,7 +12,7 @@
 -- Excel export Vincent pulled directly from QuickBooks: this system was
 -- overstating total receivables by $185,722.57 (~42%) across TAB/TAC/TAO
 -- combined (TAB alone: $278,650.17 shown vs $165,771.50 actual). Real
--- example: Ligang Limited (TAC) showed $790 owed; QuickBooks' own report
+-- example: Ligang Limited (TAC) showed $790 owed -- QuickBooks' own report
 -- nets it to -$970 once its $1,760 unapplied CreditMemo (CN268021, memo
 -- explicitly "CN TAC 02680170") is counted.
 --
