@@ -1,5 +1,17 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-15 (SHIPPED AND VERIFIED: Company 360's Outstanding section now shows every transaction type behind a balance, not just Invoices.
+
+Direct follow-up to the AgedReceivableDetail rollout below: that fix made the SOA total/detail-modal/PDF/Client-Communications paths correctly account for Credit Note/Payment/Journal Entry/Deposit lines, but Company 360's own Outstanding section still only ever listed `unpaidInvoices` (Invoice-type only) in its Invoice No./Due Date columns — a company whose balance was driven by a non-Invoice line (Cyber Quantum Pte Ltd's opening Journal Entries being the concrete example already on file) showed a correct Total Balance with nothing explaining it in the row detail. Asked Vincent directly whether to fix this; he confirmed ("补上").
+
+Added a new `SoaCompanyRow.lineItems` field — every transaction type, populated by both `computeSoaRows()` paths (fresh report-based and `legacyComputeSoaRows()` fallback) — kept deliberately separate from the existing `unpaidInvoices` field so `components/assistant/ChatCards.tsx`'s invoice-specific phrasing ("#X、#Y 等N张") stays untouched. `app/companies/[id]/_components.tsx`'s `OutstandingSection` now renders from `lineItems`; a non-Invoice line gets a small tag (CN/PMT/JE/DEP) colored red when it reduces the balance, teal otherwise — same sign-based convention already shipped on the SOA page's own detail modal.
+
+Verified against live data before pushing (queried `quickbooks_ar_aging_detail` directly, replicating the exact `lineItems` construction logic): Cyber Quantum's TAB row has exactly 2 Journal Entry rows — "Opening journal" -$22,040.26 and "OPNG JE" -$16,131.11, both due 2023-12-31, both `d91_plus` — summing to -$38,171.37, matching the number already on file. These will now render as two red `(JE ...)` tagged rows instead of a blank Invoice No. column.
+
+`npx tsc --noEmit` / `npm run build` both clean.
+
+Previous entry follows.
+
 Last updated: 2026-09-15 (SHIPPED AND VERIFIED: SOA/Outstanding Balance now syncs QuickBooks' own AgedReceivableDetail report directly — all 3 books match QuickBooks' own Grand Total exactly, $0.00 delta, closing out the whole CreditMemo/PAC/currency/entity-completeness investigation from the entries below.
 
 Direct response to Vincent's feedback mid-investigation: reactive entity-by-entity checking (Payment? too small. Old invoices? zero. "Debit note呢?" — already counted correctly) kept missing real gaps one at a time. Queried QuickBooks' own `AgedReceivableDetail` report instead — comprehensive by construction, since Intuit's own accounting engine enumerates every entity type relevant to AR, including ones this business's data had never surfaced to this app before (`Payment`, `Journal Entry`, and TAB's `Deposit`). Full design (`lib/quickbooks-ar-aging.ts`, `syncAgedReceivableDetail()`, `quickbooks_ar_aging_detail`/`quickbooks_ar_aging_sync_state`, `loadArAgingSnapshot()`/`legacyComputeSoaRows()` fallback in `lib/soa-data.ts`, all 3 bypass paths gated on the same freshness check) — see `docs/INVARIANTS.md` INV-QB-017 for the complete incident and architecture.
