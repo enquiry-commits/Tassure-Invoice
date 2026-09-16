@@ -197,6 +197,22 @@ confirm "Download SOA PDF" for the same company produces a real, non-empty
 merged PDF.
 **Guards:** `docs/INVARIANTS.md` INV-QB-018.
 
+### REG-019 — ND (or Secretary/Address) renewal period is correct when one invoice splits a renewal across a primary + deferred line
+Pick a company whose most recent ND (or Secretary/Address) invoice has BOTH
+a primary line (e.g. "Secretary:Nominee Director Fees - X") and a deferred
+line (e.g. "Deferred - ND Fees - X") in the SAME invoice, where the two
+lines' parsed periods are DIFFERENT sub-periods (not the same period
+twice) — Siehi Shipping Pte. Ltd. (TAC) is a known real example. Open
+Billing Drafts for that company and confirm the proposed next ND period
+starts the month immediately after the LATER of the two lines' period_end
+(not the earlier/primary line's), and does not overlap any month already
+billed in either line. Cross-check: query `quickbooks_invoice_items` for
+`service_type IN ('Secretary','Address','ND')` grouped by
+`(customer_name, invoice_no)`, and for any group with both a primary and a
+deferred row whose `period_end` differ, confirm the app treats the later
+one as authoritative.
+**Guards:** `docs/INVARIANTS.md` INV-QB-019.
+
 ---
 
 ## Automation priority

@@ -104,8 +104,8 @@ async function validateRenewalPeriods(
       .filter(row => row.parsed?.period_end)
       .sort((a, b) => compareRenewalPeriodProductLines(
         line.service,
-        { period_end: a.parsed?.period_end ?? null, product_service: a.product_service },
-        { period_end: b.parsed?.period_end ?? null, product_service: b.product_service },
+        { invoice_no: a.invoice_no, period_end: a.parsed?.period_end ?? null, product_service: a.product_service },
+        { invoice_no: b.invoice_no, period_end: b.parsed?.period_end ?? null, product_service: b.product_service },
       ));
     const latestParsed = parsedRows[0] ?? null;
     const latestPrimary = resolvedRows

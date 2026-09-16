@@ -63,11 +63,32 @@ export function isPrimaryRenewalProduct(service: string, productService: string 
 // period_end only breaks ties among lines that are equally primary (or
 // equally not) — the one case, multiple genuine renewal invoices for the
 // same service, where "latest period wins" is actually correct.
+//
+// 2026-09-16: the primary-first rule above is itself wrong within a SINGLE
+// invoice — confirmed via a real double-billing risk Vincent caught (Siehi
+// Shipping Pte. Ltd., TAC invoice #02580282): ND is sometimes split across
+// TWO lines in the SAME invoice covering two DIFFERENT consecutive
+// sub-periods, not the same period twice — "Secretary:Nominee Director
+// Fees - LJW" (primary) for Aug 2025-Dec 2025 ($1,250) and "Deferred - ND
+// Fees - LJW" (deferred) for Jan 2026-Jul 2026 ($1,750), together the one
+// 12-month renewal this invoice actually billed. Ranking primary-over-
+// deferred here picked the EARLIER (primary) line's period_end (Dec 2025)
+// as "how far this invoice covers", so the next draft proposed "Jan 2026 -
+// Dec 2026" — re-billing Jan-Jul 2026, already paid for in the very same
+// invoice's deferred line. The primary/deferred split this guards against
+// (an ad-hoc line vs. the real renewal) only makes sense ACROSS invoices —
+// within one invoice_no, a deferred line is real coverage from the SAME
+// renewal event as its paired primary line, so the later period_end wins
+// regardless of which line carries it. See docs/INVARIANTS.md INV-BILL-*
+// for the concrete numbers.
 export function compareRenewalPeriodProductLines(
   service: string,
-  a: { period_end: string | null; product_service: string | null },
-  b: { period_end: string | null; product_service: string | null },
+  a: { invoice_no: string; period_end: string | null; product_service: string | null },
+  b: { invoice_no: string; period_end: string | null; product_service: string | null },
 ) {
+  if (a.invoice_no === b.invoice_no) {
+    return (b.period_end ?? '').localeCompare(a.period_end ?? '');
+  }
   const primaryOrder = Number(isPrimaryRenewalProduct(service, b.product_service))
     - Number(isPrimaryRenewalProduct(service, a.product_service));
   if (primaryOrder) return primaryOrder;

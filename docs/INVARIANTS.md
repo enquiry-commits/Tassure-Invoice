@@ -847,6 +847,38 @@ again.
   detail/route.ts` and `app/api/billing/soa/pdf/route.ts` both passed the
   raw `?companyName=` query param straight through) — "为什么有一些还是看
   不到单？" (why do some [companies] still show no invoices?).)*
+- **INV-QB-019** — `lib/invoice-period.ts`'s `compareRenewalPeriodProductLines()`
+  must only rank a "primary" renewal line above its "deferred" counterpart
+  (INV-QB-013's Class-before-Location precedent is a different rule; this
+  one governs which QB line's `period_end` is trusted as "how far this
+  service is paid up to") when the two lines come from DIFFERENT invoices.
+  Within the SAME `invoice_no`, a primary line and its paired deferred line
+  can legitimately cover DIFFERENT, non-overlapping sub-periods of one
+  renewal — confirmed live: Tassure's ND billing convention sometimes
+  splits one 12-month renewal into a "Secretary:Nominee Director Fees -
+  X" (primary) stub period plus a "Deferred - ND Fees - X" (deferred)
+  continuation period in the SAME invoice (e.g. Aug-Dec of one year +
+  Jan-Jul of the next), not two lines covering the identical period twice
+  (which is the normal case this function was originally built to handle).
+  Ranking primary-over-deferred unconditionally picks the EARLIER line's
+  `period_end` as the invoice's true coverage end whenever the split
+  happens to land that way, silently understating how far the client is
+  actually paid up to. Fix: compare by `period_end` alone (latest wins)
+  when `a.invoice_no === b.invoice_no`; only fall back to the primary-first
+  rule across different invoices, where it still correctly protects against
+  an unrelated ad-hoc line (e.g. a one-off CPF submission also tagged
+  `service_type='Secretary'`) outranking the real renewal by a
+  coincidentally later date. *(source: 2026-09-16, Vincent screenshotted
+  Siehi Shipping Pte. Ltd.'s TAC Billing Drafts row: the real, PAID invoice
+  #02580282 billed "Aug 2025-Dec 2025" ($1,250, primary) + "Jan 2026-Jul
+  2026" ($1,750, deferred) — together one 12-month renewal through Jul
+  2026 — but the next draft proposed "Jan 2026-Dec 2026", re-billing
+  Jan-Jul 2026 already paid for in that same invoice. "这边的开单Period 好
+  像有点判断失误呢". A full scan of `quickbooks_invoice_items` (paginated,
+  not the default 1000-row cap) found this exact split-invoice pattern on
+  25 real companies, all ND, all previously mis-sorted the same way —
+  verified the fix corrects Siehi Shipping's own next period from "Jan
+  2026-Dec 2026" to the true "Aug 2026-Jul 2027".)*
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
