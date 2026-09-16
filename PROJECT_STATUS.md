@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-16 (SHIPPED AND VERIFIED: SOA list/export now hide companies with a genuinely $0 net balance — Vincent: "这些Total =0的就不需要显示在List了，因为证明了这家公司目前没有Outstanding, 但是这些记录好像会记录，只是不显示罢了，避免员工混乱" (then confirmed the same for the Excel export). A company like ACCADIA MANAGEMENT SERVICES (7 real line items netting to exactly $0.00, correctly visible since yesterday's per-line-item redesign) has nothing left to actually chase, so listing it among 464 "Clients With a Balance" risked confusing staff into treating it as a real collections target.
+
+Deliberately a display-only filter, not a change to `computeSoaRows()` itself — every other consumer (Company 360's own per-company Outstanding section, the AI assistant's tools, the detail modal, the underlying sync) keeps seeing the complete, neutral data; only the two consumers Vincent named (`app/billing/soa/_components.tsx`'s `picScoped`, ahead of both the KPI cards and the row list so "Clients With a Balance" never disagrees with what's shown; and both export routes, `.../export` and `.../export-all`, filtering `tab`/`tac`/`tao` once before any sheet builder reads them) exclude `totalOutstanding === 0` rows. REG-017's total-matches-QuickBooks guarantee is untouched since the filter runs strictly after the total is already computed.
+
+Verified against live data: 34 companies currently net to exactly $0 across the 3 books (TAB 16, TAC 4, TAO 14) — these are what disappears from the list/export; the ~430 real remaining balances are unaffected.
+
+`npx tsc --noEmit` / `npm run build` clean.
+
+Previous entry follows.
+
 Last updated: 2026-09-16 (SHIPPED AND VERIFIED: two more real fixes from the same session — reused Billing Drafts' gray invoice-reference chip in the SOA detail modal, then fixed the SOA Excel export's same net-hides-real-activity bug (plus a genuine wrong-TOTAL-row bug it caused) that the on-screen list had already been fixed for.
 
 **1. Shared invoice-reference chip.** Vincent: "SOA 里面的可点击式INVOICE 号码UI格式能不能设计成和 Billing Drafts的那个INVOICE 格式那样灰色的". Extracted `BillingInvoiceReference` (the small gray "TAB #02610938" click-to-open-PDF chip, built 2026-09-11) out of `app/billing/page.tsx` into `components/billing/BillingInvoiceReference.tsx` so the SOA detail modal uses the exact same component instead of a second, differently-styled copy. Extended it additively: an `id` prop (SOA already has QuickBooks' own internal Id from the AgedReceivableDetail report, skipping the DocNumber lookup Billing Drafts needs), a `docType` prop (`'credit'` for Credit Note rows, using `/creditmemo/{id}/pdf`), and `company` widened to the full `QbCompany` (adds TAO — the PDF route already supported it, Billing Drafts just never had a TAO caller).

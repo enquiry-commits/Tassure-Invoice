@@ -214,7 +214,16 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   }, [companies]);
 
   const picScoped = useMemo(() => {
-    const list = companies ?? [];
+    // Vincent, 2026-09-16: "这些Total =0的就不需要显示在List了，因为证明了
+    // 这家公司目前没有Outstanding，但是这些记录好像会记录，只是不显示罢
+    // 了，避免员工混乱" — a company whose net across every line item is
+    // exactly $0 has nothing left to chase. Filtered here (before KPIs,
+    // search, and pagination all read from this same list) so "Clients
+    // With a Balance" and the row count never disagree with what's
+    // actually shown. Display-only, on top of computeSoaRows()'s complete
+    // result — the underlying sync/detail-modal/Company 360 data (and the
+    // Excel export's own matching filter) is untouched.
+    const list = (companies ?? []).filter(c => c.totalOutstanding !== 0);
     if (!picFilter) return list;
     return list.filter(c => effectiveOwner(c) === picFilter || (!effectiveOwner(c) && c.picOptions.includes(picFilter)));
   }, [companies, picFilter]);

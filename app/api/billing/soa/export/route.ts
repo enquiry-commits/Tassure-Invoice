@@ -29,6 +29,11 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 503 });
   }
+  // Vincent, 2026-09-16: same exclusion as the on-screen SOA list — a
+  // company whose net is exactly $0 has nothing to chase, so it shouldn't
+  // clutter this export either. See app/billing/soa/_components.tsx's
+  // picScoped comment for the full reasoning.
+  rows = rows.filter(r => r.totalOutstanding !== 0);
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Tassure';
