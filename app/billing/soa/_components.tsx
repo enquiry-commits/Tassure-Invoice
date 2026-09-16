@@ -10,6 +10,7 @@ import { findUniqueBestMatch } from '@/lib/company-name';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import type { DraftLike } from '@/lib/draft-helper-client';
 import { loadSoaActor, downloadSoaPdf, buildSoaDraft } from '@/lib/soa-actions-client';
+import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 import type { QbCompany } from '@/lib/quickbooks';
 import type { SoaCompanyRow } from '@/app/api/billing/soa/route';
 import type { SoaInvoiceDetail } from '@/app/api/billing/soa/detail/route';
@@ -673,20 +674,24 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
             document in QuickBooks — same reasoning as the merged PDF's
             "Other Adjustments" summary page below not trying to fake one —
             so those stay plain, non-clickable text with a title explaining
-            why, not a dead/broken link. */}
+            why, not a dead/broken link.
+            2026-09-16: the clickable chip itself is BillingInvoiceReference
+            (shared with Billing Drafts, not a second copy — Vincent: "SOA
+            里面的可点击式INVOICE 号码UI格式能不能设计成和 Billing Drafts的
+            那个INVOICE 格式那样灰色的"), passed the real internal `id` this
+            page already has from the AgedReceivableDetail report so it can
+            skip the DocNumber lookup Billing Drafts' own callers need. */}
         {invoices !== null && invoices.map(inv => {
           const canOpenPdf = inv.type !== 'other' && !!inv.qbInvoiceId;
-          const openPdf = () => {
-            if (!canOpenPdf) return;
-            const docType = inv.type === 'credit' ? '&docType=creditmemo' : '';
-            window.open(`/api/quickbooks/invoice-pdf?company=${inv.qbCompany}&id=${encodeURIComponent(inv.qbInvoiceId!)}${docType}`, '_blank');
-          };
           return (
-          <div key={`${inv.qbCompany}-${inv.invoiceNo}`} onClick={openPdf}
-            title={canOpenPdf ? `View ${inv.rawType} PDF` : `No PDF document exists for a ${inv.rawType} in QuickBooks`}
-            style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px 90px 100px', gap: 0, alignItems: 'center', padding: '9px 10px', borderTop: '1px solid #f1f5f9', cursor: canOpenPdf ? 'pointer' : 'default' }}>
+          <div key={`${inv.qbCompany}-${inv.invoiceNo}`}
+            style={{ display: 'grid', gridTemplateColumns: '90px 1fr 90px 90px 90px 100px', gap: 0, alignItems: 'center', padding: '9px 10px', borderTop: '1px solid #f1f5f9' }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: '#31506f' }}>{inv.qbCompany}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: canOpenPdf ? '#2563eb' : '#334155', textDecoration: canOpenPdf ? 'underline' : 'none' }}>#{inv.invoiceNo}</div>
+            <div>
+              {canOpenPdf
+                ? <BillingInvoiceReference company={inv.qbCompany as QbCompany} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} docType={inv.type === 'credit' ? 'credit' : 'invoice'} title={`View ${inv.rawType} PDF`} />
+                : <span title={`No PDF document exists for a ${inv.rawType} in QuickBooks`} style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>#{inv.invoiceNo}</span>}
+            </div>
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.txnDate)}</div>
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.dueDate)}</div>
             <div style={{ textAlign: 'center', fontSize: 10.5, fontWeight: 700, color: BUCKET_COLOR[inv.bucket] }}>{AGING_BUCKETS.find(b => b.key === inv.bucket)?.label}</div>
