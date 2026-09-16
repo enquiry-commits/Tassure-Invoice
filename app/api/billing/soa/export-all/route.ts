@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import type { QbCompany } from '@/lib/quickbooks';
 import { computeSoaRows, effectiveOwner, tagAndMergeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
-import { buildAllSheet, buildCompanySheet, buildPersonSheet, buildInternalSheet } from '@/lib/soa-export';
+import { buildAllSheet, buildCompanySheet, buildPersonSheet, buildInternalSheet, type SoaExportRow } from '@/lib/soa-export';
 import { resolveStaffName } from '@/lib/staff-directory';
 
 // The 14 staff-code tabs that exist in Vincent's real Google Sheet, in
@@ -12,7 +12,7 @@ import { resolveStaffName } from '@/lib/staff-directory';
 // every row from TAB/TAC/TAO where they're the effective Owner.
 const STAFF_CODE_SHEETS = ['JF', 'YH', 'VC', 'JT', 'WE', 'VY', 'CS', 'QT', 'TSM', 'LHC', 'JL', 'ASM', 'HSX', 'CKY'];
 
-type TableRow = { companyName: string; aging: SoaCompanyRow['aging']; totalOutstanding: number; owner: string | null };
+type TableRow = SoaExportRow;
 
 // GET /api/billing/soa/export-all — Vincent, 2026-09-07: "另外要生成一个完
 // 整版的EXCEL（和GOOGLE SHEET 那边的一样的），要有 TAB/TAC/TAO/每个人员的/
@@ -53,7 +53,7 @@ export async function GET() {
   // same owner is 2 real separate rows on Vincent's real per-person tabs
   // too (confirmed against his real "CKY" tab).
   const allRows: TableRow[] = [...tab, ...tac, ...tao].map(r => ({
-    companyName: r.companyName, aging: r.aging, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r),
+    companyName: r.companyName, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r),
   }));
 
   const staffSheetNames = new Set<string>();

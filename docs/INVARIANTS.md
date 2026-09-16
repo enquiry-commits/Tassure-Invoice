@@ -879,6 +879,28 @@ again.
   25 real companies, all ND, all previously mis-sorted the same way —
   verified the fix corrects Siehi Shipping's own next period from "Jan
   2026-Dec 2026" to the true "Aug 2026-Jul 2027".)*
+- **INV-QB-020** — `lib/soa-export.ts`'s `renderAgingTable()` (the Excel
+  exports behind `GET /api/billing/soa/export` and `.../export-all`) must
+  never gate an aging-bucket cell's value — or that column's TOTAL-row
+  SUM — on the bucket's net being positive. The on-screen SOA list had
+  this exact bug (INV-QB-017's own fix history) before it was redesigned
+  to show every line item individually; the Excel export inherited the
+  same `> 0` gate independently and was never updated when the on-screen
+  list was fixed. This was not just a display gap: the TOTAL row's
+  per-bucket sum used the SAME `> 0` filter on each company's contribution
+  before summing, so a bucket column's own grand total silently EXCLUDED
+  every company whose net in that bucket was zero or negative — a real
+  wrong printed number, not merely an incomplete one. Fix: a bucket cell
+  shows the real net (`aging[bucket]`, never re-derived from line items —
+  one source of truth) whenever the bucket has ANY real line item behind
+  it (checked via `lineItems`, not the net's sign), and the itemized
+  breakdown (type/reference/signed amount, one per line) goes into that
+  cell's Excel comment/note — a spreadsheet cell can't stack lines the way
+  the on-screen table now does, so the note is the closest equivalent,
+  verified to round-trip through a real save-and-reopen cycle. *(source:
+  2026-09-16, Vincent, after seeing the on-screen ACCADIA MANAGEMENT
+  SERVICES 91+ bucket example (7 real line items netting to exactly
+  $0.00): "这样Export Full Workbook 那边也是要更新一下内容显示了".)*
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

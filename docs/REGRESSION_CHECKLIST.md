@@ -213,6 +213,19 @@ deferred row whose `period_end` differ, confirm the app treats the later
 one as authoritative.
 **Guards:** `docs/INVARIANTS.md` INV-QB-019.
 
+### REG-020 — SOA Excel export shows real bucket activity and a correct TOTAL row even when a bucket nets to zero or negative
+Export the Full Workbook (or a single TAB/TAC/TAO sheet). Pick a company
+known to have a bucket with real, mixed-sign line items netting to zero or
+negative (ACCADIA MANAGEMENT SERVICES PTE.LTD.'s TAO 91+ bucket is a known
+real example — 7 line items netting to $0.00). Confirm that bucket's cell
+shows the real net (not blank) and hovering it shows a comment/note
+listing every underlying line item. Then confirm the sheet's own bottom
+TOTAL row for that bucket column equals the real sum across ALL companies'
+`aging[bucket]` values for that column (spot-check by summing the column
+in a scratch formula) — not silently short by every company whose net in
+that bucket happened to be zero or negative.
+**Guards:** `docs/INVARIANTS.md` INV-QB-020.
+
 ---
 
 ## Automation priority

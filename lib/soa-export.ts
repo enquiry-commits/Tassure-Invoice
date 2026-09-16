@@ -32,6 +32,14 @@ const SHEET_BUCKET_LABEL: Record<(typeof AGING_BUCKETS)[number]['key'], string> 
 export const COLUMN_COUNT = 2 + AGING_BUCKETS.length + 2; // Company + 5 buckets + Total + PIC
 const BOLD = { bold: true };
 
+// Shared row shape for every sheet builder below AND app/api/billing/soa/
+// export-all/route.ts's own TableRow alias — one definition so a future
+// field addition (like lineItems, 2026-09-16) only needs updating here.
+export type SoaExportRow = {
+  companyName: string; source?: QbCompany; aging: SoaCompanyRow['aging'];
+  lineItems: SoaCompanyRow['lineItems']; totalOutstanding: number; owner: string | null;
+};
+
 // `includeSource`: the "All" sheet (2026-09-07: "在 EXPORT FULL WORKBOOK那边
 // 要加多一个 ALL 的 SHEET") is the one sheet whose rows can be the same
 // company twice (once per system) — it alone carries an extra Source column
@@ -61,10 +69,26 @@ function setColumnWidths(sheet: ExcelJS.Worksheet, includeSource = false) {
 // from matching it exactly here since he asked for the label directly), or
 // null to omit the total row entirely (Internal's own per-person
 // sub-sections never get one, on his real sheet or here).
+// 2026-09-16: Vincent, after the on-screen SOA list stopped netting a
+// bucket down to one number ("这样Export Full Workbook 那边也是要更新一下
+// 内容显示了") — a bucket's cell value is now the real net across every
+// line item landing in it (never gated on being positive; a company like
+// ACCADIA MANAGEMENT SERVICES whose 91+ bucket has 7 real line items
+// netting to exactly $0.00 used to render a blank cell here, same bug the
+// on-screen list had before its own fix), and — since a single Excel cell
+// can only hold one value, unlike the on-screen list's stacked lines — the
+// itemized breakdown (one line per transaction: type, reference, amount)
+// goes into that cell's own Excel comment/note, visible on hover, so the
+// detail isn't lost even though the cell displays one net number. This
+// also fixes a real pre-existing bug in the TOTAL row: the old `> 0` gate
+// applied to BOTH the per-cell value and the precomputed sum below, so a
+// bucket column's own grand total silently excluded every company whose
+// net in that bucket was zero or negative — not just a display gap, the
+// printed total was actually wrong.
 export function renderAgingTable(
   sheet: ExcelJS.Worksheet,
   startRow: number,
-  rows: { companyName: string; source?: QbCompany; aging: SoaCompanyRow['aging']; totalOutstanding: number; owner: string | null }[],
+  rows: SoaExportRow[],
   totalLabel: string | null,
   opts?: { includeSource?: boolean },
 ): number {
@@ -88,6 +112,15 @@ export function renderAgingTable(
   for (const r of rows) {
     rowNum++;
     const row = sheet.getRow(rowNum);
+    // Real net value whenever the bucket has any real line item behind it
+    // (r.aging[b.key] is already the authoritative net — lib/soa-data.ts
+    // computes it once; re-derived here would risk a second, driftable
+    // summation), null only when the bucket is genuinely empty. `items` is
+    // kept alongside purely to build the hover note below.
+    const bucketInfo = AGING_BUCKETS.map(b => {
+      const items = r.lineItems.filter(item => item.bucket === b.key);
+      return { amount: items.length ? r.aging[b.key] : null, items };
+    });
     row.values = [
       // Vincent, 2026-09-07: "公司名要统一...都大字母" — same display-only
       // uppercasing as the on-screen list (app/billing/soa/_components.tsx)
@@ -96,10 +129,22 @@ export function renderAgingTable(
       // QuickBooks customer_name.
       r.companyName.toUpperCase(),
       ...(includeSource ? [r.source ?? ''] : []),
-      ...AGING_BUCKETS.map(b => (r.aging[b.key] > 0 ? r.aging[b.key] : null)),
+      ...bucketInfo.map(b => b.amount),
       r.totalOutstanding,
       r.owner ?? '',
     ];
+    // One net number per bucket cell (an Excel cell can't stack lines the
+    // way the on-screen list now does — see this function's own header
+    // comment) — the itemized breakdown instead goes into that cell's own
+    // comment/note, visible on hover, so a bucket like ACCADIA MANAGEMENT
+    // SERVICES's 91+ (7 real line items netting to exactly $0.00) still
+    // shows its real activity, not a blank cell with nothing to click on.
+    bucketInfo.forEach((b, i) => {
+      if (!b.items.length) return;
+      row.getCell(firstAgingCol + i).note = b.items
+        .map(item => `${item.txnType} ${item.docNumber}: ${item.amount < 0 ? '-' : ''}$${Math.abs(item.amount).toFixed(2)}`)
+        .join('\n');
+    });
     for (let col = firstAgingCol; col <= totalCol; col++) {
       const cell = row.getCell(col);
       cell.numFmt = '#,##0.00';
@@ -126,7 +171,11 @@ export function renderAgingTable(
     // `result` alongside the formula means the correct number is visible
     // immediately either way — the formula is still there (and still
     // authoritative) if a row is later edited/deleted directly in Excel.
-    const sums = AGING_BUCKETS.map(b => rows.reduce((s, r) => s + (r.aging[b.key] > 0 ? r.aging[b.key] : 0), 0));
+    // 2026-09-16: no `> 0` gate here either — the old gate silently
+    // excluded every company's negative-or-zero-net bucket contribution
+    // from this column's own grand total, a real wrong-number bug (not
+    // just a display one), same root cause as the per-cell fix above.
+    const sums = AGING_BUCKETS.map(b => rows.reduce((s, r) => s + r.aging[b.key], 0));
     sums.push(rows.reduce((s, r) => s + r.totalOutstanding, 0));
     for (let col = firstAgingCol; col <= totalCol; col++) {
       const colLetter = sheet.getColumn(col).letter;
@@ -166,7 +215,7 @@ export function buildCompanySheet(workbook: ExcelJS.Workbook, company: QbCompany
   sheet.getCell(3, 1).alignment = { horizontal: 'center' };
 
   const headerRowNum = 5;
-  const rowsForTable = rows.map(r => ({ companyName: r.companyName, aging: r.aging, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r) }));
+  const rowsForTable = rows.map(r => ({ companyName: r.companyName, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r) }));
   renderAgingTable(sheet, headerRowNum, rowsForTable, 'TOTAL');
 
   setColumnWidths(sheet);
@@ -204,7 +253,7 @@ export function buildAllSheet(workbook: ExcelJS.Workbook, rows: SoaCompanyRowWit
 
   const headerRowNum = 5;
   const rowsForTable = rows.map(r => ({
-    companyName: r.companyName, source: r.qbCompany, aging: r.aging, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r),
+    companyName: r.companyName, source: r.qbCompany, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r),
   }));
   renderAgingTable(sheet, headerRowNum, rowsForTable, 'TOTAL', { includeSource: true });
 
@@ -222,7 +271,7 @@ export function buildAllSheet(workbook: ExcelJS.Workbook, rows: SoaCompanyRowWit
 // No title block. His real sheet's own sum row has no "TOTAL" text, but
 // Vincent, 2026-09-07: "个人的也是要有TOTAL,也是要有整合" — deliberately
 // diverges from that to add the label here, since he asked for it directly.
-export function buildPersonSheet(workbook: ExcelJS.Workbook, sheetName: string, rows: { companyName: string; aging: SoaCompanyRow['aging']; totalOutstanding: number; owner: string | null }[]) {
+export function buildPersonSheet(workbook: ExcelJS.Workbook, sheetName: string, rows: SoaExportRow[]) {
   const sheet = workbook.addWorksheet(sheetName);
   renderAgingTable(sheet, 1, rows, 'TOTAL');
   setColumnWidths(sheet);
@@ -241,7 +290,7 @@ export function buildPersonSheet(workbook: ExcelJS.Workbook, sheetName: string, 
 // each person into exactly ONE clean block.
 export function buildInternalSheet(
   workbook: ExcelJS.Workbook,
-  groups: { owner: string; rows: { companyName: string; aging: SoaCompanyRow['aging']; totalOutstanding: number; owner: string | null }[] }[],
+  groups: { owner: string; rows: SoaExportRow[] }[],
 ) {
   const sheet = workbook.addWorksheet('Internal');
   let rowNum = 1;
