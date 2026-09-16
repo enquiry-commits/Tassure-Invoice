@@ -114,21 +114,38 @@ Company 360 / My Tasks are freshly shipped (2026-08-31) and haven't had a
 real post-deploy login check yet — see Pending Improvements, not listed as
 an issue since nothing is known wrong, just not yet confirmed right.
 
-**Internal-network NAS document search — cloud-side plumbing only, NOT yet a
+**Internal-network document search — cloud-side plumbing only, NOT yet a
 working feature (2026-09-16).** The assistant's `search_documents` tool,
 `app/api/nas-index/ingest/route.ts`, and `nas_documents` (`scripts/add-nas-
 document-index.sql`) are deployed and `tsc`/build-clean, but three real
 pieces are still missing before this actually does anything: (1) Vincent has
 not yet run the migration, so the table does not exist in production; (2)
 `NAS_INDEX_SECRET` is not set, so the ingest route currently returns 503 for
-any request; (3) the NAS-side indexing script itself (the thing that
-actually walks `\\Rainbow`'s folders, extracts file content, and POSTs
-batches) has not been written at all — it was explicitly deferred pending
-Vincent confirming the NAS device's real model/OS (Synology/QNAP/other). The
-assistant will call `search_documents` and get back a real, honest "0
-results" for any query until all three are in place — that is expected, not
-a bug, but do not describe this feature as "live" to Vincent without
-checking these three first.
+any request; (3) the indexing script that actually walks the file share,
+extracts content, and POSTs batches has not been written yet.
+
+**Correction, 2026-09-16 (real, tested — not the original assumption):**
+`\\Rainbow` (the file share this targets, mapped as `Q:\RainbowData` from
+Vincent's own machine) is **not a NAS appliance** — live testing (port scan
++ `net view` showing it also hosts `NETLOGON`/`SYSVOL`) confirmed it is a
+Windows Server that is also the company's Active Directory domain
+controller. Running extra scripts/scheduled tasks directly on a domain
+controller is against normal security practice, so Vincent chose (asked via
+`AskUserQuestion`) to have the indexing script run on a SEPARATE always-on
+machine that reaches `\\Rainbow\RainbowData` over the network instead —
+which specific machine is still to be designated by Vincent/IT. Content
+extraction itself is confirmed technically easy: a real `.docx` on that
+share was unzipped and its `word/document.xml` read directly (no Word
+needed) to pull real text. Folder structure under "All Clients Profile" is
+letter (A-Z) → `"<code>_<COMPANY NAME>"` (e.g. "CA029_ACG INTERIOR AND
+EXHIBITION PTE. LTD") — matches `lib/company-name.ts`'s `normalize()` once
+the leading `CA029_`-style code is stripped, a detail the original plan
+missed. See `PROJECT_STATUS.md`'s dated entry for the full investigation.
+
+The assistant will call `search_documents` and get back a real, honest "0
+results" for any query until all of the above is in place — that is
+expected, not a bug, but do not describe this feature as "live" to Vincent
+without checking first.
 
 All 4 of the AI-feature migrations shipped 2026-09-08 (`user_activity_
 events`, `ai_conversations`/`ai_messages`, `user_memories`) have now been
