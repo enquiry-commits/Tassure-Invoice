@@ -2,30 +2,22 @@ import { todaySGT } from '@/lib/date';
 import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import type { QbCompany } from '@/lib/quickbooks';
-import { computeSoaRows, effectiveOwner, tagAndMergeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
-import { buildAllSheet, buildCompanySheet, buildPersonSheet, buildInternalSheet, type SoaExportRow } from '@/lib/soa-export';
-import { resolveStaffName } from '@/lib/staff-directory';
-
-// The 14 staff-code tabs that exist in Vincent's real Google Sheet, in
-// their real tab order (confirmed 2026-09-07 by reading the sheet's own
-// htmlview tab list) — each one is that person's own cross-system book:
-// every row from TAB/TAC/TAO where they're the effective Owner.
-const STAFF_CODE_SHEETS = ['JF', 'YH', 'VC', 'JT', 'WE', 'VY', 'CS', 'QT', 'TSM', 'LHC', 'JL', 'ASM', 'HSX', 'CKY'];
-
-type TableRow = SoaExportRow;
+import { computeSoaRows, tagAndMergeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
+import { buildAllSheet, buildCompanySheet } from '@/lib/soa-export';
 
 // GET /api/billing/soa/export-all — Vincent, 2026-09-07: "另外要生成一个完
 // 整版的EXCEL（和GOOGLE SHEET 那边的一样的），要有 TAB/TAC/TAO/每个人员的/
-// internal的" — the FULL workbook, mirroring every real tab in his sheet
-// (confirmed by reading its own tab list, not guessed): TAB, TAO, TAC (his
-// real tab order), then one sheet per staff code, then a single "Internal"
-// catch-all. Deliberately excludes his sheet's other 2 tabs ("Bank
-// Account", "Template - PIC") since he asked for these specific 5
-// categories, not "everything in the workbook". Extended same day, once
-// the on-screen "All" combined view shipped: "因为现在多了一个All , 所有
-// 等于在 EXPORT FULL WORKBOOK那边要加多一个 ALL 的 SHEET" — a 19th sheet,
-// placed FIRST (matching the sidebar's All-before-TAB/TAC/TAO order), with
-// every TAB/TAC/TAO row together and its own Source column.
+// internal的" — originally the FULL workbook mirroring every real tab in
+// his sheet: TAB, TAO, TAC (his real tab order), then one sheet per staff
+// code, then a single "Internal" catch-all, plus an "All" sheet added the
+// same day once the on-screen combined view shipped.
+//
+// 2026-09-16, Vincent: "Export Excel 那边只保留 All / TAB / TAO/ TAC, 后面
+// 的 PIC 和 Internal 不需要导出" — narrowed to just these 4 sheets. The
+// per-person (buildPersonSheet) and Internal (buildInternalSheet) sheet
+// builders in lib/soa-export.ts were removed in the same change since this
+// was their only real caller — see that file's git history if a future
+// request brings this back rather than re-deriving it from scratch.
 export async function GET() {
   let tab: SoaCompanyRow[], tac: SoaCompanyRow[], tao: SoaCompanyRow[];
   try {
@@ -35,11 +27,10 @@ export async function GET() {
   }
   // Vincent, 2026-09-16: same exclusion as the on-screen SOA list — a
   // company whose net is $0 or negative has nothing to chase, so it
-  // shouldn't clutter any sheet in this workbook either (All, TAB/TAC/TAO,
-  // per-person, Internal — every sheet below is built from these 3
-  // arrays). See app/billing/soa/_components.tsx's picScoped comment for
-  // the full reasoning (including why this stays a live filter, not a
-  // stored one). Filtered once here, before any sheet builder reads them.
+  // shouldn't clutter any sheet in this workbook either. See
+  // app/billing/soa/_components.tsx's picScoped comment for the full
+  // reasoning (including why this stays a live filter, not a stored one).
+  // Filtered once here, before any sheet builder reads them.
   tab = tab.filter(r => r.totalOutstanding > 0);
   tac = tac.filter(r => r.totalOutstanding > 0);
   tao = tao.filter(r => r.totalOutstanding > 0);
@@ -57,38 +48,6 @@ export async function GET() {
   // Real tab order on his sheet is TAB, TAO, TAC — not alphabetical.
   const byCompany: [QbCompany, SoaCompanyRow[]][] = [['TAB', tab], ['TAO', tao], ['TAC', tac]];
   for (const [company, rows] of byCompany) buildCompanySheet(workbook, company, rows);
-
-  // Flatten all 3 systems into one list for the person/Internal sheets —
-  // NOT deduplicated across systems: a company owing on 2 systems under the
-  // same owner is 2 real separate rows on Vincent's real per-person tabs
-  // too (confirmed against his real "CKY" tab).
-  const allRows: TableRow[] = [...tab, ...tac, ...tao].map(r => ({
-    companyName: r.companyName, aging: r.aging, lineItems: r.lineItems, totalOutstanding: r.totalOutstanding, owner: effectiveOwner(r),
-  }));
-
-  const staffSheetNames = new Set<string>();
-  for (const code of STAFF_CODE_SHEETS) {
-    const canonicalName = resolveStaffName(code);
-    if (!canonicalName) continue; // shouldn't happen — every code here is a real, already-confirmed alias
-    staffSheetNames.add(canonicalName);
-    const rows = allRows.filter(r => r.owner === canonicalName).sort((a, b) => a.companyName.localeCompare(b.companyName));
-    buildPersonSheet(workbook, code, rows);
-  }
-
-  // Everyone else with a real owner but no dedicated tab — grouped into one
-  // block per person (see lib/soa-export.ts's buildInternalSheet doc
-  // comment on why this doesn't replicate his sheet's own duplicate blocks).
-  const internalByOwner = new Map<string, TableRow[]>();
-  for (const r of allRows) {
-    if (!r.owner || staffSheetNames.has(r.owner)) continue;
-    const list = internalByOwner.get(r.owner) ?? [];
-    list.push(r);
-    internalByOwner.set(r.owner, list);
-  }
-  const internalGroups = [...internalByOwner.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([owner, rows]) => ({ owner, rows: rows.sort((a, b) => a.companyName.localeCompare(b.companyName)) }));
-  buildInternalSheet(workbook, internalGroups);
 
   const bytes = Buffer.from(await workbook.xlsx.writeBuffer());
   const fileName = `SOA - Full Workbook - ${todaySGT()}.xlsx`;

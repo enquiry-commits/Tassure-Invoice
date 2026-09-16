@@ -489,9 +489,8 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
 // One row per (company, qbCompany) — the "All" view's own shape. Vincent,
 // 2026-09-07: "在 Outstanding -TAB的上面加多一个3级标题（All）...举例：
 // TAB/TAO 都有 1V CAPITAL PTE. LTD.，所有就要在ALL 出现2行" — deliberately
-// NOT deduplicated across systems (same principle as the per-person Excel
-// export sheets, lib/soa-export.ts's buildPersonSheet): a company owing on
-// 2 systems is 2 real, separate rows, each tagged with which one it's from.
+// NOT deduplicated across systems: a company owing on 2 systems is 2 real,
+// separate rows, each tagged with which one it's from.
 export interface SoaCompanyRowWithSource extends SoaCompanyRow {
   qbCompany: QbCompany;
 }

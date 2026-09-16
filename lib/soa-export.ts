@@ -226,8 +226,8 @@ export function buildCompanySheet(workbook: ExcelJS.Workbook, company: QbCompany
 
 // The "All" sheet — Vincent, 2026-09-07: "因为现在多了一个All , 所有等于在
 // EXPORT FULL WORKBOOK那边要加多一个 ALL 的 SHEET" — every TAB/TAC/TAO row
-// together, NOT deduplicated (same principle as buildPersonSheet below: a
-// company owing on 2 systems is 2 real, separate rows), mirroring the
+// together, NOT deduplicated (a company owing on 2 systems is 2 real,
+// separate rows), mirroring the
 // on-screen All page exactly — including its own Source column, right
 // after Company Name. Placed first in the workbook, matching the sidebar's
 // own All-before-TAB/TAC/TAO ordering; there's no real tab on Vincent's own
@@ -263,41 +263,7 @@ export function buildAllSheet(workbook: ExcelJS.Workbook, rows: SoaCompanyRowWit
   return sheet;
 }
 
-// One staff member's own cross-system book: every row (from any of
-// TAB/TAC/TAO) where they're the effective Owner — NOT deduplicated across
-// systems, since a company owing on 2 systems under the same owner is 2
-// real, separate rows on Vincent's real per-person tabs too (confirmed
-// against his real "CKY" tab: e.g. "1V Capital" appears once per system).
-// No title block. His real sheet's own sum row has no "TOTAL" text, but
-// Vincent, 2026-09-07: "个人的也是要有TOTAL,也是要有整合" — deliberately
-// diverges from that to add the label here, since he asked for it directly.
-export function buildPersonSheet(workbook: ExcelJS.Workbook, sheetName: string, rows: SoaExportRow[]) {
-  const sheet = workbook.addWorksheet(sheetName);
-  renderAgingTable(sheet, 1, rows, 'TOTAL');
-  setColumnWidths(sheet);
-  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: COLUMN_COUNT } };
-  sheet.views = [{ state: 'frozen', ySplit: 1 }];
-  return sheet;
-}
-
-// The catch-all "Internal" tab: everyone who owns at least one real
-// outstanding row but doesn't have their own dedicated staff sheet, grouped
-// into one stacked mini-table per person (own header row, own rows, one
-// blank separator row before the next person) — matches his real sheet's
-// structure. Vincent's real Internal tab has a couple of duplicate
-// mini-blocks for the same person (BD appears twice, evidently pasted in
-// separately over time) — deliberately not replicated here: this groups
-// each person into exactly ONE clean block.
-export function buildInternalSheet(
-  workbook: ExcelJS.Workbook,
-  groups: { owner: string; rows: SoaExportRow[] }[],
-) {
-  const sheet = workbook.addWorksheet('Internal');
-  let rowNum = 1;
-  for (const group of groups) {
-    rowNum = renderAgingTable(sheet, rowNum, group.rows, null);
-    rowNum++; // blank separator row before the next person's block
-  }
-  setColumnWidths(sheet);
-  return sheet;
-}
+// buildPersonSheet()/buildInternalSheet() (per-staff-code sheets + the
+// catch-all "Internal" tab) removed 2026-09-16 — Vincent: "Export Excel 那
+// 边只保留 All / TAB / TAO/ TAC, 后面的 PIC 和 Internal 不需要导出". See git
+// history if a future request brings these back.

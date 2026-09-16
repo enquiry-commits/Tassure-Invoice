@@ -1,5 +1,13 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-16 (SHIPPED: "Export Full Workbook" narrowed to just All / TAB / TAO / TAC — Vincent: "Export Excel 那边只保留 All / TAB / TAO/ TAC, 后面的 PIC 和 Internal 不需要导出". Removed the per-staff-code sheets (the 14 tabs — JF/YH/VC/JT/WE/VY/CS/QT/TSM/LHC/JL/ASM/HSX/CKY — each a person's own cross-system book) and the "Internal" catch-all tab from `app/api/billing/soa/export-all/route.ts`'s output.
+
+Since this route was their only real caller, `lib/soa-export.ts`'s `buildPersonSheet()`/`buildInternalSheet()` were removed too rather than left as dead exported functions — full history is in git if a future request brings per-person/Internal sheets back. The 4 remaining sheets (All, TAB, TAO, TAC) and their own $0/negative-balance filtering (see the entry directly below) are untouched.
+
+`npx tsc --noEmit` / `npm run build` clean.
+
+Previous entry follows.
+
 Last updated: 2026-09-16 (SHIPPED AND VERIFIED: SOA list/export now hide companies with a $0 OR negative net balance — Vincent: "这些Total =0的就不需要显示在List了，因为证明了这家公司目前没有Outstanding, 但是这些记录好像会记录，只是不显示罢了，避免员工混乱" (confirmed the same for the Excel export), then extended the same day: "Total = 负数 也不需要显示出在List 但是要记录，如果有更新不是负数了，下次也能再根据计算显示出来". A company like ACCADIA MANAGEMENT SERVICES (7 real line items netting to exactly $0.00, correctly visible since yesterday's per-line-item redesign) has nothing left to actually chase, so listing it among 464 "Clients With a Balance" risked confusing staff into treating it as a real collections target — same reasoning extends to a negative net (we owe THEM, also not a collections target).
 
 Deliberately a display-only filter, not a change to `computeSoaRows()` itself — every other consumer (Company 360's own per-company Outstanding section, the AI assistant's tools, the detail modal, the underlying sync) keeps seeing the complete, neutral data; only the two consumers Vincent named (`app/billing/soa/_components.tsx`'s `picScoped`, ahead of both the KPI cards and the row list so "Clients With a Balance" never disagrees with what's shown; and both export routes, `.../export` and `.../export-all`, filtering `tab`/`tac`/`tao` once before any sheet builder reads them) now keep only `totalOutstanding > 0` rows. Recomputed fresh from `computeSoaRows()`'s live result every time (never a stored/cached decision), so a company automatically reappears the moment its real net crosses back above $0 — exactly the "下次也能再根据计算显示出来" behavior asked for, with no extra code needed for it. REG-017's total-matches-QuickBooks guarantee is untouched since the filter runs strictly after the total is already computed.
