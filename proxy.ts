@@ -5,7 +5,14 @@ import { getApprovedAccount, isWithinRestriction } from '@/lib/approved-accounts
 // Intuit cannot carry a Tassure Google session. The webhook route is public at
 // the session layer and authenticates the exact raw request body with Intuit's
 // HMAC signature before accepting any event.
-const PUBLIC_PATHS = new Set(['/login', '/auth/callback', '/api/quickbooks/webhook']);
+//
+// /api/nas-index/ingest (added 2026-09-16) is public for the same reason: the
+// caller is a script running on the office NAS device, not a browser with a
+// Tassure Google session — it self-authenticates via a shared-secret HMAC
+// signature inside the route itself (see app/api/nas-index/ingest/route.ts),
+// same pattern as the QuickBooks webhook, not the CRON_PATHS bearer bypass
+// below (that one is GET-only; this is an external POST-with-payload push).
+const PUBLIC_PATHS = new Set(['/login', '/auth/callback', '/api/quickbooks/webhook', '/api/nas-index/ingest']);
 const CRON_PATHS = new Set([
   '/api/teamwork/sync-nd',
   '/api/teamwork/sync',

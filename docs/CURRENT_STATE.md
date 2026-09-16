@@ -114,6 +114,22 @@ Company 360 / My Tasks are freshly shipped (2026-08-31) and haven't had a
 real post-deploy login check yet — see Pending Improvements, not listed as
 an issue since nothing is known wrong, just not yet confirmed right.
 
+**Internal-network NAS document search — cloud-side plumbing only, NOT yet a
+working feature (2026-09-16).** The assistant's `search_documents` tool,
+`app/api/nas-index/ingest/route.ts`, and `nas_documents` (`scripts/add-nas-
+document-index.sql`) are deployed and `tsc`/build-clean, but three real
+pieces are still missing before this actually does anything: (1) Vincent has
+not yet run the migration, so the table does not exist in production; (2)
+`NAS_INDEX_SECRET` is not set, so the ingest route currently returns 503 for
+any request; (3) the NAS-side indexing script itself (the thing that
+actually walks `\\Rainbow`'s folders, extracts file content, and POSTs
+batches) has not been written at all — it was explicitly deferred pending
+Vincent confirming the NAS device's real model/OS (Synology/QNAP/other). The
+assistant will call `search_documents` and get back a real, honest "0
+results" for any query until all three are in place — that is expected, not
+a bug, but do not describe this feature as "live" to Vincent without
+checking these three first.
+
 All 4 of the AI-feature migrations shipped 2026-09-08 (`user_activity_
 events`, `ai_conversations`/`ai_messages`, `user_memories`) have now been
 run by Vincent and confirmed live with a real write+read round trip on

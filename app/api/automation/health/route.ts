@@ -19,6 +19,9 @@ const SOURCES = [
   'quickbooks',
   'ar_workflow',
   'late_filing',
+  // Added 2026-09-16 — externally-triggered (from the office NAS device, not
+  // our own cron), see lib/automation-sync.ts's AutomationSource comment.
+  'nas_index',
 ] as const;
 
 export const dynamic = 'force-dynamic';

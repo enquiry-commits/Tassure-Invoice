@@ -38,3 +38,17 @@ export function lateFilingDeepLink(companyName: string): string {
 export function soaDeepLink(qbCompany: 'TAB' | 'TAC' | 'TAO', companyName: string): string {
   return `/billing/soa/${qbCompany.toLowerCase()}?${new URLSearchParams({ openCompany: companyName }).toString()}`;
 }
+
+// Added 2026-09-16 for search_documents (lib/document-search-lookup.ts) — the
+// one deep link in this file keyed by companies.id rather than a fuzzy-
+// matched name. A nas_documents row already carries a resolved company_id
+// (resolved once at NAS-index time, not at query time — see
+// scripts/add-nas-document-index.sql), so there is no name to fuzzy-match
+// here and app/companies/[id]/page.tsx already takes the real numeric id
+// directly. A found document itself lives on the internal NAS, which the
+// cloud can never serve — this links to the document's COMPANY page instead,
+// where staff already know to go find the actual file on a machine that's on
+// the office network.
+export function companyDeepLink(companyId: number): string {
+  return `/companies/${companyId}`;
+}

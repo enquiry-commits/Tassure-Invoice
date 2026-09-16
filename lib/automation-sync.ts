@@ -38,7 +38,17 @@ export type AutomationSource =
   // (automation_sync_runs.source is plain text — confirmed against
   // scripts/harden-automation.sql before adding this), so this union
   // extension alone is enough, no migration needed.
-  | 'ai_learning';
+  | 'ai_learning'
+  // Added 2026-09-16 — internal-network NAS document indexing (see
+  // scripts/add-nas-document-index.sql). Unlike every other source here,
+  // this one is NOT triggered by our own cron — it's driven by an external
+  // script running on the NAS device itself, POSTing to
+  // app/api/nas-index/ingest/route.ts, which wraps itself in
+  // withAutomationRun('nas_index', ...) just like any other source so it
+  // shows up on the same health dashboard (also add it to SOURCES in
+  // app/api/automation/health/route.ts — that array does not follow this
+  // union automatically, a known gap called out in that file's own comment).
+  | 'nas_index';
 
 type JsonSummary = Record<string, unknown>;
 

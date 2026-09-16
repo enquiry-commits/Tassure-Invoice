@@ -17,6 +17,7 @@ import { lookupEmailStatus, getCommunicationsSummary } from '@/lib/email-status-
 import { getCustomerProfileSummary } from '@/lib/customer-profile-lookup';
 import { lookupCompanyDeep } from '@/lib/company-deep-lookup';
 import { listCompanies, type CompanyListFilters } from '@/lib/company-list-lookup';
+import { searchDocuments } from '@/lib/document-search-lookup';
 import { getTrademarkSummary } from '@/lib/trademark-lookup';
 import { getUpcomingDeadlines } from '@/lib/deadlines-lookup';
 import { getRecentChanges } from '@/lib/audit-lookup';
@@ -472,6 +473,26 @@ async function companyListTool(input: Record<string, unknown>) {
       count: result.totalMatched,
     },
     note: `Real, current list — same companies+master_list data the Reports page's own drill-down uses, filtered to ACTIVE clients unless includeInactive was set. totalMatched is the REAL full count; only the first ${result.returned} are listed${result.truncated ? ' (truncated)' : ''} — always state the real total, and never imply the listed names are all of them when truncated is true. PIC matching is deliberately loose (staff names are stored inconsistently in this system, e.g. "Kah Ye Chin" vs "Chin Kah Ye"), so double-check a surprising match rather than treating it as exact.`,
+  };
+}
+
+// Added 2026-09-16 — search_documents, the internal-network NAS document
+// index (scripts/add-nas-document-index.sql). Vincent: "连内容都索引" — this
+// searches actual FILE CONTENT (客户资料/财务文档/表单/etc under \\Rainbow),
+// not just company records already covered by company_deep_lookup/
+// list_companies. A document itself lives on the office NAS, which this
+// cloud app can never open — each result's companyLink points at that
+// document's Company 360 page instead, where staff already know to go find
+// the real file from a machine on the office network.
+async function documentSearchTool(input: Record<string, unknown>) {
+  const query = String(input.query ?? '').trim();
+  if (!query) return { error: true as const, message: 'A search query is required.' };
+  const companyId = typeof input.companyId === 'number' ? input.companyId : undefined;
+  const limit = typeof input.limit === 'number' ? input.limit : undefined;
+  const result = await searchDocuments({ query, companyId, limit });
+  return {
+    ...result,
+    note: `Real full-text search over the internal NAS document index — file CONTENT, not just names. totalMatched is the real match count; only the first ${result.returned} are returned${result.truncated ? ' (truncated — say so)' : ''}. Each result's snippet is a short excerpt around the match, not the whole file — never claim to know the full document contents beyond it. companyId/companyName/companyLink are only set when the file's containing folder confidently matched a real company at index time; when they are null, say the file is not linked to a specific company rather than guessing one from the filename. The file itself is on the office NAS and cannot be opened from here — point the user at companyLink (that company's page) or the raw topFolder/fileName so they can find it themselves on the office network.`,
   };
 }
 
@@ -1487,6 +1508,7 @@ TOOL ROUTING — pick by the SHAPE of the question first, then the topic. Severa
 - "今天大家/团队做了什么" / "其他人在干嘛" / "具体改了什么" (what did the team do, at any level of detail) → team_activity. It now returns FIELD-LEVEL detail — which company, which field, from what value to what value — for AR Reminder, Master List and Trademark edits, plus invoices/emails/campaigns/Post Incorporate as creations. It excludes the person asking, on purpose. Do NOT answer with active_users_today (page VISITS, not work) and do NOT stop at recent_changes (audit_log only — it misses every human AR edit, which lives in ar_reminder_audit; team_activity reads both). If team_activity is quiet, say so plainly. "今天秘书部/会计部/税务部做了什么" (department-scoped) → team_activity with its department parameter set directly, in the SAME call — do NOT call team_roster first to look up members and filter yourself; that extra round trip has caused real timeouts.
 - What a PERSON has been doing → recent_activity_summary. Which FIELD changed on a record → recent_changes. Who used the system today → active_users_today. The caller's own habits → my_activity_pattern.
 - Anything that CHANGES data → the preview_* tools only, never claim you did it yourself.
+- Looking for an actual FILE/document (合同/表单/资料/文件 on the office NAS, not data already in this system) → search_documents. This searches real file CONTENT on \\Rainbow, not company records — for a company's data itself (directors/invoices/status/etc), use company_deep_lookup instead.
 If two tools could fit, say which one you used when you answer, so a surprising number can be traced.
 
 When the user asks you to actually CHANGE something on an AR Reminder cycle — mark it prepared/sent/received/AGM-held/filed, assign a Secretary/Accounts/Tax PIC, or set remarks (e.g. "把 XX 的年报标记为已申报", "把 XX 指派给 Chelsea") — use preview_ar_update. It is READ-ONLY: it shows the real current value and what it would become, and the user gets a Confirm button on the card. Their click is what performs the update — never say or imply you have already made the change, are making it, or will make it yourself; say what will change and ask them to confirm on the card. If they ask for a field that isn't in the allowed list, say plainly which fields you can change rather than trying a different field name.
@@ -1553,6 +1575,11 @@ const CLAUDE_TOOLS = [
     includeInactive: { type: 'boolean', description: 'Include non-active companies (default false)' },
     limit: { type: 'number', description: 'How many names to return, default 50, max 200' },
   } } },
+  { name: 'search_documents', description: 'REAL full-text search over the internal-network NAS document index (客户资料/财务文档/表单等 under \\\\Rainbow — "All Clients Profile"/"Finance"/"Marketing"/etc) — searches actual FILE CONTENT, not just filenames. Use this whenever the user asks to find/look up a specific document, file, form, or piece of paperwork that would live on the office file share, rather than data already in this system (for company records/status/directors/invoices, use company_deep_lookup or search_company instead — this tool is for FILES). A result\'s companyId/companyName/companyLink are only set when that file\'s folder confidently matched a real company at index time; when null, say so rather than guessing. The file itself lives on the office NAS and cannot be opened from this chat — point the user at the company link or the file/folder name so they can find it themselves on a machine connected to the office network.', input_schema: { type: 'object', properties: {
+    query: { type: 'string', description: 'Search terms — matched against file content, English full-text search' },
+    companyId: { type: 'number', description: 'Restrict to files linked to one specific company (its companies.id, from a prior company_deep_lookup/search_company/list_companies result) — omit to search all files' },
+    limit: { type: 'number', description: 'How many results to return, default 10, max 50' },
+  }, required: ['query'] } },
   { name: 'upcoming_deadlines', description: 'REAL, live UNIFIED deadline view across AR filing deadlines, AGM deadlines and trademark renewals — plus everything already OVERDUE. Use for "下个月有哪些deadline", "接下来要交什么", "哪些逾期了". Shows when a deadline was formally EXTENDED (EOT) and what the original date was. For "who should we chase about late filing" specifically, late_filing_summary is the authoritative list (it applies extra rules this raw view does not).', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days ahead to look, default 30, max 365' } } } },
   { name: 'preview_ar_update', description: "Preview a change to ONE AR Reminder cycle — marking it prepared/sent/received/AGM-held/FILED, assigning a PIC, or setting remarks. READ-ONLY: it shows the real current value and what it would become; the user gets a Confirm button on the card and ONLY their click performs the update. Use whenever the user asks to update/mark/set/assign something on an AR cycle (e.g. \"把 XX 的年报标记为已申报\", \"把 XX 指派给 Chelsea\"). Pass value as a date like '03 Apr 2026' for date fields, a staff name for PIC fields, or null/empty to clear. Never claim you performed the update yourself.", input_schema: { type: 'object', properties: {
     company: { type: 'string', description: 'Company name, partial match is fine' },
@@ -1671,6 +1698,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'customer_profile_summary') return customerProfileSummary(account);
   if (name === 'company_deep_lookup') return companyDeepLookup(String(input.company ?? ''));
   if (name === 'list_companies') return companyListTool(input);
+  if (name === 'search_documents') return documentSearchTool(input);
   if (name === 'upcoming_deadlines') return upcomingDeadlinesTool(typeof input.days === 'number' ? input.days : undefined);
   if (name === 'preview_ar_update') return arUpdatePreviewTool(account, input);
   if (name === 'preview_email_draft') return emailDraftPreviewTool(account, input);
