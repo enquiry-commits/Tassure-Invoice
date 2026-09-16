@@ -226,6 +226,33 @@ in a scratch formula) — not silently short by every company whose net in
 that bucket happened to be zero or negative.
 **Guards:** `docs/INVARIANTS.md` INV-QB-020.
 
+### REG-021 — Webhook-triggered AR-aging re-sync (near-real-time Outstanding updates)
+Simulate an AR-relevant webhook event (real end-to-end requires the Intuit
+Developer Dashboard's webhook subscription to actually include Payment/
+CreditMemo/JournalEntry/Deposit — see INV-QB-021's own caveat; until
+confirmed, insert a row directly into `quickbooks_webhook_events` for a
+real connected `realm_id` with `entity_name` one of `Payment`/
+`CreditMemo`/`JournalEntry`/`Deposit`, `status: 'pending'`). Trigger
+`processQuickBooksWebhookQueue()` (directly, or via `GET /api/quickbooks/
+sync`, which calls it first). Confirm: the event is marked `processed`;
+`quickbooks_ar_aging_sync_state.last_synced_at` for that company advances;
+`quickbooks_ar_aging_detail` rows for that company have a fresh
+`scraped_at`. Then insert another AR-relevant event for the SAME company
+within 60 seconds and re-trigger — confirm `last_synced_at` does NOT
+advance again (debounced) and the response/log shows
+`ar_aging_debounced: true`. Wait past 60 seconds and trigger once more —
+confirm it DOES sync again. Separately, confirm the existing Invoice CDC
+sync (`syncQuickBooksInvoiceChanges`) still runs and its own
+processed/failed status is unaffected by whatever happens with the
+AR-aging trigger (they're independent — a broken AR-aging sync must never
+mark an otherwise-successful Invoice webhook event as failed, or vice
+versa). If real Intuit-side webhook delivery is available, the one check
+that actually validates the end-user-visible feature: record a real
+Payment/CreditMemo/JournalEntry/Deposit change in QuickBooks and confirm
+the on-screen Outstanding/SOA total changes within roughly a minute,
+without waiting for the daily cron.
+**Guards:** `docs/INVARIANTS.md` INV-QB-021.
+
 ---
 
 ## Automation priority

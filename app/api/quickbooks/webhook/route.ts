@@ -23,13 +23,45 @@ function eventId(parts: unknown[]) {
   return createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 }
 
+// QuickBooks webhook's own entity resource names (the <entity> in
+// "qbo.<entity>.<op>.vN", lowercased for matching) — NOT the
+// AgedReceivableDetail report's own display-column wording ("Credit
+// Note"/"Journal Entry", with spaces — see lib/quickbooks-ar-aging.ts's
+// txn_type comment). Confirmed against this codebase's own
+// `SELECT * FROM CreditMemo` (syncCreditMemoYear, app/api/quickbooks/
+// sync/route.ts) that the real API/webhook resource name is "CreditMemo",
+// one word — never "fix" this map to match the report's wording, they are
+// two different vocabularies for the same underlying QuickBooks object.
+//
+// 2026-09-16: widened from Invoice-only (the original, narrower scope this
+// pipeline was built for — CDC-based invoice/PIC-signal freshness) to also
+// include the other 4 entity types INV-QB-017 confirmed actually affect
+// this business's real AR balance (Payment, CreditMemo, JournalEntry,
+// Deposit) — lib/quickbooks-webhook-queue.ts now triggers a fresh
+// AgedReceivableDetail report re-sync (not per-entity-type logic — see
+// docs/INVARIANTS.md INV-QB-021) whenever any of these change, so the
+// Outstanding List updates near-real-time instead of waiting for the
+// once-daily cron. Previously every non-Invoice event was silently
+// dropped right here before even reaching the queue table.
+const TRACKED_ENTITIES: Record<string, string> = {
+  invoice: 'Invoice',
+  payment: 'Payment',
+  creditmemo: 'CreditMemo',
+  journalentry: 'JournalEntry',
+  deposit: 'Deposit',
+};
+
 function parseWebhookPayload(payload: unknown): WebhookEvent[] {
   if (Array.isArray(payload)) {
     return payload.flatMap((raw, index) => {
       const event = (raw ?? {}) as Record<string, unknown>;
       const type = String(event.type ?? '').toLowerCase();
       const match = /^qbo\.([^.]+)\.([^.]+)\.v\d+$/.exec(type);
-      if (!match || match[1] !== 'invoice') return [];
+      const entityName = match ? TRACKED_ENTITIES[match[1]] : undefined;
+      if (!match || !entityName) {
+        if (match) console.warn('QuickBooks webhook: unrecognized entity type', match[1], String(event.intuitaccountid ?? ''));
+        return [];
+      }
       const realmId = String(event.intuitaccountid ?? '');
       const entityId = String(event.intuitentityid ?? '');
       if (!realmId || !entityId) return [];
@@ -37,7 +69,7 @@ function parseWebhookPayload(payload: unknown): WebhookEvent[] {
       return [{
         eventId: String(event.id ?? '') || eventId([realmId, entityId, match[2], changedAt, index]),
         realmId,
-        entityName: 'Invoice',
+        entityName,
         entityId,
         operation: match[2],
         changedAt,
@@ -54,7 +86,12 @@ function parseWebhookPayload(payload: unknown): WebhookEvent[] {
   return (legacy.eventNotifications ?? []).flatMap((notification, notificationIndex) => {
     const realmId = String(notification.realmId ?? '');
     return (notification.dataChangeEvent?.entities ?? []).flatMap((entity, entityIndex) => {
-      if (String(entity.name ?? '').toLowerCase() !== 'invoice') return [];
+      const rawName = String(entity.name ?? '').toLowerCase();
+      const entityName = TRACKED_ENTITIES[rawName];
+      if (!entityName) {
+        if (rawName) console.warn('QuickBooks webhook: unrecognized entity type', rawName, realmId);
+        return [];
+      }
       const entityId = String(entity.id ?? '');
       if (!realmId || !entityId) return [];
       const operation = String(entity.operation ?? 'Update').toLowerCase();
@@ -62,7 +99,7 @@ function parseWebhookPayload(payload: unknown): WebhookEvent[] {
       return [{
         eventId: eventId([realmId, entityId, operation, changedAt, notificationIndex, entityIndex]),
         realmId,
-        entityName: 'Invoice',
+        entityName,
         entityId,
         operation,
         changedAt,

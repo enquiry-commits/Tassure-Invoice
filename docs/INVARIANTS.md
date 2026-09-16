@@ -726,6 +726,11 @@ again.
   already accepts for Invoice data; real-time CreditMemo sync is a deferred
   follow-up, not done. *(source: 2026-09-15, confirmed via QuickBooks'
   own Aged Receivables report API + a real Excel export Vincent provided.)*
+  **CLOSED, 2026-09-16, by INV-QB-021** — not via per-entity CDC sync as
+  originally imagined here, but by widening the SAME webhook pipeline to
+  trigger a fresh AgedReceivableDetail report re-sync (comprehensive by
+  construction, covering CreditMemo and the other AR-relevant types
+  together) instead of adding a CreditMemo-specific incremental path.
 - **INV-QB-016** — `TASSURE PAC` (both `"TASSURE PAC"` and `"Tassure PAC"`
   spellings appear in real QuickBooks data across TAB/TAC/TAO) is an
   internal inter-company settlement account, not a real client, and must
@@ -901,6 +906,59 @@ again.
   2026-09-16, Vincent, after seeing the on-screen ACCADIA MANAGEMENT
   SERVICES 91+ bucket example (7 real line items netting to exactly
   $0.00): "这样Export Full Workbook 那边也是要更新一下内容显示了".)*
+- **INV-QB-021** — The Outstanding/SOA total's freshness has two layers,
+  and they must never be confused: the daily cron (`vercel.json`'s
+  `30 19 * * *`) is the unconditional baseline that always runs; on top of
+  it, `lib/quickbooks-webhook-queue.ts`'s `processQuickBooksWebhookQueue()`
+  ALSO triggers a fresh `syncAgedReceivableDetail()` (the exact same
+  function the cron calls — moved to `lib/quickbooks-ar-aging.ts` and
+  exported 2026-09-16 specifically so both callers share one
+  implementation, never a second copy) for a company whenever that
+  company's realm has a pending webhook event whose `entity_name` is one
+  of the 5 types INV-QB-017 confirmed actually affect AR: `Invoice`,
+  `Payment`, `CreditMemo`, `JournalEntry`, `Deposit`. This is deliberately
+  NOT a return to per-entity-type sync logic (INV-QB-017's own rejected
+  pattern) — the webhook only decides WHETHER to trigger a re-sync; the
+  re-sync itself still asks QuickBooks' own report for the complete truth,
+  so a future 6th AR-relevant entity type still needs zero new sync logic,
+  only an addition to this file's `TRACKED_AR_ENTITIES` set AND the
+  webhook route's own `TRACKED_ENTITIES` allowlist (see below) — missing
+  either one silently caps this at today's 5 types again.
+  Two vocabularies for the same QuickBooks objects must never be
+  conflated: `app/api/quickbooks/webhook/route.ts`'s `TRACKED_ENTITIES`
+  keys are QuickBooks' own webhook/API *resource* names (`CreditMemo`,
+  `JournalEntry` — no spaces, confirmed against this codebase's own
+  `SELECT * FROM CreditMemo` in `syncCreditMemoYear`), while
+  `lib/quickbooks-ar-aging.ts`'s synced `txn_type` column holds the
+  AgedReceivableDetail report's own *display* wording (`"Credit Note"`,
+  `"Journal Entry"` — with spaces, matching `lib/soa.ts`'s `TXN_TYPE_TAGS`
+  map). "Fixing" the webhook allowlist to match the report's wording (or
+  vice versa) breaks matching silently, not loudly.
+  A webhook-triggered re-sync is debounced per company (minimum 60s since
+  `quickbooks_ar_aging_sync_state.last_synced_at` for that company) —
+  checked in `lib/quickbooks-webhook-queue.ts`, NOT inside
+  `syncAgedReceivableDetail()` itself, so the daily cron and the manual-
+  trigger route (`POST /api/quickbooks/sync`) stay fully unconditional.
+  Verified no additional locking is needed: `AutomationRun.begin()`
+  (`lib/automation-sync.ts`) locks by `source` alone (the fixed string
+  `'quickbooks'`), not per-company, so two webhook deliveries — even for
+  different companies — can never run `processQuickBooksWebhookQueue()`
+  concurrently; the second fails to acquire the lock and the webhook
+  route's own `after()` retry loop (5 attempts, 2s apart) waits it out.
+  Before this app's own webhook route filter is even reached, whether
+  QuickBooks actually SENDS these 4 additional entity types for this
+  Intuit app registration is an out-of-band fact (configured at
+  app.developer.intuit.com, not in this repo) that this code change
+  cannot itself verify — if `quickbooks_webhook_events` never shows rows
+  with `entity_name` other than `Invoice` despite real Payment/CreditMemo/
+  JournalEntry/Deposit activity in QuickBooks, that dashboard subscription
+  (not this code) is the next place to check. *(source: 2026-09-16,
+  Vincent: "这部分是有需求的所有需要实时的收到QB的更新，不能一天更新一次" —
+  triggered by a real Taiyau Trading Pte. Ltd. case where a same-day
+  payment across TAB/TAC/TAO wasn't reflected until the next sync; this
+  closes the "real-time CreditMemo sync is a deferred follow-up, not
+  done" gap INV-QB-015 left open, extended to the other 4 AR-relevant
+  entity types confirmed by INV-QB-017.)*
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

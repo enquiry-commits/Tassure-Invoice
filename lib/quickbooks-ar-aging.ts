@@ -1,5 +1,10 @@
+import 'server-only';
+
 import { getValidToken, correctedCustomerName, type QbCompany } from './quickbooks';
 import type { AgingBucket } from './soa';
+import { createAdminClient } from './supabase';
+import { todaySGT } from './date';
+import { replaceAutomationExceptions } from './automation-sync';
 
 // Fetches and parses QuickBooks' own "Aged Receivable Detail" report —
 // added 2026-09-15 after live verification found that syncing individual
@@ -137,4 +142,115 @@ export async function fetchAgedReceivableDetail(
   }
 
   return { rows, grandTotal };
+}
+
+// ── QuickBooks Aged Receivable Detail report sync ────────────────────────
+// Added 2026-09-15 — supersedes the Invoice+CreditMemo netting above as the
+// TOTAL/aging source (lib/soa-data.ts's computeSoaRows() reads this table
+// when fresh; falls back to legacyComputeSoaRows() otherwise). Live
+// verification found the Invoice+CreditMemo approach could never be
+// assumed complete — this business's real QuickBooks data also has
+// Payment, Journal Entry, and (TAB) Deposit transactions affecting AR that
+// were never synced, plus multi-currency balances never converted to SGD.
+// This report is comprehensive by construction (QuickBooks' own accounting
+// engine enumerates every entity type relevant to AR) and already SGD-
+// converts. See scripts/add-quickbooks-ar-aging-detail.sql and
+// docs/INVARIANTS.md INV-QB-017 for the full incident.
+//
+// Unlike syncYear/syncCreditMemoYear, this is NOT date-ranged and does NOT
+// upsert-by-id — a report row has no stable identity across two different
+// days' runs, so every run inserts an entirely new snapshot tagged with
+// this run's id, then deletes the previous run's rows for this company
+// (insert-new-then-delete-old, never delete-then-insert, so a concurrent
+// read never sees a company with zero rows mid-sync).
+//
+// Moved here 2026-09-16 (was a non-exported local function in
+// app/api/quickbooks/sync/route.ts) and exported so lib/quickbooks-webhook-
+// queue.ts can call the SAME function on a QuickBooks webhook event, not a
+// second copy — see docs/INVARIANTS.md INV-QB-021 for why "real-time"
+// Outstanding updates reuse this exact report sync rather than syncing
+// individual entity types (the reactive pattern INV-QB-017 already rejected
+// once) triggered by the webhook instead.
+export async function syncAgedReceivableDetail(company: QbCompany, runId: string) {
+  const reportDate = todaySGT();
+  const parsed = await fetchAgedReceivableDetail(company, reportDate);
+  const supabase = createAdminClient();
+  const now = new Date().toISOString();
+
+  if (!parsed) {
+    await supabase.from('quickbooks_ar_aging_sync_state').upsert({
+      qb_company: company, last_status: 'error', last_synced_at: now,
+      last_error: `QuickBooks ${company} AgedReceivableDetail fetch failed or not connected`,
+    }, { onConflict: 'qb_company' });
+    return { error: `QuickBooks ${company} AgedReceivableDetail fetch failed or not connected` };
+  }
+
+  const rows = parsed.rows.map(r => ({
+    qb_company: company,
+    report_date: reportDate,
+    aging_bucket: r.agingBucket,
+    txn_type: r.txnType,
+    qb_txn_id: r.qbTxnId,
+    doc_number: r.docNumber,
+    qb_customer_id: r.qbCustomerId,
+    customer_name: r.customerName,
+    txn_date: r.txnDate,
+    due_date: r.dueDate,
+    amount: r.amount,
+    open_balance: r.openBalance,
+    location_name: r.locationName,
+    sync_run_id: runId,
+    scraped_at: now,
+  }));
+
+  let done = 0;
+  let upsertErr: { message: string } | null = null;
+  for (let i = 0; i < rows.length; i += 200) {
+    const { error } = await supabase.from('quickbooks_ar_aging_detail').insert(rows.slice(i, i + 200));
+    if (error) { upsertErr = error; break; }
+    done += Math.min(200, rows.length - i);
+  }
+
+  if (upsertErr) {
+    await supabase.from('quickbooks_ar_aging_sync_state').upsert({
+      qb_company: company, last_status: 'error', last_synced_at: now,
+      last_row_count: done, last_error: upsertErr.message,
+    }, { onConflict: 'qb_company' });
+    return { error: `QuickBooks ${company} AgedReceivableDetail insert failed: ${upsertErr.message}`, ar_aging_rows_synced: done };
+  }
+
+  // Only now that this run's new rows are fully written, remove the
+  // previous run's rows for this company — never the other way around.
+  const { error: staleError } = await supabase
+    .from('quickbooks_ar_aging_detail')
+    .delete()
+    .eq('qb_company', company)
+    .neq('sync_run_id', runId);
+  if (staleError) {
+    await supabase.from('quickbooks_ar_aging_sync_state').upsert({
+      qb_company: company, last_status: 'error', last_synced_at: now,
+      last_row_count: done, last_error: `Stale-row cleanup failed: ${staleError.message}`,
+    }, { onConflict: 'qb_company' });
+    return { error: `QuickBooks ${company} AgedReceivableDetail stale-row cleanup failed: ${staleError.message}`, ar_aging_rows_synced: done };
+  }
+
+  // Cheap, high-value self-check: does our parsed row sum match the
+  // report's own printed Grand Total? A large delta means a parsing bug or
+  // an unhandled report quirk, caught immediately instead of silently
+  // trusted — see the table comment on last_grand_total_check.
+  const parsedSum = rows.reduce((s, r) => s + r.open_balance, 0);
+  const delta = Math.abs(parsedSum - parsed.grandTotal);
+  await replaceAutomationExceptions('quickbooks', `ar_aging_grand_total_mismatch_${company}`,
+    delta > 0.05 ? [{
+      key: company,
+      name: `${company} AgedReceivableDetail parse mismatch`,
+      details: { parsedSum, reportGrandTotal: parsed.grandTotal, delta, rowCount: rows.length },
+    }] : []);
+
+  await supabase.from('quickbooks_ar_aging_sync_state').upsert({
+    qb_company: company, last_status: 'success', last_synced_at: now,
+    last_row_count: rows.length, last_error: null, last_grand_total_check: delta,
+  }, { onConflict: 'qb_company' });
+
+  return { ar_aging_rows_synced: rows.length, grand_total_delta: delta };
 }

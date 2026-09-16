@@ -83,7 +83,17 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
   still overrides it when set. Verified end-to-end against real data
   2026-09-07 after the SQL migration + a full production sync: TAB
   94.6%, TAC 81.4%, TAO 98.5% of companies with an outstanding balance
-  now get a real computed owner with zero manual input.
+  now get a real computed owner with zero manual input. As of 2026-09-16
+  the underlying `quickbooks_ar_aging_detail` snapshot (INV-QB-017) that
+  drives every one of these SOA/Outstanding numbers refreshes near-
+  real-time via the QuickBooks webhook whenever an Invoice/Payment/
+  CreditMemo/JournalEntry/Deposit changes for a company (INV-QB-021),
+  not just once daily — the daily cron (`vercel.json`, 19:30 UTC) remains
+  as the unconditional fallback. Real end-to-end responsiveness (webhook
+  fires → total visibly updates within ~a minute) has not yet been
+  observed against a live Intuit-delivered webhook event in this
+  sandbox — see REG-021's own note on the Intuit Developer Dashboard
+  subscription dependency this can't verify from inside the repo.
 - Client Communications (campaigns, templates, drafts, send history) +
   Draft Helper (separate desktop app) for the real Outlook send
 - Post Incorporate document generation (1 of 13 planned document types —

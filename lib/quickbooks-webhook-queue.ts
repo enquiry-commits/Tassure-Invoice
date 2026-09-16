@@ -2,6 +2,7 @@ import 'server-only';
 
 import { AutomationRun, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { syncQuickBooksInvoiceChanges } from '@/lib/quickbooks-invoice-incremental';
+import { syncAgedReceivableDetail } from '@/lib/quickbooks-ar-aging';
 import { createAdminClient } from '@/lib/supabase';
 import type { QbCompany } from '@/lib/quickbooks';
 
@@ -10,7 +11,29 @@ type QueueRow = {
   realm_id: string;
   changed_at: string;
   attempts: number;
+  entity_name: string;
 };
+
+// 2026-09-16: which webhook entity types genuinely affect a customer's AR
+// balance (confirmed 2026-09-15 via live AgedReceivableDetail — see
+// docs/INVARIANTS.md INV-QB-017/021) — every entity type this route's own
+// TRACKED_ENTITIES allowlist (app/api/quickbooks/webhook/route.ts) accepts
+// is currently one of these 5, so this check is always true today; kept as
+// an explicit named set rather than removed so a FUTURE tracked-but-not-
+// AR-relevant entity type doesn't silently start triggering unnecessary
+// live Report API calls.
+const TRACKED_AR_ENTITIES = new Set(['Invoice', 'Payment', 'CreditMemo', 'JournalEntry', 'Deposit']);
+
+// Minimum gap between two AgedReceivableDetail report re-syncs triggered
+// BY WEBHOOK EVENTS for the same company — a full report re-fetch, not an
+// incremental delta, so skipping a trigger never loses data (the very next
+// webhook event for that company, or the next daily cron, always catches
+// up). This collapses a realistic burst (several payments processed
+// back-to-back) into one live QuickBooks Report API call instead of one
+// per event. Deliberately checked HERE, not inside syncAgedReceivableDetail
+// itself, so the daily cron's and the manual-trigger route's own
+// unconditional calls are never rate-limited by this.
+const AR_AGING_MIN_INTERVAL_MS = 60_000;
 
 type QueueSummary = {
   queued: number;
@@ -51,7 +74,7 @@ export async function processQuickBooksWebhookQueue(existingRun?: AutomationRun)
     }).eq('status', 'processing').lt('processing_started_at', staleBefore);
 
     const { data, error } = await supabase.from('quickbooks_webhook_events')
-      .select('event_id, realm_id, changed_at, attempts')
+      .select('event_id, realm_id, changed_at, attempts, entity_name')
       .in('status', ['pending', 'failed'])
       .lt('attempts', 5)
       .order('changed_at', { ascending: true })
@@ -142,6 +165,39 @@ export async function processQuickBooksWebhookQueue(existingRun?: AutomationRun)
           name: `${company} QuickBooks webhook`,
           details: { qb_company: company, realm_id: realmId, event_ids: ids, error: message.slice(0, 1000) },
         });
+      }
+
+      // 2026-09-16: real-time Outstanding balance — trigger the SAME
+      // AgedReceivableDetail report sync the daily cron uses (INV-QB-017),
+      // not a second/different computation, whenever this realm's batch
+      // includes an AR-relevant entity change. Deliberately independent of
+      // the CDC invoice sync above (its own try/catch, its own failure
+      // tracking) — a report-sync problem must never get marked against
+      // the invoice/PIC-signal event's own processed/failed status, and
+      // vice versa. Never throws (see this function's own error-object
+      // return convention), but wrapped defensively anyway.
+      if (realmEvents.some(event => TRACKED_AR_ENTITIES.has(event.entity_name))) {
+        try {
+          const { data: state } = await supabase
+            .from('quickbooks_ar_aging_sync_state')
+            .select('last_synced_at')
+            .eq('qb_company', company)
+            .maybeSingle();
+          const lastSyncedMs = state?.last_synced_at ? new Date(state.last_synced_at).getTime() : 0;
+          if (Date.now() - lastSyncedMs >= AR_AGING_MIN_INTERVAL_MS) {
+            const arResult = await syncAgedReceivableDetail(company, run.id);
+            summary.changes.push({ company, ar_aging: arResult });
+          } else {
+            summary.changes.push({ company, ar_aging_debounced: true });
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          failures.push({
+            key: `${company}:ar_aging_webhook`,
+            name: `${company} webhook-triggered AgedReceivableDetail sync`,
+            details: { qb_company: company, realm_id: realmId, error: message.slice(0, 1000) },
+          });
+        }
       }
       await run.heartbeat(5);
     }
