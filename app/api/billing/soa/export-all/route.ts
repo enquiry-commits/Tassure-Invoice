@@ -34,14 +34,15 @@ export async function GET() {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 503 });
   }
   // Vincent, 2026-09-16: same exclusion as the on-screen SOA list — a
-  // company whose net is exactly $0 has nothing to chase, so it shouldn't
-  // clutter any sheet in this workbook either (All, TAB/TAC/TAO, per-person,
-  // Internal — every sheet below is built from these 3 arrays). See
-  // app/billing/soa/_components.tsx's picScoped comment for the full
-  // reasoning. Filtered once here, before any sheet builder reads them.
-  tab = tab.filter(r => r.totalOutstanding !== 0);
-  tac = tac.filter(r => r.totalOutstanding !== 0);
-  tao = tao.filter(r => r.totalOutstanding !== 0);
+  // company whose net is $0 or negative has nothing to chase, so it
+  // shouldn't clutter any sheet in this workbook either (All, TAB/TAC/TAO,
+  // per-person, Internal — every sheet below is built from these 3
+  // arrays). See app/billing/soa/_components.tsx's picScoped comment for
+  // the full reasoning (including why this stays a live filter, not a
+  // stored one). Filtered once here, before any sheet builder reads them.
+  tab = tab.filter(r => r.totalOutstanding > 0);
+  tac = tac.filter(r => r.totalOutstanding > 0);
+  tao = tao.filter(r => r.totalOutstanding > 0);
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Tassure';
