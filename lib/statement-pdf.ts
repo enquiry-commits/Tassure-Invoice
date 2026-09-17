@@ -29,6 +29,27 @@ export function safeText(font: PDFFont, text: string): string {
   return out || '(name unavailable)';
 }
 
+// Greedy word-wrap against real font metrics — see drawStatementCoverPage's
+// TO-block comment on why the TO block wraps address lines manually rather
+// than through pdf-lib's own drawText maxWidth auto-wrap.
+function wrapLine(font: PDFFont, text: string, size: number, maxWidth: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (current && font.widthOfTextAtSize(candidate, size) > maxWidth) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 const TASSURE_CONTACT_LINES = [
   '10 Anson Road',
   '#12-08 International Plaza',
@@ -211,9 +232,21 @@ export async function drawStatementCoverPage(
   // of overlapping.
   page.drawText(safeText(boldFont, customerDisplayName), { x: left, y, size: 10, font: boldFont, maxWidth: metaX - left - 20, lineHeight: 12 });
   y -= 15;
+  // Wrapped manually (word-by-word against the actual font metrics) instead
+  // of relying on drawText's own maxWidth auto-wrap — a real QuickBooks
+  // BillAddr can arrive as ONE long Line1 with the whole address jammed in
+  // (confirmed against real data: TAB's own record for "1V Capital Pte.
+  // Ltd." has no separate Line2/City/PostalCode at all), and auto-wrap
+  // draws its extra visual line(s) internally without this function's own
+  // `y` tracker knowing they happened — every following y -= 13 then
+  // undercounts by a line, crowding or overlapping whatever prints next.
+  // Wrapping here first means every visual line this function draws is a
+  // single real drawText() call this function itself advances `y` for.
   for (const line of billAddrLines) {
-    page.drawText(safeText(font, line), { x: left, y, size: 10, font, maxWidth: metaX - left - 20 });
-    y -= 13;
+    for (const subLine of wrapLine(font, safeText(font, line), 10, metaX - left - 20)) {
+      page.drawText(subLine, { x: left, y, size: 10, font });
+      y -= 13;
+    }
   }
   y -= 20;
 
@@ -221,8 +254,17 @@ export async function drawStatementCoverPage(
   // Credit Note/Payment/Journal Entry/Deposit — same TXN_TYPE_TAGS
   // shorthand as the on-screen list/detail modal, lib/soa.ts), oldest due
   // date first (SoaCompanyRow.lineItems is already sorted that way). Same
-  // light-blue-header styling as the aging table above.
-  const itemColWidths = [80, 220, 90, 90];
+  // light-blue-header styling as the aging table above. Only the first 3
+  // column widths are fixed — OPEN AMOUNT stretches to `right`, same
+  // "last column reaches the true right margin" rule the aging table above
+  // already follows. Vincent, 2026-09-17, third round on this same page:
+  // "宽度也很重要...蓝色的宽度，是否有对齐" (width matters too — the blue
+  // header's width, whether it lines up) — a fixed 4th-column width of 90pt
+  // left a ~32pt gap of unfilled white space past OPEN AMOUNT's blue header
+  // before the page's actual right margin, so this table's own blue bar
+  // was narrower than the aging table's directly below it and the two
+  // didn't align on the right edge at all.
+  const itemColWidths = [80, 220, 90];
   const itemCols = [left, left + itemColWidths[0], left + itemColWidths[0] + itemColWidths[1], left + itemColWidths[0] + itemColWidths[1] + itemColWidths[2]];
   const drawItemHeader = () => {
     const headerH = 18;
@@ -240,22 +282,37 @@ export async function drawStatementCoverPage(
     // The DATE column already shows item.dueDate — SoaCompanyRow.lineItems
     // doesn't carry a separate transaction date the way the reference's own
     // "DATE" column (invoice date, not due date) does, so this reuses due
-    // date for both rather than showing it twice.
+    // date for both rather than showing it twice. Reformatted DD/MM/YYYY —
+    // item.dueDate is plain ISO (YYYY-MM-DD); left unformatted here used to
+    // print e.g. "2026-07-31" while every other date on this page (the
+    // DATE meta field) already shows "31/07/2026".
     const description = `${safeText(font, item.docNumber)} (${safeText(font, TXN_TYPE_TAGS[item.txnType] ?? item.txnType)})`;
     const amountText = money(item.amount);
-    page.drawText(item.dueDate || '—', { x: itemCols[0], y, size: 9, font });
+    const itemDate = item.dueDate ? item.dueDate.split('-').reverse().join('/') : '—';
+    page.drawText(itemDate, { x: itemCols[0], y, size: 9, font });
     page.drawText(description, { x: itemCols[1], y, size: 9, font, maxWidth: itemColWidths[1] - 8 });
     page.drawText(amountText, { x: itemCols[2], y, size: 9, font });
     page.drawText(amountText, { x: itemCols[3], y, size: 9, font });
     y -= 16;
   }
-  y -= 16;
 
   // Aging-bucket summary as a footer — matches the reference's own single
   // instance of this table (see this function's header comment on the
   // earlier top+bottom misreading), used here instead of a plain "Total
-  // Outstanding" line.
-  if (y < 60) newPage();
+  // Outstanding" line. Pinned near the page's bottom margin rather than
+  // drawn immediately under the last item row — Vincent, 2026-09-17, third
+  // round: "位置很重要...上下的位置" (position matters — top-to-bottom
+  // position). The reference's own footer sits at a fixed distance from the
+  // bottom regardless of how few line items came before it (a 1-invoice
+  // statement still has most of the page blank in the middle); drawing it
+  // right after the last row instead made a short statement look crowded
+  // and positioned nothing like the reference. Only pins DOWN into empty
+  // space — if the item list already runs past this point (a long
+  // statement), it's left to flow naturally rather than overlapping already-
+  // drawn rows, and only spills to a new page if there truly isn't room.
+  const AGING_TABLE_Y = 140;
+  if (y > AGING_TABLE_Y) y = AGING_TABLE_Y;
+  else if (y < 60) { newPage(); y = AGING_TABLE_Y; }
   drawAgingTable();
 }
 

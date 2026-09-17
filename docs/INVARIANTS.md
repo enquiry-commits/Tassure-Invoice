@@ -637,6 +637,43 @@ again.
   sequence with no API equivalent (inventing one would be a fabricated
   business record), the latter is boilerplate with no real value this app
   could show under it.
+- **INV-DOC-015** — On the Statement cover page, a bottom-anchored summary
+  table must be positioned by its distance from the page bottom, not by
+  flowing immediately after whatever content precedes it — and a
+  multi-column header's fill color must span the same width as any other
+  full-width table on the same page, not a column-width subtotal that falls
+  short of it. Found live 2026-09-17, third round on this same page, Vincent
+  comparing his reference PDF pixel-by-pixel: "位置很重要，宽度也很重要，
+  上下的位置，蓝色的宽度，是否有对齐" (position matters, width matters too —
+  top-to-bottom position, the blue's width, whether things line up). Two
+  real bugs: (1) `drawAgingTable()`'s footer instance was being drawn right
+  after the last itemized row's `y`, so a short statement (few line items —
+  the reference's own 1-invoice example) left the aging summary crowded
+  right under the list instead of anchored near the bottom margin with the
+  rest of the page blank, which is how the reference actually looks. Fixed
+  by pinning to a fixed `AGING_TABLE_Y = 140` (only pulling `y` DOWN into
+  empty space, never up over already-drawn rows — a long item list that
+  already runs past that point is left to flow naturally, or spills to a new
+  page). (2) the itemized table's `OPEN AMOUNT` column had a fixed 90pt
+  width, but the DATE+DESCRIPTION+AMOUNT+OPEN AMOUNT widths only summed to
+  480pt against a ~512pt content area — its blue header band stopped ~32pt
+  short of the right margin, visibly narrower than the aging table's own
+  full-width blue band directly below it, so the two tables' right edges
+  didn't align. Fixed by dropping OPEN AMOUNT's fixed width so it stretches
+  to `right`, the same "last column reaches the true margin" rule the aging
+  table already followed. A third, related bug found in the same pass:
+  `billAddrLines` was being drawn via `page.drawText(..., { maxWidth })` —
+  pdf-lib's own auto-wrap — and a real BillAddr can be ONE long unsplit
+  `Line1` (confirmed same day, INV-DOC-014) that wraps to 2+ visual lines
+  pdf-lib draws internally; this function's own `y -= 13` per nominal
+  "line" never knew those extra visual lines happened, undercounting the
+  vertical space actually used and crowding whatever printed next. Fixed by
+  wrapping manually first (`wrapLine()`, greedy word-wrap against real font
+  metrics) so every `drawText` call this function makes is a single real
+  line it fully accounts for in its own `y` tracker. General lesson: on this
+  page, ANY place that reserves vertical space by reading back how much a
+  drawText call visually consumed (instead of the caller measuring it
+  first) is a latent version of this same bug.
 
 ## Automation & cron reliability (INV-CRON)
 
