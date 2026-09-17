@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
 import {
-  loadCompanies, loadInvoicesByCompany, loadAutoTargetNames, loadAlreadySent, loadArPicByCompany, buildRow, makeCompanyFinder,
+  loadCompanies, loadInvoicesByCompany, loadAutoTargetNames, loadAlreadySent, loadArPicByCompany, loadLastReminderSentAt, buildRow, makeCompanyFinder,
   type CompanyRow,
 } from '@/lib/client-comms-resolve';
 
@@ -30,12 +30,13 @@ export async function POST(req: NextRequest) {
   // reads companyList/findCompany until the loop below, well after all of
   // these have resolved either way, so there's no ordering reason to keep
   // it sequential.
-  const [companyList, invoicesByCompany, targetNames, alreadySent, arPicByCompany] = await Promise.all([
+  const [companyList, invoicesByCompany, targetNames, alreadySent, arPicByCompany, lastReminderSentAtByCompany] = await Promise.all([
     loadCompanies(supabase),
     loadInvoicesByCompany(supabase, type, fyeMonth, fyeYear),
     loadAutoTargetNames(supabase, type, fyeMonth, fyeYear, companyNames),
     onlyUnsent ? loadAlreadySent(supabase, type, fyeMonth, fyeYear) : Promise.resolve(new Set<string>()),
     type === 'ar' ? loadArPicByCompany(supabase, fyeMonth, fyeYear) : Promise.resolve(new Map<string, { acc_pic: string | null; tax_pic: string | null }>()),
+    type === 'soa' ? loadLastReminderSentAt(supabase, type) : Promise.resolve(new Map<string, string>()),
   ]);
   const findCompany = makeCompanyFinder(companyList);
 
@@ -46,7 +47,7 @@ export async function POST(req: NextRequest) {
     const key = normalize(rawName);
     if (seen.has(key)) continue;
     seen.add(key);
-    rows.push(buildRow(rawName, findCompany, invoicesByCompany, alreadySent, type, arPicByCompany));
+    rows.push(buildRow(rawName, findCompany, invoicesByCompany, alreadySent, type, arPicByCompany, lastReminderSentAtByCompany));
   }
   rows.sort((a, b) => a.companyName.localeCompare(b.companyName));
 
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest) {
   // Run the attempt alongside the other three queries (none of them depend
   // on which company this resolves to) rather than before them, so the
   // common case costs one round trip, not two.
-  const [exactMatch, invoicesByCompany, alreadySent, arPicByCompany] = await Promise.all([
+  const [exactMatch, invoicesByCompany, alreadySent, arPicByCompany, lastReminderSentAtByCompany] = await Promise.all([
     supabase.from('companies')
       .select('id, company_name, best_email, primary_contact, tw_to_emails, tw_cc_emails, tw_recipient_source, tw_recipient_synced_at, pic')
       .eq('is_active', true).eq('company_name', lookup).maybeSingle()
@@ -84,6 +85,7 @@ export async function GET(req: NextRequest) {
     loadInvoicesByCompany(supabase, type, fyeMonth, fyeYear),
     loadAlreadySent(supabase, type, fyeMonth, fyeYear),
     type === 'ar' ? loadArPicByCompany(supabase, fyeMonth, fyeYear) : Promise.resolve(new Map<string, { acc_pic: string | null; tax_pic: string | null }>()),
+    type === 'soa' ? loadLastReminderSentAt(supabase, type) : Promise.resolve(new Map<string, string>()),
   ]);
 
   let company: CompanyRow | null = exactMatch;
@@ -95,6 +97,6 @@ export async function GET(req: NextRequest) {
   }
   if (!company) return NextResponse.json({ error: `No matching company found for "${lookup}".` }, { status: 404 });
 
-  const row = buildRow(company.company_name, findCompany, invoicesByCompany, alreadySent, type, arPicByCompany);
+  const row = buildRow(company.company_name, findCompany, invoicesByCompany, alreadySent, type, arPicByCompany, lastReminderSentAtByCompany);
   return NextResponse.json({ row });
 }

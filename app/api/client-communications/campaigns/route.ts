@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
-import { mergeTemplate, formatInvoiceList, formatAmount, formatContactName, type InvoiceRef } from '@/lib/email-merge';
+import { mergeTemplate, formatInvoiceList, formatAmount, formatContactName, daysOverdueFromDate, type InvoiceRef } from '@/lib/email-merge';
 import { normalizeRecipientLines } from '@/lib/campaign-recipients';
+import { fmtDate } from '@/lib/date';
 
 // Client Communications: generates draft emails from real system data,
 // replacing the manual BULK.xlsm mail-merge. Sending stays manual (Outlook,
@@ -17,6 +18,12 @@ interface FinalizedCompany {
   companyName: string; companyId: number | null;
   toEmail: string; ccEmail?: string | null; contactName?: string;
   invoiceRefs?: InvoiceRef[]; totalAmount?: number | null;
+  // Added 2026-09-17 — see lib/email-merge.ts's MergeFields.daysOverdue/
+  // lastReminderDate comments. Both come pre-resolved from
+  // /api/client-communications/campaigns/preview (lib/client-comms-
+  // resolve.ts's buildRow()) — this route trusts them like everything else
+  // in this array, per its own header comment.
+  oldestDueDate?: string | null; lastReminderSentAt?: string | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -88,6 +95,8 @@ export async function POST(req: NextRequest) {
       dueDate: '',
       fyeMonth: fyeMonth ?? '',
       fyeYear: fyeYear ? String(fyeYear) : '',
+      daysOverdue: daysOverdueFromDate(c.oldestDueDate),
+      lastReminderDate: c.lastReminderSentAt ? fmtDate(c.lastReminderSentAt) : '',
     };
 
     draftRows.push({

@@ -33,6 +33,10 @@ export interface ResolvedRow {
   recipientSource: 'teamwork_report' | 'company_fallback' | 'missing';
   recipientSyncedAt: string | null;
   recipientReviewRequired: boolean;
+  // Added 2026-09-17 — see loadLastReminderSentAt()/computeDaysOverdue()'s
+  // own comments. Both null unless type === 'soa' with real data behind them.
+  oldestDueDate: string | null;
+  lastReminderSentAt: string | null;
 }
 
 // extraPicValues: raw PIC-field values beyond the company's own SEC PIC
@@ -176,6 +180,7 @@ export async function loadInvoicesByCompany(
             // (Credit Note, Payment, Journal Entry, Deposit, ...) would
             // fetch the wrong QuickBooks endpoint if populated here.
             qbInvoiceId: isInvoice ? row.qbTxnId : null,
+            dueDate: row.dueDate,
           });
         }
         continue;
@@ -249,6 +254,28 @@ export async function loadAutoTargetNames(
   return targetNames;
 }
 
+// Added 2026-09-17 for SOA's escalating 1st/2nd/3rd reminder templates'
+// {{lastReminderDate}} merge field — when a PRIOR 'soa' reminder was last
+// actually SENT to this exact company, regardless of FYE cycle (unlike
+// loadAlreadySent, SOA reminders aren't scoped to one cycle at all). Only
+// meaningful for type 'soa' today; harmless to call for any type.
+export async function loadLastReminderSentAt(
+  supabase: SupabaseClient, type: 'letter' | 'ar' | 'soa',
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const { data } = await supabase.from('email_drafts')
+    .select('company_name, sent_at, email_campaigns!inner(type)')
+    .eq('status', 'sent')
+    .eq('email_campaigns.type', type)
+    .not('sent_at', 'is', null)
+    .order('sent_at', { ascending: false });
+  for (const r of data ?? []) {
+    const key = normalize(r.company_name);
+    if (!map.has(key)) map.set(key, r.sent_at as string); // first hit per key = most recent (query is DESC)
+  }
+  return map;
+}
+
 export async function loadAlreadySent(
   supabase: SupabaseClient, type: 'letter' | 'ar' | 'soa', fyeMonth?: string, fyeYear?: number,
 ): Promise<Set<string>> {
@@ -277,6 +304,7 @@ export function buildRow(
   alreadySent: Set<string>,
   type: 'letter' | 'ar' | 'soa',
   arPicByCompany?: Map<string, { acc_pic: string | null; tax_pic: string | null }>,
+  lastReminderSentAtByCompany?: Map<string, string>,
 ): ResolvedRow {
   const key = normalize(rawName);
   const company = findCompany(rawName);
@@ -284,6 +312,8 @@ export function buildRow(
   const contact = pickContact(company, [arPic?.acc_pic, arPic?.tax_pic]);
   const refs = invoicesByCompany.get(key) ?? [];
   const totalAmount = refs.reduce((s, r) => s + r.amount, 0);
+  const dueDates = refs.filter(r => r.amount > 0 && r.dueDate).map(r => r.dueDate as string);
+  const oldestDueDate = dueDates.length ? dueDates.sort()[0] : null;
 
   let included = true;
   let reason: string | null = null;
@@ -310,5 +340,7 @@ export function buildRow(
     recipientSource: contact.source,
     recipientSyncedAt: contact.syncedAt,
     recipientReviewRequired: contact.reviewRequired,
+    oldestDueDate,
+    lastReminderSentAt: lastReminderSentAtByCompany?.get(key) ?? null,
   };
 }

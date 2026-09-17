@@ -2,14 +2,14 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Mail, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { allStaffNames } from '@/lib/staff-directory';
 import { findUniqueBestMatch } from '@/lib/company-name';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import type { DraftLike } from '@/lib/draft-helper-client';
-import { loadSoaActor, downloadSoaPdf, buildSoaDraft } from '@/lib/soa-actions-client';
+import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender } from '@/lib/soa-actions-client';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 import type { QbCompany } from '@/lib/quickbooks';
 import type { SoaCompanyRow } from '@/app/api/billing/soa/route';
@@ -86,6 +86,136 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
 // soa_owners row (customer name + THAT row's own qbCompany) the individual
 // pages read, so it's genuinely the same data, not a copy that needs
 // syncing — see rowCompany()/updateSoaPic() below.
+// Added 2026-09-17 — Vincent: "SOA的 Drafts Email 和 List 那边的小信封的UI设
+// 计都能还原和 Billing Drafts 那边一样，并且点击 SOA Drafts了过后也可以选择
+// 发送人和需要的模板". Reuses Billing Drafts' EXACT inline Mail-icon +
+// anchored-popover pattern (app/billing/page.tsx's own draftPopoverFor/
+// senders/emailTemplates state) rather than a second, differently-styled
+// implementation — one shared component used from BOTH the List row's
+// inline icon (variant='icon') and the detail modal's own button
+// (variant='button', replacing its old one-click-send teal button), so
+// there is exactly one popover implementation to keep in sync, not two.
+//
+// Sending itself is unchanged — this only adds the CHOICE step Billing
+// Drafts already had; buildSoaDraft() (lib/soa-actions-client.ts) still
+// does the actual PDF-merge + campaign creation, and the parent still owns
+// showing OutlookStyleSendModal (same reasoning as Billing Drafts keeping
+// that ONE instance at the page's top level, not one per row).
+function SoaDraftPopover({
+  company, qbCompany, me,
+  senders, senderId, setSenderId, templates, selectedTemplateId, setSelectedTemplateId,
+  isOpen, onOpenChange, variant, onDrafted,
+}: {
+  company: Row; qbCompany: QbCompany; me: SoaActor;
+  senders: { id: number; email: string; display_name: string | null; is_default: boolean }[];
+  senderId: number | null; setSenderId: (id: number) => void;
+  templates: { id: number; name: string; is_default: boolean }[];
+  selectedTemplateId: number | null; setSelectedTemplateId: (id: number) => void;
+  isOpen: boolean; onOpenChange: (open: boolean) => void;
+  variant: 'icon' | 'button';
+  onDrafted: (draft: DraftLike, sender: SoaSender) => void;
+}) {
+  const [drafting, setDrafting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) onOpenChange(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [isOpen, onOpenChange]);
+
+  const selectedSender = senders.find(s => s.id === senderId) ?? null;
+
+  const draft = async () => {
+    setDrafting(true);
+    setError(null);
+    try {
+      const d = await buildSoaDraft(company.companyName, qbCompany, me, selectedSender, selectedTemplateId ?? undefined);
+      onOpenChange(false);
+      onDrafted(d, selectedSender);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
+      {variant === 'icon' ? (
+        <button title="Draft Email" onClick={() => onOpenChange(!isOpen)}
+          style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: isOpen ? '#1d3a5c' : '#94a3b8' }}>
+          <Mail size={15} />
+        </button>
+      ) : (
+        <button onClick={() => onOpenChange(!isOpen)} disabled={!company.invoiceCount}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 8, border: 'none', background: !company.invoiceCount ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: !company.invoiceCount ? 'default' : 'pointer' }}>
+          <Send size={14} />Draft Email
+        </button>
+      )}
+      {isOpen && (
+        <div ref={popoverRef} style={{
+          position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 30, background: '#fff',
+          border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 260, padding: 12,
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>Draft Email — {company.companyName}</div>
+          <select value={senderId ?? ''} onChange={e => setSenderId(Number(e.target.value))}
+            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
+            {senders.length === 0 && <option value="">No senders found</option>}
+            {senders.map(s => <option key={s.id} value={s.id}>{s.display_name ?? s.email}</option>)}
+          </select>
+          <select value={selectedTemplateId ?? ''} onChange={e => setSelectedTemplateId(Number(e.target.value))}
+            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
+            {templates.length === 0 && <option value="">No SOA templates found</option>}
+            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          {error && <div style={{ fontSize: 10.5, color: '#b91c1c', marginBottom: 8 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+            <button onClick={() => onOpenChange(false)} style={{ fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '5px 8px' }}>Cancel</button>
+            <button onClick={draft} disabled={drafting || !selectedTemplateId}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: '#fff', background: '#397f78', border: 'none', borderRadius: 6, cursor: drafting ? 'wait' : 'pointer', padding: '6px 12px', opacity: (drafting || !selectedTemplateId) ? 0.6 : 1 }}>
+              {drafting ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={12} />}
+              {drafting ? 'Drafting…' : 'Draft'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Shared by SoaBillingViewInner (List row popovers) and SoaDetail (its own
+// Draft Email button popover) — one fetch of each, not two independently
+// re-implemented state sets. type=soa (not Billing Drafts' type=ar) is the
+// one real difference from that page's own equivalent hook.
+function useSoaDraftPickers() {
+  const [me, setMe] = useState<SoaActor>(null);
+  const [senders, setSenders] = useState<{ id: number; email: string; display_name: string | null; is_default: boolean }[]>([]);
+  const [senderId, setSenderId] = useState<number | null>(null);
+  const [templates, setTemplates] = useState<{ id: number; name: string; is_default: boolean }[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+
+  useEffect(() => {
+    void loadSoaActor().then(({ me: m }) => setMe(m));
+    fetch('/api/client-communications/senders').then(r => r.json()).then(j => {
+      const list = j.data ?? [];
+      setSenders(list);
+      setSenderId(prev => prev ?? list.find((s: { is_default: boolean }) => s.is_default)?.id ?? list[0]?.id ?? null);
+    }).catch(() => {});
+    fetch('/api/client-communications/templates?type=soa').then(r => r.json()).then(j => {
+      const list = j.data ?? [];
+      setTemplates(list);
+      setSelectedTemplateId(prev => prev ?? list.find((t: { is_default: boolean }) => t.is_default)?.id ?? list[0]?.id ?? null);
+    }).catch(() => {});
+  }, []);
+
+  return { me, senders, senderId, setSenderId, templates, selectedTemplateId, setSelectedTemplateId };
+}
+
 function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // Deep link from the chat assistant (soaDeepLink(), lib/deep-links.ts) —
   // same openCompany convention and auto-open pattern already used by
@@ -104,6 +234,14 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   const [expanded, setExpanded] = useState<string | null>(null); // keyed by rowKey()
   const [exporting, setExporting] = useState(false);
   const [exportingAll, setExportingAll] = useState(false); // full 18-sheet workbook, not just this page's own
+
+  // Added 2026-09-17 — the List row's own inline Mail-icon draft popover
+  // (see SoaDraftPopover's own header comment). Keyed by rowKey(), same as
+  // `expanded`, since a bare companyId isn't unique in "All" mode.
+  const draftPickers = useSoaDraftPickers();
+  const [draftPopoverFor, setDraftPopoverFor] = useState<string | null>(null);
+  const [sendModalDraft, setSendModalDraft] = useState<DraftLike | null>(null);
+  const [sendModalSender, setSendModalSender] = useState<SoaSender>(null);
 
   // A row's real qbCompany — its own tag in "All" mode, otherwise this
   // page's fixed one. The `as QbCompany` is safe by construction, never a
@@ -137,9 +275,12 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // wasn't asking you to change it, I was just asking — the previous
   // ratio was fine). Reverted that redistribution — back to a single
   // flexible share on Company Name alone, Owner a fixed 150px again.
+  // Trailing 36px (added 2026-09-17) is the Mail-icon draft popover column —
+  // matches Billing Drafts' own row layout, which also ends in a dedicated
+  // icon column rather than tucking it into an existing one.
   const soaListColumns = qbCompany === 'ALL'
-    ? '32px minmax(200px,1.2fr) 64px 100px 100px 100px 100px 100px 110px 100px 150px'
-    : '32px minmax(220px,1.4fr) 100px 100px 100px 100px 100px 110px 100px 150px';
+    ? '32px minmax(200px,1.2fr) 64px 100px 100px 100px 100px 100px 110px 100px 150px 36px'
+    : '32px minmax(220px,1.4fr) 100px 100px 100px 100px 100px 110px 100px 150px 36px';
   // Display-only stand-in for qbCompany wherever the literal 'ALL' would
   // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
   // a typo, not a scope).
@@ -419,8 +560,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   (soaPic, suggestedOwner, effectiveOwner, soa_owners table)
                   are unchanged — this is a display-label rename only. */}
               {(qbCompany === 'ALL'
-                ? ['', 'Company Name', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC']
-                : ['', 'Company Name', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC']
+                ? ['', 'Company Name', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '']
+                : ['', 'Company Name', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '']
               ).map((h, i) => (
                 i >= 2 ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>{h}</div> : <div key={i} style={{ padding: '0 6px' }}>{h}</div>
               ))}
@@ -570,12 +711,32 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       );
                     })()}
                   </div>
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <SoaDraftPopover
+                      company={c} qbCompany={rowCompany(c)} me={draftPickers.me}
+                      senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
+                      templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
+                      isOpen={draftPopoverFor === rowKey(c)} onOpenChange={open => setDraftPopoverFor(open ? rowKey(c) : null)}
+                      variant="icon"
+                      onDrafted={(d, sender) => { setSendModalDraft(d); setSendModalSender(sender); }}
+                    />
+                  </div>
                 </div>
               );
             })}
           </div>
         </div>
       </div>
+
+      {sendModalDraft && (
+        <OutlookStyleSendModal
+          draft={sendModalDraft}
+          sender={sendModalSender}
+          me={draftPickers.me}
+          onClose={() => setSendModalDraft(null)}
+          onSent={() => { setSendModalDraft(null); load(); }}
+        />
+      )}
 
       <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
 
@@ -626,18 +787,20 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
   const [invoices, setInvoices] = useState<SoaInvoiceDetail[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const [drafting, setDrafting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [sendModalDraft, setSendModalDraft] = useState<DraftLike | null>(null);
-  const [me, setMe] = useState<{ email: string; name: string } | null>(null);
-  const [sender, setSender] = useState<{ email: string; display_name: string | null } | null>(null);
+  const [sendModalSender, setSendModalSender] = useState<SoaSender>(null);
+  // Vincent, 2026-09-17: "Drafts Email...都能还原和 Billing Drafts 那边一
+  // 样" — same sender+template picker popover as the List row's own Mail
+  // icon (SoaDraftPopover), not the old one-click-send button.
+  const draftPickers = useSoaDraftPickers();
+  const [draftPopoverOpen, setDraftPopoverOpen] = useState(false);
 
   useEffect(() => {
     fetch(`/api/billing/soa/detail?companyName=${encodeURIComponent(company.companyName)}&company=${qbCompany}`)
       .then(res => res.json())
       .then(json => { if (json.error) setLoadError(json.error); else setInvoices(json.invoices ?? []); })
       .catch(err => setLoadError(err instanceof Error ? err.message : String(err)));
-    void loadSoaActor().then(({ me: m, sender: s }) => { setMe(m); setSender(s); });
   }, [company.companyName, qbCompany]);
 
   const downloadPdf = async () => {
@@ -649,22 +812,6 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
       setResult({ ok: false, msg: err instanceof Error ? err.message : String(err) });
     } finally {
       setDownloading(false);
-    }
-  };
-
-  // Vincent, 2026-09-05: reuses the exact same recipient resolution and
-  // template/campaign infrastructure Client Communications' own "Statement
-  // of Account" campaign type already has (GET .../campaigns/preview and
-  // POST .../campaigns) — this page's own new work is only the aging view
-  // and the merged PDF; recipient/CC policy stays the one place it's owned.
-  const draftEmail = async () => {
-    setDrafting(true); setResult(null);
-    try {
-      setSendModalDraft(await buildSoaDraft(company.companyName, qbCompany, me, sender));
-    } catch (err) {
-      setResult({ ok: false, msg: err instanceof Error ? err.message : String(err) });
-    } finally {
-      setDrafting(false);
     }
   };
 
@@ -739,18 +886,21 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
           {downloading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={14} />}
           {downloading ? 'Merging…' : 'Download SOA PDF'}
         </button>
-        <button onClick={draftEmail} disabled={drafting || !invoices?.length}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 8, border: 'none', background: drafting || !invoices?.length ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: drafting ? 'default' : 'pointer' }}>
-          {drafting ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />}
-          {drafting ? 'Preparing…' : 'Draft Email'}
-        </button>
+        <SoaDraftPopover
+          company={company} qbCompany={qbCompany} me={draftPickers.me}
+          senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
+          templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
+          isOpen={draftPopoverOpen} onOpenChange={setDraftPopoverOpen}
+          variant="button"
+          onDrafted={(d, sender) => { setSendModalDraft(d); setSendModalSender(sender); }}
+        />
       </div>
 
       {sendModalDraft && (
         <OutlookStyleSendModal
           draft={sendModalDraft}
-          sender={sender}
-          me={me}
+          sender={sendModalSender}
+          me={draftPickers.me}
           onClose={() => setSendModalDraft(null)}
           onSent={() => { setSendModalDraft(null); onSent(); }}
         />

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { qbQuery, type QbCompany } from '@/lib/quickbooks';
-import { mergeTemplate, formatInvoiceList, formatAmount, type InvoiceRef } from '@/lib/email-merge';
+import { mergeTemplate, formatInvoiceList, formatAmount, computeDaysOverdue, type InvoiceRef } from '@/lib/email-merge';
+import { loadLastReminderSentAt } from '@/lib/client-comms-resolve';
+import { normalize } from '@/lib/company-name';
+import { fmtDate } from '@/lib/date';
 
 // Re-verifies a prepared draft's invoice amount(s) against live QuickBooks
 // data right before it's opened in Outlook. Handles the case where an
@@ -23,7 +26,7 @@ export async function POST(req: NextRequest) {
   if (draftErr || !draft) return NextResponse.json({ error: draftErr?.message ?? 'Draft not found.' }, { status: 404 });
 
   const { data: campaign } = await supabase.from('email_campaigns')
-    .select('template_id, fye_month, fye_year').eq('id', draft.campaign_id).single();
+    .select('type, template_id, fye_month, fye_year').eq('id', draft.campaign_id).single();
   if (!campaign) return NextResponse.json({ error: 'Campaign for this draft was not found.' }, { status: 404 });
 
   const { data: template } = await supabase.from('email_templates')
@@ -50,6 +53,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, changed: false, draft });
   }
 
+  // Recomputed fresh rather than carried over from creation — daysOverdue is
+  // inherently a live figure (more time may have passed since the draft was
+  // first prepared), and lastReminderDate excludes THIS draft by
+  // construction (loadLastReminderSentAt only looks at already-`sent` rows,
+  // and this one is still pending). Only meaningful for 'soa' — the other
+  // two types never populate these merge fields, so skip the extra query.
+  const lastReminderSentAt = campaign.type === 'soa'
+    ? (await loadLastReminderSentAt(supabase, 'soa')).get(normalize(draft.company_name)) ?? null
+    : null;
   const fields = {
     companyName: draft.company_name,
     contactName: draft.contact_name || draft.company_name,
@@ -60,6 +72,8 @@ export async function POST(req: NextRequest) {
     dueDate: '',
     fyeMonth: campaign.fye_month ?? '',
     fyeYear: campaign.fye_year ? String(campaign.fye_year) : '',
+    daysOverdue: computeDaysOverdue(refreshedRefs),
+    lastReminderDate: lastReminderSentAt ? fmtDate(lastReminderSentAt) : '',
   };
 
   const update = {

@@ -45,7 +45,11 @@ export async function resolveCampaignRow(companyName: string, type: CampaignType
   const json = await res.json();
   if (!res.ok || !json.row) throw new Error(json.error ?? 'Could not resolve a recipient for this company.');
   if (!json.row.toEmail) throw new Error('No valid recipient email on file for this company — resolve it in Campaign Centre first.');
-  return json.row as { companyName: string; toEmail: string; ccEmail: string | null };
+  // oldestDueDate/lastReminderSentAt (added 2026-09-17, lib/client-comms-
+  // resolve.ts's buildRow()) ride along on this same object all the way
+  // into the campaigns POST body below (companies: [row]) — this type just
+  // needs to admit they exist so TypeScript doesn't flag reading them.
+  return json.row as { companyName: string; toEmail: string; ccEmail: string | null; oldestDueDate?: string | null; lastReminderSentAt?: string | null };
 }
 
 export async function pickCampaignTemplate(type: CampaignType): Promise<{ id: string; name: string }> {
@@ -62,6 +66,13 @@ export async function pickCampaignTemplate(type: CampaignType): Promise<{ id: st
  * attachment fetch with one merged statement PDF, which is why that caller
  * also clears invoice_refs (fetchSystemAttachments in draft-helper-client
  * only acts on invoice_refs).
+ *
+ * `templateId` (added 2026-09-17): an explicit user pick, e.g. SOA's own
+ * Mail-icon popover letting staff choose which of the 1st/2nd/3rd escalating
+ * reminder templates to send (Vincent: "点击 SOA Drafts了过后也可以选择发送
+ * 人和需要的模板"). Omit it to keep the old silent default/first-template
+ * behavior (pickCampaignTemplate) — every existing caller that doesn't pass
+ * one is unaffected.
  */
 export async function buildCampaignDraft(opts: {
   companyName: string;
@@ -72,10 +83,11 @@ export async function buildCampaignDraft(opts: {
   sender: CampaignSender;
   campaignName?: string;
   attachment?: File | null;
+  templateId?: number;
 }): Promise<DraftLike> {
   const { companyName, type, fyeMonth, fyeYear, me, sender, attachment } = opts;
   const row = await resolveCampaignRow(companyName, type, fyeMonth, fyeYear);
-  const template = await pickCampaignTemplate(type);
+  const template = opts.templateId ? { id: opts.templateId } : await pickCampaignTemplate(type);
 
   const createRes = await fetch('/api/client-communications/campaigns', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

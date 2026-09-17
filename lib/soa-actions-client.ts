@@ -56,12 +56,20 @@ export async function downloadSoaPdf(companyName: string, qbCompany: QbCompany):
 /**
  * Build the SOA client email draft, with the merged statement PDF already
  * attached. Returns the draft for OutlookStyleSendModal — it does NOT send.
+ *
+ * `templateId` (added 2026-09-17): an explicit pick from the Mail-icon
+ * popover (List row and the detail modal's own Draft Email button both go
+ * through it now) — lets staff choose which of the 1st/2nd/3rd escalating
+ * reminder templates to send instead of always silently getting the
+ * default/first 'soa' template. Optional — omitting it keeps the old
+ * behavior.
  */
 export async function buildSoaDraft(
   companyName: string,
   qbCompany: QbCompany,
   me: SoaActor,
   sender: SoaSender,
+  templateId?: number,
 ): Promise<DraftLike> {
   // SOA's one difference from the other campaign types: the merged
   // statement PDF replaces the automatic per-invoice attachments, so it is
@@ -76,7 +84,7 @@ export async function buildSoaDraft(
   const pdfFile = new File([pdfBlob], `SOA (${qbCompany}) - ${companyName}.pdf`, { type: 'application/pdf' });
 
   return buildCampaignDraft({
-    companyName, type: 'soa', me, sender,
+    companyName, type: 'soa', me, sender, templateId,
     campaignName: `SOA (${qbCompany}) - ${companyName} - ${todaySGT()}`,
     attachment: pdfFile,
   });
