@@ -52,9 +52,21 @@ function fmtDate(iso: string) {
 }
 
 // Non-person Owner values, always selectable for any company — not real
-// staff, so never in lib/staff-directory.ts. "BD" = "放着先" (hold off for
-// now), confirmed by Vincent 2026-09-07.
-const PLACEHOLDER_OWNER_CODES = ['BD'];
+// staff, so never in lib/staff-directory.ts. "BD" = "Bad Debt" (Vincent,
+// 2026-09-17, correcting an earlier wrong assumption in this file that it
+// meant "放着先"/hold off for now — it's a real collections designation:
+// this balance is written off as uncollectible, not merely unassigned).
+// `label` is shown in the dropdown; the stored/matched value stays the bare
+// code so existing `soaPic: 'BD'` data keeps working unchanged.
+const PLACEHOLDER_OWNER_CODES: { code: string; label: string }[] = [
+  { code: 'BD', label: 'Bad Debt' },
+];
+const PLACEHOLDER_LABEL_BY_CODE = new Map(PLACEHOLDER_OWNER_CODES.map(p => [p.code, p.label]));
+// Display label for a dropdown/select value that might be a placeholder code
+// (falls back to the value itself for a real staff name) — used wherever a
+// placeholder can appear OUTSIDE its own "Other" optgroup, e.g. already
+// selected as this row's current value under "Associated with this company".
+const ownerOptionLabel = (value: string) => PLACEHOLDER_LABEL_BY_CODE.get(value) ?? value;
 
 const BUCKET_COLOR: Record<AgingBucket, string> = {
   current: '#64748b', d1_30: '#0f766e', d31_60: '#ca8a04', d61_90: '#ea580c', d91_plus: 'var(--status-danger)',
@@ -692,13 +704,14 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                         ? [displayedOwner, ...c.picOptions] : c.picOptions;
                       const likelySet = new Set(likely);
                       const everyoneElse = allStaffNames().filter(n => !likelySet.has(n)).sort();
-                      // Vincent, 2026-09-07: "每个公司都能放BD" — "BD" ("放着
-                      // 先", a deliberate hold-off marker, not a real person)
+                      // Vincent, 2026-09-07: "每个公司都能放BD" — "BD" (Bad
+                      // Debt, a real collections designation, not a hold-off
+                      // marker — see PLACEHOLDER_OWNER_CODES' own comment)
                       // must be pickable for ANY company, not only the 3 it
                       // happened to already be backfilled onto. Excluded from
                       // its own group when it's already the row's current
                       // value (already shown once, in "Associated" above).
-                      const placeholders = PLACEHOLDER_OWNER_CODES.filter(code => !likelySet.has(code));
+                      const placeholders = PLACEHOLDER_OWNER_CODES.filter(p => !likelySet.has(p.code));
                       return (
                         <select value={displayedOwner ?? ''} onChange={e => updateSoaPic(c, e.target.value)}
                           title={!isConfirmed && c.suggestedOwner ? 'Suggested from QuickBooks — not yet confirmed' : undefined}
@@ -707,7 +720,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           {likely.length > 0 ? (
                             <>
                               <optgroup label="Associated with this company">
-                                {likely.map(name => <option key={name} value={name}>{name}</option>)}
+                                {likely.map(name => <option key={name} value={name}>{ownerOptionLabel(name)}</option>)}
                               </optgroup>
                               <optgroup label="All staff">
                                 {everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
@@ -716,7 +729,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           ) : everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
                           {placeholders.length > 0 && (
                             <optgroup label="Other">
-                              {placeholders.map(code => <option key={code} value={code}>{code}</option>)}
+                              {placeholders.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
                             </optgroup>
                           )}
                         </select>

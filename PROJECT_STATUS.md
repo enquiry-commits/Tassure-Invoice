@@ -1,5 +1,9 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-17 (FIXED: "BD" in the SOA Main PIC dropdown (`app/billing/soa/_components.tsx`) now displays as "Bad Debt" — Vincent: "BD 写完整：Bad Debt", correcting a wrong assumption baked into this file's own comments since 2026-09-07 ("BD" = "放着先"/hold off for now). It's a real collections designation (this balance is written off as uncollectible), not a placeholder-for-later marker. The stored/matched value stays the bare `'BD'` code (no data migration needed) — only the human-facing label changed, via a new `ownerOptionLabel()` helper applied everywhere the code could render (the dropdown's own "Other" group AND, since a row can already have `soaPic: 'BD'` confirmed, the "Associated with this company" group and the select's own closed-state display). `npx tsc --noEmit` / `npm run build` both clean.
+
+Previous entry follows.
+
 Last updated: 2026-09-17 (FIXED: 56 stale wrong-team Main PIC records cleaned out of `soa_owners`, plus the PIC-team rule widened to recognize Malaysia SEC staff.
 
 Vincent, on the Billing Drafts list, pointing at a real row (ACN Consultants Pte Ltd, TAB invoice #02610273, "change of directors" S$105.50): "在每个公司内的每个服务，我们都可以看到这个服务的负责任是谁...拿TAB来讲 换director 就不可能是ACC的 YU HENG做的，而是秘书负责的，那么Main PIC 就不可能是 YU HENG" — the Main PIC dropdown showed "Tee Yu Heng" (Accounting) for a pure secretarial service. Traced with real data: the invoice's own QuickBooks Class field correctly says "Ang Shi Ming" (a real Corporate Secretarial staff member) — the WRONG value was coming from a manual `soa_owners` override that always wins over the (already correctly TAB/TAO-restricted, per today's earlier PIC fix) auto-suggestion.
