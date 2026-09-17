@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-17 (FIXED: 19 more stale "Tey Shemin" Main PIC records deleted — a real side effect of earlier today's own PIC-team-widening fix.
+
+Vincent forwarded a real WhatsApp exchange questioning a real TAO A/R Ageing export, where every single company on the sheet (10+ real companies, mostly the "Iuiga" group) showed "Tey Shemin" as PIC: "shemin 还在tao？" / "可是她这些在tao 都是有tao 的pic 的". Investigated rather than assuming either side was right.
+
+Traced it to a genuine consequence of this same day's earlier fix: widening `PIC_TEAMS_BY_COMPANY` to accept `Corporate Secretarial (Malaysia)` on TAO (confirmed correct in general — she really does handle real Malaysia-side work) meant the FIRST stale-data cleanup pass (`scripts/backfill-clean-soa-owner-mismatches.js`) no longer flagged HER rows as mismatched, even the ones that were genuinely wrong. Audited all 72 real `soa_owners` rows recording her (100% from the 2026-09-07 backfill script, 0 touched by a human since) against each company's own MOST RECENT real QuickBooks invoice Class field — the actual source of truth: 44 confirmed genuinely her, 9 had no Class evidence either way, and 19 were directly contradicted by real, dated invoice evidence naming someone else entirely (TAO: mostly "Lee Jing Fei"/"Quinnie Tan" on invoices as recent as 2026-08-24; TAB: a mix of real SEC/Accounting staff) — a real staffing handoff the backfill record was never updated for, still masking the correct computed suggestion months later because a manual override always wins.
+
+Deleted only the 19 confirmed-contradicted rows via new `scripts/backfill-clean-soa-owner-contradicted.js` (hardcoded from the audit, not a live re-scan — reviewable, idempotent). `docs/INVARIANTS.md` INV-PIC-007 updated with the lesson: widening a team rule and cleaning stale data under that same rule in one pass can hide genuinely-wrong rows from the cleanup — a rule change that makes flagged data "look correct" again needs independent verification against the real source-of-truth data, not just the updated rule.
+
+Previous entry follows.
+
 Last updated: 2026-09-17 (FIXED: the SOA Statement cover page's layout had a real mistake — Vincent, comparing his real reference PDF side-by-side with this app's actual output: "排版格式差太多了吧，那个有LOGO的才是正确的排版" (the layouts differ way too much — the one WITH the logo is the correct layout).
 
 Root cause: the earlier implementation had reverse-engineered the reference PDF's layout by reading its raw content stream top-to-bottom and treating operator ORDER as visual Y-position — wrong, since each drawing operation carries its own position transform and a PDF is free to draw a page's footer before its header in stream order. The reference's aging-bucket summary table only appears ONCE, as a footer — the earlier version had mistakenly duplicated it both before the letterhead AND at the bottom. Also missing: the real T Assure logo (the earlier version reasoned this app's own `public/logo.png` was a different, unrelated icon and skipped it entirely, rather than sourcing the real one).

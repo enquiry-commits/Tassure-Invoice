@@ -412,6 +412,28 @@ again.
   when a persisted human-override table exists for the same field — check
   it for stale data seeded under the old logic in the same pass, not as an
   afterthought.
+  **Found later the same day**: the "Widened" fix above (allowing
+  `Corporate Secretarial (Malaysia)`) had a real side effect on the FIRST
+  cleanup pass — 19 of the 63 real `Tey Shemin` `soa_owners` rows that
+  "confirmed" the widening were themselves stale `backfill@internal` rows
+  that a genuine staffing handoff had made wrong, and widening the team
+  rule made them stop looking mismatched to `scripts/backfill-clean-soa-
+  owner-mismatches.js`, so they survived that cleanup even though they
+  were wrong — e.g. TAO's Iuiga New/One/Retail Chain/Retail Management/
+  Retail/Technologies Pte. Ltd. all recorded "Tey Shemin" while their real,
+  more-recent invoice Class fields clearly show "Lee Jing Fei"/"Quinnie
+  Tan" doing the actual work. Surfaced by Chelsea noticing it on a real
+  TAO export ("shemin 还在tao？"). Fixed by auditing EVERY remaining
+  `soa_owners` row for that person against the MOST RECENT real invoice
+  Class for that exact (customer, qb_company) — 44 confirmed genuinely her
+  (kept), 9 had no Class evidence either way (kept, no better signal
+  exists), 19 were directly contradicted (deleted via new
+  `scripts/backfill-clean-soa-owner-contradicted.js`). **Lesson**:
+  widening a team-restriction rule and cleaning stale data under that same
+  rule in one pass can hide genuinely-wrong rows from the cleanup — when
+  a rule change makes previously-flagged data "look correct" again,
+  independently verify a sample against the underlying source-of-truth
+  data (real invoices here), not just against the updated rule.
 
 ## Recipient / CC / email address (INV-MAIL)
 
