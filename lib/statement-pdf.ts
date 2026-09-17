@@ -149,6 +149,7 @@ export async function drawStatementCoverPage(
   row: StatementRow,
   customerDisplayName: string,
   billAddrLines: string[],
+  invoiceDetails: Map<string, { invoiceNo: string; description: string | null }> = new Map(),
 ) {
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -305,14 +306,36 @@ export async function drawStatementCoverPage(
     // item.dueDate is plain ISO (YYYY-MM-DD); left unformatted here used to
     // print e.g. "2026-07-31" while every other date on this page (the
     // DATE meta field) already shows "31/07/2026".
-    const description = `${safeText(font, item.docNumber)} (${safeText(font, TXN_TYPE_TAGS[item.txnType] ?? item.txnType)})`;
-    const amountText = money(item.amount);
     const itemDate = item.dueDate ? item.dueDate.split('-').reverse().join('/') : '—';
+    const amountText = money(item.amount);
+    // Vincent, 2026-09-17, fourth round: "这部分为什么生成出来的没有像这个
+    // 那么完整" (pointing at the reference's rich "Invoice No.02610894: Due
+    // 31/07/2026. XBRL for the year (FYE 31.12.2025)" description) — for a
+    // real Invoice line where the caller found a matching real
+    // qb_invoice_items row (see resolveInvoiceDetails in the route),
+    // reproduce that same real format; the invoice number printed here is
+    // `details.invoiceNo` (the caller's own real, correctly-padded value),
+    // never `item.docNumber` — see resolveInvoiceDetails' own comment on
+    // why that field can arrive with a stripped leading zero. Falls back to
+    // the plain "docNumber (Type)" form for anything else (Credit Note/
+    // Payment/Journal Entry/Deposit, or an Invoice this lookup didn't find)
+    // — never fabricated, only ever a real matched row's own text.
+    const numKey = /^\d+$/.test(item.docNumber ?? '') ? String(Number(item.docNumber)) : null;
+    const details = item.txnType === 'Invoice' && numKey ? invoiceDetails.get(numKey) : undefined;
+    const firstDescLine = details?.description?.split('\n').map(l => l.trim()).find(Boolean);
+    const description = firstDescLine
+      ? `Invoice No.${safeText(font, details!.invoiceNo)}: Due ${itemDate}. ${safeText(font, firstDescLine)}`
+      : `${safeText(font, item.docNumber)} (${safeText(font, TXN_TYPE_TAGS[item.txnType] ?? item.txnType)})`;
+    // Manually wrapped (same reasoning as the TO block's billAddrLines
+    // above) so a long real description's extra visual line(s) are
+    // reflected in `y` before the NEXT item row is drawn, instead of
+    // silently overlapping it.
+    const descLines = wrapLine(font, description, 9, itemColWidths[1] - 8);
     page.drawText(itemDate, { x: itemCols[0], y, size: 9, font });
-    page.drawText(description, { x: itemCols[1], y, size: 9, font, maxWidth: itemColWidths[1] - 8 });
+    descLines.forEach((descLine, i) => page.drawText(descLine, { x: itemCols[1], y: y - i * 11, size: 9, font }));
     page.drawText(amountText, { x: itemCols[2], y, size: 9, font });
     page.drawText(amountText, { x: itemCols[3], y, size: 9, font });
-    y -= 16;
+    y -= Math.max(16, descLines.length * 11 + 5);
   }
 
   // Aging-bucket summary as a footer — matches the reference's own single

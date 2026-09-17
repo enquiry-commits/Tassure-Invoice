@@ -696,6 +696,40 @@ again.
   reference field is missing, ask "is this a constant caption, or a real
   per-document data value?" before deciding whether reproducing it is safe
   — the two look identical on the page but are opposite risk categories.
+- **INV-DOC-017** — `SoaCompanyRow.lineItems[].docNumber` (from
+  `computeSoaRows()`) is not always the real QuickBooks invoice number —
+  confirmed live 2026-09-17, fourth round on the Statement cover page,
+  Vincent: "这部分为什么生成出来的没有像这个那么完整" (why doesn't the
+  generated DESCRIPTION column look as complete as the reference's "Invoice
+  No.02610894: Due 31/07/2026. XBRL for the year (FYE 31.12.2025)"). Two
+  real gaps: (1) the real invoice number for that exact example is
+  "02610894" (confirmed against both `quickbooks_invoices.invoice_no` and
+  `quickbooks_invoice_items.invoice_no`), but `SoaCompanyRow.lineItems`
+  carried it as "2610894" — the leading zero silently lost somewhere in the
+  fresh-snapshot (`ar_aging_snapshot`) path; (2) `lineItems` never carried
+  the invoice's real line `Description` at all (a real field, present in
+  `quickbooks_invoice_items.description`, e.g. "XBRL for the year (FYE
+  31.12.2025)\n\nConversion of statutory financial statements..." —
+  QuickBooks' own printed Statement shows only the first line). Fixed in
+  `app/api/billing/soa/pdf/route.ts`'s `resolveInvoiceDetails()`: rather
+  than trust `docNumber`, it re-derives both the real invoice number and
+  description from `matched` — the SAME real `quickbooks_invoices` rows
+  (with real `qb_invoice_id` + `invoice_no`) already fetched earlier in the
+  route to merge the real invoice PDFs, joined to `quickbooks_invoice_items`
+  by exact `qb_invoice_id` (never a fuzzy/numeric-string match against the
+  already-corrupted `docNumber`), and keyed for lookup by
+  `String(Number(invoice_no))` so a lookup FROM the possibly-stripped
+  `docNumber` still finds the right row. Best-effort — any failure here
+  falls back to the plain "docNumber (Type)" form the itemized table already
+  used before this round, never blocks the Statement. General lesson: a
+  `computeSoaRows()`-sourced row is a real-time AGGREGATE for the on-screen
+  list (Company/PIC/aging/total) — that's the one place INV-PIC-007 and
+  friends require strict accuracy — but its own per-line fields
+  (`docNumber` especially) are not guaranteed to preserve every formatting
+  detail of the source document; anything that needs the exact printed
+  form of a real business document (an invoice number going out to a
+  client) should re-derive it from the actual source row, not from
+  `computeSoaRows()`'s own convenience shape.
 
 ## Automation & cron reliability (INV-CRON)
 

@@ -62,6 +62,66 @@ async function resolveBillAddrLines(book: QbCompany, customerName: string): Prom
   }
 }
 
+// Real per-invoice number + line description, for the itemized table's
+// DESCRIPTION column — Vincent, 2026-09-17, fourth round on this page:
+// "这部分为什么生成出来的没有像这个那么完整" (pointing at the reference's
+// rich "Invoice No.02610894: Due 31/07/2026. XBRL for the year (FYE
+// 31.12.2025)" text). Two real gaps this closes: (1) SoaCompanyRow.lineItems
+// (computeSoaRows()'s own fresh-snapshot path) can carry a doc_number with
+// its leading zero silently stripped ("2610894" vs QuickBooks' own real
+// "02610894" — confirmed against real data, quickbooks_invoices/
+// quickbooks_invoice_items both still have it correctly). (2) it never
+// carried the invoice's actual line Description at all. Rather than trust
+// the possibly-stripped docNumber, this builds its lookup from `matched` —
+// the same real `quickbooks_invoices` rows (qb_invoice_id + invoice_no,
+// already fetched further up, never re-queried) already used to merge the
+// real invoice PDFs below — and joins to quickbooks_invoice_items by exact
+// qb_invoice_id, so both the printed invoice number and its description
+// always come from the same real row this Statement is actually about. Keyed
+// by the NUMERIC value of invoice_no (String(Number(...))) so a lookup by
+// the possibly-stripped docNumber from SoaCompanyRow.lineItems still finds
+// it. First invoice line (line_num ascending) only, matching the reference's
+// own single-line style — a multi-line item description keeps only its
+// first line (see statement-pdf.ts's own use of this).
+async function resolveInvoiceDetails(
+  matchedInvoices: Array<{ qb_company: string; qb_invoice_id: string; invoice_no: string }>,
+): Promise<Map<string, { invoiceNo: string; description: string | null }>> {
+  const result = new Map<string, { invoiceNo: string; description: string | null }>();
+  const byBook = new Map<string, string[]>();
+  for (const inv of matchedInvoices) {
+    if (!inv.invoice_no) continue;
+    const numKey = String(Number(inv.invoice_no));
+    if (numKey === 'NaN') continue;
+    result.set(numKey, { invoiceNo: inv.invoice_no, description: null });
+    const ids = byBook.get(inv.qb_company) ?? [];
+    ids.push(inv.qb_invoice_id);
+    byBook.set(inv.qb_company, ids);
+  }
+  if (!result.size) return result;
+  try {
+    const supabase = createAdminClient();
+    await Promise.all([...byBook.entries()].map(async ([book, ids]) => {
+      const { data } = await supabase
+        .from('quickbooks_invoice_items')
+        .select('qb_invoice_id, invoice_no, description, line_num')
+        .eq('qb_company', book)
+        .in('qb_invoice_id', ids)
+        .order('line_num', { ascending: true });
+      for (const row of data ?? []) {
+        if (!row.invoice_no || !row.description) continue;
+        const numKey = String(Number(row.invoice_no));
+        const entry = result.get(numKey);
+        if (entry && !entry.description) entry.description = row.description;
+      }
+    }));
+  } catch {
+    // Best-effort enrichment only — a failed lookup here must never break
+    // the Statement, it just falls back to the plainer "docNumber (Type)"
+    // description the itemized table already used before this round.
+  }
+  return result;
+}
+
 const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
 
 // Vincent, 2026-09-17, re-examining the "1V Capital" example that started
@@ -205,8 +265,11 @@ export async function GET(req: NextRequest) {
       // to come first in the pooled invoice/credit-memo list, which is fine
       // since it's the same real-world company's address regardless of book.
       const addrBook = (matched[0]?.qb_company ?? matchedCredits[0]?.qb_company ?? company) as QbCompany;
-      const billAddrLines = await resolveBillAddrLines(addrBook, resolvedRawName);
-      await drawStatementCoverPage(merged, legalName, statementRow, resolvedRawName, billAddrLines);
+      const [billAddrLines, invoiceDetails] = await Promise.all([
+        resolveBillAddrLines(addrBook, resolvedRawName),
+        resolveInvoiceDetails(matched),
+      ]);
+      await drawStatementCoverPage(merged, legalName, statementRow, resolvedRawName, billAddrLines, invoiceDetails);
       coverPageAdded = true;
     }
   } catch {
