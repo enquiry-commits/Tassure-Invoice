@@ -12,9 +12,16 @@ import type { QbCompany } from './quickbooks';
 // team, and that must not surface as the book's PIC. TAC deliberately has no
 // entry: its PIC is the current Nominee Director (INV-QB-008), not a
 // staff-team-restricted signal, and Vincent gave no rule for it here.
+// Widened 2026-09-17, same conversation: Vincent confirmed Tey Shemin's team
+// ('Corporate Secretarial (Malaysia)') is a genuinely valid Main PIC on BOTH
+// books, not just TAB — Malaysia-side staff aren't split into separate
+// Secretarial/Accounts/Tax teams the way Singapore staff are, so the same
+// person legitimately handles both kinds of work there. Confirmed against
+// real soa_owners data: 63 real rows (52 TAB + 11 TAO) already had her as
+// the recorded PIC.
 const PIC_TEAMS_BY_COMPANY: Partial<Record<QbCompany, StaffTeam[]>> = {
-  TAB: ['Corporate Secretarial'],
-  TAO: ['Accounting', 'Tax'],
+  TAB: ['Corporate Secretarial', 'Corporate Secretarial (Malaysia)'],
+  TAO: ['Accounting', 'Tax', 'Corporate Secretarial (Malaysia)'],
 };
 
 // Exported for lib/soa-data.ts, which also needs to filter `companies.pic`

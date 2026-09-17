@@ -386,7 +386,32 @@ again.
   会出现sec 的人？...tab 要只会有sec的人") that this was itself the bug, not
   a real cross-team assignment, and must be filtered rather than shown. TAC
   is deliberately NOT in this map — its PIC is the current Nominee Director
-  (INV-QB-008), not a staff-team-restricted signal.
+  (INV-QB-008), not a staff-team-restricted signal. **Widened 2026-09-17,
+  same conversation**: `Corporate Secretarial (Malaysia)` is ALSO valid on
+  both TAB and TAO — Malaysia-side staff (e.g. Tey Shemin) aren't split into
+  separate Secretarial/Accounts/Tax teams the way Singapore staff are, so
+  the same person legitimately handles both kinds of work there; confirmed
+  against real data (63 genuine `soa_owners` rows already recorded her that
+  way before this rule existed). Don't assume this list is exhaustive —
+  verify any FUTURE team addition against real `soa_owners`/PIC data the
+  same way, rather than reasoning from the org chart alone.
+  **Also found the same day**: this rule only governs the AUTOMATIC
+  suggestion — the human-override table `soa_owners` had 119 real rows
+  (31% of the table) recording a WRONG-team staff member, all written by a
+  2026-09-07 backfill script (`updated_by_email='backfill@internal'`) that
+  ran under the OLD "same owner regardless of book" theory this rule
+  replaced, before the per-book split existed. A manual override always
+  wins over the (now-correct) auto-suggestion, so these stale rows kept
+  masking the right answer even after this filter shipped — e.g. ACN
+  Consultants Pte Ltd's TAB row recorded "Tee Yu Heng" (Accounting) while
+  the real invoice Class field correctly says "Ang Shi Ming". Cleaned up via
+  `scripts/backfill-clean-soa-owner-mismatches.js` (deletes only
+  still-mismatched `backfill@internal` rows under the CURRENT team rule,
+  never a row a real human has touched since — idempotent, safe to re-run).
+  **Lesson**: fixing the computed-signal side of a PIC rule is not enough
+  when a persisted human-override table exists for the same field — check
+  it for stale data seeded under the old logic in the same pass, not as an
+  afterthought.
 
 ## Recipient / CC / email address (INV-MAIL)
 
