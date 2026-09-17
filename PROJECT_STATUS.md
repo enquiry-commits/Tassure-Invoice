@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-17 (FIXED: the SOA Statement cover page's layout had a real mistake — Vincent, comparing his real reference PDF side-by-side with this app's actual output: "排版格式差太多了吧，那个有LOGO的才是正确的排版" (the layouts differ way too much — the one WITH the logo is the correct layout).
+
+Root cause: the earlier implementation had reverse-engineered the reference PDF's layout by reading its raw content stream top-to-bottom and treating operator ORDER as visual Y-position — wrong, since each drawing operation carries its own position transform and a PDF is free to draw a page's footer before its header in stream order. The reference's aging-bucket summary table only appears ONCE, as a footer — the earlier version had mistakenly duplicated it both before the letterhead AND at the bottom. Also missing: the real T Assure logo (the earlier version reasoned this app's own `public/logo.png` was a different, unrelated icon and skipped it entirely, rather than sourcing the real one).
+
+Fixed both for real, not approximated: (1) removed the duplicate top aging table — letterhead+logo now start the page directly, matching the reference exactly; (2) extracted the ACTUAL logo image embedded in Vincent's reference PDF itself (a raw-RGB `/Image` XObject inside it — `zlib.inflateSync` to decompress the pixel data, `sharp` to re-encode as a real PNG), saved as `public/assets/tassure-statement-logo.png`, and embedded it via `pdfDoc.embedPng()` positioned beside the letterhead exactly like the reference. Verified by rendering the corrected page with real data (1V Capital's actual current TAB+TAO balance, still $3,650.00 today) and sending the resulting PDF to Vincent directly for visual confirmation, not just describing it.
+
+New `docs/INVARIANTS.md` INV-DOC-013 captures the "content-stream order ≠ visual position" lesson (a genuinely non-obvious PDF-format fact worth not re-learning) and the logo-extraction method (durable for any future reference-PDF asset pull). `npx tsc --noEmit` / `npm run build` both clean.
+
+Previous entry follows.
+
 Last updated: 2026-09-17 (SHIPPED: the SOA Statement PDF now visually matches Chelsea's real QuickBooks reference exactly (colors/layout/fonts extracted straight from its own file), and the "All" page's Draft Email/Download PDF actions now combine TAB+TAC+TAO into one Statement, as originally intended.
 
 Vincent, re-examining the "1V Capital" example that started this whole feature (a real client owing on both TAB and TAO): "当我在All 那边点 Draft 是要一起附带上 TAB/TAO/TAC的就和之前的一样...Total 也是TAB/TAO/TAC的 加在一起，然后那个SOA的PDF 我已经给你模板了，你要用那个PDF的模板要一模一样的，包括颜色和排版和字体大小和字型" — two real, separate asks, both delivered:

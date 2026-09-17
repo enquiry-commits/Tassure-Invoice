@@ -1,6 +1,8 @@
 import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
+import { promises as fs } from 'fs';
+import path from 'path';
 import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
@@ -93,25 +95,40 @@ const QB_STATEMENT_HEADER_BG = rgb(0.86274511, 0.9137255, 0.94509804); // #DCE9F
 // credit-memo pages concatenated together — no cover page at all, so a
 // client received what looked like a stray invoice, not a real "Statement
 // of Account" ("而且不是soa 是inv"). Draws a genuine Statement page —
-// Tassure's own letterhead, the aging-bucket summary (top AND bottom, same
-// as the reference), and the itemized outstanding list — using EXACTLY the
-// same computed row (computeSoaRows(), the same shared computation the
-// on-screen SOA list/Excel export already use) so its numbers can never
-// drift from what staff see elsewhere. Always added to `merged` BEFORE the
-// real invoice/credit-memo pages get merged in below (matches Vincent's own
-// framing: "inv 我们会放在soa 下面，在一个pdf 里面"). Still scoped to ONE QB
-// company when called this way — the "All" page's combined-books mode
-// builds its own row via computeCombinedSoaRow() below and passes that in
-// instead, same function either way.
+// Tassure's own letterhead+logo, the aging-bucket summary, and the itemized
+// outstanding list — using EXACTLY the same computed row (computeSoaRows(),
+// the same shared computation the on-screen SOA list/Excel export already
+// use) so its numbers can never drift from what staff see elsewhere. Always
+// added to `merged` BEFORE the real invoice/credit-memo pages get merged in
+// below (matches Vincent's own framing: "inv 我们会放在soa 下面，在一个pdf
+// 里面"). Still scoped to ONE QB company when called this way — the "All"
+// page's combined-books mode builds its own row via combineStatementRows()
+// below and passes that in instead, same function either way.
 //
-// Two honest simplifications versus the real reference (both because this
-// route's existing data model doesn't carry the field, not a design
-// choice): (1) no "STATEMENT NO." — that's QuickBooks' own internal
-// numbering; inventing one here would be a fabricated business record, not
-// a display tweak. (2) the itemized table's "AMOUNT"/"OPEN AMOUNT" columns
-// both show the same open-balance figure — SoaCompanyRow.lineItems doesn't
-// separately carry each item's original (pre-payment) amount.
+// Corrected 2026-09-17, comparing side-by-side screenshots of this function's
+// own output against Vincent's real reference PDF: (1) the aging-bucket
+// table appears ONCE, as a footer at the very bottom, not duplicated before
+// the letterhead too — an earlier version of this function misread the
+// reference's raw PDF content-stream operator ORDER as top-to-bottom visual
+// position, which is wrong for a PDF (operators execute in stream order, not
+// layout order); the actual page starts straight at the letterhead. (2) the
+// T Assure logo IS included — extracted directly from the reference PDF's
+// own embedded XObject image (public/assets/tassure-statement-logo.png;
+// this app's OTHER logo, public/logo.png, is a different, unrelated icon).
+//
+// Two honest simplifications that remain versus the real reference (both
+// because this route's existing data model doesn't carry the field, not a
+// display choice): (1) no "STATEMENT NO." — that's QuickBooks' own internal
+// numbering; inventing one here would be a fabricated business record. (2)
+// the itemized table's "AMOUNT"/"OPEN AMOUNT" columns both show the same
+// open-balance figure — SoaCompanyRow.lineItems doesn't separately carry
+// each item's original (pre-payment) amount.
 type StatementRow = Pick<SoaCompanyRow, 'companyName' | 'aging' | 'totalOutstanding' | 'lineItems'>;
+
+const STATEMENT_LOGO_PATH = path.join(process.cwd(), 'public', 'assets', 'tassure-statement-logo.png');
+// Real aspect ratio of the extracted logo file (283x200px) — used to size it
+// on the page without distorting it.
+const STATEMENT_LOGO_ASPECT = 283 / 200;
 
 async function drawStatementCoverPage(pdfDoc: PDFDocument, legalName: string, row: StatementRow) {
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -165,18 +182,23 @@ async function drawStatementCoverPage(pdfDoc: PDFDocument, legalName: string, ro
     y -= 24;
   };
 
-  drawAgingTable();
-
-  // Letterhead — Tassure's own legal name (bold) + fixed contact block
-  // (regular), left-aligned. The reference also carries the T Assure logo
-  // image here; skipped — this app's own public/logo.png is a different,
-  // unrelated icon (a generic handshake graphic), not that wordmark, and
-  // using the wrong logo would be worse than none.
+  // Letterhead (left) + T Assure logo (right), side by side on the same
+  // row — matches the reference exactly, no aging table above it.
+  const letterheadTop = y;
   page.drawText(legalName, { x: left, y, size: 12, font: boldFont });
   y -= 15;
   for (const line of TASSURE_CONTACT_LINES) {
     page.drawText(line, { x: left, y, size: 10, font });
     y -= 13;
+  }
+  try {
+    const logoBytes = await fs.readFile(STATEMENT_LOGO_PATH);
+    const logoImage = await pdfDoc.embedPng(logoBytes);
+    const logoWidth = 130;
+    const logoHeight = logoWidth / STATEMENT_LOGO_ASPECT;
+    page.drawImage(logoImage, { x: right - logoWidth, y: letterheadTop - logoHeight + 12, width: logoWidth, height: logoHeight });
+  } catch {
+    // Missing/unreadable asset must never break the whole Statement — degrade to no logo.
   }
   y -= 10;
 
@@ -239,9 +261,10 @@ async function drawStatementCoverPage(pdfDoc: PDFDocument, legalName: string, ro
   }
   y -= 16;
 
-  // Bottom aging-bucket summary — the reference repeats the exact same
-  // table as a footer; matched here rather than a plain "Total Outstanding"
-  // line.
+  // Aging-bucket summary as a footer — matches the reference's own single
+  // instance of this table (see this function's header comment on the
+  // earlier top+bottom misreading), used here instead of a plain "Total
+  // Outstanding" line.
   if (y < 60) newPage();
   drawAgingTable();
 }

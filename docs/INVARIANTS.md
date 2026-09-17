@@ -550,6 +550,28 @@ again.
   All LIST itself is unaffected — still 2+ separate un-deduplicated rows
   per company, one per book (docs/CURRENT_STATE.md) — only the Draft/PDF
   ACTION combines.
+- **INV-DOC-013** — A raw PDF content stream's operator ORDER is not its
+  visual Y-position — reverse-engineering a reference PDF's layout by
+  reading its decompressed content stream top-to-bottom and assuming that
+  matches top-to-bottom on the page is wrong, because each drawing op
+  carries its OWN absolute/relative position (`cm`/`Tm` transforms), and a
+  PDF is free to draw a page's visual FOOTER before its HEADER in stream
+  order. Found live 2026-09-17: `drawStatementCoverPage()`'s first
+  implementation put an aging-bucket summary table both above the
+  letterhead AND as a footer, having misread the reference PDF's own single
+  footer-only table (its content stream happened to draw it FIRST) as two
+  separate top+bottom instances — confirmed wrong only when Vincent
+  screenshotted his real reference side-by-side with this function's actual
+  rendered output ("排版格式差太多了吧，那个有LOGO的才是正确的排版"). The
+  safe way to reverse-engineer a reference PDF's layout: render it and
+  compare screenshots/visual position, or track each block's actual y
+  coordinate through the nested `cm` transforms — never assume stream order
+  means page order. Same investigation correctly extracted the reference's
+  embedded T Assure logo image (an `/Image` XObject, raw RGB pixels,
+  `zlib.inflateSync` + `sharp` to re-encode as PNG) — saved as
+  `public/assets/tassure-statement-logo.png` and embedded via
+  `pdfDoc.embedPng()` — that extraction method itself is correct and durable
+  for any future need to pull an asset out of a reference PDF.
 
 ## Automation & cron reliability (INV-CRON)
 
