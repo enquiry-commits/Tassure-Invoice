@@ -45,6 +45,26 @@ staff should review (visible on the Nominee Directors page's "TeamWork
 Review" panel), not an automation failure. Re-check this count too, it may
 have drifted.
 
+**2026-09-17 — `replaceAutomationExceptions()` timing bug fixed (see
+`docs/INVARIANTS.md` INV-CRON-015).** Every exception type except
+`teamwork_nd` (the one caller passing a real `graceMs`) was self-resolving
+within ~2 seconds of being created, so the dashboard and `open` counts above
+have been silently blind to `quickbooks/duplicate_doc_number_*`,
+`quickbooks/oauth_refresh_*`, `teamwork_companies/unknown_pic_id`, and
+`teamwork_companies/missing_from_teamwork` for as long as this function has
+existed — those 4 exception types will show 0 open even when the real
+underlying problem is still happening. The fix is live, but it is
+forward-only: it was not retroactively applied by manually re-running those
+sources' syncs today, so their historical exceptions will only start
+correctly showing as `open` from each source's own next scheduled cron run
+(which will re-observe and persist them under the corrected logic). Don't
+read "0 open" for those 4 types as "no problem" until at least one cron
+cycle has passed after 2026-09-17. A new source, `soa_owner_audit` (daily,
+22:00 UTC), was added the same day — a self-check that a human-confirmed SOA
+Main PIC (`soa_owners.soa_pic`) still matches the current invoice-derived
+suggestion; it flags contradictions for human review rather than
+auto-correcting (see `app/api/soa-owners/audit/route.ts`).
+
 If this table looks stale, re-check directly:
 `GET automation_sync_runs?order=started_at.desc&limit=30` and
 `GET automation_exceptions?status=eq.open` against Supabase, or open the

@@ -22,6 +22,7 @@ const CRON_PATHS = new Set([
   '/api/ar-reminder/sync-workflow',
   '/api/late-filing/sync',
   '/api/ai-learning/analyze-all',
+  '/api/soa-owners/audit',
 ]);
 
 export async function proxy(req: NextRequest) {

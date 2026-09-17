@@ -698,6 +698,40 @@ again.
   own one-off retry on top of what should have been the shared helper).
   *(source: 2026-08-31, `lib/playwright-tmp-cleanup.ts`'s
   `withPlaywrightRetry`.)*
+- **INV-CRON-015** — `replaceAutomationExceptions()`'s resolve-cutoff must
+  be computed from the SAME `observedAt` timestamp just written to the rows
+  it upserts, never a fresh `Date.now()`/`new Date()` call taken after that
+  upsert completes — the upsert's own network round-trip means a fresh
+  timestamp is always at least a few ms later than `observedAt`, so with
+  the default `graceMs=0` every exception just upserted as `'open'`
+  immediately satisfied its own `lt(last_seen_at, resolveCutoff)` check and
+  got marked `'resolved'` in the SAME call that created it — never visibly
+  open on the Automation Health dashboard long enough for a human to see.
+  Found 2026-09-17 while building `app/api/soa-owners/audit/route.ts`
+  (a brand new caller, immediately hit the bug) — then confirmed this had
+  silently affected EVERY pre-existing real caller in production history
+  except one: `quickbooks/duplicate_doc_number_*` (8 real rows),
+  `teamwork_companies/unknown_pic_id` (55 real rows),
+  `teamwork_companies/missing_from_teamwork` (1), and
+  `quickbooks/oauth_refresh_*` (3) were ALL resolved within under 2 seconds
+  of being created, 100% of the time, for as long as this function has
+  existed — a real operational-monitoring feature that never actually
+  worked for 6 of 7 real exception types. The one exception,
+  `teamwork_nd/missing_nominee_subrole`, only survived because it happens
+  to pass a real non-zero `graceMs` (INV-CRON's own 2026-08-29 comment on
+  that parameter) — accidentally avoiding the bug, not by design. Fixed by
+  deriving `resolveCutoff` from `new Date(observedAt).getTime() - graceMs`
+  instead of `Date.now() - graceMs` — a row upserted THIS call can never be
+  strictly earlier than its own `observedAt`, so it can never resolve
+  itself; only a row genuinely not re-observed this run (an older
+  `last_seen_at` from a prior call) is older than the cutoff, which is what
+  "replace" was always supposed to mean. **Lesson**: a shared helper's
+  self-test ("does this call's own output survive being read back") is
+  worth doing even for code that's been in production a while and looks
+  correct on a read-through — this bug was invisible in every code review
+  because `Date.now()` genuinely reads as "now" at a glance; only running
+  it against real data and checking the row's actual persisted `status`
+  caught it.
 
 ## QuickBooks / invoice (INV-QB)
 

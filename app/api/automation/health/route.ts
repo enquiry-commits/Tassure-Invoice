@@ -22,6 +22,8 @@ const SOURCES = [
   // Added 2026-09-16 — externally-triggered (from the office NAS device, not
   // our own cron), see lib/automation-sync.ts's AutomationSource comment.
   'nas_index',
+  // Added 2026-09-17 — see app/api/soa-owners/audit/route.ts.
+  'soa_owner_audit',
 ] as const;
 
 export const dynamic = 'force-dynamic';

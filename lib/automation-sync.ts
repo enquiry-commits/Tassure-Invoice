@@ -48,7 +48,12 @@ export type AutomationSource =
   // shows up on the same health dashboard (also add it to SOURCES in
   // app/api/automation/health/route.ts — that array does not follow this
   // union automatically, a known gap called out in that file's own comment).
-  | 'nas_index';
+  | 'nas_index'
+  // Added 2026-09-17 — daily self-check that a human-confirmed SOA Main PIC
+  // (`soa_owners.soa_pic`) still matches the current invoice-derived
+  // suggestion, since a manual override never re-validates itself once set
+  // (see app/api/soa-owners/audit/route.ts's own header comment).
+  | 'soa_owner_audit';
 
 type JsonSummary = Record<string, unknown>;
 
@@ -217,7 +222,31 @@ export async function replaceAutomationExceptions(
   // exceptions) avoid resolving the OTHER half's still-open exceptions in
   // the gap between runs. Defaults to 0 (today's exact behavior) for every
   // other existing caller — purely additive.
-  const resolveCutoff = new Date(Date.now() - (options.graceMs ?? 0)).toISOString();
+  //
+  // Fixed 2026-09-17 (real bug, not theoretical — found while building
+  // app/api/soa-owners/audit/route.ts, then confirmed against real history):
+  // this used to be `new Date(Date.now() - graceMs)` — a FRESH timestamp
+  // taken AFTER the upsert above already completed, always at least a few
+  // ms later than `observedAt`. With the default graceMs=0, that gap alone
+  // made the cutoff strictly later than the `last_seen_at` just written,
+  // so every row just upserted as 'open' immediately satisfied `lt(...,
+  // resolveCutoff)` and got marked 'resolved' in the same call that created
+  // it — never visibly open on the Automation Health dashboard for a human
+  // to see. Confirmed against real production data: 100% of historical rows
+  // for quickbooks/duplicate_doc_number_* (8), teamwork_companies/
+  // unknown_pic_id (55), teamwork_companies/missing_from_teamwork (1), and
+  // quickbooks/oauth_refresh_* (3) were resolved within under 2 seconds of
+  // being created — every real exception type except teamwork_nd's own
+  // (the one caller that happens to pass a real non-zero graceMs) has
+  // silently never shown as open, for as long as this function has existed.
+  // Fixed by anchoring the cutoff to `observedAt` (the exact timestamp just
+  // written to every upserted row) instead of a fresh `Date.now()` — a row
+  // upserted THIS call can never be strictly earlier than its own
+  // `observedAt`, so it can never immediately resolve itself; only a row
+  // genuinely NOT re-observed this run (its `last_seen_at` from a prior,
+  // earlier call) is older than the cutoff and gets resolved, which is what
+  // "replace" was always supposed to mean.
+  const resolveCutoff = new Date(new Date(observedAt).getTime() - (options.graceMs ?? 0)).toISOString();
   await supabase.from('automation_exceptions').update({
     status: 'resolved',
     resolved_at: observedAt,
