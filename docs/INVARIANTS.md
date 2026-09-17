@@ -501,7 +501,7 @@ again.
   pulled through `docx-post-incorporate.ts`/`docx-xml.ts` itself — `import
   type { ... }` from those two files is fine (erased at compile time), a
   real value import is not.
-- **INV-DOC-007** — `pdf-lib`'s `StandardFonts` (Helvetica etc.) only encode
+- **INV-DOC-011** — `pdf-lib`'s `StandardFonts` (Helvetica etc.) only encode
   WinAnsi — `page.drawText()` throws SYNCHRONOUSLY for any character outside
   it, confirmed live: `'吉木锌国际贸易（上海）有限公司'` throws `WinAnsi
   cannot encode "吉" (0x5409)`. Any real client/company name or free-text
@@ -525,6 +525,31 @@ again.
   glyph rendering (an embedded Unicode font via `fontkit`) was deliberately
   out of scope — `safeText()` is a crash-safety net, not a real
   Chinese-text-rendering feature.
+- **INV-DOC-012** — The SOA "All" page's own Draft Email / Download PDF
+  actions are the ONE deliberate exception to "TAB/TAC/TAO always stay
+  separately scoped" (INV-PIC-007's own domain) — Vincent, 2026-09-17,
+  re-examining the "1V Capital" example that started the whole SOA
+  Statement feature: "当我在All 那边点 Draft 是要一起附带上 TAB/TAO/TAC的
+  就和之前的一样...Total 也是TAB/TAO/TAC的 加在一起" (combine all 3 books
+  into one Statement, matching how this worked before the per-book pages
+  existed). A PRIOR version of this code had explicitly documented the
+  opposite as intentional ("rowCompany(c) is always a real QbCompany, never
+  the literal 'ALL' — SoaDetail... needs one real system to scope to, even
+  when this modal was opened from the combined All list") — that comment
+  was correct for its own time but is now superseded; don't reintroduce
+  "always resolve to one real book" as an assumption anywhere in this
+  flow. The combine path: `app/api/billing/soa/pdf/route.ts` accepts
+  `company=ALL` (queries `.in('qb_company', [...])` instead of `.eq()`,
+  builds the cover page via `combineStatementRows()` summing each book's own
+  `computeSoaRows()` result — never a second, independently-computed total),
+  `app/api/billing/soa/detail/route.ts` the same for the invoice-level list,
+  and `lib/soa-actions-client.ts`'s `buildSoaDraft()` passes `qbCompany:
+  undefined` to `buildCampaignDraft()` when combining (that's
+  `buildRow()`'s own default — no filter — not a 4th fake `QbCompany`
+  value threaded through `lib/client-comms-resolve.ts`). The on-screen
+  All LIST itself is unaffected — still 2+ separate un-deduplicated rows
+  per company, one per book (docs/CURRENT_STATE.md) — only the Draft/PDF
+  ACTION combines.
 
 ## Automation & cron reliability (INV-CRON)
 

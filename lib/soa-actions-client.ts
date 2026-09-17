@@ -35,8 +35,16 @@ export async function loadSoaActor(): Promise<{ me: SoaActor; sender: SoaSender 
   return loadCampaignActor();
 }
 
-/** Download the merged SOA PDF for one company in one QuickBooks book. */
-export async function downloadSoaPdf(companyName: string, qbCompany: QbCompany): Promise<void> {
+// 'ALL' (added 2026-09-17): the combined-books mode used only by the "All"
+// SOA page — Vincent: "当我在All 那边点 Draft 是要一起附带上 TAB/TAO/TAC的
+// 就和之前的一样" (combine TAB+TAC+TAO into one statement/draft, matching
+// how this used to work before the per-book pages existed). Every
+// single-book page still passes a real QbCompany and stays scoped exactly
+// as before.
+export type SoaCompanySelector = QbCompany | 'ALL';
+
+/** Download the merged SOA PDF — one QuickBooks book, or 'ALL' three combined. */
+export async function downloadSoaPdf(companyName: string, qbCompany: SoaCompanySelector): Promise<void> {
   const res = await fetch(`/api/billing/soa/pdf?companyName=${encodeURIComponent(companyName)}&company=${qbCompany}`);
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
@@ -71,10 +79,17 @@ export async function downloadSoaPdf(companyName: string, qbCompany: QbCompany):
  * TAB-titled email whose body silently listed TAO's invoices too (Vincent,
  * real client email: "tao tab 有欠款为什么只attached tab 而已"). See
  * lib/client-comms-resolve.ts's buildRow() qbCompanyFilter comment.
+ *
+ * `qbCompany: 'ALL'` (added same day, see SoaCompanySelector's own comment):
+ * the PDF fetch already combines all 3 books server-side; here it means NOT
+ * forwarding a qbCompany to buildCampaignDraft at all (`undefined`), which
+ * is buildRow()'s own default — no filter, i.e. genuinely combined — rather
+ * than inventing a 4th, fake "QbCompany" value that would have to be
+ * special-cased through buildRow/loadInvoicesByCompany too.
  */
 export async function buildSoaDraft(
   companyName: string,
-  qbCompany: QbCompany,
+  qbCompany: SoaCompanySelector,
   me: SoaActor,
   sender: SoaSender,
   templateId?: number,
@@ -92,7 +107,8 @@ export async function buildSoaDraft(
   const pdfFile = new File([pdfBlob], `SOA (${qbCompany}) - ${companyName}.pdf`, { type: 'application/pdf' });
 
   return buildCampaignDraft({
-    companyName, type: 'soa', me, sender, templateId, qbCompany,
+    companyName, type: 'soa', me, sender, templateId,
+    qbCompany: qbCompany === 'ALL' ? undefined : qbCompany,
     campaignName: `SOA (${qbCompany}) - ${companyName} - ${todaySGT()}`,
     attachment: pdfFile,
   });

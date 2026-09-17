@@ -9,7 +9,7 @@ import { allStaffNames } from '@/lib/staff-directory';
 import { findUniqueBestMatch } from '@/lib/company-name';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import type { DraftLike } from '@/lib/draft-helper-client';
-import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender } from '@/lib/soa-actions-client';
+import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender, type SoaCompanySelector } from '@/lib/soa-actions-client';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 import type { QbCompany } from '@/lib/quickbooks';
 import type { SoaCompanyRow } from '@/app/api/billing/soa/route';
@@ -118,7 +118,7 @@ function SoaDraftPopover({
   senders, senderId, setSenderId, templates, selectedTemplateId, setSelectedTemplateId,
   isOpen, onOpenChange, variant, onDrafted,
 }: {
-  company: Row; qbCompany: QbCompany; me: SoaActor;
+  company: Row; qbCompany: SoaCompanySelector; me: SoaActor;
   senders: { id: number; email: string; display_name: string | null; is_default: boolean }[];
   senderId: number | null; setSenderId: (id: number) => void;
   templates: { id: number; name: string; is_default: boolean }[];
@@ -186,7 +186,10 @@ function SoaDraftPopover({
           ...(variant === 'button' ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }),
           border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 260, padding: 12,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>Draft Email — {company.companyName}</div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>
+            Draft Email — {company.companyName}
+            {qbCompany === 'ALL' && <span style={{ color: '#0f766e', fontWeight: 700 }}> (TAB+TAC+TAO combined)</span>}
+          </div>
           <select value={senderId ?? ''} onChange={e => setSenderId(Number(e.target.value))}
             style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
             {senders.length === 0 && <option value="">No senders found</option>}
@@ -738,7 +741,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'center' }}>
                     <SoaDraftPopover
-                      company={c} qbCompany={rowCompany(c)} me={draftPickers.me}
+                      company={c} qbCompany={qbCompany === 'ALL' ? 'ALL' : rowCompany(c)} me={draftPickers.me}
                       senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
                       templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
                       isOpen={draftPopoverFor === rowKey(c)} onOpenChange={open => setDraftPopoverFor(open ? rowKey(c) : null)}
@@ -782,11 +785,13 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   <span style={{ fontSize: 11, color: '#fff' }}>Review &amp; generate Statement of Account</span>
                 </div>
               </div>
-              {/* rowCompany(c) is always a real QbCompany, never the literal
-                  'ALL' — SoaDetail (and everything it fetches: detail/pdf/
-                  campaign-preview) needs one real system to scope to, even
-                  when this modal was opened from the combined "All" list. */}
-              <SoaDetail company={c} qbCompany={rowCompany(c)} onSent={() => { load(); setExpanded(null); }} />
+              {/* qbCompany==='ALL' (this page's own combined mode, added
+                  2026-09-17 — Vincent: "当我在All 那边点 Draft 是要一起附带
+                  上 TAB/TAO/TAC的") now flows straight into SoaDetail, which
+                  combines across all 3 books consistently — the invoice
+                  LIST, the merged PDF, and the Draft Email body/total all
+                  show TAB+TAC+TAO together, not just the Draft action alone. */}
+              <SoaDetail company={c} qbCompany={qbCompany === 'ALL' ? 'ALL' : rowCompany(c)} onSent={() => { load(); setExpanded(null); }} />
             </div>
           </div>
         );
@@ -808,7 +813,7 @@ export default function SoaBillingView(props: { qbCompany: QbCompany | 'ALL' }) 
   );
 }
 
-function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbCompany: QbCompany; onSent: () => void }) {
+function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbCompany: SoaCompanySelector; onSent: () => void }) {
   const [invoices, setInvoices] = useState<SoaInvoiceDetail[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);

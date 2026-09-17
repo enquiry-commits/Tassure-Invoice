@@ -7,14 +7,21 @@ import { agingBucket, dueDate, type AgingBucket } from '@/lib/soa';
 import { loadArAgingSnapshot } from '@/lib/soa-data';
 
 const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
+type CompanySelector = QbCompany | 'ALL';
+const COMPANY_SELECTORS: CompanySelector[] = ['TAB', 'TAC', 'TAO', 'ALL'];
 
-// GET /api/billing/soa/detail?companyName=...&company=TAB|TAC|TAO — every
+// GET /api/billing/soa/detail?companyName=...&company=TAB|TAC|TAO|ALL — every
 // real unpaid invoice for one company IN ONE QuickBooks system, each tagged
 // with its own aging bucket. Backs the SOA detail modal (the line-item list
 // shown before generating the merged PDF) so ACC/Chelsea can see exactly
 // what's being combined before sending it. Scoped by `company` (2026-09-07)
 // so a TAB/TAC/TAO statement never crosses into another system's invoices —
-// see app/api/billing/soa/route.ts's own comment for why.
+// see app/api/billing/soa/route.ts's own comment for why. 'ALL' (added
+// 2026-09-17, same reasoning as app/api/billing/soa/pdf/route.ts's own
+// combine mode — Vincent: "当我在All 那边点 Draft 是要一起附带上
+// TAB/TAO/TAC的") loops all 3 books and concatenates — each row already
+// carries its own real qbCompany, so nothing downstream needs to change to
+// render a combined list.
 export interface SoaInvoiceDetail {
   qbCompany: string;
   qbInvoiceId: string | null;
@@ -36,16 +43,12 @@ export interface SoaInvoiceDetail {
   rawType: string;
 }
 
-export async function GET(req: NextRequest) {
-  const companyName = req.nextUrl.searchParams.get('companyName')?.trim();
-  if (!companyName) return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
-  const company = req.nextUrl.searchParams.get('company') as QbCompany | null;
-  if (!company || !QB_COMPANIES.includes(company)) {
-    return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO' }, { status: 400 });
-  }
-
-  const target = normalize(companyName);
-  const snapshot = await loadArAgingSnapshot(company, companyName);
+// Every real unpaid invoice/credit for ONE company, in ONE QuickBooks book —
+// extracted from the old single-book GET body verbatim so 'ALL' mode can
+// call this once per book and concatenate, without duplicating the
+// fresh-snapshot-vs-legacy-fallback branching per book.
+async function resolveOneBookDetail(book: QbCompany, companyName: string, target: string): Promise<SoaInvoiceDetail[]> {
+  const snapshot = await loadArAgingSnapshot(book, companyName);
 
   if (snapshot.fresh) {
     const byName = new Map<string, typeof snapshot.rows>();
@@ -60,13 +63,13 @@ export async function GET(req: NextRequest) {
       const match = findUniqueBestMatch(companyName, [...byName.entries()], entry => entry[0], 70);
       matched = match.value?.[1];
     }
-    const result: SoaInvoiceDetail[] = (matched ?? [])
+    return (matched ?? [])
       .filter(row => row.txnDate)
       .map(row => {
         const isInvoice = /invoice/i.test(row.txnType);
         const isCredit = /credit/i.test(row.txnType);
         return {
-          qbCompany: company,
+          qbCompany: book,
           qbInvoiceId: row.qbTxnId,
           invoiceNo: row.docNumber ?? row.qbTxnId ?? '—',
           txnDate: row.txnDate!,
@@ -77,12 +80,10 @@ export async function GET(req: NextRequest) {
           type: isInvoice ? 'invoice' as const : isCredit ? 'credit' as const : 'other' as const,
           rawType: row.txnType,
         };
-      })
-      .sort((a, b) => a.txnDate.localeCompare(b.txnDate));
-    return NextResponse.json({ invoices: result });
+      });
   }
 
-  // Fallback — report snapshot missing/stale for this company. Today's
+  // Fallback — report snapshot missing/stale for this book. Today's
   // pre-report Invoice+CreditMemo query, kept verbatim as the degraded-mode
   // behavior (see lib/soa-data.ts's legacyComputeSoaRows() for the same
   // pattern applied to the on-screen list/total).
@@ -92,7 +93,7 @@ export async function GET(req: NextRequest) {
     pageAll(() => supabase
       .from('quickbooks_invoices')
       .select('customer_name, qb_company, qb_invoice_id, invoice_no, txn_date, balance, total_amt')
-      .eq('qb_company', company)
+      .eq('qb_company', book)
       .gt('balance', 0)) as Promise<Array<{
         customer_name: string; qb_company: string; qb_invoice_id: string; invoice_no: string;
         txn_date: string | null; balance: number | null; total_amt: number | null;
@@ -100,7 +101,7 @@ export async function GET(req: NextRequest) {
     pageAll(() => supabase
       .from('quickbooks_credit_memos')
       .select('customer_name, qb_company, qb_credit_memo_id, doc_number, txn_date, balance, total_amt')
-      .eq('qb_company', company)
+      .eq('qb_company', book)
       .gt('balance', 0)) as Promise<Array<{
         customer_name: string; qb_company: string; qb_credit_memo_id: string; doc_number: string | null;
         txn_date: string | null; balance: number | null; total_amt: number | null;
@@ -132,7 +133,7 @@ export async function GET(req: NextRequest) {
     const match = findUniqueBestMatch(companyName, [...creditByName.entries()], entry => entry[0], 70);
     matchedCredits = match.value?.[1];
   }
-  if (!matched && !matchedCredits) return NextResponse.json({ invoices: [] });
+  if (!matched && !matchedCredits) return [];
 
   const today = new Date();
   const invoiceRows: SoaInvoiceDetail[] = (matched ?? [])
@@ -164,7 +165,21 @@ export async function GET(req: NextRequest) {
       rawType: 'Credit Note',
     }));
 
-  const result = [...invoiceRows, ...creditRows].sort((a, b) => a.txnDate.localeCompare(b.txnDate));
+  return [...invoiceRows, ...creditRows];
+}
+
+export async function GET(req: NextRequest) {
+  const companyName = req.nextUrl.searchParams.get('companyName')?.trim();
+  if (!companyName) return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
+  const company = req.nextUrl.searchParams.get('company') as CompanySelector | null;
+  if (!company || !COMPANY_SELECTORS.includes(company)) {
+    return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO, ALL' }, { status: 400 });
+  }
+
+  const target = normalize(companyName);
+  const books = company === 'ALL' ? QB_COMPANIES : [company];
+  const perBook = await Promise.all(books.map(book => resolveOneBookDetail(book, companyName, target)));
+  const result = perBook.flat().sort((a, b) => a.txnDate.localeCompare(b.txnDate));
 
   return NextResponse.json({ invoices: result });
 }

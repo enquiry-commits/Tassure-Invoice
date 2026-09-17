@@ -72,7 +72,13 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
   a 4th "All" sidebar entry (`/billing/soa/all`, same day) showing every
   TAB+TAC+TAO row TOGETHER, un-deduplicated — a company owing on 2+
   systems shows as 2+ separate rows (each tagged with a Source column),
-  not merged into one. Owner edits made from "All" write through
+  not merged into one. This is about the LIST/on-screen view only — since
+  2026-09-17, the "All" page's own Draft Email / Download PDF actions
+  (SoaDraftPopover, SoaDetail) are the one deliberate exception: clicking
+  either on the All page combines that customer's TAB+TAC+TAO into a
+  single Statement (combined cover page, combined merged invoice pages,
+  combined email body/total) — every single-book page (TAB/TAC/TAO) still
+  stays scoped to its own book, unchanged. Owner edits made from "All" write through
   `rowCompany()` to the exact same `soa_owners` row (customer name + that
   row's own qb_company) the single-system pages read — same data, not a
   copy, so it's immediately consistent both ways (`lib/soa-data.ts`'s
