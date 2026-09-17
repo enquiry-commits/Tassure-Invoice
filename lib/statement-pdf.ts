@@ -116,14 +116,26 @@ const QB_STATEMENT_HEADER_BG = rgb(0.86274511, 0.9137255, 0.94509804); // #DCE9F
 // DisplayName string, mixed case, matching the reference's own "1V Capital
 // Pte. Ltd." exactly.
 //
-// Two honest simplifications that remain versus the real reference: (1) no
-// "STATEMENT NO." — that's QuickBooks' own internal Statement-numbering
-// sequence, assigned only by its web-UI "Create statements" flow with no API
-// equivalent; inventing one here would be a fabricated business record. (2)
-// no "ENCLOSED" label — boilerplate on every QuickBooks-printed Statement
-// regardless of whether anything is physically enclosed, not a real data
-// field, so there is nothing accurate to show under it; showing the label
-// with no value would look like a bug, not a simplification.
+// Corrected a third time 2026-09-17, same day — Vincent, after the position/
+// width fixes: "这个你没有部分重现吗？" (pointing at STATEMENT NO./DATE/
+// TOTAL DUE/ENCLOSED as a block — didn't any of this get reproduced?).
+// "ENCLOSED" IS now reproduced — on closer look it's fixed boilerplate on
+// every real QuickBooks-printed Statement regardless of what's actually
+// being sent, never a per-Statement data value, so there was nothing to
+// fabricate by printing it (the earlier round's own reasoning for omitting
+// it — "showing the label with no value would look like a bug" — was
+// simply wrong: the reference itself shows the label with no value next to
+// it, that IS the correct look).
+//
+// One honest simplification remains: "STATEMENT NO." — that's QuickBooks'
+// own internal Statement-numbering sequence, assigned only by its web-UI
+// "Create statements" flow with no API equivalent. Unlike ENCLOSED, this
+// one genuinely varies per real Statement (the reference shows 10498) and
+// this app has no real value for it — printing anything here (blank,
+// zero, a self-generated counter) would be either misleading or a new
+// business record invented without Vincent's say-so, so it stays omitted
+// pending his decision on whether Tassure should mint its own internal
+// Statement-numbering sequence.
 export type StatementRow = Pick<SoaCompanyRow, 'companyName' | 'aging' | 'totalOutstanding' | 'lineItems'>;
 
 const STATEMENT_LOGO_PATH = path.join(process.cwd(), 'public', 'assets', 'tassure-statement-logo.png');
@@ -214,9 +226,11 @@ export async function drawStatementCoverPage(
   page.drawText('Statement', { x: left, y, size: 20, font, color: QB_STATEMENT_BLUE });
   y -= 34;
 
-  // TO block (left) + DATE/TOTAL DUE (right) — see this function's own
-  // header comment for why STATEMENT NO./ENCLOSED stay omitted and why the
-  // printed name/address changed in the second 2026-09-17 round.
+  // TO block (left) + DATE/TOTAL DUE/ENCLOSED (right) — see this function's
+  // own header comment for why STATEMENT NO. alone stays omitted (ENCLOSED
+  // reproduced below — it's fixed boilerplate on every real QuickBooks-
+  // printed Statement, not a data field, so there's nothing to fabricate)
+  // and why the printed name/address changed in the second 2026-09-17 round.
   const metaX = left + 300;
   const metaLabelW = 70;
   const drawMetaRow = (label: string, value: string, atY: number) => {
@@ -232,6 +246,11 @@ export async function drawStatementCoverPage(
   // of overlapping.
   page.drawText(safeText(boldFont, customerDisplayName), { x: left, y, size: 10, font: boldFont, maxWidth: metaX - left - 20, lineHeight: 12 });
   y -= 15;
+  // ENCLOSED — same fixed label on every real QuickBooks Statement
+  // regardless of what's being sent, printed one row below TOTAL DUE (same
+  // relative position as the reference, just shifted up one row overall
+  // since STATEMENT NO. above it has no real value to print).
+  page.drawText('ENCLOSED', { x: metaX + metaLabelW - boldFont.widthOfTextAtSize('ENCLOSED', 10), y, size: 10, font: boldFont });
   // Wrapped manually (word-by-word against the actual font metrics) instead
   // of relying on drawText's own maxWidth auto-wrap — a real QuickBooks
   // BillAddr can arrive as ONE long Line1 with the whole address jammed in

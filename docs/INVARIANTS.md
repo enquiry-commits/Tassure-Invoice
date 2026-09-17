@@ -674,6 +674,28 @@ again.
   page, ANY place that reserves vertical space by reading back how much a
   drawText call visually consumed (instead of the caller measuring it
   first) is a latent version of this same bug.
+- **INV-DOC-016** — Not every field on a reference document is equally safe
+  to reproduce: a fixed caption/label is fine to copy exactly (no data
+  behind it to get wrong), but a per-document identifier this app has no
+  real source for must stay omitted rather than invented, even under
+  pressure to "match the reference exactly." Found live 2026-09-17, Vincent
+  pointing at the reference's STATEMENT NO./DATE/TOTAL DUE/ENCLOSED block as
+  a whole: "这个你没有部分重现吗？" (didn't you reproduce any of this?). On
+  review, the earlier round's blanket omission of ENCLOSED was simply
+  wrong — it's fixed boilerplate on every real QuickBooks-printed Statement
+  regardless of what's being sent, never a per-Statement value, so printing
+  it exactly as the reference does (no value beside it — that IS the
+  correct look, not a placeholder needing a value) involved no fabrication
+  at all. Now reproduced in `drawStatementCoverPage()`. STATEMENT NO. is
+  the opposite case and correctly stays omitted: it's QuickBooks' own
+  internal per-Statement numbering sequence (the reference shows 10498),
+  assigned only by its web-UI "Create statements" flow with no API
+  equivalent — this app has no real value for it, and inventing one
+  (blank, zero, or a self-minted counter) would be a new business record
+  Vincent hasn't authorized, not a simplification. The general rule: when a
+  reference field is missing, ask "is this a constant caption, or a real
+  per-document data value?" before deciding whether reproducing it is safe
+  — the two look identical on the page but are opposite risk categories.
 
 ## Automation & cron reliability (INV-CRON)
 
