@@ -41,24 +41,29 @@ async function fetchCreditMemoPdf(company: QbCompany, creditMemoId: string): Pro
   return res.arrayBuffer();
 }
 
-// Best-effort live fetch of a customer's real QuickBooks BillAddr, flattened
-// to printable lines (see qb-invoice-conventions.ts's addrToLines) — Vincent,
-// 2026-09-17, second round on the Statement cover page: "地址都没有看到" (his
-// real reference PDF prints the client's registered mailing address under
-// their name; this route used to omit it entirely). Never stored redundantly
-// in this app's own tables, so this always reads live from QuickBooks itself
-// at Statement-generation time — an unreachable book or a customer with no
-// BillAddr on file just means the address block is skipped, same
-// never-break-the-whole-Statement posture as the logo/font-safety fallbacks
-// elsewhere on this page.
-async function resolveBillAddrLines(book: QbCompany, customerName: string): Promise<string[]> {
+// Best-effort live fetch of a customer's real QuickBooks BillAddr (flattened
+// via qb-invoice-conventions.ts's addrToLines) and its separate CompanyName
+// field — Vincent, 2026-09-17, second round on the Statement cover page:
+// "地址都没有看到" (his real reference PDF prints the client's registered
+// mailing address under their name; this route used to omit it entirely).
+// Never stored redundantly in this app's own tables, so this always reads
+// live from QuickBooks itself at Statement-generation time — an unreachable
+// book or a customer with no BillAddr on file just means the address block
+// is skipped, same never-break-the-whole-Statement posture as the logo/
+// font-safety fallbacks elsewhere on this page. `companyName` is QuickBooks'
+// own separate Customer.CompanyName field (not always equal to DisplayName,
+// though it is for this specific customer) — the reference PDF prints BOTH
+// DisplayName and CompanyName stacked, which is why "1V Capital Pte. Ltd."
+// visually appears twice; see lib/statement-pdf.ts's own comment.
+async function resolveCustomerPrintDetails(book: QbCompany, customerName: string): Promise<{ companyName: string | null; billAddrLines: string[] }> {
   try {
     const token = await getValidToken(book);
-    if (!token) return [];
+    if (!token) return { companyName: null, billAddrLines: [] };
     const customer = await findCustomer(token.access_token, token.realm_id, customerName);
-    return customer ? addrToLines(customer.billAddr) : [];
+    if (!customer) return { companyName: null, billAddrLines: [] };
+    return { companyName: customer.companyName, billAddrLines: addrToLines(customer.billAddr) };
   } catch {
-    return [];
+    return { companyName: null, billAddrLines: [] };
   }
 }
 
@@ -265,11 +270,11 @@ export async function GET(req: NextRequest) {
       // to come first in the pooled invoice/credit-memo list, which is fine
       // since it's the same real-world company's address regardless of book.
       const addrBook = (matched[0]?.qb_company ?? matchedCredits[0]?.qb_company ?? company) as QbCompany;
-      const [billAddrLines, invoiceDetails] = await Promise.all([
-        resolveBillAddrLines(addrBook, resolvedRawName),
+      const [{ companyName: qbCompanyName, billAddrLines }, invoiceDetails] = await Promise.all([
+        resolveCustomerPrintDetails(addrBook, resolvedRawName),
         resolveInvoiceDetails(matched),
       ]);
-      await drawStatementCoverPage(merged, legalName, statementRow, resolvedRawName, billAddrLines, invoiceDetails);
+      await drawStatementCoverPage(merged, legalName, statementRow, resolvedRawName, qbCompanyName, billAddrLines, invoiceDetails);
       coverPageAdded = true;
     }
   } catch {

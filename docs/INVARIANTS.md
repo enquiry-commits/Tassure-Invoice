@@ -734,6 +734,44 @@ again.
   form of a real business document (an invoice number going out to a
   client) should re-derive it from the actual source row, not from
   `computeSoaRows()`'s own convenience shape.
+- **INV-DOC-018** — Verifying a "match the reference exactly" document
+  against a screenshot is not the same as verifying it against the actual
+  reference PDF file — a screenshot can visually read as "close enough"
+  while still hiding real structural differences a byte-level comparison
+  catches immediately. Found live 2026-09-17, Vincent's fifth round asking
+  point-blank "SOA PDF格式生成已经做到和QB一模一样了吗？" (has the Statement
+  PDF format generation now been made to match QuickBooks exactly?) after
+  4 rounds of screenshot-based fixes already landed — the honest answer
+  required going back to the ORIGINAL real reference PDF file itself
+  (found still on disk from earlier in this exact investigation) rather
+  than continuing to eyeball screenshots, which surfaced two more real,
+  previously-invisible gaps: (1) the reference's TO block prints the
+  customer's name TWICE — not a rendering quirk, but QuickBooks' own
+  Customer.CompanyName field (a real field distinct from DisplayName,
+  confirmed via a direct Customer query) printed as its own second line
+  below DisplayName, unconditionally, even when the two happen to be
+  identical; (2) the reference's itemized DATE column shows the invoice's
+  real transaction date ("24/07/2026"), not its due date — confirmed the
+  real txn_date WAS already available in `quickbooks_ar_aging_detail`/
+  `ArAgingDetailRow` (surfaced days earlier while investigating INV-QB-022)
+  but was never threaded through into `SoaCompanyRow.lineItems`, which
+  only ever carried `dueDate`. Fixed: `findCustomer()`
+  (`lib/qb-invoice-conventions.ts`) now also returns `companyName`,
+  printed as an unconditional second TO-block line in
+  `drawStatementCoverPage()` whenever QuickBooks has a real value for it —
+  never deduplicated against the primary name, since the reference itself
+  doesn't deduplicate. `SoaCompanyRow.lineItems` gained a `txnDate` field
+  (both the fresh-snapshot and legacy computation paths, falling back to
+  `dueDate` when a real txnDate genuinely isn't available — no existing
+  consumer's behavior changes), and the Statement's DATE column now reads
+  `txnDate` while the DESCRIPTION text's own "Due DD/MM/YYYY" continues
+  reading `dueDate` — these are genuinely two different real dates and the
+  reference itself shows both, just in different places. General lesson:
+  when the ground truth is a real file the user already has, ask for it
+  (or check whether an earlier round of the same investigation already
+  saved a copy) rather than continuing to iterate against a photo of it —
+  a photo can look right while a `pdf-lib`/content-stream-level read
+  reveals it wasn't.
 
 ## Automation & cron reliability (INV-CRON)
 

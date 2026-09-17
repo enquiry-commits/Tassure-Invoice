@@ -148,6 +148,7 @@ export async function drawStatementCoverPage(
   legalName: string,
   row: StatementRow,
   customerDisplayName: string,
+  qbCompanyName: string | null,
   billAddrLines: string[],
   invoiceDetails: Map<string, { invoiceNo: string; description: string | null }> = new Map(),
 ) {
@@ -247,11 +248,27 @@ export async function drawStatementCoverPage(
   // of overlapping.
   page.drawText(safeText(boldFont, customerDisplayName), { x: left, y, size: 10, font: boldFont, maxWidth: metaX - left - 20, lineHeight: 12 });
   y -= 15;
+  // The customer's real QuickBooks Customer.CompanyName field — a distinct
+  // field from DisplayName, printed a second time right below it. Vincent,
+  // 2026-09-17, fifth round on this same page, side-by-side with the ORIGINAL
+  // reference PDF file (not a screenshot this time): "1V Capital Pte. Ltd."
+  // visually appears TWICE in the TO block — this is why: QuickBooks' own
+  // Statement template always prints DisplayName then CompanyName stacked,
+  // and for this customer the two happen to be identical, which reads as a
+  // plain repeat but is genuinely two separate real fields. Printed
+  // unconditionally whenever QuickBooks has a real value for it (never
+  // deduplicated against customerDisplayName — the reference shows both
+  // even when they're equal, so hiding a genuine repeat would itself be a
+  // mismatch), regular weight like the address lines below it, not bold.
+  if (qbCompanyName) {
+    page.drawText(safeText(font, qbCompanyName), { x: left, y, size: 10, font, maxWidth: metaX - left - 20 });
+  }
   // ENCLOSED — same fixed label on every real QuickBooks Statement
   // regardless of what's being sent, printed one row below TOTAL DUE (same
   // relative position as the reference, just shifted up one row overall
   // since STATEMENT NO. above it has no real value to print).
   page.drawText('ENCLOSED', { x: metaX + metaLabelW - boldFont.widthOfTextAtSize('ENCLOSED', 10), y, size: 10, font: boldFont });
+  y -= 15;
   // Wrapped manually (word-by-word against the actual font metrics) instead
   // of relying on drawText's own maxWidth auto-wrap — a real QuickBooks
   // BillAddr can arrive as ONE long Line1 with the whole address jammed in
@@ -299,14 +316,14 @@ export async function drawStatementCoverPage(
   drawItemHeader();
   for (const item of row.lineItems) {
     if (y < 90) { newPage(); drawAgingTable(); drawItemHeader(); }
-    // The DATE column already shows item.dueDate — SoaCompanyRow.lineItems
-    // doesn't carry a separate transaction date the way the reference's own
-    // "DATE" column (invoice date, not due date) does, so this reuses due
-    // date for both rather than showing it twice. Reformatted DD/MM/YYYY —
-    // item.dueDate is plain ISO (YYYY-MM-DD); left unformatted here used to
-    // print e.g. "2026-07-31" while every other date on this page (the
-    // DATE meta field) already shows "31/07/2026".
-    const itemDate = item.dueDate ? item.dueDate.split('-').reverse().join('/') : '—';
+    // DATE column shows the transaction date (item.txnDate), matching the
+    // reference's own DATE column exactly — confirmed 2026-09-17 against the
+    // ORIGINAL reference PDF file (not a screenshot): its DATE column reads
+    // "24/07/2026" (the invoice's txn_date), while "Due 31/07/2026" appears
+    // separately inside the DESCRIPTION text. Both reformatted DD/MM/YYYY
+    // from plain ISO (YYYY-MM-DD).
+    const itemDate = item.txnDate ? item.txnDate.split('-').reverse().join('/') : '—';
+    const dueDateFmt = item.dueDate ? item.dueDate.split('-').reverse().join('/') : '—';
     const amountText = money(item.amount);
     // Vincent, 2026-09-17, fourth round: "这部分为什么生成出来的没有像这个
     // 那么完整" (pointing at the reference's rich "Invoice No.02610894: Due
@@ -324,7 +341,7 @@ export async function drawStatementCoverPage(
     const details = item.txnType === 'Invoice' && numKey ? invoiceDetails.get(numKey) : undefined;
     const firstDescLine = details?.description?.split('\n').map(l => l.trim()).find(Boolean);
     const description = firstDescLine
-      ? `Invoice No.${safeText(font, details!.invoiceNo)}: Due ${itemDate}. ${safeText(font, firstDescLine)}`
+      ? `Invoice No.${safeText(font, details!.invoiceNo)}: Due ${dueDateFmt}. ${safeText(font, firstDescLine)}`
       : `${safeText(font, item.docNumber)} (${safeText(font, TXN_TYPE_TAGS[item.txnType] ?? item.txnType)})`;
     // Manually wrapped (same reasoning as the TO block's billAddrLines
     // above) so a long real description's extra visual line(s) are

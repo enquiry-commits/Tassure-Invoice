@@ -97,7 +97,15 @@ export interface SoaCompanyRow {
   // just that it did (see lib/soa.ts's TXN_TYPE_TAGS and its own comment on
   // the 2026-09-15 incident this prevents — a hardcoded "(CN)" tag on every
   // negative bucket regardless of real type).
-  lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number; bucket: AgingBucket }[];
+  //
+  // `txnDate` added 2026-09-17 for the Statement PDF's own itemized DATE
+  // column (lib/statement-pdf.ts) — Vincent, comparing against the ORIGINAL
+  // reference PDF file side-by-side: its own DATE column shows the
+  // transaction date ("24/07/2026"), not the due date this field used to be
+  // the only date available for. Falls back to dueDate when a real txnDate
+  // genuinely isn't available (matches this field's own pre-2026-09-17
+  // behavior exactly), so no existing consumer's date display changes.
+  lineItems: { docNumber: string; dueDate: string; txnDate: string; txnType: string; amount: number; bucket: AgingBucket }[];
 }
 
 type UnpaidInvoice = {
@@ -323,7 +331,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
   const byCompany = new Map<string, {
     displayName: string; invoiceCount: number; total: number; aging: AgingTotals; signals: OwnerInvoiceSignal[];
     unpaidInvoices: { invoiceNo: string; dueDate: string }[];
-    lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number; bucket: AgingBucket }[];
+    lineItems: { docNumber: string; dueDate: string; txnDate: string; txnType: string; amount: number; bucket: AgingBucket }[];
   }>();
 
   // Seed from the report snapshot — authoritative for row EXISTENCE and for
@@ -347,6 +355,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
     entry.lineItems.push({
       docNumber: row.docNumber ?? row.qbTxnId ?? row.txnType,
       dueDate: row.dueDate ?? row.txnDate ?? '',
+      txnDate: row.txnDate ?? row.dueDate ?? '',
       txnType: row.txnType,
       amount: row.openBalance,
       bucket: row.agingBucket,
@@ -460,7 +469,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
   const byCompany = new Map<string, {
     displayName: string; invoiceCount: number; total: number; aging: AgingTotals; signals: OwnerInvoiceSignal[];
     unpaidInvoices: { invoiceNo: string; dueDate: string }[];
-    lineItems: { docNumber: string; dueDate: string; txnType: string; amount: number; bucket: AgingBucket }[];
+    lineItems: { docNumber: string; dueDate: string; txnDate: string; txnType: string; amount: number; bucket: AgingBucket }[];
   }>();
   for (const inv of invoices) {
     if (!inv.txn_date || !inv.balance) continue;
@@ -475,7 +484,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
     entry.signals.push({ qbInvoiceId: inv.qb_invoice_id, txnDate: inv.txn_date, locationName: inv.location_name });
     const invDueDate = dueDate(inv.txn_date).toISOString().slice(0, 10);
     if (inv.invoice_no) entry.unpaidInvoices.push({ invoiceNo: inv.invoice_no, dueDate: invDueDate });
-    entry.lineItems.push({ docNumber: inv.invoice_no, dueDate: invDueDate, txnType: 'Invoice', amount: inv.balance, bucket: invBucket });
+    entry.lineItems.push({ docNumber: inv.invoice_no, dueDate: invDueDate, txnDate: inv.txn_date, txnType: 'Invoice', amount: inv.balance, bucket: invBucket });
   }
 
   // Net unapplied CreditMemos into the SAME customer bucket, keyed the same
@@ -498,7 +507,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
     entry.total -= cm.balance;
     const cmBucket = agingBucket(cm.txn_date, today);
     entry.aging[cmBucket] -= cm.balance;
-    entry.lineItems.push({ docNumber: cm.doc_number ?? 'Credit Note', dueDate: cm.txn_date, txnType: 'Credit Note', amount: -cm.balance, bucket: cmBucket });
+    entry.lineItems.push({ docNumber: cm.doc_number ?? 'Credit Note', dueDate: cm.txn_date, txnDate: cm.txn_date, txnType: 'Credit Note', amount: -cm.balance, bucket: cmBucket });
   }
 
   return [...byCompany.entries()].map(([key, entry]) => {
