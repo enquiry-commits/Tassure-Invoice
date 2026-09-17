@@ -1,15 +1,14 @@
 import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
-import { promises as fs } from 'fs';
-import path from 'path';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
+import { findCustomer, addrToLines } from '@/lib/qb-invoice-conventions';
 import { loadArAgingSnapshot, computeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
 import { LEGAL_NAME } from '@/lib/soa-export';
-import { AGING_BUCKETS, TXN_TYPE_TAGS, emptyAgingTotals } from '@/lib/soa';
+import { drawStatementCoverPage, combineStatementRows, safeText, type StatementRow } from '@/lib/statement-pdf';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -42,255 +41,25 @@ async function fetchCreditMemoPdf(company: QbCompany, creditMemoId: string): Pro
   return res.arrayBuffer();
 }
 
-// pdf-lib's StandardFonts (Helvetica) only encode WinAnsi — page.drawText()
-// throws SYNCHRONOUSLY for any character outside it (confirmed against
-// @pdf-lib/standard-fonts' Encoding.js), which is a real, not theoretical,
-// risk here: row.companyName/item.docNumber below are raw QuickBooks/
-// companies-table text, and this app's own real client base includes
-// Chinese-registered names (see lib/quickbooks.ts's CUSTOMER_NAME_CORRECTIONS
-// — 吉木锌国际贸易等). A throw here would leave whatever pages were already
-// added to `merged` (via prior addPage() calls) silently shipped in the
-// final client PDF, half-drawn — this must never happen for a document going
-// out to a real paying client. Filters to only what the given font can
-// actually encode; a name that's entirely unencodable renders as the
-// fallback rather than a blank line, so it's visibly a gap, not invisible.
-// Full CJK glyph rendering would need a real embedded font (pdf-lib +
-// fontkit + a bundled font file) — deliberately out of scope for this round.
-function safeText(font: PDFFont, text: string): string {
-  try { font.encodeText(text); return text; } catch { /* fall through */ }
-  let out = '';
-  for (const ch of text) {
-    try { font.encodeText(ch); out += ch; } catch { /* drop this one character */ }
-  }
-  out = out.trim();
-  return out || '(name unavailable)';
-}
-
-const TASSURE_CONTACT_LINES = [
-  '10 Anson Road',
-  '#12-08 International Plaza',
-  'Singapore 079903',
-  '+6565701965',
-  'enquiry@tassure.com',
-];
-
-// Colors/fonts below are NOT eyeballed — Vincent, 2026-09-17: "你要用那个
-// PDF的模板要一模一样的，包括颜色和排版和字体大小和字型" (must match that
-// reference PDF exactly — colors, layout, font size, font style). He'd
-// supplied a real QuickBooks-native Statement PDF for "1V Capital Pte Ltd"
-// as the target. QuickBooks' own Statement feature is web-UI-only (no API
-// endpoint — verified against Intuit's own developer docs/community, see
-// PROJECT_STATUS.md), so it can't be called directly; instead these exact
-// values were extracted straight from that real PDF's own content stream
-// (inflated the Flate-compressed page stream, read its literal `rg` fill-
-// color operators and `/BaseFont` declarations) — not approximated from the
-// screenshot. `#4F90BB` is its heading/table-header text color, `#DCE9F1`
-// its table-header fill, and its fonts are plain `Helvetica`/`Helvetica-
-// Bold` — the exact same StandardFonts this route already embeds, so no new
-// font asset is needed to match it.
-const QB_STATEMENT_BLUE = rgb(0.30980393, 0.56470591, 0.73333335); // #4F90BB
-const QB_STATEMENT_HEADER_BG = rgb(0.86274511, 0.9137255, 0.94509804); // #DCE9F1
-
-// Vincent, 2026-09-17: this merged PDF used to be nothing but raw invoice/
-// credit-memo pages concatenated together — no cover page at all, so a
-// client received what looked like a stray invoice, not a real "Statement
-// of Account" ("而且不是soa 是inv"). Draws a genuine Statement page —
-// Tassure's own letterhead+logo, the aging-bucket summary, and the itemized
-// outstanding list — using EXACTLY the same computed row (computeSoaRows(),
-// the same shared computation the on-screen SOA list/Excel export already
-// use) so its numbers can never drift from what staff see elsewhere. Always
-// added to `merged` BEFORE the real invoice/credit-memo pages get merged in
-// below (matches Vincent's own framing: "inv 我们会放在soa 下面，在一个pdf
-// 里面"). Still scoped to ONE QB company when called this way — the "All"
-// page's combined-books mode builds its own row via combineStatementRows()
-// below and passes that in instead, same function either way.
-//
-// Corrected 2026-09-17, comparing side-by-side screenshots of this function's
-// own output against Vincent's real reference PDF: (1) the aging-bucket
-// table appears ONCE, as a footer at the very bottom, not duplicated before
-// the letterhead too — an earlier version of this function misread the
-// reference's raw PDF content-stream operator ORDER as top-to-bottom visual
-// position, which is wrong for a PDF (operators execute in stream order, not
-// layout order); the actual page starts straight at the letterhead. (2) the
-// T Assure logo IS included — extracted directly from the reference PDF's
-// own embedded XObject image (public/assets/tassure-statement-logo.png;
-// this app's OTHER logo, public/logo.png, is a different, unrelated icon).
-//
-// Two honest simplifications that remain versus the real reference (both
-// because this route's existing data model doesn't carry the field, not a
-// display choice): (1) no "STATEMENT NO." — that's QuickBooks' own internal
-// numbering; inventing one here would be a fabricated business record. (2)
-// the itemized table's "AMOUNT"/"OPEN AMOUNT" columns both show the same
-// open-balance figure — SoaCompanyRow.lineItems doesn't separately carry
-// each item's original (pre-payment) amount.
-type StatementRow = Pick<SoaCompanyRow, 'companyName' | 'aging' | 'totalOutstanding' | 'lineItems'>;
-
-const STATEMENT_LOGO_PATH = path.join(process.cwd(), 'public', 'assets', 'tassure-statement-logo.png');
-// Real aspect ratio of the extracted logo file (283x200px) — used to size it
-// on the page without distorting it.
-const STATEMENT_LOGO_ASPECT = 283 / 200;
-
-async function drawStatementCoverPage(pdfDoc: PDFDocument, legalName: string, row: StatementRow) {
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const left = 50;
-
-  let page = pdfDoc.addPage();
-  let { width, height } = page.getSize();
-  let right = width - 50;
-  let y = height - 50;
-  const newPage = () => {
-    page = pdfDoc.addPage();
-    ({ width, height } = page.getSize());
-    right = width - 50;
-    y = height - 50;
-  };
-  const money = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  // DD/MM/YYYY — matches the reference PDF's own "DATE 17/09/2026" exactly
-  // (todaySGT() itself returns ISO YYYY-MM-DD, this app's usual convention
-  // everywhere else; this page alone reformats it for that visual match).
-  const ddMmYyyy = todaySGT().split('-').reverse().join('/');
-
-  // Aging-bucket summary table — 6 columns (5 buckets + Total), light-blue
-  // header fill with blue regular-weight header text, matching the
-  // reference's own proportions: the first/last columns run wider than the
-  // 4 middle ones (114.4/85.75/85.8/85.7/85.8/118.55 of 576pt there).
-  const drawAgingTable = () => {
-    const tableWidth = right - left;
-    const midW = tableWidth / 6.6;
-    const endW = midW * 1.3;
-    const colWidths = [endW, midW, midW, midW, midW, endW];
-    const labels = [['Current', 'Due'], ['1-30 Days', 'Past Due'], ['31-60 Days', 'Past Due'], ['61-90 Days', 'Past Due'], ['90+ Days', 'Past Due'], ['Amount', 'Due']];
-    const headerH = 22;
-    let cx = left;
-    for (let i = 0; i < colWidths.length; i++) {
-      page.drawRectangle({ x: cx, y: y - headerH, width: colWidths[i], height: headerH, color: QB_STATEMENT_HEADER_BG });
-      page.drawText(labels[i][0], { x: cx + 6, y: y - 10, size: 8, font, color: QB_STATEMENT_BLUE });
-      page.drawText(labels[i][1], { x: cx + 6, y: y - 20, size: 8, font, color: QB_STATEMENT_BLUE });
-      cx += colWidths[i];
-    }
-    y -= headerH + 16;
-    const values = [row.aging.current, row.aging.d1_30, row.aging.d31_60, row.aging.d61_90, row.aging.d91_plus, row.totalOutstanding];
-    cx = left;
-    for (let i = 0; i < colWidths.length; i++) {
-      const isTotal = i === colWidths.length - 1;
-      const text = isTotal ? `SGD ${money(values[i])}` : money(values[i]);
-      const f = isTotal ? boldFont : font;
-      page.drawText(text, { x: cx + 6, y, size: 9, font: f });
-      cx += colWidths[i];
-    }
-    y -= 24;
-  };
-
-  // Letterhead (left) + T Assure logo (right), side by side on the same
-  // row — matches the reference exactly, no aging table above it.
-  const letterheadTop = y;
-  page.drawText(legalName, { x: left, y, size: 12, font: boldFont });
-  y -= 15;
-  for (const line of TASSURE_CONTACT_LINES) {
-    page.drawText(line, { x: left, y, size: 10, font });
-    y -= 13;
-  }
+// Best-effort live fetch of a customer's real QuickBooks BillAddr, flattened
+// to printable lines (see qb-invoice-conventions.ts's addrToLines) — Vincent,
+// 2026-09-17, second round on the Statement cover page: "地址都没有看到" (his
+// real reference PDF prints the client's registered mailing address under
+// their name; this route used to omit it entirely). Never stored redundantly
+// in this app's own tables, so this always reads live from QuickBooks itself
+// at Statement-generation time — an unreachable book or a customer with no
+// BillAddr on file just means the address block is skipped, same
+// never-break-the-whole-Statement posture as the logo/font-safety fallbacks
+// elsewhere on this page.
+async function resolveBillAddrLines(book: QbCompany, customerName: string): Promise<string[]> {
   try {
-    const logoBytes = await fs.readFile(STATEMENT_LOGO_PATH);
-    const logoImage = await pdfDoc.embedPng(logoBytes);
-    const logoWidth = 130;
-    const logoHeight = logoWidth / STATEMENT_LOGO_ASPECT;
-    page.drawImage(logoImage, { x: right - logoWidth, y: letterheadTop - logoHeight + 12, width: logoWidth, height: logoHeight });
+    const token = await getValidToken(book);
+    if (!token) return [];
+    const customer = await findCustomer(token.access_token, token.realm_id, customerName);
+    return customer ? addrToLines(customer.billAddr) : [];
   } catch {
-    // Missing/unreadable asset must never break the whole Statement — degrade to no logo.
+    return [];
   }
-  y -= 10;
-
-  // "Statement" — 20pt, regular weight (not bold — matches the reference
-  // exactly, confirmed from its own Tf operator), in the same blue.
-  page.drawText('Statement', { x: left, y, size: 20, font, color: QB_STATEMENT_BLUE });
-  y -= 34;
-
-  // TO block (left) + Date/Total Due (right) — bold labels, regular values,
-  // same two-column arrangement as the reference's TO / STATEMENT NO.-DATE-
-  // TOTAL DUE-ENCLOSED block (STATEMENT NO./ENCLOSED omitted, see header
-  // comment).
-  const metaX = left + 300;
-  page.drawText('TO', { x: left, y, size: 10, font: boldFont });
-  const metaLabelW = 70;
-  const drawMetaRow = (label: string, value: string, atY: number) => {
-    page.drawText(label, { x: metaX + metaLabelW - boldFont.widthOfTextAtSize(label, 10), y: atY, size: 10, font: boldFont });
-    page.drawText(value, { x: metaX + metaLabelW + 10, y: atY, size: 10, font });
-  };
-  drawMetaRow('DATE', ddMmYyyy, y);
-  drawMetaRow('TOTAL DUE', `SGD ${money(row.totalOutstanding)}`, y - 16);
-  y -= 15;
-  // maxWidth guards against a long real company name running into the
-  // DATE/TOTAL DUE column beside it (metaX) — wraps to a 2nd line instead
-  // of overlapping.
-  page.drawText(safeText(boldFont, row.companyName), { x: left, y, size: 10, font: boldFont, maxWidth: metaX - left - 20, lineHeight: 12 });
-  y -= 40;
-
-  // Itemized list — every real transaction behind the total (Invoice/
-  // Credit Note/Payment/Journal Entry/Deposit — same TXN_TYPE_TAGS
-  // shorthand as the on-screen list/detail modal, lib/soa.ts), oldest due
-  // date first (SoaCompanyRow.lineItems is already sorted that way). Same
-  // light-blue-header styling as the aging table above.
-  const itemColWidths = [80, 220, 90, 90];
-  const itemCols = [left, left + itemColWidths[0], left + itemColWidths[0] + itemColWidths[1], left + itemColWidths[0] + itemColWidths[1] + itemColWidths[2]];
-  const drawItemHeader = () => {
-    const headerH = 18;
-    const labels = ['DATE', 'DESCRIPTION', 'AMOUNT', 'OPEN AMOUNT'];
-    for (let i = 0; i < itemCols.length; i++) {
-      const w = i < itemColWidths.length ? itemColWidths[i] : right - itemCols[i];
-      page.drawRectangle({ x: itemCols[i], y: y - headerH, width: w, height: headerH, color: QB_STATEMENT_HEADER_BG });
-      page.drawText(labels[i], { x: itemCols[i] + 6, y: y - 13, size: 8, font, color: QB_STATEMENT_BLUE });
-    }
-    y -= headerH + 14;
-  };
-  drawItemHeader();
-  for (const item of row.lineItems) {
-    if (y < 90) { newPage(); drawAgingTable(); drawItemHeader(); }
-    // The DATE column already shows item.dueDate — SoaCompanyRow.lineItems
-    // doesn't carry a separate transaction date the way the reference's own
-    // "DATE" column (invoice date, not due date) does, so this reuses due
-    // date for both rather than showing it twice.
-    const description = `${safeText(font, item.docNumber)} (${safeText(font, TXN_TYPE_TAGS[item.txnType] ?? item.txnType)})`;
-    const amountText = money(item.amount);
-    page.drawText(item.dueDate || '—', { x: itemCols[0], y, size: 9, font });
-    page.drawText(description, { x: itemCols[1], y, size: 9, font, maxWidth: itemColWidths[1] - 8 });
-    page.drawText(amountText, { x: itemCols[2], y, size: 9, font });
-    page.drawText(amountText, { x: itemCols[3], y, size: 9, font });
-    y -= 16;
-  }
-  y -= 16;
-
-  // Aging-bucket summary as a footer — matches the reference's own single
-  // instance of this table (see this function's header comment on the
-  // earlier top+bottom misreading), used here instead of a plain "Total
-  // Outstanding" line.
-  if (y < 60) newPage();
-  drawAgingTable();
-}
-
-// 'ALL' mode's own aggregation — sums each of TAB/TAC/TAO's own computeSoaRows()
-// result for this one customer into a single synthetic row. Never a second,
-// independently-computed total: every number here is the plain sum of the
-// exact same per-book rows the individual TAB/TAC/TAO pages already show,
-// so a combined statement can never disagree with what staff see by adding
-// the 3 single-book pages up by hand.
-function combineStatementRows(rows: SoaCompanyRow[], fallbackName: string): StatementRow {
-  const aging = emptyAgingTotals();
-  let totalOutstanding = 0;
-  const lineItems: SoaCompanyRow['lineItems'] = [];
-  for (const r of rows) {
-    for (const b of AGING_BUCKETS) aging[b.key] += r.aging[b.key];
-    totalOutstanding += r.totalOutstanding;
-    lineItems.push(...r.lineItems);
-  }
-  lineItems.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  return {
-    companyName: rows[0]?.companyName ?? fallbackName,
-    aging,
-    totalOutstanding: Math.round(totalOutstanding * 100) / 100,
-    lineItems,
-  };
 }
 
 const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
@@ -429,7 +198,15 @@ export async function GET(req: NextRequest) {
       legalName = LEGAL_NAME[company];
     }
     if (statementRow) {
-      await drawStatementCoverPage(merged, legalName, statementRow);
+      // Whichever book actually produced resolvedRawName (matched[0]/
+      // matchedCredits[0] above) is the real QuickBooks Customer record to
+      // pull the mailing address from — same book either way in single-book
+      // mode; in 'ALL' mode this is just whichever of TAB/TAC/TAO happened
+      // to come first in the pooled invoice/credit-memo list, which is fine
+      // since it's the same real-world company's address regardless of book.
+      const addrBook = (matched[0]?.qb_company ?? matchedCredits[0]?.qb_company ?? company) as QbCompany;
+      const billAddrLines = await resolveBillAddrLines(addrBook, resolvedRawName);
+      await drawStatementCoverPage(merged, legalName, statementRow, resolvedRawName, billAddrLines);
       coverPageAdded = true;
     }
   } catch {

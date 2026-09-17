@@ -594,6 +594,49 @@ again.
   `public/assets/tassure-statement-logo.png` and embedded via
   `pdfDoc.embedPng()` — that extraction method itself is correct and durable
   for any future need to pull an asset out of a reference PDF.
+- **INV-DOC-014** — The Statement cover page's TO block must print the
+  client's own real QuickBooks data, not this app's own `companies` table
+  convention. Found live 2026-09-17, same day as INV-DOC-013, a second real
+  mismatch Vincent caught by comparing his reference PDF again: "地址都没有
+  看到" (the client's mailing address wasn't printed at all) and "你最新版的
+  位置不对" (the block's spacing looked wrong — a direct symptom of the
+  missing address leaving the wrong-looking gap). Two causes: (1)
+  `drawStatementCoverPage()` was printing `row.companyName`, which for a row
+  sourced through `computeSoaRows()` can be the `companies` table's own
+  ALL-CAPS display convention (e.g. "1V CAPITAL PTE. LTD.") instead of
+  QuickBooks' actual mixed-case DisplayName ("1V Capital Pte. Ltd." — the
+  reference's own printed name); (2) the client's registered mailing address
+  was never fetched or printed at all — `SoaCompanyRow` doesn't carry it,
+  and nothing else in the request path did either. Fixed by having the route
+  (`app/api/billing/soa/pdf/route.ts`) pass the ALREADY-RESOLVED raw QB
+  customer_name (`resolvedRawName` — the same exact-match value the
+  invoice/credit-memo merge already settled on, see INV-DOC-012's own
+  resolution note) as the printed name, and by live-fetching that exact
+  QuickBooks Customer's `BillAddr` (`findCustomer()` +
+  `addrToLines()`, both in `lib/qb-invoice-conventions.ts`, `addrToLines`
+  newly exported for this) at generation time — never stored redundantly in
+  this app's own tables, best-effort (an unreachable book or a customer with
+  no BillAddr on file just skips the address block, never fails the whole
+  Statement). Confirmed against real data: TAB's own BillAddr for "1V
+  Capital Pte. Ltd." has its entire address jammed into a single `Line1`
+  string ("100 Lorong 23 Geylang #04-03 D' Centennial Singapore 388398") —
+  genuinely different real data than TAO's own record for the same real
+  company (which has it properly split across `Line1`/`Line2`/`City`/
+  `PostalCode`, and is even a DIFFERENT physical address, "60 Paya Lebar
+  Road") — this app prints whatever that book's own field actually contains
+  rather than attempting to normalize/re-split free text, since guessing at
+  a client's real address is worse than an occasionally-unsplit line. The
+  cover-page drawing code itself moved out of the route file into
+  `lib/statement-pdf.ts` (`drawStatementCoverPage`, `combineStatementRows`,
+  `safeText`, `StatementRow`) purely so it could be verified against real
+  QuickBooks/Supabase data via a standalone `tsx` script outside the
+  Next.js/proxy.ts auth wall — same reasoning as this file's own bar for
+  real-data verification, not a design preference. "STATEMENT NO." and
+  "ENCLOSED" (both present in the reference) remain deliberately omitted:
+  the former is QuickBooks' own internal web-UI-only Statement-numbering
+  sequence with no API equivalent (inventing one would be a fabricated
+  business record), the latter is boilerplate with no real value this app
+  could show under it.
 
 ## Automation & cron reliability (INV-CRON)
 

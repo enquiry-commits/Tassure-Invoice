@@ -351,7 +351,7 @@ export type CareOfBillAddrResult =
 // a structured {Line1, City, PostalCode}, while an invoice keeps flat
 // {Line1..Line5}. Flatten to printable lines in the order QuickBooks itself
 // prints them.
-function addrToLines(addr: Record<string, unknown> | null | undefined): string[] {
+export function addrToLines(addr: Record<string, unknown> | null | undefined): string[] {
   if (!addr) return [];
   const keys = ['Line1', 'Line2', 'Line3', 'Line4', 'Line5', 'City', 'CountrySubDivisionCode', 'PostalCode', 'Country'];
   return keys
