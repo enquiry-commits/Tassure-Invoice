@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-17 (SHIPPED: the 3 SOA escalating-reminder email subjects now match Chelsea's real wording, and the "(SEP 2026)" month auto-updates instead of being hand-edited.
+
+The 3 templates seeded earlier today (scripts/seed-soa-reminder-templates.js) had placeholder English subject lines ("Payment Reminder (1st Notice) - {{companyName}}") that never matched what Chelsea actually uses. Vincent relayed her real text via WhatsApp (labeled "SOA email subject"): "Auto1:GENTLE REMINDER FROM TASSURE GROUP (SEP 2026) / Auto2: 2ND REMINDER... / Auto3: 3RD REMINDER..." — confirmed with him that "Auto1/2/3:" is just her own labeling (not part of the subject) and that the real subject deliberately has NO company name, unlike every other template in this system.
+
+He then asked Chelsea how the month gets set ("月份是按照？"); her answer ("那个月发就发那个月的" — whichever month it's actually sent) and his own follow-up to her ("可以 系统里面有计时设置" — yes, the system can auto-set this) meant the month needed to become a real computed field, not hardcoded text staff re-type every month. New `lib/date.ts` `currentMonthUpperSGT()` ("SEP 2026" style, SGT-safe, reuses the file's existing `MONTHS` array) wired into `lib/email-merge.ts`'s `MergeFields` as `{{sendMonth}}`, computed in both places a draft's subject/body gets (re)merged — campaign creation (`app/api/client-communications/campaigns/route.ts`) and the pre-send refresh (`.../drafts/refresh-amounts/route.ts`) — same pattern as `{{daysOverdue}}`/`{{lastReminderDate}}` added earlier today, including the same "only refreshes alongside an amount change" limitation on the refresh path (pre-existing architecture, not new). Updated the 3 templates' `subject_template` via new `scripts/update-soa-reminder-subjects.js` (idempotent). Verified end-to-end with a throwaway script: `currentMonthUpperSGT()` returns "SEP 2026" for today's real date, and merging it into the new subject template produces exactly "GENTLE REMINDER FROM TASSURE GROUP (SEP 2026)".
+
+`npx tsc --noEmit` / `npm run build` both clean.
+
+Previous entry follows.
+
 Last updated: 2026-09-17 (FIXED: "BD" in the SOA Main PIC dropdown (`app/billing/soa/_components.tsx`) now displays as "Bad Debt" — Vincent: "BD 写完整：Bad Debt", correcting a wrong assumption baked into this file's own comments since 2026-09-07 ("BD" = "放着先"/hold off for now). It's a real collections designation (this balance is written off as uncollectible), not a placeholder-for-later marker. The stored/matched value stays the bare `'BD'` code (no data migration needed) — only the human-facing label changed, via a new `ownerOptionLabel()` helper applied everywhere the code could render (the dropdown's own "Other" group AND, since a row can already have `soaPic: 'BD'` confirmed, the "Associated with this company" group and the select's own closed-state display). `npx tsc --noEmit` / `npm run build` both clean.
 
 Previous entry follows.

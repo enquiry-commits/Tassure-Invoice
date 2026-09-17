@@ -27,6 +27,13 @@ export type MergeFields = {
   // SENT to this exact company (empty string on a company's first-ever SOA
   // reminder) — not this draft's own date.
   lastReminderDate: string;
+  // sendMonth (added 2026-09-17, lib/date.ts's currentMonthUpperSGT()):
+  // "SEP 2026" style, computed at draft-creation/refresh time — Vincent:
+  // "那个月发就发那个月的" (whichever month it's actually sent). Same
+  // refresh-only-alongside-an-amount-change caveat as daysOverdue/
+  // lastReminderDate above — see app/api/client-communications/drafts/
+  // refresh-amounts/route.ts's own comment.
+  sendMonth: string;
 };
 
 export function mergeTemplate(template: string, fields: Partial<MergeFields>): string {

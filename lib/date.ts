@@ -65,6 +65,21 @@ export function thisYearSGT(): number {
   return parseInt(new Date().toLocaleDateString('en-CA', { timeZone: SGT }).slice(0, 4), 10);
 }
 
+// Added 2026-09-17 for the SOA escalating-reminder templates' {{sendMonth}}
+// merge field — Vincent, on whether the "(SEP 2026)" in the subject should
+// be a fixed string staff re-type every month: "那个月发就发那个月的...系统
+// 里面有计时设置" (whichever month it's actually sent, that's the month —
+// the system computes it). Built off todaySGT() (already SGT-safe) rather
+// than toLocaleDateString's own month/year formatting, whose exact casing/
+// abbreviation ("Sept" vs "Sep") isn't guaranteed stable across runtimes —
+// this reuses the same MONTHS array every other month label in this file
+// already does.
+/** Current month+year in Singapore time as "SEP 2026" (uppercase 3-letter month). */
+export function currentMonthUpperSGT(): string {
+  const [year, month] = todaySGT().split('-');
+  return `${MONTHS[Number(month) - 1].toUpperCase()} ${year}`;
+}
+
 // ── Unified date display: "D MMM YYYY" (e.g. 1 Jan 2013, 3 Sep 2025) ──────────
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_INDEX: Record<string, number> = {

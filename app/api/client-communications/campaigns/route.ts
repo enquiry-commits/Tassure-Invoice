@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { mergeTemplate, formatInvoiceList, formatAmount, formatContactName, daysOverdueFromDate, type InvoiceRef } from '@/lib/email-merge';
 import { normalizeRecipientLines } from '@/lib/campaign-recipients';
-import { fmtDate } from '@/lib/date';
+import { fmtDate, currentMonthUpperSGT } from '@/lib/date';
 
 // Client Communications: generates draft emails from real system data,
 // replacing the manual BULK.xlsm mail-merge. Sending stays manual (Outlook,
@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
       fyeYear: fyeYear ? String(fyeYear) : '',
       daysOverdue: daysOverdueFromDate(c.oldestDueDate),
       lastReminderDate: c.lastReminderSentAt ? fmtDate(c.lastReminderSentAt) : '',
+      sendMonth: currentMonthUpperSGT(),
     };
 
     draftRows.push({

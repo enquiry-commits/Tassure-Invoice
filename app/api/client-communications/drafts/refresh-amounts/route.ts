@@ -4,7 +4,7 @@ import { qbQuery, type QbCompany } from '@/lib/quickbooks';
 import { mergeTemplate, formatInvoiceList, formatAmount, computeDaysOverdue, type InvoiceRef } from '@/lib/email-merge';
 import { loadLastReminderSentAt } from '@/lib/client-comms-resolve';
 import { normalize } from '@/lib/company-name';
-import { fmtDate } from '@/lib/date';
+import { fmtDate, currentMonthUpperSGT } from '@/lib/date';
 
 // Re-verifies a prepared draft's invoice amount(s) against live QuickBooks
 // data right before it's opened in Outlook. Handles the case where an
@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
     fyeYear: campaign.fye_year ? String(campaign.fye_year) : '',
     daysOverdue: computeDaysOverdue(refreshedRefs),
     lastReminderDate: lastReminderSentAt ? fmtDate(lastReminderSentAt) : '',
+    sendMonth: currentMonthUpperSGT(),
   };
 
   const update = {
