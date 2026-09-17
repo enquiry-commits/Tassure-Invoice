@@ -261,7 +261,18 @@ async function syncYear(year: string, company: QbCompany, runId: string) {
         qb_invoice_id:   qbInvoiceId,
         qb_line_id:      String(line.Id ?? lineNum),
         qb_customer_id:  qbCustomerId || null,
-        customer_name:   (customer.name as string) ?? '',
+        // Was the raw QB value, unlike invoiceRows' own customer_name above
+        // (line 228) — the one write path CUSTOMER_NAME_CORRECTIONS' own
+        // header comment claimed covered both tables actually only covered
+        // quickbooks_invoices. Confirmed live 2026-09-17: 21 real
+        // quickbooks_invoice_items rows across all 5 known corrected
+        // customer ids (TAC 362/363/366/394, TAO 1697) still held the raw
+        // GBK-as-Latin1 garbled name — surfaced on app/billing/tao/page.tsx,
+        // which reads this column directly (computeTaoCompanies()'s
+        // displayNameByNorm). lib/quickbooks-invoice-incremental.ts's own
+        // item-row write already got this right; this was the one path that
+        // hadn't.
+        customer_name:   correctedCustomerName(company, qbCustomerId, (customer.name as string) ?? ''),
         txn_date:        txnDate,
         line_num:        lineNum,
         description:     desc || null,

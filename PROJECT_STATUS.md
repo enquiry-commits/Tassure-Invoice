@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-17 (FIXED: mojibake company name reappeared on the TAO Billing Drafts page — Vincent: "为什么还有乱码问题，我记得之前是处理了的". Root cause: INV-QB-012's `correctedCustomerName()` rule was only actually applied to `quickbooks_invoices` in `app/api/quickbooks/sync/route.ts`'s full-year sync — its own `quickbooks_invoice_items` row-push (a separate push site in the SAME function) wrote `customer.name` raw, unlike `lib/quickbooks-invoice-incremental.ts`'s webhook path, which already had both pushes correct. `app/billing/tao/page.tsx`'s company list (`computeTaoCompanies()`) reads `quickbooks_invoice_items.customer_name` directly for its `displayNameByNorm` fallback, so the garbled name surfaced there specifically. Diagnosed with a read-only script scanning every table for mojibake-pattern text (Latin-1-supplement runs with no CJK) — confirmed all 21 affected `quickbooks_invoice_items` rows map exactly to the 5 already-known corrected customer ids (TAC 362/363/366/394, TAO 1697), no new/undiscovered corrupted records. Fixed the sync route (one line, wraps the item-row's `customer_name` in `correctedCustomerName()` same as the invoice-row's own push a few lines above) and backfilled the 21 already-written rows via new `scripts/backfill-invoice-item-name-corrections.js` (idempotent, display-name only, verified 0 garbled rows remain afterward). `docs/INVARIANTS.md` INV-QB-012 updated in place with a "Gap found 2026-09-17" note rather than a new invariant number, since this was the exact rule that should have prevented it.
+
+`npx tsc --noEmit` / `npm run build` both clean.
+
+Previous entry follows.
+
 Last updated: 2026-09-17 (SHIPPED: A/R Ageing PIC/Owner is now restricted to the staff team that actually services each QuickBooks book — TAB only ever shows Corporate Secretarial names, TAO only ever Accounting/Tax.
 
 Vincent, via WhatsApp screenshots of a real A/R Ageing Summary Report export, flagged two mismatches: TAO's PIC filter listed Corporate Secretarial names ("TAO 为什么会出现sec 的人？不是讲tao只会有acc和tax的人吗") and TAB's listed Accounting names ("tab 要只会有sec的人，谁做就是谁的名"). TAO is Accounts/Tax's own QuickBooks book (`docs/INVARIANTS.md` INV-DATA-041); TAB is Corporate Secretarial's.

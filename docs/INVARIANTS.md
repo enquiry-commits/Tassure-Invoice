@@ -666,6 +666,21 @@ again.
   QuickBooks itself (irreversible, needs manual review there) — correct
   only this app's own copy, keyed by the stable `qb_customer_id` (never
   by the free-text name, which for these rows IS the corrupted value).
+  **Gap found 2026-09-17**: despite this rule naming both tables,
+  `app/api/quickbooks/sync/route.ts`'s full-year sync only ever called
+  `correctedCustomerName()` for its `invoiceRows` push — its `itemRows`
+  push (the `quickbooks_invoice_items` row) wrote `customer.name` raw.
+  `lib/quickbooks-invoice-incremental.ts`'s webhook path had it right on
+  both rows the whole time, which is exactly why the garbled name kept
+  reappearing specifically after a full-year sync, not after a webhook
+  update — a subtlety worth checking for on ANY future "two write paths,
+  same correction" rule (verify EVERY row-push site in EACH path
+  individually, don't assume a path is fully fixed because one push site
+  in it is). Confirmed live: 21 `quickbooks_invoice_items` rows across
+  all 5 known corrected customer ids (TAC 362/363/366/394, TAO 1697) held
+  the raw garbled name — backfilled via
+  `scripts/backfill-invoice-item-name-corrections.js` (safe to re-run,
+  idempotent, display-name only).
 - **INV-QB-013** — When deriving "who is really responsible for this
   company's billing" FROM existing QuickBooks data (as opposed to INV-
   QB-007's rule for WRITING a new PIC/Class), a per-line `ClassRef` name
