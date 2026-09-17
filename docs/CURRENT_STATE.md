@@ -80,7 +80,11 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
   now computed automatically from each company's own real QuickBooks
   Class/Location data (`lib/soa-owner.ts`, see INV-QB-013) instead of
   needing a manual Google Sheet backfill — a human pick in `soa_owners`
-  still overrides it when set. Verified end-to-end against real data
+  still overrides it when set. Since 2026-09-17 that automatic signal (plus
+  the `companies.pic` union) is also restricted per QB company to the staff
+  team that actually services that book — TAB only Corporate Secretarial,
+  TAO only Accounting/Tax (INV-PIC-007); TAC has no such restriction (its
+  PIC is the current Nominee Director, INV-QB-008). Verified end-to-end against real data
   2026-09-07 after the SQL migration + a full production sync: TAB
   94.6%, TAC 81.4%, TAO 98.5% of companies with an outstanding balance
   now get a real computed owner with zero manual input. As of 2026-09-16

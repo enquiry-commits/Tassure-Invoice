@@ -6,7 +6,7 @@ import { normalize, findUniqueBestMatch, significantWord } from './company-name'
 import { formatStaffNameList } from './staff-directory';
 import type { QbCompany } from './quickbooks';
 import { agingBucket, dueDate, emptyAgingTotals, type AgingBucket, type AgingTotals } from './soa';
-import { computeSuggestedOwner, collectInvolvedStaff, type OwnerInvoiceSignal } from './soa-owner';
+import { computeSuggestedOwner, collectInvolvedStaff, picAllowedForCompany, type OwnerInvoiceSignal } from './soa-owner';
 
 // Shared by GET /api/billing/soa (the on-screen list) and
 // GET /api/billing/soa/export (the Excel download) so the two can never
@@ -328,15 +328,15 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
 
   return [...byCompany.entries()].map(([key, entry]) => {
     const companyMatch = companyByNormName.get(key) ?? wordMatch(key);
-    const picFromCompanies = formatStaffNameList(companyMatch?.pic ?? null);
-    const picFromInvoices = collectInvolvedStaff(entry.signals, classNamesByInvoice);
+    const picFromCompanies = formatStaffNameList(companyMatch?.pic ?? null).filter(name => picAllowedForCompany(name, company));
+    const picFromInvoices = collectInvolvedStaff(entry.signals, classNamesByInvoice, company);
     return {
       companyName: companyMatch?.company_name ?? entry.displayName,
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
       soaPic: ownerByNormName.get(key) ?? null,
-      suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice),
+      suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice, company),
       invoiceCount: entry.invoiceCount,
       totalOutstanding: Math.round(entry.total * 100) / 100,
       aging: entry.aging,
@@ -465,15 +465,15 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
 
   return [...byCompany.entries()].map(([key, entry]) => {
     const companyMatch = companyByNormName.get(key) ?? wordMatch(key);
-    const picFromCompanies = formatStaffNameList(companyMatch?.pic ?? null);
-    const picFromInvoices = collectInvolvedStaff(entry.signals, classNamesByInvoice);
+    const picFromCompanies = formatStaffNameList(companyMatch?.pic ?? null).filter(name => picAllowedForCompany(name, company));
+    const picFromInvoices = collectInvolvedStaff(entry.signals, classNamesByInvoice, company);
     return {
       companyName: companyMatch?.company_name ?? entry.displayName,
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
       soaPic: ownerByNormName.get(key) ?? null,
-      suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice),
+      suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice, company),
       invoiceCount: entry.invoiceCount,
       totalOutstanding: Math.round(entry.total * 100) / 100,
       aging: entry.aging,

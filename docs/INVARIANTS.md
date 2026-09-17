@@ -372,6 +372,21 @@ again.
   pass (its `value: (r) => string` contract is shared by the pivot
   table/chart, not just filtering, so decomposing it is a larger, separate
   change) — still splinters on multi-name PICs as of this writing.
+- **INV-PIC-007** — A QuickBooks Class/Location tag, or `companies.pic`
+  (always a Corporate Secretarial value), resolving to a real staff name does
+  NOT mean that name belongs on every QB company's PIC — TAB's PIC must only
+  ever be Corporate Secretarial staff, TAO's only ever Accounting/Tax staff
+  (`lib/soa-owner.ts`'s `PIC_TEAMS_BY_COMPANY`/`picAllowedForCompany()`, used
+  by `computeSuggestedOwner()`/`collectInvolvedStaff()` AND the
+  `companies.pic` union in `lib/soa-data.ts`). Real data violates this: a
+  mistagged TAB invoice's Accounts line carried Class="Lee Jing Fei"
+  (Accounting), which a 2026-09-07 fix (see this file's `collectInvolvedStaff`
+  comment) had treated as a genuine co-assigned PIC — Vincent, 2026-09-17,
+  confirmed after seeing it surface in a real A/R Ageing export ("TAO 为什么
+  会出现sec 的人？...tab 要只会有sec的人") that this was itself the bug, not
+  a real cross-team assignment, and must be filtered rather than shown. TAC
+  is deliberately NOT in this map — its PIC is the current Nominee Director
+  (INV-QB-008), not a staff-team-restricted signal.
 
 ## Recipient / CC / email address (INV-MAIL)
 

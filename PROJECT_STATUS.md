@@ -1,5 +1,17 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-17 (SHIPPED: A/R Ageing PIC/Owner is now restricted to the staff team that actually services each QuickBooks book — TAB only ever shows Corporate Secretarial names, TAO only ever Accounting/Tax.
+
+Vincent, via WhatsApp screenshots of a real A/R Ageing Summary Report export, flagged two mismatches: TAO's PIC filter listed Corporate Secretarial names ("TAO 为什么会出现sec 的人？不是讲tao只会有acc和tax的人吗") and TAB's listed Accounting names ("tab 要只会有sec的人，谁做就是谁的名"). TAO is Accounts/Tax's own QuickBooks book (`docs/INVARIANTS.md` INV-DATA-041); TAB is Corporate Secretarial's.
+
+Root cause: `lib/soa-data.ts`'s PIC/Owner computation unions THREE signals — `companies.pic` (always a Corporate Secretarial value), a real QuickBooks invoice-line Class/Location tag (`lib/soa-owner.ts`), and a human override (`soa_owners`) — with no restriction tying a resolved name's own staff team to which QB company (TAB/TAC/TAO) the row is actually on. This directly contradicted a 2026-09-07 fix (`lib/soa-owner.ts`'s `collectInvolvedStaff`) that had celebrated a real example — "1V Capital Pte Ltd" showing BOTH "Chin Kah Ye" (Corporate Secretarial) and "Lee Jing Fei" (Accounting) as co-assigned PIC on what the on-screen picture strongly implies was a TAB row, because a real invoice's Accounts line carried Class="Lee Jing Fei". Flagged this exact conflict to Vincent via `AskUserQuestion` before implementing anything (see this file's own non-negotiable rule about never silently picking a side on a contradicted existing behavior) — he confirmed the 1V Capital case was itself the bug (a mistagged real QuickBooks invoice, not a genuine cross-team assignment) and the restriction should be strict.
+
+**Fix**: new `lib/soa-owner.ts` `PIC_TEAMS_BY_COMPANY` map (`TAB: ['Corporate Secretarial']`, `TAO: ['Accounting', 'Tax']`; TAC deliberately omitted — its PIC is the current Nominee Director per INV-QB-008, not a staff-team-restricted signal) plus `picAllowedForCompany()`, applied inside `computeSuggestedOwner()`/`collectInvolvedStaff()` (both gained a new `company: QbCompany` parameter) AND at `lib/soa-data.ts`'s `companies.pic` union (the one signal that doesn't route through either of those functions) — fixed in BOTH `computeSoaRows()`'s report-snapshot path and its `legacyComputeSoaRows()` fallback, since both independently duplicate this exact computation. `lib/staff-directory.ts` gained `teamForName()` (name-keyed sibling of the existing `teamForEmail()`). The manual "Owner" override dropdown (`soa_owners`, Chelsea's pick) was deliberately left unrestricted — Vincent's own 2026-09-07 direction ("每个公司都能放BD") already established that flow as intentionally open to any staff member, and today's screenshots were specifically about the AUTOMATIC signal, not that picker.
+
+`npx tsc --noEmit` / `npm run build` both clean. `docs/INVARIANTS.md` INV-PIC-007 (new) documents the rule and the superseded 1V Capital precedent.
+
+Previous entry follows.
+
 Last updated: 2026-09-17 (SHIPPED: SOA Drafts Email now has Billing Drafts' own sender+template picker, plus a real 1st/2nd/3rd escalating reminder sequence.
 
 Vincent: "SOA的 Drafts Email 和 List 那边的小信封的UI设计都能还原和 Billing Drafts 那边一样，并且点击 SOA Drafts了过后也可以选择发送人和需要的模板" — also supplied the real bilingual EN/中文 wording for a 1st/2nd/3rd escalating reminder sequence as 3 Word docs on his Desktop (Auto_1st/2nd/3rd.docx), read directly via `mammoth` (already installed for the NAS indexer above).

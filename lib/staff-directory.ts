@@ -187,6 +187,14 @@ export function teamForEmail(email: string | null | undefined): StaffTeam | null
   return STAFF_DIRECTORY.find(s => s.email.toLowerCase() === email.toLowerCase())?.team ?? null;
 }
 
+// Same lookup keyed by a resolved directory NAME (e.g. the output of
+// resolveStaffName) rather than email — for lib/soa-owner.ts's per-QB-company
+// PIC team restriction, which only ever has a resolved name in hand.
+export function teamForName(name: string | null | undefined): StaffTeam | null {
+  if (!name) return null;
+  return STAFF_DIRECTORY.find(s => s.name === name)?.team ?? null;
+}
+
 export function findStaffEmails(rawValue: string | null | undefined): string[] {
   if (!rawValue) return [];
   const emails: string[] = [];
