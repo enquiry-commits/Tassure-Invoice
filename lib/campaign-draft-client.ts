@@ -1,6 +1,7 @@
 'use client';
 
 import type { DraftLike } from '@/lib/draft-helper-client';
+import type { QbCompany } from '@/lib/quickbooks';
 import { todaySGT } from '@/lib/date';
 
 /**
@@ -37,10 +38,11 @@ export async function loadCampaignActor(): Promise<{ me: CampaignActor; sender: 
   return { me, sender };
 }
 
-export async function resolveCampaignRow(companyName: string, type: CampaignType, fyeMonth?: string, fyeYear?: number) {
+export async function resolveCampaignRow(companyName: string, type: CampaignType, fyeMonth?: string, fyeYear?: number, qbCompany?: QbCompany) {
   const qs = new URLSearchParams({ lookup: companyName, type });
   if (fyeMonth) qs.set('fyeMonth', fyeMonth);
   if (fyeYear) qs.set('fyeYear', String(fyeYear));
+  if (qbCompany) qs.set('qbCompany', qbCompany);
   const res = await fetch(`/api/client-communications/campaigns/preview?${qs.toString()}`);
   const json = await res.json();
   if (!res.ok || !json.row) throw new Error(json.error ?? 'Could not resolve a recipient for this company.');
@@ -73,6 +75,12 @@ export async function pickCampaignTemplate(type: CampaignType): Promise<{ id: st
  * 人和需要的模板"). Omit it to keep the old silent default/first-template
  * behavior (pickCampaignTemplate) — every existing caller that doesn't pass
  * one is unaffected.
+ *
+ * `qbCompany` (added 2026-09-17): forwarded straight to resolveCampaignRow's
+ * own new optional param — see buildRow()'s comment (lib/client-comms-
+ * resolve.ts) for why an SOA draft must scope its body's invoice list/total
+ * to one QB book, not pool TAB+TAC+TAO. Only lib/soa-actions-client.ts's
+ * buildSoaDraft() passes this; every other caller is unaffected.
  */
 export async function buildCampaignDraft(opts: {
   companyName: string;
@@ -84,9 +92,10 @@ export async function buildCampaignDraft(opts: {
   campaignName?: string;
   attachment?: File | null;
   templateId?: number;
+  qbCompany?: QbCompany;
 }): Promise<DraftLike> {
   const { companyName, type, fyeMonth, fyeYear, me, sender, attachment } = opts;
-  const row = await resolveCampaignRow(companyName, type, fyeMonth, fyeYear);
+  const row = await resolveCampaignRow(companyName, type, fyeMonth, fyeYear, opts.qbCompany);
   const template = opts.templateId ? { id: opts.templateId } : await pickCampaignTemplate(type);
 
   const createRes = await fetch('/api/client-communications/campaigns', {

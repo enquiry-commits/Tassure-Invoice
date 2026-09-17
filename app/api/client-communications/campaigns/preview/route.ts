@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
+import type { QbCompany } from '@/lib/quickbooks';
 import {
   loadCompanies, loadInvoicesByCompany, loadAutoTargetNames, loadAlreadySent, loadArPicByCompany, loadLastReminderSentAt, buildRow, makeCompanyFinder,
   type CompanyRow,
@@ -60,6 +61,15 @@ export async function GET(req: NextRequest) {
   const type = sp.get('type') as 'letter' | 'ar' | 'soa' | null;
   const fyeMonth = sp.get('fyeMonth') ?? undefined;
   const fyeYear = sp.get('fyeYear') ? Number(sp.get('fyeYear')) : undefined;
+  // Optional — only the ad-hoc single-company SOA draft flow passes this
+  // (lib/soa-actions-client.ts's buildSoaDraft), to scope the resolved row
+  // to the one QuickBooks book its "Draft Email" button was clicked on. See
+  // buildRow()'s own comment on qbCompanyFilter for why this can't just
+  // default to always-on — Campaign Centre's bulk SOA flow (the POST
+  // handler above) deliberately stays cross-book.
+  const qbCompanyParam = sp.get('qbCompany');
+  const qbCompany = qbCompanyParam && (['TAB', 'TAC', 'TAO'] as const).includes(qbCompanyParam as QbCompany)
+    ? (qbCompanyParam as QbCompany) : undefined;
   if (!lookup || !type) return NextResponse.json({ error: 'lookup and type are required' }, { status: 400 });
   if (!['letter', 'ar', 'soa'].includes(type)) return NextResponse.json({ error: 'invalid type' }, { status: 400 });
 
@@ -97,6 +107,6 @@ export async function GET(req: NextRequest) {
   }
   if (!company) return NextResponse.json({ error: `No matching company found for "${lookup}".` }, { status: 404 });
 
-  const row = buildRow(company.company_name, findCompany, invoicesByCompany, alreadySent, type, arPicByCompany, lastReminderSentAtByCompany);
+  const row = buildRow(company.company_name, findCompany, invoicesByCompany, alreadySent, type, arPicByCompany, lastReminderSentAtByCompany, qbCompany);
   return NextResponse.json({ row });
 }

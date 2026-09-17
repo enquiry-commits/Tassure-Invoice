@@ -305,12 +305,26 @@ export function buildRow(
   type: 'letter' | 'ar' | 'soa',
   arPicByCompany?: Map<string, { acc_pic: string | null; tax_pic: string | null }>,
   lastReminderSentAtByCompany?: Map<string, string>,
+  // Added 2026-09-17: an ad-hoc single-company SOA draft (the "Draft Email"
+  // button on a company-scoped /billing/soa/tab|tac|tao row) must never mix
+  // in another book's invoices — Vincent, real client email: a TAB draft's
+  // body listed TAO invoices too, because loadInvoicesByCompany()'s SOA
+  // branch pools TAB+TAC+TAO into ONE array per customer name (by design,
+  // for the OTHER caller — Campaign Centre's bulk SOA candidate list, which
+  // intentionally stays cross-book). When provided, narrows `refs` to just
+  // this one qb_company before computing totalAmount/invoiceRefs/dueDates —
+  // every InvoiceRef already carries its own `qbCompany` (loadInvoicesByCompany
+  // sets it per-push), so this is a pure filter, no new data source. Omitted
+  // (the default) keeps every existing caller — Campaign Centre's bulk
+  // preview/creation, the 'letter'/'ar' types — byte-identical.
+  qbCompanyFilter?: QbCompany,
 ): ResolvedRow {
   const key = normalize(rawName);
   const company = findCompany(rawName);
   const arPic = arPicByCompany?.get(key);
   const contact = pickContact(company, [arPic?.acc_pic, arPic?.tax_pic]);
-  const refs = invoicesByCompany.get(key) ?? [];
+  const allRefs = invoicesByCompany.get(key) ?? [];
+  const refs = qbCompanyFilter ? allRefs.filter(r => r.qbCompany === qbCompanyFilter) : allRefs;
   const totalAmount = refs.reduce((s, r) => s + r.amount, 0);
   const dueDates = refs.filter(r => r.amount > 0 && r.dueDate).map(r => r.dueDate as string);
   const oldestDueDate = dueDates.length ? dueDates.sort()[0] : null;

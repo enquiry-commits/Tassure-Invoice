@@ -476,6 +476,30 @@ again.
   pulled through `docx-post-incorporate.ts`/`docx-xml.ts` itself — `import
   type { ... }` from those two files is fine (erased at compile time), a
   real value import is not.
+- **INV-DOC-007** — `pdf-lib`'s `StandardFonts` (Helvetica etc.) only encode
+  WinAnsi — `page.drawText()` throws SYNCHRONOUSLY for any character outside
+  it, confirmed live: `'吉木锌国际贸易（上海）有限公司'` throws `WinAnsi
+  cannot encode "吉" (0x5409)`. Any real client/company name or free-text
+  QuickBooks field drawn onto a PDF with a StandardFont MUST be passed
+  through a filter (`app/api/billing/soa/pdf/route.ts`'s `safeText()`) before
+  `drawText()`, never drawn raw — this app's own real client base includes
+  Chinese-registered names (`lib/quickbooks.ts`'s
+  `CUSTOMER_NAME_CORRECTIONS`), so this is not a theoretical edge case. Found
+  2026-09-17 by adversarial code review, before shipping: the SOA Statement
+  cover page (`drawStatementCoverPage()`) called `pdfDoc.addPage()` before
+  any `drawText()`, and the caller's `try/catch` swallowed a mid-draw throw
+  WITHOUT removing that already-added page — a half-drawn page (letterhead +
+  a bare "To:" label, no client name, no totals) would have silently shipped
+  in a real client's downloaded/emailed Statement, with zero error surfaced
+  anywhere. The fix has two independent layers, both required: (1)
+  `safeText()` so a CJK name never throws in the first place, degrading to
+  visible placeholder text rather than a blank; (2) the `try/catch` around
+  page-drawing must still track the page count BEFORE drawing and
+  `removePage()` anything added if it throws anyway, since (1) can never be
+  proven to cover every future draw call someone adds later. Proper CJK
+  glyph rendering (an embedded Unicode font via `fontkit`) was deliberately
+  out of scope — `safeText()` is a crash-safety net, not a real
+  Chinese-text-rendering feature.
 
 ## Automation & cron reliability (INV-CRON)
 

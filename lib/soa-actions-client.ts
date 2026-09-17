@@ -63,6 +63,14 @@ export async function downloadSoaPdf(companyName: string, qbCompany: QbCompany):
  * reminder templates to send instead of always silently getting the
  * default/first 'soa' template. Optional — omitting it keeps the old
  * behavior.
+ *
+ * `qbCompany` (fixed 2026-09-17): now also forwarded into buildCampaignDraft
+ * so the draft's BODY (invoice list/total merge fields) is scoped to this
+ * same one book, matching the PDF attachment — it used to only reach the PDF
+ * fetch and the campaign-name string, so a company owing on 2+ systems got a
+ * TAB-titled email whose body silently listed TAO's invoices too (Vincent,
+ * real client email: "tao tab 有欠款为什么只attached tab 而已"). See
+ * lib/client-comms-resolve.ts's buildRow() qbCompanyFilter comment.
  */
 export async function buildSoaDraft(
   companyName: string,
@@ -84,7 +92,7 @@ export async function buildSoaDraft(
   const pdfFile = new File([pdfBlob], `SOA (${qbCompany}) - ${companyName}.pdf`, { type: 'application/pdf' });
 
   return buildCampaignDraft({
-    companyName, type: 'soa', me, sender, templateId,
+    companyName, type: 'soa', me, sender, templateId, qbCompany,
     campaignName: `SOA (${qbCompany}) - ${companyName} - ${todaySGT()}`,
     attachment: pdfFile,
   });
