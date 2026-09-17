@@ -705,8 +705,12 @@ again.
   real gaps: (1) the real invoice number for that exact example is
   "02610894" (confirmed against both `quickbooks_invoices.invoice_no` and
   `quickbooks_invoice_items.invoice_no`), but `SoaCompanyRow.lineItems`
-  carried it as "2610894" — the leading zero silently lost somewhere in the
-  fresh-snapshot (`ar_aging_snapshot`) path; (2) `lineItems` never carried
+  carried it as "2610894" — the leading zero silently lost in the
+  fresh-snapshot (`quickbooks_ar_aging_detail`) path, confirmed systemic
+  (433 of 541 real unpaid invoices, not just this one) and fixed at its
+  actual source, not just here — see INV-QB-022, found immediately after
+  this entry when Vincent pushed back on treating this fix as complete
+  without checking further ("你不要忘记看远一点"); (2) `lineItems` never carried
   the invoice's real line `Description` at all (a real field, present in
   `quickbooks_invoice_items.description`, e.g. "XBRL for the year (FYE
   31.12.2025)\n\nConversion of statutory financial statements..." —
@@ -1277,6 +1281,44 @@ again.
   closes the "real-time CreditMemo sync is a deferred follow-up, not
   done" gap INV-QB-015 left open, extended to the other 4 AR-relevant
   entity types confirmed by INV-QB-017.)*
+- **INV-QB-022** — QuickBooks' AgedReceivableDetail REPORT API (the source
+  of `quickbooks_ar_aging_detail`, INV-QB-017) silently reformats a purely-
+  numeric Invoice `DocNumber`, stripping its leading zero — the same real
+  invoice is "02610894" in the Invoice entity itself
+  (`quickbooks_invoices.invoice_no`, synced separately via the Invoice
+  entity API, never the Report API) but "2610894" in the report-sourced
+  `doc_number` column. This is NOT a one-off cosmetic quirk: checked
+  against ALL real unpaid invoices across all 3 books, 433 of 541 (72-92%
+  per book) have a leading zero and were affected. `loadArAgingSnapshot()`
+  (`lib/soa-data.ts`) is `computeSoaRows()`'s fresh-path source for EVERY
+  consumer of `SoaCompanyRow.lineItems[].docNumber` — Company 360's
+  Outstanding section (`app/companies/[id]/_components.tsx` renders
+  `item.docNumber` directly to staff), the Excel export
+  (`lib/soa-export.ts`), the on-screen SOA list, and the Statement PDF
+  (INV-DOC-017) — so every one of them was showing the wrong invoice
+  number for the large majority of real invoices, not just the one example
+  that surfaced it. Found live 2026-09-17 while building the Statement
+  PDF's own itemized description (Vincent: "这部分为什么生成出来的没有像这
+  个那么完整"); confirmed systemic, not a one-off, only after deliberately
+  checking the FULL real dataset rather than trusting the one fixed
+  example (Vincent, same day, pushing back on a premature "done": "你不要
+  忘记看远一点"). Fixed at the one shared chokepoint,
+  `loadArAgingSnapshot()` itself: for every Invoice-type row, cross-
+  references `quickbooks_invoices.invoice_no` by `qb_invoice_id` (a table
+  synced via the Invoice entity API, never touched by the Report API's own
+  reformatting) and uses that authoritative value whenever the report's own
+  value differs — one extra bounded query per snapshot load, best-effort
+  (a failed lookup just leaves the report's own value, same as before this
+  fix). Credit Note doc numbers (e.g. "CN240023", "JV24-138") are never
+  purely numeric, so the Report API never reformats them — this fix only
+  ever needed to touch Invoice rows. Verified against the FULL real
+  dataset post-fix: 0 remaining mismatches across all 541 checked
+  invoices, all 3 books. General lesson: a QuickBooks REPORT API response
+  is not guaranteed to preserve a field's exact printed form the way the
+  matching ENTITY API does, even for what looks like a plain passthrough
+  string field — cross-check a report-sourced identifier against its own
+  entity's API before trusting it for anything shown to a client or used
+  as a real document reference.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

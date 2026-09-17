@@ -183,12 +183,50 @@ export async function loadArAgingSnapshot(
     aging_bucket: AgingBucket;
   }>;
 
+  // Correct Invoice doc_number against its own authoritative source — found
+  // live 2026-09-17 building the Statement PDF's own itemized description
+  // (Vincent: "这部分为什么生成出来的没有像这个那么完整"), then confirmed
+  // this is NOT a one-off: QuickBooks' AgedReceivableDetail REPORT API
+  // (this table's own source) silently drops a purely-numeric DocNumber's
+  // leading zero — the same real invoice is "02610894" in the Invoice
+  // entity itself (quickbooks_invoices.invoice_no, synced separately via
+  // the Invoice entity API, never the Report API) but "2610894" here.
+  // Checked against real data: 433 of this app's 541 real unpaid invoices
+  // across TAB/TAC/TAO (72-92% per book) have a leading zero and are
+  // affected. This table is computeSoaRows()'s fresh-path source for
+  // EVERY consumer — Company 360's Outstanding section
+  // (app/companies/[id]/_components.tsx renders item.docNumber directly),
+  // the Excel export (lib/soa-export.ts), the on-screen SOA list, and this
+  // PDF — so left uncorrected here, every one of them would (and, before
+  // this fix, did) show the wrong invoice number to staff and clients.
+  // Credit Note doc numbers (e.g. "CN240023", "JV24-138") are untouched —
+  // never purely numeric, so the Report API never reformats them; this only
+  // ever needs to correct Invoice rows. Best-effort: an unmatched/failed
+  // lookup just leaves the report's own value, same as before this fix.
+  const invoiceTxnIds = [...new Set(
+    rows.filter(r => r.txn_type === 'Invoice' && r.qb_txn_id).map(r => r.qb_txn_id as string),
+  )];
+  const authoritativeDocNumber = new Map<string, string>();
+  if (invoiceTxnIds.length) {
+    try {
+      const invoiceRows = await pageAll(() => supabase
+        .from('quickbooks_invoices')
+        .select('qb_invoice_id, invoice_no')
+        .eq('qb_company', company)
+        .in('qb_invoice_id', invoiceTxnIds)) as Array<{ qb_invoice_id: string; invoice_no: string | null }>;
+      for (const inv of invoiceRows) if (inv.invoice_no) authoritativeDocNumber.set(inv.qb_invoice_id, inv.invoice_no);
+    } catch {
+      // Correction is best-effort — a failed lookup here must never break
+      // the whole snapshot read, it just leaves doc_number uncorrected.
+    }
+  }
+
   return {
     fresh: true,
     rows: rows.map(r => ({
       txnType: r.txn_type,
       qbTxnId: r.qb_txn_id,
-      docNumber: r.doc_number,
+      docNumber: (r.qb_txn_id && authoritativeDocNumber.get(r.qb_txn_id)) || r.doc_number,
       customerName: r.customer_name,
       txnDate: r.txn_date,
       dueDate: r.due_date,
