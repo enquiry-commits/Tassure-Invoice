@@ -2095,6 +2095,35 @@ again.
   pattern needs the same guard — this is not specific to these two calls.
   *(source: 2026-09-11, Vincent: "来回切换身份的时候有点信息更新延迟卡顿的
   情况".)*
+- **INV-DATA-054** — A `companies` row is only ever safely hard-deletable
+  when it has ZERO real dependent data anywhere in the system AND has never
+  been touched by a real TeamWork sync — never as a general "remove a
+  company" capability. Added 2026-09-18 for `DELETE /api/billing/tao`
+  (`companyDeletionBlockers()`), the undo path for the SAME route's own
+  manual "+ Add new company" side door (`POST`, added 2026-09-05) — Vincent,
+  after asking for exactly this once by hand (a placeholder "AAAA" row from
+  testing Add): "以后这种自己在系统开的公司for 开单的，能不能可以添加过后
+  删除". Real double gate, not a single check: (1) a real `companies.tw_status`
+  refuses outright — this route is only for undoing what POST itself just
+  did, never a real TeamWork-tracked client, regardless of whether that
+  client happens to have zero invoices yet; (2) a real dependent row in ANY
+  of `ar_reminder`/`email_drafts` (real `company_id` FK — see `lib/company-
+  360.ts`'s own "Reliable links" comment), or `quickbooks_invoices`/
+  `quickbooks_credit_memos`/`generated_invoices`/`trademark_records`/
+  `nd_appointments` (company_name text match — none of these carry a real
+  FK to `companies` at all) or `post_incorporate_operations` (UEN text
+  match) refuses, with the specific real reason(s) surfaced rather than a
+  generic failure. A query ERROR in any of these checks must never read as
+  "0, safe to delete" — every branch explicitly throws instead of letting a
+  failed count default to zero, since that would be a silent false negative
+  that could let a real client's row get deleted. Verified against real
+  data before shipping: a fresh throwaway company (mirroring exactly what
+  POST creates) correctly returned zero blockers; "1V Capital Pte. Ltd."
+  (known real AR Reminder/QuickBooks/Post Incorporate history) correctly
+  returned 5 real blocking reasons. The UI (`app/billing/tao/page.tsx`) only
+  ever offers the delete button on a row with `lastInvoice === null` (an
+  already-billed company could never pass check #2 above anyway), but the
+  server remains the real authority regardless of what the UI shows.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Receipt, RefreshCw, Plus, X, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, AlertTriangle, Mail } from 'lucide-react';
+import { Receipt, RefreshCw, Plus, X, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, AlertTriangle, Mail, Trash2 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
+import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { isValidEmail } from '@/lib/campaign-recipients';
 import { rollRecurringDescriptionForward } from '@/lib/invoice-period';
@@ -58,6 +59,49 @@ export default function TaoBillingPage() {
       setAddCompanyError(err instanceof Error ? err.message : String(err));
     } finally {
       setAddCompanySubmitting(false);
+    }
+  };
+
+  // Undo the "+ Add new company" side door above — Vincent, 2026-09-18,
+  // after asking for exactly this once (a placeholder row from testing the
+  // Add button): "以后这种自己在系统开的公司for 开单的，能不能可以添加过
+  // 后删除" (companies I create myself for billing — can they be deleted
+  // after adding). Only ever offered for a row with no invoice history yet
+  // (lastInvoice === null, same "Never billed" signal already shown) — a
+  // company that's genuinely been billed can never pass the server's own
+  // deletion checks anyway (see DELETE handler in app/api/billing/tao/
+  // route.ts), so there's no point showing the button there. The server is
+  // still the real authority: it also refuses a company TeamWork has synced
+  // or that has real history anywhere else in the system, with the specific
+  // reason surfaced here rather than a generic failure.
+  const [pendingDeleteCompany, setPendingDeleteCompany] = useState<TaoCompanyRow | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+  const confirmDeleteCompany = async () => {
+    const target = pendingDeleteCompany;
+    if (!target?.companyId || deleteSubmitting) return;
+    setDeleteSubmitting(true);
+    // Closed either way, success or refusal — ConfirmDeleteModal is a
+    // full-screen overlay, so an error set while it stays open would be
+    // invisible behind it until the user separately cancels; the error
+    // banner already names the company, so losing the modal's own context
+    // costs nothing.
+    setPendingDeleteCompany(null);
+    try {
+      const res = await fetch('/api/billing/tao', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId: target.companyId }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setDeleteError(json.error ?? 'Could not remove this company.'); return; }
+      setDeleteError(null);
+      if (expanded === target.companyName) setExpanded(null);
+      load();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeleteSubmitting(false);
     }
   };
 
@@ -152,6 +196,9 @@ export default function TaoBillingPage() {
             <RefreshCw size={13} />Refresh
           </button>
         </div>
+        {deleteError && (
+          <div style={{ padding: '8px 16px', fontSize: 11.5, color: 'var(--status-danger)', fontWeight: 600, borderTop: '1px solid #fee2e2', background: '#fef2f2' }}>{deleteError}</div>
+        )}
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
           <div style={{ minWidth: 760 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: taoListColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
@@ -171,6 +218,16 @@ export default function TaoBillingPage() {
                   <div style={{ padding: '0 6px' }}>
                     <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName}
+                      {!c.lastInvoice && c.companyId && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setDeleteError(null); setPendingDeleteCompany(c); }}
+                          title="Remove this company (only possible while it has no real history anywhere)"
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 6, border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', flexShrink: 0 }}
+                          onMouseEnter={e => { e.currentTarget.style.color = '#dc2626'; e.currentTarget.style.background = '#fee2e2'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = '#cbd5e1'; e.currentTarget.style.background = 'transparent'; }}>
+                          <Trash2 size={12} />
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -214,6 +271,14 @@ export default function TaoBillingPage() {
           </div>
         );
       })()}
+
+      {pendingDeleteCompany && (
+        <ConfirmDeleteModal
+          label={pendingDeleteCompany.companyName}
+          onCancel={() => setPendingDeleteCompany(null)}
+          onConfirm={confirmDeleteCompany}
+        />
+      )}
     </div>
   );
 }

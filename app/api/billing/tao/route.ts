@@ -175,3 +175,95 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ company: { companyId: inserted.id, companyName: inserted.company_name, lastInvoice: null } });
 }
+
+// None of these tables carry a real `company_id`/UEN FK to `companies`
+// except ar_reminder and email_drafts (see lib/company-360.ts's own "Reliable
+// links" comment) — everything else here is matched by company_name text,
+// the same convention that whole file already documents. A query ERROR must
+// never read as "0, safe to delete" — that would be a silent false negative
+// letting a real client's data get deleted; every branch below explicitly
+// throws instead of defaulting a failed count to zero.
+async function companyDeletionBlockers(
+  supabase: ReturnType<typeof createAdminClient>,
+  company: { id: number; company_name: string; registration_no: string | null },
+): Promise<string[]> {
+  const name = company.company_name;
+  type CountResult = { count: number | null; error: { message: string } | null };
+  const checks: Array<[string, Promise<CountResult>]> = [
+    ['AR Reminder cycle(s)', Promise.resolve(supabase.from('ar_reminder').select('id', { count: 'exact', head: true }).eq('company_id', company.id))],
+    ['email draft(s)', Promise.resolve(supabase.from('email_drafts').select('id', { count: 'exact', head: true }).eq('company_id', company.id))],
+    ['QuickBooks invoice(s)', Promise.resolve(supabase.from('quickbooks_invoices').select('qb_invoice_id', { count: 'exact', head: true }).ilike('customer_name', name))],
+    ['QuickBooks credit memo(s)', Promise.resolve(supabase.from('quickbooks_credit_memos').select('qb_credit_memo_id', { count: 'exact', head: true }).ilike('customer_name', name))],
+    ['generated invoice(s)', Promise.resolve(supabase.from('generated_invoices').select('id', { count: 'exact', head: true }).ilike('company_name', name))],
+    ['trademark record(s)', Promise.resolve(supabase.from('trademark_records').select('id', { count: 'exact', head: true }).ilike('company_name', name))],
+    ['ND appointment(s)', Promise.resolve(supabase.from('nd_appointments').select('nd_id', { count: 'exact', head: true }).ilike('company_name', name))],
+  ];
+  if (company.registration_no) {
+    checks.push(['Post Incorporate record(s)', Promise.resolve(supabase.from('post_incorporate_operations').select('id', { count: 'exact', head: true }).ilike('company_uen', company.registration_no))]);
+  }
+  const results = await Promise.all(checks.map(async ([label, query]) => {
+    const { count, error } = await query;
+    if (error) throw new Error(`Could not verify "${label}" is clear: ${error.message}`);
+    return count && count > 0 ? `${count} ${label}` : null;
+  }));
+  return results.filter((r): r is string => r !== null);
+}
+
+// DELETE /api/billing/tao — undo a manual "+ Add new company" mistake (the
+// POST handler above), never a general company-delete tool. Vincent,
+// 2026-09-18, after manually asking for exactly this once (a placeholder
+// "AAAA" row from testing the Add button): "以后这种自己在系统开的公司for
+// 开单的，能不能可以添加过后删除" (companies I create myself in the system
+// for billing — can they be deletable after adding). Deliberately narrow and
+// defense-in-depth, not a single check: (1) refuses outright if TeamWork has
+// ever synced this company (a real `tw_status`) — this route is only for a
+// row that's STILL in the exact state POST leaves it in, a real client
+// TeamWork picked up is never this route's business regardless of whether
+// it has invoices yet; (2) refuses if any real dependent record exists
+// anywhere in the system (see companyDeletionBlockers, checked against every
+// table a real client's data could live in), with the specific reason(s) in
+// the error so a genuine "can't delete, here's why" reads as a real answer,
+// not a mystery. Hard delete, not a soft one — the AAAA precedent was a
+// clean hard delete with zero data loss because it genuinely had nothing to
+// lose; that is precisely the state this route requires before proceeding.
+export async function DELETE(req: NextRequest) {
+  const auth = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => req.cookies.getAll(), setAll: () => undefined } },
+  );
+  const { data: authData } = await auth.auth.getUser();
+  const account: ApprovedAccount | null = getApprovedAccount(authData.user?.email);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+
+  const { companyId } = await req.json().catch(() => ({})) as { companyId?: number };
+  if (!companyId) return NextResponse.json({ error: 'companyId is required' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  const { data: company, error: companyError } = await supabase
+    .from('companies')
+    .select('id, company_name, registration_no, tw_status')
+    .eq('id', companyId)
+    .maybeSingle();
+  if (companyError) return NextResponse.json({ error: companyError.message }, { status: 503 });
+  if (!company) return NextResponse.json({ error: 'Company not found — it may already have been removed.' }, { status: 404 });
+
+  if (company.tw_status) {
+    return NextResponse.json({ error: `"${company.company_name}" has been synced from TeamWork (status: ${company.tw_status}) — it's a real tracked client, not something this can remove.` }, { status: 409 });
+  }
+
+  let blockers: string[];
+  try {
+    blockers = await companyDeletionBlockers(supabase, company);
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 503 });
+  }
+  if (blockers.length) {
+    return NextResponse.json({ error: `Can't remove "${company.company_name}" — it already has real history: ${blockers.join(', ')}.` }, { status: 409 });
+  }
+
+  const { error: deleteError } = await supabase.from('companies').delete().eq('id', companyId);
+  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 503 });
+
+  return NextResponse.json({ ok: true });
+}
