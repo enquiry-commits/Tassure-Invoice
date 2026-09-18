@@ -113,6 +113,12 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
 // does the actual PDF-merge + campaign creation, and the parent still owns
 // showing OutlookStyleSendModal (same reasoning as Billing Drafts keeping
 // that ONE instance at the page's top level, not one per row).
+
+// Canonical display order for the download picker below — QbCompany's own
+// declared union order, not the order books happen to appear in `invoices`
+// (which follows the AgedReceivableDetail report, e.g. TAO rows before TAB).
+const BOOK_ORDER: QbCompany[] = ['TAB', 'TAC', 'TAO'];
+
 function SoaDraftPopover({
   company, qbCompany, me,
   senders, senderId, setSenderId, templates, selectedTemplateId, setSelectedTemplateId,
@@ -209,6 +215,74 @@ function SoaDraftPopover({
               {drafting ? 'Drafting…' : 'Draft'}
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// SoaDetail's Download button in 'ALL' mode only — added 2026-09-18. Vincent
+// first saw this still hand back one merged "SOA (ALL)" PDF exactly like
+// before the Draft-attachment fix ("为什么还是Download All 的"), then chose
+// (over "auto-download both" and "keep the merged PDF") a small popover
+// listing each book with a real balance as its own individual download,
+// then asked for one more thing: "点击下载 TAB / TAO / All (TAB+TAO)" — the
+// combined merged PDF stays too, as its own explicitly-labeled last choice,
+// not gone entirely. `books` is already exactly "books with a real balance"
+// — SoaDetail derives it from the same `invoices` list the table renders,
+// which only ever contains real outstanding line items. The merged option
+// only renders when there are 2+ books — with a single book it would just
+// be a second, identically-scoped copy of that one book's own row.
+function SoaDownloadPopover({
+  books, downloading, isOpen, onOpenChange, onDownload,
+}: {
+  books: QbCompany[]; downloading: boolean;
+  isOpen: boolean; onOpenChange: (open: boolean) => void;
+  onDownload: (book: SoaCompanySelector) => void;
+}) {
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) onOpenChange(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [isOpen, onOpenChange]);
+
+  const pick = (book: SoaCompanySelector) => { onOpenChange(false); onDownload(book); };
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
+      <button onClick={() => onOpenChange(!isOpen)} disabled={downloading || !books.length}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', fontSize: 13, fontWeight: 700, cursor: downloading ? 'default' : 'pointer' }}>
+        {downloading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={14} />}
+        {downloading ? 'Downloading…' : 'Download SOA PDF'}
+      </button>
+      {isOpen && (
+        // Opens upward — same reason as SoaDraftPopover's 'button' variant
+        // right above: this button sits at the bottom of SoaDetail's own
+        // overflow:hidden modal, so downward would clip it almost entirely.
+        <div ref={popoverRef} style={{
+          position: 'absolute', right: 0, bottom: '100%', marginBottom: 4, zIndex: 30, background: '#fff',
+          border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 200, padding: 6,
+        }}>
+          {books.map(book => (
+            <button key={book} onClick={() => pick(book)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6, border: 'none', background: 'none', fontSize: 12.5, fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+              {book}
+            </button>
+          ))}
+          {books.length > 1 && (
+            <>
+              <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0' }} />
+              <button onClick={() => pick('ALL')}
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6, border: 'none', background: 'none', fontSize: 12.5, fontWeight: 700, color: '#0f766e', cursor: 'pointer' }}>
+                All ({books.join('+')})
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
@@ -825,6 +899,7 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
   // icon (SoaDraftPopover), not the old one-click-send button.
   const draftPickers = useSoaDraftPickers();
   const [draftPopoverOpen, setDraftPopoverOpen] = useState(false);
+  const [downloadPopoverOpen, setDownloadPopoverOpen] = useState(false);
 
   useEffect(() => {
     fetch(`/api/billing/soa/detail?companyName=${encodeURIComponent(company.companyName)}&company=${qbCompany}`)
@@ -833,11 +908,23 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
       .catch(err => setLoadError(err instanceof Error ? err.message : String(err)));
   }, [company.companyName, qbCompany]);
 
-  const downloadPdf = async () => {
+  // 'ALL' mode only — which books SoaDownloadPopover below offers. Derived
+  // from `invoices` (the same list the table renders, so it's already
+  // exactly "books with a real balance" — no separate fetch needed), not
+  // from the raw appearance order in that list.
+  const booksWithBalance = useMemo(
+    () => BOOK_ORDER.filter(b => (invoices ?? []).some(inv => inv.qbCompany === b)),
+    [invoices],
+  );
+
+  const downloadPdf = async (book: SoaCompanySelector) => {
     setDownloading(true); setResult(null);
     try {
-      await downloadSoaPdf(company.companyName, qbCompany);
-      setResult({ ok: true, msg: `Combined PDF (${company.invoiceCount} invoices) downloaded.` });
+      await downloadSoaPdf(company.companyName, book);
+      setResult({
+        ok: true,
+        msg: book === qbCompany ? `Combined PDF (${company.invoiceCount} invoices) downloaded.` : `${book} PDF downloaded.`,
+      });
     } catch (err) {
       setResult({ ok: false, msg: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -911,11 +998,19 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
       )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-        <button onClick={downloadPdf} disabled={downloading || !invoices?.length}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', fontSize: 13, fontWeight: 700, cursor: downloading ? 'default' : 'pointer' }}>
-          {downloading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={14} />}
-          {downloading ? 'Merging…' : 'Download SOA PDF'}
-        </button>
+        {/* 'ALL' mode: a choice (each book with a real balance, plus the
+            merged PDF as its own explicit last option) rather than one
+            button that always merges — see SoaDownloadPopover's own
+            comment. Single-book pages are untouched: same plain button,
+            calling the same downloadPdf, just now parametrized. */}
+        {qbCompany === 'ALL'
+          ? <SoaDownloadPopover books={booksWithBalance} downloading={downloading}
+              isOpen={downloadPopoverOpen} onOpenChange={setDownloadPopoverOpen} onDownload={downloadPdf} />
+          : <button onClick={() => downloadPdf(qbCompany)} disabled={downloading || !invoices?.length}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', fontSize: 13, fontWeight: 700, cursor: downloading ? 'default' : 'pointer' }}>
+              {downloading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={14} />}
+              {downloading ? 'Merging…' : 'Download SOA PDF'}
+            </button>}
         <SoaDraftPopover
           company={company} qbCompany={qbCompany} me={draftPickers.me}
           senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}

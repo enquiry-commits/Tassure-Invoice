@@ -810,11 +810,13 @@ again.
   需要TAC的" — for a company owing on 2 of the 3 books, the draft needs
   each of those 2 books' OWN complete Statement PDF as its own attachment,
   not one file combining them, and never a third attachment for a book with
-  no real balance. `downloadSoaPdf()` (`lib/soa-actions-client.ts`) is
-  UNCHANGED and deliberately so — "当然在外面Download PDF的时候可以单独下
-  载选择 TAB还是TAO的 SOA PDF" confirms the standalone download button (per
-  book, or the existing single merged 'ALL' PDF) was never the part that
-  was wrong. Only `buildSoaDraft()` changed: for `qbCompany === 'ALL'`, it
+  no real balance. At the time, "当然在外面Download PDF的时候可以单独下载
+  选择 TAB还是TAO的 SOA PDF" was read as confirming the standalone download
+  button (per book, or the existing single merged 'ALL' PDF) was never the
+  part that was wrong, so `downloadSoaPdf()` (`lib/soa-actions-client.ts`)
+  itself was left UNCHANGED in this first round — that reading turned out
+  to be incomplete; see the correction below, same day. `buildSoaDraft()`
+  changed: for `qbCompany === 'ALL'`, it
   now tries all 3 books' own single-book PDF endpoint (the exact same one
   each book's own "Download SOA PDF" button already calls) in parallel and
   keeps only the ones that succeed — a 404 there is not an error, it's
@@ -834,6 +836,36 @@ again.
   `quickbooks_invoices`/`quickbooks_credit_memos`, the same tables that
   route's own 404 check reads) — confirming the draft will correctly
   attach exactly 2 files, never a spurious third.
+
+  Correction, same day: the standalone "Download SOA PDF" button in 'ALL'
+  mode DID still need to change — it had kept silently calling
+  `downloadSoaPdf(name, 'ALL')` and only ever produced one merged file.
+  Real proof, not more wording: a live screenshot of the button doing
+  exactly that, and "为什么还是Download All 的". `当然在外面Download PDF的
+  时候可以单独下载选择 TAB还是TAO的 SOA PDF` actually meant the button
+  itself should let him choose TAB's or TAO's PDF individually, not that it
+  should be left alone. Fixed by giving `SoaDetail` (`app/billing/soa/
+  _components.tsx`) a `SoaDownloadPopover`, rendered only when `qbCompany
+  === 'ALL'`: it lists every book with a real balance — derived from the
+  same `invoices` array the line-item table already renders, so it cannot
+  disagree with what is on screen — as its own one-click single-book
+  download, plus (Vincent's own final refinement, "再优化一点就是点击下载
+  TAB / TAO / All (TAB+TAO)") an explicitly-labeled combined option at the
+  bottom, shown only when 2+ books have a balance, still calling the same
+  `downloadSoaPdf(name, 'ALL')` from round 1 unchanged. Single-book pages
+  (a real `qbCompany`, never `'ALL'`) keep the original plain button.
+  Verified the same way as round 1, directly against 1V Capital's real AR
+  aging snapshot: TAB 1 row, TAO 3 rows, TAC 0 rows — so the picker lists
+  exactly `['TAB', 'TAO']` plus an `All (TAB+TAO)` option, matching what
+  the account actually owes.
+
+  General lesson for both rounds: a fix built from Vincent's wording alone,
+  without watching the specific control get used, is provisional — "当然在
+  外面Download PDF的时候可以单独下载选择 TAB还是TAO的" genuinely admitted
+  both "leave it alone" and "let me pick TAB or TAO here too," and only a
+  live screenshot of the actual button settled which one he meant. Treat a
+  natural-language confirmation of a UI behavior as settled only once the
+  specific control has actually been exercised, not just described.
 
 ## Automation & cron reliability (INV-CRON)
 
