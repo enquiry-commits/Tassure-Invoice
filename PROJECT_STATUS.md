@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-18 (SHIPPED: Company 360's Outstanding table gets a new rightmost column with the exact same "Download SOA PDF" All-books button SoaDetail's own modal just got — Vincent: "复制这个 Download SOA PDF 的按钮，但是是All 的版本").
+
+Extracted the popover built in the immediately-previous entry (below) out of `app/billing/soa/_components.tsx` into `components/billing/SoaDownloadPopover.tsx` so both places render the same component instead of a second copy — same reasoning `BillingInvoiceReference` and `lib/soa-actions-client.ts` were already extracted for. The shared file exports the presentational `SoaDownloadPopover` (unchanged behavior; `SoaDetail` still derives `books` from the invoices it already fetched, now just importing rather than defining it) plus a new self-contained `SoaAllDownloadButton({ companyName })` for callers with no invoices already loaded — it fetches `/api/billing/soa/detail?...&company=ALL` itself and derives the same book list the same way.
+
+`OutstandingSection` (`app/companies/[id]/_components.tsx` — a server component; rendering a `'use client'` component as its child is the normal Next.js boundary, no conversion needed) gets a new 7th column (`GRID_7_COLS`, same "N columns → N-equal split" convention as every other Company 360 section) rendering one `SoaAllDownloadButton` per row. One row per book means a company owing on 2 books shows the button twice — confirmed expected, not a dedupe bug: "好像这边有两个就要有2个一样的All 按钮".
+
+`npx tsc --noEmit` / `npx eslint` (only the same 3 pre-existing, unrelated errors in `_components.tsx`, confirmed via `git stash` earlier today; zero issues in the two new/touched files) / `npm run build` all clean. Could not click through this one live — this environment's browser has no real Google login for this app — so this rests on the same book-balance derivation already verified live against 1V Capital in the previous entry (identical endpoint, identical `BOOK_ORDER.filter` logic) plus a clean build, not a fresh screenshot.
+
+Previous entry follows.
+
 Last updated: 2026-09-18 (FIXED, correcting the immediately-previous entry below: the standalone "Download SOA PDF" button in 'ALL' mode still needed to change too — it wasn't the part that was already right, as that entry claimed).
 
 The previous entry (still below, unedited) said the standalone Download button was "deliberately unchanged" because Vincent's own words had confirmed it was fine. He came back with a live screenshot proving otherwise: the button in 'ALL' mode still silently produced one merged "SOA (ALL) - ... .pdf", and "为什么还是Download All 的". His earlier sentence — "当然在外面Download PDF的时候可以单独下载选择 TAB还是TAO的 SOA PDF" — actually meant the button itself should let him choose TAB's or TAO's PDF individually, not "leave this button alone." Lesson: a fix built from wording alone, without watching the specific control get used, is provisional — see the new general lesson added to `docs/INVARIANTS.md` INV-DOC-020.

@@ -867,6 +867,24 @@ again.
   natural-language confirmation of a UI behavior as settled only once the
   specific control has actually been exercised, not just described.
 
+  Round 3, same day: `SoaDownloadPopover` moved out of `app/billing/soa/
+  _components.tsx` into `components/billing/SoaDownloadPopover.tsx` —
+  Vincent wanted the identical button reachable from Company 360's
+  Outstanding table too ("复制这个 Download SOA PDF 的按钮，但是是All 的版
+  本"), and a second independently-styled copy of the same popover is
+  exactly the drift this codebase already has a name for (see
+  `lib/company-name.ts`'s four-divergent-matchers header). The shared file
+  exports the presentational popover itself (unchanged; `SoaDetail` still
+  derives `books` from the `invoices` it already fetched for its own table,
+  now just importing the component instead of defining it) plus a new
+  self-contained `SoaAllDownloadButton({ companyName })` for callers with
+  no invoices list already in hand — it fetches `/api/billing/soa/detail`
+  itself. `OutstandingSection` (`app/companies/[id]/_components.tsx`, a
+  SERVER component) renders one `SoaAllDownloadButton` per row — one row
+  per book a company owes on, so a company owing on 2 books shows this
+  button twice, confirmed expected ("好像这边有两个就要有2个一样的All 按
+  钮") rather than something to deduplicate down to one.
+
 ## Automation & cron reliability (INV-CRON)
 
 - **INV-CRON-001** — Vercel Hobby-tier functions have a hard,
