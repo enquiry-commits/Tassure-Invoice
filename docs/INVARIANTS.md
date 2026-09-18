@@ -2212,3 +2212,30 @@ again.
   search's results would lose them. Before wiring up dispatch logic for any
   FUTURE Anthropic server tool (code execution, bash, etc.), check whether
   it needs any client-side handling at all — most don't.
+- **INV-AI-002** — When this app gains a genuinely new capability on a page
+  (a combined/merged view, a new download option, a new action), check
+  whether the AI assistant has its own hand-written comment somewhere
+  actively saying that capability doesn't exist yet — a stale "not
+  supported" note left over from before the feature shipped is a real,
+  silent trap, not a harmless leftover. Found live 2026-09-18: `lib/deep-
+  links.ts`'s `soaDeepLink()` had an explicit 2026-09-09 comment/type
+  restriction saying `qbCompany` "must be... never 'ALL'", accurate on the
+  day it was written (the combined Statement was a page with no real
+  generatable PDF yet) but never revisited when `app/api/billing/soa/pdf`'s
+  own `company=ALL` combined-PDF mode shipped 2026-09-17 (the same session's
+  own INV-DOC-012 through 018 work). Confirmed real: a client owing on both
+  TAB and TAO, asked the assistant for "All" of it combined into one
+  document, got told flatly that no combined PDF exists and to download the
+  two books' SOAs separately — wrong, and actively worse than saying
+  nothing, since it confidently denied a real, already-shipped feature.
+  `checkOutstandingBalance()` (`app/api/assistant/route.ts`) now also
+  returns `soa_link_all` (built via the now-widened `soaDeepLink('ALL', …)`)
+  whenever a company's `byQbCompany` has 2+ lines, with explicit routing
+  guidance (both the tool's own `description` and the static system prompt)
+  telling the model to use it for "全部/All/合并/一起" requests instead of
+  handing back each book's own link separately. General lesson: a tool-
+  routing comment or type restriction written to describe "what's possible
+  today" needs the same staleness suspicion as a stale INVARIANTS.md entry
+  — grep for a feature's name/page across the assistant's own tool
+  descriptions and deep-link helpers whenever it changes, not just its own
+  page's code.

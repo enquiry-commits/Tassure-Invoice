@@ -27,15 +27,27 @@ export function lateFilingDeepLink(companyName: string): string {
 }
 
 // SOA (Statement of Account) is its own real feature — a PDF of a
-// company's unpaid invoices downloaded from /billing/soa/{tab,tac,tao},
+// company's unpaid invoices downloaded from /billing/soa/{tab,tac,tao,all},
 // with a "Draft Email" button right there to send it to the client — NOT
 // the same thing as Billing Drafts (new invoice generation). Confirmed
 // real bug in the assistant, 2026-09-09: asked "我要开SOA", it offered to
-// preview a new Billing Draft instead. `qbCompany` must be a real 'TAB' |
-// 'TAC' | 'TAO' (never 'ALL' — the "All" combined view exists but a
-// specific company's outstanding balance is always tagged with the real
-// QuickBooks company it's under, from check_outstanding_balance).
-export function soaDeepLink(qbCompany: 'TAB' | 'TAC' | 'TAO', companyName: string): string {
+// preview a new Billing Draft instead.
+//
+// Corrected 2026-09-18 — this used to say `qbCompany` "must be a real 'TAB'
+// | 'TAC' | 'TAO' (never 'ALL')", which was accurate THAT day (the combined
+// "All" download didn't exist yet as a real generatable PDF, only as a
+// page) but went stale once app/api/billing/soa/pdf's own `company=ALL`
+// mode shipped 2026-09-17 — a real, working ONE-PDF-across-TAB/TAC/TAO
+// Statement, same /billing/soa/all page this already links to. Confirmed
+// real bug from that staleness, same day: a client owed on both TAB and
+// TAO, the user asked the assistant for "All" the combined one, and it told
+// them no combined PDF exists and to download the two separately — because
+// checkOutstandingBalance() only ever built per-book links, this file's own
+// stale comment having told it 'ALL' was invalid. `/billing/soa/all` reads
+// the same `openCompany` deep-link param as every other SOA page (see
+// app/billing/soa/_components.tsx's shared SoaBillingView), so this needed
+// no new page logic — just widening this function's own type.
+export function soaDeepLink(qbCompany: 'TAB' | 'TAC' | 'TAO' | 'ALL', companyName: string): string {
   return `/billing/soa/${qbCompany.toLowerCase()}?${new URLSearchParams({ openCompany: companyName }).toString()}`;
 }
 
