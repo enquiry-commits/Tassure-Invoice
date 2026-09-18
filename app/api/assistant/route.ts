@@ -1449,6 +1449,7 @@ WHEN ASKED WHAT YOU CAN DO ("你能做什么", "有什么功能", "help", "怎�
 - 人: 自己的任务、同事的任务和近期动向（管理层账号）、ND 在任数量、工作量分布
 - 帮你操作（都需要你点确认才真正执行）: 开单草稿预览、改发票、标记 AR 进度/指派 PIC、标记迟报已处理、生成 Post Incorporate 文件
 - 名单可以下载成 Excel 拿去用
+- 跟系统数据无关的一般问题，也可以直接问——会去搜网页找答案
 End by inviting one concrete next question. Never claim an ability you do not have — you cannot send emails, create QuickBooks invoices by yourself, or change data without the user's click.
 
 System map (link pages with markdown, e.g. [开单草稿](/billing?tab=billing)):
@@ -1522,6 +1523,8 @@ Use recent_changes for "最近谁改了什么" / "这家公司最近被改了什
 For company-WIDE (not one-company) questions, four more real tools exist — never say "no such capability" for these without calling the matching tool first: trademark_summary (how many trademarks registered/in-progress, which are expiring soon), late_filing_summary (how many companies overdue in total, broken down by severity and by which staff member has the most), communications_summary (how many emails sent recently, all-time status/campaign-type breakdown), nd_roster_capacity (each nominee director's current active-appointment count — there is NO fixed "max slots per person" rule anywhere in this system, never invent one). revenue_workload_summary (revenue/invoice-volume trend by year, PIC workload) is the same canViewReports-gated management tier as customer_profile_summary.
 
 "我们有什么服务", "XX服务多少钱", "做XX大概多少费用", "XX包含什么/怎么运作的/流程是什么", "你们的付款条款是什么" (what Tassure offers, what it standardly charges, or how a service actually works) → service_pricing_lookup, NEVER invented from memory — this is real reference data (Tassure's own 11 Sep 2026 proposal), not a guess, but it is a STANDARD/LIST price, never a specific client's actual invoice. The price is only half of what this tool is for — Vincent, 2026-09-11: "价格服务说明也是一大重点...让系统可以更好理解流程和细节和我们真正服务包含什么" — each row's description is the real substance (the concrete scope/steps a service covers), so for "what's included" style questions lead with that, not the fee. When a number IS what's asked: quote priceDisplay verbatim rather than doing your own math on the min/max numbers, say plainly when a row is quote_required ("按实报价，需要看实际情况") or is_foc ("这个是免费/包含在配套内的，不收费"), and if the question is really "what does THIS client owe/get billed" redirect to check_outstanding_balance/preview_invoice_draft instead of this catalog.
+
+For anything genuinely unrelated to Tassure's own data — a general knowledge question, something about the outside world, a fact you're not confident of and this system has no tool for — use web_search rather than answering from memory or declining. This is a LAST RESORT, not a first instinct: if the question is about a company, client, invoice, deadline, staff member, or anything else this system tracks, use the matching tool above instead, even if you think you already know the answer — this system's own live data is always more current and more trustworthy than a general web search for anything inside it. When you do use web_search, say plainly that you searched the web (not this system's own records) so the user can judge the answer accordingly, and cite what you found rather than presenting it as something you already knew.
 
 Use tools to answer data questions. Distinguish confirmed live data from general workflow guidance. If the user should go somewhere, include the markdown link. If you don't know or lack row-level context, say so plainly.`;
 }
@@ -1684,6 +1687,25 @@ const CLAUDE_TOOLS = [
       nominatorCorpContactNumber: { type: 'string' }, nominatorCorpDateBecameNominator: { type: 'string' },
     } } },
   }, required: ['company', 'directors', 'shareholders'] } },
+  // Anthropic's own hosted web-search tool — added 2026-09-18, Vincent:
+  // "现在的Chatbot 还是很简陋...我问不相关的问题，它可以去到Google 引擎去找相关
+  // 答案" (the chatbot is too limited — a question unrelated to this system
+  // should be able to search the web for a real answer). Unlike every other
+  // entry in this array, this is NOT one of this app's own tools dispatched
+  // through runTool() below — Anthropic executes the search itself
+  // server-side as part of generating its response, so it never appears in
+  // this file's own tool_use-filtered dispatch loop (see claudeAnswer()'s
+  // `toolUses` filter, which only ever matches `type === 'tool_use'`; a
+  // server-tool call comes back as `server_tool_use` and is already resolved
+  // into a `web_search_tool_result` block by the time this route sees the
+  // response) — no new dispatch code needed here, only the tool declaration
+  // and the routing guidance in staticSystemPrompt() below telling the model
+  // to prefer this system's own real tools for anything about Tassure's own
+  // data and reach for this only on genuinely unrelated/general questions.
+  // max_uses caps real per-call cost (Anthropic bills web search separately
+  // from normal token usage) — 3 is generous for a single chat turn without
+  // leaving it unbounded.
+  { type: 'web_search_20250305', name: 'web_search', max_uses: 3 },
 ];
 
 async function runTool(name: string, input: Record<string, unknown>, account: ApprovedAccount | null) {

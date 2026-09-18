@@ -2188,3 +2188,27 @@ again.
   assuming the 60s ceiling (Vercel's max for this plan) is the fix. *(source:
   2026-09-11, Vincent: "然后具体一直显示网络错误", confirmed via a Vercel log
   screenshot.)*
+
+## AI Assistant / chatbot (INV-AI)
+
+- **INV-AI-001** — An Anthropic-hosted SERVER tool (e.g. `web_search`,
+  added to `CLAUDE_TOOLS` in `app/api/assistant/route.ts` 2026-09-18) is
+  architecturally different from every other entry in that array and needs
+  NO dispatch code in `runTool()` — Anthropic executes it server-side as
+  part of generating the response, before this route ever sees it. Its
+  invocation comes back as a `server_tool_use` content block (already
+  resolved into a `web_search_tool_result` block alongside it), never
+  `tool_use` — `claudeAnswer()`'s own tool-loop filters `data.content` for
+  `b.type === 'tool_use'` specifically to decide what to dispatch, so a
+  server tool's blocks simply never match that filter and `runTool()` is
+  never called for them; if the model's whole turn only used a server tool
+  (no request-response round trip needed), `stop_reason` comes back
+  `'end_turn'`, not `'tool_use'`, and the loop already returns the
+  synthesized final text as-is, no extra handling required. The one thing
+  that DOES matter: `convo.push({ role: 'assistant', content: data.content
+  })` must keep pushing the WHOLE content array verbatim (already true,
+  unchanged) — it must never be filtered down to just `tool_use`/`text`
+  blocks before being pushed back, or a later turn referencing an earlier
+  search's results would lose them. Before wiring up dispatch logic for any
+  FUTURE Anthropic server tool (code execution, bash, etc.), check whether
+  it needs any client-side handling at all — most don't.
