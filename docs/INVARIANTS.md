@@ -2316,3 +2316,46 @@ again.
   capability that existed on the day it was written can quietly start
   telling the model to do something WORSE than what later shipped, with no
   error, no stale-comment smell, just steadily suboptimal replies.
+
+  Extended a fourth time, same day, immediately after the round above
+  shipped: Vincent tried it live — "这边的还是不完善" — and a real
+  conversation showed the FIRST reply now correctly listing the TAB/TAO/All
+  choices (that fix genuinely worked), then a SHORT FOLLOW-UP that just
+  named which one ("我要下载 All的", no company re-stated, nothing left
+  ambiguous) got "抱歉，我这边没有任何工具能直接下载或生成 PDF" — an even
+  more absolute false claim than the original bug. Root cause: a terse
+  follow-up narrowing an earlier SOA answer reads to the model as answerable
+  from conversation memory alone, so `check_outstanding_balance` never gets
+  called again for THAT turn, no fresh card attaches, and with no tool
+  result in hand the model fabricated a "no tool exists" refusal instead.
+  This time fixed with TWO layers, not one, precisely because prompt wording
+  alone had already failed to hold once: (1) an explicit HARD RULE added to
+  the static prompt — any SOA-related follow-up, even a bare format name
+  with no company repeated, must re-call `check_outstanding_balance` every
+  time, no exceptions; (2) — the real backstop —
+  `claimsNoSoaDownloadTool()`, a new deterministic regex guard in
+  `app/api/assistant/route.ts`, same family as the pre-existing
+  `mentionsOutstandingBalance`/`claimsPermissionDenied` guards (both born
+  from the identical incident shape: the model confidently stating
+  something false that a real tool call would have caught). Wired into the
+  same `guardedText()` pipeline, reusing the already-tracked
+  `outstandingToolCalled` flag — fires whenever a reply flatly denies any
+  tool exists to download/generate an SOA PDF while that flag is still
+  false, prepending a correction. Verified against the ACTUAL failure text
+  from the real screenshot (not invented test strings): both this new false
+  claim and the earlier round's own wording are caught, a correctly-behaving
+  reply pointing at the real card is not. Caught a real, separate,
+  build-breaking mistake while writing this fix: a literal backtick typed
+  inside a prompt string that is ITSELF a backtick-delimited template
+  literal terminates that outer string early — `npx tsc --noEmit` caught it
+  immediately as a syntax error, before it could ship; the fix was to drop
+  the inline-code backticks around a bare identifier mentioned in prose,
+  matching how every other identifier reference in this same prompt string
+  is already written (plain text, never backtick-wrapped, precisely because
+  the whole prompt is already one big template literal). Sharpest lesson
+  yet: when the SAME class of "the model asserts a false capability denial"
+  bug recurs a second time after a prompt-only fix, add the deterministic
+  code-level guard immediately rather than trying a third round of prompt
+  wording — this codebase already had the right pattern for it
+  (`mentionsOutstandingBalance`/`claimsPermissionDenied`), it just hadn't
+  been extended to this specific false claim yet.

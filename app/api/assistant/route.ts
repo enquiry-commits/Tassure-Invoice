@@ -172,6 +172,28 @@ export function claimsPermissionDenied(text: string): boolean {
   return keywords.some(k => t.includes(k));
 }
 
+// Same failure family, caught live 2026-09-18 immediately after the SOA
+// prose/note guidance above was rewritten to fix exactly this: a first
+// reply correctly listed the real TAB/TAO/All choices, then the user's own
+// SHORT FOLLOW-UP just naming which one ("我要下载 All的") — no company
+// re-named, nothing ambiguous left — got "抱歉，我这边没有任何工具能直接下
+// 载或生成 PDF" (sorry, I don't have any tool that can directly download or
+// generate a PDF). That is FALSE whenever check_outstanding_balance would
+// have attached a real interactive card (real Download SOA PDF/Draft Email
+// buttons) had it actually been called this turn — which is exactly what a
+// terse "just narrowing an earlier answer" follow-up tends to skip, since
+// it reads as answerable from conversation memory alone. Same tell as
+// claimsPermissionDenied above: a model that genuinely lacks a capability
+// hedges: it doesn't flatly assert "I have no tool for this" as a fact
+// without having tried. Deliberately narrow to an explicit NO-TOOL/CANNOT-
+// DIRECTLY-DOWNLOAD claim specifically about a PDF/SOA/statement — never
+// flags a reply that correctly explains the "your own click on the card
+// performs it" model, only one claiming no such mechanism exists at all.
+export function claimsNoSoaDownloadTool(text: string): boolean {
+  const t = text.toLowerCase();
+  return /(没有.{0,8}工具.{0,12}(下载|生成).{0,8}(pdf|soa|对账单|statement)|没法直接帮.{0,4}下载|没办法直接帮.{0,4}下载|无法直接帮.{0,4}下载|不能直接帮.{0,4}下载|no tool.{0,30}(download|generate).{0,15}(pdf|soa|statement))/i.test(t);
+}
+
 // ── System map: single source for both engines ──────────────────────────────
 const PAGES = [
   { label: 'Dashboard 总览',        href: '/',                          kw: ['dashboard', '总览', '首页', 'overview', '主页'] },
@@ -1501,11 +1523,11 @@ HARD RULE, confirmed wrong again 2026-09-10: "我要开SOA" (and any 开SOA / �
 
 SOA (Statement of Account) is a REAL, DIFFERENT feature from Billing Drafts — confirmed real confusion, 2026-09-09: asked "我要开SOA" (I want to generate an SOA), a reply offered to preview a NEW invoice draft for a company instead, which is wrong. An SOA is a PDF of a company's unpaid invoices — it only exists where the company genuinely has an outstanding balance. Whenever the user asks to "开SOA"/generate, download, check, or send an SOA/statement of account for a company — including a HYPOTHETICAL-sounding phrasing like "如果我要你帮我下载...可以吗" (if I asked you to help download..., could you) — call check_outstanding_balance for that company first (never guess which QB company it's under, never answer from memory of an earlier call for a different company).
 
-If hasOutstanding is true, a REAL INTERACTIVE CARD renders automatically below your reply — real "Download SOA PDF" and "Draft Email" buttons for each book, plus (2026-09-18) a combined "ALL" option when the company owes on 2+ books — you do not build or link to this yourself, it just appears. Do NOT repeat each line's soa_link/soa_link_all as separate markdown links in your own text, and never say you "can't directly help download" or can only point at a page: the card's own buttons genuinely perform the download or open a real Draft Email popup (the same OutlookStyleSendModal pattern Billing Drafts' own full editor uses) in one real click — this system's usual rule (the user's own click performs the action, you never claim to have done it yourself) applies the same way here, it does NOT mean chat is unable to help. Confirmed real gap 2026-09-18: asked (in that hypothetical phrasing) to help download a real 2-book company's SOA, a reply said "我没法直接帮你下载文件" and gave bare page links instead of trusting the card sitting right below it — technically not FALSE, but undersold a capability that was genuinely one click away, and repeated information the card already showed better.
+If hasOutstanding is true, a REAL INTERACTIVE CARD renders automatically below your reply — real "Download SOA PDF" and "Draft Email" buttons for each book, plus (2026-09-18) a combined "ALL" option when the company owes on 2+ books — you do not build or link to this yourself, it just appears. Do NOT repeat each line's soa_link/soa_link_all as separate markdown links in your own text, and never say you "can't directly help download" or can only point at a page: the card's own buttons genuinely perform the download or open a real Draft Email popup (the same OutlookStyleSendModal pattern Billing Drafts' own full editor uses) in one real click — this system's usual rule (the user's own click performs the action, you never claim to have done it yourself) applies the same way here, it does NOT mean chat is unable to help.
 
-When the company owes across 2+ QuickBooks books and the user's own request doesn't already say which they want, ask in ONE short sentence naming the real choices (one specific book, each book separately, or the combined "All" covering everything) rather than guessing or dumping every option's own link as text — once they answer, a short confirmation pointing at the card below is enough, never redirect to Billing Drafts for this.
+HARD RULE, confirmed wrong AGAIN the same day 2026-09-18, immediately after the fix above shipped: the first reply in a conversation correctly listed the "All"/TAB/TAO choices — then the user's own SHORT FOLLOW-UP just naming which one ("我要下载 All的") got "抱歉，我这边没有任何工具能直接下载或生成 PDF" — an even more absolute wrong claim than the original bug, on a request that was no longer even ambiguous. Root cause: a terse follow-up that only narrows an EARLIER SOA answer (naming a format — "All的"/"TAB的"/"两个都要" — with no new company named) reads to the model as answerable from conversation memory alone, so check_outstanding_balance never gets called AGAIN for that turn, no fresh _soa/card attaches to THIS reply, and with no tool result in hand the model falls back to generic (wrong) "I have no tool for this" hedging instead of recognizing the card already exists two messages up. Fix: ANY message that could be about SOA download/draft/send for a company you already discussed this conversation — including a bare follow-up that only names a format/scope with no company repeated — calls check_outstanding_balance again for that same company, every single time, no exceptions, specifically so a fresh real card attaches to THIS reply too. Never answer a "which one" follow-up from memory with no tool call; never tell the user "no tool exists" when the real reason is simply that you didn't call the one that does.
 
-If the company owes across MORE THAN ONE QuickBooks book (byQbCompany has 2+ lines), the result also carries soa_link_all — a real, working ONE-PDF-covering-every-book combined Statement (/billing/soa/all), same page and buttons, just pre-scoped to everything this company owes instead of one book. Confirmed real bug 2026-09-18: a client owing on both TAB and TAO, asked to download "All" of it combined, got told no combined PDF exists and to download the two books' SOAs separately — wrong, that combined download is a real, already-built feature. Whenever the user's request is about "全部"/"All"/"everything"/"合并"/"一起"/all of it TOGETHER as one document, present soa_link_all, not the individual byQbCompany lines' own soa_link values separately — only fall back to per-book links when the user specifically wants ONE particular book's own copy. Never state or imply that a combined PDF is unavailable when soa_link_all is present in the tool's result.
+When the company owes across 2+ QuickBooks books and the user's own request doesn't already say which they want, ask in ONE short sentence naming the real choices (one specific book, each book separately, or the combined "All" covering everything) rather than guessing or dumping every option's own link as text — once they answer (even a bare "All的"/"TAB的"), call the tool again per the HARD RULE above and let the fresh card do the rest.
 
 Use active_users_today when the user asks who else is using/has used the system (今天/这周谁在用系统, "who's active today") — this IS a real, answerable question from real tracked activity data; never say the system has no such capability without calling the tool first, and never guess who might be active. "今天" (today) in active_users_today's own default (days=1) is the real Singapore calendar day, not a rolling 24-hour window — say "today", never describe it as "the last 24 hours". Every timestamp these activity tools (active_users_today, recent_activity_summary, my_activity_pattern) return is already formatted in Singapore time — relay it as given, never attempt your own UTC conversion or arithmetic on it.
 
@@ -1823,6 +1845,9 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     let out = text;
     if (mentionsOutstandingBalance(out) && !outstandingToolCalled) {
       out = `⚠️ 系统提示：这条回复提到了欠款/outstanding，但本次没有检测到真正调用 check_outstanding_balance（单个公司）或 outstanding_balance_summary（整体汇总）查询实时数据——内容可能不准确，请换个更明确的问法重新提问（例如直接说"查一下 XX 公司的欠款"或"TAB 的欠款总数是多少"），不要直接采信。\n\n${out}`;
+    }
+    if (claimsNoSoaDownloadTool(out) && !outstandingToolCalled) {
+      out = `⚠️ 系统提示：这条回复说没有工具能下载/生成 SOA PDF，但本次没有检测到真正调用 check_outstanding_balance——如果这家公司确实有欠款，系统其实会自动附上真正可以点击下载/起草邮件的卡片，这个说法很可能是错的。请换个更明确的问法重新提问（例如直接说"查一下 XX 公司的欠款"），让它先真正查一次实时数据。\n\n${out}`;
     }
     if (account && callerRank(account.email) !== 'staff' && claimsPermissionDenied(out) && !crossPersonToolCalled) {
       out = `⚠️ 系统提示：这条回复说没有权限，但你的账号（${account.name}）对下级同事是有查看权限的——如果被问到的是下级或平级，这个拒绝就是错的，本次没有检测到真正调用查询工具。请换个更明确的问法重新提问（例如给出完整姓名，如"Chelsea Ang 今天要做什么"）。\n\n${out}`;
