@@ -2268,3 +2268,24 @@ again.
   — grep for a feature's name/page across the assistant's own tool
   descriptions and deep-link helpers whenever it changes, not just its own
   page's code.
+
+  Extended same day: fixing the tool's PROSE reply (above) was not the
+  whole gap — Vincent, looking at the actual structured `SoaCard` UI
+  underneath that reply: "我要这边多一个All的". The card
+  (`components/assistant/ChatCards.tsx`) maps `preview.lines` into one row
+  per book with its own download/draft buttons, but had no combined row at
+  all — a company owing on 2+ books got a correct combined link in the TEXT
+  above the card, then a card below it that still only ever offered
+  per-book actions, a real half-fixed gap a text-only check wouldn't have
+  caught. Added a highlighted "ALL" row (shown only when
+  `preview.lines.length > 1`) reusing the exact same `downloadSoaPdf`/
+  `buildSoaDraft` actions the per-book rows call, just passed `'ALL'` —
+  both already accept `SoaCompanySelector = QbCompany | 'ALL'` from the
+  original combine-books work, so no new plumbing was needed, only wiring
+  the UI up to what already existed. Also fixed the card's own "Open in
+  SOA" bottom link, which defaulted to `lines[0]`'s single-book page even
+  for a multi-book company. General lesson, sharpened: when a capability
+  gap is fixed only in a tool's prose/routing layer, check every OTHER
+  surface fed by the same preview/result object (a structured card, a
+  button row) for the identical stale assumption — they can drift
+  independently even when they render from the same data.

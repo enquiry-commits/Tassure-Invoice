@@ -984,6 +984,65 @@ export function SoaCard({ preview }: { preview: SoaPreview }) {
         <div style={{ fontSize: 10.5, color: '#94a3b8' }}>Statement of Account · 欠款合计 {money(preview.totalOutstanding)}</div>
       </div>
 
+      {/* Combined "All books" row — Vincent, 2026-09-18, pointing at this
+          exact card: "我要这边多一个All的". The free-text reply above this
+          card already offers the combined link (soa_link_all, see
+          checkOutstandingBalance() in app/api/assistant/route.ts) when a
+          company owes across 2+ books, but the structured card itself only
+          ever showed the per-book rows below — this closes that same gap
+          inside the card, not just in prose. Reuses the exact same
+          downloadSoaPdf/buildSoaDraft actions the per-book buttons below
+          call, just with 'ALL' instead of one qbCompany (both already
+          support SoaCompanySelector = QbCompany | 'ALL', see lib/soa-
+          actions-client.ts — no new plumbing needed). Only shown when there
+          really is more than one book to combine; a single-book company's
+          "All" would just be that one book's own SOA again. */}
+      {preview.lines.length > 1 && (
+        <div style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', background: '#f0fdfa' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 7, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: '#0f766e', background: '#fff', border: '1px solid #ccfbf1', borderRadius: 4, padding: '1px 5px' }}>ALL</span>
+            <span style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61' }}>{money(preview.totalOutstanding)}</span>
+            <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{preview.lines.map(l => l.qbCompany).join('+')} 合并</span>
+          </div>
+          <div style={{ display: 'flex', gap: 7 }}>
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() => void run('pdf-ALL', async () => {
+                await downloadSoaPdf(preview.companyName, 'ALL');
+                logActivity('chat_soa_pdf', { companyName: preview.companyName, qbCompany: 'ALL' });
+                setDone('合并 SOA PDF 已下载。');
+              })}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                border: '1px solid #cbd5e1', borderRadius: 7, padding: '7px 10px', fontSize: 11, fontWeight: 700,
+                background: '#fff', color: '#173b61', cursor: busy ? 'wait' : 'pointer',
+              }}
+            >
+              <Download size={12} />
+              {busy === 'pdf-ALL' ? '合并中…' : '下载合并 SOA PDF'}
+            </button>
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() => void run('mail-ALL', async () => {
+                const built = await buildSoaDraft(preview.companyName, 'ALL', actor?.me ?? null, actor?.sender ?? null);
+                logActivity('chat_soa_draft', { companyName: preview.companyName, qbCompany: 'ALL' });
+                setDraft(built);
+              })}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                border: 'none', borderRadius: 7, padding: '7px 10px', fontSize: 11, fontWeight: 700,
+                background: busy ? '#94a3b8' : '#0f766e', color: '#fff', cursor: busy ? 'wait' : 'pointer',
+              }}
+            >
+              <Send size={12} />
+              {busy === 'mail-ALL' ? '准备中…' : '起草合并邮件'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {preview.lines.map(line => (
         <div key={line.qbCompany} style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
@@ -1046,7 +1105,10 @@ export function SoaCard({ preview }: { preview: SoaPreview }) {
 
       {preview.lines.length > 0 && (
         <div style={{ padding: '8px 14px', borderTop: '1px solid #eef2f7' }}>
-          <a href={soaDeepLink(preview.lines[0].qbCompany, preview.companyName)} style={deepLinkStyle}>
+          {/* 2+ books → the real combined page, same as the ALL row's own
+              actions above, rather than arbitrarily defaulting to whichever
+              book happened to sort first. */}
+          <a href={soaDeepLink(preview.lines.length > 1 ? 'ALL' : preview.lines[0].qbCompany, preview.companyName)} style={deepLinkStyle}>
             <ExternalLink size={13} /> Open in SOA
           </a>
         </div>
