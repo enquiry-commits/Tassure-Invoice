@@ -87,6 +87,16 @@ export async function downloadSoaPdf(companyName: string, qbCompany: SoaCompanyS
  * than inventing a 4th, fake "QbCompany" value that would have to be
  * special-cased through buildRow/loadInvoicesByCompany too.
  */
+async function fetchBookSoaPdf(companyName: string, book: QbCompany): Promise<File> {
+  const res = await fetch(`/api/billing/soa/pdf?companyName=${encodeURIComponent(companyName)}&company=${book}`);
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error(j.error ?? `Unable to generate the ${book} SOA PDF.`);
+  }
+  const blob = await res.blob();
+  return new File([blob], `SOA (${book}) - ${companyName}.pdf`, { type: 'application/pdf' });
+}
+
 export async function buildSoaDraft(
   companyName: string,
   qbCompany: SoaCompanySelector,
@@ -94,22 +104,43 @@ export async function buildSoaDraft(
   sender: SoaSender,
   templateId?: number,
 ): Promise<DraftLike> {
-  // SOA's one difference from the other campaign types: the merged
-  // statement PDF replaces the automatic per-invoice attachments, so it is
-  // passed as `attachment` (which also clears invoice_refs — see
+  // SOA's one difference from the other campaign types: the real Statement
+  // PDF(s) replace the automatic per-invoice attachments, so they are
+  // passed as `attachments` (which also clears invoice_refs — see
   // buildCampaignDraft). Everything else is the shared flow.
-  const pdfRes = await fetch(`/api/billing/soa/pdf?companyName=${encodeURIComponent(companyName)}&company=${qbCompany}`);
-  if (!pdfRes.ok) {
-    const j = await pdfRes.json().catch(() => ({}));
-    throw new Error(j.error ?? 'Unable to generate the combined PDF.');
+  //
+  // 'ALL' (corrected 2026-09-18): Vincent, after seeing this attach the ONE
+  // merged cross-book PDF — "其实是当我在All 的时候，就要出现TAB/TAO/TAC
+  // 单独的3个SOA PDF，而这3个SOA PDF 要加到All 的 Draft 内...类似于截图中
+  // 只有 TAB/TAO两家公司，所以在Drafts 的时候就只需要附带 TAB/TAO 的SOA
+  // PDF，不需要TAC的" (the individual per-book PDFs should attach — for a
+  // company owing on TAB+TAO only, the draft needs TAB's own PDF and TAO's
+  // own PDF as two separate attachments, not TAC's, since it owes nothing
+  // there). Tries all 3 books' own single-book PDF (the exact same endpoint
+  // each book's own "Download SOA PDF" button already calls) and keeps only
+  // the ones that succeed — a book 404ing is not a failure here, it is
+  // exactly how that book's own download button already reports "nothing
+  // outstanding here", so it's correctly excluded rather than surfaced as
+  // an error. downloadSoaPdf() above is UNCHANGED and deliberately so — "当
+  // 然在外面Download PDF的时候可以单独下载选择 TAB还是TAO的 SOA PDF" (the
+  // standalone Download PDF button should still let you pick one book, or
+  // the existing single merged PDF for 'ALL') — this only changes what the
+  // DRAFT attaches.
+  let files: File[];
+  if (qbCompany === 'ALL') {
+    const attempts = await Promise.all((['TAB', 'TAC', 'TAO'] as QbCompany[]).map(async book => {
+      try { return await fetchBookSoaPdf(companyName, book); } catch { return null; }
+    }));
+    files = attempts.filter((f): f is File => f !== null);
+    if (!files.length) throw new Error('Unable to generate any SOA PDF for this company.');
+  } else {
+    files = [await fetchBookSoaPdf(companyName, qbCompany)];
   }
-  const pdfBlob = await pdfRes.blob();
-  const pdfFile = new File([pdfBlob], `SOA (${qbCompany}) - ${companyName}.pdf`, { type: 'application/pdf' });
 
   return buildCampaignDraft({
     companyName, type: 'soa', me, sender, templateId,
     qbCompany: qbCompany === 'ALL' ? undefined : qbCompany,
     campaignName: `SOA (${qbCompany}) - ${companyName} - ${todaySGT()}`,
-    attachment: pdfFile,
+    attachments: files,
   });
 }

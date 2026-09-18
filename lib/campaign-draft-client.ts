@@ -64,10 +64,14 @@ export async function pickCampaignTemplate(type: CampaignType): Promise<{ id: st
 }
 
 /**
- * `attachment` is how SOA differs: it replaces the automatic per-invoice
- * attachment fetch with one merged statement PDF, which is why that caller
+ * `attachments` is how SOA differs: it replaces the automatic per-invoice
+ * attachment fetch with the real Statement PDF(s), which is why that caller
  * also clears invoice_refs (fetchSystemAttachments in draft-helper-client
- * only acts on invoice_refs).
+ * only acts on invoice_refs). Plural since 2026-09-18 — Vincent, on the
+ * combined "All" mode's own draft: "当我在All 的时候...这3个SOA PDF 要加
+ * 到All 的 Draft 内" (the individual per-book PDFs should attach to the
+ * combined draft, not one single merged file) — see buildSoaDraft() in
+ * lib/soa-actions-client.ts, still the only real caller of this param.
  *
  * `templateId` (added 2026-09-17): an explicit user pick, e.g. SOA's own
  * Mail-icon popover letting staff choose which of the 1st/2nd/3rd escalating
@@ -90,11 +94,11 @@ export async function buildCampaignDraft(opts: {
   me: CampaignActor;
   sender: CampaignSender;
   campaignName?: string;
-  attachment?: File | null;
+  attachments?: File[] | null;
   templateId?: number;
   qbCompany?: QbCompany;
 }): Promise<DraftLike> {
-  const { companyName, type, fyeMonth, fyeYear, me, sender, attachment } = opts;
+  const { companyName, type, fyeMonth, fyeYear, me, sender, attachments } = opts;
   const row = await resolveCampaignRow(companyName, type, fyeMonth, fyeYear, opts.qbCompany);
   const template = opts.templateId ? { id: opts.templateId } : await pickCampaignTemplate(type);
 
@@ -116,8 +120,8 @@ export async function buildCampaignDraft(opts: {
     id: createdDraft.id, version: createdDraft.version,
     company_name: createdDraft.company_name, to_email: createdDraft.to_email, cc_email: createdDraft.cc_email,
     subject: createdDraft.subject, body: createdDraft.body,
-    invoice_refs: attachment ? [] : createdDraft.invoice_refs,
-    ...(attachment ? { additional_attachments: [attachment] } : {}),
+    invoice_refs: attachments?.length ? [] : createdDraft.invoice_refs,
+    ...(attachments?.length ? { additional_attachments: attachments } : {}),
     sender_email: sender?.email ?? 'finance@tassure.com',
     // The amounts came from generated_invoices moments ago (the POST above),
     // so skip prepareDraftForSend's live QuickBooks re-check — that exists

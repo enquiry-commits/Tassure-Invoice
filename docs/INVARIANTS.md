@@ -797,6 +797,43 @@ again.
   shorthand and external wording are often genuinely incompatible
   requirements on the same enum, not two call sites that happen to want the
   same string.
+- **INV-DOC-020** — The combined "All books" SOA Statement is TWO real,
+  legitimately different documents, not one document with two possible
+  formats — a single merged PDF (cover page + every book's real invoice
+  PDFs concatenated, `app/api/billing/soa/pdf`'s `company=ALL` mode,
+  INV-DOC-012) for the standalone "Download SOA PDF" button, and — added
+  2026-09-18 — N separate per-book PDFs as individual attachments for the
+  DRAFT EMAIL specifically. Vincent, correcting his own earlier framing of
+  what "All" should do: "其实是当我在All 的时候，就要出现TAB/TAO/TAC 单独
+  的3个SOA PDF，而这3个SOA PDF 要加到All 的 Draft 内...类似于截图中只有
+  TAB/TAO两家公司，所以在Drafts 的时候就只需要附带 TAB/TAO 的SOA PDF，不
+  需要TAC的" — for a company owing on 2 of the 3 books, the draft needs
+  each of those 2 books' OWN complete Statement PDF as its own attachment,
+  not one file combining them, and never a third attachment for a book with
+  no real balance. `downloadSoaPdf()` (`lib/soa-actions-client.ts`) is
+  UNCHANGED and deliberately so — "当然在外面Download PDF的时候可以单独下
+  载选择 TAB还是TAO的 SOA PDF" confirms the standalone download button (per
+  book, or the existing single merged 'ALL' PDF) was never the part that
+  was wrong. Only `buildSoaDraft()` changed: for `qbCompany === 'ALL'`, it
+  now tries all 3 books' own single-book PDF endpoint (the exact same one
+  each book's own "Download SOA PDF" button already calls) in parallel and
+  keeps only the ones that succeed — a 404 there is not an error, it's
+  exactly how that endpoint already reports "this book has no real
+  balance for this company," so treating it as "skip this attachment" is
+  reusing an existing, already-correct signal, not inventing a new
+  determination of which books have a balance. `buildCampaignDraft()`'s own
+  `attachment?: File | null` widened to `attachments?: File[] | null` to
+  carry them — safe because `additional_attachments` on `DraftLike` was
+  ALREADY `File[]` end-to-end (the real Outlook draft creation in `lib/
+  draft-helper-client.ts` already maps over it), and `buildSoaDraft()` was
+  confirmed to be the ONLY real caller ever passing this param (`npx tsc
+  --noEmit` across the whole project would have caught any other caller
+  still using the old singular name). Verified against the real 1V Capital
+  example from the screenshot: TAB and TAO's own single-book PDF fetch both
+  genuinely succeed, TAC's genuinely 404s (checked directly against
+  `quickbooks_invoices`/`quickbooks_credit_memos`, the same tables that
+  route's own 404 check reads) — confirming the draft will correctly
+  attach exactly 2 files, never a spurious third.
 
 ## Automation & cron reliability (INV-CRON)
 
