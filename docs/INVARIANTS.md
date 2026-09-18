@@ -772,6 +772,31 @@ again.
   saved a copy) rather than continuing to iterate against a photo of it —
   a photo can look right while a `pdf-lib`/content-stream-level read
   reveals it wasn't.
+- **INV-DOC-019** — A staff-facing abbreviation and a client-facing label
+  are two different requirements on the same underlying data, and sharing
+  one lookup table between them is wrong even when it looks like harmless
+  reuse. Found live 2026-09-18: the Statement PDF's itemized DESCRIPTION
+  column fell back to `TXN_TYPE_TAGS` (`lib/soa.ts`) for a non-Invoice line
+  — e.g. "3343 (PM)", "Trial Balance -Dec'23 (JE)" — printing Vincent's own
+  2-letter internal-staff shorthand (Deposit→DP, Payment→PM, Journal
+  Entry→JE, explicitly spec'd "kept short since these sit inline next to a
+  number" for the on-screen SOA list/Company 360) straight through to a
+  real client's copy of the Statement. Vincent: "客户也不知道是什么" — a
+  client has no way to know what "(PM)" means. Fixed by adding a SEPARATE
+  export, `TXN_TYPE_LABELS` (`lib/soa.ts`), used only by
+  `lib/statement-pdf.ts` — full English words, only remapping "Credit
+  Memo"→"Credit Note" (this business's own client-facing term for it, same
+  normalization `TXN_TYPE_TAGS` already does), everything else falling
+  through to QuickBooks' own already-correct full type name. `TXN_TYPE_TAGS`
+  itself is UNCHANGED — the on-screen staff UI (`app/billing/soa/
+  _components.tsx`, `app/companies/[id]/_components.tsx`) still uses the
+  compact codes Vincent explicitly asked for there; narrowing those to full
+  words too would have been an unrequested, unwanted regression in the
+  other direction. General lesson: before reusing an existing lookup table
+  for a new consumer, check who the ORIGINAL one was designed for — internal
+  shorthand and external wording are often genuinely incompatible
+  requirements on the same enum, not two call sites that happen to want the
+  same string.
 
 ## Automation & cron reliability (INV-CRON)
 

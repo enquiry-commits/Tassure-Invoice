@@ -2,7 +2,7 @@ import { todaySGT } from '@/lib/date';
 import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { AGING_BUCKETS, TXN_TYPE_TAGS, emptyAgingTotals } from '@/lib/soa';
+import { AGING_BUCKETS, TXN_TYPE_LABELS, emptyAgingTotals } from '@/lib/soa';
 import type { SoaCompanyRow } from '@/lib/soa-data';
 
 // pdf-lib's StandardFonts (Helvetica) only encode WinAnsi — page.drawText()
@@ -288,9 +288,11 @@ export async function drawStatementCoverPage(
   y -= 20;
 
   // Itemized list — every real transaction behind the total (Invoice/
-  // Credit Note/Payment/Journal Entry/Deposit — same TXN_TYPE_TAGS
-  // shorthand as the on-screen list/detail modal, lib/soa.ts), oldest due
-  // date first (SoaCompanyRow.lineItems is already sorted that way). Same
+  // Credit Note/Payment/Journal Entry/Deposit — full-word TXN_TYPE_LABELS,
+  // lib/soa.ts, NOT the same 2-letter TXN_TYPE_TAGS the on-screen list/
+  // detail modal use; see that map's own comment for why this page needs
+  // different wording), oldest due date first (SoaCompanyRow.lineItems is
+  // already sorted that way). Same
   // light-blue-header styling as the aging table above. Only the first 3
   // column widths are fixed — OPEN AMOUNT stretches to `right`, same
   // "last column reaches the true right margin" rule the aging table above
@@ -342,7 +344,7 @@ export async function drawStatementCoverPage(
     const firstDescLine = details?.description?.split('\n').map(l => l.trim()).find(Boolean);
     const description = firstDescLine
       ? `Invoice No.${safeText(font, details!.invoiceNo)}: Due ${dueDateFmt}. ${safeText(font, firstDescLine)}`
-      : `${safeText(font, item.docNumber)} (${safeText(font, TXN_TYPE_TAGS[item.txnType] ?? item.txnType)})`;
+      : `${safeText(font, item.docNumber)} (${safeText(font, TXN_TYPE_LABELS[item.txnType] ?? item.txnType)})`;
     // Manually wrapped (same reasoning as the TO block's billAddrLines
     // above) so a long real description's extra visual line(s) are
     // reflected in `y` before the NEXT item row is drawn, instead of

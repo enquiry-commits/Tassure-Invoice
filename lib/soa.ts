@@ -62,6 +62,24 @@ export const TXN_TYPE_TAGS: Record<string, string> = {
   'Journal Entry': 'JE',
 };
 
+// Full-word transaction-type label for CLIENT-FACING documents (the
+// Statement PDF, lib/statement-pdf.ts) — deliberately NOT the same map as
+// TXN_TYPE_TAGS above. Vincent, 2026-09-18, reviewing the Statement PDF:
+// "客户也不知道是什么" (the client won't know what it means either) —
+// TXN_TYPE_TAGS's 2-letter codes are Vincent's own explicit spec for the
+// internal staff UI ("kept short since these sit inline next to a number",
+// see that map's own comment), but a real client reading "(JE)"/"(PM)" on
+// their own Statement has no way to know those mean Journal Entry/Payment.
+// Only "Credit Memo" needs remapping (to "Credit Note", this business's own
+// client-facing term for it — same normalization TXN_TYPE_TAGS already
+// does); every other real QuickBooks transaction type name (Payment,
+// Journal Entry, Deposit, Credit Note) is already the correct full word, so
+// the caller's own `?? item.txnType` fallback handles those without an
+// entry here.
+export const TXN_TYPE_LABELS: Record<string, string> = {
+  'Credit Memo': 'Credit Note',
+};
+
 export type AgingTotals = Record<AgingBucket, number>;
 
 export function emptyAgingTotals(): AgingTotals {
