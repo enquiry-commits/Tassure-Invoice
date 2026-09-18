@@ -2289,3 +2289,30 @@ again.
   surface fed by the same preview/result object (a structured card, a
   button row) for the identical stale assumption — they can drift
   independently even when they render from the same data.
+
+  Extended once more, same day: even after the card itself had every real
+  option, the model's own TEXT reply for a real 2-book company still said
+  "我没法直接帮你下载文件" (I can't directly help you download the file)
+  and repeated each book's `soa_link` as bare markdown links — not false,
+  but actively undermining a capability that was one real click away on the
+  card rendering right below that same reply, since a reader has no way to
+  know the sentence right above it is wrong about what chat can do. Root
+  cause: `checkOutstandingBalance()`'s own `note` and the static SOA prose
+  block both still instructed the model to "present each line's soa_link as
+  a real clickable markdown link" — guidance written before the card had
+  real inline buttons, never revisited once it did, so the model was doing
+  exactly what it was told, just against stale instructions. Rewrote both
+  to explicitly forbid repeating the links as text and state plainly that
+  the card's buttons genuinely perform the download/draft in one click —
+  this app's usual "the user's own click performs the action" rule does NOT
+  mean chat is unable to help, and the guidance now says so directly, since
+  the model had no way to infer that distinction on its own. Also added
+  explicit guidance to ask (one short sentence) which of 2+ books' worth the
+  user wants when their own request doesn't already say, rather than
+  dumping every option as text — Vincent's own explicit ask ("你应该是问要
+  下载哪个"). General lesson, sharpened again: "the data is available to the
+  model" and "the model has been told the RIGHT way to present it" are two
+  separate facts — a `note`/prompt string written honestly for the
+  capability that existed on the day it was written can quietly start
+  telling the model to do something WORSE than what later shipped, with no
+  error, no stale-comment smell, just steadily suboptimal replies.
