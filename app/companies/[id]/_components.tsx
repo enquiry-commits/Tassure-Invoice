@@ -3,6 +3,7 @@ import { fmtDate, toIsoDateValue } from '@/lib/date';
 import { formatStaffName, nameForEmail } from '@/lib/staff-directory';
 import { effectiveOwner } from '@/lib/soa-data';
 import { AGING_BUCKETS, TXN_TYPE_TAGS, oldestAgingBucket } from '@/lib/soa';
+import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 import { DataCard } from './DataCard';
 import type { Company360 } from '@/lib/company-360';
 
@@ -328,14 +329,29 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
                 styling deviation, same reasoning as Due Date below. Header
                 stays "Invoice No." (unchanged) since most rows are still
                 plain invoices; a non-invoice line disambiguates itself with
-                its own tag rather than needing a header rename. */}
+                its own tag rather than needing a header rename.
+                Corrected 2026-09-18: was bare text — Vincent: "这边的单号要
+                弄成和 Billing Drafts 那种灰色UI格式，可以打开点击的" (this
+                invoice number should be styled like Billing Drafts' gray
+                clickable chip). That chip already exists as
+                BillingInvoiceReference (extracted 2026-09-16 specifically so
+                it has exactly one implementation — the SOA detail modal
+                reuses it too, see that file's own comment on the identical
+                request there). Only Invoice/Credit Note lines get it — a
+                Payment/Journal Entry/Deposit line has no real QuickBooks PDF
+                document behind it (same `canOpenPdf` reasoning
+                app/billing/soa/_components.tsx's detail modal already uses),
+                so those stay the plain tagged text they were before. */}
             <div>
               {r.lineItems.length ? r.lineItems.map((item, idx) => {
+                const isDocument = item.txnType === 'Invoice' || item.txnType === 'Credit Note' || item.txnType === 'Credit Memo';
                 const tag = item.txnType === 'Invoice' ? null : (TXN_TYPE_TAGS[item.txnType] ?? item.txnType);
                 const color = item.amount < 0 ? 'var(--status-danger)' : '#0f766e';
                 return (
                   <div key={`${item.txnType}-${item.docNumber}-${idx}`}>
-                    {item.docNumber}
+                    {isDocument
+                      ? <BillingInvoiceReference company={r.qbCompany} invoiceNo={item.docNumber} docType={item.txnType === 'Invoice' ? 'invoice' : 'credit'} title={`View ${item.txnType} PDF`} />
+                      : item.docNumber}
                     {/* Vincent, 2026-09-15: "这种有简写的好像稍微要有一个窗口
                         描述到底是什么" — a native title attribute (browser's
                         own hover tooltip) spelling out the real QuickBooks
