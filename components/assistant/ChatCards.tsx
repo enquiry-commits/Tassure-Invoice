@@ -206,13 +206,14 @@ export function InvoiceDraftCard({ preview }: { preview: InvoicePreview; onGener
           disabled={blocked}
           title={preview.alreadyInvoicedThisCycle ? '本周期已开单 — 打开可查看/编辑那张发票' : included.length === 0 ? 'Nothing due this cycle' : undefined}
           style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
             width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
             cursor: blocked ? 'not-allowed' : 'pointer',
             background: blocked ? '#e2e8f0' : '#0f766e',
             color: blocked ? '#94a3b8' : '#fff',
           }}
         >
-          <Pencil size={13} style={{ marginRight: 5, verticalAlign: '-2px' }} />
+          <Pencil size={13} />
           查看完整发票并生成
         </button>
         <a href={billingDeepLink(preview.companyName, preview.fyeMonth, preview.fyeCycle)} style={deepLinkStyle}>
