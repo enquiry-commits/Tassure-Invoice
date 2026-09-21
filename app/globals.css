@@ -174,7 +174,7 @@ body {
    owns its background with !important; an inline background is ignored. */
 .system-list-row--soa-group-open,
 .system-list-row--soa-group-open:hover {
-  background: linear-gradient(to right, #dfe7f0 0 calc(100% - 184px), var(--list-surface) calc(100% - 184px)) !important;
+  background: #dfe7f0 !important;
   border-top: 0 !important;
   border-left: 3px solid transparent !important;
   border-right: 0;
@@ -190,9 +190,8 @@ body {
   margin: 7px 0 9px;
 }
 
-/* The expanded-company frame ends after the Mail column. The shared
-   Remarks field is intentionally outside it, in the normal table surface
-   on the right. 184px = 14px row padding + 160px Remarks + 10px grid gap. */
+/* Remarks is company-level metadata and now lives below Company Name, so
+   the visual frame can cover the complete row without an absolute overlay. */
 .soa-company-group--open::after {
   content: '';
   position: absolute;
@@ -201,7 +200,7 @@ body {
   top: 0;
   bottom: 0;
   left: 0;
-  right: 184px;
+  right: 0;
   border: 1px solid #b8c7d6;
   border-left: 3px solid #526b85;
   border-radius: 7px;
@@ -212,13 +211,13 @@ body {
    continuous navy rail and quiet right edge create one group boundary while
    preserving the table's existing column alignment. */
 .system-list-row--soa-group-child {
-  background: linear-gradient(to right, #fbfcfe 0 calc(100% - 184px), var(--list-surface) calc(100% - 184px)) !important;
+  background: #fbfcfe !important;
   border-left: 3px solid transparent !important;
   border-right: 0;
 }
 
 .system-list-row--soa-group-child:hover {
-  background: linear-gradient(to right, #f3f6fa 0 calc(100% - 184px), var(--list-surface) calc(100% - 184px)) !important;
+  background: #f3f6fa !important;
 }
 
 .system-list-row--soa-group-child.system-list-row--selected {
@@ -230,22 +229,113 @@ body {
   border-radius: 0;
 }
 
-/* One company-level Remarks editor still spans the combined row and source
-   rows, but now reads as a normal Billing Drafts-style white input outside
-   the framed group. The normal surface only masks row separators beneath the
-   shared editor; there is no special tint or cell border around the column. */
-.soa-company-group__remarks {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 14px;
-  width: 160px;
-  z-index: 5;
-  box-sizing: border-box;
+.soa-remarks-editor {
+  position: relative;
+  width: 100%;
+  font-weight: 400;
+}
+
+.soa-remarks-chip {
   display: flex;
   align-items: center;
-  padding: 8px 4px;
-  background: var(--list-surface);
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  border: 0;
+  border-radius: 5px;
+  padding: 2px 6px;
+  background: transparent;
+  color: #94a3b8;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.soa-remarks-chip:hover {
+  background: rgba(255, 255, 255, .68);
+  color: #526b85;
+}
+
+.soa-remarks-chip--filled {
+  color: #526b85;
+  background: rgba(255, 255, 255, .48);
+}
+
+.soa-remarks-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.soa-remarks-editor--open {
+  z-index: 6;
+}
+
+.soa-remarks-editor__panel {
+  width: min(360px, calc(100vw - 80px));
+  padding: 8px;
+  border: 1px solid #c5d1de;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(30, 58, 95, .14);
+}
+
+.soa-remarks-editor__panel textarea {
+  display: block;
+  width: 100%;
+  min-height: 54px;
+  resize: vertical;
+  box-sizing: border-box;
+  border: 1px solid #d9e2ec;
+  border-radius: 6px;
+  padding: 7px 9px;
+  outline: none;
+  color: #1e293b;
+  background: #fff;
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.soa-remarks-editor__panel textarea:focus {
+  border-color: #7f9bb5;
+  box-shadow: 0 0 0 2px rgba(82, 107, 133, .12);
+}
+
+.soa-remarks-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.soa-remarks-editor__actions button {
+  border: 1px solid #d9e2ec;
+  border-radius: 5px;
+  padding: 3px 8px;
+  background: #fff;
+  color: #64748b;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.soa-remarks-editor__actions .soa-remarks-editor__save {
+  border-color: #1e3a5f;
+  background: #1e3a5f;
+  color: #fff;
+}
+
+.soa-remarks-editor__actions button:disabled {
+  cursor: default;
+  opacity: .6;
+}
+
+.soa-remarks-editor__error {
+  margin-right: auto;
+  color: var(--status-danger);
+  font-size: 9.5px;
 }
 
 /* Replace the browser's heavy black focus rectangle on the compact expand

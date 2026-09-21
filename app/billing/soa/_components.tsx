@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Mail, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Mail, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, MessageSquareText } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { allStaffNames } from '@/lib/staff-directory';
@@ -148,15 +148,20 @@ function SoaOwnerSelect({ row, onChange }: { row: Row; onChange: (value: string)
   );
 }
 
-function SoaRemarksInput({ value, onSave }: { value: string | null; onSave: (value: string) => Promise<void> }) {
+function SoaRemarksEditor({ value, onSave }: { value: string | null; onSave: (value: string) => Promise<void> }) {
   const [draft, setDraft] = useState(value ?? '');
+  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (document.activeElement !== inputRef.current) setDraft(value ?? '');
   }, [value]);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
 
   const save = async () => {
     const next = draft.trim();
@@ -165,6 +170,7 @@ function SoaRemarksInput({ value, onSave }: { value: string | null; onSave: (val
     setError(null);
     try {
       await onSave(next);
+      setEditing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save remark.');
     } finally {
@@ -172,27 +178,46 @@ function SoaRemarksInput({ value, onSave }: { value: string | null; onSave: (val
     }
   };
 
+  const cancel = () => {
+    setDraft(value ?? '');
+    setError(null);
+    setEditing(false);
+  };
+  const displayValue = value?.trim() ?? '';
+
   return (
-    <input
-      ref={inputRef}
-      value={draft}
-      onChange={event => setDraft(event.target.value)}
-      onBlur={() => void save()}
-      onKeyDown={event => {
-        if (event.key === 'Enter') event.currentTarget.blur();
-        if (event.key === 'Escape') { setDraft(value ?? ''); event.currentTarget.blur(); }
-      }}
-      placeholder="Add remark…"
-      disabled={saving}
-      title={error ?? (saving ? 'Saving…' : 'Shared across TAB, TAC and TAO')}
-      aria-label="SOA remarks"
-      style={{
-        width: '100%', minWidth: 0, height: 36, boxSizing: 'border-box', borderRadius: 6,
-        border: `1px solid ${error ? '#fca5a5' : saving ? '#a8bacb' : '#e2e8f0'}`,
-        background: saving ? '#f8fafc' : '#fff', color: '#1e293b', padding: '8px 12px',
-        fontSize: 12.5, fontFamily: 'inherit', outline: 'none', opacity: saving ? 0.75 : 1,
-      }}
-    />
+    <div className={`soa-remarks-editor${editing ? ' soa-remarks-editor--open' : ''}`} onClick={event => event.stopPropagation()}>
+      {!editing ? (
+        <button type="button" className={`soa-remarks-chip${displayValue ? ' soa-remarks-chip--filled' : ''}`}
+          onClick={() => setEditing(true)} title={displayValue || 'Add a company-level remark shared across TAB, TAC and TAO'}>
+          <MessageSquareText size={11} />
+          <span>{displayValue || 'Add remark'}</span>
+        </button>
+      ) : (
+        <div className="soa-remarks-editor__panel">
+          <textarea
+            ref={inputRef}
+            value={draft}
+            onChange={event => setDraft(event.target.value)}
+            onKeyDown={event => {
+              if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void save();
+              if (event.key === 'Escape') cancel();
+            }}
+            placeholder="Add a company remark…"
+            disabled={saving}
+            rows={2}
+            aria-label="SOA remarks"
+          />
+          <div className="soa-remarks-editor__actions">
+            {error && <span className="soa-remarks-editor__error">{error}</span>}
+            <button type="button" onClick={cancel} disabled={saving}>Cancel</button>
+            <button type="button" className="soa-remarks-editor__save" onClick={() => void save()} disabled={saving}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -458,13 +483,13 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // wasn't asking you to change it, I was just asking — the previous
   // ratio was fine). Reverted that redistribution — back to a single
   // flexible share on Company Name alone, Owner a fixed 150px again.
-  // The final pair is Mail then Remarks. Remarks deliberately sits to the
-  // RIGHT of the envelope and outside the visual frame around an expanded
-  // multi-source company; this matches Billing Drafts' plain white Remarks
-  // field instead of making the shared note look like a tinted group cell.
+  // Remarks belongs to the legal company, not to an individual QuickBooks
+  // source. It now lives under Company Name as a compact expandable editor;
+  // Mail is therefore the stable final grid column and no absolute overlay
+  // can drift out of alignment when a multi-source group changes height.
   const soaListColumns = qbCompany === 'ALL'
-    ? '32px minmax(200px,1.2fr) 150px 120px 100px 100px 100px 100px 100px 110px 100px 150px 36px 160px'
-    : '32px minmax(220px,1.4fr) 150px 100px 100px 100px 100px 100px 110px 100px 150px 36px 160px';
+    ? '32px minmax(220px,1.35fr) 150px 120px 100px 100px 100px 100px 100px 110px 100px 150px 36px'
+    : '32px minmax(240px,1.5fr) 150px 100px 100px 100px 100px 100px 110px 100px 150px 36px';
   // Display-only stand-in for qbCompany wherever the literal 'ALL' would
   // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
   // a typo, not a scope).
@@ -712,7 +737,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
 
   const renderSourceRow = (
     c: Row,
-    opts: { child: boolean; lastChild?: boolean; listIndex: number; reserveSharedRemark?: boolean },
+    opts: { child: boolean; lastChild?: boolean; listIndex: number },
   ) => {
     const isOpen = expanded === rowKey(c);
     return (
@@ -729,6 +754,11 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
               ? <span style={{ color: '#64748b', fontSize: 10.5, fontWeight: 700 }}>{rowCompany(c)} source balance</span>
               : <><span style={{ color: '#cbd5e1', fontSize: 10 }}>{opts.listIndex + 1}</span>{c.companyName.toUpperCase()}</>}
           </div>
+          {!opts.child && (
+            <div style={{ marginTop: 4, maxWidth: 260 }}>
+              <SoaRemarksEditor value={c.remarks} onSave={value => updateSoaRemarks(c.companyName, value)} />
+            </div>
+          )}
         </div>
         <div style={{ padding: '0 6px', textAlign: 'center' }}>
           <SoaReminderStatus progress={c.reminderProgress} />
@@ -775,11 +805,6 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             onDrafted={(draft, sender) => { setSendModalDraft(draft); setSendModalSender(sender); }}
           />
         </div>
-        {opts.reserveSharedRemark ? <div aria-hidden="true" /> : (
-          <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
-            <SoaRemarksInput value={c.remarks} onSave={value => updateSoaRemarks(c.companyName, value)} />
-          </div>
-        )}
       </div>
     );
   };
@@ -880,8 +905,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   (soaPic, suggestedOwner, effectiveOwner, soa_owners table)
                   are unchanged — this is a display-label rename only. */}
               {(qbCompany === 'ALL'
-                ? ['', 'Company Name', 'Reminder', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '', 'Remarks']
-                : ['', 'Company Name', 'Reminder', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '', 'Remarks']
+                ? ['', 'Company Name', 'Reminder', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '']
+                : ['', 'Company Name', 'Reminder', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '']
               ).map((h, i) => (
                 i >= 2 ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>{h}</div> : <div key={i} style={{ padding: '0 6px' }}>{h}</div>
               ))}
@@ -932,15 +957,20 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                         style={{ border: 'none', background: 'none', color: '#64748b', padding: 0, cursor: 'pointer', display: 'flex' }}>
                         {groupOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                       </button>
-                      <button onClick={() => openDetail(combined, draftScope)} title={group.rows.length > 1 ? 'Open combined SOA detail' : `Open ${sources[0]} SOA detail`}
-                        style={{ border: 'none', background: 'none', padding: '0 6px', textAlign: 'left', cursor: 'pointer', minWidth: 0 }}>
-                        <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ color: '#cbd5e1', fontSize: 10 }}>{entry.listIndex + 1}</span>{group.companyName.toUpperCase()}
+                      <div style={{ padding: '0 6px', minWidth: 0 }}>
+                        <button onClick={() => openDetail(combined, draftScope)} title={group.rows.length > 1 ? 'Open combined SOA detail' : `Open ${sources[0]} SOA detail`}
+                          style={{ border: 'none', background: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', minWidth: 0, width: '100%' }}>
+                          <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ color: '#cbd5e1', fontSize: 10 }}>{entry.listIndex + 1}</span>{group.companyName.toUpperCase()}
+                          </div>
+                          <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9.5 }}>
+                            {group.rows.length > 1 ? `${group.rows.length} sources · combined SOA` : `${sources[0]} · click for SOA`}
+                          </div>
+                        </button>
+                        <div style={{ marginTop: 4, maxWidth: 260 }}>
+                          <SoaRemarksEditor value={group.rows[0].remarks} onSave={value => updateSoaRemarks(group.companyName, value)} />
                         </div>
-                        <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9.5 }}>
-                          {group.rows.length > 1 ? `${group.rows.length} sources · combined SOA` : `${sources[0]} · click for SOA`}
-                        </div>
-                      </button>
+                      </div>
                       <div style={{ padding: '0 6px', textAlign: 'center' }}>
                         <SoaReminderGroupStatus items={group.rows.map(row => ({ source: rowCompany(row), progress: row.reminderProgress }))} />
                       </div>
@@ -980,12 +1010,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       child: true,
                       lastChild: index === group.rows.length - 1,
                       listIndex: entry.listIndex,
-                      reserveSharedRemark: true,
                     }))}
-
-                    <div className="soa-company-group__remarks" onClick={event => event.stopPropagation()}>
-                      <SoaRemarksInput value={group.rows[0].remarks} onSave={value => updateSoaRemarks(group.companyName, value)} />
-                    </div>
                   </div>
                 );
               }
