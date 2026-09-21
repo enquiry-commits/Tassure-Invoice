@@ -175,7 +175,34 @@ body {
 .system-list-row--soa-group-open,
 .system-list-row--soa-group-open:hover {
   background: #dfe7f0 !important;
+  border-top: 1px solid #b8c7d6 !important;
+  border-right: 1px solid #b8c7d6;
+  border-radius: 7px 7px 0 0;
   box-shadow: inset 0 -1px 0 #c5d1de;
+  margin-top: 7px;
+}
+
+/* Source rows visually remain part of the expanded company above. The
+   continuous navy rail and quiet right edge create one group boundary while
+   preserving the table's existing column alignment. */
+.system-list-row--soa-group-child {
+  background: #fbfcfe !important;
+  border-left: 3px solid #526b85 !important;
+  border-right: 1px solid #b8c7d6;
+}
+
+.system-list-row--soa-group-child:hover {
+  background: #f3f6fa !important;
+}
+
+.system-list-row--soa-group-child.system-list-row--selected {
+  background: var(--list-row-selected) !important;
+}
+
+.system-list-row--soa-group-last-child {
+  border-bottom: 1px solid #b8c7d6 !important;
+  border-radius: 0 0 7px 7px;
+  margin-bottom: 9px;
 }
 
 /* Replace the browser's heavy black focus rectangle on the compact expand

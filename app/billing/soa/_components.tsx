@@ -24,7 +24,7 @@ type Row = SoaCompanyRow & { qbCompany?: QbCompany };
 type AllCompanyGroup = { key: string; companyName: string; rows: Row[] };
 type DisplayEntry =
   | { kind: 'group'; group: AllCompanyGroup; listIndex: number }
-  | { kind: 'row'; row: Row; listIndex: number; child: boolean };
+  | { kind: 'row'; row: Row; listIndex: number; child: boolean; lastChild?: boolean };
 import { AGING_BUCKETS, TXN_TYPE_TAGS, type AgingBucket } from '@/lib/soa';
 
 function fmtMoney(n: number) {
@@ -568,7 +568,10 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     groupPages.pageItems.forEach((group, i) => {
       displayEntries.push({ kind: 'group', group, listIndex: groupPages.startIndex + i });
       if (group.rows.length > 1 && expandedGroup === group.key) {
-        group.rows.forEach(row => displayEntries.push({ kind: 'row', row, listIndex: groupPages.startIndex + i, child: true }));
+        group.rows.forEach((row, childIndex) => displayEntries.push({
+          kind: 'row', row, listIndex: groupPages.startIndex + i, child: true,
+          lastChild: childIndex === group.rows.length - 1,
+        }));
       }
     });
   } else {
@@ -833,9 +836,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
               const c = entry.row;
               const isOpen = expanded === rowKey(c);
               return (
-                <div key={`${entry.child ? 'child:' : ''}${rowKey(c)}`} className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}`}
+                <div key={`${entry.child ? 'child:' : ''}${rowKey(c)}`} className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}${entry.child ? ' system-list-row--soa-group-child' : ''}${entry.lastChild ? ' system-list-row--soa-group-last-child' : ''}`}
                   onClick={() => isOpen ? closeDetail() : openDetail(c, rowCompany(c))}
-                  style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'start', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer', background: entry.child ? '#fff' : undefined }}>
+                  style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'start', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer' }}>
                   <div style={{ color: entry.child ? '#cbd5e1' : '#94a3b8', display: 'flex', paddingLeft: entry.child ? 5 : 0 }}>
                     {entry.child ? <span style={{ fontSize: 15 }}>↳</span> : isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                   </div>
