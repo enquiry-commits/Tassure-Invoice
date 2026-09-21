@@ -41,6 +41,41 @@ function fmtNum(n: number) {
 function allCompanyGroupKey(companyName: string) {
   return normalize(companyName) || companyName.trim().toLowerCase();
 }
+
+// A single legal company can exist as more than one QuickBooks customer in
+// the same book (for example, an old and a current TAB customer record). Once
+// both records resolve to the same master company, the All view must still
+// present that book as ONE source. Otherwise the UI says "3 sources" and
+// renders TAB / TAB / TAO even though there are only two actual books. Keep
+// every balance and transaction, but collapse same-book rows into one source
+// row before the company group is rendered.
+function mergeSameSourceRows(rows: Row[]): Row {
+  if (rows.length === 1) return rows[0];
+  const mostAdvancedReminder = [...rows].sort((a, b) =>
+    (b.reminderProgress.completedStage ?? 0) - (a.reminderProgress.completedStage ?? 0)
+      || (b.reminderProgress.completedAt ?? '').localeCompare(a.reminderProgress.completedAt ?? ''))[0];
+  const confirmedOwners = [...new Set(rows.map(row => row.soaPic).filter((owner): owner is string => !!owner))];
+  const suggestedOwners = [...new Set(rows.map(row => row.suggestedOwner).filter((owner): owner is string => !!owner))];
+
+  return {
+    ...rows[0],
+    picOptions: [...new Set(rows.flatMap(row => row.picOptions))],
+    soaPic: confirmedOwners.length === 1 ? confirmedOwners[0] : null,
+    suggestedOwner: suggestedOwners.length === 1 ? suggestedOwners[0] : null,
+    invoiceCount: rows.reduce((sum, row) => sum + row.invoiceCount, 0),
+    totalOutstanding: rows.reduce((sum, row) => sum + row.totalOutstanding, 0),
+    aging: {
+      current: rows.reduce((sum, row) => sum + row.aging.current, 0),
+      d1_30: rows.reduce((sum, row) => sum + row.aging.d1_30, 0),
+      d31_60: rows.reduce((sum, row) => sum + row.aging.d31_60, 0),
+      d61_90: rows.reduce((sum, row) => sum + row.aging.d61_90, 0),
+      d91_plus: rows.reduce((sum, row) => sum + row.aging.d91_plus, 0),
+    },
+    unpaidInvoices: rows.flatMap(row => row.unpaidInvoices).sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+    lineItems: rows.flatMap(row => row.lineItems).sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+    reminderProgress: mostAdvancedReminder.reminderProgress,
+  };
+}
 // The metric card's 28px/-0.035em letter-spacing (app/globals.css's
 // .metric-card-value) squeezes "S$" straight into the digits with no visual
 // separation at that size and weight. A dedicated span with its own spacing
@@ -509,10 +544,19 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
       if (existing) existing.rows.push(row);
       else groups.set(key, { key, companyName: row.companyName, rows: [row] });
     }
-    return [...groups.values()].map(group => ({
-      ...group,
-      rows: [...group.rows].sort((a, b) => BOOK_ORDER.indexOf(rowCompany(a)) - BOOK_ORDER.indexOf(rowCompany(b))),
-    }));
+    return [...groups.values()].map(group => {
+      const rowsBySource = new Map<QbCompany, Row[]>();
+      for (const row of group.rows) {
+        const source = rowCompany(row);
+        rowsBySource.set(source, [...(rowsBySource.get(source) ?? []), row]);
+      }
+      return {
+        ...group,
+        rows: [...rowsBySource.entries()]
+          .sort(([a], [b]) => BOOK_ORDER.indexOf(a) - BOOK_ORDER.indexOf(b))
+          .map(([, rows]) => mergeSameSourceRows(rows)),
+      };
+    });
   })();
 
   const resetKey = `${qbCompany}::${search}::${picFilter}`;
@@ -730,13 +774,13 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                 const draftScope: SoaCompanySelector = group.rows.length > 1 ? 'ALL' : rowCompany(group.rows[0]);
                 const groupDraftKey = `group:${group.key}`;
                 return (
-                  <div key={groupDraftKey} className="system-list-row" style={{
+                  <div key={groupDraftKey} className={`system-list-row${group.rows.length > 1 && groupOpen ? ' system-list-row--soa-group-open' : ''}`} style={{
                     display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'center', minHeight: 68,
                     columnGap: 10, padding: '11px 14px',
-                    background: group.rows.length > 1 && groupOpen ? '#e8eef5' : '#f8fafc',
                     borderLeft: `3px solid ${group.rows.length > 1 && groupOpen ? '#526b85' : '#cbd5e1'}`,
                   }}>
                     <button onClick={() => group.rows.length > 1 ? setExpandedGroup(groupOpen ? null : group.key) : openDetail(combined, draftScope)}
+                      className="soa-group-toggle"
                       title={group.rows.length > 1 ? (groupOpen ? 'Hide source rows' : 'Show source rows') : `Open ${sources[0]} SOA detail`}
                       style={{ border: 'none', background: 'none', color: '#64748b', padding: 0, cursor: 'pointer', display: 'flex' }}>
                       {group.rows.length > 1 && groupOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
