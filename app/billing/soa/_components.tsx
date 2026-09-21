@@ -77,6 +77,40 @@ const PLACEHOLDER_LABEL_BY_CODE = new Map(PLACEHOLDER_OWNER_CODES.map(p => [p.co
 // selected as this row's current value under "Associated with this company".
 const ownerOptionLabel = (value: string) => PLACEHOLDER_LABEL_BY_CODE.get(value) ?? value;
 
+function SoaOwnerSelect({ row, onChange }: { row: Row; onChange: (value: string) => void }) {
+  const singlePicFallback = row.picOptions.length === 1 ? row.picOptions[0] : null;
+  const displayedOwner = row.soaPic ?? row.suggestedOwner ?? singlePicFallback;
+  const isConfirmed = !!row.soaPic;
+  const likely = displayedOwner && !row.picOptions.includes(displayedOwner)
+    ? [displayedOwner, ...row.picOptions] : row.picOptions;
+  const likelySet = new Set(likely);
+  const everyoneElse = allStaffNames().filter(name => !likelySet.has(name)).sort();
+  const placeholders = PLACEHOLDER_OWNER_CODES.filter(item => !likelySet.has(item.code));
+
+  return (
+    <select value={displayedOwner ?? ''} onChange={event => onChange(event.target.value)}
+      title={!isConfirmed && row.suggestedOwner ? 'Suggested from QuickBooks — not yet confirmed' : undefined}
+      style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: isConfirmed ? '#1e3a5f' : displayedOwner ? '#0f766e' : '#94a3b8', fontWeight: isConfirmed ? 600 : 400, cursor: 'pointer' }}>
+      <option value="">Choose Main PIC…</option>
+      {likely.length > 0 ? (
+        <>
+          <optgroup label="Associated with this company">
+            {likely.map(name => <option key={name} value={name}>{ownerOptionLabel(name)}</option>)}
+          </optgroup>
+          <optgroup label="All staff">
+            {everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
+          </optgroup>
+        </>
+      ) : everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
+      {placeholders.length > 0 && (
+        <optgroup label="Other">
+          {placeholders.map(item => <option key={item.code} value={item.code}>{item.label}</option>)}
+        </optgroup>
+      )}
+    </select>
+  );
+}
+
 const BUCKET_COLOR: Record<AgingBucket, string> = {
   current: '#64748b', d1_30: '#0f766e', d31_60: '#ca8a04', d61_90: '#ea580c', d91_plus: 'var(--status-danger)',
 };
@@ -489,7 +523,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   if (qbCompany === 'ALL') {
     groupPages.pageItems.forEach((group, i) => {
       displayEntries.push({ kind: 'group', group, listIndex: groupPages.startIndex + i });
-      if (expandedGroup === group.key) {
+      if (group.rows.length > 1 && expandedGroup === group.key) {
         group.rows.forEach(row => displayEntries.push({ kind: 'row', row, listIndex: groupPages.startIndex + i, child: true }));
       }
     });
@@ -700,9 +734,10 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                     display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'center', minHeight: 68,
                     columnGap: 10, padding: '11px 14px', background: '#f8fafc', borderLeft: '3px solid #cbd5e1',
                   }}>
-                    <button onClick={() => setExpandedGroup(groupOpen ? null : group.key)} title={groupOpen ? 'Hide source rows' : 'Show source rows'}
+                    <button onClick={() => group.rows.length > 1 ? setExpandedGroup(groupOpen ? null : group.key) : openDetail(combined, draftScope)}
+                      title={group.rows.length > 1 ? (groupOpen ? 'Hide source rows' : 'Show source rows') : `Open ${sources[0]} SOA detail`}
                       style={{ border: 'none', background: 'none', color: '#64748b', padding: 0, cursor: 'pointer', display: 'flex' }}>
-                      {groupOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                      {group.rows.length > 1 && groupOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     </button>
                     <button onClick={() => openDetail(combined, draftScope)} title={group.rows.length > 1 ? 'Open combined SOA detail' : `Open ${sources[0]} SOA detail`}
                       style={{ border: 'none', background: 'none', padding: '0 6px', textAlign: 'left', cursor: 'pointer', minWidth: 0 }}>
@@ -710,7 +745,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                         <span style={{ color: '#cbd5e1', fontSize: 10 }}>{entry.listIndex + 1}</span>{group.companyName.toUpperCase()}
                       </div>
                       <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9.5 }}>
-                        {group.rows.length} source{group.rows.length === 1 ? '' : 's'} · click for {group.rows.length > 1 ? 'combined ' : ''}SOA
+                        {group.rows.length > 1 ? `${group.rows.length} sources · click for combined SOA` : `${sources[0]} · click for SOA`}
                       </div>
                     </button>
                     <div style={{ padding: '0 6px', textAlign: 'center' }}>
@@ -727,9 +762,15 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                     <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                       {combined.picOptions.length ? combined.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
                     </div>
-                    <div style={{ textAlign: 'center', fontSize: 10.5, color: owners.length === 1 ? '#1e3a5f' : '#64748b', lineHeight: 1.45 }}>
-                      {owners.length === 1 ? ownerOptionLabel(owners[0]) : owners.length > 1 ? 'By source' : '—'}
-                    </div>
+                    {group.rows.length === 1 ? (
+                      <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
+                        <SoaOwnerSelect row={group.rows[0]} onChange={value => updateSoaPic(group.rows[0], value)} />
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: 'center', fontSize: 10.5, color: owners.length === 1 ? '#1e3a5f' : '#64748b', lineHeight: 1.45 }}>
+                        {owners.length === 1 ? ownerOptionLabel(owners[0]) : owners.length > 1 ? 'By source' : '—'}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
                       <SoaDraftPopover
                         company={combined} qbCompany={draftScope} me={draftPickers.me}
@@ -832,67 +873,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                     {c.picOptions.length ? c.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
                   </div>
                   <div onClick={e => e.stopPropagation()} style={{ padding: '0 4px' }}>
-                    {(() => {
-                      // Display priority: (1) soaPic — a human's confirmed
-                      // pick, always wins; (2) suggestedOwner — computed
-                      // server-side from THIS company's own real QuickBooks
-                      // Class/Location data (see lib/soa-owner.ts —
-                      // Vincent, 2026-09-07: "不用再靠人工从 Google Sheet
-                      // 回填"); (3) the single unambiguous companies.pic
-                      // name, only when there's exactly one and no better
-                      // signal exists — a last-resort convenience, same as
-                      // before this system had any real QB-derived signal.
-                      const singlePicFallback = c.picOptions.length === 1 ? c.picOptions[0] : null;
-                      const displayedOwner = c.soaPic ?? c.suggestedOwner ?? singlePicFallback;
-                      const isConfirmed = !!c.soaPic;
-
-                      // Vincent, 2026-09-07: "假设某个人不在PIC，但是owner
-                      // 我要加她怎么办" — the dropdown used to offer ONLY
-                      // picOptions once there was at least one (falling back
-                      // to the full directory only when picOptions was
-                      // completely empty), so Chelsea had no way to hand an
-                      // outstanding balance to someone who simply hasn't
-                      // touched this company yet (a coverage reassignment,
-                      // someone new taking over). Now always offers everyone
-                      // — picOptions/displayedOwner grouped first as the
-                      // likely picks, every other real staff name below,
-                      // alphabetical since that group is too long to scan
-                      // in file-declaration order.
-                      const likely = displayedOwner && !c.picOptions.includes(displayedOwner)
-                        ? [displayedOwner, ...c.picOptions] : c.picOptions;
-                      const likelySet = new Set(likely);
-                      const everyoneElse = allStaffNames().filter(n => !likelySet.has(n)).sort();
-                      // Vincent, 2026-09-07: "每个公司都能放BD" — "BD" (Bad
-                      // Debt, a real collections designation, not a hold-off
-                      // marker — see PLACEHOLDER_OWNER_CODES' own comment)
-                      // must be pickable for ANY company, not only the 3 it
-                      // happened to already be backfilled onto. Excluded from
-                      // its own group when it's already the row's current
-                      // value (already shown once, in "Associated" above).
-                      const placeholders = PLACEHOLDER_OWNER_CODES.filter(p => !likelySet.has(p.code));
-                      return (
-                        <select value={displayedOwner ?? ''} onChange={e => updateSoaPic(c, e.target.value)}
-                          title={!isConfirmed && c.suggestedOwner ? 'Suggested from QuickBooks — not yet confirmed' : undefined}
-                          style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '4px 6px', fontSize: 11, background: '#fff', color: isConfirmed ? '#1e3a5f' : displayedOwner ? '#0f766e' : '#94a3b8', fontWeight: isConfirmed ? 600 : 400, cursor: 'pointer' }}>
-                          <option value="">Choose Main PIC…</option>
-                          {likely.length > 0 ? (
-                            <>
-                              <optgroup label="Associated with this company">
-                                {likely.map(name => <option key={name} value={name}>{ownerOptionLabel(name)}</option>)}
-                              </optgroup>
-                              <optgroup label="All staff">
-                                {everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
-                              </optgroup>
-                            </>
-                          ) : everyoneElse.map(name => <option key={name} value={name}>{name}</option>)}
-                          {placeholders.length > 0 && (
-                            <optgroup label="Other">
-                              {placeholders.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
-                            </optgroup>
-                          )}
-                        </select>
-                      );
-                    })()}
+                    <SoaOwnerSelect row={c} onChange={value => updateSoaPic(c, value)} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'center' }}>
                     <SoaDraftPopover
