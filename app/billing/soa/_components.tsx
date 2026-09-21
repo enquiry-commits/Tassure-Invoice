@@ -631,7 +631,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName.toUpperCase()}
                     </div>
                   </div>
-                  <div style={{ padding: '0 6px' }}>
+                  <div style={{ padding: '0 6px', textAlign: 'center' }}>
                     <SoaReminderStatus progress={c.reminderProgress} />
                   </div>
                   {qbCompany === 'ALL' && (

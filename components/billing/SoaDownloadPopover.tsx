@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Download, Loader2 } from 'lucide-react';
 import type { QbCompany } from '@/lib/quickbooks';
 import { downloadSoaPdf, type SoaCompanySelector } from '@/lib/soa-actions-client';
@@ -20,6 +21,14 @@ import { downloadSoaPdf, type SoaCompanySelector } from '@/lib/soa-actions-clien
 // whatever order a book happens to appear in some invoices list.
 export const BOOK_ORDER: QbCompany[] = ['TAB', 'TAC', 'TAO'];
 
+function popoverPosition(rect: DOMRect, menuHeight: number, openUpward?: boolean) {
+  const shouldOpenUpward = openUpward || window.innerHeight - rect.bottom < menuHeight + 12;
+  return {
+    top: shouldOpenUpward ? Math.max(8, rect.top - menuHeight - 4) : rect.bottom + 4,
+    left: Math.max(8, Math.min(window.innerWidth - 208, rect.right - 200)),
+  };
+}
+
 /**
  * The picker itself: each book with a real balance as its own one-click
  * download, plus an explicitly-labeled combined option when there's more
@@ -33,39 +42,61 @@ export function SoaDownloadPopover({
   books: QbCompany[]; downloading: boolean;
   isOpen: boolean; onOpenChange: (open: boolean) => void;
   onDownload: (book: SoaCompanySelector) => void;
-  // SoaDetail's own modal has `overflow: hidden`, so its button (fixed at
-  // the bottom of the modal) needs the popover to open UPWARD or it clips
-  // almost entirely — same reasoning as SoaDraftPopover's 'button' variant
-  // right next to it. A plain table row (Company 360's Outstanding) has no
-  // such ancestor, so the default (downward) is the normal dropdown feel.
+  // SoaDetail prefers upward because its button sits at the bottom of the
+  // modal. The menu itself is portalled to document.body so neither that
+  // modal nor Company 360's scrollable Outstanding card can clip it.
   openUpward?: boolean;
 }) {
+  const triggerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
-    const onDocClick = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) onOpenChange(false);
+    const positionPopover = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+      const rect = trigger.getBoundingClientRect();
+      const menuHeight = popoverRef.current?.offsetHeight ?? (books.length * 38 + (books.length > 1 ? 48 : 12));
+      setPosition(popoverPosition(rect, menuHeight, openUpward));
     };
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!popoverRef.current?.contains(target) && !triggerRef.current?.contains(target)) onOpenChange(false);
+    };
+    const frame = requestAnimationFrame(positionPopover);
     document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [isOpen, onOpenChange]);
+    window.addEventListener('resize', positionPopover);
+    window.addEventListener('scroll', positionPopover, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener('mousedown', onDocClick);
+      window.removeEventListener('resize', positionPopover);
+      window.removeEventListener('scroll', positionPopover, true);
+    };
+  }, [books.length, isOpen, onOpenChange, openUpward]);
 
   const pick = (book: SoaCompanySelector) => { onOpenChange(false); onDownload(book); };
   const disabled = downloading || !books.length;
+  const togglePopover = () => {
+    if (!isOpen && triggerRef.current) {
+      const estimatedHeight = books.length * 38 + (books.length > 1 ? 48 : 12);
+      setPosition(popoverPosition(triggerRef.current.getBoundingClientRect(), estimatedHeight, openUpward));
+    }
+    onOpenChange(!isOpen);
+  };
 
   return (
-    <div style={{ position: 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
-      <button onClick={() => onOpenChange(!isOpen)} disabled={disabled}
+    <div ref={triggerRef} style={{ position: 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
+      <button onClick={togglePopover} disabled={disabled}
         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', fontSize: 13, fontWeight: 700, cursor: disabled ? 'default' : 'pointer' }}>
         {downloading ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Download size={14} />}
         {downloading ? 'Downloading…' : 'Download SOA PDF'}
       </button>
-      {isOpen && (
-        <div ref={popoverRef} style={{
-          position: 'absolute', right: 0, zIndex: 30, background: '#fff',
-          ...(openUpward ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }),
-          border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 200, padding: 6,
+      {isOpen && position && createPortal(
+        <div ref={popoverRef} onClick={e => e.stopPropagation()} style={{
+          position: 'fixed', top: position.top, left: position.left, zIndex: 1000, background: '#fff',
+          border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 200, padding: 6, boxSizing: 'border-box',
         }}>
           {books.map(book => (
             <button key={book} onClick={() => pick(book)}
@@ -82,7 +113,8 @@ export function SoaDownloadPopover({
               </button>
             </>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
