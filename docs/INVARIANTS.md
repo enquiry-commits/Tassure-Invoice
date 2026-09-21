@@ -2460,3 +2460,8 @@ again.
   a book-specific send applies only to that book. Old placeholder templates
   remain in the database for campaign foreign-key history but are hidden;
   the operational SOA template set is exactly 1st/2nd/3rd Reminder.
+  The All list groups same-company book rows for display only: each child
+  still retains its own scope and status. A mixed group defaults a combined
+  draft to the earliest `nextStage` among its sources, preventing an
+  unrecorded source from being silently skipped; staff may still explicitly
+  select 2nd/3rd when earlier reminders pre-date the system.

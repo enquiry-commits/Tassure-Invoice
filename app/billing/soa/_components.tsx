@@ -6,13 +6,13 @@ import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Downlo
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { allStaffNames } from '@/lib/staff-directory';
-import { findUniqueBestMatch } from '@/lib/company-name';
+import { findUniqueBestMatch, normalize } from '@/lib/company-name';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import type { DraftLike } from '@/lib/draft-helper-client';
 import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender, type SoaCompanySelector } from '@/lib/soa-actions-client';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 import { SoaDownloadPopover, BOOK_ORDER } from '@/components/billing/SoaDownloadPopover';
-import { SoaReminderStatus } from '@/components/billing/SoaReminderStatus';
+import { SoaReminderGroupStatus, SoaReminderStatus } from '@/components/billing/SoaReminderStatus';
 import type { QbCompany } from '@/lib/quickbooks';
 import type { SoaCompanyRow } from '@/app/api/billing/soa/route';
 import type { SoaInvoiceDetail } from '@/app/api/billing/soa/detail/route';
@@ -21,6 +21,10 @@ import type { SoaInvoiceDetail } from '@/app/api/billing/soa/detail/route';
 // app/api/billing/soa/all/route.ts) — absent in single-company mode, where
 // every row is implicitly the page's own qbCompany prop.
 type Row = SoaCompanyRow & { qbCompany?: QbCompany };
+type AllCompanyGroup = { key: string; companyName: string; rows: Row[] };
+type DisplayEntry =
+  | { kind: 'group'; group: AllCompanyGroup; listIndex: number }
+  | { kind: 'row'; row: Row; listIndex: number; child: boolean };
 import { AGING_BUCKETS, TXN_TYPE_TAGS, type AgingBucket } from '@/lib/soa';
 
 function fmtMoney(n: number) {
@@ -33,6 +37,9 @@ function fmtMoney(n: number) {
 // the list specifically, not those.
 function fmtNum(n: number) {
   return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function allCompanyGroupKey(companyName: string) {
+  return normalize(companyName) || companyName.trim().toLowerCase();
 }
 // The metric card's 28px/-0.035em letter-spacing (app/globals.css's
 // .metric-card-value) squeezes "S$" straight into the digits with no visual
@@ -174,7 +181,7 @@ function SoaDraftPopover({
   return (
     <div style={{ position: 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
       {variant === 'icon' ? (
-        <button title="Draft Email" onClick={toggleOpen}
+        <button title={qbCompany === 'ALL' ? 'Draft Email — all sources' : `Draft Email — ${qbCompany}`} onClick={toggleOpen}
           style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: isOpen ? '#1d3a5c' : '#94a3b8' }}>
           <Mail size={15} />
         </button>
@@ -203,7 +210,7 @@ function SoaDraftPopover({
         }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>
             Draft Email — {company.companyName}
-            {qbCompany === 'ALL' && <span style={{ color: '#0f766e', fontWeight: 700 }}> (TAB+TAC+TAO combined)</span>}
+            {qbCompany === 'ALL' && <span style={{ color: '#0f766e', fontWeight: 700 }}> (all available sources combined)</span>}
           </div>
           <select value={senderId ?? ''} onChange={e => setSenderId(Number(e.target.value))}
             style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
@@ -274,6 +281,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   const [search, setSearch] = useState('');
   const [picFilter, setPicFilter] = useState(''); // '' = everyone
   const [expanded, setExpanded] = useState<string | null>(null); // keyed by rowKey()
+  const [detailCompany, setDetailCompany] = useState<Row | null>(null);
+  const [detailScope, setDetailScope] = useState<SoaCompanySelector | null>(null);
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportingAll, setExportingAll] = useState(false); // full 18-sheet workbook, not just this page's own
 
@@ -295,6 +305,16 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // company can genuinely appear twice, once per system) — every row
   // identity (React key, the expanded-detail lookup) goes through this.
   const rowKey = (c: Row) => `${rowCompany(c)}:${c.companyName}`;
+  const openDetail = (c: Row, scope: SoaCompanySelector) => {
+    setDetailCompany(c);
+    setDetailScope(scope);
+    setExpanded(rowKey(c));
+  };
+  const closeDetail = () => {
+    setExpanded(null);
+    setDetailCompany(null);
+    setDetailScope(null);
+  };
 
   // Same "only try once, once real data has loaded" guard app/late-filing/
   // page.tsx's own openCompany auto-open already uses — companies starts
@@ -306,7 +326,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     if (!openCompany || triedAutoOpen.current || !companies?.length) return;
     triedAutoOpen.current = true;
     const match = findUniqueBestMatch(openCompany, companies, c => c.companyName, 70).value;
-    if (match) setExpanded(rowKey(match));
+    if (match) openDetail(match, qbCompany === 'ALL' ? 'ALL' : rowCompany(match));
   }, [openCompany, companies]);
 
   // Vincent, 2026-09-07: after capping Company Name's width, then
@@ -369,7 +389,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // Also reset picFilter/search/expanded/page-affecting state when switching
   // companies — a PIC selected on TAB's book shouldn't silently carry over
   // and mis-scope TAC's list before the user notices.
-  useEffect(() => { setSearch(''); setPicFilter(''); setExpanded(null); }, [qbCompany]);
+  useEffect(() => {
+    setSearch(''); setPicFilter(''); setExpanded(null); setDetailCompany(null); setDetailScope(null); setExpandedGroup(null);
+  }, [qbCompany]);
 
   // Vincent, 2026-09-07: "不用再靠人工从 Google Sheet 回填" — Chelsea's real
   // rule (Class on the invoice line, Location as fallback — computed
@@ -424,9 +446,18 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   const counts = useMemo(() => {
     const list = picScoped;
     const totalOutstanding = list.reduce((s, c) => s + c.totalOutstanding, 0);
-    const seriouslyOverdue = list.filter(c => c.aging.d61_90 > 0 || c.aging.d91_plus > 0).length;
-    return { total: list.length, totalOutstanding, seriouslyOverdue };
-  }, [picScoped]);
+    if (qbCompany !== 'ALL') {
+      const seriouslyOverdue = list.filter(c => c.aging.d61_90 > 0 || c.aging.d91_plus > 0).length;
+      return { total: list.length, totalOutstanding, seriouslyOverdue };
+    }
+    const groups = new Map<string, Row[]>();
+    for (const row of list) {
+      const key = allCompanyGroupKey(row.companyName);
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    const seriouslyOverdue = [...groups.values()].filter(rows => rows.some(c => c.aging.d61_90 > 0 || c.aging.d91_plus > 0)).length;
+    return { total: groups.size, totalOutstanding, seriouslyOverdue };
+  }, [picScoped, qbCompany]);
 
   const filtered = useMemo(() => {
     let list = picScoped;
@@ -435,7 +466,36 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     return list;
   }, [picScoped, search]);
 
-  const { page, setPage, totalPages, pageItems, startIndex, total } = usePagination(filtered, `${qbCompany}::${search}::${picFilter}`);
+  const allGroups: AllCompanyGroup[] = (() => {
+    if (qbCompany !== 'ALL') return [];
+    const groups = new Map<string, AllCompanyGroup>();
+    for (const row of filtered) {
+      const key = allCompanyGroupKey(row.companyName);
+      const existing = groups.get(key);
+      if (existing) existing.rows.push(row);
+      else groups.set(key, { key, companyName: row.companyName, rows: [row] });
+    }
+    return [...groups.values()].map(group => ({
+      ...group,
+      rows: [...group.rows].sort((a, b) => BOOK_ORDER.indexOf(rowCompany(a)) - BOOK_ORDER.indexOf(rowCompany(b))),
+    }));
+  })();
+
+  const resetKey = `${qbCompany}::${search}::${picFilter}`;
+  const rowPages = usePagination(filtered, resetKey);
+  const groupPages = usePagination(allGroups, resetKey);
+  const activePages = qbCompany === 'ALL' ? groupPages : rowPages;
+  const displayEntries: DisplayEntry[] = [];
+  if (qbCompany === 'ALL') {
+    groupPages.pageItems.forEach((group, i) => {
+      displayEntries.push({ kind: 'group', group, listIndex: groupPages.startIndex + i });
+      if (expandedGroup === group.key) {
+        group.rows.forEach(row => displayEntries.push({ kind: 'row', row, listIndex: groupPages.startIndex + i, child: true }));
+      }
+    });
+  } else {
+    rowPages.pageItems.forEach((row, i) => displayEntries.push({ kind: 'row', row, listIndex: rowPages.startIndex + i, child: false }));
+  }
 
   // Vincent, 2026-09-06: "PIC有几个人的情况，所以实际上就要在右边多一列可以
   // 让CHELSEA 下拉选择谁才是这个outstanding的主要负责人" — companies.pic can
@@ -574,7 +634,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
               <X size={12} />Clear
             </button>
           )}
-          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{total} companies</span>
+          <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{activePages.total} companies</span>
         </div>
       </div>
 
@@ -584,7 +644,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             <span className="system-list-title">SOA — {scopeLabel} Statement of Account</span>
             <span className="system-list-title-hint" style={{ marginLeft: 8 }}>
               {qbCompany === 'ALL'
-                ? 'Every TAB/TAC/TAO balance together — same company on 2+ systems shows as separate rows'
+                ? 'Grouped by company — expand a company to review or send an individual TAB/TAC/TAO source'
                 : <>Aged the same way as QuickBooks&apos; own AR Aging report</>}
             </span>
           </div>
@@ -610,13 +670,88 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             </div>
             {companies === null && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>}
             {companies !== null && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No outstanding balances — nothing to show.</div>}
-            {pageItems.map((c, i) => {
+            {displayEntries.map(entry => {
+              if (entry.kind === 'group') {
+                const { group } = entry;
+                const groupOpen = expandedGroup === group.key;
+                const sources = group.rows.map(row => rowCompany(row));
+                const earliestNext = [...group.rows].sort((a, b) => a.reminderProgress.nextStage - b.reminderProgress.nextStage)[0];
+                const combined: Row = {
+                  ...group.rows[0],
+                  companyName: group.companyName,
+                  invoiceCount: group.rows.reduce((sum, row) => sum + row.invoiceCount, 0),
+                  totalOutstanding: group.rows.reduce((sum, row) => sum + row.totalOutstanding, 0),
+                  aging: {
+                    current: group.rows.reduce((sum, row) => sum + row.aging.current, 0),
+                    d1_30: group.rows.reduce((sum, row) => sum + row.aging.d1_30, 0),
+                    d31_60: group.rows.reduce((sum, row) => sum + row.aging.d31_60, 0),
+                    d61_90: group.rows.reduce((sum, row) => sum + row.aging.d61_90, 0),
+                    d91_plus: group.rows.reduce((sum, row) => sum + row.aging.d91_plus, 0),
+                  },
+                  lineItems: group.rows.flatMap(row => row.lineItems),
+                  picOptions: [...new Set(group.rows.flatMap(row => row.picOptions))],
+                  reminderProgress: earliestNext.reminderProgress,
+                };
+                const owners = [...new Set(group.rows.map(effectiveOwner).filter((owner): owner is string => !!owner))];
+                const draftScope: SoaCompanySelector = group.rows.length > 1 ? 'ALL' : rowCompany(group.rows[0]);
+                const groupDraftKey = `group:${group.key}`;
+                return (
+                  <div key={groupDraftKey} className="system-list-row" style={{
+                    display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'center', minHeight: 68,
+                    columnGap: 10, padding: '11px 14px', background: '#f8fafc', borderLeft: '3px solid #cbd5e1',
+                  }}>
+                    <button onClick={() => setExpandedGroup(groupOpen ? null : group.key)} title={groupOpen ? 'Hide source rows' : 'Show source rows'}
+                      style={{ border: 'none', background: 'none', color: '#64748b', padding: 0, cursor: 'pointer', display: 'flex' }}>
+                      {groupOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                    </button>
+                    <button onClick={() => openDetail(combined, draftScope)} title={group.rows.length > 1 ? 'Open combined SOA detail' : `Open ${sources[0]} SOA detail`}
+                      style={{ border: 'none', background: 'none', padding: '0 6px', textAlign: 'left', cursor: 'pointer', minWidth: 0 }}>
+                      <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: '#cbd5e1', fontSize: 10 }}>{entry.listIndex + 1}</span>{group.companyName.toUpperCase()}
+                      </div>
+                      <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9.5 }}>
+                        {group.rows.length} source{group.rows.length === 1 ? '' : 's'} · click for {group.rows.length > 1 ? 'combined ' : ''}SOA
+                      </div>
+                    </button>
+                    <div style={{ padding: '0 6px', textAlign: 'center' }}>
+                      <SoaReminderGroupStatus items={group.rows.map(row => ({ source: rowCompany(row), progress: row.reminderProgress }))} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap' }}>
+                      {sources.map(source => <span key={source} style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f' }}>{source}</span>)}
+                    </div>
+                    {AGING_BUCKETS.map(bucket => {
+                      const value = combined.aging[bucket.key];
+                      return <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontFamily: 'Arial, Helvetica, sans-serif', color: value < 0 ? 'var(--status-danger)' : value ? '#64748b' : '#cbd5e1' }}>{value ? fmtNum(value) : '—'}</div>;
+                    })}
+                    <div style={{ textAlign: 'center', fontSize: 12, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
+                    <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+                      {combined.picOptions.length ? combined.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
+                    </div>
+                    <div style={{ textAlign: 'center', fontSize: 10.5, color: owners.length === 1 ? '#1e3a5f' : '#64748b', lineHeight: 1.45 }}>
+                      {owners.length === 1 ? ownerOptionLabel(owners[0]) : owners.length > 1 ? 'By source' : '—'}
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <SoaDraftPopover
+                        company={combined} qbCompany={draftScope} me={draftPickers.me}
+                        senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
+                        templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
+                        isOpen={draftPopoverFor === groupDraftKey} onOpenChange={open => setDraftPopoverFor(open ? groupDraftKey : null)}
+                        variant="icon" onDrafted={(d, sender) => { setSendModalDraft(d); setSendModalSender(sender); }}
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              const c = entry.row;
               const isOpen = expanded === rowKey(c);
               return (
-                <div key={rowKey(c)} className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}`}
-                  onClick={() => setExpanded(isOpen ? null : rowKey(c))}
-                  style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'start', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer' }}>
-                  <div style={{ color: '#94a3b8', display: 'flex' }}>{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</div>
+                <div key={`${entry.child ? 'child:' : ''}${rowKey(c)}`} className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}`}
+                  onClick={() => isOpen ? closeDetail() : openDetail(c, rowCompany(c))}
+                  style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'start', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer', background: entry.child ? '#fff' : undefined }}>
+                  <div style={{ color: entry.child ? '#cbd5e1' : '#94a3b8', display: 'flex', paddingLeft: entry.child ? 5 : 0 }}>
+                    {entry.child ? <span style={{ fontSize: 15 }}>↳</span> : isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  </div>
                   <div style={{ padding: '0 6px' }}>
                     {/* Vincent, 2026-09-07: "公司名要统一...都大字母" — some
                         companies (matched via companies.company_name) are
@@ -628,7 +763,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                         as an exact lookup key (detail/pdf/campaign-preview
                         fetches). */}
                     <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName.toUpperCase()}
+                      {entry.child
+                        ? <span style={{ color: '#64748b', fontSize: 10.5, fontWeight: 700 }}>{rowCompany(c)} source balance</span>
+                        : <><span style={{ color: '#cbd5e1', fontSize: 10 }}>{entry.listIndex + 1}</span>{c.companyName.toUpperCase()}</>}
                     </div>
                   </div>
                   <div style={{ padding: '0 6px', textAlign: 'center' }}>
@@ -759,7 +896,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'center' }}>
                     <SoaDraftPopover
-                      company={c} qbCompany={qbCompany === 'ALL' ? 'ALL' : rowCompany(c)} me={draftPickers.me}
+                      company={c} qbCompany={rowCompany(c)} me={draftPickers.me}
                       senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
                       templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
                       isOpen={draftPopoverFor === rowKey(c)} onOpenChange={open => setDraftPopoverFor(open ? rowKey(c) : null)}
@@ -784,21 +921,23 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         />
       )}
 
-      <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
+      <PaginationBar page={activePages.page} totalPages={activePages.totalPages} total={activePages.total}
+        startIndex={activePages.startIndex} pageCount={activePages.pageItems.length} onPage={activePages.setPage} />
 
       {expanded !== null && (() => {
-        const c = (companies ?? []).find(x => rowKey(x) === expanded);
+        const c = detailCompany ?? (companies ?? []).find(x => rowKey(x) === expanded);
         if (!c) return null;
+        const activeDetailScope = detailScope ?? (qbCompany === 'ALL' ? 'ALL' : rowCompany(c));
         return (
-          <div onClick={() => setExpanded(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
+          <div onClick={closeDetail} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
             <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 780, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
               <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: '4px solid #ea580c', padding: '16px 20px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{c.companyName.toUpperCase()}</div>
-                  <button onClick={() => setExpanded(null)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
+                  <button onClick={closeDetail} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 11, color: '#fff' }}>{rowCompany(c)} · {c.invoiceCount} unpaid invoice{c.invoiceCount !== 1 ? 's' : ''} · {fmtMoney(c.totalOutstanding)} total</span>
+                  <span style={{ fontSize: 11, color: '#fff' }}>{activeDetailScope} · {c.invoiceCount} unpaid invoice{c.invoiceCount !== 1 ? 's' : ''} · {fmtMoney(c.totalOutstanding)} total</span>
                   <span style={{ width: 1, height: 12, background: 'rgba(255,255,255,0.2)', display: 'inline-block' }} />
                   <span style={{ fontSize: 11, color: '#fff' }}>Review &amp; generate Statement of Account</span>
                 </div>
@@ -809,7 +948,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   combines across all 3 books consistently — the invoice
                   LIST, the merged PDF, and the Draft Email body/total all
                   show TAB+TAC+TAO together, not just the Draft action alone. */}
-              <SoaDetail company={c} qbCompany={qbCompany === 'ALL' ? 'ALL' : rowCompany(c)} onSent={() => { load(); setExpanded(null); }} />
+              <SoaDetail company={c} qbCompany={activeDetailScope} onSent={() => { load(); closeDetail(); }} />
             </div>
           </div>
         );
