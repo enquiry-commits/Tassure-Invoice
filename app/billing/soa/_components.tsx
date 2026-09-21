@@ -8,6 +8,7 @@ import { usePagination, PaginationBar } from '@/components/Pagination';
 import { allStaffNames } from '@/lib/staff-directory';
 import { findUniqueBestMatch, normalize } from '@/lib/company-name';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
+import OutlookHelperReadiness from '@/components/client-communications/OutlookHelperReadiness';
 import type { DraftLike } from '@/lib/draft-helper-client';
 import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender, type SoaCompanySelector } from '@/lib/soa-actions-client';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
@@ -659,7 +660,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           list's own dark title bar below (see "SOA — {scopeLabel}..." further
           down) — Vincent: "把SOA — TAB Statement of Account...放回去Company
           Name 上面的深蓝色行". */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 26 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: qbCompany === 'ALL' ? 10 : 26 }}>
         <div style={{ display: 'flex', gap: 8 }}>
           {/* Vincent, 2026-09-07: "All" has no single real sheet of its own
               to export (it's a combined view over TAB/TAC/TAO, not a 4th
@@ -682,6 +683,10 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           <RefreshCw size={14} />Refresh
         </button>
       </div>
+
+      {qbCompany === 'ALL' && (
+        <OutlookHelperReadiness context="soa" style={{ marginBottom: 26 }} />
+      )}
 
       {companies !== null && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>

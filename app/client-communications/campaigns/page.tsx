@@ -9,7 +9,6 @@ import {
   FilePlus2,
   Loader2,
   Mail,
-  MonitorCheck,
   Paperclip,
   Plus,
   RefreshCw,
@@ -171,16 +170,11 @@ export default function EmailDraftWorkbenchPage() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [helperAvailable, setHelperAvailable] = useState<boolean | null>(null);
-  const [helperOutdated, setHelperOutdated] = useState(false);
   const [helperVersion, setHelperVersion] = useState<string | null>(null);
-  const [helperClassicOutlook, setHelperClassicOutlook] = useState<boolean | null>(null);
-  // The inline "Update available" banner (helper-readiness section below)
-  // already existed, but Vincent pointed out it's easy to miss on page
-  // load: "如果没有更新到最新，在进入这个页面的时候要出现一个弹窗提醒更新最新
-  // 的HELPER." Only auto-shown on the initial mount check (see recheckHelper
-  // below), not on every manual "Recheck" click — an explicit re-check
-  // already gives its own visible feedback via the banner, so a second
-  // popup on top of that would just be noise.
+  // Keep the page-load update warning because Email Drafts still uses the
+  // same local Helper when a draft is opened. The full readiness card now
+  // lives at the two operational entry points (Billing Drafts and SOA All),
+  // where Vincent asked staff to set up/recheck it.
   const [showOutdatedModal, setShowOutdatedModal] = useState(false);
   const [me, setMe] = useState<AuthUser | null>(null);
   const [message, setMessage] = useState<{ tone: 'success' | 'warning' | 'error'; text: string } | null>(null);
@@ -201,9 +195,7 @@ export default function EmailDraftWorkbenchPage() {
     getHelperHealth().then(health => {
       setHelperAvailable(health !== null);
       const outdated = isHelperOutdated(health);
-      setHelperOutdated(outdated);
       setHelperVersion(health?.version ?? null);
-      setHelperClassicOutlook(health?.isClassicOutlook ?? null);
       if (opts?.announceOutdated && outdated) setShowOutdatedModal(true);
     });
   }, []);
@@ -560,60 +552,6 @@ export default function EmailDraftWorkbenchPage() {
         </Link>
       </div>
 
-      <section className={`helper-readiness helper-readiness--${
-        helperAvailable === null ? 'checking' : !helperAvailable ? 'missing' : helperOutdated ? 'outdated' : 'ready'
-      }`}>
-        <div className="helper-readiness__icon">
-          {helperAvailable === null
-            ? <Loader2 size={18} className="spin" />
-            : helperAvailable
-              ? <MonitorCheck size={18} />
-              : <Download size={18} />}
-        </div>
-        <div className="helper-readiness__copy">
-          <div className="helper-readiness__title-row">
-            <strong>Outlook Helper</strong>
-            <span className="helper-readiness__status">
-              {helperAvailable === null
-                ? 'Checking'
-                : !helperAvailable
-                  ? 'Not detected'
-                  : helperOutdated
-                    ? 'Update available'
-                    : 'Ready'}
-            </span>
-          </div>
-          <div className="helper-readiness__description">
-            {helperAvailable === null
-              ? 'Checking whether this computer is ready to create Classic Outlook drafts.'
-              : !helperAvailable
-                ? 'Required before drafts can open in Outlook. Download it once, start the Helper, then recheck.'
-                : helperOutdated
-                  ? `Helper ${helperVersion ? `v${helperVersion} ` : ''}is running, but a newer version is available. You may continue or update now.`
-                  : `This computer is ready${helperVersion ? ` · Helper v${helperVersion}` : ''}${helperClassicOutlook ? ' · Classic Outlook verified' : ''}.`}
-          </div>
-          {helperAvailable === false && (
-            <div className="helper-readiness__steps">
-              <span><b>1</b> Download</span>
-              <span><b>2</b> Open the Helper</span>
-              <span><b>3</b> Recheck</span>
-            </div>
-          )}
-        </div>
-        <div className="helper-readiness__actions">
-          {(helperAvailable === false || helperOutdated) && (
-            <a href="/downloads/TassureDraftHelper.exe" download className="helper-download">
-              <Download size={14} />
-              {helperOutdated ? 'Download update' : 'Download Helper'}
-            </a>
-          )}
-          <button type="button" onClick={() => { setHelperAvailable(null); recheckHelper(); }} disabled={helperAvailable === null} className="helper-recheck">
-            <RefreshCw size={13} className={helperAvailable === null ? 'spin' : ''} />
-            Recheck
-          </button>
-        </div>
-      </section>
-
       <section className="draft-setup-panel">
         <div className="draft-section-heading">
           <span className="draft-step">1</span>
@@ -905,23 +843,10 @@ export default function EmailDraftWorkbenchPage() {
         .draft-section-heading div>span{display:block;margin-top:2px;color:#8494a6;font-size:10.5px;font-weight:500}
         .draft-step{width:25px;height:25px;border-radius:8px;background:#eef3f8;color:#173b63;display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:11px;font-weight:800}
         .draft-list-toolbar{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid #e6edf3;flex-wrap:wrap}
-        .helper-readiness{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:13px 15px;background:#fff;border:1px solid #dfe7ef;border-radius:12px;box-shadow:0 4px 16px rgba(24,50,79,.025)}
-        .helper-readiness__icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;background:#eef3f8;color:#526b85}
-        .helper-readiness__copy{min-width:0;flex:1}
-        .helper-readiness__title-row{display:flex;align-items:center;gap:8px;color:#18324f;font-size:12.5px}
-        .helper-readiness__status{padding:2px 7px;border-radius:999px;background:#f1f5f9;color:#60758c;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.02em}
-        .helper-readiness__description{margin-top:3px;color:#718399;font-size:11px;line-height:1.45}
-        .helper-readiness__steps{display:flex;align-items:center;gap:14px;margin-top:7px;color:#526b85;font-size:10px;font-weight:700}
-        .helper-readiness__steps b{display:inline-flex;width:16px;height:16px;margin-right:3px;align-items:center;justify-content:center;border-radius:50%;background:#eef3f8;color:#173b63;font-size:9px}
-        .helper-readiness__actions{display:flex;align-items:center;gap:7px;flex:none}
         .helper-download,.helper-recheck{height:34px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 11px;font-size:11px;font-weight:800;text-decoration:none;cursor:pointer}
         .helper-download{border:0;background:#173b63;color:#fff}
         .helper-recheck{border:1px solid #d9e2ec;background:#fff;color:#526b85}
         .helper-recheck:disabled{cursor:wait;opacity:.65}
-        .helper-readiness--ready .helper-readiness__icon{background:#eef8f2;color:#15803d}
-        .helper-readiness--ready .helper-readiness__status{background:#eef8f2;color:#15803d}
-        .helper-readiness--missing .helper-readiness__icon,.helper-readiness--outdated .helper-readiness__icon{background:#fff8e8;color:#9a6700}
-        .helper-readiness--missing .helper-readiness__status,.helper-readiness--outdated .helper-readiness__status{background:#fff8e8;color:#9a6700}
         .row-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800}
         .row-status--ready{color:#15803d}
         .helper-inline-status{display:inline-flex;align-items:center;gap:5px;color:#8494a6;font-size:10.5px;font-weight:700}
@@ -934,11 +859,6 @@ export default function EmailDraftWorkbenchPage() {
         .helper-outdated-modal strong{display:block;color:#18324f;font-size:14.5px;margin-bottom:8px}
         .helper-outdated-modal p{color:#5b7089;font-size:12px;line-height:1.55;margin:0 0 16px}
         .helper-outdated-modal__actions{display:flex;align-items:center;justify-content:center;gap:8px}
-        @media(max-width:900px){
-          .helper-readiness{align-items:flex-start;flex-wrap:wrap}
-          .helper-readiness__actions{width:100%;padding-left:50px}
-          .helper-readiness__steps{flex-wrap:wrap;gap:7px 12px}
-        }
       `}</style>
     </div>
   );

@@ -18,6 +18,7 @@ import { SVC_CONFIG } from '@/components/billing/service-config';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import MetricCard from '@/components/MetricCard';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
+import OutlookHelperReadiness, { type OutlookHelperStatus } from '@/components/client-communications/OutlookHelperReadiness';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { useIsMobile } from '@/lib/use-is-mobile';
 import { logActivity } from '@/lib/activity-client';
@@ -27,7 +28,7 @@ import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { formatStaffName, formatStaffNameList } from '@/lib/staff-directory';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
-import { getHelperHealth, isHelperOutdated, buildMailtoLink, type DraftLike } from '@/lib/draft-helper-client';
+import { buildMailtoLink, type DraftLike } from '@/lib/draft-helper-client';
 import { isValidEmail } from '@/lib/campaign-recipients';
 import { manualInvoiceOverrides } from '@/lib/manual-invoice-marker';
 import { findUniqueBestMatch } from '@/lib/company-name';
@@ -1578,11 +1579,9 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
   useEffect(() => { loadDraftStatus(); }, [loadDraftStatus]);
   const [helperAvailable, setHelperAvailable] = useState<boolean | null>(null);
   const [helperOutdated, setHelperOutdated] = useState(false);
-  useEffect(() => {
-    getHelperHealth().then(health => {
-      setHelperAvailable(health !== null);
-      setHelperOutdated(isHelperOutdated(health));
-    });
+  const handleHelperStatus = useCallback((status: OutlookHelperStatus) => {
+    setHelperAvailable(status.available);
+    setHelperOutdated(status.outdated);
   }, []);
   const [emailTemplates, setEmailTemplates] = useState<{ id: number; name: string; subject_template: string; body_template: string; is_default: boolean }[]>([]);
   useEffect(() => {
@@ -1886,6 +1885,8 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
           </button>
         </div>
       </div>
+
+      <OutlookHelperReadiness context="billing" onStatusChange={handleHelperStatus} style={{ marginBottom: 14 }} />
 
       {/* Stats — click to filter (scoped to the month) */}
       {arList.length > 0 && (
