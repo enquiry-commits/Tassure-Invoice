@@ -375,7 +375,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // matches Billing Drafts' own row layout, which also ends in a dedicated
   // icon column rather than tucking it into an existing one.
   const soaListColumns = qbCompany === 'ALL'
-    ? '32px minmax(200px,1.2fr) 150px 64px 100px 100px 100px 100px 100px 110px 100px 150px 36px'
+    ? '32px minmax(200px,1.2fr) 150px 120px 100px 100px 100px 100px 100px 110px 100px 150px 36px'
     : '32px minmax(220px,1.4fr) 150px 100px 100px 100px 100px 100px 110px 100px 150px 36px';
   // Display-only stand-in for qbCompany wherever the literal 'ALL' would
   // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
@@ -684,7 +684,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           </div>
         </div>
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
-          <div style={{ minWidth: 1090 }}>
+          <div style={{ minWidth: qbCompany === 'ALL' ? 1150 : 1090 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: soaListColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
               {/* Vincent, 2026-09-15: "Owner...换成类似于Main PIC会不会比较
                   好" — "Owner" read oddly next to the "PIC" column right
@@ -732,7 +732,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                 return (
                   <div key={groupDraftKey} className="system-list-row" style={{
                     display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'center', minHeight: 68,
-                    columnGap: 10, padding: '11px 14px', background: '#f8fafc', borderLeft: '3px solid #cbd5e1',
+                    columnGap: 10, padding: '11px 14px',
+                    background: group.rows.length > 1 && groupOpen ? '#e8eef5' : '#f8fafc',
+                    borderLeft: `3px solid ${group.rows.length > 1 && groupOpen ? '#526b85' : '#cbd5e1'}`,
                   }}>
                     <button onClick={() => group.rows.length > 1 ? setExpandedGroup(groupOpen ? null : group.key) : openDetail(combined, draftScope)}
                       title={group.rows.length > 1 ? (groupOpen ? 'Hide source rows' : 'Show source rows') : `Open ${sources[0]} SOA detail`}
@@ -751,8 +753,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                     <div style={{ padding: '0 6px', textAlign: 'center' }}>
                       <SoaReminderGroupStatus items={group.rows.map(row => ({ source: rowCompany(row), progress: row.reminderProgress }))} />
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 4, flexWrap: 'wrap' }}>
-                      {sources.map(source => <span key={source} style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f' }}>{source}</span>)}
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
+                      {sources.map(source => <span key={source} style={{ display: 'inline-block', flex: '0 0 auto', fontSize: 9.5, fontWeight: 800, padding: '2px 6px', borderRadius: 5, background: '#dfe7f0', color: '#1e3a5f' }}>{source}</span>)}
                     </div>
                     {AGING_BUCKETS.map(bucket => {
                       const value = combined.aging[bucket.key];
