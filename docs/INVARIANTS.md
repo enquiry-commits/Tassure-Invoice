@@ -2465,3 +2465,16 @@ again.
   draft to the earliest `nextStage` among its sources, preventing an
   unrecorded source from being silently skipped; staff may still explicitly
   select 2nd/3rd when earlier reminders pre-date the system.
+
+## SOA Outstanding shared remarks
+
+- **INV-DATA-025** — SOA Outstanding Remarks are company-level operational
+  notes, not book-level notes. One normalized company/customer has exactly
+  one `soa_remarks` row shared across All, TAB, TAC and TAO; never add
+  `qb_company` to this key or copy the text into each source row. The key is
+  normalized customer name rather than `companies.id` because legitimate
+  QuickBooks Outstanding customers may not exist in `companies`. In the All
+  view, the Remarks UI must visually span the combined parent plus all of its
+  expanded source children, while each envelope remains source-specific.
+  Multi-source groups start expanded; collapsing one is only a temporary UI
+  preference and does not alter balances, reminder stages, owners or remarks.

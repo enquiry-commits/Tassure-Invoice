@@ -6,6 +6,7 @@ import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-account
 import type { QbCompany } from '@/lib/quickbooks';
 import { computeSoaRows, type SoaCompanyRow as BaseSoaCompanyRow } from '@/lib/soa-data';
 import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderProgress } from '@/lib/soa-reminder-progress';
+import { isMissingSoaRemarksStorage, loadSoaRemarks, soaRemarksForCompany } from '@/lib/soa-remarks';
 
 const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
 
@@ -28,7 +29,7 @@ const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
 // The actual row-computation lives in lib/soa-data.ts (computeSoaRows),
 // shared with GET /api/billing/soa/export so the on-screen list and the
 // Excel download can never silently drift into different numbers.
-export type SoaCompanyRow = BaseSoaCompanyRow & { reminderProgress: SoaReminderProgress };
+export type SoaCompanyRow = BaseSoaCompanyRow & { reminderProgress: SoaReminderProgress; remarks: string | null };
 
 export async function GET(req: NextRequest) {
   const company = req.nextUrl.searchParams.get('company') as QbCompany | null;
@@ -36,14 +37,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO' }, { status: 400 });
   }
   try {
-    const [rows, history] = await Promise.all([
+    const admin = createAdminClient();
+    const [rows, history, remarks] = await Promise.all([
       computeSoaRows(company),
-      loadSoaReminderHistory(createAdminClient()),
+      loadSoaReminderHistory(admin),
+      loadSoaRemarks(admin),
     ]);
     return NextResponse.json({
       companies: rows.map(row => ({
         ...row,
         reminderProgress: resolveSoaReminderProgress(history, row, company),
+        remarks: soaRemarksForCompany(remarks, row.companyName),
       })),
     });
   } catch (err) {
@@ -67,16 +71,35 @@ export async function PATCH(req: NextRequest) {
   const account: ApprovedAccount | null = getApprovedAccount(authData.user?.email);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
 
-  const { companyName, soaPic, company } = await req.json().catch(() => ({})) as {
-    companyName?: string; soaPic?: string | null; company?: QbCompany;
+  const body = await req.json().catch(() => ({})) as {
+    companyName?: string; soaPic?: string | null; company?: QbCompany; remarks?: string | null;
   };
+  const { companyName, soaPic, company } = body;
   const name = companyName?.trim();
   if (!name) return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  if (Object.prototype.hasOwnProperty.call(body, 'remarks')) {
+    const { error } = await supabase.from('soa_remarks').upsert({
+      customer_name_norm: normalize(name),
+      customer_name: name,
+      remarks: body.remarks?.trim() || null,
+      updated_at: new Date().toISOString(),
+      updated_by_email: account.email,
+    }, { onConflict: 'customer_name_norm' });
+    if (error) {
+      const message = isMissingSoaRemarksStorage(error)
+        ? 'SOA Remarks storage is not installed yet. Run scripts/add-soa-remarks.sql in Supabase.'
+        : error.message;
+      return NextResponse.json({ error: message }, { status: 503 });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   if (!company || !QB_COMPANIES.includes(company)) {
     return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO' }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
   const { error } = await supabase.from('soa_owners').upsert({
     customer_name_norm: normalize(name),
     customer_name: name,

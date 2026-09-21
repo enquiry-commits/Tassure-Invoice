@@ -25,7 +25,7 @@ type Row = SoaCompanyRow & { qbCompany?: QbCompany };
 type AllCompanyGroup = { key: string; companyName: string; rows: Row[] };
 type DisplayEntry =
   | { kind: 'group'; group: AllCompanyGroup; listIndex: number }
-  | { kind: 'row'; row: Row; listIndex: number; child: boolean; lastChild?: boolean };
+  | { kind: 'row'; row: Row; listIndex: number; child: boolean };
 import { AGING_BUCKETS, TXN_TYPE_TAGS, type AgingBucket } from '@/lib/soa';
 
 function fmtMoney(n: number) {
@@ -75,6 +75,7 @@ function mergeSameSourceRows(rows: Row[]): Row {
     unpaidInvoices: rows.flatMap(row => row.unpaidInvoices).sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
     lineItems: rows.flatMap(row => row.lineItems).sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
     reminderProgress: mostAdvancedReminder.reminderProgress,
+    remarks: rows.find(row => row.remarks)?.remarks ?? null,
   };
 }
 // The metric card's 28px/-0.035em letter-spacing (app/globals.css's
@@ -144,6 +145,54 @@ function SoaOwnerSelect({ row, onChange }: { row: Row; onChange: (value: string)
         </optgroup>
       )}
     </select>
+  );
+}
+
+function SoaRemarksInput({ value, onSave }: { value: string | null; onSave: (value: string) => Promise<void> }) {
+  const [draft, setDraft] = useState(value ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) setDraft(value ?? '');
+  }, [value]);
+
+  const save = async () => {
+    const next = draft.trim();
+    if (next === (value ?? '').trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save remark.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      value={draft}
+      onChange={event => setDraft(event.target.value)}
+      onBlur={() => void save()}
+      onKeyDown={event => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+        if (event.key === 'Escape') { setDraft(value ?? ''); event.currentTarget.blur(); }
+      }}
+      placeholder="Add remark…"
+      disabled={saving}
+      title={error ?? (saving ? 'Saving…' : 'Shared across TAB, TAC and TAO')}
+      aria-label="SOA remarks"
+      style={{
+        width: '100%', minWidth: 0, height: 32, boxSizing: 'border-box', borderRadius: 6,
+        border: `1px solid ${error ? '#fca5a5' : saving ? '#a8bacb' : '#d7e1eb'}`,
+        background: saving ? '#f8fafc' : '#fff', color: '#334155', padding: '5px 8px',
+        fontSize: 10.5, outline: 'none', opacity: saving ? 0.75 : 1,
+      }}
+    />
   );
 }
 
@@ -353,7 +402,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   const [expanded, setExpanded] = useState<string | null>(null); // keyed by rowKey()
   const [detailCompany, setDetailCompany] = useState<Row | null>(null);
   const [detailScope, setDetailScope] = useState<SoaCompanySelector | null>(null);
-  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
+  // Multi-source companies are open by default. Store only explicit user
+  // collapses so every newly loaded group naturally starts expanded.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set());
   const [exporting, setExporting] = useState(false);
   const [exportingAll, setExportingAll] = useState(false); // full 18-sheet workbook, not just this page's own
 
@@ -411,8 +462,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // matches Billing Drafts' own row layout, which also ends in a dedicated
   // icon column rather than tucking it into an existing one.
   const soaListColumns = qbCompany === 'ALL'
-    ? '32px minmax(200px,1.2fr) 150px 120px 100px 100px 100px 100px 100px 110px 100px 150px 36px'
-    : '32px minmax(220px,1.4fr) 150px 100px 100px 100px 100px 100px 110px 100px 150px 36px';
+    ? '32px minmax(200px,1.2fr) 150px 120px 100px 100px 100px 100px 100px 110px 100px 150px 160px 36px'
+    : '32px minmax(220px,1.4fr) 150px 100px 100px 100px 100px 100px 110px 100px 150px 160px 36px';
   // Display-only stand-in for qbCompany wherever the literal 'ALL' would
   // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
   // a typo, not a scope).
@@ -460,7 +511,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // companies — a PIC selected on TAB's book shouldn't silently carry over
   // and mis-scope TAC's list before the user notices.
   useEffect(() => {
-    setSearch(''); setPicFilter(''); setExpanded(null); setDetailCompany(null); setDetailScope(null); setExpandedGroup(null);
+    setSearch(''); setPicFilter(''); setExpanded(null); setDetailCompany(null); setDetailScope(null); setCollapsedGroups(new Set());
   }, [qbCompany]);
 
   // Vincent, 2026-09-07: "不用再靠人工从 Google Sheet 回填" — Chelsea's real
@@ -568,12 +619,6 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   if (qbCompany === 'ALL') {
     groupPages.pageItems.forEach((group, i) => {
       displayEntries.push({ kind: 'group', group, listIndex: groupPages.startIndex + i });
-      if (group.rows.length > 1 && expandedGroup === group.key) {
-        group.rows.forEach((row, childIndex) => displayEntries.push({
-          kind: 'row', row, listIndex: groupPages.startIndex + i, child: true,
-          lastChild: childIndex === group.rows.length - 1,
-        }));
-      }
     });
   } else {
     rowPages.pageItems.forEach((row, i) => displayEntries.push({ kind: 'row', row, listIndex: rowPages.startIndex + i, child: false }));
@@ -609,6 +654,18 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ companyName: row.companyName, soaPic: value || null, company }),
     }).catch(() => {});
+  };
+
+  const updateSoaRemarks = async (companyName: string, value: string) => {
+    const response = await fetch('/api/billing/soa', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyName, remarks: value || null }),
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(json.error ?? 'Unable to save remark.');
+    const key = allCompanyGroupKey(companyName);
+    setCompanies(current => (current ?? []).map(row =>
+      allCompanyGroupKey(row.companyName) === key ? { ...row, remarks: value || null } : row));
   };
 
   // Vincent, 2026-09-07: "我要可以导出EXCEL，要和GOOGLE SHEET的格式一样" —
@@ -650,6 +707,80 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     } finally {
       setExportingAll(false);
     }
+  };
+
+  const renderSourceRow = (
+    c: Row,
+    opts: { child: boolean; lastChild?: boolean; listIndex: number; reserveSharedRemark?: boolean },
+  ) => {
+    const isOpen = expanded === rowKey(c);
+    return (
+      <div key={`${opts.child ? 'child:' : ''}${rowKey(c)}`}
+        className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}${opts.child ? ' system-list-row--soa-group-child' : ''}${opts.lastChild ? ' system-list-row--soa-group-last-child' : ''}`}
+        onClick={() => isOpen ? closeDetail() : openDetail(c, rowCompany(c))}
+        style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'start', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer' }}>
+        <div style={{ color: opts.child ? '#cbd5e1' : '#94a3b8', display: 'flex', paddingLeft: opts.child ? 5 : 0 }}>
+          {opts.child ? <span style={{ fontSize: 15 }}>↳</span> : isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </div>
+        <div style={{ padding: '0 6px' }}>
+          <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {opts.child
+              ? <span style={{ color: '#64748b', fontSize: 10.5, fontWeight: 700 }}>{rowCompany(c)} source balance</span>
+              : <><span style={{ color: '#cbd5e1', fontSize: 10 }}>{opts.listIndex + 1}</span>{c.companyName.toUpperCase()}</>}
+          </div>
+        </div>
+        <div style={{ padding: '0 6px', textAlign: 'center' }}>
+          <SoaReminderStatus progress={c.reminderProgress} />
+        </div>
+        {qbCompany === 'ALL' && (
+          <div style={{ textAlign: 'center' }}>
+            <span style={{
+              display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
+              padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f',
+            }}>{rowCompany(c)}</span>
+          </div>
+        )}
+        {AGING_BUCKETS.map(bucket => {
+          const items = c.lineItems.filter(item => item.bucket === bucket.key);
+          return (
+            <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif' }}>
+              {items.length ? items.map((item, index) => {
+                const isNegative = item.amount < 0;
+                const tag = isNegative ? (TXN_TYPE_TAGS[item.txnType] ?? item.txnType) : null;
+                return (
+                  <div key={`${item.txnType}-${item.docNumber}-${index}`} title={isNegative ? item.txnType : undefined}
+                    style={{ color: isNegative ? 'var(--status-danger)' : '#64748b', cursor: isNegative ? 'help' : undefined }}>
+                    {fmtNum(item.amount)}{tag ? ` (${tag})` : ''}
+                  </div>
+                );
+              }) : <span style={{ color: '#cbd5e1' }}>—</span>}
+            </div>
+          );
+        })}
+        <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: c.totalOutstanding < 0 ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
+        <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+          {c.picOptions.length ? c.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
+        </div>
+        <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
+          <SoaOwnerSelect row={c} onChange={value => updateSoaPic(c, value)} />
+        </div>
+        {opts.reserveSharedRemark ? <div aria-hidden="true" /> : (
+          <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
+            <SoaRemarksInput value={c.remarks} onSave={value => updateSoaRemarks(c.companyName, value)} />
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <SoaDraftPopover
+            company={c} qbCompany={rowCompany(c)} me={draftPickers.me}
+            senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
+            templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
+            isOpen={draftPopoverFor === rowKey(c)} onOpenChange={open => setDraftPopoverFor(open ? rowKey(c) : null)}
+            variant="icon"
+            onDrafted={(draft, sender) => { setSendModalDraft(draft); setSendModalSender(sender); }}
+          />
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -730,13 +861,13 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             <span className="system-list-title">SOA — {scopeLabel} Statement of Account</span>
             <span className="system-list-title-hint" style={{ marginLeft: 8 }}>
               {qbCompany === 'ALL'
-                ? 'Grouped by company — expand a company to review or send an individual TAB/TAC/TAO source'
+                ? 'Grouped by company — multi-source balances are expanded by default'
                 : <>Aged the same way as QuickBooks&apos; own AR Aging report</>}
             </span>
           </div>
         </div>
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
-          <div style={{ minWidth: qbCompany === 'ALL' ? 1150 : 1090 }}>
+          <div style={{ minWidth: qbCompany === 'ALL' ? 1320 : 1250 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: soaListColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
               {/* Vincent, 2026-09-15: "Owner...换成类似于Main PIC会不会比较
                   好" — "Owner" read oddly next to the "PIC" column right
@@ -748,8 +879,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   (soaPic, suggestedOwner, effectiveOwner, soa_owners table)
                   are unchanged — this is a display-label rename only. */}
               {(qbCompany === 'ALL'
-                ? ['', 'Company Name', 'Reminder', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '']
-                : ['', 'Company Name', 'Reminder', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '']
+                ? ['', 'Company Name', 'Reminder', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', 'Remarks', '']
+                : ['', 'Company Name', 'Reminder', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', 'Remarks', '']
               ).map((h, i) => (
                 i >= 2 ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>{h}</div> : <div key={i} style={{ padding: '0 6px' }}>{h}</div>
               ))}
@@ -759,7 +890,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             {displayEntries.map(entry => {
               if (entry.kind === 'group') {
                 const { group } = entry;
-                const groupOpen = expandedGroup === group.key;
+                const groupOpen = group.rows.length > 1 && !collapsedGroups.has(group.key);
                 const sources = group.rows.map(row => rowCompany(row));
                 const earliestNext = [...group.rows].sort((a, b) => a.reminderProgress.nextStage - b.reminderProgress.nextStage)[0];
                 const combined: Row = {
@@ -781,166 +912,84 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                 const owners = [...new Set(group.rows.map(effectiveOwner).filter((owner): owner is string => !!owner))];
                 const draftScope: SoaCompanySelector = group.rows.length > 1 ? 'ALL' : rowCompany(group.rows[0]);
                 const groupDraftKey = `group:${group.key}`;
+                const toggleGroup = () => setCollapsedGroups(current => {
+                  const next = new Set(current);
+                  if (groupOpen) next.add(group.key);
+                  else next.delete(group.key);
+                  return next;
+                });
                 return (
-                  <div key={groupDraftKey} className={`system-list-row${group.rows.length > 1 && groupOpen ? ' system-list-row--soa-group-open' : ''}`} style={{
-                    display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'center', minHeight: 68,
-                    columnGap: 10, padding: '11px 14px',
-                    borderLeft: `3px solid ${group.rows.length > 1 && groupOpen ? '#526b85' : '#cbd5e1'}`,
-                  }}>
-                    <button onClick={() => group.rows.length > 1 ? setExpandedGroup(groupOpen ? null : group.key) : openDetail(combined, draftScope)}
-                      className="soa-group-toggle"
-                      title={group.rows.length > 1 ? (groupOpen ? 'Hide source rows' : 'Show source rows') : `Open ${sources[0]} SOA detail`}
-                      style={{ border: 'none', background: 'none', color: '#64748b', padding: 0, cursor: 'pointer', display: 'flex' }}>
-                      {group.rows.length > 1 && groupOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                    </button>
-                    <button onClick={() => openDetail(combined, draftScope)} title={group.rows.length > 1 ? 'Open combined SOA detail' : `Open ${sources[0]} SOA detail`}
-                      style={{ border: 'none', background: 'none', padding: '0 6px', textAlign: 'left', cursor: 'pointer', minWidth: 0 }}>
-                      <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ color: '#cbd5e1', fontSize: 10 }}>{entry.listIndex + 1}</span>{group.companyName.toUpperCase()}
+                  <div key={groupDraftKey} className={`soa-company-group${groupOpen ? ' soa-company-group--open' : ''}`}>
+                    <div className={`system-list-row${groupOpen ? ' system-list-row--soa-group-open' : ''}`} style={{
+                      display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'center', minHeight: 68,
+                      columnGap: 10, padding: '11px 14px',
+                      borderLeft: `3px solid ${groupOpen ? '#526b85' : '#cbd5e1'}`,
+                    }}>
+                      <button onClick={() => group.rows.length > 1 ? toggleGroup() : openDetail(combined, draftScope)}
+                        className="soa-group-toggle"
+                        title={group.rows.length > 1 ? (groupOpen ? 'Hide source rows' : 'Show source rows') : `Open ${sources[0]} SOA detail`}
+                        style={{ border: 'none', background: 'none', color: '#64748b', padding: 0, cursor: 'pointer', display: 'flex' }}>
+                        {groupOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                      </button>
+                      <button onClick={() => openDetail(combined, draftScope)} title={group.rows.length > 1 ? 'Open combined SOA detail' : `Open ${sources[0]} SOA detail`}
+                        style={{ border: 'none', background: 'none', padding: '0 6px', textAlign: 'left', cursor: 'pointer', minWidth: 0 }}>
+                        <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ color: '#cbd5e1', fontSize: 10 }}>{entry.listIndex + 1}</span>{group.companyName.toUpperCase()}
+                        </div>
+                        <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9.5 }}>
+                          {group.rows.length > 1 ? `${group.rows.length} sources · combined SOA` : `${sources[0]} · click for SOA`}
+                        </div>
+                      </button>
+                      <div style={{ padding: '0 6px', textAlign: 'center' }}>
+                        <SoaReminderGroupStatus items={group.rows.map(row => ({ source: rowCompany(row), progress: row.reminderProgress }))} />
                       </div>
-                      <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9.5 }}>
-                        {group.rows.length > 1 ? `${group.rows.length} sources · click for combined SOA` : `${sources[0]} · click for SOA`}
+                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
+                        {sources.map(source => <span key={source} style={{ display: 'inline-block', flex: '0 0 auto', fontSize: 9.5, fontWeight: 800, padding: '2px 6px', borderRadius: 5, background: '#dfe7f0', color: '#1e3a5f' }}>{source}</span>)}
                       </div>
-                    </button>
-                    <div style={{ padding: '0 6px', textAlign: 'center' }}>
-                      <SoaReminderGroupStatus items={group.rows.map(row => ({ source: rowCompany(row), progress: row.reminderProgress }))} />
+                      {AGING_BUCKETS.map(bucket => {
+                        const value = combined.aging[bucket.key];
+                        return <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontFamily: 'Arial, Helvetica, sans-serif', color: value < 0 ? 'var(--status-danger)' : value ? '#64748b' : '#cbd5e1' }}>{value ? fmtNum(value) : '—'}</div>;
+                      })}
+                      <div style={{ textAlign: 'center', fontSize: 12, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
+                      <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
+                        {combined.picOptions.length ? combined.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
+                      </div>
+                      {group.rows.length === 1 ? (
+                        <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
+                          <SoaOwnerSelect row={group.rows[0]} onChange={value => updateSoaPic(group.rows[0], value)} />
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: 'center', fontSize: 10.5, color: owners.length === 1 ? '#1e3a5f' : '#64748b', lineHeight: 1.45 }}>
+                          {owners.length === 1 ? ownerOptionLabel(owners[0]) : owners.length > 1 ? 'By source' : '—'}
+                        </div>
+                      )}
+                      <div aria-hidden="true" />
+                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <SoaDraftPopover
+                          company={combined} qbCompany={draftScope} me={draftPickers.me}
+                          senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
+                          templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
+                          isOpen={draftPopoverFor === groupDraftKey} onOpenChange={open => setDraftPopoverFor(open ? groupDraftKey : null)}
+                          variant="icon" onDrafted={(draft, sender) => { setSendModalDraft(draft); setSendModalSender(sender); }}
+                        />
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
-                      {sources.map(source => <span key={source} style={{ display: 'inline-block', flex: '0 0 auto', fontSize: 9.5, fontWeight: 800, padding: '2px 6px', borderRadius: 5, background: '#dfe7f0', color: '#1e3a5f' }}>{source}</span>)}
-                    </div>
-                    {AGING_BUCKETS.map(bucket => {
-                      const value = combined.aging[bucket.key];
-                      return <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontFamily: 'Arial, Helvetica, sans-serif', color: value < 0 ? 'var(--status-danger)' : value ? '#64748b' : '#cbd5e1' }}>{value ? fmtNum(value) : '—'}</div>;
-                    })}
-                    <div style={{ textAlign: 'center', fontSize: 12, fontFamily: 'Arial, Helvetica, sans-serif', color: '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
-                    <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
-                      {combined.picOptions.length ? combined.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
-                    </div>
-                    {group.rows.length === 1 ? (
-                      <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
-                        <SoaOwnerSelect row={group.rows[0]} onChange={value => updateSoaPic(group.rows[0], value)} />
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', fontSize: 10.5, color: owners.length === 1 ? '#1e3a5f' : '#64748b', lineHeight: 1.45 }}>
-                        {owners.length === 1 ? ownerOptionLabel(owners[0]) : owners.length > 1 ? 'By source' : '—'}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      <SoaDraftPopover
-                        company={combined} qbCompany={draftScope} me={draftPickers.me}
-                        senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
-                        templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
-                        isOpen={draftPopoverFor === groupDraftKey} onOpenChange={open => setDraftPopoverFor(open ? groupDraftKey : null)}
-                        variant="icon" onDrafted={(d, sender) => { setSendModalDraft(d); setSendModalSender(sender); }}
-                      />
+
+                    {groupOpen && group.rows.map((row, index) => renderSourceRow(row, {
+                      child: true,
+                      lastChild: index === group.rows.length - 1,
+                      listIndex: entry.listIndex,
+                      reserveSharedRemark: true,
+                    }))}
+
+                    <div className="soa-company-group__remarks" onClick={event => event.stopPropagation()}>
+                      <SoaRemarksInput value={group.rows[0].remarks} onSave={value => updateSoaRemarks(group.companyName, value)} />
                     </div>
                   </div>
                 );
               }
 
-              const c = entry.row;
-              const isOpen = expanded === rowKey(c);
-              return (
-                <div key={`${entry.child ? 'child:' : ''}${rowKey(c)}`} className={`system-list-row${isOpen ? ' system-list-row--selected' : ''}${entry.child ? ' system-list-row--soa-group-child' : ''}${entry.lastChild ? ' system-list-row--soa-group-last-child' : ''}`}
-                  onClick={() => isOpen ? closeDetail() : openDetail(c, rowCompany(c))}
-                  style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'start', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer' }}>
-                  <div style={{ color: entry.child ? '#cbd5e1' : '#94a3b8', display: 'flex', paddingLeft: entry.child ? 5 : 0 }}>
-                    {entry.child ? <span style={{ fontSize: 15 }}>↳</span> : isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  </div>
-                  <div style={{ padding: '0 6px' }}>
-                    {/* Vincent, 2026-09-07: "公司名要统一...都大字母" — some
-                        companies (matched via companies.company_name) are
-                        already ALL CAPS, others (no companies match — falls
-                        back to the raw QuickBooks customer_name) can be
-                        mixed case, reading as inconsistent side by side.
-                        .toUpperCase() only at display time — the underlying
-                        c.companyName stays untouched, since it's also used
-                        as an exact lookup key (detail/pdf/campaign-preview
-                        fetches). */}
-                    <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {entry.child
-                        ? <span style={{ color: '#64748b', fontSize: 10.5, fontWeight: 700 }}>{rowCompany(c)} source balance</span>
-                        : <><span style={{ color: '#cbd5e1', fontSize: 10 }}>{entry.listIndex + 1}</span>{c.companyName.toUpperCase()}</>}
-                    </div>
-                  </div>
-                  <div style={{ padding: '0 6px', textAlign: 'center' }}>
-                    <SoaReminderStatus progress={c.reminderProgress} />
-                  </div>
-                  {qbCompany === 'ALL' && (
-                    // Vincent, 2026-09-07: "company name 右边第2列 要放Source :
-                    // TAB or TAC or TAO" — which real system this specific
-                    // row's balance/Owner edit actually belongs to.
-                    <div style={{ textAlign: 'center' }}>
-                      <span style={{
-                        display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
-                        padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f',
-                      }}>{rowCompany(c)}</span>
-                    </div>
-                  )}
-                  {/* Vincent, 2026-09-07: "我加多颜色太多了，全部变成灰色会
-                      在深蓝色就好，并且数字不需要加粗普通的 Arial" — dropped
-                      the old per-severity rainbow (BUCKET_COLOR — gray/teal/
-                      amber/orange/red by how overdue a bucket is) for one
-                      flat gray on every non-empty cell; Total keeps navy
-                      (the one deliberate "dark blue" he asked to keep) as
-                      the sole accent. No more bold, and an explicit Arial
-                      stack instead of the app's default UI font (Segoe UI
-                      on his own machine — a different face even though the
-                      two look similar). BUCKET_COLOR itself is untouched —
-                      still used by the detail modal's own per-invoice
-                      bucket badge below, which he hasn't asked to change. */}
-                  {/* Vincent, 2026-09-15: "当一个列里面出现多过一个单逾期的
-                      时候，这些欠款都应该要出现在List...我一行一个数字" — a
-                      bucket cell used to show only its NET value, which goes
-                      wrong two ways: (1) an unapplied CreditMemo/Payment/
-                      Journal Entry/Deposit netting it negative used to be
-                      hidden behind the old `> 0` gate entirely; (2) even
-                      after that fix, several real line items that happen to
-                      net to exactly the same total (or to $0) still collapse
-                      into ONE number or a dash — e.g. ACCADIA MANAGEMENT
-                      SERVICES's real 7-line 91+ bucket (1,900 / 1,500 /
-                      1,200 / 1,500 / -4,600 (JE) / 1,200 / -2,700 (JE), net
-                      exactly $0) showed nothing at all. Now every line item
-                      in the bucket renders on its own line — one number per
-                      line, oldest-due first (c.lineItems is already sorted
-                      that way) — so nothing with real money behind it is
-                      ever hidden by netting. Total (below) is still the one
-                      place a genuine net makes sense. */}
-                  {AGING_BUCKETS.map(b => {
-                    const items = c.lineItems.filter(item => item.bucket === b.key);
-                    return (
-                      <div key={b.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif' }}>
-                        {items.length ? items.map((item, idx) => {
-                          const isNeg = item.amount < 0;
-                          const tag = isNeg ? (TXN_TYPE_TAGS[item.txnType] ?? item.txnType) : null;
-                          return (
-                            <div key={`${item.txnType}-${item.docNumber}-${idx}`} title={isNeg ? item.txnType : undefined} style={{ color: isNeg ? 'var(--status-danger)' : '#64748b', cursor: isNeg ? 'help' : undefined }}>
-                              {fmtNum(item.amount)}{tag ? ` (${tag})` : ''}
-                            </div>
-                          );
-                        }) : <span style={{ color: '#cbd5e1' }}>—</span>}
-                      </div>
-                    );
-                  })}
-                  <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: c.totalOutstanding < 0 ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
-                  <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
-                    {c.picOptions.length ? c.picOptions.map(name => <div key={name}>{name}</div>) : '—'}
-                  </div>
-                  <div onClick={e => e.stopPropagation()} style={{ padding: '0 4px' }}>
-                    <SoaOwnerSelect row={c} onChange={value => updateSoaPic(c, value)} />
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'center' }}>
-                    <SoaDraftPopover
-                      company={c} qbCompany={rowCompany(c)} me={draftPickers.me}
-                      senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
-                      templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
-                      isOpen={draftPopoverFor === rowKey(c)} onOpenChange={open => setDraftPopoverFor(open ? rowKey(c) : null)}
-                      variant="icon"
-                      onDrafted={(d, sender) => { setSendModalDraft(d); setSendModalSender(sender); }}
-                    />
-                  </div>
-                </div>
-              );
+              return renderSourceRow(entry.row, { child: false, listIndex: entry.listIndex });
             })}
           </div>
         </div>

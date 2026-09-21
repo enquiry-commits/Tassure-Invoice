@@ -179,7 +179,14 @@ body {
   border-right: 1px solid #b8c7d6;
   border-radius: 7px 7px 0 0;
   box-shadow: inset 0 -1px 0 #c5d1de;
-  margin-top: 7px;
+}
+
+.soa-company-group {
+  position: relative;
+}
+
+.soa-company-group--open {
+  margin: 7px 0 9px;
 }
 
 /* Source rows visually remain part of the expanded company above. The
@@ -202,7 +209,26 @@ body {
 .system-list-row--soa-group-last-child {
   border-bottom: 1px solid #b8c7d6 !important;
   border-radius: 0 0 7px 7px;
-  margin-bottom: 9px;
+}
+
+/* One company-level Remarks cell spans the combined row plus every expanded
+   source row. Each underlying row reserves the same grid column; this opaque
+   overlay hides their separators so the result reads as a real row-spanned
+   cell while all numeric/source columns remain on the normal table grid. */
+.soa-company-group__remarks {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  right: 60px;
+  width: 160px;
+  z-index: 3;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  padding: 8px 4px;
+  background: #f8fafc;
+  border-left: 1px solid #d7e1eb;
+  border-right: 1px solid #d7e1eb;
 }
 
 /* Replace the browser's heavy black focus rectangle on the compact expand
