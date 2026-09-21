@@ -174,10 +174,11 @@ body {
    owns its background with !important; an inline background is ignored. */
 .system-list-row--soa-group-open,
 .system-list-row--soa-group-open:hover {
-  background: #dfe7f0 !important;
-  border-top: 1px solid #b8c7d6 !important;
-  border-right: 1px solid #b8c7d6;
-  border-radius: 7px 7px 0 0;
+  background: linear-gradient(to right, #dfe7f0 0 calc(100% - 184px), var(--list-surface) calc(100% - 184px)) !important;
+  border-top: 0 !important;
+  border-left: 3px solid transparent !important;
+  border-right: 0;
+  border-radius: 0;
   box-shadow: inset 0 -1px 0 #c5d1de;
 }
 
@@ -189,17 +190,35 @@ body {
   margin: 7px 0 9px;
 }
 
+/* The expanded-company frame ends after the Mail column. The shared
+   Remarks field is intentionally outside it, in the normal table surface
+   on the right. 184px = 14px row padding + 160px Remarks + 10px grid gap. */
+.soa-company-group--open::after {
+  content: '';
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 184px;
+  border: 1px solid #b8c7d6;
+  border-left: 3px solid #526b85;
+  border-radius: 7px;
+  box-sizing: border-box;
+}
+
 /* Source rows visually remain part of the expanded company above. The
    continuous navy rail and quiet right edge create one group boundary while
    preserving the table's existing column alignment. */
 .system-list-row--soa-group-child {
-  background: #fbfcfe !important;
-  border-left: 3px solid #526b85 !important;
-  border-right: 1px solid #b8c7d6;
+  background: linear-gradient(to right, #fbfcfe 0 calc(100% - 184px), var(--list-surface) calc(100% - 184px)) !important;
+  border-left: 3px solid transparent !important;
+  border-right: 0;
 }
 
 .system-list-row--soa-group-child:hover {
-  background: #f3f6fa !important;
+  background: linear-gradient(to right, #f3f6fa 0 calc(100% - 184px), var(--list-surface) calc(100% - 184px)) !important;
 }
 
 .system-list-row--soa-group-child.system-list-row--selected {
@@ -208,27 +227,25 @@ body {
 
 .system-list-row--soa-group-last-child {
   border-bottom: 1px solid #b8c7d6 !important;
-  border-radius: 0 0 7px 7px;
+  border-radius: 0;
 }
 
-/* One company-level Remarks cell spans the combined row plus every expanded
-   source row. Each underlying row reserves the same grid column; this opaque
-   overlay hides their separators so the result reads as a real row-spanned
-   cell while all numeric/source columns remain on the normal table grid. */
+/* One company-level Remarks editor still spans the combined row and source
+   rows, but now reads as a normal Billing Drafts-style white input outside
+   the framed group. The normal surface only masks row separators beneath the
+   shared editor; there is no special tint or cell border around the column. */
 .soa-company-group__remarks {
   position: absolute;
-  top: 1px;
-  bottom: 1px;
-  right: 60px;
+  top: 0;
+  bottom: 0;
+  right: 14px;
   width: 160px;
-  z-index: 3;
+  z-index: 5;
   box-sizing: border-box;
   display: flex;
   align-items: center;
   padding: 8px 4px;
-  background: #f8fafc;
-  border-left: 1px solid #d7e1eb;
-  border-right: 1px solid #d7e1eb;
+  background: var(--list-surface);
 }
 
 /* Replace the browser's heavy black focus rectangle on the compact expand

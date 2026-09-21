@@ -187,10 +187,10 @@ function SoaRemarksInput({ value, onSave }: { value: string | null; onSave: (val
       title={error ?? (saving ? 'Saving…' : 'Shared across TAB, TAC and TAO')}
       aria-label="SOA remarks"
       style={{
-        width: '100%', minWidth: 0, height: 32, boxSizing: 'border-box', borderRadius: 6,
-        border: `1px solid ${error ? '#fca5a5' : saving ? '#a8bacb' : '#d7e1eb'}`,
-        background: saving ? '#f8fafc' : '#fff', color: '#334155', padding: '5px 8px',
-        fontSize: 10.5, outline: 'none', opacity: saving ? 0.75 : 1,
+        width: '100%', minWidth: 0, height: 36, boxSizing: 'border-box', borderRadius: 6,
+        border: `1px solid ${error ? '#fca5a5' : saving ? '#a8bacb' : '#e2e8f0'}`,
+        background: saving ? '#f8fafc' : '#fff', color: '#1e293b', padding: '8px 12px',
+        fontSize: 12.5, fontFamily: 'inherit', outline: 'none', opacity: saving ? 0.75 : 1,
       }}
     />
   );
@@ -458,12 +458,13 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // wasn't asking you to change it, I was just asking — the previous
   // ratio was fine). Reverted that redistribution — back to a single
   // flexible share on Company Name alone, Owner a fixed 150px again.
-  // Trailing 36px (added 2026-09-17) is the Mail-icon draft popover column —
-  // matches Billing Drafts' own row layout, which also ends in a dedicated
-  // icon column rather than tucking it into an existing one.
+  // The final pair is Mail then Remarks. Remarks deliberately sits to the
+  // RIGHT of the envelope and outside the visual frame around an expanded
+  // multi-source company; this matches Billing Drafts' plain white Remarks
+  // field instead of making the shared note look like a tinted group cell.
   const soaListColumns = qbCompany === 'ALL'
-    ? '32px minmax(200px,1.2fr) 150px 120px 100px 100px 100px 100px 100px 110px 100px 150px 160px 36px'
-    : '32px minmax(220px,1.4fr) 150px 100px 100px 100px 100px 100px 110px 100px 150px 160px 36px';
+    ? '32px minmax(200px,1.2fr) 150px 120px 100px 100px 100px 100px 100px 110px 100px 150px 36px 160px'
+    : '32px minmax(220px,1.4fr) 150px 100px 100px 100px 100px 100px 110px 100px 150px 36px 160px';
   // Display-only stand-in for qbCompany wherever the literal 'ALL' would
   // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
   // a typo, not a scope).
@@ -764,11 +765,6 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
           <SoaOwnerSelect row={c} onChange={value => updateSoaPic(c, value)} />
         </div>
-        {opts.reserveSharedRemark ? <div aria-hidden="true" /> : (
-          <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
-            <SoaRemarksInput value={c.remarks} onSave={value => updateSoaRemarks(c.companyName, value)} />
-          </div>
-        )}
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           <SoaDraftPopover
             company={c} qbCompany={rowCompany(c)} me={draftPickers.me}
@@ -779,6 +775,11 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             onDrafted={(draft, sender) => { setSendModalDraft(draft); setSendModalSender(sender); }}
           />
         </div>
+        {opts.reserveSharedRemark ? <div aria-hidden="true" /> : (
+          <div onClick={event => event.stopPropagation()} style={{ padding: '0 4px' }}>
+            <SoaRemarksInput value={c.remarks} onSave={value => updateSoaRemarks(c.companyName, value)} />
+          </div>
+        )}
       </div>
     );
   };
@@ -879,8 +880,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   (soaPic, suggestedOwner, effectiveOwner, soa_owners table)
                   are unchanged — this is a display-label rename only. */}
               {(qbCompany === 'ALL'
-                ? ['', 'Company Name', 'Reminder', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', 'Remarks', '']
-                : ['', 'Company Name', 'Reminder', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', 'Remarks', '']
+                ? ['', 'Company Name', 'Reminder', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '', 'Remarks']
+                : ['', 'Company Name', 'Reminder', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '', 'Remarks']
               ).map((h, i) => (
                 i >= 2 ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>{h}</div> : <div key={i} style={{ padding: '0 6px' }}>{h}</div>
               ))}
@@ -963,7 +964,6 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           {owners.length === 1 ? ownerOptionLabel(owners[0]) : owners.length > 1 ? 'By source' : '—'}
                         </div>
                       )}
-                      <div aria-hidden="true" />
                       <div style={{ display: 'flex', justifyContent: 'center' }}>
                         <SoaDraftPopover
                           company={combined} qbCompany={draftScope} me={draftPickers.me}
@@ -973,6 +973,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           variant="icon" onDrafted={(draft, sender) => { setSendModalDraft(draft); setSendModalSender(sender); }}
                         />
                       </div>
+                      <div aria-hidden="true" />
                     </div>
 
                     {groupOpen && group.rows.map((row, index) => renderSourceRow(row, {
