@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
 import { APPROVED_ACCOUNTS, getApprovedAccount } from '@/lib/approved-accounts';
 import { analyzeUserActivity, listLearningCandidates } from '@/lib/ai-learning/candidates';
+import { analyzeUserConversations } from '@/lib/ai-learning/conversations';
 import type { CandidateStatus } from '@/lib/ai-learning/patterns';
 
 const STATUSES = new Set<CandidateStatus>(['observing', 'ready_for_review', 'approved', 'rejected', 'dismissed']);
@@ -43,9 +44,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null) as { days?: number } | null;
   const days = Math.min(Math.max(Number(body?.days) || 30, 7), 180);
   try {
-    const candidates = await analyzeUserActivity(target.email, days);
+    const [activity, conversation] = await Promise.all([
+      analyzeUserActivity(target.email, days),
+      analyzeUserConversations(target.email, days).catch(() => []),
+    ]);
+    const candidates = await listLearningCandidates(target.email);
     return NextResponse.json({
-      mode: 'controlled', accountEmail: target.email, analyzedDays: days, detected: candidates.length, candidates,
+      mode: 'controlled', accountEmail: target.email, analyzedDays: days,
+      detected: candidates.length, activityDetected: activity.length, conversationDetected: conversation.length, candidates,
       staffDirectory: account.canViewActivityInsights ? STAFF_DIRECTORY : [],
     });
   } catch (error) {

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
 import { getRequestAccount } from '@/lib/request-account';
@@ -40,6 +40,10 @@ import { pageAll } from '@/lib/page-all';
 import { formatSgtDateTime, todaySGT, nowSgtHuman, thisYearSGT } from '@/lib/date';
 import type { QbCompany } from '@/lib/quickbooks';
 import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
+import { routeAssistantTurn, openAIGeneralAnswer, synthesizeWithOpenAI, type ToolEvidence } from '@/lib/ai/orchestrator';
+import { openAIConfigured, openAIModel } from '@/lib/ai/openai';
+import { recordAgentRun } from '@/lib/ai/agent-runs';
+import { analyzeUserConversations, shouldAnalyzeConversationNow } from '@/lib/ai-learning/conversations';
 import {
   validatePostIncorporateInput,
   type PostIncorporateInput, type PostIncorporateCompany, type PostIncorporateDirector, type PostIncorporateShareholder, type PostIncorporatePreview,
@@ -1495,7 +1499,7 @@ WHO MAY ASK ABOUT WHOM (personal activity only — this restricts NOTHING about 
 
 Use the my_tasks_summary tool for any question about "my tasks", "what should I do today", overdue items assigned to the user, or similar — it already knows who is asking. If it returns counts.total 0, check everAssigned before answering: everAssigned false means this account has NEVER been PIC on anything (typical for management/owner accounts who aren't caseworkers) — say that plainly, don't say "you're all caught up" (which wrongly implies work existed and got done). everAssigned true with total 0 means genuinely caught up. If the user asks about a DIFFERENT staff member's tasks instead of their own (e.g. "如果我是HC，我要做什么今天？", "Show me Cindy's tasks", "HC 今天有什么任务") pass that person's name/nickname/initials as the tool's optional "person" argument — ALWAYS actually call the tool for this, every single time a different person's name comes up, even a second/third name in the same conversation right after a previous person's query — never answer "no permission" (or anything else) from memory of how a similar-looking request went earlier; the tool itself, not your own guess, is what determines whether this account is allowed to see someone else's tasks (the rank rules in WHO MAY ASK ABOUT WHOM above) and returns an explicit refusal or "not found" message when it can't proceed — relay THAT message honestly and do not fall back to answering about the caller instead, and never invent or guess another person's task data (or a permission refusal) yourself. Use my_activity_pattern for questions about the user's OWN usage habits ("why do I keep opening X", "what do I do most often", "when am I most active") — it reflects real recorded page-visit/action history only from 2026-09-08 onward; if it reports no_data, say plainly that there isn't enough history yet rather than inventing a plausible-sounding pattern. Use recent_activity_summary for "what has X actually been doing" / "what's Chelsea been up to" style questions, INCLUDING open-ended ones like "根据她最近做的东西，判断她接下来会做什么" (based on her recent activity, predict what she'll likely do next) — call the tool to get the real data, then reason over it yourself; don't just recite the raw counts back. It reads real audit-trail history (invoices, AR edits, campaigns, Master List, sent emails, ...) that predates today, unlike my_activity_pattern's page-view tracking; it also accepts an optional "person" argument, gated by the WHO MAY ASK ABOUT WHOM ranks above (not a flat management-only check). Never guess whose tasks or habits are whose from name alone.
 
-Use the remember_this tool ONLY when the user EXPLICITLY asks you to remember, note, or keep in mind something for the future (e.g. "记住...", "以后都...", "remember that I..."). Never call it just because something seems noteworthy from the conversation's tone — a single passing remark is not a durable preference, and this tool writes something that will keep influencing future conversations.
+Use the remember_this tool ONLY when the user EXPLICITLY asks you to remember, note, or keep in mind something for the future (e.g. "记住...", "以后都...", "remember that I..."). Never call this immediate-write tool just because something seems noteworthy from the conversation's tone — a separate controlled background-learning pipeline analyzes repeated durable patterns with evidence and confidence thresholds; a single passing remark must not become a permanent memory.
 
 Key workflows:
 - AR pipeline: TeamWork determines each company's FYE cycle → ar_reminder batches auto-generate daily (rolling 6 months) → staff review → Billing Drafts. Deleting an AR row is a soft delete (won't be auto-recreated; Add Manual restores it).
@@ -1795,7 +1799,23 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   return { error: 'unknown tool' };
 }
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<{ text: string; invoicePreview?: InvoicePreview; lateFilingPreview?: LateFilingResolvePreview; invoiceEditPreview?: InvoiceEditPreview; postIncorporatePreview?: PostIncorporatePreview; arUpdatePreview?: ArUpdatePreview; exportOffer?: ChatExportOffer; soaPreview?: SoaPreview; emailDraftPreview?: EmailDraftPreview; companyUpdatePreview?: CompanyUpdatePreview; taoPreview?: TaoPreview }> {
+type ClaudeAnswerResult = {
+  text: string;
+  invoicePreview?: InvoicePreview;
+  lateFilingPreview?: LateFilingResolvePreview;
+  invoiceEditPreview?: InvoiceEditPreview;
+  postIncorporatePreview?: PostIncorporatePreview;
+  arUpdatePreview?: ArUpdatePreview;
+  exportOffer?: ChatExportOffer;
+  soaPreview?: SoaPreview;
+  emailDraftPreview?: EmailDraftPreview;
+  companyUpdatePreview?: CompanyUpdatePreview;
+  taoPreview?: TaoPreview;
+  toolNames: string[];
+  toolEvidence: ToolEvidence[];
+};
+
+async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<ClaudeAnswerResult> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
@@ -1829,6 +1849,8 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   let lastEmailDraftPreview: EmailDraftPreview | undefined;
   let lastCompanyUpdatePreview: CompanyUpdatePreview | undefined;
   let lastTaoPreview: TaoPreview | undefined;
+  const toolNames: string[] = [];
+  const toolEvidence: ToolEvidence[] = [];
   // INV-DATA-022 deterministic safety net — see mentionsOutstandingBalance's
   // own comment on why this checks the REPLY, not the question.
   // outstandingToolCalled flips true the instant check_outstanding_balance
@@ -1876,7 +1898,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview };
+      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, toolNames, toolEvidence };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -1937,11 +1959,17 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
       } catch (err) {
         result = { error: err instanceof Error ? err.message : 'tool failed' };
       }
-      results.push({ type: 'tool_result', tool_use_id: tu.id, content: JSON.stringify(result).slice(0, 6000) });
+      const resultText = JSON.stringify(result).slice(0, 6000);
+      toolNames.push(tu.name!);
+      // Previewing legal incorporation documents can contain identity data.
+      // It stays on Claude's established path and is never forwarded to the
+      // OpenAI synthesis layer.
+      if (tu.name !== 'preview_post_incorporate') toolEvidence.push({ name: tu.name!, input: tu.input ?? {}, result: resultText });
+      results.push({ type: 'tool_result', tool_use_id: tu.id, content: resultText });
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, toolNames, toolEvidence };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -2267,7 +2295,15 @@ function toStoredPreview(
   return null;
 }
 
-async function persistExchange(conversationId: number | undefined, account: ApprovedAccount | null, userMessage: string | ContentBlock[], reply: string, isFirstMessage: boolean, previewData?: StoredPreview | null) {
+async function persistExchange(
+  conversationId: number | undefined,
+  account: ApprovedAccount | null,
+  userMessage: string | ContentBlock[],
+  reply: string,
+  isFirstMessage: boolean,
+  previewData?: StoredPreview | null,
+  provenance?: { provider?: string; model?: string; agentRoute?: string; agentRunId?: number | null },
+) {
   if (!conversationId || !account) return;
   try {
     const owner = await getConversationOwner(conversationId);
@@ -2279,13 +2315,40 @@ async function persistExchange(conversationId: number | undefined, account: Appr
     // the text portion plus a plain note that something was attached.
     const userText = messageText(userMessage) || (typeof userMessage === 'string' ? '' : '(图片/文件)');
     await appendMessage(conversationId, 'user', userText + attachmentSummary(userMessage));
-    await appendMessage(conversationId, 'assistant', reply, previewData);
+    await appendMessage(conversationId, 'assistant', reply, previewData, provenance);
     if (isFirstMessage) await renameConversation(conversationId, deriveTitle(userText || '图片/文件'));
     else await touchConversation(conversationId);
   } catch {
     // Persistence is a nice-to-have on top of a reply that already
     // succeeded — never surface this as a failure to the caller.
   }
+}
+
+function assistantTranscript(messages: Msg[]): string {
+  return messages.slice(-24).map(message => {
+    const text = messageText(message.content);
+    const attachments = attachmentSummary(message.content);
+    return `${message.role.toUpperCase()}: ${text || '(no text)'}${attachments}`;
+  }).join('\n\n');
+}
+
+function hasAnyAttachment(messages: Msg[]): boolean {
+  return messages.some(message => Array.isArray(message.content) && message.content.some(block => block.type !== 'text'));
+}
+
+function hasActionPreview(result: ClaudeAnswerResult): boolean {
+  return Boolean(
+    result.invoicePreview || result.lateFilingPreview || result.invoiceEditPreview
+    || result.postIncorporatePreview || result.arUpdatePreview || result.emailDraftPreview
+    || result.companyUpdatePreview || result.taoPreview,
+  );
+}
+
+function scheduleConversationLearning(conversationId: number | undefined, account: ApprovedAccount | null, latestText: string) {
+  if (!conversationId || !account || !shouldAnalyzeConversationNow(latestText)) return;
+  after(async () => {
+    await analyzeUserConversations(account.email, 30).catch(() => {});
+  });
 }
 
 // ── Route ────────────────────────────────────────────────────────────────────
@@ -2339,7 +2402,30 @@ export async function POST(req: NextRequest) {
 
   const last = messages[messages.length - 1];
   const isFirstMessage = messages.length === 1;
+  const startedAt = Date.now();
+  const latestText = messageText(last.content);
+  const transcript = assistantTranscript(messages);
+  const route = await routeAssistantTurn({
+    transcript,
+    latestText,
+    hasAttachments: hasAnyAttachment(messages),
+    accountEmail: account?.email,
+  });
   try {
+    if (route.route === 'openai_only' && openAIConfigured()) {
+      const reply = await openAIGeneralAnswer({ transcript, accountEmail: account?.email, currentDate: nowSgtHuman() });
+      const runId = account ? await recordAgentRun({
+        accountEmail: account.email, conversationId, route: route.route,
+        primaryProvider: 'openai', primaryModel: openAIModel('primary'),
+        status: 'completed', latencyMs: Date.now() - startedAt,
+      }) : null;
+      await persistExchange(conversationId, account, last.content, reply, isFirstMessage, null, {
+        provider: 'openai', model: openAIModel('primary'), agentRoute: route.route, agentRunId: runId,
+      });
+      scheduleConversationLearning(conversationId, account, latestText);
+      return NextResponse.json({ reply, engine: 'openai', agentRoute: route.route });
+    }
+
     if (process.env.ANTHROPIC_API_KEY) {
       // Widened from 8 to 24 (2026-09-09, alongside preview_post_incorporate)
       // — a guided intake conversation (company info, then each director,
@@ -2347,24 +2433,80 @@ export async function POST(req: NextRequest) {
       // than the other, single-shot preview tools ever did; losing an
       // earlier-collected director's details off the back of an 8-message
       // window would make Claude re-ask for them or, worse, guess.
-      const { text: reply, invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview, companyUpdatePreview, taoPreview } = await claudeAnswer(messages.slice(-24), context, account);
-      await persistExchange(conversationId, account, last.content, reply, isFirstMessage, toStoredPreview(invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview));
-      return NextResponse.json({ reply, engine: 'claude', invoicePreview, lateFilingPreview, invoiceEditPreview, postIncorporatePreview, arUpdatePreview, exportOffer, soaPreview, emailDraftPreview, companyUpdatePreview, taoPreview });
+      const result = await claudeAnswer(messages.slice(-24), context, account);
+      const actionPreview = hasActionPreview(result);
+      const synthesisBudgetMs = 55_000 - (Date.now() - startedAt);
+      // Identity-bearing Post Incorporate intake stays entirely on Claude;
+      // all other complex/internal turns may use OpenAI as a final synthesis
+      // and quality-control layer over the already-resolved tool evidence.
+      const useOpenAISynthesis = route.route === 'claude_then_openai'
+        && openAIConfigured()
+        && !result.postIncorporatePreview
+        && synthesisBudgetMs >= 8_000;
+      const reply = useOpenAISynthesis
+        ? await synthesizeWithOpenAI({
+            transcript,
+            claudeDraft: result.text,
+            evidence: result.toolEvidence,
+            accountEmail: account?.email,
+            hasActionPreview: actionPreview,
+            timeoutMs: synthesisBudgetMs,
+          })
+        : result.text;
+      const finalRoute = useOpenAISynthesis ? 'claude_then_openai' as const : 'claude_only' as const;
+      const finalProvider = useOpenAISynthesis ? 'anthropic+openai' : 'anthropic';
+      const finalModel = useOpenAISynthesis ? openAIModel('primary') : ASSISTANT_MODEL;
+      const runId = account ? await recordAgentRun({
+        accountEmail: account.email, conversationId, route: finalRoute,
+        primaryProvider: 'anthropic', primaryModel: ASSISTANT_MODEL,
+        secondaryProvider: useOpenAISynthesis ? 'openai' : null,
+        secondaryModel: useOpenAISynthesis ? openAIModel('primary') : null,
+        toolNames: [...new Set(result.toolNames)], status: 'completed', latencyMs: Date.now() - startedAt,
+      }) : null;
+      await persistExchange(
+        conversationId, account, last.content, reply, isFirstMessage,
+        toStoredPreview(result.invoicePreview, result.lateFilingPreview, result.invoiceEditPreview, result.postIncorporatePreview, result.arUpdatePreview),
+        { provider: finalProvider, model: finalModel, agentRoute: finalRoute, agentRunId: runId },
+      );
+      scheduleConversationLearning(conversationId, account, latestText);
+      return NextResponse.json({
+        reply, engine: useOpenAISynthesis ? 'multi-model' : 'claude', agentRoute: finalRoute,
+        invoicePreview: result.invoicePreview, lateFilingPreview: result.lateFilingPreview,
+        invoiceEditPreview: result.invoiceEditPreview, postIncorporatePreview: result.postIncorporatePreview,
+        arUpdatePreview: result.arUpdatePreview, exportOffer: result.exportOffer, soaPreview: result.soaPreview,
+        emailDraftPreview: result.emailDraftPreview, companyUpdatePreview: result.companyUpdatePreview,
+        taoPreview: result.taoPreview,
+      });
     }
     // The rule-based intent router only ever understands plain text — an
     // attached image/PDF is real content only Claude can actually look at,
     // so say so plainly rather than silently ignoring what the user attached.
     const attachNote = attachmentSummary(last.content) ? '\n\n（附带的图片/文件目前只有在 Claude 模式下才能被读取——基础模式暂时看不到内容。）' : '';
     const reply = await intentAnswer(messageText(last.content), context, account) + attachNote;
-    await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
-    return NextResponse.json({ reply, engine: 'intent' });
+    const runId = account ? await recordAgentRun({
+      accountEmail: account.email, conversationId, route: 'intent_fallback',
+      primaryProvider: 'intent', status: 'fallback', latencyMs: Date.now() - startedAt,
+    }) : null;
+    await persistExchange(conversationId, account, last.content, reply, isFirstMessage, null, {
+      provider: 'intent', agentRoute: 'intent_fallback', agentRunId: runId,
+    });
+    scheduleConversationLearning(conversationId, account, latestText);
+    return NextResponse.json({ reply, engine: 'intent', agentRoute: 'intent_fallback' });
   } catch (e) {
     // Claude path failed (bad key / network) — degrade to the intent engine.
     try {
       const attachNote = attachmentSummary(last.content) ? '\n\n（附带的图片/文件目前只有在 Claude 模式下才能被读取——基础模式暂时看不到内容。）' : '';
       const reply = await intentAnswer(messageText(last.content), context, account) + attachNote;
-      await persistExchange(conversationId, account, last.content, reply, isFirstMessage);
-      return NextResponse.json({ reply, engine: 'intent-fallback', note: e instanceof Error ? e.message : 'claude failed' });
+      const errorMessage = e instanceof Error ? e.message : 'assistant failed';
+      const runId = account ? await recordAgentRun({
+        accountEmail: account.email, conversationId, route: 'intent_fallback',
+        primaryProvider: 'intent', status: 'fallback', latencyMs: Date.now() - startedAt, error: errorMessage,
+      }) : null;
+      await persistExchange(conversationId, account, last.content, reply, isFirstMessage, null, {
+        provider: 'intent', agentRoute: 'intent_fallback', agentRunId: runId,
+      });
+      scheduleConversationLearning(conversationId, account, latestText);
+      return NextResponse.json({ reply, engine: 'intent-fallback', agentRoute: 'intent_fallback', note: errorMessage });
     } catch {
       return NextResponse.json({ error: e instanceof Error ? e.message : 'assistant failed' }, { status: 500 });
     }

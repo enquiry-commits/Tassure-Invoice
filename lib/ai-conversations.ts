@@ -38,6 +38,17 @@ export type ConversationMessage = {
   content: string;
   created_at: string;
   preview_data?: StoredPreview | null;
+  provider?: string | null;
+  model?: string | null;
+  agent_route?: string | null;
+  agent_run_id?: number | null;
+};
+
+export type MessageProvenance = {
+  provider?: string | null;
+  model?: string | null;
+  agentRoute?: string | null;
+  agentRunId?: number | null;
 };
 
 // Pinned first, then most-recently-updated — matches the ChatGPT sidebar
@@ -102,15 +113,42 @@ export async function listMessages(conversationId: number): Promise<Conversation
   return (data ?? []) as ConversationMessage[];
 }
 
-export async function appendMessage(conversationId: number, role: 'user' | 'assistant', content: string, previewData?: StoredPreview | null): Promise<void> {
+export async function appendMessage(
+  conversationId: number,
+  role: 'user' | 'assistant',
+  content: string,
+  previewData?: StoredPreview | null,
+  provenance?: MessageProvenance,
+): Promise<void> {
   const supabase = createAdminClient();
-  if (previewData !== undefined) {
-    const { error } = await supabase.from('ai_messages').insert({ conversation_id: conversationId, role, content, preview_data: previewData });
+  if (previewData !== undefined || provenance) {
+    const { error } = await supabase.from('ai_messages').insert({
+      conversation_id: conversationId,
+      role,
+      content,
+      ...(previewData !== undefined ? { preview_data: previewData } : {}),
+      ...(provenance ? {
+        provider: provenance.provider ?? null,
+        model: provenance.model ?? null,
+        agent_route: provenance.agentRoute ?? null,
+        agent_run_id: provenance.agentRunId ?? null,
+      } : {}),
+    });
     if (!error) return;
-    // The preview_data column might not be migrated onto this database yet
-    // (scripts/add-ai-messages-preview-data.sql) — never let an optional,
-    // additive column being absent break the base save that has worked all
-    // along; fall through to the plain insert below instead.
+    // Optional preview/provenance columns may not be migrated yet. Never let
+    // additive observability metadata break the base conversation save.
+    // Preserve the older preview_data field when only the NEW provenance
+    // migration is missing; otherwise deploying this code before the SQL
+    // would make previously working preview cards disappear from history.
+    if (previewData !== undefined) {
+      const { error: previewFallbackError } = await supabase.from('ai_messages').insert({
+        conversation_id: conversationId,
+        role,
+        content,
+        preview_data: previewData,
+      });
+      if (!previewFallbackError) return;
+    }
   }
   await supabase.from('ai_messages').insert({ conversation_id: conversationId, role, content });
 }

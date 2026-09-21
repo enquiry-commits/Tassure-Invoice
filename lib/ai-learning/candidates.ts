@@ -15,7 +15,7 @@ export type LearningCandidate = {
   account_email: string;
   pattern_kind: LearningPatternKind;
   pattern_key: string;
-  proposed_memory_type: 'behaviour' | 'pattern';
+  proposed_memory_type: 'preference' | 'behaviour' | 'decision' | 'rejection' | 'pattern';
   proposed_content: string;
   status: CandidateStatus;
   confidence: number;
@@ -45,6 +45,26 @@ const AUTO_APPROVE_MIN_DISTINCT_DAYS = 5;
 // (ai_learning_feedback.actor_email) always shows plainly that this
 // specific approval was automatic, not Vincent's.
 const AUTO_APPROVE_ACTOR = 'system:ai-learning-auto';
+
+export async function autoApproveLearningCandidates(candidates: LearningCandidate[]): Promise<LearningCandidate[]> {
+  const results: LearningCandidate[] = [];
+  for (const candidate of candidates) {
+    const autoApproveEligible = !FINAL_STATUSES.has(candidate.status)
+      && candidate.confidence >= AUTO_APPROVE_MIN_CONFIDENCE
+      && candidate.distinct_days >= AUTO_APPROVE_MIN_DISTINCT_DAYS;
+    if (!autoApproveEligible) { results.push(candidate); continue; }
+    try {
+      const approved = await reviewLearningCandidate({
+        candidate, actorEmail: AUTO_APPROVE_ACTOR, decision: 'approve',
+        note: `Auto-approved: confidence ${Math.round(candidate.confidence * 100)}% >= 90%, ${candidate.distinct_days} distinct days >= 5.`,
+      });
+      results.push(approved);
+    } catch {
+      results.push(candidate);
+    }
+  }
+  return results;
+}
 
 export async function analyzeUserActivity(accountEmail: string, windowDays = 30): Promise<LearningCandidate[]> {
   const email = accountEmail.trim().toLowerCase();
@@ -115,25 +135,7 @@ export async function analyzeUserActivity(accountEmail: string, windowDays = 30)
   // Never touches a candidate a human already finalized — the upsert
   // above already preserves an existing approved/rejected/dismissed
   // status, so only observing/ready_for_review rows ever reach here.
-  const results: LearningCandidate[] = [];
-  for (const candidate of upserted) {
-    const autoApproveEligible = !FINAL_STATUSES.has(candidate.status)
-      && candidate.confidence >= AUTO_APPROVE_MIN_CONFIDENCE
-      && candidate.distinct_days >= AUTO_APPROVE_MIN_DISTINCT_DAYS;
-    if (!autoApproveEligible) { results.push(candidate); continue; }
-    try {
-      const approved = await reviewLearningCandidate({
-        candidate, actorEmail: AUTO_APPROVE_ACTOR, decision: 'approve',
-        note: `Auto-approved: confidence ${Math.round(candidate.confidence * 100)}% >= 90%, ${candidate.distinct_days} distinct days >= 5.`,
-      });
-      results.push(approved);
-    } catch {
-      // Auto-approval failing must never break the analysis pass itself —
-      // the candidate just stays exactly as upserted, in the human queue.
-      results.push(candidate);
-    }
-  }
-  return results;
+  return autoApproveLearningCandidates(upserted);
 }
 
 export async function listLearningCandidates(

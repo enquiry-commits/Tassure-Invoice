@@ -287,6 +287,32 @@ surfaced to the user (confirmed by reading the route's own try/catch — see
 `docs/PROJECT_STATUS.md`'s 2026-09-08 entry) — this is not something to
 treat as broken if it happens.
 
+**My Tasks now has a multi-model agent and controlled conversation
+learning (code-complete 2026-09-21; database migration still required).**
+`app/api/assistant/route.ts` uses `lib/ai/orchestrator.ts` to divide work:
+clearly external/general questions can go directly to OpenAI; ordinary
+Tassure lookups stay on Claude's established tool-use path; complex
+internal analysis runs Claude tools first and lets OpenAI synthesize the
+result without changing tool facts. The user still sees one final answer.
+Every OpenAI Responses request sets `store:false`, and Post Incorporate
+identity intake stays Claude-only. `ai_agent_runs` plus provenance columns
+on `ai_messages` make provider/model/route/tool usage auditable.
+
+Saved My Tasks conversations are now a second AI Learning evidence source,
+alongside `user_activity_events`. `lib/ai-learning/conversations.ts`
+analyzes the last 30 days for durable preferences, workflows, corrections
+and decisions, excludes secrets/sensitive data/one-off business facts, and
+upserts evidence-backed candidates. It never promotes one casual message
+directly into memory: the existing `confidence >= 0.9 AND distinct_days >=
+5` rule remains the only automatic promotion path, and everything below
+that stays reviewable in AI Learning. The daily automation scans both
+sources; relevant new chat wording also schedules a best-effort background
+scan after the reply is safely returned. Before production can use these
+new fields/tables, run `scripts/add-ai-multi-model-and-conversation-
+learning.sql`. `OPENAI_API_KEY` and the three optional model variables must
+exist in the deployment environment; Vincent confirmed the production key
+was saved in Vercel, but a fresh deployment is still needed to load it.
+
 ## Known risks (not bugs — things worth remembering before relying on data)
 
 - **Billing draft auto-fill accuracy varies by field** — Secretary ~85%

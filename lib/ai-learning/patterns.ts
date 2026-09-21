@@ -7,18 +7,28 @@ export type LearnableActivityEvent = {
   created_at: string;
 };
 
-export type LearningPatternKind = 'frequent_page' | 'frequent_action';
+export type LearningPatternKind =
+  | 'frequent_page'
+  | 'frequent_action'
+  | 'conversation_preference'
+  | 'conversation_workflow'
+  | 'conversation_correction'
+  | 'conversation_decision';
 export type CandidateStatus = 'observing' | 'ready_for_review' | 'approved' | 'rejected' | 'dismissed';
 
 export type PatternEvidence = {
-  generation_version: 'deterministic-v1';
+  generation_version: 'deterministic-v1' | 'conversation-openai-v1';
   claim_scope: 'observed-only';
   window_days: number;
-  raw_count: number;
-  effective_count: number;
-  distinct_days: number;
-  sample_event_ids: number[];
+  raw_count?: number;
+  effective_count?: number;
+  distinct_days?: number;
+  sample_event_ids?: number[];
   sample_details?: (Record<string, unknown> | null)[];
+  message_ids?: number[];
+  conversation_ids?: number[];
+  sample_excerpts?: string[];
+  rationale?: string;
 };
 
 export type PatternProposal = {

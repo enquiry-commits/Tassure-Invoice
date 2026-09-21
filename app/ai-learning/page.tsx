@@ -8,9 +8,9 @@ type CandidateStatus = 'observing' | 'ready_for_review' | 'approved' | 'rejected
 type Candidate = {
   id: number;
   account_email: string;
-  pattern_kind: 'frequent_page' | 'frequent_action';
+  pattern_kind: PatternKind;
   pattern_key: string;
-  proposed_memory_type: 'behaviour' | 'pattern';
+  proposed_memory_type: 'preference' | 'behaviour' | 'decision' | 'rejection' | 'pattern';
   proposed_content: string;
   status: CandidateStatus;
   confidence: number;
@@ -23,6 +23,13 @@ type Candidate = {
   promoted_memory_id: number | null;
   updated_at: string;
 };
+type PatternKind =
+  | 'frequent_page'
+  | 'frequent_action'
+  | 'conversation_preference'
+  | 'conversation_workflow'
+  | 'conversation_correction'
+  | 'conversation_decision';
 type StaffEntry = { email: string; name: string };
 type Me = { email: string; name: string; admin: boolean; canViewActivityInsights: boolean };
 
@@ -34,9 +41,13 @@ const STATUS_LABEL: Record<CandidateStatus, string> = {
   dismissed: '已忽略',
 };
 
-const PATTERN_KIND_LABEL: Record<'frequent_page' | 'frequent_action', string> = {
+const PATTERN_KIND_LABEL: Record<PatternKind, string> = {
   frequent_page: '常访问页面',
   frequent_action: '常做操作',
+  conversation_preference: '对话偏好',
+  conversation_workflow: '工作方式',
+  conversation_correction: '纠正与拒绝',
+  conversation_decision: '长期决定',
 };
 
 // Existing candidate rows were stored with English proposed_content; the
@@ -202,7 +213,7 @@ export default function AiLearningPage() {
             <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 750 }}>受控学习</span>
           </div>
           <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: 12 }}>
-            每天自动运行。只有置信度非常高、证据充分的观察（≥90% 置信度、在 5 个以上不同日子出现过）才会自动采纳，其余都留在这里等人工复核。业务数据永远不会被改动。
+            每天自动分析页面操作与 My Tasks 对话。重复偏好、稳定工作方式、纠正和长期决定会形成候选记忆；只有 ≥90% 置信度且在至少 5 个不同日子出现的内容才会自动采纳，其余留在这里复核。业务数据永远不会被改动。
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -241,7 +252,7 @@ export default function AiLearningPage() {
         ) : candidates.length === 0 ? (
           <div style={{ padding: 42, textAlign: 'center', color: '#64748b', fontSize: 12.5 }}>
             目前还没有任何重复模式积累到足够的证据。
-            <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 5 }}>行为追踪从 2026 年 9 月 8 日开始，之前的数据无法补齐。</div>
+            <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 5 }}>页面行为从 2026 年 9 月 8 日开始记录；已保存的 My Tasks 对话会纳入最近 30 天分析。</div>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>

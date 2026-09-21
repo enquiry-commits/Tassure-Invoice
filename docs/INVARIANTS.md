@@ -1607,21 +1607,22 @@ again.
   migration was even run, so the honest "no data" UI path was exercised
   and verified before real data ever existed to distinguish the two cases.
 
-- **INV-DATA-017** — `user_memories` (added 2026-09-08, from Vincent's
-  shared AI-assistant blueprint) may ONLY be written to through an
-  EXPLICIT, user-initiated path — today that's the assistant's
-  `remember_this` tool, which its own system-prompt instruction fires
-  only when the user directly asks to be remembered/noted (`app/api/
-  assistant/route.ts`). Never wire automatic pattern-mining from
-  `user_activity_events` (or conversation tone/sentiment) into a write to
-  this table — the blueprint that introduced this schema explicitly warns
-  against exactly that shortcut ("AI 不应因为一次对话就永久定义用户";
-  "用户的一次情绪性表达不应被直接写成永久性格或偏好"). The schema's own
-  `source` column (`'explicit' | 'inferred'`) exists so a FUTURE, properly
-  confidence-scored auto-learning pass (the blueprint's own Phase 3) can
-  be added later without a migration — but until that pass exists and is
-  deliberately built, `'inferred'` should never actually appear as a
-  written value.
+- **INV-DATA-017** — `user_memories` has two deliberate write paths. The
+  immediate path is the assistant's `remember_this` tool and may fire ONLY
+  when the user explicitly asks to remember/note something. The inferred
+  path (added 2026-09-21 at Vincent's explicit request) must go through
+  `ai_learning_candidates`: `lib/ai-learning/conversations.ts` extracts a
+  durable preference/workflow/correction/decision from saved My Tasks
+  messages, records evidence and confidence, and leaves it pending unless
+  it passes INV-DATA-019's high auto-approval bar. No code may write a
+  single conversational inference directly into `user_memories`. Never
+  learn API keys/secrets, sensitive personal data, emotions/personality,
+  one-off tasks, client facts, invoice/status facts, or assistant-only
+  claims. This preserves the original blueprint's two warnings ("AI 不应
+  因为一次对话就永久定义用户"; "用户的一次情绪性表达不应被直接写成永久性
+  格或偏好") while allowing systematic conversation learning. Inferred
+  writes use `source='inferred'`; explicit requests remain
+  `source='explicit'`.
 
 - **INV-DATA-018** — `canViewAsOthers` (added 2026-09-02 for the My Tasks
   Tasks-tab picker) grants FULL identity substitution for the assistant
@@ -1660,10 +1661,10 @@ again.
   null-check with a `401` response — its mere presence proves nothing.
 
 - **INV-DATA-019** — `ai_learning_candidates` auto-approval (added
-  2026-09-08, `lib/ai-learning/candidates.ts`'s `analyzeUserActivity()`)
-  is a DELIBERATE, negotiated exception to INV-DATA-017's "explicit only"
-  rule for `user_memories` — not a contradiction of it, and not a
-  precedent for lowering the bar further without going back to Vincent.
+  2026-09-08 for activity; extended 2026-09-21 to saved My Tasks
+  conversations) is the ONLY permitted automatic route into inferred
+  `user_memories`, and is not a precedent for lowering the bar without
+  going back to Vincent.
   He explicitly asked for auto-approval with zero human review ("我希望AI
   可以自主学习...不一定要我审核对话"); the actual design landed on a
   narrower middle ground after being shown the direct conflict with his
@@ -1676,6 +1677,9 @@ again.
   it, or auto-approve a candidate a human already rejected/dismissed
   (the upsert in `analyzeUserActivity()` already guards the latter by
   preserving any final status) without an explicit new ask from Vincent.
+  Conversation evidence follows the same rule; additionally, one-message
+  candidates are capped below approval, same-day repetition cannot count
+  as multiple days, and only real user-message IDs may be evidence.
   The auto-approve actor is always `system:ai-learning-auto` — never a
   real person's email — so `ai_learning_feedback`/`user_memories` audit
   trails stay honest about which approvals were automatic.
@@ -2306,6 +2310,20 @@ again.
   screenshot.)*
 
 ## AI Assistant / chatbot (INV-AI)
+
+- **INV-AI-003** — The multi-model My Tasks agent (added 2026-09-21) has
+  one final-answer owner and one source of truth for internal facts.
+  `lib/ai/orchestrator.ts` may route clearly external/general questions to
+  OpenAI, but internal company/staff/task/email/invoice questions remain on
+  Claude's established live-data tools. For a complex internal turn,
+  Claude resolves tool calls first and OpenAI may only synthesize/review
+  that evidence; it must never alter a tool-returned name, amount, date,
+  count, permission, status or link. Data-changing actions remain previews
+  requiring the user's existing Confirm button. Post Incorporate identity
+  intake is never forwarded to OpenAI. Every OpenAI Responses request uses
+  `store:false`, and the UI receives one final answer rather than exposing
+  two competing model responses. Keep the deterministic internal/mutation
+  routing guard even if the learned router is changed later.
 
 - **INV-AI-001** — An Anthropic-hosted SERVER tool (e.g. `web_search`,
   added to `CLAUDE_TOOLS` in `app/api/assistant/route.ts` 2026-09-18) is
