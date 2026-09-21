@@ -293,6 +293,20 @@ body {
   padding-bottom: 8px !important;
 }
 
+/* Late Filing can show up to three icon actions (resolve, recall, delete).
+   Keep the pinned right-hand column compact without allowing those controls
+   to overflow behind the viewport edge. */
+.system-list-table .system-list-row > td.late-filing-actions-cell {
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+
+.late-filing-actions-cell .system-list-action {
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+}
+
 .system-list-grid {
   align-items: center;
   min-height: 58px;

@@ -212,7 +212,7 @@ function LateFilingPageInner() {
   const dragging = useRef(false);
   const dragRef  = useRef({ startX: 0, startScroll: 0 });
   const metaRef  = useRef({ tw: 0, sbW: 0 });
-  const STICKY_WIDTHS = [32, 300, 120]; // chevron, company_name, uen
+  const STICKY_WIDTHS = [32, 250, 120]; // chevron, company_name, uen
 
   const updateSb = useCallback(() => {
     const el = outerRef.current, thumb = thumbRef.current, sb = sbRef.current;
@@ -559,7 +559,7 @@ function LateFilingPageInner() {
           <table className="system-list-table" style={{ minWidth: 1320 }}>
             <colgroup>
               <col style={{ width: 32 }} />
-              <col style={{ width: 300 }} />
+              <col style={{ width: STICKY_WIDTHS[1] }} />
               <col style={{ width: 120 }} />
               <col style={{ width: 100 }} />
               <col style={{ width: 95 }} />
@@ -569,16 +569,20 @@ function LateFilingPageInner() {
               <col style={{ width: 145 }} />
               <col style={{ width: 170 }} />
               <col style={{ width: 160 }} />
-              <col style={{ width: 54 }} />
+              <col style={{ width: 106 }} />
             </colgroup>
             <thead>
               <tr className="list-column-header-gray">
                 {['','Company Name','UEN / ROC','FYE','Late FY','PIC','Last AR Date','Last AGM Date','Last Accounts Date','Next AGM Due','Remarks',''].map((h,i)=>{
+                  const isActionColumn = i === 11;
                   const sl = i === 0 ? 0 : i === 1 ? STICKY_WIDTHS[0] : i === 2 ? STICKY_WIDTHS[0] + STICKY_WIDTHS[1] : undefined;
                   return (
                     <th key={i} style={{ textAlign:'left', whiteSpace:'nowrap',
-                      position:'sticky', top:0, left: sl, zIndex: sl !== undefined ? 3 : 2,
-                      boxShadow: i === 2 ? '3px 0 8px -2px rgba(0,0,0,0.1)' : undefined,
+                      position:'sticky', top:0, left: isActionColumn ? undefined : sl, right: isActionColumn ? 0 : undefined,
+                      zIndex: isActionColumn ? 4 : sl !== undefined ? 3 : 2,
+                      boxShadow: i === 2
+                        ? '3px 0 8px -2px rgba(0,0,0,0.1)'
+                        : isActionColumn ? '-3px 0 8px -2px rgba(0,0,0,0.1)' : undefined,
                     }}>{h}</th>
                   );
                 })}
@@ -651,7 +655,7 @@ function LateFilingPageInner() {
                         <StillOverdueWarning since={row.resolved_but_still_overdue_since} />
                       </span>
                     </td>
-                    <td style={{ whiteSpace:'nowrap' }} onClick={e => e.stopPropagation()}>
+                    <td className="late-filing-actions-cell" style={{ whiteSpace:'nowrap', position:'sticky', right:0, zIndex:2, background:'#fff', boxShadow:'-3px 0 8px -2px rgba(0,0,0,0.08)' }} onClick={e => e.stopPropagation()}>
                       {(() => {
                         const isResolved = catOf.get(row.id) === 'resolved';
                         const who = row.updated_by_name ?? row.updated_by_email;
