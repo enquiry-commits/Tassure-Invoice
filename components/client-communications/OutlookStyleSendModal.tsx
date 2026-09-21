@@ -226,6 +226,7 @@ export default function OutlookStyleSendModal({
               id: prepared.draft.id, version: prepared.draft.version,
               patch: { status: 'sent', subject: editedSubject, body: editedBody },
               sentByEmail: me?.email, sentByName: me?.name,
+              outlookHelperVerified: true,
             }),
           });
           if (!patchRes.ok) {

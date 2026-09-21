@@ -2446,3 +2446,17 @@ again.
   wording — this codebase already had the right pattern for it
   (`mentionsOutstandingBalance`/`claimsPermissionDenied`), it just hadn't
   been extended to this specific false claim yet.
+
+## SOA Reminder delivery tracking
+
+- **INV-DOC-021** — `email_drafts.status='sent'` alone is not proof that
+  Outlook actually sent an SOA Reminder: Delivery History also has a manual
+  “Mark as Sent” fallback. Only `outlook_send_verified_at` may advance the
+  1st → 2nd → 3rd sequence, and that field is written only after the local
+  Draft Helper returns success from Outlook's real `.Send()`. The chosen
+  stage and book scope are snapshotted on the draft itself
+  (`soa_reminder_stage`, `soa_qb_company`) rather than re-derived later from
+  editable template content. An `ALL` send applies to each TAB/TAC/TAO row;
+  a book-specific send applies only to that book. Old placeholder templates
+  remain in the database for campaign foreign-key history but are hidden;
+  the operational SOA template set is exactly 1st/2nd/3rd Reminder.

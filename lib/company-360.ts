@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalize, matchScore, significantWord } from './company-name';
 import { computeSoaRows, effectiveOwner, type SoaCompanyRow } from './soa-data';
 import type { QbCompany } from './quickbooks';
+import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderProgress } from './soa-reminder-progress';
 
 // Company 360 — one aggregation function, imported by both the page
 // (server component, no HTTP hop) and the API route (for any future
@@ -121,7 +122,7 @@ export type Company360 = {
   // Matched by companyId when computeSoaRows() itself resolved one (same
   // fuzzy company-name match every other SOA view relies on), falling back
   // to an exact normalize()'d name match on the rarer row it didn't.
-  outstanding: (SoaCompanyRow & { qbCompany: QbCompany })[];
+  outstanding: (SoaCompanyRow & { qbCompany: QbCompany; reminderProgress: SoaReminderProgress })[];
   matchQuality: {
     warnings: string[];
   };
@@ -168,6 +169,7 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
     soaTabRows,
     soaTacRows,
     soaTaoRows,
+    soaReminderHistory,
   ] = await Promise.all([
     uen ? supabase.from('master_list').select('*').ilike('roc_no', uen) : Promise.resolve({ data: [] as Record<string, unknown>[] }),
     supabase.from('ar_reminder').select('*').eq('company_id', id).or('status.is.null,status.neq.Excluded'),
@@ -212,6 +214,7 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
     word ? computeSoaRows('TAB', { customerNamePrefilter: word }).catch(() => [] as SoaCompanyRow[]) : Promise.resolve([] as SoaCompanyRow[]),
     word ? computeSoaRows('TAC', { customerNamePrefilter: word }).catch(() => [] as SoaCompanyRow[]) : Promise.resolve([] as SoaCompanyRow[]),
     word ? computeSoaRows('TAO', { customerNamePrefilter: word }).catch(() => [] as SoaCompanyRow[]) : Promise.resolve([] as SoaCompanyRow[]),
+    loadSoaReminderHistory(supabase).catch(() => []),
   ]);
 
   // AR Reminder cycles — company_id + uen dual check (INV-AR-003, the same
@@ -259,9 +262,9 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
   // row" gap lib/soa-data.ts's own SoaCompanyRow comment documents).
   const matchesThisCompany = (r: SoaCompanyRow) => (r.companyId != null ? r.companyId === id : normalize(r.companyName) === normName);
   const outstanding = ([
-    ...soaTabRows.filter(matchesThisCompany).map(r => ({ ...r, qbCompany: 'TAB' as const })),
-    ...soaTacRows.filter(matchesThisCompany).map(r => ({ ...r, qbCompany: 'TAC' as const })),
-    ...soaTaoRows.filter(matchesThisCompany).map(r => ({ ...r, qbCompany: 'TAO' as const })),
+    ...soaTabRows.filter(matchesThisCompany).map(r => ({ ...r, qbCompany: 'TAB' as const, reminderProgress: resolveSoaReminderProgress(soaReminderHistory, r, 'TAB') })),
+    ...soaTacRows.filter(matchesThisCompany).map(r => ({ ...r, qbCompany: 'TAC' as const, reminderProgress: resolveSoaReminderProgress(soaReminderHistory, r, 'TAC') })),
+    ...soaTaoRows.filter(matchesThisCompany).map(r => ({ ...r, qbCompany: 'TAO' as const, reminderProgress: resolveSoaReminderProgress(soaReminderHistory, r, 'TAO') })),
   ]);
 
   const quickbooks = fuzzyMatch(companyName, qbCandidateRows ?? [], r => r.customer_name as string);

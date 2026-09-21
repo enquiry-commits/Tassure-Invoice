@@ -5,6 +5,7 @@ import { effectiveOwner } from '@/lib/soa-data';
 import { AGING_BUCKETS, TXN_TYPE_TAGS, oldestAgingBucket } from '@/lib/soa';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 import { SoaAllDownloadButton } from '@/components/billing/SoaDownloadPopover';
+import { SoaReminderStatus } from '@/components/billing/SoaReminderStatus';
 import { DataCard } from './DataCard';
 import type { Company360 } from '@/lib/company-360';
 
@@ -85,7 +86,7 @@ const GRID_5_COLS = 'repeat(5, minmax(0,1fr))';
 const GRID_6_COLS = 'repeat(6, minmax(0,1fr))';
 // OutstandingSection only (2026-09-18, its new Download column) — same
 // "N columns, N-equal split" rule as every constant above, just for 7.
-const GRID_7_COLS = 'repeat(7, minmax(0,1fr))';
+const GRID_8_COLS = 'repeat(8, minmax(0,1fr))';
 
 export function ArAgmSection({ cycles }: { cycles: Company360['arReminderCycles'] }) {
   return (
@@ -312,8 +313,8 @@ export function CommsSection({ drafts }: { drafts: Company360['communications'][
 export function OutstandingSection({ outstanding }: { outstanding: Company360['outstanding'] }) {
   return (
     <DataCard title="Outstanding" icon={<Receipt size={15} color="#fff" />} count={outstanding.length} empty="No outstanding balance on TAB/TAC/TAO for this company.">
-      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_7_COLS, gap: 16, padding: '10px 16px' }}>
-        <div>Invoice No.</div><div>Company</div><div>Aging</div><div>Total Balance</div><div>Due Date</div><div>Main PIC</div><div />
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_8_COLS, gap: 16, padding: '10px 16px' }}>
+        <div>Invoice No.</div><div>Company</div><div>Reminder</div><div>Aging</div><div>Total Balance</div><div>Due Date</div><div>Main PIC</div><div />
       </div>
       {outstanding.map((r, i) => {
         // "欠下多久了...主要显示是最久的是欠了多久时间，比如最久的是 91+，
@@ -323,7 +324,7 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
         const oldest = oldestAgingBucket(r.aging);
         const oldestLabel = oldest ? AGING_BUCKETS.find(b => b.key === oldest)?.label : null;
         return (
-          <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_7_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+          <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_8_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
             {/* Vincent, 2026-09-08: "Invoice 换成 Invoice No. , 格式要参考
                 Invoice No. 列的字体格式" — same page's own Invoices section
                 again: its Invoice No. cell is bare inherited text with no
@@ -374,6 +375,7 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
                 keep a separate pill look for what both sections already
                 agree is the same value. */}
             <div>{r.qbCompany}</div>
+            <div><SoaReminderStatus progress={r.reminderProgress} /></div>
             <div>
               {/* Vincent, 2026-09-08: "放成黄色显示" — yellow, distinct from
                   the plain Company text next to it, so the one column

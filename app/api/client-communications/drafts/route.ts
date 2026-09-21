@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 // other's "mark as sent".
 export async function PATCH(req: NextRequest) {
   const body = await req.json();
-  const { id, version, patch, sentByEmail, sentByName } = body as {
+  const { id, version, patch, sentByEmail, sentByName, outlookHelperVerified } = body as {
     id: number; version: number;
     patch: Partial<{
       status: 'pending' | 'opened' | 'sent' | 'skipped';
@@ -48,6 +48,7 @@ export async function PATCH(req: NextRequest) {
       cc_email: string;
     }>;
     sentByEmail?: string; sentByName?: string;
+    outlookHelperVerified?: boolean;
   };
   if (!id || version === undefined || !patch) return NextResponse.json({ error: 'id, version and patch required' }, { status: 400 });
 
@@ -57,6 +58,11 @@ export async function PATCH(req: NextRequest) {
     update.sent_at = new Date().toISOString();
     update.sent_by_email = sentByEmail ?? null;
     update.sent_by_name = sentByName ?? null;
+    // Only OutlookStyleSendModal sets this, and only AFTER the local Helper
+    // returned success from Outlook's real .Send(). History's manual
+    // "Mark as Sent" intentionally leaves it null, so it cannot advance an
+    // SOA Reminder sequence without a machine-verifiable send result.
+    if (outlookHelperVerified === true) update.outlook_send_verified_at = new Date().toISOString();
   } else if (patch.status === 'opened') {
     update.opened_at = new Date().toISOString();
     update.opened_by_email = sentByEmail ?? null;

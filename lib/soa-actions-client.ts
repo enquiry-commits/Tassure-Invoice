@@ -140,6 +140,7 @@ export async function buildSoaDraft(
   return buildCampaignDraft({
     companyName, type: 'soa', me, sender, templateId,
     qbCompany: qbCompany === 'ALL' ? undefined : qbCompany,
+    soaReminderScope: qbCompany,
     campaignName: `SOA (${qbCompany}) - ${companyName} - ${todaySGT()}`,
     attachments: files,
   });

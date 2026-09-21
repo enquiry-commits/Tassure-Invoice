@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { mergeTemplate, formatInvoiceList, formatAmount, formatContactName, daysOverdueFromDate, type InvoiceRef } from '@/lib/email-merge';
 import { normalizeRecipientLines } from '@/lib/campaign-recipients';
 import { fmtDate, currentMonthUpperSGT } from '@/lib/date';
+import { soaReminderStageFromTemplate, type SoaReminderScope } from '@/lib/soa-reminder-progress';
 
 // Client Communications: generates draft emails from real system data,
 // replacing the manual BULK.xlsm mail-merge. Sending stays manual (Outlook,
@@ -40,13 +41,14 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const {
     type, name, fyeMonth, fyeYear, senderId, templateId, companies,
-    createdByEmail, createdByName,
+    createdByEmail, createdByName, soaQbCompany,
   } = body as {
     type: 'letter' | 'ar' | 'soa'; name: string;
     fyeMonth?: string; fyeYear?: number;
     senderId?: number; templateId: number;
     companies: FinalizedCompany[];
     createdByEmail?: string; createdByName?: string;
+    soaQbCompany?: SoaReminderScope;
   };
 
   if (!type || !name || !templateId) {
@@ -61,6 +63,14 @@ export async function POST(req: NextRequest) {
 
   const { data: template } = await supabase.from('email_templates').select('*').eq('id', templateId).single();
   if (!template) return NextResponse.json({ error: 'template not found' }, { status: 404 });
+  if (template.type !== type) return NextResponse.json({ error: 'template type does not match campaign type' }, { status: 400 });
+  const soaReminderStage = type === 'soa' ? soaReminderStageFromTemplate(template.name) : null;
+  if (type === 'soa' && !soaReminderStage) {
+    return NextResponse.json({ error: 'SOA campaigns must use 1st Reminder, 2nd Reminder or 3rd Reminder.' }, { status: 400 });
+  }
+  if (soaQbCompany && !['TAB', 'TAC', 'TAO', 'ALL'].includes(soaQbCompany)) {
+    return NextResponse.json({ error: 'invalid SOA QuickBooks scope' }, { status: 400 });
+  }
 
   const { data: campaign, error: campaignErr } = await supabase.from('email_campaigns').insert({
     type, name, fye_month: fyeMonth ?? null, fye_year: fyeYear ?? null,
@@ -112,6 +122,10 @@ export async function POST(req: NextRequest) {
       invoice_refs: refs,
       total_amount: totalAmount || null,
       status: 'pending',
+      ...(type === 'soa' ? {
+        soa_reminder_stage: soaReminderStage,
+        soa_qb_company: soaQbCompany ?? null,
+      } : {}),
     });
   }
 

@@ -4,7 +4,8 @@ import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import type { QbCompany } from '@/lib/quickbooks';
-import { computeSoaRows } from '@/lib/soa-data';
+import { computeSoaRows, type SoaCompanyRow as BaseSoaCompanyRow } from '@/lib/soa-data';
+import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderProgress } from '@/lib/soa-reminder-progress';
 
 const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
 
@@ -27,7 +28,7 @@ const QB_COMPANIES: QbCompany[] = ['TAB', 'TAC', 'TAO'];
 // The actual row-computation lives in lib/soa-data.ts (computeSoaRows),
 // shared with GET /api/billing/soa/export so the on-screen list and the
 // Excel download can never silently drift into different numbers.
-export type { SoaCompanyRow } from '@/lib/soa-data';
+export type SoaCompanyRow = BaseSoaCompanyRow & { reminderProgress: SoaReminderProgress };
 
 export async function GET(req: NextRequest) {
   const company = req.nextUrl.searchParams.get('company') as QbCompany | null;
@@ -35,8 +36,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'company must be one of TAB, TAC, TAO' }, { status: 400 });
   }
   try {
-    const rows = await computeSoaRows(company);
-    return NextResponse.json({ companies: rows });
+    const [rows, history] = await Promise.all([
+      computeSoaRows(company),
+      loadSoaReminderHistory(createAdminClient()),
+    ]);
+    return NextResponse.json({
+      companies: rows.map(row => ({
+        ...row,
+        reminderProgress: resolveSoaReminderProgress(history, row, company),
+      })),
+    });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 503 });
   }

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { computeAllSoaRows } from '@/lib/soa-data';
+import { createAdminClient } from '@/lib/supabase';
+import { loadSoaReminderHistory, resolveSoaReminderProgress } from '@/lib/soa-reminder-progress';
 
 // GET /api/billing/soa/all — Vincent, 2026-09-07: "在 Outstanding -TAB的
 // 上面加多一个3级标题（All）,这个All, 就是把 TAB/TAC/TAO的所有总和放进去
@@ -12,8 +14,16 @@ import { computeAllSoaRows } from '@/lib/soa-data';
 // sync logic needed.
 export async function GET() {
   try {
-    const rows = await computeAllSoaRows();
-    return NextResponse.json({ companies: rows });
+    const [rows, history] = await Promise.all([
+      computeAllSoaRows(),
+      loadSoaReminderHistory(createAdminClient()),
+    ]);
+    return NextResponse.json({
+      companies: rows.map(row => ({
+        ...row,
+        reminderProgress: resolveSoaReminderProgress(history, row, row.qbCompany),
+      })),
+    });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 503 });
   }

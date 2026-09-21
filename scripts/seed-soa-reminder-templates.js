@@ -16,11 +16,10 @@
 // exact marker with no image markup of their own. Keeping the same marker
 // here is enough; no image handling needed in this script.
 //
-// Additive: inserts 3 new rows, does not touch/delete the 2 existing
-// placeholder 'soa' templates (SOA1/SOA2) — staff can remove those later
-// via Client Communications > Templates if they don't want them. "1st
-// Reminder" becomes the new type='soa' default (unsets the old one) since
-// it's the real content staff should see first when opening the picker.
+// Additive: inserts 3 new rows and keeps old placeholder rows only so past
+// email_campaigns.template_id foreign keys remain valid. The application
+// now hides every other SOA template and exposes only this fixed 1st/2nd/3rd
+// sequence. "1st Reminder" becomes the type='soa' default.
 //
 // Usage: node scripts/seed-soa-reminder-templates.js
 // Safe to re-run: skips any template whose exact name already exists.

@@ -12,6 +12,7 @@ import type { DraftLike } from '@/lib/draft-helper-client';
 import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender, type SoaCompanySelector } from '@/lib/soa-actions-client';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 import { SoaDownloadPopover, BOOK_ORDER } from '@/components/billing/SoaDownloadPopover';
+import { SoaReminderStatus } from '@/components/billing/SoaReminderStatus';
 import type { QbCompany } from '@/lib/quickbooks';
 import type { SoaCompanyRow } from '@/app/api/billing/soa/route';
 import type { SoaInvoiceDetail } from '@/app/api/billing/soa/detail/route';
@@ -144,6 +145,18 @@ function SoaDraftPopover({
 
   const selectedSender = senders.find(s => s.id === senderId) ?? null;
 
+  // The default is company-specific, not one global picker state: once a
+  // verified 1st Reminder is sent this row opens on 2nd, then 3rd after the
+  // verified 2nd. A manual History-page "Mark as Sent" never changes the
+  // server's reminderProgress, so it cannot move this selection forward.
+  const toggleOpen = () => {
+    if (!isOpen) {
+      const wanted = templates.find(t => t.name === company.reminderProgress.nextTemplateName);
+      if (wanted && wanted.id !== selectedTemplateId) setSelectedTemplateId(wanted.id);
+    }
+    onOpenChange(!isOpen);
+  };
+
   const draft = async () => {
     setDrafting(true);
     setError(null);
@@ -161,12 +174,12 @@ function SoaDraftPopover({
   return (
     <div style={{ position: 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
       {variant === 'icon' ? (
-        <button title="Draft Email" onClick={() => onOpenChange(!isOpen)}
+        <button title="Draft Email" onClick={toggleOpen}
           style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: isOpen ? '#1d3a5c' : '#94a3b8' }}>
           <Mail size={15} />
         </button>
       ) : (
-        <button onClick={() => onOpenChange(!isOpen)} disabled={!company.invoiceCount}
+        <button onClick={toggleOpen} disabled={!company.invoiceCount}
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 8, border: 'none', background: !company.invoiceCount ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: !company.invoiceCount ? 'default' : 'pointer' }}>
           <Send size={14} />Draft Email
         </button>
@@ -308,8 +321,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // matches Billing Drafts' own row layout, which also ends in a dedicated
   // icon column rather than tucking it into an existing one.
   const soaListColumns = qbCompany === 'ALL'
-    ? '32px minmax(200px,1.2fr) 64px 100px 100px 100px 100px 100px 110px 100px 150px 36px'
-    : '32px minmax(220px,1.4fr) 100px 100px 100px 100px 100px 110px 100px 150px 36px';
+    ? '32px minmax(200px,1.2fr) 150px 64px 100px 100px 100px 100px 100px 110px 100px 150px 36px'
+    : '32px minmax(220px,1.4fr) 150px 100px 100px 100px 100px 100px 110px 100px 150px 36px';
   // Display-only stand-in for qbCompany wherever the literal 'ALL' would
   // otherwise leak into user-facing copy (e.g. "any ALL invoice" reads as
   // a typo, not a scope).
@@ -577,7 +590,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           </div>
         </div>
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
-          <div style={{ minWidth: 940 }}>
+          <div style={{ minWidth: 1090 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: soaListColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
               {/* Vincent, 2026-09-15: "Owner...换成类似于Main PIC会不会比较
                   好" — "Owner" read oddly next to the "PIC" column right
@@ -589,8 +602,8 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                   (soaPic, suggestedOwner, effectiveOwner, soa_owners table)
                   are unchanged — this is a display-label rename only. */}
               {(qbCompany === 'ALL'
-                ? ['', 'Company Name', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '']
-                : ['', 'Company Name', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '']
+                ? ['', 'Company Name', 'Reminder', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '']
+                : ['', 'Company Name', 'Reminder', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', '']
               ).map((h, i) => (
                 i >= 2 ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>{h}</div> : <div key={i} style={{ padding: '0 6px' }}>{h}</div>
               ))}
@@ -617,6 +630,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                     <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName.toUpperCase()}
                     </div>
+                  </div>
+                  <div style={{ padding: '0 6px' }}>
+                    <SoaReminderStatus progress={c.reminderProgress} />
                   </div>
                   {qbCompany === 'ALL' && (
                     // Vincent, 2026-09-07: "company name 右边第2列 要放Source :

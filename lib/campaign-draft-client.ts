@@ -97,6 +97,7 @@ export async function buildCampaignDraft(opts: {
   attachments?: File[] | null;
   templateId?: number;
   qbCompany?: QbCompany;
+  soaReminderScope?: QbCompany | 'ALL';
 }): Promise<DraftLike> {
   const { companyName, type, fyeMonth, fyeYear, me, sender, attachments } = opts;
   const row = await resolveCampaignRow(companyName, type, fyeMonth, fyeYear, opts.qbCompany);
@@ -109,6 +110,7 @@ export async function buildCampaignDraft(opts: {
       name: opts.campaignName ?? `${type.toUpperCase()} - ${companyName} - ${todaySGT()}`,
       ...(type === 'ar' ? { fyeMonth, fyeYear } : {}),
       templateId: template.id, companies: [row], createdByEmail: me?.email, createdByName: me?.name,
+      ...(type === 'soa' && opts.soaReminderScope ? { soaQbCompany: opts.soaReminderScope } : {}),
     }),
   });
   const createJson = await createRes.json();
