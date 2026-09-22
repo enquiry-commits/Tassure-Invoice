@@ -6,6 +6,7 @@ import { customerSourceLabel } from '@/lib/customer-source';
 import { buildReportsCompanyRows, computeRevenueTrend, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT } from '@/lib/reports-data';
 import { pageAll } from '@/lib/page-all';
 import { normalize } from '@/lib/company-name';
+import { REPORT_PALETTE } from '@/lib/chart-colors';
 
 // Reports — customer-profile analytics for leadership (Vincent, Cindy,
 // Samuell, Tan Yee Soon; gated on ApprovedAccount.canViewReports, see
@@ -44,8 +45,27 @@ import { normalize } from '@/lib/company-name';
 export const preferredRegion = 'sin1';
 
 type Row = Record<string, unknown>;
+type Pt = { label: string; value: number; color?: string };
+type FlowRow = { companyName: string; uen: string | null };
 
-const PALETTE = ['#0f766e', '#2563eb', '#7c3aed', '#c026d3', '#0891b2', '#f59e0b', '#dc2626', '#65a30d', '#94a3b8'];
+// Exported shape of computeReportsData()'s return — kept in sync BY HAND
+// with app/reports/page.tsx's own identical `ReportsData` interface (that
+// file is a separate 'use client' component and doesn't import server-only
+// route code), same convention every other route/page pair in this app
+// already uses. lib/reports-narrative.ts imports this type, not the page's
+// copy, since it runs server-side.
+export interface ReportsData {
+  generatedAt: string;
+  kpis: { activeClients: number; newThisYear: number; churnedThisYear: number; netGrowthThisYear: number };
+  clientTypeDonut: Pt[];
+  serviceMix: Pt[];
+  sourceDonut: Pt[];
+  flow: { years: string[]; newClientsTrend: Pt[]; churnedTrend: Pt[]; newByYearRows: Record<string, FlowRow[]>; churnedByYearRows: Record<string, FlowRow[]> };
+  revenue: { years: string[]; invoiceCountTrend: Pt[]; revenueTrendThousands: Pt[] };
+  picWorkload: Pt[];
+  companyRows: ReturnType<typeof buildReportsCompanyRows>;
+  notes: { clientType: string; flow: string; source: string; revenue: string };
+}
 
 // master_list.join_date/update_date are free text typed by staff over the
 // years — confirmed via live sampling (see the 2026-09-02 direction-
@@ -80,11 +100,13 @@ function parseFlexibleDate(raw: unknown): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-export async function GET(req: NextRequest) {
-  const account = await getRequestAccount(req);
-  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
-  if (!account.canViewReports) return NextResponse.json({ error: 'Your account cannot view Reports.' }, { status: 403 });
-
+// Extracted 2026-09-22 from GET's own body (mechanical move, behavior
+// unchanged) so lib/reports-narrative.ts's AI narrative generator can call
+// the SAME computation the page itself renders, rather than a second,
+// divergent re-derivation — the auto-generated analysis must never disagree
+// with the numbers sitting right next to it on the same page. GET below
+// keeps the auth checks (a route-level concern); this only computes.
+export async function computeReportsData(): Promise<ReportsData> {
   const sb = createAdminClient();
   const thisYear = thisYearSGT();
   const YEARS_BACK = 5;
@@ -121,7 +143,7 @@ export async function GET(req: NextRequest) {
     typeCount[t] = (typeCount[t] ?? 0) + 1;
   }
   const clientTypeDonut = Object.entries(typeCount)
-    .map(([label, value], i) => ({ label, value, color: PALETTE[i % PALETTE.length] }))
+    .map(([label, value], i) => ({ label, value, color: REPORT_PALETTE[i % REPORT_PALETTE.length] }))
     .sort((a, b) => b.value - a.value);
 
   // ── Service mix (active clients) ─────────────────────────────────────────
@@ -141,7 +163,7 @@ export async function GET(req: NextRequest) {
     sourceCount[label] = (sourceCount[label] ?? 0) + 1;
   }
   const sourceDonut = Object.entries(sourceCount)
-    .map(([label, value], i) => ({ label, value, color: label === 'Unknown' ? '#cbd5e1' : PALETTE[i % PALETTE.length] }))
+    .map(([label, value], i) => ({ label, value, color: label === 'Unknown' ? '#cbd5e1' : REPORT_PALETTE[i % REPORT_PALETTE.length] }))
     .sort((a, b) => b.value - a.value);
 
   // ── Client flow: new (join_date) vs churned (update_date on terminated/
@@ -185,7 +207,7 @@ export async function GET(req: NextRequest) {
   const { invoiceCountTrend, revenueTrendThousands: revenueTrend } = computeRevenueTrend(qbInvoices, years);
   const picWorkload = computePicWorkload(arRows);
 
-  return NextResponse.json({
+  return {
     generatedAt: todaySGT(),
     kpis: {
       activeClients: active.length,
@@ -209,5 +231,16 @@ export async function GET(req: NextRequest) {
       source: '"Unknown" is expected for most of the existing roster — customer_source is a new field staff tag going forward from Company 360, not backfilled from history.',
       revenue: 'Per-company revenue is not offered as an Explore metric — attributing quickbooks_invoices to a specific company reliably needs the same fuzzy company-name matching lib/company-360.ts uses for one company at a time (docs/FEATURE_MAP.md flags that matching as high-risk shared logic); running it across the whole roster for a leadership-facing aggregate risks misattributed figures in a way a single Company 360 lookup does not. The Revenue/Invoice Volume chart above stays company-agnostic (a plain by-year total) for that reason.',
     },
-  });
+  };
+}
+
+export async function GET(req: NextRequest) {
+  const account = await getRequestAccount(req);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+  if (!account.canViewReports) return NextResponse.json({ error: 'Your account cannot view Reports.' }, { status: 403 });
+  try {
+    return NextResponse.json(await computeReportsData());
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 503 });
+  }
 }

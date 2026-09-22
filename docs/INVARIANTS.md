@@ -2230,7 +2230,17 @@ again.
   `ar-reminder`'s own `servicesAuto`/`services` merge already did this
   correctly; `app/api/reports/route.ts`'s Service Mix chart did not — it
   read the raw columns directly and showed "Accounts: 1, Tax: 2" on a client
-  base where the real count is 223/217. Fixed by computing Accounts/Tax
+  base where the real count is **383/454** (corrected 2026-09-22, same day
+  — this entry originally said 223/217, itself wrong: the verification
+  script used to confirm the fix queried `quickbooks_invoice_items` with a
+  plain `.select()`, silently truncated at Supabase's default 1000-row cap
+  — real row count 4033 — while the ACTUAL fix already correctly used
+  `pageAll()`. The shipped code was right the whole time; only this
+  invariant's own reported number was wrong. General lesson: a verification
+  script checking a `pageAll()`-based production computation must ALSO use
+  `pageAll()`, never a plain `.select()` — a truncated verification can
+  silently confirm a wrong number, which is worse than no verification at
+  all since it reads as checked). Fixed by computing Accounts/Tax
   service-mix membership from real `quickbooks_invoice_items` history
   (service_type-specific, so Accounts and Tax stay two genuinely different
   counts — `computeTaoCompanies()` itself was NOT reused here since it
@@ -2531,6 +2541,25 @@ again.
   shared, real-money modal — deliberately deferred as its own careful
   change rather than folded in here, given the blast radius (every manual
   invoice too) of touching that specific code path.
+
+- **INV-AI-006** — A NEW AI feature in this app defaults to a direct
+  Anthropic call (`app/api/assistant/route.ts`'s claudeAnswer() pattern:
+  `x-api-key`/`anthropic-version: 2023-06-01` headers,
+  `https://api.anthropic.com/v1/messages`), never `lib/ai/openai.ts`'s
+  multi-model path, UNLESS that OpenAI path's production config has been
+  freshly confirmed live. Added 2026-09-22 for `lib/reports-narrative.ts`
+  (Reports' auto-generated analysis card) — as of the multi-model agent's
+  own 2026-09-21 rollout, `docs/CURRENT_STATE.md` already noted "Vincent
+  confirmed the production key was saved in Vercel, but a fresh deployment
+  is still needed to load it," still unconfirmed the next day. A feature
+  meant to reliably show something on every page load cannot depend on a
+  still-uncertain second provider — Anthropic is the one path this session
+  has real production evidence for (real `ai_agent_runs` rows,
+  `primary_provider: "anthropic"`). Once OpenAI's production config is
+  confirmed live, a feature like this can gain OpenAI polish the same way
+  `lib/ai/orchestrator.ts`'s `synthesizeWithOpenAI()` already does for the
+  My Tasks assistant (degrades to the Claude draft unchanged if
+  `openAIConfigured()` is false) — without changing its own contract.
 
 - **INV-AI-004** — The reply-scanning safety-net guards (INV-DATA-022/023,
   `mentionsOutstandingBalance`/`claimsPermissionDenied`/

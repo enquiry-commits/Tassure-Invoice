@@ -4,14 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  BarChart3, Users, UserPlus, UserMinus, TrendingUp, PieChart, Wallet, Compass, Download, X,
+  BarChart3, Users, UserPlus, UserMinus, TrendingUp, PieChart, Wallet, Compass, Download, X, Sparkles, RefreshCw,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
-import { Donut, VBars, HBars } from '@/components/dashboard/Charts';
+import { Donut, HBars, LineChart, ComboChart } from '@/components/dashboard/Charts';
 import { DimensionFilterMenu, type FilterOption } from '@/components/dashboard/DimensionFilterMenu';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { customerSourceLabel } from '@/lib/customer-source';
 import { formatStaffName } from '@/lib/staff-directory';
+import { REPORT_COLORS, REPORT_PALETTE } from '@/lib/chart-colors';
 
 // Reports — customer-profile analytics for leadership, gated on
 // ApprovedAccount.canViewReports (lib/approved-accounts.ts). Guard pattern
@@ -42,8 +43,11 @@ interface ReportsData {
   notes: { clientType: string; flow: string; source: string; revenue: string };
 }
 
-const COLORS = { ink: '#102a43', teal: '#397f78', blue: '#557795', gold: '#b98243', plum: '#746487', rose: '#b45f6b' };
-const PALETTE = ['#0f766e', '#2563eb', '#7c3aed', '#c026d3', '#0891b2', '#f59e0b', '#dc2626', '#65a30d', '#94a3b8', '#334155'];
+// One shared palette now, not two (see lib/chart-colors.ts's own header for
+// why) — COLORS/PALETTE names kept local so every reference below is
+// unchanged, just re-pointed at the shared source.
+const COLORS = REPORT_COLORS;
+const PALETTE = REPORT_PALETTE;
 
 function Card({ title, eyebrow, icon, children, note }: {
   title: string; eyebrow: string; icon: React.ReactNode; children: React.ReactNode; note?: string;
@@ -281,6 +285,35 @@ export default function ReportsPage() {
     }).catch(e => setError(e.message));
   }, [authorized]);
 
+  // AI narrative — its own effect/fetch, deliberately independent of `data`
+  // above: it has its own (slower, LLM-backed) endpoint, and the numbers
+  // must render immediately rather than wait on it. See app/api/reports/
+  // narrative/route.ts for the 24h cache + lib/reports-narrative.ts for the
+  // prompt itself — Vincent: "能不能...装好一个金融分析师和企业规划师的Ai
+  // 分析助手...让这些数据不会只是单单的数字了", picking "auto-generated
+  // narrative" over a chat panel so this always shows something on load.
+  const [narrative, setNarrative] = useState<{ text: string; generatedAt: string; cached: boolean } | null>(null);
+  // Starts true (not false) specifically so the initial mount's effect below
+  // never needs to set it synchronously itself — a synchronous setState
+  // inside an effect body is a real lint error (react-hooks/set-state-in-
+  // effect), not just style; only the deferred setNarrativeLoading(false)
+  // inside the fetch's own .finally() runs from there, which this rule
+  // doesn't flag. The manual refresh button's own click handler is a real
+  // event handler, not an effect, so it's free to set this synchronously.
+  const [narrativeLoading, setNarrativeLoading] = useState(true);
+  const [narrativeError, setNarrativeError] = useState<string | null>(null);
+
+  const fetchNarrative = (refresh?: boolean) => {
+    fetch(`/api/reports/narrative${refresh ? '?refresh=true' : ''}`).then(async r => {
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error || 'Failed to load AI analysis');
+      setNarrative({ text: body.narrative, generatedAt: body.generatedAt, cached: !!body.cached });
+      setNarrativeError(null);
+    }).catch(e => setNarrativeError(e.message)).finally(() => setNarrativeLoading(false));
+  };
+  const refreshNarrative = () => { setNarrativeLoading(true); fetchNarrative(true); };
+  useEffect(() => { if (authorized) fetchNarrative(); }, [authorized]);
+
   // usePagination MUST run on every render, before the early returns below
   // — calling a hook only on renders where authorized/data happen to be
   // ready (as this was originally written, with the call sitting after
@@ -309,6 +342,35 @@ export default function ReportsPage() {
           <p style={{ margin: '2px 0 0', fontSize: 12, color: '#8493a3' }}>Customer profile analytics — generated {data.generatedAt}. Visible to a small, named group only.</p>
         </div>
       </div>
+
+      <section style={{ background: 'linear-gradient(135deg,#102a43,#1d3a5c)', borderRadius: 16, padding: '20px 22px', color: '#fff', boxShadow: '0 10px 32px rgba(16,42,67,.18)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <span style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Sparkles size={15} />
+          </span>
+          <div style={{ fontSize: 13, fontWeight: 750, letterSpacing: '-.01em' }}>AI 分析 — 本期观察</div>
+          <button onClick={refreshNarrative} disabled={narrativeLoading}
+            title="Regenerate"
+            style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,.75)', background: 'rgba(255,255,255,.1)', border: 'none', borderRadius: 7, padding: '5px 10px', cursor: narrativeLoading ? 'default' : 'pointer' }}>
+            <RefreshCw size={11} style={{ animation: narrativeLoading ? 'spin 1s linear infinite' : 'none' }} />
+            {narrativeLoading ? '生成中…' : '重新生成'}
+          </button>
+        </div>
+        {narrativeError && (
+          <div style={{ fontSize: 12.5, color: '#fecaca', lineHeight: 1.6 }}>{narrativeError}</div>
+        )}
+        {!narrativeError && narrativeLoading && !narrative && (
+          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.65)' }}>正在生成分析…</div>
+        )}
+        {!narrativeError && narrative && (
+          <>
+            <div style={{ fontSize: 13, lineHeight: 1.85, color: 'rgba(255,255,255,.92)', whiteSpace: 'pre-wrap' }}>{narrative.text}</div>
+            <div style={{ marginTop: 12, fontSize: 10.5, color: 'rgba(255,255,255,.45)' }}>
+              {narrative.cached ? '基于缓存的分析 · ' : ''}生成于 {new Date(narrative.generatedAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}
+            </div>
+          </>
+        )}
+      </section>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
         <MetricCard value={data.kpis.activeClients} label="Active Clients" icon={<Users size={16} />} color={COLORS.teal} />
@@ -365,23 +427,31 @@ export default function ReportsPage() {
         <HBars data={data.serviceMix} accent={COLORS.teal} labelWidth={110} />
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 16 }}>
-        <Card title="New Clients by Year" eyebrow="Flow" icon={<UserPlus size={16} />} note={data.notes.flow}>
-          <VBars data={data.flow.newClientsTrend} color={COLORS.teal} height={170} />
-        </Card>
-        <Card title="Churned by Year" eyebrow="Flow" icon={<UserMinus size={16} />} note={data.notes.flow}>
-          <VBars data={data.flow.churnedTrend} color={COLORS.rose} height={170} />
-        </Card>
-      </div>
+      {/* Both trend cards below were 2 separate bar charts each — bars are
+          right for comparing discrete categories (Service Mix, Staff
+          Workload above), but these are genuinely a value changing across
+          ORDERED years, which a line reads as a trend/shape at a glance in
+          a way two side-by-side bar charts never could (Vincent: "为什么
+          只有柱状图...找出适合我们的"). Combining each pair onto one chart
+          is also the point, not just the chart type: New vs Churned on one
+          axis shows net growth directly; Revenue (bars) with Invoice Count
+          (line) overlaid reveals average-invoice-value trend — rising
+          revenue with a flat invoice-count line means billing MORE per
+          invoice, not just more invoices — which two separate charts could
+          never show either. */}
+      <Card title="Client Flow by Year" eyebrow="Flow" icon={<UserPlus size={16} />} note={data.notes.flow}>
+        <LineChart labels={data.flow.years} height={190}
+          series={[
+            { label: 'New Clients', color: COLORS.teal, data: data.flow.newClientsTrend.map(p => p.value) },
+            { label: 'Churned', color: COLORS.rose, data: data.flow.churnedTrend.map(p => p.value) },
+          ]} />
+      </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 16 }}>
-        <Card title="Invoice Volume by Year" eyebrow="Billing" icon={<Wallet size={16} />}>
-          <VBars data={data.revenue.invoiceCountTrend} color={COLORS.blue} height={170} />
-        </Card>
-        <Card title="Revenue by Year (S$'000)" eyebrow="Billing" icon={<Wallet size={16} />} note={data.notes.revenue}>
-          <VBars data={data.revenue.revenueTrendThousands} color={COLORS.gold} height={170} />
-        </Card>
-      </div>
+      <Card title="Revenue & Invoice Volume by Year" eyebrow="Billing" icon={<Wallet size={16} />} note={data.notes.revenue}>
+        <ComboChart labels={data.revenue.years} height={190}
+          bars={data.revenue.revenueTrendThousands.map(p => p.value)} barLabel="Revenue (S$'000)" barColor={COLORS.gold}
+          line={data.revenue.invoiceCountTrend.map(p => p.value)} lineLabel="Invoice Count" lineColor={COLORS.blue} />
+      </Card>
 
       <Card title="Staff Workload" eyebrow="Open AR / AGM Cycles" icon={<Users size={16} />} note="Counts every open (not yet filed) cycle a person is SEC, ACC, or TAX PIC on — the same fields My Tasks reads.">
         {data.picWorkload.length
