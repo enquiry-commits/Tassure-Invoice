@@ -133,7 +133,7 @@ const deepLinkStyle: React.CSSProperties = {
 // button before sending it — the AI itself can never trigger this call,
 // it only ever produces the preview data the card renders.
 
-export function InvoiceDraftCard({ preview }: { preview: InvoicePreview; onGenerated?: (summary: string) => void }) {
+export function InvoiceDraftCard({ preview, conversationId }: { preview: InvoicePreview; onGenerated?: (summary: string) => void; conversationId?: number | null }) {
   // The chat card is a preview; generation happens in the real editor it
   // opens (BillingDraftsModal). It had its own simplified confirm dialog
   // and POST path here — Vincent asked for the real popup, so that path is
@@ -202,7 +202,18 @@ export function InvoiceDraftCard({ preview }: { preview: InvoicePreview; onGener
       <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7', display: 'flex', flexDirection: 'column', gap: 6 }}>
         <button
           type="button"
-          onClick={() => setFullEditor(true)}
+          onClick={() => {
+            // Only marks that this card's own editor was opened from a chat
+            // suggestion — BillingDraftsModal below is the exact same
+            // component/write-path the real Billing Drafts page uses for
+            // 100% of manual invoicing, so it has no chat-origin awareness
+            // of its own; this does not (and must not) prove a real invoice
+            // was actually generated. See INV-AI-004's own note on why that
+            // stronger signal is a deliberately separate, more careful
+            // follow-up rather than bundled into this same change.
+            logActivity('chat_invoice_draft_opened', { companyName: preview.companyName, conversationId });
+            setFullEditor(true);
+          }}
           disabled={blocked}
           title={preview.alreadyInvoicedThisCycle ? '本周期已开单 — 打开可查看/编辑那张发票' : included.length === 0 ? 'Nothing due this cycle' : undefined}
           style={{
@@ -242,7 +253,7 @@ type ResolveOutcome =
   | { state: 'success' }
   | { state: 'error'; message: string };
 
-export function LateFilingResolveCard({ preview, onGenerated }: { preview: LateFilingResolvePreview; onGenerated: (summary: string) => void }) {
+export function LateFilingResolveCard({ preview, onGenerated, conversationId }: { preview: LateFilingResolvePreview; onGenerated: (summary: string) => void; conversationId?: number | null }) {
   const [outcome, setOutcome] = useState<ResolveOutcome>({ state: 'idle' });
 
   const submit = async () => {
@@ -258,7 +269,12 @@ export function LateFilingResolveCard({ preview, onGenerated }: { preview: LateF
         setOutcome({ state: 'error', message: json.error || `Request failed (${res.status})` });
         return;
       }
-      logActivity('late_filing_resolve', { companyName: preview.companyName });
+      // Renamed from the page's own 'late_filing_resolve' (2026-09-22,
+      // INV-AI-004) — that exact event_type was also what app/late-filing/
+      // page.tsx's own manual resolve() logs, so the two were indistinguishable
+      // in user_activity_events. A chat-confirmed write needs its own name to
+      // ever be told apart from the identical manual action.
+      logActivity('chat_late_filing_resolve', { companyName: preview.companyName, conversationId });
       setOutcome({ state: 'success' });
       onGenerated(`已将 ${preview.companyName} 标记为 Resolved。`);
     } catch (err) {
@@ -373,7 +389,7 @@ type EditOutcome =
   | { state: 'success'; invoiceNo: string | null; total: number | null }
   | { state: 'error'; message: string };
 
-export function InvoiceEditCard({ preview, onGenerated }: { preview: InvoiceEditPreview; onGenerated: (summary: string) => void }) {
+export function InvoiceEditCard({ preview, onGenerated, conversationId }: { preview: InvoiceEditPreview; onGenerated: (summary: string) => void; conversationId?: number | null }) {
   const [outcome, setOutcome] = useState<EditOutcome>({ state: 'idle' });
   const blocked = preview.changesSummary.length === 0;
 
@@ -394,6 +410,11 @@ export function InvoiceEditCard({ preview, onGenerated }: { preview: InvoiceEdit
         setOutcome({ state: 'error', message: json.error || `Request failed (${res.status})` });
         return;
       }
+      // No logActivity call existed here before 2026-09-22 (INV-AI-004) —
+      // a real invoice edit confirmed from chat previously left no trace
+      // distinguishing it from the same PATCH made manually from Billing
+      // Drafts' own edit panel.
+      logActivity('chat_invoice_edit', { companyName: preview.companyName, qbCompany: preview.qbCompany, conversationId });
       setOutcome({ state: 'success', invoiceNo: json.invoiceNo ?? null, total: json.total ?? null });
       onGenerated(`已更新 ${preview.companyName} 的 ${preview.qbCompany} 发票 #${json.invoiceNo ?? preview.docNumber} — 总额 S$${(json.total ?? preview.proposedTotal).toLocaleString()}。`);
     } catch (err) {
@@ -519,7 +540,7 @@ type PostIncorporateOutcome =
   | { state: 'success'; filename: string }
   | { state: 'error'; message: string };
 
-export function PostIncorporateCard({ preview, onGenerated }: { preview: PostIncorporatePreview; onGenerated: (summary: string) => void }) {
+export function PostIncorporateCard({ preview, onGenerated, conversationId }: { preview: PostIncorporatePreview; onGenerated: (summary: string) => void; conversationId?: number | null }) {
   const [outcome, setOutcome] = useState<PostIncorporateOutcome>({ state: 'idle' });
 
   const submit = async () => {
@@ -546,6 +567,8 @@ export function PostIncorporateCard({ preview, onGenerated }: { preview: PostInc
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      // No logActivity call existed here before 2026-09-22 (INV-AI-004).
+      logActivity('chat_post_incorporate', { companyName: preview.company, conversationId });
       setOutcome({ state: 'success', filename });
       onGenerated(`已生成并下载 "${filename}"（${preview.company} 的 Post Incorporate 文件）。`);
     } catch (err) {
@@ -718,7 +741,7 @@ type ArUpdateOutcome =
   | { state: 'conflict'; currentValue: string | null; updatedByName: string | null }
   | { state: 'error'; message: string };
 
-export function ArUpdateCard({ preview, onGenerated }: { preview: ArUpdatePreview; onGenerated: (summary: string) => void }) {
+export function ArUpdateCard({ preview, onGenerated, conversationId }: { preview: ArUpdatePreview; onGenerated: (summary: string) => void; conversationId?: number | null }) {
   const [outcome, setOutcome] = useState<ArUpdateOutcome>({ state: 'idle' });
   // Opens the page's own full AR record modal — see ArFullRecordModal.
   const [fullRecord, setFullRecord] = useState(false);
@@ -746,7 +769,7 @@ export function ArUpdateCard({ preview, onGenerated }: { preview: ArUpdatePrevie
         setOutcome({ state: 'error', message: json.error || `Request failed (${res.status})` });
         return;
       }
-      logActivity('ar_update_from_chat', { companyName: preview.companyName, field: preview.field });
+      logActivity('ar_update_from_chat', { companyName: preview.companyName, field: preview.field, conversationId });
       setOutcome({ state: 'success' });
       onGenerated(`已更新 ${preview.companyName}${cycle ? `（${cycle}）` : ''} 的 ${preview.fieldLabel}：${preview.currentValue || '（空）'} → ${preview.newValue || '（空）'}。`);
     } catch (err) {
@@ -884,7 +907,7 @@ function ArUpdateConfirmModal({ preview, outcome, onCancel, onConfirm }: {
 // Deliberately session-only (not persisted with the conversation): an
 // offer reopened days later would silently rebuild against TODAY's data
 // under yesterday's headline number, which is worse than asking again.
-export function ListExportCard({ offer }: { offer: ChatExportOffer }) {
+export function ListExportCard({ offer, conversationId }: { offer: ChatExportOffer; conversationId?: number | null }) {
   const [state, setState] = useState<'idle' | 'working' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
@@ -915,7 +938,7 @@ export function ListExportCard({ offer }: { offer: ChatExportOffer }) {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      logActivity('chat_list_export', { kind: offer.spec.kind, count: offer.count });
+      logActivity('chat_list_export', { kind: offer.spec.kind, count: offer.count, conversationId });
       setState('idle');
     } catch (err) {
       setMessage(err instanceof Error ? err.message : '网络错误，请重试。');
@@ -959,7 +982,7 @@ export function ListExportCard({ offer }: { offer: ChatExportOffer }) {
 // really builds the campaign draft with that PDF attached and opens the
 // same OutlookStyleSendModal the page opens. Sending still happens inside
 // that modal, by the user — chat never sends (INV-DATA-033).
-export function SoaCard({ preview }: { preview: SoaPreview }) {
+export function SoaCard({ preview, conversationId }: { preview: SoaPreview; conversationId?: number | null }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -1010,7 +1033,7 @@ export function SoaCard({ preview }: { preview: SoaPreview }) {
               disabled={!!busy}
               onClick={() => void run('pdf-ALL', async () => {
                 await downloadSoaPdf(preview.companyName, 'ALL');
-                logActivity('chat_soa_pdf', { companyName: preview.companyName, qbCompany: 'ALL' });
+                logActivity('chat_soa_pdf', { companyName: preview.companyName, qbCompany: 'ALL', conversationId });
                 setDone('合并 SOA PDF 已下载。');
               })}
               style={{
@@ -1027,7 +1050,7 @@ export function SoaCard({ preview }: { preview: SoaPreview }) {
               disabled={!!busy}
               onClick={() => void run('mail-ALL', async () => {
                 const built = await buildSoaDraft(preview.companyName, 'ALL', actor?.me ?? null, actor?.sender ?? null);
-                logActivity('chat_soa_draft', { companyName: preview.companyName, qbCompany: 'ALL' });
+                logActivity('chat_soa_draft', { companyName: preview.companyName, qbCompany: 'ALL', conversationId });
                 setDraft(built);
               })}
               style={{
@@ -1064,7 +1087,7 @@ export function SoaCard({ preview }: { preview: SoaPreview }) {
               disabled={!!busy}
               onClick={() => void run(`pdf-${line.qbCompany}`, async () => {
                 await downloadSoaPdf(preview.companyName, line.qbCompany);
-                logActivity('chat_soa_pdf', { companyName: preview.companyName, qbCompany: line.qbCompany });
+                logActivity('chat_soa_pdf', { companyName: preview.companyName, qbCompany: line.qbCompany, conversationId });
                 setDone(`${line.qbCompany} 的 SOA PDF 已下载。`);
               })}
               style={{
@@ -1081,7 +1104,7 @@ export function SoaCard({ preview }: { preview: SoaPreview }) {
               disabled={!!busy}
               onClick={() => void run(`mail-${line.qbCompany}`, async () => {
                 const built = await buildSoaDraft(preview.companyName, line.qbCompany, actor?.me ?? null, actor?.sender ?? null);
-                logActivity('chat_soa_draft', { companyName: preview.companyName, qbCompany: line.qbCompany });
+                logActivity('chat_soa_draft', { companyName: preview.companyName, qbCompany: line.qbCompany, conversationId });
                 setDraft(built);
               })}
               style={{
@@ -1201,7 +1224,7 @@ function BillingDraftsModal({ companyName, cycleFye, onClose }: { companyName: s
 // here), then the button creates the real campaign draft and opens the
 // SAME OutlookStyleSendModal both Campaign Centre and the Billing page
 // open. The send itself is the user's click inside that window.
-export function EmailDraftCard({ preview }: { preview: EmailDraftPreview }) {
+export function EmailDraftCard({ preview, conversationId }: { preview: EmailDraftPreview; conversationId?: number | null }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -1227,7 +1250,7 @@ export function EmailDraftCard({ preview }: { preview: EmailDraftPreview }) {
         me: actor?.me ?? null,
         sender: actor?.sender ?? null,
       });
-      logActivity('chat_email_draft', { companyName: preview.companyName, type: preview.type });
+      logActivity('chat_email_draft', { companyName: preview.companyName, type: preview.type, conversationId });
       setDraft(built);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -1320,7 +1343,7 @@ export function EmailDraftCard({ preview }: { preview: EmailDraftPreview }) {
 // reads the result. So the card shows the automatic judgement, the current
 // override and the resulting effective value separately, and repeats that
 // warning in the confirm step — a wrong toggle here is not self-healing.
-export function CompanyUpdateCard({ preview, onDone }: { preview: CompanyUpdatePreview; onDone: (summary: string) => void }) {
+export function CompanyUpdateCard({ preview, onDone, conversationId }: { preview: CompanyUpdatePreview; onDone: (summary: string) => void; conversationId?: number | null }) {
   const [state, setState] = useState<'idle' | 'confirming' | 'saving' | 'done' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
@@ -1355,7 +1378,7 @@ export function CompanyUpdateCard({ preview, onDone }: { preview: CompanyUpdateP
         return;
       }
       if (!res.ok) { setMessage(json.error || `Request failed (${res.status})`); setState('error'); return; }
-      logActivity('chat_company_update', { companyName: preview.companyName, field: preview.field });
+      logActivity('chat_company_update', { companyName: preview.companyName, field: preview.field, conversationId });
       setState('done');
       onDone(`已把 ${preview.companyName} 的${preview.fieldLabel}改为：${preview.proposedDisplay}`);
     } catch (err) {
@@ -1479,7 +1502,7 @@ function TaoBuilderModal({ company, onClose }: { company: TaoCompanyRow; onClose
   );
 }
 
-export function TaoBillingCard({ preview }: { preview: TaoPreview }) {
+export function TaoBillingCard({ preview, conversationId }: { preview: TaoPreview; conversationId?: number | null }) {
   const [open, setOpen] = useState(false);
   const money = (n: number | null | undefined) =>
     n === null || n === undefined ? '—' : `S$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -1539,7 +1562,13 @@ export function TaoBillingCard({ preview }: { preview: TaoPreview }) {
       <div style={{ padding: '10px 14px', borderTop: '1px solid #eef2f7' }}>
         <button
           type="button"
-          onClick={() => setOpen(true)}
+          onClick={() => {
+            // Same caveat as InvoiceDraftCard's own open-tag above — marks
+            // the builder was opened from a chat suggestion, not that a
+            // real TAO invoice was actually generated (see INV-AI-004).
+            logActivity('chat_tao_builder_opened', { companyName: preview.companyName, conversationId });
+            setOpen(true);
+          }}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,

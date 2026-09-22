@@ -2311,6 +2311,54 @@ again.
 
 ## AI Assistant / chatbot (INV-AI)
 
+- **INV-AI-005** — A chat-confirmed write and the SAME business action done
+  manually from its own real page must never share one `logActivity()`
+  `event_type` string — doing so makes them permanently indistinguishable in
+  `user_activity_events`/Activity Insights, which is exactly the "AI
+  proposed this vs. a human just did it normally" distinction this table
+  exists to be able to answer. Found 2026-09-22 (Vincent's own "AI Agent/My
+  Tasks 少一些东西" review, item "AI建议 vs 人工确认没有审计层"):
+  `components/assistant/ChatCards.tsx`'s `LateFilingResolveCard` and
+  `app/late-filing/page.tsx`'s own manual `resolve()` both logged the
+  identical `'late_filing_resolve'` — every one of Late Filing's other 7
+  chat-confirmed write cards already used a `chat_`-prefixed name distinct
+  from anything a real page logs, so this was the one place the convention
+  had quietly lapsed, not a general problem. Renamed to
+  `'chat_late_filing_resolve'`. Any NEW chat card added later must pick an
+  event_type that cannot collide with what the equivalent real page logs for
+  the same action — grep for the exact string first if unsure.
+
+  Same change (INV-AI-005) added `conversationId` to every chat-confirmed
+  write's `logActivity()` `detail` (both render sites —
+  `app/my-tasks/page.tsx`'s `activeConversationId`,
+  `components/AssistantWidget.tsx`'s `conversationId` — now pass it into
+  every card: `InvoiceDraftCard`, `LateFilingResolveCard`, `InvoiceEditCard`,
+  `PostIncorporateCard`, `ArUpdateCard`, `EmailDraftCard`, `CompanyUpdateCard`,
+  `TaoBillingCard`, `SoaCard`, `ListExportCard`), and closed 2 real gaps
+  where a chat-confirmed write logged NOTHING at all —
+  `InvoiceEditCard`/`preview_invoice_edit` (`PATCH /api/quickbooks/update-
+  invoice`) and `PostIncorporateCard`/`preview_post_incorporate` (`POST
+  /api/post-incorporate/generate`) previously had no `logActivity` call
+  whatsoever, so a chat-confirmed edit or a chat-confirmed Post Incorporate
+  generation was invisible to Activity Insights entirely, not just
+  unlabeled. `user_activity_events.detail` is free-form JSONB
+  (`app/api/activity/log/route.ts`), so this needed no migration.
+
+  **Deliberately NOT covered by this same change**: `InvoiceDraftCard`
+  (real QuickBooks invoice creation) and `TaoBillingCard` (real TAO invoice
+  creation) don't have a self-contained confirm handler to tag at all — both
+  open the SAME shared, reused editor modal
+  (`BillingDraftsModal`/`TaoBuilderModal`) the real Billing Drafts/TAO pages
+  use for effectively 100% of manual invoicing, which has no chat-origin
+  awareness and no success callback to hook. What this change adds for
+  those two is only `chat_invoice_draft_opened`/`chat_tao_builder_opened` —
+  proof the AI's suggestion was OPENED for review, not proof a real invoice
+  was actually generated from it. Making the real generate-success event
+  itself distinguishable would mean threading an origin flag into that
+  shared, real-money modal — deliberately deferred as its own careful
+  change rather than folded in here, given the blast radius (every manual
+  invoice too) of touching that specific code path.
+
 - **INV-AI-004** — The reply-scanning safety-net guards (INV-DATA-022/023,
   `mentionsOutstandingBalance`/`claimsPermissionDenied`/
   `claimsNoSoaDownloadTool`, plus the new generic backstop below) must run

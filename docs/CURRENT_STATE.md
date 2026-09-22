@@ -398,9 +398,21 @@ next real My Tasks/AssistantWidget chat session is the first real test.
      reminds a staff member who simply never opens the page that day. No
      email digest, WeChat Work, or Telegram push exists. Needs Vincent to
      decide a channel before this can be built.
-  4. **No audit trail distinguishing "AI proposed this draft" from "human
-     clicked Confirm"** — already listed below under the 2026-09-09
-     agentic-invoicing entry as its own known follow-up gap; still open.
+  4. **Mostly done, 2026-09-22 — see INV-AI-005.** Every chat-confirmed
+     write now logs a `chat_`-prefixed, page-distinct `logActivity()` event
+     carrying the real `conversationId` (fixed a real name COLLISION —
+     `LateFilingResolveCard` and the Late Filing page's own manual resolve
+     both used to log identical `'late_filing_resolve'` — and closed 2 real
+     silent gaps, `InvoiceEditCard`/`PostIncorporateCard`, which logged
+     nothing at all before). **Still explicitly NOT covered**: real
+     QuickBooks invoice creation (`InvoiceDraftCard`) and real TAO invoice
+     creation (`TaoBillingCard`) only get an "opened from chat" signal, not
+     a "really generated, and it was chat-originated" one — both route
+     through the same shared, reused, real-money editor modal
+     (`BillingDraftsModal`/`TaoBuilderModal`) every MANUAL invoice also
+     goes through, and giving the real generate-success event a chat-origin
+     tag means threading that into this shared code path carefully, as its
+     own change — deliberately deferred, not silently skipped.
   5. **`search_documents`/NAS document search is a dead entry point** —
      already covered under Active issues above (migration not run, secret
      not set, indexing script not written, machine not designated).
@@ -480,11 +492,14 @@ next real My Tasks/AssistantWidget chat session is the first real test.
   gaps, not yet started: (1) ~~none of the 4 preview cards' structured data
   is persisted to `ai_messages`~~ — fixed 2026-09-09, see the dated entry
   above (`preview_data` column, needs Vincent to run the migration SQL
-  before it takes effect in production); (2) no dedicated audit trail
-  distinguishing "AI proposed this draft" from "human clicked confirm" —
-  today it's implicit (whatever `/api/quickbooks/create-invoice` itself
-  already logs to `generated_invoices.created_by_email`, same as a manual
-  Billing Drafts submission, nothing chat-specific).
+  before it takes effect in production); (2) ~~no dedicated audit trail
+  distinguishing "AI proposed this draft" from "human clicked confirm"~~ —
+  mostly fixed 2026-09-22, see INV-AI-005 and the Pending improvements entry
+  below; for THIS specific card it's still only "opened from chat", not
+  "really generated" — see INV-AI-005's own note on why. (This paragraph
+  also predates `GenerateConfirmModal`'s later removal — `InvoiceDraftCard`
+  now opens the real `BillingDraftsModal` editor instead of its own simplified
+  confirm dialog; not rewritten here to stay in scope.)
 - **Investigate why `ai_conversations`/`ai_messages` have zero real rows**
   despite real successful chat exchanges (Vincent's own screenshots,
   2026-09-08) — the DB write path itself is confirmed working (isolated

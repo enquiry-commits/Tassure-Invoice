@@ -1703,6 +1703,46 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Assistant: chat-confirmed writes get a real audit trail (INV-AI-005),
+  2nd item from Vincent's "AI Agent/My Tasks 少一些东西" review queue.**
+  Every chat-confirmed write card (`components/assistant/ChatCards.tsx`)
+  now passes `conversationId` into its `logActivity()` call, wired from both
+  render sites (`app/my-tasks/page.tsx`'s `activeConversationId`,
+  `components/AssistantWidget.tsx`'s `conversationId`) — `InvoiceDraftCard`,
+  `LateFilingResolveCard`, `InvoiceEditCard`, `PostIncorporateCard`,
+  `ArUpdateCard`, `EmailDraftCard`, `CompanyUpdateCard`, `TaoBillingCard`,
+  `SoaCard`, `ListExportCard`. `user_activity_events.detail` is free-form
+  JSONB, so no migration was needed.
+  - **A real name COLLISION found while doing this**: `LateFilingResolveCard`
+    and `app/late-filing/page.tsx`'s own manual `resolve()` both logged the
+    identical `event_type: 'late_filing_resolve'` — indistinguishable in
+    Activity Insights/`user_activity_events`, the opposite of what this
+    whole change was for. Every other chat card already used a
+    `chat_`-prefixed name; this was the one place the convention had
+    lapsed. Renamed to `'chat_late_filing_resolve'`.
+  - **2 real silent gaps closed**: `InvoiceEditCard`
+    (`PATCH /api/quickbooks/update-invoice`) and `PostIncorporateCard`
+    (`POST /api/post-incorporate/generate`) had NO `logActivity` call at
+    all before this — a chat-confirmed invoice edit or Post Incorporate
+    generation left zero trace in Activity Insights, not just an unlabeled
+    one.
+  - **Deliberately NOT covered, and said so rather than silently skipped**:
+    `InvoiceDraftCard` (real QuickBooks invoice creation) and
+    `TaoBillingCard` (real TAO invoice creation) don't have their own
+    confirm handler — both open the exact same shared, reused editor modal
+    (`BillingDraftsModal`/`TaoBuilderModal`) real manual invoicing uses, with
+    no chat-origin awareness and no success callback to hook. This change
+    only adds `chat_invoice_draft_opened`/`chat_tao_builder_opened` — proof
+    the AI's suggestion was opened for review, not proof a real invoice was
+    generated from it. Tagging the real generate-success event itself would
+    mean threading an origin flag into that shared real-money modal —
+    deliberately left as its own careful follow-up given the blast radius
+    (every manual invoice too), not folded into this change.
+  - `npx tsc --noEmit` and `npm run build` both clean. `docs/INVARIANTS.md`
+    INV-AI-005 and `docs/CURRENT_STATE.md`'s Pending improvements queue
+    updated (item 4 of Vincent's review, marked mostly done with the same
+    caveat above).
+
 - **Assistant: generalized the "false capability denial" reply guard, and
   fixed a real gap it exposed (INV-AI-004).** Prompted by Vincent's own
   review of the AI Agent/My Tasks area — "我还是觉得少一些东西" — one

@@ -792,45 +792,50 @@ export default function MyTasksPage() {
                               {message.invoicePreview && (
                                 <InvoiceDraftCard
                                   preview={message.invoicePreview}
+                                  conversationId={activeConversationId}
                                   onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
                                 />
                               )}
                               {message.lateFilingPreview && (
                                 <LateFilingResolveCard
                                   preview={message.lateFilingPreview}
+                                  conversationId={activeConversationId}
                                   onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
                                 />
                               )}
                               {message.taoPreview && (
-                                <TaoBillingCard preview={message.taoPreview} />
+                                <TaoBillingCard preview={message.taoPreview} conversationId={activeConversationId} />
                               )}
                               {message.companyUpdatePreview && (
-                                <CompanyUpdateCard preview={message.companyUpdatePreview} onDone={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
+                                <CompanyUpdateCard preview={message.companyUpdatePreview} conversationId={activeConversationId} onDone={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
                               )}
                               {message.emailDraftPreview && (
-                                <EmailDraftCard preview={message.emailDraftPreview} />
+                                <EmailDraftCard preview={message.emailDraftPreview} conversationId={activeConversationId} />
                               )}
                               {message.soaPreview && (
-                                <SoaCard preview={message.soaPreview} />
+                                <SoaCard preview={message.soaPreview} conversationId={activeConversationId} />
                               )}
                               {message.exportOffer && (
-                                <ListExportCard offer={message.exportOffer} />
+                                <ListExportCard offer={message.exportOffer} conversationId={activeConversationId} />
                               )}
                               {message.arUpdatePreview && (
                                 <ArUpdateCard
                                   preview={message.arUpdatePreview}
+                                  conversationId={activeConversationId}
                                   onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
                                 />
                               )}
                               {message.invoiceEditPreview && (
                                 <InvoiceEditCard
                                   preview={message.invoiceEditPreview}
+                                  conversationId={activeConversationId}
                                   onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
                                 />
                               )}
                               {message.postIncorporatePreview && (
                                 <PostIncorporateCard
                                   preview={message.postIncorporatePreview}
+                                  conversationId={activeConversationId}
                                   onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])}
                                 />
                               )}

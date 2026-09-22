@@ -524,34 +524,34 @@ export default function AssistantWidget() {
                     ? <>
                         <RichText text={message.content} onNav={nav} />
                         {message.invoicePreview && (
-                          <InvoiceDraftCard preview={message.invoicePreview} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
+                          <InvoiceDraftCard preview={message.invoicePreview} conversationId={conversationId} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
                         )}
                         {message.lateFilingPreview && (
-                          <LateFilingResolveCard preview={message.lateFilingPreview} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
+                          <LateFilingResolveCard preview={message.lateFilingPreview} conversationId={conversationId} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
                         )}
                         {message.taoPreview && (
-                          <TaoBillingCard preview={message.taoPreview} />
+                          <TaoBillingCard preview={message.taoPreview} conversationId={conversationId} />
                         )}
                         {message.companyUpdatePreview && (
-                          <CompanyUpdateCard preview={message.companyUpdatePreview} onDone={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
+                          <CompanyUpdateCard preview={message.companyUpdatePreview} conversationId={conversationId} onDone={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
                         )}
                         {message.emailDraftPreview && (
-                          <EmailDraftCard preview={message.emailDraftPreview} />
+                          <EmailDraftCard preview={message.emailDraftPreview} conversationId={conversationId} />
                         )}
                         {message.soaPreview && (
-                          <SoaCard preview={message.soaPreview} />
+                          <SoaCard preview={message.soaPreview} conversationId={conversationId} />
                         )}
                         {message.exportOffer && (
-                          <ListExportCard offer={message.exportOffer} />
+                          <ListExportCard offer={message.exportOffer} conversationId={conversationId} />
                         )}
                         {message.arUpdatePreview && (
-                          <ArUpdateCard preview={message.arUpdatePreview} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
+                          <ArUpdateCard preview={message.arUpdatePreview} conversationId={conversationId} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
                         )}
                         {message.invoiceEditPreview && (
-                          <InvoiceEditCard preview={message.invoiceEditPreview} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
+                          <InvoiceEditCard preview={message.invoiceEditPreview} conversationId={conversationId} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
                         )}
                         {message.postIncorporatePreview && (
-                          <PostIncorporateCard preview={message.postIncorporatePreview} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
+                          <PostIncorporateCard preview={message.postIncorporatePreview} conversationId={conversationId} onGenerated={summary => setChatMessages(current => [...current, { role: 'assistant', content: summary }])} />
                         )}
                       </>
                     : <>
