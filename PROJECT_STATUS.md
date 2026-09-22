@@ -1765,6 +1765,58 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Reports V3 P0: real comparable-period engine, Missing≠Zero fix,
+  Revenue Performance card, Customer Source data-quality card
+  (INV-DATA-059).** Vincent's "Reports V3 — Management Analytics Upgrade
+  Specification" — audited first (`docs/MANAGEMENT_ANALYST_GAP_ANALYSIS.md`
+  §0), found the spec's own headline failure mode already live in
+  production, fixed it same-session rather than just documenting it.
+  - New `lib/reporting-period.ts`: `buildReportingContext()` resolves 8
+    period types (current/previous month, quarter, YTD, TTM, custom) and
+    validates comparability by day-count match before anything downstream
+    can treat two periods as comparable. 12/12 own diagnostic cases passing
+    (incl. the spec's own literal example: 1 Jan–22 Sep 2026 vs 1 Jan–22
+    Sep 2025 is comparable; vs full 2025 is not).
+  - `lib/reports-data.ts`'s new `computeComparableRevenue()` replaces
+    `lib/reports-narrative.ts`'s old "compare the trend's own last two
+    year-buckets" YoY calculation (2026 partial vs 2025 full, exactly the
+    spec's named bug) — verified against all 8,017 real `quickbooks_
+    invoices` rows: the OLD calculation would have shown revenue **down
+    ~14.4%**, matching the spec's own bad-output example almost exactly;
+    the REAL comparable figure shows revenue **up 16.2%** — a complete
+    reversal. Surfaced both to the AI narrative (`comparableRevenueYoy`,
+    with a hard system-prompt rule that it's the ONLY period-over-period
+    number the model may cite) and on screen (new `RevenuePerformanceCard`,
+    `app/reports/page.tsx`, matching the spec's §13 mockup).
+  - "Missing Data Is Not Zero": `computeRevenueTrend()` now returns `null`
+    for a year with zero QuickBooks data (2022/2023 — real data only
+    starts 2024-01-02) instead of `0`; `components/dashboard/Charts.tsx`'s
+    shared `Pt`/`LineSeries` types widened to `number | null` app-wide
+    (Dashboard + Reports + Activity Insights all share this file) —
+    `VBars` skips the bar entirely for null, `LineChart` lets Recharts
+    break the line (no `connectNulls`) instead of drawing through a
+    fabricated 0.
+  - Customer Source donut (real coverage: 0%, all 911 active clients)
+    replaced with an honest `CustomerSourceQualityCard` per spec §15/§31
+    ("does this chart communicate useful information?").
+  - `npx tsc --noEmit`, `npm run lint` (changed files), `npm run build` all
+    clean. Full details, including the exact before/after numbers: INV-
+    DATA-059. **Not yet visually verified against a real browser login**
+    (same limitation as the earlier Recharts work) — Vincent should check
+    `/reports` directly.
+  - **Explicitly NOT attempted in this pass** (P1/P2 per the spec's own
+    phasing, and its own "do not implement everything at once" rule):
+    tabs restructuring (Executive/Clients/Revenue/Operations/Explore),
+    Management Signal Cards, the AI Analysis OBSERVED/DRIVER/NOT-YET-
+    PROVEN/NEXT-ACTION restructuring, the Data Quality module (built one
+    card of it, not the full multi-metric version), Service Eligibility/
+    Attach Rate/Opportunity engine (needs Vincent's per-service business
+    rules — flagged in the earlier gap analysis, still true here), Weighted
+    Staff Workload, the Analysis Builder upgrade, global period-control UI
+    (the ENGINE exists now; no `[Period ▼] [Compare With ▼]` selector was
+    built — Revenue Performance currently always shows YTD-vs-previous-YTD,
+    not yet user-selectable).
+
 - **Dashboard/Reports charts rebuilt on Recharts, dashboard-design skill
   added.** Vincent's "Professional Dashboard UI & Data Visualization
   Upgrade Package" spec. Investigated the real stack first (no Tailwind/

@@ -13,6 +13,8 @@
 // to reach for the fuzzy-match machinery docs/FEATURE_MAP.md flags as
 // high-risk shared logic, and no risk of misattributing one company's
 // join_date onto a different company with a similar name.
+import { buildReportingContext, pctChange } from './reporting-period';
+
 export type ReportsCompanyRow = {
   id: number;
   companyName: string;
@@ -77,6 +79,59 @@ export const REPORTS_MASTER_LIST_SELECT = 'roc_no, join_date';
 // Reports page itself shows, rather than a second, divergent copy. Needs
 // `quickbooks_invoices.select('txn_date, total_amt')`, full table (no
 // filter) — the same fetch app/api/reports/route.ts already does.
+// Reports V3, P0 #1/#2 — Vincent's spec, §5/§13. The real fix for
+// docs/MANAGEMENT_ANALYST_GAP_ANALYSIS.md's §0 bug: computeRevenueTrend()
+// above buckets by fixed calendar year, so its own last-two-buckets
+// comparison was 2026's partial year against 2025's full year, labeled
+// "YoY". This function instead sums real invoices within two dates ranges
+// resolved by lib/reporting-period.ts's buildReportingContext() — by
+// construction (ytd vs previous_ytd is the SAME day-count, both genuinely
+// partial-through-the-year), so the comparison is always safe by the time
+// it reaches a reader, and `comparable`/`comparabilityReason` are exposed
+// so nothing downstream can accidentally present it as a real YoY number
+// if that guarantee is ever loosened later.
+export type ComparableRevenue = {
+  periodLabel: string;
+  comparisonLabel: string | null;
+  currentRevenue: number;
+  currentInvoiceCount: number;
+  priorRevenue: number | null;
+  priorInvoiceCount: number | null;
+  revenuePctChange: number | null;
+  invoiceCountPctChange: number | null;
+  comparable: boolean;
+  comparabilityReason: string;
+};
+
+export function computeComparableRevenue(qbInvoices: Record<string, unknown>[], asOfDate: string): ComparableRevenue {
+  const ctx = buildReportingContext({ asOfDate, periodType: 'ytd' });
+  const sum = (range: { start: string; end: string }) => {
+    let revenue = 0;
+    let invoiceCount = 0;
+    for (const inv of qbInvoices) {
+      const raw = typeof inv.txn_date === 'string' ? inv.txn_date.slice(0, 10) : null;
+      if (!raw || raw < range.start || raw > range.end) continue;
+      revenue += Number(inv.total_amt) || 0;
+      invoiceCount += 1;
+    }
+    return { revenue, invoiceCount };
+  };
+  const current = sum(ctx.period);
+  const prior = ctx.comparison ? sum(ctx.comparison) : null;
+  return {
+    periodLabel: `${ctx.period.start} to ${ctx.period.end}`,
+    comparisonLabel: ctx.comparison ? `${ctx.comparison.start} to ${ctx.comparison.end}` : null,
+    currentRevenue: current.revenue,
+    currentInvoiceCount: current.invoiceCount,
+    priorRevenue: prior?.revenue ?? null,
+    priorInvoiceCount: prior?.invoiceCount ?? null,
+    revenuePctChange: prior ? pctChange(current.revenue, prior.revenue) : null,
+    invoiceCountPctChange: prior ? pctChange(current.invoiceCount, prior.invoiceCount) : null,
+    comparable: ctx.comparable,
+    comparabilityReason: ctx.comparabilityReason,
+  };
+}
+
 export function computeRevenueTrend(qbInvoices: Record<string, unknown>[], years: number[]) {
   const invoiceCountByYear: Record<number, number> = {};
   const revenueByYear: Record<number, number> = {};
@@ -87,9 +142,16 @@ export function computeRevenueTrend(qbInvoices: Record<string, unknown>[], years
     invoiceCountByYear[y] = (invoiceCountByYear[y] ?? 0) + 1;
     revenueByYear[y] = (revenueByYear[y] ?? 0) + (Number(inv.total_amt) || 0);
   }
+  // Reports V3, "Missing Data Is Not Zero" — a year that never appears in
+  // invoiceCountByYear (the loop above only ever creates a key when it
+  // actually sees an invoice) means no QuickBooks data exists for that
+  // year at all, which is a DIFFERENT fact than "zero invoices that year"
+  // and must render as a gap, never a 0 bar/point. Real example this
+  // fixes: quickbooks_invoices has no rows before 2024-01-02, so a 5-year
+  // trend reaching back to 2022 used to draw a flat 0 line for 2022/2023.
   return {
-    invoiceCountTrend: years.map(y => ({ label: String(y), value: invoiceCountByYear[y] ?? 0 })),
-    revenueTrendThousands: years.map(y => ({ label: String(y), value: Math.round((revenueByYear[y] ?? 0) / 1000) })),
+    invoiceCountTrend: years.map(y => ({ label: String(y), value: y in invoiceCountByYear ? invoiceCountByYear[y] : null })),
+    revenueTrendThousands: years.map(y => ({ label: String(y), value: y in revenueByYear ? Math.round(revenueByYear[y] / 1000) : null })),
   };
 }
 

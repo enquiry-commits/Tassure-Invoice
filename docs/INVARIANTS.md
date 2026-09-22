@@ -2355,6 +2355,65 @@ again.
   "are you sure" modal — every existing caller passing only `label`/
   `onCancel`/`onConfirm` is unaffected. *(source: 2026-09-22, Vincent: "假设
   我后面发现加错公司了怎么办...这个新加的公司后面发现无效".)*
+- **INV-DATA-059** — Any period-over-period figure ("YoY", "growth", "vs
+  last year") shown anywhere in this app — on screen or fed to an AI
+  narrative — must be built from `lib/reporting-period.ts`'s
+  `buildReportingContext()`, never from comparing two arbitrary values a
+  caller happens to have lying around. Found 2026-09-22 (Vincent's "Reports
+  V3 — Management Analytics Upgrade Specification"): `lib/reports-
+  narrative.ts`'s AI analysis card (shipped THE SAME DAY, hours earlier)
+  derived its own "YoY" by comparing a 5-year trend series' own last two
+  year-buckets — the current year's bucket is only ever partial-through-
+  the-year (2026 = Jan-Sep so far) while every prior bucket is a full 12
+  months, so this was silently comparing 2026 YTD against all of 2025 and
+  calling the result YoY, the EXACT failure mode the same spec calls out by
+  name as its first example. Confirmed with real data, not a hypothetical:
+  the old (buggy) calculation would have reported revenue **down ~14.4%**
+  (2026's partial S$3.29M bucket vs 2025's full S$3.84M bucket) — almost
+  exactly matching the spec's own illustrative bad-output number
+  ("Revenue declined 14.4% YoY"). The REAL comparable figure (2026-01-01
+  to 2026-09-22 vs the identical date range in 2025) shows revenue
+  genuinely **up 16.2%** — a complete reversal of the conclusion a reader
+  would have drawn from the old chart. `lib/reports-data.ts`'s
+  `computeComparableRevenue()` is now the one place this gets computed,
+  surfaced both on-screen (`RevenuePerformanceCard`, `app/reports/
+  page.tsx`) and to the narrative prompt (`comparableRevenueYoy` in
+  `lib/reports-narrative.ts`'s evidence object) — never computed a third
+  way anywhere else. `buildReportingContext()`'s comparability check is a
+  pure day-count match between period and comparison; when it fails,
+  `comparable: false` and a human-readable `comparabilityReason` are
+  returned, and every consumer must check `comparable` before presenting
+  a percentage — `RevenuePerformanceCard` shows "Comparison unavailable"
+  instead, and the narrative's own system prompt now says explicitly it
+  may only ever cite `comparableRevenueYoy`'s numbers, never recompute a
+  percentage itself from the raw multi-year `revenueByYear` series (which
+  stays in the prompt only to describe overall SHAPE, e.g. "trending up
+  across years").
+
+  Same change fixed "Missing Data Is Not Zero" (the same spec, its own
+  named rule) for the multi-year trend charts: `quickbooks_invoices` has
+  zero rows before 2024-01-02, so the 5-year Revenue/Invoice Volume trend
+  (reaching back to 2022) was drawing a flat 0 line for 2022/2023 — a real,
+  live instance of exactly the bug the spec's own literal example
+  describes. `computeRevenueTrend()` now returns `value: null` for a year
+  that never appears in its own aggregation (proof no QuickBooks data
+  exists for that year at all — a different fact than "zero invoices"),
+  and `components/dashboard/Charts.tsx`'s shared `Pt`/`LineSeries` types
+  were widened to `number | null` app-wide (Dashboard, Reports, Activity
+  Insights all share this file) — `VBars` renders no bar at all for a null
+  point (never a phantom 0-height one) and `LineChart` lets Recharts break
+  the line at that point (`connectNulls` is not set) instead of drawing
+  through a fabricated 0. `Donut`/`HBars` (composition/ranking, no time-
+  series "missing" concept) filter null entries out entirely rather than
+  rendering them. Verified against real data before shipping: `npx tsx`
+  (with a local no-op `server-only` shim, since that package is a
+  Next.js-only virtual module with no real npm entry — removed again after
+  testing, never committed) fetched all 8,017 real `quickbooks_invoices`
+  rows and ran both the old and new calculations side by side, producing
+  the exact before/after numbers quoted above. `npx tsc --noEmit`, `npm
+  run lint` on the changed files, and `npm run build` all clean. See
+  `docs/MANAGEMENT_ANALYST_GAP_ANALYSIS.md` §0 for the original audit that
+  found this bug, written hours before it was fixed.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

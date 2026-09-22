@@ -21,7 +21,14 @@ import {
 } from 'recharts';
 import { formatCompactNumber } from '@/lib/chart-format';
 
-type Pt = { label: string; value: number; color?: string };
+// value: null means "no data collected for this point" (Reports V3 spec,
+// "Missing Data Is Not Zero") — genuinely different from a real 0, and must
+// never be drawn as one. Real example this fixes: quickbooks_invoices has
+// no rows before 2024-01-02, so a 5-year trend chart reaching back to 2022
+// was drawing a flat 0 line for 2022/2023 instead of a gap with no data
+// collected — a reader has no way to tell "zero invoices that year" apart
+// from "we don't have data for that year" from a 0 alone.
+type Pt = { label: string; value: number | null; color?: string };
 
 function EmptyState({ height }: { height: number }) {
   return (
@@ -35,7 +42,7 @@ function EmptyState({ height }: { height: number }) {
 // name, Formatted value (dashboard-design skill's own Tooltip spec).
 function ChartTooltip({ active, payload, label, valueFormatter }: {
   active?: boolean; label?: string;
-  payload?: { name?: string; value?: number; color?: string; payload?: Pt }[];
+  payload?: { name?: string; value?: number | null; color?: string; payload?: Pt }[];
   valueFormatter: (v: number) => string;
 }) {
   if (!active || !payload?.length) return null;
@@ -46,7 +53,9 @@ function ChartTooltip({ active, payload, label, valueFormatter }: {
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569' }}>
           {p.color && <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color, flexShrink: 0 }} />}
           <span>{p.name ?? p.payload?.label}</span>
-          <span style={{ marginLeft: 'auto', paddingLeft: 10, fontWeight: 700, color: '#1e3a5f' }}>{valueFormatter(p.value ?? 0)}</span>
+          <span style={{ marginLeft: 'auto', paddingLeft: 10, fontWeight: 700, color: p.value == null ? '#94a3b8' : '#1e3a5f' }}>
+            {p.value == null ? 'No data' : valueFormatter(p.value)}
+          </span>
         </div>
       ))}
     </div>
@@ -65,8 +74,13 @@ export function VBars({ data, color = '#0f766e', height = 220, valueFormatter = 
         <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={{ stroke: '#e2e8f0' }} />
         <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} width={44} tickFormatter={formatCompactNumber} allowDecimals={false} />
         <Tooltip cursor={{ fill: '#f8fafc' }} content={<ChartTooltip valueFormatter={valueFormatter} />} />
+        {/* A null value renders as no bar at all (height 0, invisible) —
+            correct: it must never look like a real zero-height bar. The
+            X-axis label for that slot is still shown, so the gap itself
+            (rather than a phantom flat bar) is what communicates "no data
+            collected here", per the "Missing Data Is Not Zero" rule. */}
         <Bar dataKey="value" radius={[5, 5, 0, 0]} maxBarSize={44}>
-          {data.map((d, i) => <Cell key={i} fill={d.color ?? color} />)}
+          {data.map((d, i) => <Cell key={i} fill={d.value == null ? 'transparent' : (d.color ?? color)} />)}
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -74,7 +88,11 @@ export function VBars({ data, color = '#0f766e', height = 220, valueFormatter = 
 }
 
 // ── Donut chart with legend ──────────────────────────────────────────────
-export function Donut({ segments, size = 168, thickness = 26 }: { segments: Pt[]; size?: number; thickness?: number }) {
+export function Donut({ segments: rawSegments, size = 168, thickness = 26 }: { segments: Pt[]; size?: number; thickness?: number }) {
+  // Composition charts have no "missing" segment concept the way a time
+  // series does — a null-value category is simply excluded, not shown as
+  // a 0-width slice.
+  const segments = rawSegments.filter((s): s is Pt & { value: number } => s.value != null);
   const total = segments.reduce((s, x) => s + x.value, 0);
   if (!total) return <EmptyState height={size} />;
   const outerR = size / 2;
@@ -110,14 +128,17 @@ export function Donut({ segments, size = 168, thickness = 26 }: { segments: Pt[]
 }
 
 // ── Multi-series line chart ──────────────────────────────────────────────
-export type LineSeries = { label: string; color: string; data: number[] };
+// A data point of `null` breaks the line at that point (Recharts' default
+// — connectNulls is NOT set, so it never draws through a gap) instead of
+// coercing to 0, same "Missing Data Is Not Zero" rule as VBars above.
+export type LineSeries = { label: string; color: string; data: (number | null)[] };
 export function LineChart({ labels, series, height = 260, valueFormatter = formatCompactNumber }: {
   labels: string[]; series: LineSeries[]; height?: number; valueFormatter?: (v: number) => string;
 }) {
   if (!labels.length || !series.some(s => s.data.length)) return <EmptyState height={height} />;
   const rows = labels.map((label, i) => {
-    const row: Record<string, string | number> = { label };
-    for (const s of series) row[s.label] = s.data[i] ?? 0;
+    const row: Record<string, string | number | null> = { label };
+    for (const s of series) row[s.label] = s.data[i] ?? null;
     return row;
   });
   // Small point count (this app's charts are always yearly — typically
@@ -152,9 +173,12 @@ export function LineChart({ labels, series, height = 260, valueFormatter = forma
 }
 
 // ── Horizontal bars (rankings, long category names) ──────────────────────
-export function HBars({ data, accent = '#1d4ed8', labelWidth = 130, valueFormatter = formatCompactNumber }: {
+export function HBars({ data: rawData, accent = '#1d4ed8', labelWidth = 130, valueFormatter = formatCompactNumber }: {
   data: Pt[]; accent?: string; labelWidth?: number; valueFormatter?: (v: number) => string;
 }) {
+  // Same reasoning as Donut above — a ranking has no meaningful "missing"
+  // row to draw.
+  const data = rawData.filter((d): d is Pt & { value: number } => d.value != null);
   if (!data.length) return <EmptyState height={40} />;
   const height = Math.max(60, data.length * 34);
   return (

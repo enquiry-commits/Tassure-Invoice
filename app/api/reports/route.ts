@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
 import { customerSourceLabel } from '@/lib/customer-source';
-import { buildReportsCompanyRows, computeRevenueTrend, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT } from '@/lib/reports-data';
+import { buildReportsCompanyRows, computeRevenueTrend, computeComparableRevenue, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT, type ComparableRevenue } from '@/lib/reports-data';
 import { pageAll } from '@/lib/page-all';
 import { normalize } from '@/lib/company-name';
 import { REPORT_COLORS, REPORT_PALETTE } from '@/lib/chart-colors';
@@ -45,7 +45,10 @@ import { REPORT_COLORS, REPORT_PALETTE } from '@/lib/chart-colors';
 export const preferredRegion = 'sin1';
 
 type Row = Record<string, unknown>;
-type Pt = { label: string; value: number; color?: string };
+// value: null means no data exists for this point (Reports V3, "Missing
+// Data Is Not Zero") — kept in sync with components/dashboard/Charts.tsx's
+// own identical widening.
+type Pt = { label: string; value: number | null; color?: string };
 type FlowRow = { companyName: string; uen: string | null };
 
 // Exported shape of computeReportsData()'s return — kept in sync BY HAND
@@ -61,7 +64,7 @@ export interface ReportsData {
   serviceMix: Pt[];
   sourceDonut: Pt[];
   flow: { years: string[]; newClientsTrend: Pt[]; churnedTrend: Pt[]; newByYearRows: Record<string, FlowRow[]>; churnedByYearRows: Record<string, FlowRow[]> };
-  revenue: { years: string[]; invoiceCountTrend: Pt[]; revenueTrendThousands: Pt[] };
+  revenue: { years: string[]; invoiceCountTrend: Pt[]; revenueTrendThousands: Pt[]; comparableYoy: ComparableRevenue };
   picWorkload: Pt[];
   companyRows: ReturnType<typeof buildReportsCompanyRows>;
   notes: { clientType: string; flow: string; source: string; revenue: string };
@@ -204,14 +207,30 @@ export async function computeReportsData(): Promise<ReportsData> {
       }
     }
   }
-  const newClientsTrend = years.map(y => ({ label: String(y), value: newByYear[y] ?? 0 }));
-  const churnedTrend = years.map(y => ({ label: String(y), value: churnedByYear[y] ?? 0 }));
+  // Reports V3 §13 — "clearly label 2026 YTD rather than 2026" whenever
+  // the current year genuinely isn't over yet (true every day except real
+  // Dec 31). Presentation-only: relabels the LAST chart point's display
+  // text, never the plain numeric `years` array or newByYearRows/
+  // churnedByYearRows' own dict keys (still real 4-digit years), so
+  // nothing that looks these up by year is affected.
+  const currentYearIsPartial = todaySGT() < `${thisYear}-12-31`;
+  const yearLabel = (y: number) => (currentYearIsPartial && y === thisYear ? `${y} YTD` : String(y));
+  const newClientsTrend = years.map(y => ({ label: yearLabel(y), value: newByYear[y] ?? 0 }));
+  const churnedTrend = years.map(y => ({ label: yearLabel(y), value: churnedByYear[y] ?? 0 }));
 
   // ── Revenue / invoice-volume trend + PIC workload — extracted 2026-09-09
   //    into lib/reports-data.ts (computeRevenueTrend/computePicWorkload) so
   //    a chat-assistant tool can reuse the exact same computation; behavior
   //    here is unchanged. ────────────────────────────────────────────────
-  const { invoiceCountTrend, revenueTrendThousands: revenueTrend } = computeRevenueTrend(qbInvoices, years);
+  const { invoiceCountTrend: rawInvoiceCountTrend, revenueTrendThousands: rawRevenueTrend } = computeRevenueTrend(qbInvoices, years);
+  const invoiceCountTrend = rawInvoiceCountTrend.map(p => ({ ...p, label: yearLabel(Number(p.label)) }));
+  const revenueTrend = rawRevenueTrend.map(p => ({ ...p, label: yearLabel(Number(p.label)) }));
+  // Reports V3 P0 — the real YTD-vs-comparable-prior-year figure
+  // (lib/reporting-period.ts), replacing the old practice of comparing the
+  // trend's own last two year-buckets (2026 partial vs 2025 full) and
+  // calling it YoY. See INV-DATA-057's neighbor entry / docs/
+  // MANAGEMENT_ANALYST_GAP_ANALYSIS.md §0 for the bug this fixes.
+  const comparableYoy = computeComparableRevenue(qbInvoices, todaySGT());
   const picWorkload = computePicWorkload(arRows);
 
   return {
@@ -229,7 +248,7 @@ export async function computeReportsData(): Promise<ReportsData> {
       years: years.map(String), newClientsTrend, churnedTrend,
       newByYearRows: newRowsByYear, churnedByYearRows: churnedRowsByYear,
     },
-    revenue: { years: years.map(String), invoiceCountTrend, revenueTrendThousands: revenueTrend },
+    revenue: { years: years.map(String), invoiceCountTrend, revenueTrendThousands: revenueTrend, comparableYoy },
     picWorkload,
     companyRows,
     notes: {

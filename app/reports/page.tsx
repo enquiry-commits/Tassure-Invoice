@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  BarChart3, Users, UserPlus, UserMinus, TrendingUp, PieChart, Wallet, Compass, Download, X, Sparkles, RefreshCw,
+  BarChart3, Users, UserPlus, UserMinus, TrendingUp, TrendingDown, PieChart, Wallet, Compass, Download, X, Sparkles, RefreshCw, Database,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { Donut, VBars, HBars, LineChart } from '@/components/dashboard/Charts';
@@ -22,7 +22,10 @@ import { formatCompactCurrency, formatCompactNumber } from '@/lib/chart-format';
 // proxy.ts change, no precedent for that here either) backed by a real
 // server-side 403 on the API route itself (app/api/reports/route.ts), so
 // this is a real permission boundary, not just hidden UI.
-type Pt = { label: string; value: number; color?: string };
+// value: null means no data exists for this point (Reports V3, "Missing
+// Data Is Not Zero") — kept in sync with app/api/reports/route.ts's own
+// identical widening.
+type Pt = { label: string; value: number | null; color?: string };
 type CompanyRow = {
   id: number; companyName: string; uen: string | null; companyType: string | null;
   ssicDescription1: string | null; customerSource: string | null; twStatus: string | null;
@@ -31,6 +34,16 @@ type CompanyRow = {
   hasXbrl: boolean | null; hasAccounts: boolean | null; hasTax: boolean | null;
 };
 type FlowRow = { companyName: string; uen: string | null };
+// Page-local copy of lib/reports-data.ts's ComparableRevenue, kept in sync
+// by hand — same convention this file's own ReportsData interface already
+// documents for the server-only route's identical shape.
+type ComparableRevenue = {
+  periodLabel: string; comparisonLabel: string | null;
+  currentRevenue: number; currentInvoiceCount: number;
+  priorRevenue: number | null; priorInvoiceCount: number | null;
+  revenuePctChange: number | null; invoiceCountPctChange: number | null;
+  comparable: boolean; comparabilityReason: string;
+};
 interface ReportsData {
   generatedAt: string;
   kpis: { activeClients: number; newThisYear: number; churnedThisYear: number; netGrowthThisYear: number };
@@ -38,7 +51,7 @@ interface ReportsData {
   serviceMix: Pt[];
   sourceDonut: Pt[];
   flow: { years: string[]; newClientsTrend: Pt[]; churnedTrend: Pt[]; newByYearRows: Record<string, FlowRow[]>; churnedByYearRows: Record<string, FlowRow[]> };
-  revenue: { years: string[]; invoiceCountTrend: Pt[]; revenueTrendThousands: Pt[] };
+  revenue: { years: string[]; invoiceCountTrend: Pt[]; revenueTrendThousands: Pt[]; comparableYoy: ComparableRevenue };
   picWorkload: Pt[];
   companyRows: CompanyRow[];
   notes: { clientType: string; flow: string; source: string; revenue: string };
@@ -65,6 +78,78 @@ function Card({ title, eyebrow, icon, children, note }: {
       {children}
       {note && <p style={{ margin: '14px 0 0', fontSize: 10.5, color: '#94a3b8', lineHeight: 1.5, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>{note}</p>}
     </section>
+  );
+}
+
+// Reports V3 §13 — the real fix for docs/MANAGEMENT_ANALYST_GAP_ANALYSIS.md
+// §0's bug, shown on screen, not just fed to the AI narrative: the old
+// "Revenue by Year" chart compared 2026's partial bucket against 2025's
+// FULL year and any reader doing the mental subtraction themselves would
+// hit the exact same wrong conclusion the AI narrative used to. This
+// renders lib/reports-data.ts's computeComparableRevenue() — a real
+// equal-length YTD-vs-previous-YTD comparison — and refuses to show a %
+// change at all when `comparable` is false, per spec §5's own
+// "Comparison unavailable" instruction, rather than silently computing one
+// anyway.
+function RevenuePerformanceCard({ yoy }: { yoy: ComparableRevenue }) {
+  const up = (yoy.revenuePctChange ?? 0) >= 0;
+  return (
+    <Card title="Revenue Performance" eyebrow="Comparable Period" icon={<Wallet size={16} />}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22 }}>
+        <div>
+          <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>
+            {yoy.comparisonLabel ? `Same Period ${yoy.comparisonLabel.slice(0, 4)}` : 'Comparison Period'}
+          </div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: '#64748b' }}>{yoy.priorRevenue != null ? formatCompactCurrency(yoy.priorRevenue) : '—'}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>
+            {yoy.periodLabel.slice(0, 4)} YTD
+          </div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: COLORS.ink }}>{formatCompactCurrency(yoy.currentRevenue)}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>Change</div>
+          {yoy.comparable && yoy.revenuePctChange != null ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 20, fontWeight: 800, color: up ? '#0f766e' : '#b45f6b' }}>
+              {up ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+              {up ? '+' : ''}{yoy.revenuePctChange.toFixed(1)}%
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>Comparison unavailable</div>
+          )}
+        </div>
+      </div>
+      <p style={{ margin: '16px 0 0', fontSize: 10.5, color: '#94a3b8', lineHeight: 1.5, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+        {yoy.comparable
+          ? `${yoy.periodLabel} compared against the SAME date range one year earlier (${yoy.comparisonLabel}) — both periods are the identical length, never a partial year against a full one.`
+          : yoy.comparabilityReason}
+      </p>
+    </Card>
+  );
+}
+
+// Reports V3 §15/§17 — Customer Source's real coverage is 0% (911/911
+// active clients have no customer_source on file — confirmed against live
+// data before writing this, not assumed) — a donut chart with one 100%
+// slice communicates nothing. Replaced with an honest data-quality signal
+// instead of a decorative chart, per spec §30/§31 ("does this chart
+// communicate useful information?" / "is a KPI better?").
+function CustomerSourceQualityCard({ total, unknown }: { total: number; unknown: number }) {
+  const coveragePct = total > 0 ? Math.round(((total - unknown) / total) * 100) : 0;
+  return (
+    <Card title="Customer Source" eyebrow="Data Quality" icon={<Database size={16} />}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 34, fontWeight: 800, color: coveragePct === 0 ? '#b45f6b' : COLORS.ink }}>{coveragePct}%</span>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>coverage</span>
+      </div>
+      <p style={{ margin: 0, fontSize: 12.5, color: '#475569', lineHeight: 1.6 }}>
+        {unknown} of {total} active clients have no recorded customer source — a composition chart here would only ever show one 100% &ldquo;Unknown&rdquo; slice.
+      </p>
+      <p style={{ margin: '10px 0 0', fontSize: 10.5, color: '#94a3b8', lineHeight: 1.5, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+        Source tracking is a new field staff tag going forward from Company 360 — not backfilled from history. This card will show a real composition chart once enough new/updated clients carry it.
+      </p>
+    </Card>
   );
 }
 
@@ -468,9 +553,10 @@ export default function ReportsPage() {
         <Card title="Client Type" eyebrow="Composition" icon={<PieChart size={16} />} note={data.notes.clientType}>
           <Donut segments={data.clientTypeDonut} size={150} thickness={22} />
         </Card>
-        <Card title="Customer Source" eyebrow="Composition" icon={<Compass size={16} />} note={data.notes.source}>
-          <Donut segments={data.sourceDonut} size={150} thickness={22} />
-        </Card>
+        <CustomerSourceQualityCard
+          total={data.kpis.activeClients}
+          unknown={data.sourceDonut.find(s => s.label === 'Unknown')?.value ?? 0}
+        />
       </div>
 
       <Card title="Service Mix" eyebrow="Active Clients" icon={<BarChart3 size={16} />}>
@@ -500,6 +586,8 @@ export default function ReportsPage() {
           served by computing that ratio directly as its own single-axis
           series (average invoice value), not by cramming two raw numbers
           onto one plot. */}
+      <RevenuePerformanceCard yoy={data.revenue.comparableYoy} />
+
       <Card title="Revenue by Year" eyebrow="Billing" icon={<Wallet size={16} />} note={data.notes.revenue}>
         {/* revenueTrendThousands stores dollars/1000 (lib/reports-data.ts's
             own computeRevenueTrend) — unitScale multiplies it back to real

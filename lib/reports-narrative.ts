@@ -47,11 +47,6 @@ export type ReportsSignal = 'good' | 'watch' | 'warning';
 export type ReportsInsight = { signal: ReportsSignal; titleZh: string; titleEn: string; bodyZh: string; bodyEn: string };
 export type ReportsNarrative = { insights: ReportsInsight[]; summaryZh: string; summaryEn: string };
 
-function pctChange(curr: number, prev: number): number | null {
-  if (prev === 0) return null; // undefined growth rate off a zero base — let the model say "no prior-year base", never divide by zero itself
-  return Math.round(((curr - prev) / prev) * 1000) / 10; // 1 decimal, matches the skill's own percentage convention
-}
-
 // Deliberately NOT the full companyRows array (900+ objects, mostly
 // irrelevant to a narrative and a real prompt-size/cost concern) — just the
 // same aggregates already rendered on the page, so the model can never
@@ -63,17 +58,37 @@ function pctChange(curr: number, prev: number): number | null {
 // INVARIANTS.md INV-AI-003 already requires of the My Tasks assistant's own
 // OpenAI synthesis step; an LLM doing its own arithmetic on 5 data points is
 // exactly the kind of thing that occasionally comes out subtly wrong.
+//
+// Fixed 2026-09-22 (Reports V3 spec, docs/MANAGEMENT_ANALYST_GAP_ANALYSIS.md
+// §0) — this used to derive "YoY" from the trend series' own last two
+// year-buckets: the current year's bucket is only ever partial-through-the-
+// year (2026 = Jan-Sep so far) while every prior bucket is a full 12
+// months, so that comparison was silently 2026 YTD vs all of 2025, exactly
+// the failure mode the spec calls out by name. Now uses
+// data.revenue.comparableYoy — a real YTD-vs-previous-YTD figure
+// (lib/reporting-period.ts, same day-count both sides by construction) —
+// and passes its own `comparable`/`comparabilityReason` straight through so
+// the model is told explicitly when NOT to present a YoY number, rather
+// than silently computing one anyway.
 function summarizeForPrompt(data: ReportsData) {
   const flowByYear = data.flow.years.map((y, i) => ({
-    year: y, newClients: data.flow.newClientsTrend[i]?.value ?? 0, churned: data.flow.churnedTrend[i]?.value ?? 0,
+    year: y, newClients: data.flow.newClientsTrend[i]?.value ?? null, churned: data.flow.churnedTrend[i]?.value ?? null,
   }));
+  // Raw multi-year series, null-preserving ("Missing Data Is Not Zero" —
+  // a year with no QuickBooks data at all must never look like a real
+  // S$0 year to the model). This is CONTEXT for the model to describe the
+  // overall shape, not something it should compute a period-over-period
+  // percentage from itself — that's exactly what comparableYoy below is
+  // for, already validated.
   const revenueByYear = data.revenue.years.map((y, i) => ({
-    year: y, invoiceCount: data.revenue.invoiceCountTrend[i]?.value ?? 0, revenueThousandsSGD: data.revenue.revenueTrendThousands[i]?.value ?? 0,
+    year: y, invoiceCount: data.revenue.invoiceCountTrend[i]?.value ?? null, revenueThousandsSGD: data.revenue.revenueTrendThousands[i]?.value ?? null,
   }));
-  const lastIdx = revenueByYear.length - 1;
-  const revenueYoyPct = lastIdx > 0 ? pctChange(revenueByYear[lastIdx].revenueThousandsSGD, revenueByYear[lastIdx - 1].revenueThousandsSGD) : null;
-  const invoiceCountYoyPct = lastIdx > 0 ? pctChange(revenueByYear[lastIdx].invoiceCount, revenueByYear[lastIdx - 1].invoiceCount) : null;
-  const avgInvoiceValueByYear = revenueByYear.map(r => ({ year: r.year, avgInvoiceValueSGD: r.invoiceCount > 0 ? Math.round((r.revenueThousandsSGD * 1000) / r.invoiceCount) : null }));
+  const avgInvoiceValueByYear = revenueByYear.map(r => ({
+    year: r.year,
+    avgInvoiceValueSGD: r.invoiceCount && r.revenueThousandsSGD !== null && r.invoiceCount > 0 ? Math.round((r.revenueThousandsSGD * 1000) / r.invoiceCount) : null,
+  }));
+
+  const yoy = data.revenue.comparableYoy;
 
   return {
     generatedAt: data.generatedAt,
@@ -83,10 +98,17 @@ function summarizeForPrompt(data: ReportsData) {
     customerSourceMix: data.sourceDonut,
     clientFlowByYear: flowByYear,
     revenueByYear,
-    computedTrends: {
-      revenueYoyPct, invoiceCountYoyPct, avgInvoiceValueByYear,
-      note: revenueYoyPct === null ? 'Not enough prior-year data yet to compute YoY growth.' : undefined,
+    // The ONLY period-over-period figure this prompt hands the model —
+    // already validated comparable (or explicitly marked not comparable,
+    // with a reason) by lib/reporting-period.ts before it ever gets here.
+    comparableRevenueYoy: {
+      currentPeriod: yoy.periodLabel, comparisonPeriod: yoy.comparisonLabel,
+      currentRevenueSGD: yoy.currentRevenue, priorRevenueSGD: yoy.priorRevenue,
+      currentInvoiceCount: yoy.currentInvoiceCount, priorInvoiceCount: yoy.priorInvoiceCount,
+      revenuePctChange: yoy.revenuePctChange, invoiceCountPctChange: yoy.invoiceCountPctChange,
+      comparable: yoy.comparable, comparabilityReason: yoy.comparabilityReason,
     },
+    avgInvoiceValueByYear,
     staffWorkload: data.picWorkload,
     dataScopeCaveat: 'This is CLIENT-BASE and TOP-LINE BILLING data only (active/new/churned client counts, service mix, revenue by year from invoicing, staff workload). There is no cost/expense data, no balance sheet, and no cash flow statement anywhere in this system — never infer or state a profit margin, profitability, asset/liability position, or liquidity ratio; none of those can be computed from what is provided.',
   };
@@ -131,7 +153,7 @@ export async function generateReportsNarrative(data: ReportsData): Promise<Repor
 
 专业规范（来自新加坡财务分析方法论，应用于本次数据范围）：
 - 每条 insight 必须先判断信号：good（🟢健康/积极）、watch（🟡需要关注）、warning（🔴需要注意的风险）——按重要性排序，最值得老板先看到的排第一条。
-- 同比分析纪律：涉及增长率时，直接使用 computedTrends 里已经算好的数字，不要自己心算或重新推导；如果某项是 null 或有 note 说明数据不够，就照实说数据不够，不要硬编一个百分比。
+- 同比分析纪律（硬性）：唯一允许提及的"同比/YoY"数字是 comparableRevenueYoy 里已经算好的——它是真正等长的两个区间（今年至今 vs 去年同一段日期，不是去年整年），只有当它的 comparable 字段为 true 时才能把 revenuePctChange/invoiceCountPctChange 说成"同比增长/下降 X%"；如果 comparable 为 false，必须照 comparabilityReason 原样说明数据不可比，绝对不能自己拿 revenueByYear 里任意两年的数字相减算百分比——那个数组只用来描述多年走势的形状（比如"逐年上升"），不能自己心算百分比或增长率。revenueByYear/clientFlowByYear 里任何一年的 value 是 null，代表这个系统对那一年完全没有数据（不是营收为0），必须原样说"这一年没有数据"，不能说成"零收入"或跳过不提。
 - 数字格式：金额用 S$ 前缀（如 S$1.23M 或 S$123,000），百分比保留1位小数（如 12.3%），不用整数估算百分比。
 - 范围边界：dataScopeCaveat 字段说明了这份数据不包含什么（成本、利润率、资产负债表、现金流）——绝对不要评论"盈利能力""利润率""财务健康"这类需要成本/资产负债数据才能判断的话题，只分析客户基础、服务结构、收入趋势、人力配置这些真正有数据支撑的方面。
 - titleZh/titleEn 是短标签，不是句子——好比一个新闻标题，body 里才展开解释和数字。
