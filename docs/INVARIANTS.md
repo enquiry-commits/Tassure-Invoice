@@ -2372,6 +2372,49 @@ again.
 
 ## AI Assistant / chatbot (INV-AI)
 
+- **INV-AI-006** — The automated quality spot-check
+  (`lib/ai-quality/review.ts`, `ai_quality_reviews`, `/ai-quality`, item 6 of
+  Vincent's "AI Agent/My Tasks 少一些东西" review, 2026-09-22) is a
+  BEHAVIORAL judge, not a fact-checker, and this must stay explicit
+  everywhere it's described — to Vincent, on the page itself, in any future
+  extension. `ai_messages` never persists the raw RESULT a tool call
+  returned (only `ai_agent_runs.tool_names`, which tools ran, not what they
+  returned), so the judge genuinely cannot verify whether a dollar figure,
+  date or name in a reply is factually correct — it only has the reply's own
+  text and which tools were called this turn to reason from. Its rubric is
+  written to reflect that limit rather than pretend otherwise: it flags a
+  denial-of-capability, a specific factual claim asserted from a turn with
+  ZERO tools called, wrong-language/non-sequitur replies, and confusing
+  action cards — never "this number looks wrong", which it has no way to
+  know. A future version that wants real ground-truth checking would need
+  the judge to re-run the same tools itself, not just read the transcript —
+  a materially bigger feature, not a rubric tweak.
+
+  This is the `ai_feedback` table `scripts/add-ai-conversations.sql`'s own
+  header deliberately deferred back on 2026-09-08 ("belong to that
+  document's own later phases... have no concrete consumer yet") — named
+  `ai_quality_reviews` instead since what it holds is one specific
+  automated judge's verdict, not the blueprint's more generic
+  user-submitted feedback (thumbs up/down), which remains unbuilt. A human
+  verdict (`confirmed_issue`/`false_positive`) is recorded on the SAME row
+  the machine's own verdict lives on, never a second row — "does a human
+  agree with the machine" must stay attached to the exact verdict it is
+  agreeing or disagreeing with. Migration: `scripts/add-ai-quality-
+  reviews.sql` (not yet run in production as of this writing — the route
+  degrades to a per-candidate error, not a crash, exactly like every other
+  optional-migration column in this codebase, see `ai_conversations`' own
+  header). Daily cron `0 23 * * *` (`vercel.json`), plus a manual "立即抽查"
+  button on `/ai-quality` for an on-demand run. Gated on `account.admin`
+  (Vincent-only today), same as `/ai-learning`.
+
+  Same change closed 2 real, unrelated dashboard-visibility gaps found while
+  wiring this in: `ai_learning` and the new `ai_quality_review` are both
+  valid `AutomationSource` values with real daily crons, but
+  `app/api/automation/health/route.ts`'s own `SOURCES` array — which does
+  NOT follow the `AutomationSource` union automatically, a gap its own
+  comment already warned about — only listed one of them (neither, until
+  this change). Both now added.
+
 - **INV-AI-005** — A chat-confirmed write and the SAME business action done
   manually from its own real page must never share one `logActivity()`
   `event_type` string — doing so makes them permanently indistinguishable in

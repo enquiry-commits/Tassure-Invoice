@@ -124,6 +124,7 @@ const ADMIN_NODE: Node = {
   children: [
     { label: 'Appearance Settings', href: '/admin/appearance' },
     { label: 'AI Learning', href: '/ai-learning' },
+    { label: 'AI Quality', href: '/ai-quality' },
     { label: 'Activity Insights', href: '/activity-insights' },
   ],
 };

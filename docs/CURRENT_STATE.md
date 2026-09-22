@@ -416,12 +416,23 @@ next real My Tasks/AssistantWidget chat session is the first real test.
   5. **`search_documents`/NAS document search is a dead entry point** —
      already covered under Active issues above (migration not run, secret
      not set, indexing script not written, machine not designated).
-  6. **No quality spot-check/eval loop** — every real AI-assistant bug in
-     `docs/INVARIANTS.md`'s INV-AI/INV-DATA-022/023 family was found by
-     Vincent personally screenshotting a wrong reply, never by any
-     automated sampling or review process. Needs a design decision (auto
-     LLM-judge over a random sample? a lightweight human review queue?)
-     before building anything.
+  6. **Done, 2026-09-22 — see INV-AI-006.** Vincent chose "自动LLM抽查判分".
+     Daily cron (`0 23 * * *`) + a manual "立即抽查" button on the new
+     `/ai-quality` page sample real recent replies and have Claude judge
+     each against a fixed rubric, writing every verdict to
+     `ai_quality_reviews` (migration `scripts/add-ai-quality-reviews.sql`,
+     **not yet run in production**). A human (Vincent) can mark a flagged
+     row confirmed-issue or false-positive from the page. **Honest scope,
+     not yet fully realized**: the judge can only see the reply's text and
+     which tools were called, never what those tools actually returned
+     (never persisted) — so it catches behavioral defects (a capability
+     denial, a confident claim from a zero-tool turn), not factual errors
+     like a wrong dollar figure. A real ground-truth checker would need the
+     judge to re-run the same tools itself — a bigger follow-up, not
+     attempted here. Not yet exercised against real production traffic —
+     same "code-complete, not yet a real click-through" caveat as
+     everything else in this section; needs the migration run, then a real
+     day or two of the cron actually firing.
 - **Floating AssistantWidget rebuilt as a draggable/resizable/collapsible
   popup, shipped 2026-09-09** — full functional parity with My Tasks chat
   (same cards, same attachments, now shared via `components/assistant/

@@ -1717,6 +1717,48 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Assistant: automated AI-reply quality spot-check shipped (INV-AI-006),
+  item 6 (last) of Vincent's "AI Agent/My Tasks 少一些东西" review queue.**
+  Vincent picked "自动LLM抽查判分" when asked to choose between an LLM
+  judge, a human review queue, or both. New `lib/ai-quality/review.ts`
+  samples up to 20 random recent real assistant replies (excluding ones
+  already reviewed), has Claude judge each against a fixed rubric, and
+  writes every verdict — pass or flag — to the new `ai_quality_reviews`
+  table (`scripts/add-ai-quality-reviews.sql`, not yet run in production).
+  Runs daily via a new cron (`/api/ai-quality/review`, `0 23 * * *`,
+  `withAutomationRun('ai_quality_review', ...)` so a stuck run shows up on
+  Automation Health like any other source), plus a manual "立即抽查" button
+  on the new `/ai-quality` page (gated `account.admin`, same as
+  `/ai-learning`) for an on-demand run. A human can mark a flagged row
+  confirmed-issue or false-positive on the same row the machine's verdict
+  lives on (`PATCH /api/ai-quality/reviews/[id]`).
+  - **Honest scope, stated in the code and docs, not glossed over**:
+    `ai_messages` never persists what a tool call actually RETURNED, only
+    `ai_agent_runs.tool_names` (which tools ran). So this judge cannot
+    verify whether a dollar figure, date or name in a reply is factually
+    correct — its rubric only flags what's visible from the reply's own
+    text and which tools ran: a capability denial, a confident specific
+    claim from a zero-tool turn, wrong-language/non-sequitur replies, a
+    confusing action card. A real ground-truth checker would need the judge
+    to re-run the same tools itself — a materially bigger follow-up,
+    explicitly not attempted in this change.
+  - This is the `ai_feedback` table `scripts/add-ai-conversations.sql`'s own
+    2026-09-08 header deliberately deferred ("belong to that document's own
+    later phases... no concrete consumer yet") — named `ai_quality_reviews`
+    instead since it holds one specific automated judge's verdict, not
+    generic user-submitted feedback (still unbuilt).
+  - **2 unrelated real gaps closed while wiring this in**: `ai_learning` and
+    the new `ai_quality_review` are both valid `AutomationSource` values
+    with real daily crons, but `app/api/automation/health/route.ts`'s own
+    `SOURCES` array (which does not follow the union automatically — a gap
+    its own comment already flagged) only listed neither. Both now added.
+  - `npx tsc --noEmit` and `npm run build` both clean. `docs/INVARIANTS.md`
+    INV-AI-006 and `docs/CURRENT_STATE.md`'s Pending improvements queue
+    updated — all 6 items from Vincent's original review are now addressed
+    (2 fully shipped and verified end-to-end here, the rest either done
+    with a stated honest gap, or blocked on Vincent's own action —
+    verification click-through, a push channel, NAS machine designation).
+
 - **Assistant: chat-confirmed writes get a real audit trail (INV-AI-005),
   2nd item from Vincent's "AI Agent/My Tasks 少一些东西" review queue.**
   Every chat-confirmed write card (`components/assistant/ChatCards.tsx`)

@@ -24,6 +24,14 @@ const SOURCES = [
   'nas_index',
   // Added 2026-09-17 — see app/api/soa-owners/audit/route.ts.
   'soa_owner_audit',
+  // ai_learning was a real pre-existing gap of this exact shape (a valid
+  // AutomationSource with a real daily cron, never listed here) — added
+  // 2026-09-22 alongside ai_quality_review below, closing both while
+  // already touching this array for the same reason lib/automation-
+  // sync.ts's AutomationSource comment warns about.
+  'ai_learning',
+  // Added 2026-09-22 — see app/api/ai-quality/review/route.ts.
+  'ai_quality_review',
 ] as const;
 
 export const dynamic = 'force-dynamic';

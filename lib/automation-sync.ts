@@ -53,7 +53,11 @@ export type AutomationSource =
   // (`soa_owners.soa_pic`) still matches the current invoice-derived
   // suggestion, since a manual override never re-validates itself once set
   // (see app/api/soa-owners/audit/route.ts's own header comment).
-  | 'soa_owner_audit';
+  | 'soa_owner_audit'
+  // Added 2026-09-22 — daily automated AI-reply quality spot-check (item 6
+  // of Vincent's "AI Agent/My Tasks 少一些东西" review; see
+  // app/api/ai-quality/review/route.ts, lib/ai-quality/review.ts).
+  | 'ai_quality_review';
 
 type JsonSummary = Record<string, unknown>;
 
