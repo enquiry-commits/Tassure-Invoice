@@ -13,6 +13,7 @@ import { usePagination, PaginationBar } from '@/components/Pagination';
 import { customerSourceLabel } from '@/lib/customer-source';
 import { formatStaffName } from '@/lib/staff-directory';
 import { REPORT_COLORS, REPORT_PALETTE } from '@/lib/chart-colors';
+import { formatCompactCurrency, formatCompactNumber } from '@/lib/chart-format';
 
 // Reports — customer-profile analytics for leadership, gated on
 // ApprovedAccount.canViewReports (lib/approved-accounts.ts). Guard pattern
@@ -482,7 +483,7 @@ export default function ReportsPage() {
           合我们的"), and both series share ONE real axis (client count), so
           one multi-line chart is the correct type, not a design shortcut. */}
       <Card title="Client Flow by Year" eyebrow="Flow" icon={<UserPlus size={16} />} note={data.notes.flow}>
-        <LineChart labels={data.flow.years} height={190}
+        <LineChart labels={data.flow.years} height={260} valueFormatter={formatCompactNumber}
           series={[
             { label: 'New Clients', color: COLORS.teal, data: data.flow.newClientsTrend.map(p => p.value) },
             { label: 'Churned', color: COLORS.rose, data: data.flow.churnedTrend.map(p => p.value) },
@@ -500,11 +501,15 @@ export default function ReportsPage() {
           series (average invoice value), not by cramming two raw numbers
           onto one plot. */}
       <Card title="Revenue by Year" eyebrow="Billing" icon={<Wallet size={16} />} note={data.notes.revenue}>
-        <VBars data={data.revenue.revenueTrendThousands} color={COLORS.gold} height={170} />
+        {/* revenueTrendThousands stores dollars/1000 (lib/reports-data.ts's
+            own computeRevenueTrend) — unitScale multiplies it back to real
+            dollars before formatting, so this reads "S$1.28M", not "1284". */}
+        <VBars data={data.revenue.revenueTrendThousands} color={COLORS.gold} height={260}
+          valueFormatter={v => formatCompactCurrency(v, { unitScale: 1000 })} />
       </Card>
       <Card title="Average Invoice Value by Year" eyebrow="Billing" icon={<Wallet size={16} />}
         note="Revenue ÷ invoice count for that year — rising even while invoice volume is flat means Tassure is billing more per invoice, not just billing more often.">
-        <LineChart labels={data.revenue.years} height={190}
+        <LineChart labels={data.revenue.years} height={260} valueFormatter={formatCompactCurrency}
           series={[{
             label: 'Avg. Invoice Value (S$)', color: COLORS.blue,
             data: data.revenue.years.map((_, i) => {

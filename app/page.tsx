@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import QBConnectButton from '@/components/QBConnectButton';
 import { Donut, VBars, HBars } from '@/components/dashboard/Charts';
+import { REPORT_COLORS } from '@/lib/chart-colors';
 
 type Pt = { label: string; value: number; color?: string };
 interface Data {
@@ -78,16 +79,11 @@ interface AutomationExceptionGroup {
   items: AutomationExceptionItem[];
 }
 
-const DASHBOARD_COLORS = {
-  ink: '#102a43',
-  navy: '#234e70',
-  teal: '#397f78',
-  blue: '#557795',
-  gold: '#b98243',
-  plum: '#746487',
-  rose: '#b45f6b',
-  muted: '#a8b5c2',
-};
+// Was its own separately-defined object with the same values as
+// lib/chart-colors.ts's REPORT_COLORS (plus these exact 2 extras, now
+// folded into that shared source too) — re-pointed 2026-09-22 so Dashboard
+// and Reports draw from one palette, not two copies of the same numbers.
+const DASHBOARD_COLORS = REPORT_COLORS;
 
 function Card({ title, eyebrow, icon, children, action, style }: {
   title: string; eyebrow?: string; icon: React.ReactNode; children: React.ReactNode; action?: React.ReactNode; style?: React.CSSProperties;
