@@ -36,23 +36,52 @@ export default function TaoBillingPage() {
   // genuinely new client (never synced from TeamWork, no QB invoices yet)
   // has no way to appear otherwise. This is a deliberate side door, not a
   // TeamWork-replacement — see app/api/billing/tao/route.ts's POST handler.
+  //
+  // Extended 2026-09-22: this button turned out to have a real dead end —
+  // a company already tracked for another service (real TeamWork sync) but
+  // never billed under TAO isn't in THIS list (it's built from real TAO
+  // eligibility, not from `companies` itself), so typing its name here hit
+  // "already exists... search for it instead" pointing at a search that
+  // could never find it. UEN is now required (Vincent: "是否有必要加入UEN
+  // 做保险机制" — the server checks it before name, since two real
+  // companies can never share a UEN, but similar-sounding names do happen —
+  // see route.ts's own comment) and Accounts/Tax become an explicit choice
+  // instead of a hardcoded `has_accounts: true`. A server response of
+  // `needsConfirmation` (a fuzzy name match, not a confident UEN/exact-name
+  // one) pauses here for a yes/no rather than silently guessing which real
+  // company to flip a service flag on.
   const [addingCompany, setAddingCompany] = useState(false);
   const [newCompanyName, setNewCompanyName] = useState('');
+  const [newCompanyUen, setNewCompanyUen] = useState('');
+  const [newCompanyAccounts, setNewCompanyAccounts] = useState(true);
+  const [newCompanyTax, setNewCompanyTax] = useState(false);
   const [addCompanyError, setAddCompanyError] = useState<string | null>(null);
   const [addCompanySubmitting, setAddCompanySubmitting] = useState(false);
+  const [pendingConfirmMatch, setPendingConfirmMatch] = useState<{ id: number; companyName: string; message: string } | null>(null);
 
-  const submitNewCompany = async () => {
+  const resetAddCompanyForm = () => {
+    setAddingCompany(false); setNewCompanyName(''); setNewCompanyUen('');
+    setNewCompanyAccounts(true); setNewCompanyTax(false); setAddCompanyError(null); setPendingConfirmMatch(null);
+  };
+
+  const submitNewCompany = async (extra?: { confirmedCompanyId?: number; forceNew?: boolean }) => {
     const name = newCompanyName.trim();
-    if (!name) return;
+    const uen = newCompanyUen.trim();
+    if (!name || !uen || (!newCompanyAccounts && !newCompanyTax)) return;
     setAddCompanySubmitting(true); setAddCompanyError(null);
     try {
       const res = await fetch('/api/billing/tao', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyName: name }),
+        body: JSON.stringify({
+          companyName: name, registrationNo: uen,
+          services: { accounts: newCompanyAccounts, tax: newCompanyTax },
+          ...extra,
+        }),
       });
       const json = await res.json();
-      if (!res.ok) { setAddCompanyError(json.error ?? 'Could not add this company.'); return; }
-      setAddingCompany(false); setNewCompanyName('');
+      if (!res.ok) { setAddCompanyError(json.error ?? 'Could not add this company.'); setPendingConfirmMatch(null); return; }
+      if (json.needsConfirmation) { setPendingConfirmMatch({ ...json.candidate, message: json.message }); return; }
+      resetAddCompanyForm();
       load();
       setExpanded(json.company.companyName);
     } catch (err) {
@@ -159,28 +188,62 @@ export default function TaoBillingPage() {
           <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
           <span style={{ fontSize: 11, color: '#94a3b8' }}>{total} companies</span>
-          <button onClick={() => { setAddingCompany(v => !v); setAddCompanyError(null); }}
+          <button onClick={() => { if (addingCompany) resetAddCompanyForm(); else setAddingCompany(true); }}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #a7f3d0', background: addingCompany ? '#ecfdf5' : '#fff', color: '#0f766e', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
             <Plus size={13} />Add new company
           </button>
         </div>
-        {addingCompany && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
-            <input type="text" placeholder="Company name (not yet in the system)" value={newCompanyName}
-              onChange={e => setNewCompanyName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') submitNewCompany(); }}
-              autoFocus
-              style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none' }} />
-            <button onClick={submitNewCompany} disabled={addCompanySubmitting || !newCompanyName.trim()}
-              style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: addCompanySubmitting || !newCompanyName.trim() ? '#cbd5e1' : '#0f766e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
-              {addCompanySubmitting ? 'Adding…' : 'Add'}
-            </button>
-            <button onClick={() => { setAddingCompany(false); setNewCompanyName(''); setAddCompanyError(null); }}
-              style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, cursor: 'pointer' }}>
-              Cancel
-            </button>
+        {addingCompany && pendingConfirmMatch && (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ fontSize: 12.5, color: '#334155', marginBottom: 8 }}>{pendingConfirmMatch.message}</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => submitNewCompany({ confirmedCompanyId: pendingConfirmMatch.id })} disabled={addCompanySubmitting}
+                style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: '#0f766e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
+                {addCompanySubmitting ? 'Working…' : `Yes — this is "${pendingConfirmMatch.companyName}"`}
+              </button>
+              <button onClick={() => { setPendingConfirmMatch(null); submitNewCompany({ forceNew: true }); }} disabled={addCompanySubmitting}
+                style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, fontWeight: 600, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
+                No, different company
+              </button>
+            </div>
           </div>
         )}
+        {addingCompany && !pendingConfirmMatch && (() => {
+          const uenLooksValid = /^(\d{8,9}[A-Z]|(19|20)\d{7}[A-Z])$/.test(newCompanyUen.trim().toUpperCase());
+          const canSubmit = !!newCompanyName.trim() && uenLooksValid && (newCompanyAccounts || newCompanyTax);
+          return (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="text" placeholder="Company name (not yet in the system)" value={newCompanyName}
+                  onChange={e => setNewCompanyName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && canSubmit) submitNewCompany(); }}
+                  autoFocus
+                  style={{ flex: 1.4, border: '1px solid #e2e8f0', borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none' }} />
+                <input type="text" placeholder="UEN (e.g. 201720273R)" value={newCompanyUen}
+                  onChange={e => setNewCompanyUen(e.target.value.toUpperCase())}
+                  onKeyDown={e => { if (e.key === 'Enter' && canSubmit) submitNewCompany(); }}
+                  style={{ flex: 1, border: `1px solid ${newCompanyUen.trim() && !uenLooksValid ? '#fca5a5' : '#e2e8f0'}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none' }} />
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#334155', whiteSpace: 'nowrap' }}>
+                  <input type="checkbox" checked={newCompanyAccounts} onChange={e => setNewCompanyAccounts(e.target.checked)} />Accounts
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#334155', whiteSpace: 'nowrap' }}>
+                  <input type="checkbox" checked={newCompanyTax} onChange={e => setNewCompanyTax(e.target.checked)} />Tax
+                </label>
+                <button onClick={() => submitNewCompany()} disabled={addCompanySubmitting || !canSubmit}
+                  style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: addCompanySubmitting || !canSubmit ? '#cbd5e1' : '#0f766e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
+                  {addCompanySubmitting ? 'Adding…' : 'Add'}
+                </button>
+                <button onClick={resetAddCompanyForm}
+                  style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, cursor: 'pointer' }}>
+                  Cancel
+                </button>
+              </div>
+              {newCompanyUen.trim() && !uenLooksValid && (
+                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--status-danger)' }}>That doesn&apos;t look like a valid Singapore UEN.</div>
+              )}
+            </div>
+          );
+        })()}
         {addCompanyError && (
           <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--status-danger)', fontWeight: 600 }}>{addCompanyError}</div>
         )}

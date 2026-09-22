@@ -2216,6 +2216,67 @@ again.
   already-billed company could never pass check #2 above anyway), but the
   server remains the real authority regardless of what the UI shows.
 
+- **INV-DATA-055** — `companies.has_accounts`/`has_tax` (and any other raw
+  per-service boolean on that table) are NOT the real signal for "does this
+  company get this service" — confirmed live 2026-09-22: only 1-2 of 911
+  active companies had `has_accounts`/`has_tax` set at all, and only ONE
+  company anywhere had any `services_manual` override set (and it wasn't
+  accounts/tax). The real signal is REAL history: actual QuickBooks
+  Accounts/Tax invoice line items (`quickbooks_invoice_items.service_type`),
+  with `services_manual`'s per-service override (`/api/companies/service-
+  override`, `secretary`/`accounts`/`tax`/`xbrl` only — ND/Address always
+  follow TeamWork) layered on top for the rare case with no invoice history
+  yet. `computeTaoCompanies()` (`app/api/billing/tao/route.ts`) and
+  `ar-reminder`'s own `servicesAuto`/`services` merge already did this
+  correctly; `app/api/reports/route.ts`'s Service Mix chart did not — it
+  read the raw columns directly and showed "Accounts: 1, Tax: 2" on a client
+  base where the real count is 223/217. Fixed by computing Accounts/Tax
+  service-mix membership from real `quickbooks_invoice_items` history
+  (service_type-specific, so Accounts and Tax stay two genuinely different
+  counts — `computeTaoCompanies()` itself was NOT reused here since it
+  merges the two into one combined roster). `uses_address`/`has_nd`/
+  `has_xbrl` were checked too and are NOT part of this bug (375/153/35 out
+  of 911 — real, plausible numbers, kept in sync some other way); `has_agm`
+  reads 911/911 (100%) for a different reason — it's definitionally near-
+  universal, not a broken column — and was deliberately left alone rather
+  than guessed at. Before trusting any `has_*`/`uses_*` company flag for a
+  new feature, check its actual population rate against `is_active`
+  companies first; do not assume a column means what its name says.
+- **INV-DATA-056** — A "does this company already exist" collision check
+  before a write must use the identifier that CAN'T legitimately collide
+  between two real companies (UEN) before falling back to one that can
+  (name) — and a NAME-only match below 100% confidence (fuzzy) must ask a
+  human before acting, never silently proceed, when the action is
+  consequential (here: turning on a real service flag on someone else's
+  tracked company). Added 2026-09-22 to `POST /api/billing/tao`'s "+ Add new
+  company" side door (INV-DATA-054's own POST): its OLD collision check was
+  name-only (exact then 85%-fuzzy) and had a real dead end — a company
+  already tracked via TeamWork for another service, but never billed under
+  TAO, has no TAO eligibility yet (see INV-DATA-055's real-signal
+  definition) so it doesn't appear in this page's own list/search either;
+  hitting the old collision check on it produced "already exists...search
+  for it instead" pointing at a search that could never find it. Now: UEN is
+  a REQUIRED field (validated against the same regex `lib/teamwork-company-
+  profile.ts` already uses to recognize one), checked before name; a
+  UEN-exact or normalized-name-exact hit is trusted immediately since
+  neither can reasonably be a different real company; a fuzzy-name-only hit
+  returns `needsConfirmation` (candidate + message) instead of guessing, and
+  the caller must explicitly send back `confirmedCompanyId` (yes, same
+  company — flip its `services_manual` accounts/tax flag via `/api/
+  companies/service-override`'s own `set_service_override` RPC, never a
+  second `companies` row) or `forceNew` (no, different company — insert).
+  Confirmed a REAL pre-existing duplicate this design would have caught:
+  "GOLDEN BRIDGE MARTEC PTE. LTD." exists as two separate `companies` rows
+  sharing one real UEN (202633763E) — found, not fixed (unclear which row
+  carries which real dependent data; a human should pick which to keep).
+  UEN coverage confirmed asymmetric: 98.8% for TeamWork-synced companies,
+  21.4% for the small manually-added set — so UEN is a reliable check
+  against the EXISTING roster, but wasn't being captured going forward by
+  this exact side door until this fix (now stored as `registration_no` on
+  every insert, and backfilled onto an existing row only when that row's own
+  field was empty — never overwritten). *(source: 2026-09-22, Vincent: "是否
+  有必要加入UEN做保险机制".)*
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

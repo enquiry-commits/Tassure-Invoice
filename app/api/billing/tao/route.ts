@@ -137,6 +137,12 @@ export async function GET() {
 // name, `has_accounts: true` so it's immediately eligible above) — every
 // other `companies` column is nullable and gets filled in properly later,
 // either by staff or once TeamWork does pick this company up.
+// Same pattern lib/teamwork-company-profile.ts already uses to recognize a
+// UEN inside free-form TeamWork text — reused here rather than re-derived,
+// this is the one place that must actually REJECT a bad one before it's
+// stored, not just detect one already known-good.
+const UEN_RE = /^(\d{8,9}[A-Z]|(19|20)\d{7}[A-Z])$/;
+
 export async function POST(req: NextRequest) {
   const auth = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -147,28 +153,103 @@ export async function POST(req: NextRequest) {
   const account: ApprovedAccount | null = getApprovedAccount(authData.user?.email);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
 
-  const { companyName } = await req.json().catch(() => ({})) as { companyName?: string };
-  const name = companyName?.trim();
+  const body = await req.json().catch(() => ({})) as {
+    companyName?: string; registrationNo?: string;
+    services?: { accounts?: boolean; tax?: boolean };
+    // Round 2 of this POST, after the client showed the user a fuzzy-match
+    // candidate this same request returned as `needsConfirmation` — see
+    // below. Never both set together; the client only ever sends the one
+    // the user actually picked.
+    confirmedCompanyId?: number; forceNew?: boolean;
+  };
+  const name = body.companyName?.trim();
   if (!name) return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
+  const uen = body.registrationNo?.trim().toUpperCase();
+  if (!uen) return NextResponse.json({ error: 'registrationNo (UEN) is required' }, { status: 400 });
+  if (!UEN_RE.test(uen)) return NextResponse.json({ error: 'That does not look like a valid Singapore UEN.' }, { status: 400 });
+  const wantAccounts = body.services?.accounts === true;
+  const wantTax = body.services?.tax === true;
+  if (!wantAccounts && !wantTax) return NextResponse.json({ error: 'Pick at least one of Accounts or Tax.' }, { status: 400 });
 
   const supabase = createAdminClient();
   const target = normalize(name);
-  const { data: existingRows, error: existingError } = await supabase.from('companies').select('id, company_name');
+  const { data: existingRows, error: existingError } = await supabase.from('companies').select('id, company_name, registration_no');
   if (existingError) return NextResponse.json({ error: existingError.message }, { status: 503 });
+  const rows = existingRows ?? [];
 
-  // Guard against creating a shadow duplicate of a company that's already in
-  // the system (e.g. staff mistyping a search and not realizing it already
-  // exists) — exact match first, fuzzy fallback same as the GET handler.
-  const exact = (existingRows ?? []).find(c => normalize(c.company_name) === target);
-  const fuzzy = exact ? null : findUniqueBestMatch(name, existingRows ?? [], c => c.company_name, 85);
-  const collision = exact ?? fuzzy?.value;
-  if (collision) {
-    return NextResponse.json({ error: `"${collision.company_name}" already exists in the system (id ${collision.id}) — search for it instead of adding a duplicate.` }, { status: 409 });
+  // Vincent, 2026-09-22, on a company already tracked (real TeamWork sync)
+  // for another service but never billed under TAO: this used to be flatly
+  // rejected as "already exists... search for it instead" — advice that led
+  // nowhere, since this page's own list/search is built from real TAO
+  // eligibility (computeTaoCompanies below), not from `companies` itself, so
+  // that search could never find it either. Turning ON its accounts/tax
+  // service flag makes it real (see computeTaoCompanies's own
+  // eligibleNames/namesWithManualOverride) instead of creating a second,
+  // divergent row for a company this system already knows.
+  const applyToExisting = async (companyId: number, matchedName: string, currentUen: string | null) => {
+    if (wantAccounts) {
+      const { error } = await supabase.rpc('set_service_override', { p_company_id: companyId, p_service: 'accounts', p_value: true });
+      if (error) throw new Error(error.message);
+    }
+    if (wantTax) {
+      const { error } = await supabase.rpc('set_service_override', { p_company_id: companyId, p_service: 'tax', p_value: true });
+      if (error) throw new Error(error.message);
+    }
+    // Only fills a real gap on the existing row — never overwrites a UEN
+    // already on file, in case a mismatch there is something a human should
+    // look at rather than this route silently deciding for them.
+    if (!currentUen) {
+      const { error } = await supabase.from('companies').update({ registration_no: uen }).eq('id', companyId);
+      if (error) throw new Error(error.message);
+    }
+    return NextResponse.json({ company: { companyId, companyName: matchedName, lastInvoice: null } });
+  };
+
+  // The user already answered "yes, that's the same company" to a fuzzy
+  // candidate this same endpoint returned a moment ago.
+  if (body.confirmedCompanyId) {
+    const row = rows.find(r => r.id === body.confirmedCompanyId);
+    if (!row) return NextResponse.json({ error: 'That company no longer exists — try again.' }, { status: 404 });
+    try { return await applyToExisting(row.id, row.company_name, row.registration_no); }
+    catch (err) { return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 503 }); }
+  }
+
+  // The user already answered "no, this is a genuinely different company"
+  // to a fuzzy candidate — skip matching entirely and fall through to insert.
+  if (!body.forceNew) {
+    // UEN is the one identifier that can never legitimately collide between
+    // two real companies, so an exact hit there is trusted immediately, same
+    // confidence tier as an exact normalized name — a fuzzy NAME-only hit
+    // (nothing else this sure) is the one case that asks first, since acting
+    // on a wrong guess here means flipping a real service flag on the wrong
+    // real company, not just a cosmetic mismatch.
+    const byUen = rows.find(r => r.registration_no && r.registration_no.trim().toUpperCase() === uen);
+    const exactName = rows.find(r => normalize(r.company_name) === target);
+    const collision = byUen ?? exactName;
+    const fuzzy = collision ? null : findUniqueBestMatch(name, rows, r => r.company_name, 85);
+    const match = collision ?? fuzzy?.value;
+
+    if (match) {
+      const taoRoster = await computeTaoCompanies();
+      const alreadyEligible = taoRoster.some(t => normalize(t.companyName) === normalize(match.company_name));
+      if (alreadyEligible) {
+        return NextResponse.json({ error: `"${match.company_name}" already exists and is already a TAO client (id ${match.id}) — search for it instead of adding a duplicate.` }, { status: 409 });
+      }
+      if (collision) {
+        try { return await applyToExisting(match.id, match.company_name, match.registration_no); }
+        catch (err) { return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 503 }); }
+      }
+      return NextResponse.json({
+        needsConfirmation: true,
+        candidate: { id: match.id, companyName: match.company_name },
+        message: `"${match.company_name}" already exists in the system, with no TAO history yet — is this the same company?`,
+      });
+    }
   }
 
   const { data: inserted, error: insertError } = await supabase
     .from('companies')
-    .insert({ company_name: name, has_accounts: true })
+    .insert({ company_name: name, registration_no: uen, has_accounts: wantAccounts, has_tax: wantTax, is_active: true })
     .select('id, company_name')
     .single();
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 503 });

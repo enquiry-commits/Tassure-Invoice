@@ -5,14 +5,21 @@ import { getRequestAccount } from '@/lib/request-account';
 import { customerSourceLabel } from '@/lib/customer-source';
 import { buildReportsCompanyRows, computeRevenueTrend, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT } from '@/lib/reports-data';
 import { pageAll } from '@/lib/page-all';
+import { normalize } from '@/lib/company-name';
 
 // Reports — customer-profile analytics for leadership (Vincent, Cindy,
 // Samuell, Tan Yee Soon; gated on ApprovedAccount.canViewReports, see
 // lib/approved-accounts.ts). Phase 1 (2026-09-03): everything here uses
 // data that's already real and clean — companies.company_type (legal
 // entity structure — NOT industry; SSIC is a separate, not-yet-built Phase
-// 2, see PROJECT_STATUS.md), companies.has_*/uses_address (service mix),
-// master_list.list_type/join_date/update_date (client flow — see the
+// 2, see PROJECT_STATUS.md), companies.has_nd/has_xbrl/uses_address (service
+// mix — these three are reliably kept in sync elsewhere, unlike
+// has_accounts/has_tax below), real QuickBooks Accounts/Tax invoice history
+// for the Accounts/Tax service-mix counts specifically (added 2026-09-22 —
+// companies.has_accounts/has_tax turned out to be a near-dead column, true
+// for 1-2 of 911 active companies, so those two counts used to read almost
+// entirely wrong; see the Promise.all below), master_list.list_type/
+// join_date/update_date (client flow — see the
 // caveat below), quickbooks_invoices (revenue trend), ar_reminder.pic/
 // acc_pic/tax_pic (workload). Aggregates the same way app/api/dashboard/
 // route.ts does: pageAll() to fetch full tables, then plain in-memory
@@ -83,12 +90,25 @@ export async function GET(req: NextRequest) {
   const YEARS_BACK = 5;
   const years = Array.from({ length: YEARS_BACK }, (_, i) => thisYear - YEARS_BACK + 1 + i);
 
-  const [companies, masterList, arRows, qbInvoices] = await Promise.all([
+  const [companies, masterList, arRows, qbInvoices, taoServiceItems] = await Promise.all([
     pageAll<Row>(() => sb.from('companies').select(REPORTS_COMPANY_SELECT)),
     pageAll<Row>(() => sb.from('master_list').select(`list_type, update_date, company_name, ${REPORTS_MASTER_LIST_SELECT}`)),
     pageAll<Row>(() => sb.from('ar_reminder').select('pic, acc_pic, tax_pic, filling_date').or('status.is.null,status.neq.Excluded')),
     pageAll<Row>(() => sb.from('quickbooks_invoices').select('txn_date, total_amt')),
+    pageAll<Row>(() => sb.from('quickbooks_invoice_items').select('customer_name, service_type').in('service_type', ['Accounts', 'Tax']).gte('txn_date', `${thisYear - 3}-01-01`)),
   ]);
+  // Accounts/Tax eligibility, real signal — same real-history check the TAO
+  // billing page's own "807 Accounts/Tax Clients" metric uses
+  // (app/api/billing/tao/route.ts's computeTaoCompanies, not reused directly
+  // here since it merges Accounts+Tax into one combined roster and this
+  // chart needs them kept separate). companies.has_accounts/has_tax alone is
+  // a near-dead column — confirmed live 2026-09-22, true for 1-2 of 911
+  // active companies (of the ~1 company anywhere with any services_manual
+  // override at all, none happened to be accounts/tax), so reading it
+  // directly here previously showed "Accounts: 1, Tax: 2" on a client base
+  // where real QuickBooks history shows roughly half billed for one or both.
+  const accountsNames = new Set(taoServiceItems.filter(i => i.service_type === 'Accounts').map(i => normalize(i.customer_name as string)));
+  const taxNames = new Set(taoServiceItems.filter(i => i.service_type === 'Tax').map(i => normalize(i.customer_name as string)));
 
   const companyRows = buildReportsCompanyRows(companies, masterList);
 
@@ -110,8 +130,8 @@ export async function GET(req: NextRequest) {
     { label: 'Nominee Dir.', value: active.filter(c => c.has_nd).length, color: '#7c3aed' },
     { label: 'AGM', value: active.filter(c => c.has_agm).length, color: '#2563eb' },
     { label: 'XBRL', value: active.filter(c => c.has_xbrl).length, color: '#c026d3' },
-    { label: 'Accounts', value: active.filter(c => c.has_accounts).length, color: '#0891b2' },
-    { label: 'Tax', value: active.filter(c => c.has_tax).length, color: '#f59e0b' },
+    { label: 'Accounts', value: active.filter(c => accountsNames.has(normalize(c.company_name as string))).length, color: '#0891b2' },
+    { label: 'Tax', value: active.filter(c => taxNames.has(normalize(c.company_name as string))).length, color: '#f59e0b' },
   ].sort((a, b) => b.value - a.value);
 
   // ── Customer source (Unknown until staff tag companies going forward) ───
