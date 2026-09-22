@@ -1765,6 +1765,52 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Dashboard/Reports charts rebuilt on Recharts, dashboard-design skill
+  added.** Vincent's "Professional Dashboard UI & Data Visualization
+  Upgrade Package" spec. Investigated the real stack first (no Tailwind/
+  shadcn component paradigm anywhere in this app — near-zero `className=`
+  usage, no `components.json`) before choosing an approach: Recharts
+  (newly installed) for chart rendering, the EXISTING design system
+  (`MetricCard`, the per-page `Card` pattern, `REPORT_COLORS`) for
+  everything else — matching the spec's own stated priority #1 ("existing
+  project components").
+  - `components/dashboard/Charts.tsx` (`VBars`/`Donut`/`LineChart`/`HBars`)
+    was a fully hand-rolled SVG/flex chart library with zero charting
+    dependency — rebuilt on Recharts with the EXACT same exported names
+    and prop shapes, so `app/page.tsx` (Dashboard), `app/reports/page.tsx`
+    (Reports) and `app/activity-insights/page.tsx` all upgrade with no
+    call-site changes needed. New optional `valueFormatter` prop added for
+    callers that need real currency/compact-number formatting.
+  - New `lib/chart-format.ts` (`formatCompactNumber`/`formatCompactCurrency`/
+    `formatPercent`) — one shared implementation of the spec's own number
+    rules (1284000 → 1.28M), wired into Reports' Revenue/Client Flow/
+    Average Invoice Value charts.
+  - Consolidated `app/page.tsx`'s own separately-defined `DASHBOARD_COLORS`
+    (identical values to `lib/chart-colors.ts`'s `REPORT_COLORS`, defined a
+    second time) into the one shared source.
+  - Added `.claude/skills/dashboard-design/` (`SKILL.md`,
+    `chart-guidelines.md`, `dashboard-layout.md`, `dashboard-review.md`),
+    adapted to state this project's real stack up front.
+  - **Left open, not decided unilaterally**: "Revenue & Invoice Volume by
+    Year" as one dual-axis combo chart (the spec's own section 9) — a
+    concurrent same-day change had deliberately split this into Revenue
+    (bar) + Average Invoice Value (line, a derived single-axis ratio)
+    specifically to avoid a dual-axis plot. Upgraded both to Recharts
+    without merging them back, since reversing that is a real design
+    decision, not an implementation detail — see the chat reply for the
+    explicit question put to Vincent.
+  - Did not touch business data, calculation logic, database queries, or
+    `lib/reports-data.ts`/`app/api/reports` — presentation layer only.
+    `npx tsc --noEmit` and `npm run build` both clean; `npm run lint` on
+    just the changed files is clean (the repo-wide lint run has a large
+    pre-existing baseline of `require()`-import errors in `scripts/*.js`
+    unrelated to app code — not this project's normal verification gate).
+  - **Not yet visually verified against a real browser login** — the app
+    requires Google OAuth to an approved Tassure account, which this
+    session cannot complete; verification here was `tsc`/build plus a
+    careful read of the Recharts output shape, not a real screenshot.
+    Vincent should check `/reports` and `/` (Dashboard) directly.
+
 - **My Tasks: real scope widening past AR Reminder + Late Filing
   (INV-DATA-057), plus 3 real bugs fixed in the same area.** Vincent, on a
   real screenshot of the still-v1 page: "现在这部分那么简陋，根本都称不上是
