@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-22 (FIXED: TAO's "+ Add new company" form is now a real modal instead of an inline row — Vincent: "这个能不能变成弹窗", after the row (name + UEN + 2 checkboxes + Add + Cancel, all added earlier the same day) got visibly cramped in the toolbar).
+
+Same shell `ConfirmDeleteModal` (`components/ConfirmDeleteModal.tsx`) already uses elsewhere in this app — backdrop + centered white card, closes on backdrop click or the X — not a new pattern. Fields now stack vertically with real labels instead of squeezing into one flex row, and the fuzzy-match confirm step (`pendingConfirmMatch`) renders inside the same modal shell rather than a second inline block. `npx tsc --noEmit` / `npx eslint` (same pre-existing unused-import warnings only) / `npm run build` all clean. Could not click through live (no real login in this environment, same limitation as earlier today) — this rests on matching `ConfirmDeleteModal`'s own already-proven-in-production layout exactly, not a fresh screenshot.
+
+Previous entry follows.
+
 Last updated: 2026-09-22 (SHIPPED: redesigned TAO's "+ Add new company" side door, UEN becomes required and the real collision path, and a real Reports dashboard bug found along the way — Accounts/Tax service-mix counts were reading a near-dead column and showing "1"/"2" instead of the real ~223/217).
 
 Came out of Vincent asking me to look at Company 360's TAO onboarding flow more broadly ("按照你的了解和对系统的分析...怎么样会比较合适" then "是否有必要加入UEN做保险机制" then "你再分析分析完整的情况，还有什么补充去完善"). Root problem found by tracing the FULL path, not just the button: `POST /api/billing/tao` used to reject any name collision with "already exists...search for it instead" — but this page's own list/search is built from REAL TAO eligibility (`computeTaoCompanies()`), not from the `companies` table directly, so a company already tracked via TeamWork for another service but never billed under TAO couldn't be found by that search either. Dead end, not just an unhelpful error.

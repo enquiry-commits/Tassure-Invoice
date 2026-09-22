@@ -188,66 +188,91 @@ export default function TaoBillingPage() {
           <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
           <span style={{ fontSize: 11, color: '#94a3b8' }}>{total} companies</span>
-          <button onClick={() => { if (addingCompany) resetAddCompanyForm(); else setAddingCompany(true); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #a7f3d0', background: addingCompany ? '#ecfdf5' : '#fff', color: '#0f766e', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
+          <button onClick={() => setAddingCompany(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #a7f3d0', background: '#fff', color: '#0f766e', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
             <Plus size={13} />Add new company
           </button>
         </div>
-        {addingCompany && pendingConfirmMatch && (
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: 12.5, color: '#334155', marginBottom: 8 }}>{pendingConfirmMatch.message}</div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={() => submitNewCompany({ confirmedCompanyId: pendingConfirmMatch.id })} disabled={addCompanySubmitting}
-                style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: '#0f766e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
-                {addCompanySubmitting ? 'Working…' : `Yes — this is "${pendingConfirmMatch.companyName}"`}
-              </button>
-              <button onClick={() => { setPendingConfirmMatch(null); submitNewCompany({ forceNew: true }); }} disabled={addCompanySubmitting}
-                style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, fontWeight: 600, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
-                No, different company
-              </button>
-            </div>
-          </div>
-        )}
-        {addingCompany && !pendingConfirmMatch && (() => {
-          const uenLooksValid = /^(\d{8,9}[A-Z]|(19|20)\d{7}[A-Z])$/.test(newCompanyUen.trim().toUpperCase());
-          const canSubmit = !!newCompanyName.trim() && uenLooksValid && (newCompanyAccounts || newCompanyTax);
-          return (
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input type="text" placeholder="Company name (not yet in the system)" value={newCompanyName}
-                  onChange={e => setNewCompanyName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && canSubmit) submitNewCompany(); }}
-                  autoFocus
-                  style={{ flex: 1.4, border: '1px solid #e2e8f0', borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none' }} />
-                <input type="text" placeholder="UEN (e.g. 201720273R)" value={newCompanyUen}
-                  onChange={e => setNewCompanyUen(e.target.value.toUpperCase())}
-                  onKeyDown={e => { if (e.key === 'Enter' && canSubmit) submitNewCompany(); }}
-                  style={{ flex: 1, border: `1px solid ${newCompanyUen.trim() && !uenLooksValid ? '#fca5a5' : '#e2e8f0'}`, borderRadius: 7, padding: '6px 10px', fontSize: 13, outline: 'none' }} />
-                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#334155', whiteSpace: 'nowrap' }}>
-                  <input type="checkbox" checked={newCompanyAccounts} onChange={e => setNewCompanyAccounts(e.target.checked)} />Accounts
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#334155', whiteSpace: 'nowrap' }}>
-                  <input type="checkbox" checked={newCompanyTax} onChange={e => setNewCompanyTax(e.target.checked)} />Tax
-                </label>
-                <button onClick={() => submitNewCompany()} disabled={addCompanySubmitting || !canSubmit}
-                  style={{ padding: '6px 14px', borderRadius: 7, border: 'none', background: addCompanySubmitting || !canSubmit ? '#cbd5e1' : '#0f766e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
-                  {addCompanySubmitting ? 'Adding…' : 'Add'}
-                </button>
-                <button onClick={resetAddCompanyForm}
-                  style={{ padding: '6px 10px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 12, cursor: 'pointer' }}>
-                  Cancel
-                </button>
+      </div>
+
+      {/* Vincent, 2026-09-22: "这个能不能变成弹窗" — the inline expanding row
+          above squeezed name+UEN+2 checkboxes+Add+Cancel into one toolbar-
+          width flex line with no room to breathe. Same modal shell
+          ConfirmDeleteModal already uses elsewhere in this app (backdrop +
+          centered white card, close on backdrop click), not a new pattern. */}
+      {addingCompany && (() => {
+        const uenLooksValid = /^(\d{8,9}[A-Z]|(19|20)\d{7}[A-Z])$/.test(newCompanyUen.trim().toUpperCase());
+        const canSubmit = !!newCompanyName.trim() && uenLooksValid && (newCompanyAccounts || newCompanyTax);
+        return (
+          <div onClick={resetAddCompanyForm} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 440, padding: 24, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b' }}>Add new company</div>
+                <button onClick={resetAddCompanyForm} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', padding: 2 }}><X size={18} /></button>
               </div>
-              {newCompanyUen.trim() && !uenLooksValid && (
-                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--status-danger)' }}>That doesn&apos;t look like a valid Singapore UEN.</div>
+
+              {pendingConfirmMatch ? (
+                <div>
+                  <div style={{ fontSize: 13, color: '#334155', marginBottom: 18, lineHeight: 1.5 }}>{pendingConfirmMatch.message}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button onClick={() => submitNewCompany({ confirmedCompanyId: pendingConfirmMatch.id })} disabled={addCompanySubmitting}
+                      style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
+                      {addCompanySubmitting ? 'Working…' : `Yes — this is "${pendingConfirmMatch.companyName}"`}
+                    </button>
+                    <button onClick={() => { setPendingConfirmMatch(null); submitNewCompany({ forceNew: true }); }} disabled={addCompanySubmitting}
+                      style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontSize: 13, fontWeight: 600, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
+                      No, this is a different company
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#64748b', marginBottom: 5 }}>Company name</label>
+                  <input type="text" placeholder="Not yet in the system" value={newCompanyName}
+                    onChange={e => setNewCompanyName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && canSubmit) submitNewCompany(); }}
+                    autoFocus
+                    style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e2e8f0', borderRadius: 8, padding: '9px 11px', fontSize: 13.5, outline: 'none', marginBottom: 14 }} />
+
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#64748b', marginBottom: 5 }}>UEN</label>
+                  <input type="text" placeholder="e.g. 201720273R" value={newCompanyUen}
+                    onChange={e => setNewCompanyUen(e.target.value.toUpperCase())}
+                    onKeyDown={e => { if (e.key === 'Enter' && canSubmit) submitNewCompany(); }}
+                    style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${newCompanyUen.trim() && !uenLooksValid ? '#fca5a5' : '#e2e8f0'}`, borderRadius: 8, padding: '9px 11px', fontSize: 13.5, outline: 'none' }} />
+                  {newCompanyUen.trim() && !uenLooksValid && (
+                    <div style={{ marginTop: 5, fontSize: 11, color: 'var(--status-danger)' }}>That doesn&apos;t look like a valid Singapore UEN.</div>
+                  )}
+
+                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#64748b', margin: '14px 0 5px' }}>Service(s)</label>
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#334155' }}>
+                      <input type="checkbox" checked={newCompanyAccounts} onChange={e => setNewCompanyAccounts(e.target.checked)} />Accounts
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#334155' }}>
+                      <input type="checkbox" checked={newCompanyTax} onChange={e => setNewCompanyTax(e.target.checked)} />Tax
+                    </label>
+                  </div>
+
+                  {addCompanyError && (
+                    <div style={{ marginTop: 14, fontSize: 12, color: 'var(--status-danger)', fontWeight: 600, lineHeight: 1.5 }}>{addCompanyError}</div>
+                  )}
+
+                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 22 }}>
+                    <button onClick={resetAddCompanyForm}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                    <button onClick={() => submitNewCompany()} disabled={addCompanySubmitting || !canSubmit}
+                      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: addCompanySubmitting || !canSubmit ? '#cbd5e1' : '#0f766e', color: '#fff', fontWeight: 700, fontSize: 13, cursor: addCompanySubmitting ? 'default' : 'pointer' }}>
+                      {addCompanySubmitting ? 'Adding…' : 'Add'}
+                    </button>
+                  </div>
+                </div>
               )}
             </div>
-          );
-        })()}
-        {addCompanyError && (
-          <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--status-danger)', fontWeight: 600 }}>{addCompanyError}</div>
-        )}
-      </div>
+          </div>
+        );
+      })()}
 
       <div className="system-list-shell">
         <div className="system-list-title-bar" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
