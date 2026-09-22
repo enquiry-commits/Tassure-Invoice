@@ -18,6 +18,15 @@ export interface TaoCompanyRow {
   companyId: number | null;
   companyName: string;
   lastInvoice: { invoiceNo: string; txnDate: string | null; totalAmt: number | null } | null;
+  // Added 2026-09-22 so the page can tell apart the two ways a company with
+  // no invoice yet can appear here: a genuinely fresh row the "+ Add new
+  // company" POST just inserted (this is false — hard-delete is safe, same
+  // gate DELETE below already enforces server-side), vs a real TeamWork
+  // client whose accounts/tax services_manual override that same POST just
+  // flipped on (true — deleting the company would be wrong; the undo here
+  // is clearing that override back off, see PATCH-through-service-override
+  // in the page component).
+  trackedByTeamWork: boolean;
 }
 
 type QbItem = { customer_name: string; service_type: string };
@@ -49,7 +58,7 @@ export async function computeTaoCompanies(): Promise<TaoCompanyRow[]> {
   const currentYear = thisYearSGT();
 
   const [companiesRes, qbItemsRes, taoInvoicesRes] = await Promise.all([
-    supabase.from('companies').select('id, company_name, has_accounts, has_tax, services_manual'),
+    supabase.from('companies').select('id, company_name, has_accounts, has_tax, services_manual, tw_status'),
     pageAll(() => supabase
       .from('quickbooks_invoice_items')
       .select('customer_name, service_type')
@@ -113,6 +122,7 @@ export async function computeTaoCompanies(): Promise<TaoCompanyRow[]> {
         lastInvoice: lastByName.get(name)
           ? { invoiceNo: lastByName.get(name)!.invoice_no, txnDate: lastByName.get(name)!.txn_date, totalAmt: lastByName.get(name)!.total_amt }
           : null,
+        trackedByTeamWork: !!companyMatch?.tw_status,
       };
     })
     .sort((a, b) => a.companyName.localeCompare(b.companyName));

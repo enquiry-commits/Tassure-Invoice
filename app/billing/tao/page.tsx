@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Receipt, RefreshCw, Plus, X, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, AlertTriangle, Mail, Trash2 } from 'lucide-react';
+import { Receipt, RefreshCw, Plus, X, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, AlertTriangle, Mail, Trash2, MinusCircle } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import ConfirmDeleteModal from '@/components/ConfirmDeleteModal';
 import { usePagination, PaginationBar } from '@/components/Pagination';
@@ -131,6 +131,50 @@ export default function TaoBillingPage() {
       setDeleteError(err instanceof Error ? err.message : String(err));
     } finally {
       setDeleteSubmitting(false);
+    }
+  };
+
+  // Vincent, 2026-09-22: "假设我后面发现加错公司了怎么办...这个新加的公司后
+  // 面发现无效" — for a genuinely fresh row, ConfirmDeleteCompany above
+  // already handles it (no tw_status, so DELETE's own server-side gate
+  // allows it). But the OTHER add path (POST flipping services_manual on a
+  // real TeamWork-tracked company — see TaoCompanyRow.trackedByTeamWork) can
+  // never pass that gate, on purpose: it's a real client, deleting the row
+  // would be wrong. The correct undo there is clearing the override this
+  // page's own Add flow just set, same PATCH /api/companies/service-override
+  // endpoint, `value: null` (not `false`) so this only removes what was
+  // manually forced on — a real Accounts/Tax history appearing later is
+  // still free to make this company TAO-eligible again on its own.
+  const [pendingRemoveFromTao, setPendingRemoveFromTao] = useState<TaoCompanyRow | null>(null);
+  const [removeFromTaoError, setRemoveFromTaoError] = useState<string | null>(null);
+  const [removeFromTaoSubmitting, setRemoveFromTaoSubmitting] = useState(false);
+
+  const confirmRemoveFromTao = async () => {
+    const target = pendingRemoveFromTao;
+    if (!target?.companyId || removeFromTaoSubmitting) return;
+    setRemoveFromTaoSubmitting(true);
+    setPendingRemoveFromTao(null);
+    try {
+      const [accountsRes, taxRes] = await Promise.all([
+        fetch('/api/companies/service-override', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companyId: target.companyId, service: 'accounts', value: null }),
+        }),
+        fetch('/api/companies/service-override', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companyId: target.companyId, service: 'tax', value: null }),
+        }),
+      ]);
+      const [accountsJson, taxJson] = await Promise.all([accountsRes.json(), taxRes.json()]);
+      if (!accountsRes.ok) { setRemoveFromTaoError(accountsJson.error ?? 'Could not remove this company from TAO.'); return; }
+      if (!taxRes.ok) { setRemoveFromTaoError(taxJson.error ?? 'Could not remove this company from TAO.'); return; }
+      setRemoveFromTaoError(null);
+      if (expanded === target.companyName) setExpanded(null);
+      load();
+    } catch (err) {
+      setRemoveFromTaoError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRemoveFromTaoSubmitting(false);
     }
   };
 
@@ -287,6 +331,9 @@ export default function TaoBillingPage() {
         {deleteError && (
           <div style={{ padding: '8px 16px', fontSize: 11.5, color: 'var(--status-danger)', fontWeight: 600, borderTop: '1px solid #fee2e2', background: '#fef2f2' }}>{deleteError}</div>
         )}
+        {removeFromTaoError && (
+          <div style={{ padding: '8px 16px', fontSize: 11.5, color: '#0369a1', fontWeight: 600, borderTop: '1px solid #bae6fd', background: '#f0f9ff' }}>{removeFromTaoError}</div>
+        )}
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
           <div style={{ minWidth: 760 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: taoListColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
@@ -306,7 +353,7 @@ export default function TaoBillingPage() {
                   <div style={{ padding: '0 6px' }}>
                     <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{c.companyName}
-                      {!c.lastInvoice && c.companyId && (
+                      {!c.lastInvoice && c.companyId && !c.trackedByTeamWork && (
                         <button
                           onClick={e => { e.stopPropagation(); setDeleteError(null); setPendingDeleteCompany(c); }}
                           title="Remove this company (only possible while it has no real history anywhere)"
@@ -314,6 +361,21 @@ export default function TaoBillingPage() {
                           onMouseEnter={e => { e.currentTarget.style.color = '#dc2626'; e.currentTarget.style.background = '#fee2e2'; }}
                           onMouseLeave={e => { e.currentTarget.style.color = '#cbd5e1'; e.currentTarget.style.background = 'transparent'; }}>
                           <Trash2 size={12} />
+                        </button>
+                      )}
+                      {/* A real TeamWork-tracked company never passes DELETE's
+                          own tw_status gate (INV-DATA-054) — this is the undo
+                          for the OTHER add path instead (POST flipping its
+                          services_manual accounts/tax on): clear that
+                          override, don't try to delete a real client's row. */}
+                      {!c.lastInvoice && c.companyId && c.trackedByTeamWork && (
+                        <button
+                          onClick={e => { e.stopPropagation(); setRemoveFromTaoError(null); setPendingRemoveFromTao(c); }}
+                          title="Take this company off the TAO Accounts/Tax list (does not delete the company)"
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 6, border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', flexShrink: 0 }}
+                          onMouseEnter={e => { e.currentTarget.style.color = '#0369a1'; e.currentTarget.style.background = '#e0f2fe'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = '#cbd5e1'; e.currentTarget.style.background = 'transparent'; }}>
+                          <MinusCircle size={12} />
                         </button>
                       )}
                     </div>
@@ -365,6 +427,18 @@ export default function TaoBillingPage() {
           label={pendingDeleteCompany.companyName}
           onCancel={() => setPendingDeleteCompany(null)}
           onConfirm={confirmDeleteCompany}
+        />
+      )}
+
+      {pendingRemoveFromTao && (
+        <ConfirmDeleteModal
+          label={pendingRemoveFromTao.companyName}
+          onCancel={() => setPendingRemoveFromTao(null)}
+          onConfirm={confirmRemoveFromTao}
+          tone="neutral"
+          title="Take off the TAO list?"
+          confirmLabel="Remove from TAO"
+          body={<>This removes <strong style={{ color: '#1e293b' }}>{pendingRemoveFromTao.companyName}</strong> from the Accounts/Tax billing list. The company record and its other services (Secretary, ND, etc.) are not affected — if it later gets real Accounts/Tax invoice history, it becomes eligible again on its own.</>}
         />
       )}
     </div>

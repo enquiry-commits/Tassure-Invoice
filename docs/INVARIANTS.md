@@ -2313,6 +2313,39 @@ again.
   past the "5+ Supabase queries" threshold with AR Reminder + Late Filing +
   the mirrored-AR lookup alone), and is well past it now.
 
+- **INV-DATA-058** — "Undo my last add" is not one operation — which undo is
+  correct depends entirely on WHICH of two different things the add actually
+  did, and showing the wrong one is worse than showing neither. Added
+  2026-09-22 to TAO's "+ Add new company" (INV-DATA-054/056's own POST):
+  a row with no invoice yet (`lastInvoice === null`) can exist for two
+  unrelated reasons — a genuinely fresh `companies` row that POST just
+  inserted (hard-deletable; DELETE's own `tw_status` gate already allows
+  it), or a real TeamWork-tracked company whose `services_manual` accounts/
+  tax override POST just flipped on (NEVER hard-deletable — DELETE's
+  `tw_status` gate correctly refuses it, but the old UI showed the delete
+  icon on it anyway, so the only feedback was a refusal with no path
+  forward). `TaoCompanyRow` gained `trackedByTeamWork` (a real
+  `companies.tw_status` read, computed once in `computeTaoCompanies()`
+  itself so every caller — the TAO page and `lib/tao-lookup.ts`'s chat
+  preview alike — sees the same real answer) so the page can show the RIGHT
+  undo for each: the trash icon only for `!trackedByTeamWork` (delete),
+  a new "Remove from TAO" icon only for `trackedByTeamWork` (clears the
+  `services_manual` override back to `null` — not `false` — via the same
+  `/api/companies/service-override` PATCH the Add flow itself used to set
+  it; `null` clears the override rather than asserting "never eligible",
+  so real Accounts/Tax invoice history appearing later still makes the
+  company eligible again on its own, unlike a hard `false` would). Verified
+  against real production data: of 807 real TAO-eligible companies, 19 are
+  never-billed-but-`trackedByTeamWork` (would have hit the old dead-end) vs.
+  only 2 genuinely fresh never-billed ones (the trash icon's real intended
+  case). `ConfirmDeleteModal` (`components/ConfirmDeleteModal.tsx`, shared
+  by 7 call sites) gained optional `title`/`body`/`confirmLabel`/`tone`
+  props, all defaulting to the exact original hard-delete wording/red
+  styling, so this reuses the one shell instead of a second, divergent
+  "are you sure" modal — every existing caller passing only `label`/
+  `onCancel`/`onConfirm` is unaffected. *(source: 2026-09-22, Vincent: "假设
+  我后面发现加错公司了怎么办...这个新加的公司后面发现无效".)*
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

@@ -1580,8 +1580,11 @@ export function TaoBillingCard({ preview, conversationId }: { preview: TaoPrevie
       </div>
 
       {open && (
+        // trackedByTeamWork: only the TAO page's own delete/remove icons
+        // read this field (app/billing/tao/page.tsx) — TaoInvoiceBuilder
+        // never does, so a placeholder here is inert either way.
         <TaoBuilderModal
-          company={{ companyId: preview.companyId, companyName: preview.companyName, lastInvoice: preview.lastInvoice }}
+          company={{ companyId: preview.companyId, companyName: preview.companyName, lastInvoice: preview.lastInvoice, trackedByTeamWork: false }}
           onClose={() => setOpen(false)}
         />
       )}
