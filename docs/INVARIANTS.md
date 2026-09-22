@@ -2311,6 +2311,56 @@ again.
 
 ## AI Assistant / chatbot (INV-AI)
 
+- **INV-AI-004** — The reply-scanning safety-net guards (INV-DATA-022/023,
+  `mentionsOutstandingBalance`/`claimsPermissionDenied`/
+  `claimsNoSoaDownloadTool`, plus the new generic backstop below) must run
+  exactly ONCE, on the text actually about to be shown to the user — never
+  inside `claudeAnswer()` on its own draft. Found 2026-09-22 while adding the
+  4th guard, not from a screenshot: `claudeAnswer()` used to guard its own
+  `result.text` before returning it, but `POST()`'s `claude_then_openai`
+  route then feeds that ALREADY-guarded text into `synthesizeWithOpenAI()` as
+  `claudeDraft` and ships whatever OpenAI rewrites it into, unguarded — a
+  real, live gap (not yet observed misfiring, but structurally certain to):
+  OpenAI's own "improve clarity" rewrite could smooth away the ⚠️ warning
+  banner, or introduce a fresh denial claim of its own that never existed in
+  Claude's draft, and neither would ever be caught. Guarding inside
+  `claudeAnswer()` also can't simply be left in place alongside a second
+  guard pass later — the warning banner's own text contains "欠款", which
+  re-matches `mentionsOutstandingBalance` and would double-prepend itself on
+  every un-synthesized reply. Fixed by moving the whole guard chain out of
+  `claudeAnswer()` (`applyCapabilityGuards()`, `app/api/assistant/route.ts`)
+  and calling it exactly once in `POST()` on `draftReply` — whichever text
+  that is (Claude's own, or OpenAI's synthesis of it) — using the same
+  `toolNames`/`toolEvidence` `claudeAnswer()` already tracks (the two
+  boolean flags `claudeAnswer()` used to track locally,
+  `outstandingToolCalled`/`crossPersonToolCalled`, are now derived from
+  those instead of tracked separately). Any FUTURE reply-scanning guard
+  follows the same rule: add it to `applyCapabilityGuards()`, never re-check
+  inside `claudeAnswer()`.
+
+  Same change added `claimsGenericCapabilityDenial()` — a structural
+  backstop instead of a 4th per-feature regex. The three specific guards
+  above each exist because Vincent found one specific false "I can't do X"
+  claim, for one specific feature, after the fact; the next NEW false denial
+  (for a capability none of the three happen to name) would need the same
+  discover-then-patch cycle again. What all three real incidents actually
+  had in common wasn't their wording, it was that **zero tools were called
+  that turn** before the model asserted it had no way to help. The generic
+  guard checks that structural signal instead: a denial-shaped reply
+  (reusing the same question/offer-to-check exclusion shapes as
+  `mentionsOutstandingBalance`, so a genuine hedge is never flagged) is
+  suspicious specifically when `toolNames.length === 0` for the whole turn —
+  with 35+ real tools covering nearly everything in this app, a flat "no
+  tool/no way/can't do this" on a turn that never even tried one is almost
+  always fabricated. Only fires when none of the three specific guards
+  already did (`applyCapabilityGuards`' own `flagged` check), so a known
+  incident is never double-warned. Verified against all three real
+  documented incidents' own wording (would have caught each on this signal
+  alone) plus 6 new true/false cases, `test-reply-guards.ts` (`npx tsx
+  test-reply-guards.ts`), 20/20 passing; `npx tsc --noEmit` and `npm run
+  build` both clean. *(source: 2026-09-22, following up on Vincent's own
+  "AI Agent/My Tasks 少一些东西" review of this exact failure family.)*
+
 - **INV-AI-003** — The multi-model My Tasks agent (added 2026-09-21) has
   one final-answer owner and one source of truth for internal facts.
   `lib/ai/orchestrator.ts` may route clearly external/general questions to

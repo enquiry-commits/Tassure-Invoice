@@ -198,6 +198,64 @@ export function claimsNoSoaDownloadTool(text: string): boolean {
   return /(没有.{0,8}工具.{0,12}(下载|生成).{0,8}(pdf|soa|对账单|statement)|没法直接帮.{0,4}下载|没办法直接帮.{0,4}下载|无法直接帮.{0,4}下载|不能直接帮.{0,4}下载|no tool.{0,30}(download|generate).{0,15}(pdf|soa|statement))/i.test(t);
 }
 
+// Same failure family as the three guards above, generalized instead of
+// added-to. Each of those was written AFTER Vincent found one specific false
+// "I can't do X" claim live, for one specific feature — a real new denial
+// for a capability none of the three happens to cover would need yet another
+// hand-written regex discovered the same way. With 35+ real tools now
+// covering nearly everything in this app, the one thing every documented
+// incident above actually had in common was not the WORDING, it was that
+// **zero tools were called that turn** before the model asserted it had no
+// way to help — a model that genuinely lacks a capability hedges or offers
+// to check; it doesn't flatly assert "no tool/no permission/can't do this"
+// as settled fact without having tried one. So this checks that structural
+// signal (did ANY tool fire this turn) rather than a claim about one
+// specific feature — it catches a denial for a capability none of the three
+// above happens to name, without needing to predict its wording in advance.
+// Deliberately narrower than "the reply sounds unhelpful": reuses the same
+// question/offer-to-check exclusion shapes as mentionsOutstandingBalance
+// (a hedge or a clarifying question is not a denial claim), and only ever
+// runs when the three specific guards above did NOT already fire, so a
+// known incident is never double-flagged with two stacked warnings.
+export function claimsGenericCapabilityDenial(text: string): boolean {
+  const t = text.toLowerCase();
+  if (/[？?]/.test(text)) return false;
+  if (/(请问|請問|告诉我|告訴我|帮你查|帮您查|幫你查|要我帮|要我幫|想查一下|需要我|which company|tell me the|let me check|i can check|would you like me)/i.test(t)) return false;
+  const zhHit = /(没有.{0,10}(工具|权限|办法|方法)(可以|能)|无法(直接)?(帮|协助|提供|查询|下载|生成|操作)|这边(暂时)?没有(工具|权限|办法)|不支持这(个|项)(操作|功能)|系统(目前)?没有(工具|办法)|办不到|做不到)/.test(text);
+  const enHit = /(i (don'?t|do not) have (a|any) (tool|way|permission)|there'?s no way for me to|i'?m not able to (directly )?(help|do|access|retrieve|download|generate)|i can'?t (directly )?(help|do|access|retrieve|download|generate))/i.test(t);
+  return zhHit || enHit;
+}
+
+// Single point of truth for applying every reply-scanning safety-net guard
+// above. Must run exactly ONCE, on the text actually shown to the user —
+// never on an intermediate draft a later step (OpenAI synthesis) can still
+// freely rewrite. Callers pass the SAME toolNames/toolEvidence claudeAnswer()
+// already tracks rather than this function tracking its own flags, so it can
+// be applied identically whether the final reply is Claude's own draft or
+// OpenAI's synthesis of it. See docs/INVARIANTS.md INV-AI-004.
+export function applyCapabilityGuards(text: string, opts: { toolNames: string[]; toolEvidence: { name: string; input: Record<string, unknown> }[]; account?: ApprovedAccount | null }): string {
+  const outstandingToolCalled = opts.toolNames.includes('check_outstanding_balance') || opts.toolNames.includes('outstanding_balance_summary');
+  const crossPersonToolCalled = opts.toolEvidence.some(e => (e.name === 'my_tasks_summary' || e.name === 'recent_activity_summary') && typeof e.input?.person === 'string' && (e.input.person as string).trim().length > 0);
+  let out = text;
+  let flagged = false;
+  if (mentionsOutstandingBalance(out) && !outstandingToolCalled) {
+    out = `⚠️ 系统提示：这条回复提到了欠款/outstanding，但本次没有检测到真正调用 check_outstanding_balance（单个公司）或 outstanding_balance_summary（整体汇总）查询实时数据——内容可能不准确，请换个更明确的问法重新提问（例如直接说"查一下 XX 公司的欠款"或"TAB 的欠款总数是多少"），不要直接采信。\n\n${out}`;
+    flagged = true;
+  }
+  if (claimsNoSoaDownloadTool(out) && !outstandingToolCalled) {
+    out = `⚠️ 系统提示：这条回复说没有工具能下载/生成 SOA PDF，但本次没有检测到真正调用 check_outstanding_balance——如果这家公司确实有欠款，系统其实会自动附上真正可以点击下载/起草邮件的卡片，这个说法很可能是错的。请换个更明确的问法重新提问（例如直接说"查一下 XX 公司的欠款"），让它先真正查一次实时数据。\n\n${out}`;
+    flagged = true;
+  }
+  if (opts.account && callerRank(opts.account.email) !== 'staff' && claimsPermissionDenied(out) && !crossPersonToolCalled) {
+    out = `⚠️ 系统提示：这条回复说没有权限，但你的账号（${opts.account.name}）对下级同事是有查看权限的——如果被问到的是下级或平级，这个拒绝就是错的，本次没有检测到真正调用查询工具。请换个更明确的问法重新提问（例如给出完整姓名，如"Chelsea Ang 今天要做什么"）。\n\n${out}`;
+    flagged = true;
+  }
+  if (!flagged && claimsGenericCapabilityDenial(out) && opts.toolNames.length === 0) {
+    out = `⚠️ 系统提示：这条回复声称没有工具/权限/办法完成这件事，但这次对话完全没有尝试调用任何真实工具——这类"做不到"的结论没试过并不可靠，很可能是猜的。请换个更明确的问法重新提问（说清楚公司名或具体要做的事），让它先真正尝试查询或操作一次，而不是直接采信这个说法。\n\n${out}`;
+  }
+  return out;
+}
+
 // ── System map: single source for both engines ──────────────────────────────
 const PAGES = [
   { label: 'Dashboard 总览',        href: '/',                          kw: ['dashboard', '总览', '首页', 'overview', '主页'] },
@@ -1851,31 +1909,17 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   let lastTaoPreview: TaoPreview | undefined;
   const toolNames: string[] = [];
   const toolEvidence: ToolEvidence[] = [];
-  // INV-DATA-022 deterministic safety net — see mentionsOutstandingBalance's
-  // own comment on why this checks the REPLY, not the question.
-  // outstandingToolCalled flips true the instant check_outstanding_balance
-  // actually fires (found or not — a real "not found" is still a real
-  // check, never a guess).
-  let outstandingToolCalled = false;
-  // Same deterministic-guard family — see claimsPermissionDenied's own
-  // comment. Flips true only when my_tasks_summary/recent_activity_summary
-  // was actually called THIS turn with a real `person` argument (a
-  // self-only call never hits the permission branch at all, so it doesn't
-  // count here).
-  let crossPersonToolCalled = false;
-  const guardedText = (text: string): string => {
-    let out = text;
-    if (mentionsOutstandingBalance(out) && !outstandingToolCalled) {
-      out = `⚠️ 系统提示：这条回复提到了欠款/outstanding，但本次没有检测到真正调用 check_outstanding_balance（单个公司）或 outstanding_balance_summary（整体汇总）查询实时数据——内容可能不准确，请换个更明确的问法重新提问（例如直接说"查一下 XX 公司的欠款"或"TAB 的欠款总数是多少"），不要直接采信。\n\n${out}`;
-    }
-    if (claimsNoSoaDownloadTool(out) && !outstandingToolCalled) {
-      out = `⚠️ 系统提示：这条回复说没有工具能下载/生成 SOA PDF，但本次没有检测到真正调用 check_outstanding_balance——如果这家公司确实有欠款，系统其实会自动附上真正可以点击下载/起草邮件的卡片，这个说法很可能是错的。请换个更明确的问法重新提问（例如直接说"查一下 XX 公司的欠款"），让它先真正查一次实时数据。\n\n${out}`;
-    }
-    if (account && callerRank(account.email) !== 'staff' && claimsPermissionDenied(out) && !crossPersonToolCalled) {
-      out = `⚠️ 系统提示：这条回复说没有权限，但你的账号（${account.name}）对下级同事是有查看权限的——如果被问到的是下级或平级，这个拒绝就是错的，本次没有检测到真正调用查询工具。请换个更明确的问法重新提问（例如给出完整姓名，如"Chelsea Ang 今天要做什么"）。\n\n${out}`;
-    }
-    return out;
-  };
+  // The reply-scanning safety-net guards (INV-DATA-022/023, INV-AI-004) no
+  // longer run here — they need the FINAL text actually shown to the user,
+  // and OpenAI synthesis (see orchestrator.ts's synthesizeWithOpenAI) can
+  // still rewrite this function's own draft after it returns. Guarding here
+  // AND there would double-apply on the un-synthesized path (the warning
+  // banner itself contains "欠款" and would re-trigger its own guard) and
+  // still miss a denial OpenAI introduces or a warning OpenAI smooths away
+  // on the synthesized path. So POST() below calls applyCapabilityGuards()
+  // exactly once, on whichever text — this draft or OpenAI's synthesis of
+  // it — is actually about to be shown, using the toolNames/toolEvidence
+  // this function already tracks either way.
   for (let turn = 0; turn < 4; turn++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -1898,7 +1942,7 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text: guardedText(text), invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, toolNames, toolEvidence };
+      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, toolNames, toolEvidence };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -1911,10 +1955,10 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
       // equivalent handling and would answer something unrelated.
       let result: unknown;
       try {
-        if (tu.name === 'check_outstanding_balance' || tu.name === 'outstanding_balance_summary') outstandingToolCalled = true;
-        if ((tu.name === 'my_tasks_summary' || tu.name === 'recent_activity_summary') && typeof tu.input?.person === 'string' && tu.input.person.trim()) {
-          crossPersonToolCalled = true;
-        }
+        // outstandingToolCalled/crossPersonToolCalled used to be tracked
+        // here as local flags; applyCapabilityGuards() now derives the same
+        // two facts from toolNames/toolEvidence below instead (see its own
+        // comment), so this loop no longer needs to track them itself.
         result = await runTool(tu.name!, tu.input ?? {}, account ?? null);
         if (tu.name === 'preview_invoice_draft' && result && typeof result === 'object' && (result as { found?: boolean }).found) {
           lastInvoicePreview = (result as { preview: InvoicePreview }).preview;
@@ -2443,7 +2487,7 @@ export async function POST(req: NextRequest) {
         && openAIConfigured()
         && !result.postIncorporatePreview
         && synthesisBudgetMs >= 8_000;
-      const reply = useOpenAISynthesis
+      const draftReply = useOpenAISynthesis
         ? await synthesizeWithOpenAI({
             transcript,
             claudeDraft: result.text,
@@ -2453,6 +2497,12 @@ export async function POST(req: NextRequest) {
             timeoutMs: synthesisBudgetMs,
           })
         : result.text;
+      // Applied exactly once, here, on whichever text is actually about to
+      // be shown — Claude's own draft, or OpenAI's synthesis of it — using
+      // the SAME toolNames/toolEvidence claudeAnswer() tracked either way.
+      // See applyCapabilityGuards' own comment for why this moved out of
+      // claudeAnswer() itself (INV-AI-004).
+      const reply = applyCapabilityGuards(draftReply, { toolNames: result.toolNames, toolEvidence: result.toolEvidence, account });
       const finalRoute = useOpenAISynthesis ? 'claude_then_openai' as const : 'claude_only' as const;
       const finalProvider = useOpenAISynthesis ? 'anthropic+openai' : 'anthropic';
       const finalModel = useOpenAISynthesis ? openAIModel('primary') : ASSISTANT_MODEL;

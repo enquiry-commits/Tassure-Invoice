@@ -313,6 +313,31 @@ learning.sql`. `OPENAI_API_KEY` and the three optional model variables must
 exist in the deployment environment; Vincent confirmed the production key
 was saved in Vercel, but a fresh deployment is still needed to load it.
 
+**2026-09-22 — the reply-scanning "false capability denial" guard family
+generalized, plus a real structural gap closed (INV-AI-004).** Prompted by
+Vincent's own review of this AI Agent/My Tasks area ("我还是觉得少一些东
+西"): the 3 existing guards (INV-DATA-022/023) each exist because Vincent
+found one specific fabricated "I can't do X" reply after the fact, for one
+specific feature. Added a 4th, generic backstop
+(`claimsGenericCapabilityDenial`, `app/api/assistant/route.ts`) that catches
+a NEW denial-shaped reply for a capability none of the three name, using a
+structural signal (zero tools called that turn) instead of predicting its
+exact wording — verified it would have caught all 3 real historical
+incidents on this signal alone, plus 6 new cases, `test-reply-guards.ts`,
+20/20 passing. Same change fixed a real latent gap found while doing this
+(not yet observed misfiring in production, but structurally certain to):
+the guard chain used to run inside `claudeAnswer()` on its own draft, before
+`POST()`'s `claude_then_openai` route could still feed that text into
+OpenAI's `synthesizeWithOpenAI()` for a free rewrite — meaning OpenAI's
+"improve clarity" pass could silently drop the ⚠️ warning banner or
+introduce its own fresh denial claim, unguarded either way. Moved to a
+single `applyCapabilityGuards()` call in `POST()` on whichever text is
+actually about to be shown, whichever engine produced it. `npx tsc --noEmit`
+and `npm run build` both clean. **Not yet exercised against a real live
+conversation** — same "code-complete, verified via diagnostic script, not
+yet a real click-through" caveat as everything else in this section; the
+next real My Tasks/AssistantWidget chat session is the first real test.
+
 ## Known risks (not bugs — things worth remembering before relying on data)
 
 - **Billing draft auto-fill accuracy varies by field** — Secretary ~85%
@@ -355,6 +380,36 @@ was saved in Vercel, but a fresh deployment is still needed to load it.
 
 ## Pending improvements (known, not yet scheduled)
 
+- **2026-09-22 — Vincent's own "AI Agent/My Tasks 少一些东西" review queue,
+  being worked one item at a time ("一个一个优化").** 6 gaps identified;
+  #1 shipped same day (see `PROJECT_STATUS.md`'s dated entry, INV-AI-004 —
+  the generic capability-denial guard backstop). Remaining 5, in the order
+  proposed to Vincent:
+  1. **Verification backlog** — this file already lists 7-8 separate
+     "code-complete, `tsc`/build clean, never actually clicked through"
+     write paths scattered across this section (floating widget drag/
+     resize, deep-link auto-open, the 3 agentic-chat phase-2-4 actions,
+     agentic invoicing step 2, View-As-for-chat). Needs a real consolidated
+     checklist plus Vincent (or a designated staff account) actually
+     clicking through each one — not something that can be verified by
+     reading code.
+  2. Done — see the INV-AI-004 entry above.
+  3. **No proactive/outbound channel** — My Tasks is 100% pull: nothing
+     reminds a staff member who simply never opens the page that day. No
+     email digest, WeChat Work, or Telegram push exists. Needs Vincent to
+     decide a channel before this can be built.
+  4. **No audit trail distinguishing "AI proposed this draft" from "human
+     clicked Confirm"** — already listed below under the 2026-09-09
+     agentic-invoicing entry as its own known follow-up gap; still open.
+  5. **`search_documents`/NAS document search is a dead entry point** —
+     already covered under Active issues above (migration not run, secret
+     not set, indexing script not written, machine not designated).
+  6. **No quality spot-check/eval loop** — every real AI-assistant bug in
+     `docs/INVARIANTS.md`'s INV-AI/INV-DATA-022/023 family was found by
+     Vincent personally screenshotting a wrong reply, never by any
+     automated sampling or review process. Needs a design decision (auto
+     LLM-judge over a random sample? a lightweight human review queue?)
+     before building anything.
 - **Floating AssistantWidget rebuilt as a draggable/resizable/collapsible
   popup, shipped 2026-09-09** — full functional parity with My Tasks chat
   (same cards, same attachments, now shared via `components/assistant/

@@ -1703,6 +1703,56 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Assistant: generalized the "false capability denial" reply guard, and
+  fixed a real gap it exposed (INV-AI-004).** Prompted by Vincent's own
+  review of the AI Agent/My Tasks area — "我还是觉得少一些东西" — one
+  specific gap flagged back was that the 3 existing reply-scanning guards
+  (INV-DATA-022/023: `mentionsOutstandingBalance`, `claimsPermissionDenied`,
+  `claimsNoSoaDownloadTool`) are each a one-off regex written AFTER Vincent
+  found one specific fabricated "I can't do X" reply — a new false denial
+  for a capability none of the three name would need the same
+  discover-then-patch cycle again. Added a 4th, generic backstop instead of
+  a 4th specific regex: `claimsGenericCapabilityDenial()`
+  (`app/api/assistant/route.ts`) fires on a denial-shaped reply
+  (reusing the existing question/offer-to-check exclusion shapes so a
+  genuine hedge is never flagged) specifically when **zero tools were
+  called that turn** — the one thing all 3 real historical incidents
+  actually had in common, more reliable than their wording. Verified it
+  would have caught all 3 on this structural signal alone, plus 6 new
+  true/false cases, in the extended `test-reply-guards.ts` (`npx tsx
+  test-reply-guards.ts`), 20/20 passing.
+  - **A real bug found while doing this, not from a screenshot**: the guard
+    chain used to run inside `claudeAnswer()`, on its own draft, before
+    returning. But `POST()`'s `claude_then_openai` route can feed that
+    already-guarded text into `synthesizeWithOpenAI()` for a free OpenAI
+    rewrite ("improve clarity") and ship whatever comes back — unguarded.
+    OpenAI could silently smooth away the ⚠️ warning banner, or introduce a
+    brand-new denial claim never in Claude's draft, and neither would ever
+    be caught. Guarding inside `claudeAnswer()` also can't simply run AGAIN
+    afterward on the same text — the warning banner's own wording contains
+    "欠款", which re-matches `mentionsOutstandingBalance` and would
+    double-prepend itself on every un-synthesized reply.
+  - **Fix**: extracted the whole chain into `applyCapabilityGuards()` and
+    call it exactly ONCE in `POST()`, on `draftReply` — whichever text is
+    actually about to be shown to the user, Claude's own or OpenAI's
+    synthesis of it — reusing the same `toolNames`/`toolEvidence`
+    `claudeAnswer()` already tracks (the two boolean flags it used to track
+    locally, `outstandingToolCalled`/`crossPersonToolCalled`, are now
+    derived from those instead).
+  - `npx tsc --noEmit` and `npm run build` both clean. **Not yet exercised
+    against a real live conversation** — same "verified via diagnostic
+    script, not yet a real click-through" caveat as most of this session's
+    AI-assistant work; the next real My Tasks/AssistantWidget chat is the
+    first real test. `docs/INVARIANTS.md` INV-AI-004, `docs/CURRENT_STATE.md`
+    updated.
+  - Vincent flagged 5 more gaps in the same review (verification backlog for
+    "code-complete, not yet clicked" features; a purely-pull My Tasks with
+    no outbound push; no audit trail distinguishing an AI-proposed draft
+    from a human confirm; the dead `search_documents`/NAS entry point; no
+    quality spot-check loop) — see `docs/CURRENT_STATE.md`'s Pending
+    improvements; this entry is the first of those tackled, one at a time
+    per Vincent's own "一个一个优化".
+
 - **Fixed a real regression Vincent hit from today's own Master List
   conflict-detection feature: checking a Service checkbox
   (Nominee Dir./Secretary/ACC/TAX) for the first time on a row that had
