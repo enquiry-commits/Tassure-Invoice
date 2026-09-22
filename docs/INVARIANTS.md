@@ -2276,6 +2276,42 @@ again.
   every insert, and backfilled onto an existing row only when that row's own
   field was empty — never overwritten). *(source: 2026-09-22, Vincent: "是否
   有必要加入UEN做保险机制".)*
+- **INV-DATA-057** — My Tasks' per-person task list must only ever ADD a new
+  domain by REUSING that domain's own already-established attribution rule
+  and "needs attention" threshold — never invent a new one for the purpose
+  of populating this page. `lib/my-tasks-data.ts`'s `computeMyTasks()` was
+  widened 2026-09-22 (Vincent, on a real screenshot of the v1 AR-Reminder-
+  and-Late-Filing-only page: "现在这部分那么简陋，根本都称不上是提醒") to
+  add 2 more domains, both reusing existing logic verbatim: SOA collections
+  (`effectiveOwner()`, `lib/soa-data.ts` — the EXACT function the SOA pages
+  themselves already show as the "Owner" column) and Trademark renewals
+  (`getTrademarkSummary()`'s own existing 180-day "expiring soon" window,
+  attributed via `companies.pic`/`sec_pic` joined by `normalize()`-matched
+  company name — the SAME company_name→companies.pic fallback join Late
+  Filing's own PIC resolution already relies on, INV-DATA-049). Nominee
+  Director subrole review and Client Communications drafts were
+  DELIBERATELY NOT added in the same pass, and must not be added later by
+  guessing a threshold — neither has an equally clean existing per-person
+  attribution rule (ND review is company-scoped but "whose job" isn't
+  defined anywhere; an unsent draft has no existing "how long is too long"
+  rule anywhere in this codebase) — see `docs/CURRENT_STATE.md`'s Pending
+  improvements for what a real decision would need to cover before either
+  could be added the same way.
+
+  Verified against real production data before shipping (`computeMyTasks()`
+  run for 2 real accounts with genuine SOA involvement): Hoo Seng Xin — 33
+  real SOA collections, each correctly attributed to him by name via
+  `effectiveOwner()`; Chelsea Ang — 1 real SOA collection (ZTT Engineering,
+  S$1,533.50). Both accounts' first `computeMyTasks()` call measured ~12.8s
+  (cold Node process — module load + first Supabase TLS handshake), but a
+  second call on an already-warm process measured ~2-2.4s consistently —
+  the real added cost of `computeAllSoaRows()` in a warm serverless
+  function is closer to the latter, not the former; don't mistake a cold
+  diagnostic script's first-run number for steady-state latency. Same
+  change added `preferredRegion = 'sin1'` to `/api/my-tasks`
+  (INV-PERF-001) — it had NONE even in the narrower v1 scope (already
+  past the "5+ Supabase queries" threshold with AR Reminder + Late Filing +
+  the mirrored-AR lookup alone), and is well past it now.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

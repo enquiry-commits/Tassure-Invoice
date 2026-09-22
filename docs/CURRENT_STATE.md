@@ -313,6 +313,33 @@ learning.sql`. `OPENAI_API_KEY` and the three optional model variables must
 exist in the deployment environment; Vincent confirmed the production key
 was saved in Vercel, but a fresh deployment is still needed to load it.
 
+**2026-09-22 — My Tasks' per-person scope widened past AR Reminder + Late
+Filing for the first time since 2026-08-31 (INV-DATA-057).** Vincent, on a
+real screenshot of the still-v1 page: "现在这部分那么简陋，根本都称不上是
+提醒". Added SOA collections owed (attributed via the exact same
+`effectiveOwner()` the SOA pages themselves show) and Trademark renewals
+due within 180 days (attributed via `companies.pic`/`sec_pic`, the same
+join Late Filing's own PIC fallback already uses) — both reuse existing,
+already-tested rules, nothing invented. Nominee Director subrole review and
+Client Communications drafts are still NOT included — neither has an
+equally clean existing attribution rule or "needs attention" threshold; a
+real decision from Vincent is still needed before either can be added the
+same way (what makes an ND review "whose job", how long an unsent draft
+should sit before it counts as overdue). Same change fixed 2 unrelated real
+bugs found in the same file: the "Today's Priority" banner and its
+rule-based fallback were hardcoded English in an otherwise all-Chinese
+page, and the Claude-generated version of that banner was still running on
+`claude-haiku-4-5-20251001` — the exact model INV-DATA-047 already
+diagnosed elsewhere as producing degraded replies — never updated when
+`app/api/assistant/route.ts`'s own `ASSISTANT_MODEL` moved to Sonnet on
+2026-09-10; now shares that same env var on purpose. Also added
+`preferredRegion = 'sin1'` to `/api/my-tasks` (INV-PERF-001), which had
+none even before this change. Verified against real data for 2 real staff
+accounts (33 and 1 real SOA collections respectively, correctly attributed)
+— `npx tsc --noEmit` and `npm run build` both clean. **Not yet exercised by
+a real browser login** — same caveat as most of this session's other
+AI-assistant work.
+
 **2026-09-22 — the reply-scanning "false capability denial" guard family
 generalized, plus a real structural gap closed (INV-AI-004).** Prompted by
 Vincent's own review of this AI Agent/My Tasks area ("我还是觉得少一些东

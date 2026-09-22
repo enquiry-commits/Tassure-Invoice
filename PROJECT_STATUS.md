@@ -1723,6 +1723,55 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **My Tasks: real scope widening past AR Reminder + Late Filing
+  (INV-DATA-057), plus 3 real bugs fixed in the same area.** Vincent, on a
+  real screenshot of the still-v1 page: "现在这部分那么简陋，根本都称不上是
+  提醒" — a direct, sharper follow-up on top of the AI-review queue work
+  above (this wasn't one of the original 6 items; it's what came out of
+  actually looking at the shipped result).
+  - **Scope**: added SOA collections owed (`lib/my-tasks-data.ts`, attributed
+    via `effectiveOwner()` — the EXACT function the SOA pages themselves show
+    as "Owner", never a new rule) and Trademark renewals due within 180 days
+    (attributed via `companies.pic`/`sec_pic`, the same company-name join
+    Late Filing's own PIC fallback already uses, INV-DATA-049;
+    `getTrademarkSummary()`'s own existing 180-day window). Both flow through
+    `computeMyTasks()` into every consumer at once: the on-screen tables
+    (`app/my-tasks/page.tsx`, 2 new metric cards + 2 new tables), the daily
+    brief (`lib/my-tasks-brief.ts`), and the chat assistant's
+    `my_tasks_summary` tool (`app/api/assistant/route.ts`) — same "one
+    shared computation" guarantee as everything else in this file.
+    Deliberately did NOT add Nominee Director subrole review or Client
+    Communications drafts in the same pass — neither has an equally clean
+    existing attribution rule or "needs attention" threshold anywhere in
+    this codebase yet; adding either would mean inventing a business rule,
+    not reusing one, and needs a real decision from Vincent first (see
+    `docs/CURRENT_STATE.md`'s Pending improvements).
+  - **Bug 1**: the "Today's Priority" banner and its rule-based fallback
+    (`lib/my-tasks-brief.ts`) were hardcoded English inside an otherwise
+    all-Chinese staff-facing page — rewritten to Chinese, including both
+    empty-state messages and `/api/my-tasks`'s own `scopeNote` field.
+  - **Bug 2**: the Claude-generated version of that same banner was still
+    running on `claude-haiku-4-5-20251001` — the exact model INV-DATA-047
+    already diagnosed elsewhere in this codebase as producing "mechanical,
+    table-padded" replies — never updated when `app/api/assistant/route.ts`'s
+    own `ASSISTANT_MODEL` moved to Sonnet on 2026-09-10 for exactly that
+    reason. Now shares that same env var on purpose, so the two surfaces
+    can't silently drift apart again the way they just did.
+  - **Bug 3**: `/api/my-tasks` never had `preferredRegion` set (INV-PERF-001)
+    — already past the "5+ Supabase queries" threshold even in the narrower
+    v1 scope (AR Reminder + Late Filing + the mirrored-AR lookup), and well
+    past it now. Added `preferredRegion = 'sin1'`.
+  - Verified against real production data before shipping, not just
+    `tsc`/build: `computeMyTasks()` run for 2 real staff accounts — Hoo Seng
+    Xin (33 real SOA collections, all correctly attributed by name) and
+    Chelsea Ang (1 real SOA collection, ZTT Engineering S$1,533.50).
+    Confirmed the first call's ~12.8s reading was cold-process overhead
+    (module load + first Supabase TLS handshake), not steady-state cost — a
+    warm second call measured ~2-2.4s consistently. `npx tsc --noEmit` and
+    `npm run build` both clean. `docs/INVARIANTS.md` INV-DATA-057,
+    `docs/CURRENT_STATE.md`, and `docs/FEATURE_MAP.md`'s My Tasks row all
+    updated. **Not yet exercised by a real browser login.**
+
 - **Assistant: automated AI-reply quality spot-check shipped (INV-AI-006),
   item 6 (last) of Vincent's "AI Agent/My Tasks 少一些东西" review queue.**
   Vincent picked "自动LLM抽查判分" when asked to choose between an LLM

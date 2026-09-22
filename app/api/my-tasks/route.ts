@@ -7,12 +7,15 @@ import { getRecentActivity } from '@/lib/recent-activity';
 import { todaySGT } from '@/lib/date';
 
 // My Tasks — the logged-in staff member's own outstanding items,
-// aggregated. `arReminder`/`lateFiling`/`counts` scope for v1: AR Reminder
-// + Late Filing only — the only two areas with reliable per-person PIC
-// data (see docs/FEATURE_MAP.md / PROJECT_STATUS.md 2026-08-31 entry for
-// why Nominee Director review, Client Communications drafts, and
-// Trademark were left out: none of them have a real assignee column to
-// attribute a row to a specific person).
+// aggregated. Scope widened 2026-09-22 (Vincent, on a real screenshot of
+// this exact page: "现在这部分那么简陋，根本都称不上是提醒") from the v1
+// AR Reminder + Late Filing-only scope to also include SOA collections
+// (via `soa_owners`/`effectiveOwner()`) and Trademark renewals (via
+// `companies.pic`/`sec_pic`) — see lib/my-tasks-data.ts's own comment for
+// why those two could be added safely (real existing PIC/owner data, real
+// existing "needs attention" rules, nothing invented here) while Nominee
+// Director review and Client Communications drafts still could not (no
+// equally clean attribution or threshold exists for either yet).
 //
 // `recentActivity` (added 2026-09-08) is a SEPARATE, deliberately broader
 // lens on top of that same limitation — see lib/recent-activity.ts's own
@@ -36,6 +39,16 @@ import { todaySGT } from '@/lib/date';
 // route also now returns `brief` — Vincent: "每天打开My Tasks 的时候 AI
 // 助手会提醒今天可能会需要完成的任务" — a short daily-priority sentence
 // (lib/my-tasks-brief.ts) generated from the exact same computed data.
+//
+// INV-PERF-001 — this route was already past the "5+ Supabase queries"
+// threshold before 2026-09-22's SOA/Trademark scope widening (AR Reminder +
+// Late Filing + mirrored-AR lookups) and is well past it now
+// (computeAllSoaRows() alone issues several more); never had
+// preferredRegion set. Added here rather than left for the next person to
+// rediscover — Supabase is Tokyo-hosted, so every one of these round-trips
+// was crossing the Pacific for no reason.
+export const preferredRegion = 'sin1';
+
 export async function GET(req: NextRequest) {
   const realAccount = await getRequestAccount(req);
   if (!realAccount) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
@@ -87,16 +100,22 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     scope: tasks.arOnly ? 'ar-only' : 'full',
+    // Rewritten to Chinese + updated for the widened scope, 2026-09-22 —
+    // same "这个提醒的任务...没有做好" review. Still says plainly what's
+    // NOT covered (honesty stays the point of this line, not just its
+    // language) rather than implying the reminder is now complete.
     scopeNote: tasks.arOnly
       ? (viewingAs
-          ? `${viewingAs.name}'s account has access to AR Reminder only — showing their AR Reminder tasks.`
-          : 'Your account has access to AR Reminder only — showing your AR Reminder tasks.')
-      : "My Tasks currently covers AR Reminder and Late Filing only — Nominee Director reviews, Client Communications drafts and Trademark renewals aren't aggregated here yet.",
+          ? `${viewingAs.name} 的账号只有 AR Reminder 权限——只显示 TA 的 AR Reminder 任务。`
+          : '你的账号只有 AR Reminder 权限——只显示你的 AR Reminder 任务。')
+      : 'My Tasks 目前覆盖 AR Reminder、Late Filing、SOA 欠款催收和商标续期——Nominee Director 复核和 Client Communications 待发邮件还没有纳入。',
     generatedAt: todaySGT(),
     brief,
     recentActivity,
     arReminder: tasks.arReminder,
     lateFiling: tasks.lateFiling,
+    soaCollections: tasks.soaCollections,
+    trademarkRenewals: tasks.trademarkRenewals,
     counts: tasks.counts,
     everAssigned: tasks.everAssigned,
     viewingAs,

@@ -26,6 +26,10 @@ type LateFilingTask = {
   id: number; companyName: string; uen: string | null; nextAgmDueDate: string | null;
   remarks: string | null; pic: string | null; accPic: string | null; taxPic: string | null; matchedAs: string[];
 };
+// Added 2026-09-22 alongside lib/my-tasks-data.ts's own scope widening —
+// see that file's own comment for why SOA/Trademark could be added safely.
+type SoaTask = { companyName: string; qbCompany: 'TAB' | 'TAC' | 'TAO'; totalOutstanding: number; owner: string | null };
+type TrademarkTask = { companyName: string; applicationNumber: string | null; markExpiredDate: string; daysUntilDue: number };
 // Vincent, 2026-09-08, on the View-As-Chelsea screen showing 0 tasks
 // despite her using the system daily: "没有真正了解到...我们的员工在做什
 // 么" — a real audit-trail timeline (lib/recent-activity.ts), separate
@@ -54,7 +58,12 @@ type MyTasksResponse = {
   everAssigned: boolean;
   arReminder: { overdue: ArTask[]; staleOverdue: ArTask[]; dueSoon: ArTask[] };
   lateFiling: { needsAttention: LateFilingTask[] } | null;
-  counts: { arOverdue: number; arStaleOverdue: number; arDueSoon: number; lateFiling: number; total: number };
+  soaCollections: SoaTask[] | null;
+  trademarkRenewals: TrademarkTask[] | null;
+  counts: {
+    arOverdue: number; arStaleOverdue: number; arDueSoon: number; lateFiling: number;
+    soaCollections: number; trademarkRenewals: number; total: number;
+  };
   viewingAs: { email: string; name: string } | null;
   // Only ever present when the REAL logged-in account has
   // canViewAsOthers — see app/api/my-tasks/route.ts's own comment. Absent
@@ -81,7 +90,7 @@ function DailyBriefBanner({ brief }: { brief: string | null }) {
   );
 }
 
-type Category = 'ALL' | 'overdue' | 'dueSoon' | 'lateFiling';
+type Category = 'ALL' | 'overdue' | 'dueSoon' | 'lateFiling' | 'soaCollections' | 'trademarkRenewals';
 
 function MatchedAsBadges({ fields }: { fields: string[] }) {
   const labels: Record<string, string> = { pic: 'SEC', acc_pic: 'ACC', tax_pic: 'TAX' };
@@ -138,6 +147,56 @@ function LateFilingTable({ rows }: { rows: LateFilingTask[] }) {
               <td style={{ padding: '6px 10px' }}>{r.nextAgmDueDate ? fmtDate(r.nextAgmDueDate) : '—'}</td>
               <td style={{ padding: '6px 10px' }}><MatchedAsBadges fields={r.matchedAs} /></td>
               <td style={{ padding: '6px 10px', fontSize: 11, color: '#64748b', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.remarks ?? ''}>{r.remarks || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Added 2026-09-22 alongside the scope widening in lib/my-tasks-data.ts.
+function SoaTaskTable({ rows }: { rows: SoaTask[] }) {
+  if (!rows.length) return null;
+  const money = (n: number) => `S$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  return (
+    <div className="system-list-shell" style={{ marginBottom: 16 }}>
+      <div className="system-list-title-bar px-4 py-3">
+        <h2 className="system-list-title">SOA Collections <span style={{ opacity: 0.7, fontWeight: 500 }}>({rows.length})</span></h2>
+      </div>
+      <table className="system-list-table" style={{ width: '100%' }}>
+        <thead><tr className="list-column-header-gray"><th>Company</th><th>Book</th><th>Outstanding</th><th>Owner</th></tr></thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={`${r.qbCompany}-${r.companyName}`} className="system-list-row">
+              <td style={{ padding: '6px 10px' }}><span className="company-name-text">{r.companyName}</span></td>
+              <td style={{ padding: '6px 10px' }}>{r.qbCompany}</td>
+              <td style={{ padding: '6px 10px', fontWeight: 700, color: '#b45309' }}>{money(r.totalOutstanding)}</td>
+              <td style={{ padding: '6px 10px' }}>{r.owner || '—'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TrademarkTaskTable({ rows }: { rows: TrademarkTask[] }) {
+  if (!rows.length) return null;
+  return (
+    <div className="system-list-shell" style={{ marginBottom: 16 }}>
+      <div className="system-list-title-bar px-4 py-3">
+        <h2 className="system-list-title">Trademark Renewals <span style={{ opacity: 0.7, fontWeight: 500 }}>({rows.length})</span></h2>
+      </div>
+      <table className="system-list-table" style={{ width: '100%' }}>
+        <thead><tr className="list-column-header-gray"><th>Company</th><th>Application No.</th><th>Expires</th><th>Days</th></tr></thead>
+        <tbody>
+          {rows.map(r => (
+            <tr key={`${r.companyName}-${r.applicationNumber}`} className="system-list-row">
+              <td style={{ padding: '6px 10px' }}><span className="company-name-text">{r.companyName}</span></td>
+              <td style={{ padding: '6px 10px' }}>{r.applicationNumber || '—'}</td>
+              <td style={{ padding: '6px 10px' }}>{fmtDate(r.markExpiredDate)}</td>
+              <td style={{ padding: '6px 10px', fontWeight: 700, color: r.daysUntilDue <= 30 ? '#dc2626' : '#b45309' }}>{r.daysUntilDue}d left</td>
             </tr>
           ))}
         </tbody>
@@ -545,10 +604,14 @@ export default function MyTasksPage() {
   const counts = data?.counts;
   const arRows = data?.arReminder;
   const lateRows = data?.lateFiling?.needsAttention ?? [];
+  const soaRows = data?.soaCollections ?? [];
+  const trademarkRows = data?.trademarkRenewals ?? [];
 
   const showOverdue = cat === 'ALL' || cat === 'overdue';
   const showDueSoon = cat === 'ALL' || cat === 'dueSoon';
   const showLate = cat === 'ALL' || cat === 'lateFiling';
+  const showSoa = cat === 'ALL' || cat === 'soaCollections';
+  const showTrademark = cat === 'ALL' || cat === 'trademarkRenewals';
 
   return (
     <div>
@@ -910,11 +973,17 @@ export default function MyTasksPage() {
               ) : (
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginBottom: 24 }}>
-                    <MetricCard onClick={() => setCat('ALL')} active={cat === 'ALL'} value={counts?.total ?? 0} label="All Tasks" sub="across AR & Late Filing" icon={<ListChecks size={16} />} color="#1e3a5f" ariaLabel="Show all tasks" />
+                    <MetricCard onClick={() => setCat('ALL')} active={cat === 'ALL'} value={counts?.total ?? 0} label="All Tasks" sub="AR, Late Filing, SOA & Trademark" icon={<ListChecks size={16} />} color="#1e3a5f" ariaLabel="Show all tasks" />
                     <MetricCard onClick={() => setCat('overdue')} active={cat === 'overdue'} value={(counts?.arOverdue ?? 0) + (counts?.arStaleOverdue ?? 0)} label="AR Overdue" sub="past due, not filed" icon={<AlertTriangle size={16} />} color="#dc2626" ariaLabel="Filter by AR overdue" />
                     <MetricCard onClick={() => setCat('dueSoon')} active={cat === 'dueSoon'} value={counts?.arDueSoon ?? 0} label="AR Due Soon" sub="due within 14 days" icon={<Clock size={16} />} color="#b45309" ariaLabel="Filter by AR due soon" />
                     {data?.scope === 'full' && (
                       <MetricCard onClick={() => setCat('lateFiling')} active={cat === 'lateFiling'} value={counts?.lateFiling ?? 0} label="Late Filing" sub="flagged, mine to chase" icon={<CalendarClock size={16} />} color="#7c3aed" ariaLabel="Filter by Late Filing" />
+                    )}
+                    {data?.scope === 'full' && (
+                      <MetricCard onClick={() => setCat('soaCollections')} active={cat === 'soaCollections'} value={counts?.soaCollections ?? 0} label="SOA Collections" sub="money owed, mine to chase" icon={<AlertTriangle size={16} />} color="#0f766e" ariaLabel="Filter by SOA collections" />
+                    )}
+                    {data?.scope === 'full' && (
+                      <MetricCard onClick={() => setCat('trademarkRenewals')} active={cat === 'trademarkRenewals'} value={counts?.trademarkRenewals ?? 0} label="Trademark Renewals" sub="expiring within 180 days" icon={<CalendarClock size={16} />} color="#a16207" ariaLabel="Filter by Trademark renewals" />
                     )}
                   </div>
 
@@ -930,7 +999,7 @@ export default function MyTasksPage() {
                         // message for an account that was never a
                         // caseworker in the first place.
                         <>
-                          <div>{data?.viewingAs ? `${data.viewingAs.name} isn't` : "Your account isn't"} assigned as PIC on any AR Reminder or Late Filing item — that's expected for a management/non-caseworker account, not a sign anything is broken.</div>
+                          <div>{data?.viewingAs ? `${data.viewingAs.name} isn't` : "Your account isn't"} assigned as PIC/owner on any AR Reminder, Late Filing, SOA collection or Trademark renewal — that's expected for a management/non-caseworker account, not a sign anything is broken.</div>
                           {!data?.viewingAs && (
                             <div style={{ marginTop: 8, fontSize: 12.5 }}>
                               {!!data?.viewableAccounts?.length && 'Use "View as" above to check a specific team member, or '}
@@ -952,6 +1021,8 @@ export default function MyTasksPage() {
                       )}
                       {showDueSoon && arRows && <ArTaskTable rows={arRows.dueSoon} title="AR Due Soon" tone="warning" />}
                       {showLate && data?.scope === 'full' && <LateFilingTable rows={lateRows} />}
+                      {showSoa && data?.scope === 'full' && <SoaTaskTable rows={soaRows} />}
+                      {showTrademark && data?.scope === 'full' && <TrademarkTaskTable rows={trademarkRows} />}
                     </>
                   )}
                 </>
