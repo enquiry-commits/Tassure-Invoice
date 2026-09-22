@@ -19,27 +19,33 @@ import type { ReportsData } from '@/app/api/reports/route';
  * ratio suite verbatim — that skill is written for a company's own P&L/
  * balance sheet/cash-flow statement (gross margin, ROE, current ratio,
  * DSO/DPO...), none of which exists anywhere in this system: Reports only
- * has CLIENT-BASE and TOP-LINE BILLING data (active/new/churned clients,
- * service mix, revenue by year, staff workload) — no COGS, no balance
- * sheet, no cash flow. Forcing those ratios in would mean inventing the
- * missing inputs, which breaks this file's own no-invented-facts rule
- * below. What DOES transfer: the skill's rigor and format, applied to the
- * data that genuinely exists — not its ratio formulas applied to data that
- * doesn't.
+ * has CLIENT-BASE and TOP-LINE BILLING data. Forcing those ratios in would
+ * mean inventing the missing inputs.
+ *
+ * Structured output (added same day, round 2) — "文字没有优先级"/"排列也不
+ * 整齐": the first version returned one prose blob, which rendered as an
+ * undifferentiated wall of text no matter how the prompt asked it to read
+ * as prioritized. A plain string can't GUARANTEE visual hierarchy — only
+ * real structure can. Forced via an Anthropic tool call (input_schema,
+ * tool_choice pinned to it) rather than asking for JSON in prose, which is
+ * the reliable way to get structured output from the Messages API — the
+ * page renders each `insights[]` entry as its own distinct row (signal
+ * badge + title + body), not prose paragraphs. Bilingual for the same
+ * reason as the requested toggle button: BOTH languages come back in the
+ * same call and get cached together, so switching languages on the page is
+ * instant (no second API round-trip, no regenerate).
  *
  * Direct Anthropic call, same reliable model/endpoint app/api/assistant/
  * route.ts's claudeAnswer() already uses in production (confirmed live via
- * real ai_agent_runs rows) — NOT lib/ai/openai.ts's multi-model path, whose
- * own production config was still unconfirmed as of 2026-09-21
- * (docs/CURRENT_STATE.md: "a fresh deployment is still needed to load it").
- * A narrative that's supposed to always be there when the page loads should
- * not depend on a still-uncertain second provider — this can gain OpenAI
- * polish later (mirroring lib/ai/orchestrator.ts's synthesizeWithOpenAI
- * pattern) once that path is confirmed live, without changing this file's
- * own contract.
+ * real ai_agent_runs rows) — see docs/INVARIANTS.md INV-AI-006 for why this
+ * is NOT lib/ai/openai.ts's multi-model path.
  */
 
 const NARRATIVE_MODEL = process.env.ASSISTANT_MODEL || 'claude-sonnet-5';
+
+export type ReportsSignal = 'good' | 'watch' | 'warning';
+export type ReportsInsight = { signal: ReportsSignal; titleZh: string; titleEn: string; bodyZh: string; bodyEn: string };
+export type ReportsNarrative = { insights: ReportsInsight[]; summaryZh: string; summaryEn: string };
 
 function pctChange(curr: number, prev: number): number | null {
   if (prev === 0) return null; // undefined growth rate off a zero base — let the model say "no prior-year base", never divide by zero itself
@@ -77,8 +83,6 @@ function summarizeForPrompt(data: ReportsData) {
     customerSourceMix: data.sourceDonut,
     clientFlowByYear: flowByYear,
     revenueByYear,
-    // Pre-computed, not for the model to derive — see this function's own
-    // header comment.
     computedTrends: {
       revenueYoyPct, invoiceCountYoyPct, avgInvoiceValueByYear,
       note: revenueYoyPct === null ? 'Not enough prior-year data yet to compute YoY growth.' : undefined,
@@ -88,43 +92,75 @@ function summarizeForPrompt(data: ReportsData) {
   };
 }
 
-export async function generateReportsNarrative(data: ReportsData): Promise<string> {
+const ANALYSIS_TOOL = {
+  name: 'submit_analysis',
+  description: 'Submit the structured financial/business analysis for the Reports page.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      insights: {
+        type: 'array' as const,
+        minItems: 2, maxItems: 4,
+        items: {
+          type: 'object' as const,
+          properties: {
+            signal: { type: 'string' as const, enum: ['good', 'watch', 'warning'] },
+            titleZh: { type: 'string' as const, description: '一句话标题，不超过16个汉字，不是完整句子，是标签式短语' },
+            titleEn: { type: 'string' as const, description: 'Short headline, under 8 words, phrase not a sentence' },
+            bodyZh: { type: 'string' as const, description: '2-4句解读，带具体数字支撑' },
+            bodyEn: { type: 'string' as const, description: '2-4 sentences of explanation, with specific supporting numbers' },
+          },
+          required: ['signal', 'titleZh', 'titleEn', 'bodyZh', 'bodyEn'],
+        },
+      },
+      summaryZh: { type: 'string' as const, description: '1句话范围说明：这份分析基于什么数据，不涉及什么（成本/利润率等）' },
+      summaryEn: { type: 'string' as const, description: '1-sentence scope note: what this analysis is based on and what it does not cover (cost/margin etc.)' },
+    },
+    required: ['insights', 'summaryZh', 'summaryEn'],
+  },
+};
+
+export async function generateReportsNarrative(data: ReportsData): Promise<ReportsNarrative> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured — the AI analysis cannot run.');
 
   const evidence = summarizeForPrompt(data);
   const system = `你是 Tassure（新加坡企业服务公司，做公司秘书、提名董事、账目/税务等业务）的资深财务分析师与企业规划顾问，直接向老板 Vincent 汇报。你的分析方法遵循新加坡财务分析的专业规范（信号灯快速评估、同比趋势分析纪律、新加坡数字格式惯例、免责声明），但只应用在下面真正给你的数据范围内。
 
-你会拿到公司 Reports 页面上真实的汇总数据（客户数、新增/流失、服务组合、收入趋势、员工工作量，以及已经算好的同比增长率）。基于这些真实数字写一段面向老板的分析，帮他做前瞻性规划、及早发现风险和机会——不是重复数字，是解读数字背后的含义。
+你会拿到公司 Reports 页面上真实的汇总数据（客户数、新增/流失、服务组合、收入趋势、员工工作量，以及已经算好的同比增长率）。你要通过 submit_analysis 这个工具提交结构化的分析结果——每条 insight 是一个独立的信号/发现，不是把所有内容揉成一段话。
 
 专业规范（来自新加坡财务分析方法论，应用于本次数据范围）：
-- 信号灯思维：判断每个关键信号是 🟢健康 / 🟡需关注 / 🟢🟡🔴 挑一个最贴切的放在段落开头对应的地方，不用每句话都加，但至少覆盖1-2个最关键的信号。
-- 同比分析纪律：涉及增长率时，直接使用 computedTrends 里已经算好的数字，不要自己心算或重新推导；如果 computedTrends 里某项是 null 或有 note 说明数据不够，就照实说数据不够，不要硬编一个百分比。
+- 每条 insight 必须先判断信号：good（🟢健康/积极）、watch（🟡需要关注）、warning（🔴需要注意的风险）——按重要性排序，最值得老板先看到的排第一条。
+- 同比分析纪律：涉及增长率时，直接使用 computedTrends 里已经算好的数字，不要自己心算或重新推导；如果某项是 null 或有 note 说明数据不够，就照实说数据不够，不要硬编一个百分比。
 - 数字格式：金额用 S$ 前缀（如 S$1.23M 或 S$123,000），百分比保留1位小数（如 12.3%），不用整数估算百分比。
 - 范围边界：dataScopeCaveat 字段说明了这份数据不包含什么（成本、利润率、资产负债表、现金流）——绝对不要评论"盈利能力""利润率""财务健康"这类需要成本/资产负债数据才能判断的话题，只分析客户基础、服务结构、收入趋势、人力配置这些真正有数据支撑的方面。
-- 免责边界：如果某个判断已经接近"应该怎么做决策"的程度，用"值得进一步核实"或类似措辞，不要说得像最终结论——这是方向性分析，不是正式的审计或会计意见。
+- titleZh/titleEn 是短标签，不是句子——好比一个新闻标题，body 里才展开解释和数字。
+- 每条 insight 都需要中文和英文两个版本，内容对应一致（不是逐字翻译，但传达同一个判断和同一组数字）。
 
 硬性规则：
 - 只根据给你的真实数据做判断，绝不编造数据里没有的事实、没有的客户名、没有的原因。
 - 如果某个结论只是可能性而不是确定的，要明确说"可能是""值得关注"，不要说得像确定的事实。
 - 数据不足以支撑判断的地方，直接说数据不够、需要补充什么，不要硬编一个分析出来。
-- 语言：中文，直接、简洁、像在跟老板面对面汇报，不要用"首先/其次/总之"这种模板腔调，不要写成正式报告的八股格式，不用 markdown 标题。
-- 长度：350-550字，分3-4个自然段（可以在段落开头很自然地带出🟢/🟡/🔴信号，不用刻意做成列表）。
-- 覆盖角度尽量包含：这期数据里最值得注意的一两个信号（好的或坏的，带同比数字支撑）、一个具体的风险提醒、一个具体的机会或建议方向。`;
+- 提交 2-4 条 insights，覆盖：这期数据里最值得注意的信号（好的或坏的，带同比数字支撑）、一个具体的风险提醒、一个具体的机会或建议方向——不要重复内容相近的信号。
+- summaryZh/summaryEn 是最后的范围说明（1句话：这是基于客户数/服务量/开票收入数据的判断，不涉及成本或利润率，这部分数据系统里没有），不是又一条 insight。`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
       model: NARRATIVE_MODEL,
-      max_tokens: 1500,
+      max_tokens: 2000,
       system,
-      messages: [{ role: 'user', content: `这是本次 Reports 的真实数据：\n\n${JSON.stringify(evidence, null, 2)}\n\n请写你的分析。` }],
+      tools: [ANALYSIS_TOOL],
+      tool_choice: { type: 'tool', name: 'submit_analysis' },
+      messages: [{ role: 'user', content: `这是本次 Reports 的真实数据：\n\n${JSON.stringify(evidence, null, 2)}\n\n请调用 submit_analysis 提交你的分析。` }],
     }),
   });
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
-  const text = (json.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
-  if (!text) throw new Error('Claude returned an empty analysis.');
-  return text;
+  const toolUse = (json.content as Array<{ type: string; input?: unknown }>).find(b => b.type === 'tool_use');
+  if (!toolUse?.input) throw new Error('Claude did not return a structured analysis.');
+  const result = toolUse.input as ReportsNarrative;
+  if (!Array.isArray(result.insights) || !result.insights.length) throw new Error('Claude returned an empty analysis.');
+  return result;
 }

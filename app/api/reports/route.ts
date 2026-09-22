@@ -6,7 +6,7 @@ import { customerSourceLabel } from '@/lib/customer-source';
 import { buildReportsCompanyRows, computeRevenueTrend, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT } from '@/lib/reports-data';
 import { pageAll } from '@/lib/page-all';
 import { normalize } from '@/lib/company-name';
-import { REPORT_PALETTE } from '@/lib/chart-colors';
+import { REPORT_COLORS, REPORT_PALETTE } from '@/lib/chart-colors';
 
 // Reports — customer-profile analytics for leadership (Vincent, Cindy,
 // Samuell, Tan Yee Soon; gated on ApprovedAccount.canViewReports, see
@@ -147,13 +147,20 @@ export async function computeReportsData(): Promise<ReportsData> {
     .sort((a, b) => b.value - a.value);
 
   // ── Service mix (active clients) ─────────────────────────────────────────
+  // Colors fixed per SERVICE (not assigned by sorted rank/position below) —
+  // "color follows the entity, never its rank": re-sorting this list on
+  // every data refresh must never make a service's own color jump to a
+  // different hue just because its count moved up or down one place.
+  // Muted palette (was hardcoded bright/saturated colors until 2026-09-22,
+  // round 2 — Vincent: "颜色不要鲜艳色" — this array was the one place the
+  // color-palette-unification pass earlier the same day missed).
   const serviceMix = [
-    { label: 'Reg. Address', value: active.filter(c => c.uses_address).length, color: '#0f766e' },
-    { label: 'Nominee Dir.', value: active.filter(c => c.has_nd).length, color: '#7c3aed' },
-    { label: 'AGM', value: active.filter(c => c.has_agm).length, color: '#2563eb' },
-    { label: 'XBRL', value: active.filter(c => c.has_xbrl).length, color: '#c026d3' },
-    { label: 'Accounts', value: active.filter(c => accountsNames.has(normalize(c.company_name as string))).length, color: '#0891b2' },
-    { label: 'Tax', value: active.filter(c => taxNames.has(normalize(c.company_name as string))).length, color: '#f59e0b' },
+    { label: 'Reg. Address', value: active.filter(c => c.uses_address).length, color: REPORT_COLORS.teal },
+    { label: 'Nominee Dir.', value: active.filter(c => c.has_nd).length, color: REPORT_COLORS.plum },
+    { label: 'AGM', value: active.filter(c => c.has_agm).length, color: REPORT_COLORS.blue },
+    { label: 'XBRL', value: active.filter(c => c.has_xbrl).length, color: REPORT_PALETTE[8] },
+    { label: 'Accounts', value: active.filter(c => accountsNames.has(normalize(c.company_name as string))).length, color: REPORT_PALETTE[5] },
+    { label: 'Tax', value: active.filter(c => taxNames.has(normalize(c.company_name as string))).length, color: REPORT_COLORS.gold },
   ].sort((a, b) => b.value - a.value);
 
   // ── Customer source (Unknown until staff tag companies going forward) ───

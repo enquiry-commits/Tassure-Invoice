@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
 import { computeReportsData } from '@/app/api/reports/route';
-import { generateReportsNarrative } from '@/lib/reports-narrative';
+import { generateReportsNarrative, type ReportsNarrative } from '@/lib/reports-narrative';
 
 export const preferredRegion = 'sin1';
 
@@ -15,6 +15,22 @@ export const preferredRegion = 'sin1';
 // underlying numbers don't meaningfully shift within a day. `?refresh=true`
 // forces regeneration (the page's own manual refresh button).
 const NARRATIVE_STALE_MS = 24 * 60 * 60 * 1000;
+
+// The `narrative` column is plain `text` (no migration needed for round 2's
+// structured/bilingual rework — see lib/reports-narrative.ts's own header):
+// stores JSON.stringify(ReportsNarrative), parsed back on read. A row
+// written by round 1 (a plain prose string, from before this change) is not
+// valid JSON — caught and treated as a cache miss rather than crashing, so
+// the one real row Vincent already generated live doesn't need manual
+// cleanup; it just naturally gets replaced by the next real generation.
+function parseCachedNarrative(raw: string): ReportsNarrative | null {
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed?.insights) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(req: NextRequest) {
   const account = await getRequestAccount(req);
@@ -37,8 +53,9 @@ export async function GET(req: NextRequest) {
         : '';
       return NextResponse.json({ error: cacheErr.message + hint }, { status: 503 });
     }
-    if (cached && Date.now() - new Date(cached.generated_at).getTime() < NARRATIVE_STALE_MS) {
-      return NextResponse.json({ narrative: cached.narrative, generatedAt: cached.generated_at, cached: true });
+    const parsed = cached ? parseCachedNarrative(cached.narrative) : null;
+    if (parsed && Date.now() - new Date(cached!.generated_at).getTime() < NARRATIVE_STALE_MS) {
+      return NextResponse.json({ narrative: parsed, generatedAt: cached!.generated_at, cached: true });
     }
   }
 
@@ -46,7 +63,7 @@ export async function GET(req: NextRequest) {
     const data = await computeReportsData();
     const narrative = await generateReportsNarrative(data);
     const now = new Date().toISOString();
-    const { error: insertErr } = await sb.from('reports_narrative_cache').insert({ narrative, model: process.env.ASSISTANT_MODEL || 'claude-sonnet-5', generated_at: now });
+    const { error: insertErr } = await sb.from('reports_narrative_cache').insert({ narrative: JSON.stringify(narrative), model: process.env.ASSISTANT_MODEL || 'claude-sonnet-5', generated_at: now });
     if (insertErr) {
       // A failed cache WRITE must not throw away a real, already-generated
       // analysis — the reader still gets today's write-up, it just won't be

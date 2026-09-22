@@ -7,7 +7,7 @@ import {
   BarChart3, Users, UserPlus, UserMinus, TrendingUp, PieChart, Wallet, Compass, Download, X, Sparkles, RefreshCw,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
-import { Donut, HBars, LineChart, ComboChart } from '@/components/dashboard/Charts';
+import { Donut, VBars, HBars, LineChart } from '@/components/dashboard/Charts';
 import { DimensionFilterMenu, type FilterOption } from '@/components/dashboard/DimensionFilterMenu';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { customerSourceLabel } from '@/lib/customer-source';
@@ -292,7 +292,17 @@ export default function ReportsPage() {
   // prompt itself — Vincent: "能不能...装好一个金融分析师和企业规划师的Ai
   // 分析助手...让这些数据不会只是单单的数字了", picking "auto-generated
   // narrative" over a chat panel so this always shows something on load.
-  const [narrative, setNarrative] = useState<{ text: string; generatedAt: string; cached: boolean } | null>(null);
+  //
+  // Structured, not prose (round 2) — "文字没有优先级"/"排列也不整齐": a
+  // single string can never GUARANTEE visual hierarchy no matter how the
+  // prompt words it, so the API now returns real structure (insights[],
+  // each with its own signal/title/body) and this renders each as its own
+  // distinct row instead of paragraphs of prose. Bilingual per-field, both
+  // languages already in the same fetched object — the 中/EN toggle below
+  // just switches which field it reads, no second request.
+  type NarrativeInsight = { signal: 'good' | 'watch' | 'warning'; titleZh: string; titleEn: string; bodyZh: string; bodyEn: string };
+  const [narrative, setNarrative] = useState<{ insights: NarrativeInsight[]; summaryZh: string; summaryEn: string; generatedAt: string; cached: boolean } | null>(null);
+  const [narrativeLang, setNarrativeLang] = useState<'zh' | 'en'>('zh');
   // Starts true (not false) specifically so the initial mount's effect below
   // never needs to set it synchronously itself — a synchronous setState
   // inside an effect body is a real lint error (react-hooks/set-state-in-
@@ -307,12 +317,18 @@ export default function ReportsPage() {
     fetch(`/api/reports/narrative${refresh ? '?refresh=true' : ''}`).then(async r => {
       const body = await r.json();
       if (!r.ok) throw new Error(body.error || 'Failed to load AI analysis');
-      setNarrative({ text: body.narrative, generatedAt: body.generatedAt, cached: !!body.cached });
+      setNarrative({ insights: body.narrative.insights, summaryZh: body.narrative.summaryZh, summaryEn: body.narrative.summaryEn, generatedAt: body.generatedAt, cached: !!body.cached });
       setNarrativeError(null);
     }).catch(e => setNarrativeError(e.message)).finally(() => setNarrativeLoading(false));
   };
   const refreshNarrative = () => { setNarrativeLoading(true); fetchNarrative(true); };
   useEffect(() => { if (authorized) fetchNarrative(); }, [authorized]);
+
+  const SIGNAL_STYLE: Record<NarrativeInsight['signal'], { color: string; bg: string; labelZh: string; labelEn: string }> = {
+    good: { color: '#6ee7b7', bg: 'rgba(110,231,183,.12)', labelZh: '健康', labelEn: 'Good' },
+    watch: { color: '#fbbf24', bg: 'rgba(251,191,36,.12)', labelZh: '关注', labelEn: 'Watch' },
+    warning: { color: '#fca5a5', bg: 'rgba(252,165,165,.12)', labelZh: '风险', labelEn: 'Warning' },
+  };
 
   // usePagination MUST run on every render, before the early returns below
   // — calling a hook only on renders where authorized/data happen to be
@@ -344,29 +360,62 @@ export default function ReportsPage() {
       </div>
 
       <section style={{ background: 'linear-gradient(135deg,#102a43,#1d3a5c)', borderRadius: 16, padding: '20px 22px', color: '#fff', boxShadow: '0 10px 32px rgba(16,42,67,.18)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <span style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Sparkles size={15} />
           </span>
-          <div style={{ fontSize: 13, fontWeight: 750, letterSpacing: '-.01em' }}>AI 分析 — 本期观察</div>
-          <button onClick={refreshNarrative} disabled={narrativeLoading}
-            title="Regenerate"
-            style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,.75)', background: 'rgba(255,255,255,.1)', border: 'none', borderRadius: 7, padding: '5px 10px', cursor: narrativeLoading ? 'default' : 'pointer' }}>
-            <RefreshCw size={11} style={{ animation: narrativeLoading ? 'spin 1s linear infinite' : 'none' }} />
-            {narrativeLoading ? '生成中…' : '重新生成'}
-          </button>
+          <div style={{ fontSize: 13, fontWeight: 750, letterSpacing: '-.01em' }}>{narrativeLang === 'zh' ? 'AI 分析 — 本期观察' : 'AI Analysis — This Period'}</div>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Both languages already sit in the one fetched object (see
+                lib/reports-narrative.ts) — this only ever flips which field
+                renders, never triggers a second request. */}
+            <div style={{ display: 'flex', background: 'rgba(255,255,255,.1)', borderRadius: 7, padding: 2 }}>
+              {(['zh', 'en'] as const).map(l => (
+                <button key={l} onClick={() => setNarrativeLang(l)}
+                  style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                    background: narrativeLang === l ? 'rgba(255,255,255,.9)' : 'transparent', color: narrativeLang === l ? '#102a43' : 'rgba(255,255,255,.7)' }}>
+                  {l === 'zh' ? '中' : 'EN'}
+                </button>
+              ))}
+            </div>
+            <button onClick={refreshNarrative} disabled={narrativeLoading}
+              title="Regenerate"
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,.75)', background: 'rgba(255,255,255,.1)', border: 'none', borderRadius: 7, padding: '5px 10px', cursor: narrativeLoading ? 'default' : 'pointer' }}>
+              <RefreshCw size={11} style={{ animation: narrativeLoading ? 'spin 1s linear infinite' : 'none' }} />
+              {narrativeLoading ? (narrativeLang === 'zh' ? '生成中…' : 'Working…') : (narrativeLang === 'zh' ? '重新生成' : 'Refresh')}
+            </button>
+          </div>
         </div>
         {narrativeError && (
           <div style={{ fontSize: 12.5, color: '#fecaca', lineHeight: 1.6 }}>{narrativeError}</div>
         )}
         {!narrativeError && narrativeLoading && !narrative && (
-          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.65)' }}>正在生成分析…</div>
+          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.65)' }}>{narrativeLang === 'zh' ? '正在生成分析…' : 'Generating analysis…'}</div>
         )}
         {!narrativeError && narrative && (
           <>
-            <div style={{ fontSize: 13, lineHeight: 1.85, color: 'rgba(255,255,255,.92)', whiteSpace: 'pre-wrap' }}>{narrative.text}</div>
-            <div style={{ marginTop: 12, fontSize: 10.5, color: 'rgba(255,255,255,.45)' }}>
-              {narrative.cached ? '基于缓存的分析 · ' : ''}生成于 {new Date(narrative.generatedAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {narrative.insights.map((ins, i) => {
+                const s = SIGNAL_STYLE[ins.signal];
+                return (
+                  <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.05)', borderLeft: `3px solid ${s.color}` }}>
+                    <span style={{ flexShrink: 0, height: 20, padding: '0 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', letterSpacing: '.02em' }}>
+                      {narrativeLang === 'zh' ? s.labelZh : s.labelEn}
+                    </span>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{narrativeLang === 'zh' ? ins.titleZh : ins.titleEn}</div>
+                      <div style={{ fontSize: 12.5, lineHeight: 1.7, color: 'rgba(255,255,255,.8)' }}>{narrativeLang === 'zh' ? ins.bodyZh : ins.bodyEn}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.1)', fontSize: 11, lineHeight: 1.6, color: 'rgba(255,255,255,.5)' }}>
+              {narrativeLang === 'zh' ? narrative.summaryZh : narrative.summaryEn}
+            </div>
+            <div style={{ marginTop: 8, fontSize: 10.5, color: 'rgba(255,255,255,.4)' }}>
+              {narrative.cached ? (narrativeLang === 'zh' ? '基于缓存的分析 · ' : 'Cached · ') : ''}
+              {narrativeLang === 'zh' ? '生成于 ' : 'Generated '}{new Date(narrative.generatedAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}
             </div>
           </>
         )}
@@ -427,18 +476,11 @@ export default function ReportsPage() {
         <HBars data={data.serviceMix} accent={COLORS.teal} labelWidth={110} />
       </Card>
 
-      {/* Both trend cards below were 2 separate bar charts each — bars are
-          right for comparing discrete categories (Service Mix, Staff
-          Workload above), but these are genuinely a value changing across
-          ORDERED years, which a line reads as a trend/shape at a glance in
-          a way two side-by-side bar charts never could (Vincent: "为什么
-          只有柱状图...找出适合我们的"). Combining each pair onto one chart
-          is also the point, not just the chart type: New vs Churned on one
-          axis shows net growth directly; Revenue (bars) with Invoice Count
-          (line) overlaid reveals average-invoice-value trend — rising
-          revenue with a flat invoice-count line means billing MORE per
-          invoice, not just more invoices — which two separate charts could
-          never show either. */}
+      {/* New Clients vs Churned is genuinely a value changing across ORDERED
+          years — a line reads that shape at a glance in a way two side-by-
+          side bar charts never could (Vincent: "为什么只有柱状图...找出适
+          合我们的"), and both series share ONE real axis (client count), so
+          one multi-line chart is the correct type, not a design shortcut. */}
       <Card title="Client Flow by Year" eyebrow="Flow" icon={<UserPlus size={16} />} note={data.notes.flow}>
         <LineChart labels={data.flow.years} height={190}
           series={[
@@ -447,10 +489,30 @@ export default function ReportsPage() {
           ]} />
       </Card>
 
-      <Card title="Revenue & Invoice Volume by Year" eyebrow="Billing" icon={<Wallet size={16} />} note={data.notes.revenue}>
-        <ComboChart labels={data.revenue.years} height={190}
-          bars={data.revenue.revenueTrendThousands.map(p => p.value)} barLabel="Revenue (S$'000)" barColor={COLORS.gold}
-          line={data.revenue.invoiceCountTrend.map(p => p.value)} lineLabel="Invoice Count" lineColor={COLORS.blue} />
+      {/* Revenue and Invoice Count used to be overlaid on one chart on two
+          DIFFERENT implicit scales — a real dual-axis chart, which good
+          chart-design guidance flags as a non-negotiable to avoid (two
+          scales on one plot area is inherently hard to read correctly: a
+          reader can't tell which scale a given line height refers to).
+          What that overlay was actually FOR — showing whether Tassure bills
+          more per invoice over time, not just more invoices — is better
+          served by computing that ratio directly as its own single-axis
+          series (average invoice value), not by cramming two raw numbers
+          onto one plot. */}
+      <Card title="Revenue by Year" eyebrow="Billing" icon={<Wallet size={16} />} note={data.notes.revenue}>
+        <VBars data={data.revenue.revenueTrendThousands} color={COLORS.gold} height={170} />
+      </Card>
+      <Card title="Average Invoice Value by Year" eyebrow="Billing" icon={<Wallet size={16} />}
+        note="Revenue ÷ invoice count for that year — rising even while invoice volume is flat means Tassure is billing more per invoice, not just billing more often.">
+        <LineChart labels={data.revenue.years} height={190}
+          series={[{
+            label: 'Avg. Invoice Value (S$)', color: COLORS.blue,
+            data: data.revenue.years.map((_, i) => {
+              const count = data.revenue.invoiceCountTrend[i]?.value ?? 0;
+              const revenue = data.revenue.revenueTrendThousands[i]?.value ?? 0;
+              return count > 0 ? Math.round((revenue * 1000) / count) : 0;
+            }),
+          }]} />
       </Card>
 
       <Card title="Staff Workload" eyebrow="Open AR / AGM Cycles" icon={<Users size={16} />} note="Counts every open (not yet filed) cycle a person is SEC, ACC, or TAX PIC on — the same fields My Tasks reads.">
