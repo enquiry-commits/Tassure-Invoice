@@ -1822,6 +1822,31 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **SOA Outstanding > All: each Source badge (TAB/TAC/TAO) is now a
+  one-click PDF download**, per Vincent's screenshots + "我希望是连接这
+  SOA PDF的链接...置入到 Source 的列内，点击 TAB就会和点击（Download SOA
+  PDF）的功能一样，并且当是Total 的那行有显示两个公司，比如 TAB/TAO, 那么
+  当我点击那行的 source 就会是下载两个PDF" (wire the existing Download
+  SOA PDF link into the Source column itself — clicking a TAB badge should
+  act like clicking Download SOA PDF, and a combined row showing 2 badges
+  means 2 independent downloads, one per badge). `app/billing/soa/
+  _components.tsx`'s Source badges (both the multi-source group row's
+  `sources.map(...)` badges and each per-source/child row's own single
+  badge) became `<button>`s calling the existing `downloadSoaPdf()`
+  (`lib/soa-actions-client.ts`) directly for that ONE book — the same
+  function `SoaDetail`'s own Download button and Company 360's
+  `SoaAllDownloadButton` already call, no new download mechanism. New
+  `downloadingBadges`/`badgeDownloadErrors` state, keyed by `${rowKey}:
+  ${book}` so two different rows' TAB badges never share loading/error
+  state; a failed download turns that ONE badge red with a tooltip
+  instead of a page-level error. `event.stopPropagation()` on the click so
+  it never also triggers the row's own "open detail" handler.
+  `npx tsc --noEmit` clean, `npx eslint` clean (2 pre-existing warnings
+  elsewhere in the file, unrelated to this change — confirmed via `git
+  diff`'s own line ranges), `npm run build` (cold) clean. No
+  `docs/INVARIANTS.md` entry — reuses an existing, already-proven download
+  path, not a new durable fact.
+
 - **Fixed the Mail-icon column getting squeezed out of view on wide list
   tables when the sidebar is expanded (INV-DATA-065).** Vincent: "当被挤
   压到宽度，信封就会出现在不对的位置...就是导致我每次要在浏览器ZOOM小画面

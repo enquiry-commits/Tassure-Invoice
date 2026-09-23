@@ -430,6 +430,32 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   const [sendModalDraft, setSendModalDraft] = useState<DraftLike | null>(null);
   const [sendModalSender, setSendModalSender] = useState<SoaSender>(null);
 
+  // Added 2026-09-23 — Vincent: "我希望是连接这 SOA PDF的链接...置入到
+  // Source 的列内，点击 TAB就会和点击（Download SOA PDF）的功能一样，并且
+  // 当是Total 的那行有显示两个公司，比如 TAB/TAO, 那么当我点击那行的
+  // source 就会是下载两个PDF" — each Source badge (TAB/TAC/TAO) on the
+  // "All" page becomes its own one-click download for THAT book specifically
+  // (not the combined "All" PDF) — a group row showing 2 badges means 2
+  // independent click targets, one PDF each, not one click producing both.
+  // Reuses downloadSoaPdf() (lib/soa-actions-client.ts) — the same function
+  // SoaDetail's own Download button and Company 360's SoaAllDownloadButton
+  // already call — no new download mechanism. Keyed by `${rowKey}:${book}`
+  // (not just `book`) so two different rows' TAB badges don't share loading
+  // state.
+  const [downloadingBadges, setDownloadingBadges] = useState<Set<string>>(() => new Set());
+  const [badgeDownloadErrors, setBadgeDownloadErrors] = useState<Record<string, string>>({});
+  const downloadSourceBadge = async (key: string, companyName: string, book: QbCompany) => {
+    setDownloadingBadges(prev => new Set(prev).add(key));
+    setBadgeDownloadErrors(prev => { const next = { ...prev }; delete next[key]; return next; });
+    try {
+      await downloadSoaPdf(companyName, book);
+    } catch (err) {
+      setBadgeDownloadErrors(prev => ({ ...prev, [key]: err instanceof Error ? err.message : String(err) }));
+    } finally {
+      setDownloadingBadges(prev => { const next = new Set(prev); next.delete(key); return next; });
+    }
+  };
+
   // A row's real qbCompany — its own tag in "All" mode, otherwise this
   // page's fixed one. The `as QbCompany` is safe by construction, never a
   // guess: computeAllSoaRows() (app/api/billing/soa/all/route.ts) always
@@ -745,14 +771,27 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         <div style={{ padding: '0 6px', textAlign: 'center' }}>
           <SoaReminderStatus progress={c.reminderProgress} />
         </div>
-        {qbCompany === 'ALL' && (
-          <div style={{ textAlign: 'center' }}>
-            <span style={{
-              display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
-              padding: '2px 7px', borderRadius: 5, background: '#eef2f7', color: '#1e3a5f',
-            }}>{rowCompany(c)}</span>
-          </div>
-        )}
+        {/* Clickable Source badge downloads that book's own SOA PDF — see
+            downloadSourceBadge's own comment above for the full request. */}
+        {qbCompany === 'ALL' && (() => {
+          const badgeKey = `${rowKey(c)}:${rowCompany(c)}`;
+          const isDownloading = downloadingBadges.has(badgeKey);
+          const badgeError = badgeDownloadErrors[badgeKey];
+          return (
+            <div style={{ textAlign: 'center' }}>
+              <button title={badgeError ?? `Download ${rowCompany(c)} SOA PDF`}
+                onClick={event => { event.stopPropagation(); void downloadSourceBadge(badgeKey, c.companyName, rowCompany(c)); }}
+                disabled={isDownloading}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
+                  padding: '2px 7px', borderRadius: 5, border: 'none', cursor: isDownloading ? 'default' : 'pointer',
+                  background: badgeError ? 'var(--status-danger-tint)' : '#eef2f7', color: badgeError ? 'var(--status-danger)' : '#1e3a5f',
+                }}>
+                {isDownloading ? <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} /> : rowCompany(c)}
+              </button>
+            </div>
+          );
+        })()}
         {AGING_BUCKETS.map(bucket => {
           const items = c.lineItems.filter(item => item.bucket === bucket.key);
           return (
@@ -980,7 +1019,23 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                         <SoaReminderGroupStatus items={group.rows.map(row => ({ source: rowCompany(row), progress: row.reminderProgress }))} />
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
-                        {sources.map(source => <span key={source} style={{ display: 'inline-block', flex: '0 0 auto', fontSize: 9.5, fontWeight: 800, padding: '2px 6px', borderRadius: 5, background: '#dfe7f0', color: '#1e3a5f' }}>{source}</span>)}
+                        {sources.map(source => {
+                          const key = `${group.key}:${source}`;
+                          const isDownloading = downloadingBadges.has(key);
+                          const badgeError = badgeDownloadErrors[key];
+                          return (
+                            <button key={source} title={badgeError ?? `Download ${source} SOA PDF`}
+                              onClick={event => { event.stopPropagation(); void downloadSourceBadge(key, group.companyName, source); }}
+                              disabled={isDownloading}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 3, flex: '0 0 auto', fontSize: 9.5, fontWeight: 800,
+                                padding: '2px 6px', borderRadius: 5, border: 'none', cursor: isDownloading ? 'default' : 'pointer',
+                                background: badgeError ? 'var(--status-danger-tint)' : '#dfe7f0', color: badgeError ? 'var(--status-danger)' : '#1e3a5f',
+                              }}>
+                              {isDownloading ? <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} /> : source}
+                            </button>
+                          );
+                        })}
                       </div>
                       {AGING_BUCKETS.map(bucket => {
                         const value = combined.aging[bucket.key];
