@@ -71,7 +71,13 @@ export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'inv
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 3, width: 'fit-content', maxWidth: '100%',
         padding: '2px 5px', borderRadius: 4,
-        background: status === 'error' ? '#fee2e2' : '#f2f6f8',
+        // White fill, not the original gray (#f2f6f8) — Vincent, right
+        // after the border shipped: "轮廓是可以的，但是我希望按钮的灰色底
+        // 变成白色底" (the outline is good, but wants the gray fill changed
+        // to white) — matches the Source badges' own white fill exactly.
+        // Error state's red tint is untouched — only the default fill
+        // changed.
+        background: status === 'error' ? '#fee2e2' : '#fff',
         color: status === 'error' ? '#b91c1c' : '#31506f',
         fontSize: 9.5, fontWeight: 800, lineHeight: 1.25, whiteSpace: 'nowrap',
         opacity: muted ? 0.72 : 1,
@@ -83,8 +89,7 @@ export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'inv
         // text unchanged, across every page). This is the ONE shared chip
         // component every one of those pages already renders (see this
         // file's own header comment), so a single change here reaches all
-        // of them — no separate edit needed per page. Text/background/
-        // color are all untouched, only the border is new.
+        // of them — no separate edit needed per page.
         border: `1px solid ${status === 'error' ? '#fca5a5' : '#b8c7d6'}`,
         cursor: status === 'loading' ? 'wait' : 'pointer',
         fontFamily: 'inherit',

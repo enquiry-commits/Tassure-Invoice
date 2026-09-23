@@ -1822,6 +1822,14 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Corrected same-day: Invoice No. chip's fill changed gray → white.**
+  Vincent, right after the border shipped: "轮廓是可以的，但是我希望按钮的
+  灰色底变成白色底" — outline's good, wants the gray fill (`#f2f6f8`)
+  changed to white, matching the Source badges' own white fill exactly.
+  One-property change in the same shared `BillingInvoiceReference.tsx`
+  (error state's red tint untouched). `npx tsc --noEmit`/`eslint`/`npm run
+  build` (cold) all clean.
+
 - **The "TAB #02610894"-style Invoice No. chip gets the same visible
   border as the new Source badges, app-wide in one edit.** Vincent, after
   seeing Company 360's new Source badge outline: "那个按钮轮廓好看很多，
