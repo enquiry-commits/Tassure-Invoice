@@ -889,18 +889,17 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             rows via renderSourceRow) so the column band stays visually
             consistent as the row scrolls horizontally, even on a child row
             where the popover itself is intentionally omitted below.
-            zIndex only rises to 3 (above the sticky header's own 2) WHILE
-            this row's popover is actually open — a `position: sticky` cell
-            creates its own stacking context, so the popover it contains
-            (zIndex 30 on its own) can never out-rank a SIBLING stacking
-            context with a higher zIndex no matter how high its own number
-            is (see this cell's own zIndex comment further down for the
-            live bug this caused). Left permanently at 3 instead, the idle
-            icon itself — not just an open popover — pokes above the header
-            at the sticky-right/sticky-top corner (confirmed live the same
-            day, Vincent: "信封的层级也是不能比表头更上层"); staying at 1
-            while closed keeps the plain icon exactly where it was. */}
-        <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: draftPopoverFor === rowKey(c) ? 3 : 1, backgroundColor: 'inherit' }}>
+            Flat zIndex 1, always below the sticky header's own 2 — the
+            conditional 1-while-closed/3-while-open version this briefly
+            was is gone now that the popover itself no longer lives inside
+            this cell at all (it portals to document.body — see
+            SoaDraftPopover's own comment), so this cell never needs to
+            out-rank anything again. Vincent, on the leftover 3: "为什么我
+            不是说了一级表头和2级表头要放成最高层级吗" (the title bar and
+            column header both need to stay the topmost layer) — that 3 was
+            dead weight from the old fix, not something still doing any
+            work, so removed rather than left "just in case". */}
+        <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 1, backgroundColor: 'inherit' }}>
           {/* Vincent, 2026-09-23: only the combined/Total row needs its own
               Draft Email icon — a per-source child row (TAB source balance,
               TAO source balance, etc.) drafting separately would split one
@@ -1181,27 +1180,25 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           (default/hover/soa-group-open, all set via CSS classes
                           with !important) so the pinned cell never shows a
                           mismatched patch as other columns scroll underneath it.
-                          zIndex only rises to 3 (above the sticky header's own
-                          2) WHILE this row's popover is actually open —
-                          confirmed live 2026-09-23: `position: sticky` makes
-                          this cell its own stacking context, so its child
-                          popover (its own zIndex 30) could never out-rank the
-                          sticky column header row above (zIndex 2, see the
-                          header's own comment) when opened upward from a row
-                          near the top — a child's z-index can never lift it
-                          past a sibling of its OWN ancestor's stacking
-                          context, regardless of how high that child's number
-                          is. Vincent: "这个肯定是要在最上层的不能被卡片的线
-                          条挡到" (this has to be on top, must not be blocked
-                          by the card's lines) — the header's own sticky
-                          border was exactly what was cutting across the
-                          popover. Left permanently at 3 instead, the idle
-                          icon itself — not just an open popover — pokes
-                          above the header at the sticky-right/sticky-top
-                          corner (also confirmed live the same day: "信封的
-                          层级也是不能比表头更上层"); staying at 1 while
-                          closed keeps the plain icon exactly where it was. */}
-                      <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: draftPopoverFor === groupDraftKey ? 3 : 1, backgroundColor: 'inherit' }}>
+                          Flat zIndex 1, always below the sticky header's own
+                          2 — this briefly rose to 3 while a popover was open
+                          (a `position: sticky` cell creates its own stacking
+                          context, so at the time the popover living inside
+                          it, zIndex 30 on its own, could never out-rank a
+                          SIBLING stacking context with a higher zIndex no
+                          matter how high its own number was — the sticky
+                          header cut across it, confirmed live: "这个肯定是要
+                          在最上层的不能被卡片的线条挡到", then the idle icon
+                          itself started poking above the header too: "信封的
+                          层级也是不能比表头更上层"). Both symptoms are gone
+                          now that the popover no longer lives inside this
+                          cell at all — it portals to document.body instead
+                          (see SoaDraftPopover's own comment) — so the 3 was
+                          dead weight kept "just in case"; Vincent caught it:
+                          "为什么我不是说了一级表头和2级表头要放成最高层级
+                          吗". Removed — this cell never needs to out-rank
+                          the header again. */}
+                      <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 1, backgroundColor: 'inherit' }}>
                         <SoaDraftPopover
                           company={combined} qbCompany={draftScope} me={draftPickers.me}
                           senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
