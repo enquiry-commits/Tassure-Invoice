@@ -39,6 +39,7 @@ export default function ActiveClientsPage() {
       fields={[...ACTIVE_CLIENT_FIELDS]}
       columnWidths={{ status: 60, fye: 60 }}
       enableListView
+      enableExport
       moveTargets={[
         { type: 'strike_off', label: 'Strike Off',          statusValue: 'STRUCK OFF' },
         { type: 'terminated', label: 'Terminated Services', statusValue: 'TERMINATED' },

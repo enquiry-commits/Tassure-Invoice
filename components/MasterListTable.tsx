@@ -11,6 +11,7 @@ import { normalize } from '@/lib/company-name';
 import { formatStaffName, formatStaffNameList } from '@/lib/staff-directory';
 import { titleCase } from '@/lib/text-case';
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser';
+import { MASTER_LIST_COLUMNS, MASTER_LIST_EXTRA_COLUMNS } from '@/lib/master-list-columns';
 
 type AuditEntry = { id: number; field: string; old_value: string | null; new_value: string | null; changed_by: string; changed_at: string };
 
@@ -143,58 +144,18 @@ type ColumnField = Exclude<keyof MasterListRow,
 // as well for clarity. To restore everywhere: add both rows back here, and
 // add 'email', 'tel' back to AD_HOC_FIELDS/NAME_CHANGE_FIELDS/
 // ACTIVE_CLIENT_FIELDS (app/master-list/*/page.tsx) wherever still wanted.
-const COLUMNS: { field: ColumnField; label: string; w: number }[] = [
-  { field: 'company_name',               label: 'Company Name',    w: 240 },
-  { field: 'roc_no',                     label: 'UEN / ROC',       w: 110 },
-  { field: 'status',                     label: 'Active',          w: 220 },
-  { field: 'internal_code',              label: 'Code',            w: 70  },
-  { field: 'update_date',                label: 'Update Date',     w: 100 },
-  { field: 'join_date',                  label: 'Join Date',       w: 100 },
-  { field: 'sec_agent',                  label: 'Sec Agent',       w: 80  },
-  { field: 'kyc_year',                   label: 'KYC Year',        w: 90  },
-  { field: 'register_of_controllers',    label: 'ROC',             w: 80  },
-  { field: 'corporate_tax',              label: 'Corp Tax',        w: 80  },
-  { field: 'efiling_authorization',      label: 'E-filing Auth',   w: 100 },
-  { field: 'ac',                         label: 'A/C',             w: 70  },
-  { field: 'audit',                      label: 'Audit',           w: 70  },
-  { field: 'gst',                        label: 'GST',             w: 70  },
-  { field: 'compil_report',              label: 'Compil Report',   w: 100 },
-  { field: 'cpf_submit',                 label: 'CPF Submit',      w: 90  },
-  { field: 'add_here',                   label: 'Add @',           w: 90  },
-  { field: 'invoice_address',            label: 'Invoice/Reg Add', w: 220 },
-  { field: 'mailing_address',            label: 'Mailing Add',     w: 220 },
-  { field: 'contact_window',             label: 'Contact Window',  w: 140 },
-  { field: 'mailing_list',               label: 'Mailing List',    w: 140 },
-  { field: 'inc_date',                   label: 'Inc. Date',       w: 100 },
-  { field: 'shareholders',               label: 'Shareholders',    w: 200 },
-  { field: 'directors',                  label: 'Directors',       w: 200 },
-  { field: 'nominee_director',           label: 'Nominee Dir.',    w: 120 },
-  { field: 'secretary',                  label: 'Secretary',       w: 130 },
-  { field: 'annual_return',              label: 'Annual Return',   w: 110 },
-  { field: 'fye',                        label: 'FYE',             w: 180 },
-  { field: 'last_ar_date',               label: 'Last AR Date',    w: 110 },
-  { field: 'last_agm_date',              label: 'Last AGM Date',   w: 110 },
-  { field: 'last_accounts_date',         label: 'Last Accts Date', w: 110 },
-  { field: 'next_agm_due_date',          label: 'Next AGM Due',    w: 110 },
-  { field: 'months_from_last_accounts',  label: '>13M Accts',      w: 90  },
-  { field: 'remark',                     label: 'Remark',          w: 220 },
-  { field: 'referral',                   label: 'Referral',        w: 110 },
-  { field: 'risk_level',                 label: 'Risk Level',      w: 100 },
-  { field: 'incorp_with_us',             label: 'Incorp w/ Us',    w: 100 },
-  { field: 'acra_update',                label: 'ACRA Update',     w: 100 },
-  { field: 'mas',                        label: 'MAS',             w: 90  },
-  { field: 'grade',                      label: 'Grade',           w: 80  },
-];
+//
+// Sourced from lib/master-list-columns.ts (not defined inline here) so the
+// Excel export route (app/api/master-list/export/route.ts, plain server
+// code with no 'use client' component tree) can reuse the exact same labels
+// without a second, hand-copied list that can drift out of sync.
+const COLUMNS = MASTER_LIST_COLUMNS as { field: ColumnField; label: string; w: number }[];
 
 // Derived, page-opt-in-only columns — not part of the default COLUMNS set,
 // so they only ever appear on a page whose `fields` prop names them
 // explicitly (Active Client). Values come from a join done server-side in
 // /api/master-list, not from an editable master_list column.
-const EXTRA_COLUMNS: { field: ColumnField; label: string; w: number }[] = [
-  { field: 'acc_pic', label: 'ACC', w: 120 },
-  { field: 'tax_pic', label: 'TAX', w: 120 },
-  { field: 'new_company_name', label: 'New Name', w: 220 },
-];
+const EXTRA_COLUMNS = MASTER_LIST_EXTRA_COLUMNS as { field: ColumnField; label: string; w: number }[];
 
 const STICKY_WIDTHS = [240, 110, 110]; // company_name, roc_no, status
 
@@ -1148,7 +1109,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
   );
 }
 
-export default function MasterListTable({ listType, title, accentColor = '#1d3a5c', moveTargets, fields, columnWidths, enableListView = false }: { listType: string; title: string; accentColor?: string; moveTargets?: MoveTarget[]; fields?: ColumnField[]; columnWidths?: Partial<Record<ColumnField, number>>; enableListView?: boolean }) {
+export default function MasterListTable({ listType, title, accentColor = '#1d3a5c', moveTargets, fields, columnWidths, enableListView = false, enableExport = false }: { listType: string; title: string; accentColor?: string; moveTargets?: MoveTarget[]; fields?: ColumnField[]; columnWidths?: Partial<Record<ColumnField, number>>; enableListView?: boolean; enableExport?: boolean }) {
   const columns = useMemo(() => {
     // `fields` can name an EXTRA_COLUMNS entry (e.g. Active Client's acc_pic/
     // tax_pic); the no-`fields` default deliberately only ever falls back to
@@ -1169,6 +1130,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
   const [columnFilters, setColumnFilters] = useState<Partial<Record<ColumnField, Set<string>>>>({});
   const [view, setView] = useState<'list' | 'table'>('list');
   const [selectedRowId, setSelectedRowId] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const isMobile = useIsMobile();
   // Active Client only: TeamWork CSS Clients with no row here at all — can't
   // be shown by filtering the table (there's nothing to filter to), so it's
@@ -1586,6 +1549,36 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
     { key: 'has_nd',        label: 'Has Nominee Dir', sub: 'nominee director on file',              color: '#7c3aed', Icon: UserCheck },
   ];
 
+  // Quarterly backup export (Vincent/Cindy, 2026-09-23: "Active client list,
+  // 我需要可以generate excel...每个季度要back up") — exports the FULL list for
+  // this page's listType, in this page's own column set/order, ignoring the
+  // on-screen search/column filters (a backup should be the complete roster,
+  // not whatever happens to be filtered on screen at the time). Same
+  // blob-download pattern already established in app/billing/soa/
+  // _components.tsx's downloadBlobFrom.
+  const exportExcel = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const cols = fields ?? COLUMNS.map(c => c.field);
+      const res = await fetch(`/api/master-list/export?type=${encodeURIComponent(listType)}&fields=${encodeURIComponent(cols.join(','))}`);
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error ?? 'Unable to export.'); }
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = `${title} - ${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div>
       <div className="mb-4 text-sm text-slate-500">Dashboard › Master List › {title}</div>
@@ -1729,6 +1722,16 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         >
           <Plus size={14} />Add Manual
         </button>
+        {enableExport && (
+          <button
+            onClick={exportExcel}
+            disabled={exporting}
+            title="Export the full list to Excel"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', fontSize: 13, cursor: exporting ? 'wait' : 'pointer', fontWeight: 600, opacity: exporting ? 0.6 : 1 }}
+          >
+            {exporting ? 'Exporting…' : 'Export Excel'}
+          </button>
+        )}
         {activeColumnFilterCount > 0 && (
           <button onClick={() => setColumnFilters({})}
             style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 7, border: '1px solid #fde68a', background: '#fffbeb', color: '#b45309', cursor: 'pointer', whiteSpace: 'nowrap' }}>
@@ -1746,6 +1749,9 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
           </div>
         )}
       </div>
+      {exportError && (
+        <div style={{ marginTop: -8, marginBottom: 16, fontSize: 12, color: '#dc2626' }}>{exportError}</div>
+      )}
 
       {showAddForm && (
         <div onClick={cancelAdd} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
