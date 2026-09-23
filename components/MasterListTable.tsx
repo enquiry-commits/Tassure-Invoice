@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, memo, Fragment } from 'react';
-import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, Calendar, Building2, Users, UserCheck, CloudOff, History, RefreshCw } from 'lucide-react';
+import { Plus, Check, X, Trash2, MoreVertical, ArrowRightCircle, AlertTriangle, RotateCcw, Filter, ChevronLeft, ChevronRight, Calendar, Building2, Users, UserCheck, CloudOff, History, RefreshCw, FileSpreadsheet, Loader2 } from 'lucide-react';
 import ConfirmDeleteModal from './ConfirmDeleteModal';
 import MetricCard from './MetricCard';
 import { usePagination, PaginationBar } from './Pagination';
@@ -1709,6 +1709,17 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
       )}
 
       <div className="bg-white rounded-xl shadow-sm p-4 mb-4 flex flex-wrap items-center gap-3">
+        {enableExport && (
+          <button
+            onClick={exportExcel}
+            disabled={exporting}
+            title="Export the full list to Excel"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', background: '#397f78', color: '#fff', fontSize: 13, cursor: exporting ? 'default' : 'pointer', fontWeight: 600 }}
+          >
+            {exporting ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={14} />}
+            {exporting ? 'Exporting…' : 'Export Excel'}
+          </button>
+        )}
         <input
           type="text"
           placeholder="Search company name or UEN / ROC..."
@@ -1722,16 +1733,6 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         >
           <Plus size={14} />Add Manual
         </button>
-        {enableExport && (
-          <button
-            onClick={exportExcel}
-            disabled={exporting}
-            title="Export the full list to Excel"
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#334155', fontSize: 13, cursor: exporting ? 'wait' : 'pointer', fontWeight: 600, opacity: exporting ? 0.6 : 1 }}
-          >
-            {exporting ? 'Exporting…' : 'Export Excel'}
-          </button>
-        )}
         {activeColumnFilterCount > 0 && (
           <button onClick={() => setColumnFilters({})}
             style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 7, border: '1px solid #fde68a', background: '#fffbeb', color: '#b45309', cursor: 'pointer', whiteSpace: 'nowrap' }}>
