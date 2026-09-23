@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  BarChart3, Users, UserPlus, UserMinus, TrendingUp, TrendingDown, PieChart, Wallet, Compass, Download, X, Sparkles, RefreshCw, Database,
+  BarChart3, Users, UserPlus, UserMinus, TrendingUp, TrendingDown, PieChart, Wallet, Compass, Download, X, Sparkles, RefreshCw, Database, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { Donut, VBars, HBars, LineChart } from '@/components/dashboard/Charts';
@@ -429,6 +429,11 @@ export default function ReportsPage() {
   // call, up to ~2 minutes) and needs its own spinner state so the initial
   // load's brief flash doesn't get confused with it.
   const [narrativeRegenerating, setNarrativeRegenerating] = useState(false);
+  // 2026-09-23, Vincent: "不喜欢这个板块的暗色显示...并且是可以收起的" —
+  // collapsible, not persisted across reloads (component state only, same
+  // as components/NDPersonCard.tsx's own expand/collapse — no stated need
+  // to remember it between visits).
+  const [narrativeCollapsed, setNarrativeCollapsed] = useState(false);
 
   const fetchNarrative = () => {
     fetch('/api/reports/narrative').then(async r => {
@@ -462,10 +467,15 @@ export default function ReportsPage() {
     medium: { zh: '中置信度', en: 'Medium confidence' },
     low: { zh: '低置信度', en: 'Low confidence' },
   };
+  // Reuses REPORT_COLORS' own muted/desaturated family (teal/gold/rose)
+  // instead of the brighter mint/amber/coral this card used on its old
+  // dark background — those read fine as light text on navy, but as text
+  // on white they're too pale for real contrast; the existing palette
+  // already has readable, on-brand equivalents for exactly these 3 signals.
   const SIGNAL_STYLE: Record<NarrativeInsight['signal'], { color: string; bg: string; labelZh: string; labelEn: string }> = {
-    good: { color: '#6ee7b7', bg: 'rgba(110,231,183,.12)', labelZh: '健康', labelEn: 'Good' },
-    watch: { color: '#fbbf24', bg: 'rgba(251,191,36,.12)', labelZh: '关注', labelEn: 'Watch' },
-    warning: { color: '#fca5a5', bg: 'rgba(252,165,165,.12)', labelZh: '风险', labelEn: 'Warning' },
+    good: { color: COLORS.teal, bg: 'rgba(57,127,120,.1)', labelZh: '健康', labelEn: 'Good' },
+    watch: { color: COLORS.gold, bg: 'rgba(185,130,67,.12)', labelZh: '关注', labelEn: 'Watch' },
+    warning: { color: COLORS.rose, bg: 'rgba(180,95,107,.1)', labelZh: '风险', labelEn: 'Warning' },
   };
 
   // usePagination MUST run on every render, before the early returns below
@@ -497,21 +507,31 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      <section style={{ background: 'linear-gradient(135deg,#102a43,#1d3a5c)', borderRadius: 16, padding: '20px 22px', color: '#fff', boxShadow: '0 10px 32px rgba(16,42,67,.18)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <span style={{ width: 30, height: 30, borderRadius: 9, background: 'rgba(255,255,255,.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      {/* Light theme + collapsible, 2026-09-23 — Vincent: "不喜欢这个板块的
+          暗色显示，一个是要Light的UI的，并且是可以收起的". Same light-card
+          look as the Card component above instead of the dark navy
+          gradient this used to have — every text/accent color below was
+          re-picked for readability on white, not just inverted. */}
+      <section style={{ background: 'rgba(255,255,255,.96)', borderRadius: 16, border: '1px solid #dfe7ec', boxShadow: '0 10px 32px rgba(28,52,73,.045)', padding: '20px 22px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: narrativeCollapsed ? 0 : 16 }}>
+          <span style={{ width: 30, height: 30, borderRadius: 9, background: '#edf4f3', color: COLORS.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Sparkles size={15} />
           </span>
-          <div style={{ fontSize: 13, fontWeight: 750, letterSpacing: '-.01em' }}>{narrativeLang === 'zh' ? 'AI 分析 — 本期观察' : 'AI Analysis — This Period'}</div>
+          <button onClick={() => setNarrativeCollapsed(v => !v)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 750, letterSpacing: '-.01em', color: COLORS.ink, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+            {narrativeLang === 'zh' ? 'AI 分析 — 本期观察' : 'AI Analysis — This Period'}
+            {narrativeCollapsed ? <ChevronDown size={14} style={{ color: '#94a3b8' }} /> : <ChevronUp size={14} style={{ color: '#94a3b8' }} />}
+          </button>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* Both languages already sit in the one fetched object (see
                 lib/reports-narrative.ts) — this only ever flips which field
                 renders, never triggers a second request. */}
-            <div style={{ display: 'flex', background: 'rgba(255,255,255,.1)', borderRadius: 7, padding: 2 }}>
+            <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 7, padding: 2 }}>
               {(['zh', 'en'] as const).map(l => (
                 <button key={l} onClick={() => setNarrativeLang(l)}
                   style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
-                    background: narrativeLang === l ? 'rgba(255,255,255,.9)' : 'transparent', color: narrativeLang === l ? '#102a43' : 'rgba(255,255,255,.7)' }}>
+                    background: narrativeLang === l ? '#fff' : 'transparent', color: narrativeLang === l ? COLORS.ink : '#64748b',
+                    boxShadow: narrativeLang === l ? '0 1px 3px rgba(28,52,73,.12)' : 'none' }}>
                   {l === 'zh' ? '中' : 'EN'}
                 </button>
               ))}
@@ -526,25 +546,25 @@ export default function ReportsPage() {
             {isVincent && (
               <button onClick={refreshNarrative} disabled={narrativeRegenerating}
                 title="Regenerate (Vincent only)"
-                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,.75)', background: 'rgba(255,255,255,.1)', border: 'none', borderRadius: 7, padding: '5px 10px', cursor: narrativeRegenerating ? 'default' : 'pointer' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: COLORS.ink, background: '#f1f5f9', border: 'none', borderRadius: 7, padding: '5px 10px', cursor: narrativeRegenerating ? 'default' : 'pointer' }}>
                 <RefreshCw size={11} style={{ animation: narrativeRegenerating ? 'spin 1s linear infinite' : 'none' }} />
                 {narrativeRegenerating ? (narrativeLang === 'zh' ? '生成中…' : 'Working…') : (narrativeLang === 'zh' ? '重新生成' : 'Refresh')}
               </button>
             )}
           </div>
         </div>
-        {narrativeError && (
-          <div style={{ fontSize: 12.5, color: '#fecaca', lineHeight: 1.6 }}>{narrativeError}</div>
+        {!narrativeCollapsed && narrativeError && (
+          <div style={{ fontSize: 12.5, color: COLORS.rose, lineHeight: 1.6 }}>{narrativeError}</div>
         )}
-        {!narrativeError && narrativeLoading && (
-          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.65)' }}>{narrativeLang === 'zh' ? '加载中…' : 'Loading…'}</div>
+        {!narrativeCollapsed && !narrativeError && narrativeLoading && (
+          <div style={{ fontSize: 12.5, color: '#94a3b8' }}>{narrativeLang === 'zh' ? '加载中…' : 'Loading…'}</div>
         )}
-        {!narrativeError && !narrativeLoading && !narrative && (
-          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.65)' }}>
+        {!narrativeCollapsed && !narrativeError && !narrativeLoading && !narrative && (
+          <div style={{ fontSize: 12.5, color: '#94a3b8' }}>
             {narrativeLang === 'zh' ? '分析将于下周一早上6点（新加坡时间）生成，请稍候。' : 'Analysis will be generated next Monday at 6am SGT.'}
           </div>
         )}
-        {!narrativeError && narrative && (
+        {!narrativeCollapsed && !narrativeError && narrative && (
           <>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {narrative.insights.map((ins, i) => {
@@ -553,33 +573,33 @@ export default function ReportsPage() {
                 const driver = narrativeLang === 'zh' ? ins.driverZh : ins.driverEn;
                 const notYetProven = narrativeLang === 'zh' ? ins.notYetProvenZh : ins.notYetProvenEn;
                 return (
-                  <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.05)', borderLeft: `3px solid ${s.color}` }}>
+                  <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 10, background: '#f8fafc', borderLeft: `3px solid ${s.color}` }}>
                     <span style={{ flexShrink: 0, height: 20, padding: '0 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', letterSpacing: '.02em' }}>
                       {narrativeLang === 'zh' ? s.labelZh : s.labelEn}
                     </span>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{narrativeLang === 'zh' ? ins.titleZh : ins.titleEn}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: COLORS.ink }}>{narrativeLang === 'zh' ? ins.titleZh : ins.titleEn}</span>
                         {/* Confidence is metadata, not a visual centerpiece —
                             dashboard-design skill's own "do not overuse
                             confidence badges visually" guidance. */}
-                        <span style={{ fontSize: 9.5, fontWeight: 700, color: 'rgba(255,255,255,.45)', border: '1px solid rgba(255,255,255,.18)', borderRadius: 999, padding: '1px 7px' }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 999, padding: '1px 7px' }}>
                           {narrativeLang === 'zh' ? c.zh : c.en}
                         </span>
                       </div>
-                      <div style={{ fontSize: 12.5, lineHeight: 1.7, color: 'rgba(255,255,255,.85)' }}>{narrativeLang === 'zh' ? ins.observedZh : ins.observedEn}</div>
+                      <div style={{ fontSize: 12.5, lineHeight: 1.7, color: '#475569' }}>{narrativeLang === 'zh' ? ins.observedZh : ins.observedEn}</div>
                       {driver && (
-                        <div style={{ fontSize: 12, lineHeight: 1.7, color: 'rgba(255,255,255,.65)', marginTop: 5 }}>
-                          <span style={{ fontWeight: 700, color: 'rgba(255,255,255,.4)' }}>{narrativeLang === 'zh' ? '推测 · ' : 'Driver · '}</span>{driver}
+                        <div style={{ fontSize: 12, lineHeight: 1.7, color: '#64748b', marginTop: 5 }}>
+                          <span style={{ fontWeight: 700, color: '#94a3b8' }}>{narrativeLang === 'zh' ? '推测 · ' : 'Driver · '}</span>{driver}
                         </div>
                       )}
                       {notYetProven.length > 0 && (
-                        <div style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(255,255,255,.5)', marginTop: 5 }}>
-                          <span style={{ fontWeight: 700, color: 'rgba(255,255,255,.4)' }}>{narrativeLang === 'zh' ? '尚未证实 · ' : 'Not yet proven · '}</span>
+                        <div style={{ fontSize: 11.5, lineHeight: 1.7, color: '#94a3b8', marginTop: 5 }}>
+                          <span style={{ fontWeight: 700, color: '#94a3b8' }}>{narrativeLang === 'zh' ? '尚未证实 · ' : 'Not yet proven · '}</span>
                           {notYetProven.join(' / ')}
                         </div>
                       )}
-                      <div style={{ fontSize: 12, lineHeight: 1.7, color: '#a7f3d0', marginTop: 6 }}>
+                      <div style={{ fontSize: 12, lineHeight: 1.7, color: COLORS.teal, marginTop: 6 }}>
                         <span style={{ fontWeight: 700 }}>{narrativeLang === 'zh' ? '下一步 · ' : 'Next · '}</span>
                         {narrativeLang === 'zh' ? ins.nextActionZh : ins.nextActionEn}
                       </div>
@@ -588,10 +608,10 @@ export default function ReportsPage() {
                 );
               })}
             </div>
-            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,.1)', fontSize: 11, lineHeight: 1.6, color: 'rgba(255,255,255,.5)' }}>
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f1f5f9', fontSize: 11, lineHeight: 1.6, color: '#94a3b8' }}>
               {narrativeLang === 'zh' ? narrative.summaryZh : narrative.summaryEn}
             </div>
-            <div style={{ marginTop: 8, fontSize: 10.5, color: 'rgba(255,255,255,.4)' }}>
+            <div style={{ marginTop: 8, fontSize: 10.5, color: '#94a3b8' }}>
               {narrativeLang === 'zh' ? '生成于 ' : 'Generated '}{new Date(narrative.generatedAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}
               {narrativeLang === 'zh' ? ' · 每周一 6:00（新加坡时间）自动更新' : ' · Auto-updates every Monday 6am SGT'}
             </div>

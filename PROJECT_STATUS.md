@@ -1822,6 +1822,28 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **AI Analysis card restyled light + made collapsible.** Vincent, after
+  seeing it actually generate real content for the first time: "我不喜欢
+  这个板块的暗色显示，一个是要Light的UI的，并且是可以收起的." Replaced the
+  dark navy gradient (`linear-gradient(135deg,#102a43,#1d3a5c)`, white
+  text) with the same light-card treatment every other Reports section
+  already uses (`rgba(255,255,255,.96)` background, `#dfe7ec` border, the
+  same soft shadow) — every text/accent color inside was individually
+  re-picked for contrast on white, not just inverted; the 3 signal colors
+  (good/watch/warning) now reuse `REPORT_COLORS`' own teal/gold/rose
+  instead of the brighter mint/amber/coral that only worked on a dark
+  background. Header title is now a click target (new `narrativeCollapsed`
+  state, `ChevronUp`/`ChevronDown` from `lucide-react`) that hides the
+  whole body — same non-persisted `useState` collapse pattern
+  `components/NDPersonCard.tsx` already uses elsewhere in this app, no new
+  convention invented. `npx tsc --noEmit`, `npx eslint`, `npm run build`
+  (cold) all clean. **Not visually verified** — this page requires a real
+  Tassure login (Supabase auth), which this session doesn't have; the
+  change is a pure inline-style rewrite (no logic touched) reviewed
+  carefully against the exact color values other light sections on this
+  same page already use, but Vincent should confirm it actually looks
+  right after deploy.
+
 - **Amended same-day: the weekly-cron Reports narrative (INV-DATA-063
   below) gets a Vincent-only manual refresh back.** His immediate
   follow-up after seeing the "will generate next Monday" empty state:
