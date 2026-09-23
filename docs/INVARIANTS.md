@@ -1043,6 +1043,30 @@ again.
   source. Do not chase CSIS's 403 with stealth/evasion techniques — it is
   documented as an expected, tolerated per-source failure in
   `lib/sg-news-sources.ts`, not a bug.
+- **INV-CRON-017** — A new Playwright-launching route is NOT automatically
+  safe on Vercel just because its `launchBrowser()` copies an existing,
+  proven working pattern (per INV-CRON-004's "duplicate, don't share"
+  convention) — `next.config.ts`'s `outputFileTracingIncludes` is keyed
+  per ROUTE PATH, and Next.js's automatic file-tracing does not reliably
+  find `playwright-core`'s own non-import asset files (`browsers.json`)
+  for every route that dynamically `import()`s it, even when an existing
+  route with the identical import line works fine. `/api/sg-news/sync`
+  (built 2026-09-23) had the exact code shape of the already-working
+  `teamwork_nd_*`/`teamwork_companies` jobs, shipped without a
+  `outputFileTracingIncludes` entry, and its first 3 real production runs
+  ALL failed with `Cannot find module '/var/task/node_modules/playwright-
+  core/browsers.json'` — caught only because Vincent's "SQL好了" prompted
+  a check of `sg_news_sync_state`'s real rows right after migration,
+  not from any build-time signal (`npm run build` succeeds either way —
+  this is a Lambda-runtime-only failure, invisible locally even against
+  the Vercel code path, since local dev always takes the non-`VERCEL`
+  branch of `launchBrowser()`). Fixed by adding the same two-glob include
+  `/api/late-filing/sync` already needed for this identical error.
+  **Any future route that dynamically imports `playwright-core` on
+  Vercel must add its own `outputFileTracingIncludes` entry as part of
+  that same change, checked by looking at the actual `sg_news_sync_state`/
+  `automation_sync_runs` row after its first real deploy — do not assume
+  a clean local build means the Vercel Lambda will find the browser.**
 
 ## QuickBooks / invoice (INV-QB)
 
