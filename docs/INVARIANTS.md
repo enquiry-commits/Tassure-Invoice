@@ -2855,6 +2855,54 @@ again.
   `OPENAI_API_KEY`/`CRON_SECRET` local-access limitation) — the manual path
   is code-reviewed and compiles, not yet proven by an actual click.
 
+- **INV-DATA-064** — Moving a Master List row into a new `list_type` must
+  never default `status` to a value more FINAL than what's actually known
+  at that moment — a staff action (moving a row) is not a TeamWork
+  confirmation, and the two must not be conflated. Found live 2026-09-23:
+  Vincent flagged YOUWE SOLUTIONS PTE. LTD (Strike Off list) showing
+  "STRUCK OFF" while TeamWork itself still showed "Striking Off" — live-
+  confirmed by fetching TeamWork's own `getCompanies` response directly
+  (`status: "Striking Off"`, `liquid_strike_off_date: "23/09/2026"` — the
+  strike-off was still IN PROGRESS, finalizing that same day). Root cause:
+  `app/master-list/active-clients/page.tsx`'s `moveTargets` hardcoded
+  `statusValue: 'STRUCK OFF'` for the Strike Off target — every row ever
+  moved Active Client -> Strike Off via the UI got this literal, final-
+  sounding value stamped on unconditionally by `app/api/master-list/
+  move/route.ts` (`status: statusValue ?? rest.status`), regardless of
+  what TeamWork's real status was at that instant. This is NOT overwritten
+  immediately — it sits until the next successful `teamwork/sync` cron
+  run corrects it via `companies.tw_status`, matched by UEN; a row moved
+  the same day it's viewed (as YOUWE was — `updated_at` was hours old)
+  will show the wrong, more-final status for up to a full day. Vincent's
+  own framing of the fix: "一开始Move 过来的时候，也应该是先默认显示是
+  Striking Off，等到同步TW过后，才根据TW的 status 更新，而不是一开始move
+  过来，就是默认 Struck off" — the move-time value is a PLACEHOLDER until
+  a real sync confirms it, and the placeholder must be the more
+  conservative one. Fixed by changing that one `statusValue` to `'Striking
+  Off'` — the exact wording TeamWork's own API uses (confirmed via the
+  live fetch above), so `components/MasterListTable.tsx`'s `statusColor()`
+  (`s.includes('STRIKING OFF')`) still renders the same red badge, and the
+  nightly sync (which does NOT set `manual_fields.status` on a move) is
+  still free to correct it to whatever TeamWork's real status turns out to
+  be the next time it runs. `TERMINATED`'s own `moveTargets` entry is
+  unchanged — Vincent's report and fix request were specifically about the
+  Strike Off transition, and TERMINATED has no equivalent
+  in-progress-vs-final distinction to get wrong the same way.
+  **Also directly corrected the one flagged row** (`master_list` id 1644,
+  `status`: `STRUCK OFF` -> `Striking Off`, audit-logged as
+  `changed_by: 'system:teamwork'` to match what the sync itself would have
+  written) — using the SAME real, just-fetched TeamWork status as ground
+  truth, not a guess, rather than making Vincent wait for that night's
+  cron to self-correct it. **Not audited for other rows in the same
+  state** — any OTHER row moved via this same path before this fix, still
+  unlocked (no `manual_fields.status`) and not yet re-synced, could carry
+  the same stale "STRUCK OFF" default; flagged to Vincent as a real
+  possibility, not silently assumed to be a one-off, but not backfilled
+  here since only this one company was reported and a full cross-check
+  against live TeamWork data for every Strike Off row is a materially
+  bigger, unrequested task. `npx tsc --noEmit`, `npx eslint`, `npm run
+  build` (cold) all clean.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

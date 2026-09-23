@@ -1822,6 +1822,35 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Fixed a real status-default bug: moving a company to Strike Off
+  claimed "STRUCK OFF" before TeamWork ever confirmed it (INV-DATA-064).**
+  Vincent flagged YOUWE SOLUTIONS PTE. LTD showing "STRUCK OFF" on the
+  Strike Off list; live-confirmed by fetching TeamWork's own `getCompanies`
+  response directly (not assumed): real status was `"Striking Off"`,
+  `liquid_strike_off_date` dated that same day — genuinely still in
+  progress. Root cause: `app/master-list/active-clients/page.tsx`'s
+  Strike Off `moveTarget` hardcoded `statusValue: 'STRUCK OFF'`, stamped
+  unconditionally by `app/api/master-list/move/route.ts` onto every row
+  the moment staff move it from Active Client — a staff action, not a
+  TeamWork confirmation, wrongly presented as one; it sits wrong until
+  the next nightly `teamwork/sync` happens to correct it. Vincent's own
+  framing: "一开始Move 过来的时候，也应该是先默认显示是 Striking Off，等
+  到同步TW过后，才根据TW的 status 更新，而不是一开始move 过来，就是默认
+  Struck off." Fixed by changing the default to `'Striking Off'` (TeamWork's
+  own exact wording) — still renders the same red badge
+  (`statusColor()` already matches `STRIKING OFF`), and the nightly sync
+  (which never locks `manual_fields.status` on a move) is still free to
+  correct it once real data arrives. Also directly corrected the one
+  flagged row (id 1644) using that same live-fetched TeamWork status as
+  ground truth, audit-logged the same way the sync itself would, rather
+  than making Vincent wait for that night's cron. **Not audited for other
+  rows in the same state** — any other row moved via this path before the
+  fix could carry the same stale default; flagged, not silently assumed
+  fine, but not backfilled without being asked (a full live-TeamWork
+  cross-check of every Strike Off row is a materially bigger task than
+  what was reported). `npx tsc --noEmit`/`eslint`/`npm run build` (cold)
+  all clean. Full details: `docs/INVARIANTS.md` INV-DATA-064.
+
 - **AI Analysis card restyled light + made collapsible.** Vincent, after
   seeing it actually generate real content for the first time: "我不喜欢
   这个板块的暗色显示，一个是要Light的UI的，并且是可以收起的." Replaced the

@@ -40,8 +40,25 @@ export default function ActiveClientsPage() {
       columnWidths={{ status: 60, fye: 60 }}
       enableListView
       enableExport
+      // strike_off's statusValue is 'Striking Off', not 'STRUCK OFF' — Vincent,
+      // 2026-09-23, from a real case (YOUWE SOLUTIONS PTE. LTD, moved into
+      // this list but its TeamWork status was still genuinely "Striking Off",
+      // live-confirmed against TeamWork's own getCompanies response at the
+      // time): "一开始Move 过来的时候，也应该是先默认显示是 Striking Off，
+      // 等到同步TW过后，才根据TW的 status 更新，而不是一开始move 过来，就是
+      // 默认 Struck off" — moving a row here is a staff ACTION taken before
+      // any TeamWork confirmation exists yet; claiming "STRUCK OFF" (a
+      // completed, final state) at that exact moment overstates what's
+      // actually known. `app/api/master-list/move/route.ts` writes this
+      // value unconditionally on move and does NOT set `manual_fields.status`,
+      // so app/api/teamwork/sync/route.ts's nightly status sync (matches
+      // "Striking Off" via `components/MasterListTable.tsx`'s own
+      // `statusColor()`, same red badge either way) is still free to correct
+      // it to whatever TeamWork's real status turns out to be the next time
+      // it runs — this default is deliberately a starting placeholder, not a
+      // claim of fact.
       moveTargets={[
-        { type: 'strike_off', label: 'Strike Off',          statusValue: 'STRUCK OFF' },
+        { type: 'strike_off', label: 'Strike Off',          statusValue: 'Striking Off' },
         { type: 'terminated', label: 'Terminated Services', statusValue: 'TERMINATED' },
       ]}
     />
