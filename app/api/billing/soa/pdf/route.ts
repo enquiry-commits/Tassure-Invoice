@@ -1,14 +1,14 @@
 import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument } from 'pdf-lib';
 import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
 import { findCustomer, addrToLines } from '@/lib/qb-invoice-conventions';
-import { loadArAgingSnapshot, computeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
+import { computeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
 import { LEGAL_NAME } from '@/lib/soa-export';
-import { drawStatementCoverPage, combineStatementRows, safeText, type StatementRow } from '@/lib/statement-pdf';
+import { drawStatementCoverPage, combineStatementRows, type StatementRow } from '@/lib/statement-pdf';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -309,66 +309,25 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: `Could not fetch any invoice PDFs. ${errors.join(' ')}` }, { status: 502 });
   }
 
-  // Added 2026-09-15 (docs/INVARIANTS.md INV-QB-017) — Payment/Journal
-  // Entry/Deposit/anything else QuickBooks' own AgedReceivableDetail report
-  // counts against this customer's balance has no client-facing document
-  // to merge (unlike Invoice/CreditMemo, which always do) — appending
-  // nothing for these would leave the merged PDF's own total quietly short
-  // of what the rest of the system shows for this customer. When the
-  // report is fresh, list them on one appended summary page instead, so
-  // the merged PDF's total always foots. Omitted entirely when there are
-  // none (today's exact behavior, unchanged for the common case) or when
-  // the report is stale for this company (falls back to exactly today's
-  // behavior, same as the detail modal/collections email paths). In 'ALL'
-  // mode this loops all 3 books, same "only a fresh book's snapshot counts"
-  // rule applied per book, and tags each row with its own book since they
-  // now come from more than one.
-  const otherBooks = combineAllBooks ? QB_COMPANIES : [company as QbCompany];
-  const otherRows: { book: QbCompany; txnDate: string | null; txnType: string; docNumber: string | null; qbTxnId: string | null; openBalance: number }[] = [];
-  for (const book of otherBooks) {
-    const snapshot = await loadArAgingSnapshot(book, companyName);
-    if (!snapshot.fresh) continue;
-    for (const row of snapshot.rows) {
-      if (normalize(row.customerName) !== target || /invoice|credit/i.test(row.txnType)) continue;
-      otherRows.push({ book, txnDate: row.txnDate, txnType: row.txnType, docNumber: row.docNumber, qbTxnId: row.qbTxnId, openBalance: row.openBalance });
-    }
-  }
-  if (otherRows.length) {
-    const font = await merged.embedFont(StandardFonts.Helvetica);
-    const boldFont = await merged.embedFont(StandardFonts.HelveticaBold);
-    const page = merged.addPage();
-    const { width, height } = page.getSize();
-    let y = height - 60;
-    const left = 50;
-    page.drawText('Other Adjustments', { x: left, y, size: 14, font: boldFont });
-    y -= 20;
-    page.drawText(`Not represented by an individual invoice/credit note document above.`, { x: left, y, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
-    y -= 24;
-    const cols = combineAllBooks
-      ? { book: left, date: left + 40, type: left + 120, doc: left + 260, amount: width - 50 }
-      : { book: null, date: left, type: left + 80, doc: left + 220, amount: width - 50 };
-    if (cols.book !== null) page.drawText('Book', { x: cols.book, y, size: 9, font: boldFont });
-    page.drawText('Date', { x: cols.date, y, size: 9, font: boldFont });
-    page.drawText('Type', { x: cols.type, y, size: 9, font: boldFont });
-    page.drawText('No.', { x: cols.doc, y, size: 9, font: boldFont });
-    page.drawText('Amount', { x: cols.amount - 50, y, size: 9, font: boldFont });
-    y -= 16;
-    let subtotal = 0;
-    for (const row of otherRows.sort((a, b) => (a.txnDate ?? '').localeCompare(b.txnDate ?? ''))) {
-      subtotal += row.openBalance;
-      if (cols.book !== null) page.drawText(row.book, { x: cols.book, y, size: 9, font });
-      page.drawText(row.txnDate ?? '—', { x: cols.date, y, size: 9, font });
-      page.drawText(row.txnType, { x: cols.type, y, size: 9, font });
-      page.drawText(safeText(font, row.docNumber ?? row.qbTxnId ?? '—'), { x: cols.doc, y, size: 9, font });
-      const amountText = row.openBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-      page.drawText(amountText, { x: width - 50 - font.widthOfTextAtSize(amountText, 9), y, size: 9, font });
-      y -= 14;
-    }
-    y -= 6;
-    page.drawText('Subtotal', { x: cols.type, y, size: 10, font: boldFont });
-    const subtotalText = subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    page.drawText(subtotalText, { x: width - 50 - boldFont.widthOfTextAtSize(subtotalText, 10), y, size: 10, font: boldFont });
-  }
+  // The "Other Adjustments" appended summary page (Payment/Journal Entry/
+  // Deposit rows with no invoice/credit-memo document to merge) — added
+  // 2026-09-15 per docs/INVARIANTS.md INV-QB-017 specifically so the
+  // merged PDF's total never went quietly short of what the rest of the
+  // system shows — was REMOVED 2026-09-23 per Vincent's own explicit,
+  // informed choice: told directly this page exists to prevent exactly
+  // that discrepancy (a real one was found once, $38,171.37, see
+  // INV-QB-017's own history) and that removing it unconditionally means
+  // a customer with a genuine non-zero Payment/JE/Deposit adjustment will
+  // now see a merged PDF total that does NOT match the system's own
+  // figure for them — Vincent chose "完全不生成这页，不管金额" (never
+  // generate this page, regardless of amount) over the safer "only when
+  // it nets to $0" alternative offered. This is a deliberate, known
+  // tradeoff, not an oversight — see PROJECT_STATUS.md's entry for this
+  // change for the exact confirmation. INV-QB-017 itself (AgedReceivableDetail
+  // as the primary total/aging source everywhere else — the SOA list,
+  // detail modal, collections email) is completely unaffected; only this
+  // one appended PDF page, and only for customers whose adjustments don't
+  // net to zero, loses that guarantee.
 
   const bytes = Buffer.from(await merged.save());
   const fileName = `SOA - ${companyName} - ${todaySGT()}.pdf`;

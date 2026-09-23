@@ -1575,6 +1575,36 @@ again.
   string field — cross-check a report-sourced identifier against its own
   entity's API before trusting it for anything shown to a client or used
   as a real document reference.
+- **INV-QB-023** — The merged SOA PDF's "Other Adjustments" appended
+  summary page (Payment/Journal Entry/Deposit rows with no invoice/credit-
+  memo document to merge — added 2026-09-15 specifically per INV-QB-017 so
+  the merged PDF's total never went quietly short of the system's own
+  figure) was REMOVED 2026-09-23, deliberately, per Vincent's own informed
+  choice — this is a KNOWN, ACCEPTED gap, not an oversight or a bug to
+  silently "fix" back. He was told directly, before the change, exactly
+  what this page existed to prevent (a real ~$38,171.37 discrepancy once
+  found this way, see INV-QB-017's own history) and was offered the safer
+  alternative — suppress the page only when its subtotal nets to $0, which
+  preserves the guarantee for every case that actually matters — but chose
+  "完全不生成这页，不管金额" (never generate this page, regardless of
+  amount) instead. **Concrete, current consequence**: a customer whose
+  Payment/JE/Deposit adjustments do NOT net to exactly $0 will now get a
+  merged SOA PDF whose total does not match what the SOA list/detail modal
+  shows for them elsewhere in this app — the exact class of discrepancy
+  INV-QB-017 was written to close. If this surfaces again as a real
+  complaint ("PDF total doesn't match the system"), do not silently
+  restore the page — that would contradict this explicit decision; ask
+  Vincent to reconfirm first. `INV-QB-017` itself is completely unaffected
+  by this change — `loadArAgingSnapshot()`/`AgedReceivableDetail` remains
+  the primary total/aging source everywhere else (SOA list, detail modal,
+  Excel export, collections email); only this one appended PDF page, for
+  non-zero-netting adjustments specifically, lost the guarantee. Removed
+  `app/api/billing/soa/pdf/route.ts`'s entire `otherRows`/"Other
+  Adjustments" block and its now-unused imports (`StandardFonts`, `rgb`
+  from `pdf-lib`; `loadArAgingSnapshot` from `lib/soa-data`; `safeText`
+  from `lib/statement-pdf`) rather than leaving dead code disabled in
+  place. `npx tsc --noEmit`, `npx eslint`, `npm run build` (cold) all
+  clean.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

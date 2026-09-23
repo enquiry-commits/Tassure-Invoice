@@ -1822,6 +1822,32 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Removed the merged SOA PDF's "Other Adjustments" page — a deliberate,
+  informed reversal of a real prior fix, not an oversight (INV-QB-023).**
+  Vincent: "SOA 的这个页面不需要生成." This page (Payment/Journal Entry/
+  Deposit rows with no invoice/credit-memo document, added 2026-09-15 per
+  INV-QB-017 specifically so the merged PDF's total never went quietly
+  short of the system's own figure — a real ~$38,171.37 discrepancy was
+  once found this exact way) is now gone unconditionally. Before touching
+  anything, explained the conflict directly: this page exists to prevent
+  exactly that class of bug, and offered the safer "only suppress when the
+  page's subtotal nets to $0" alternative via `AskUserQuestion` — Vincent
+  explicitly chose "完全不生成这页，不管金额" (never generate it, regardless
+  of amount) over that safer option, an informed tradeoff, not a silent
+  regression. **Known, accepted consequence going forward**: a customer
+  whose Payment/JE/Deposit adjustments don't net to exactly $0 will now
+  get a merged PDF whose total doesn't match the SOA list/detail modal
+  elsewhere in this app. `INV-QB-017` itself (AgedReceivableDetail as the
+  primary total/aging source everywhere else) is completely unaffected —
+  only this one appended PDF page is gone. `app/api/billing/soa/pdf/
+  route.ts`: removed the entire `otherRows` block and its now-unused
+  imports (`StandardFonts`/`rgb` from `pdf-lib`, `loadArAgingSnapshot` from
+  `lib/soa-data`, `safeText` from `lib/statement-pdf`) rather than leaving
+  it disabled in place. `npx tsc --noEmit`, `npx eslint`, `npm run build`
+  (cold) all clean. Full details: `docs/INVARIANTS.md` INV-QB-023 —
+  **if this surfaces again as "PDF total doesn't match," do not silently
+  restore the page; confirm with Vincent first.**
+
 - **Corrected same-day: Invoice No. chip's fill changed gray → white.**
   Vincent, right after the border shipped: "轮廓是可以的，但是我希望按钮的
   灰色底变成白色底" — outline's good, wants the gray fill (`#f2f6f8`)
