@@ -609,8 +609,20 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
       if (owner) names.add(owner);
       for (const p of c.picOptions) names.add(p);
     }
-    return [...names].sort();
+    // Vincent, 2026-09-23: "BD" (Bad Debt — a write-off marker, not a real
+    // staff member) needs to sit apart from the alphabetized staff list,
+    // always last, rather than wherever "BD" happens to sort to among real
+    // names (it landed between Ang Shi Ming and Chee Wei En). The option's
+    // own label/color are handled where it renders below — this only
+    // controls ordering.
+    const hasBadDebt = names.delete('BD');
+    const sorted = [...names].sort();
+    return hasBadDebt ? [...sorted, 'BD'] : sorted;
   }, [companies]);
+  // Same "BD" -> "Bad Debt" expansion as the dropdown's own option label,
+  // reused everywhere picFilter's raw value would otherwise leak through
+  // as the bare "BD" (the KPI cards' "{name}'s book" subtitles below).
+  const picFilterLabel = picFilter === 'BD' ? 'Bad Debt' : picFilter;
 
   const picScoped = useMemo(() => {
     // Vincent, 2026-09-16: "这些Total =0的就不需要显示在List了，因为证明了
@@ -947,11 +959,11 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
 
       {companies !== null && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
-          <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilter ? `${picFilter}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `any ${qbCompany} invoice still unpaid`}
+          <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilter ? `${picFilterLabel}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `any ${qbCompany} invoice still unpaid`}
             icon={<Receipt size={16} />} color="#1d3a5c" />
-          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub={picFilter ? `${picFilter}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `${qbCompany} invoices only`}
+          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub={picFilter ? `${picFilterLabel}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `${qbCompany} invoices only`}
             icon={<Receipt size={16} />} color="#0f766e" />
-          <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub={picFilter ? `${picFilter}'s book` : 'needs a statement sent soon'}
+          <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub={picFilter ? `${picFilterLabel}'s book` : 'needs a statement sent soon'}
             icon={<AlertTriangle size={16} />} color="var(--status-danger)" />
         </div>
       )}
@@ -969,7 +981,11 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           <select value={picFilter} onChange={e => setPicFilter(e.target.value)}
             style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12.5, fontWeight: picFilter ? 700 : 400, background: '#fff', color: picFilter ? '#1e3a5f' : '#334155', cursor: 'pointer', outline: 'none' }}>
             <option value="">Everyone</option>
-            {picFilterOptions.map(name => <option key={name} value={name}>{name}</option>)}
+            {picFilterOptions.map(name => (
+              <option key={name} value={name} style={name === 'BD' ? { color: 'var(--status-danger)' } : undefined}>
+                {name === 'BD' ? 'Bad Debt' : name}
+              </option>
+            ))}
           </select>
           {picFilter && (
             <button onClick={() => setPicFilter('')} title="Clear filter"
