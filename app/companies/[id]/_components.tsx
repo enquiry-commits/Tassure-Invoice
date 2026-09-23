@@ -1,4 +1,4 @@
-import { AlertTriangle, Calendar, FileText, Mail, Receipt, ScrollText, Stamp, Users, UserCog, PieChart } from 'lucide-react';
+import { AlertTriangle, Calendar, FileText, Receipt, ScrollText, Stamp, Users, UserCog, PieChart } from 'lucide-react';
 import { fmtDate, toIsoDateValue } from '@/lib/date';
 import { formatStaffName, nameForEmail } from '@/lib/staff-directory';
 import { effectiveOwner } from '@/lib/soa-data';
@@ -7,9 +7,10 @@ import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceRefe
 import { SoaAllDownloadButton } from '@/components/billing/SoaDownloadPopover';
 import { SoaReminderStatus } from '@/components/billing/SoaReminderStatus';
 import { DataCard } from './DataCard';
+import { CommsSection } from './CommsSection';
 import type { Company360 } from '@/lib/company-360';
 
-export { DataCard };
+export { DataCard, CommsSection };
 
 // Colocated, route-scoped presentational pieces for Company 360 — every
 // one of these is read-only, so all stay server components (no 'use
@@ -18,7 +19,9 @@ export { DataCard };
 // (2026-09-08, once it needed collapse/expand state) moved out to its own
 // 'use client' file, DataCard.tsx — re-exported here so every existing
 // `import { DataCard, ... } from './_components'` elsewhere keeps working
-// unchanged.
+// unchanged. CommsSection moved out the same way (2026-09-23) once it
+// needed its own state for a per-row delete button — see CommsSection.tsx's
+// own header comment.
 
 export function StatusBadge({ status }: { status: string | null }) {
   const normalized = (status ?? '').toLowerCase();
@@ -233,41 +236,6 @@ export function NdSection({ nd }: { nd: Company360['nomineeDirector'] }) {
           </div>
         </div>
       ))}
-    </DataCard>
-  );
-}
-
-export function CommsSection({ drafts }: { drafts: Company360['communications']['drafts'] }) {
-  return (
-    <DataCard title="Email Status" icon={<Mail size={15} color="#fff" />} count={drafts.length} empty="No client communications sent to this company yet.">
-      {/* Genuinely equal 5-way column split matching the header card's own
-          grid (2026-09-04, Vincent: "分成5等分列宽和 第一模块的5等分列宽一致",
-          then "上下没有对齐" once the first attempt — table colgroup
-          percentages — still didn't line up against a CSS grid's gap-based
-          math). Same div/grid pattern as ArAgmSection above; see
-          GRID_5_COLS' own comment for why a <table> can't do this. */}
-      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_5_COLS, gap: 16, padding: '10px 16px' }}>
-        <div>Campaign</div><div>Subject</div><div>To</div><div>Status</div><div>Sent</div>
-      </div>
-      {/* Vincent, 2026-09-04: "隐藏的内容往下行展示" — the previous
-          nowrap+ellipsis truncation (Campaign/Subject/To) hid the rest of a
-          long value behind a title-only tooltip; wrap onto additional lines
-          instead so nothing is hidden. Row alignItems switched from center
-          to start since row height now varies with wrapped content. */}
-      {drafts.map(d => {
-        const campaign = d.email_campaigns as { name?: string; type?: string } | null;
-        return (
-          <div key={d.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_5_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
-            <div>{campaign?.name || campaign?.type || '—'}</div>
-            <div>{(d.subject as string) || '—'}</div>
-            <div style={{ fontSize: 11 }}>{(d.to_email as string) || '—'}</div>
-            <div>
-              <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: d.status === 'sent' ? '#15803d' : d.status === 'skipped' ? '#94a3b8' : '#b45309' }}>{d.status as string}</span>
-            </div>
-            <div>{d.sent_at ? fmtDate(d.sent_at as string) : '—'}</div>
-          </div>
-        );
-      })}
     </DataCard>
   );
 }
