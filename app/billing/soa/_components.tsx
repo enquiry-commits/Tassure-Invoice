@@ -330,15 +330,22 @@ function SoaDraftPopover({
           // 2026-09-17 fix: the 'button' variant sits inside SoaDetail's
           // modal, whose outer wrapper has `overflow: hidden` (for the
           // header's rounded-corner gradient) — opening downward like the
-          // 'icon' variant does put most of the popover past that wrapper's
-          // own bottom edge, clipping it almost entirely (real bug, seen
-          // live: only a sliver of "Draft Email — 1V CAPITAL PTE. LTD."
-          // was visible). The button always sits at the bottom of that
-          // modal, so opening UPWARD keeps the whole popover within the
-          // modal's own rendered bounds instead. The 'icon' variant (List
-          // row, not inside any overflow:hidden ancestor) keeps opening
-          // downward, matching Billing Drafts' own popover exactly.
-          ...(variant === 'button' ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }),
+          // 'icon' variant used to do put most of the popover past that
+          // wrapper's own bottom edge, clipping it almost entirely (real
+          // bug, seen live: only a sliver of "Draft Email — 1V CAPITAL PTE.
+          // LTD." was visible). Opening UPWARD keeps the whole popover
+          // within the modal's own rendered bounds instead.
+          //
+          // 2026-09-23: the 'icon' variant (List row) hit the exact same
+          // class of bug — Vincent, on a row near the bottom of the
+          // scrollable list card: "这个Draft的弹窗要放到最上方，不然被卡片
+          // 的线挡到" (the popup needs to open upward, otherwise the card's
+          // own edge cuts it off). That list sits in a container with
+          // `overflowY: 'auto'` and a capped height (see SoaBillingViewInner
+          // below), so a downward popover on a row near the bottom is just
+          // as clipped as the button variant was inside its modal. Both
+          // variants now open upward.
+          bottom: '100%', marginBottom: 4,
           border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 260, padding: 12,
         }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>
