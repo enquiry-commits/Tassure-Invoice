@@ -23,6 +23,7 @@ const CRON_PATHS = new Set([
   '/api/late-filing/sync',
   '/api/ai-learning/analyze-all',
   '/api/soa-owners/audit',
+  '/api/sg-news/sync',
 ]);
 
 export async function proxy(req: NextRequest) {
@@ -67,6 +68,14 @@ export async function proxy(req: NextRequest) {
   // AI-learning governance is Vincent-only. Hiding the sidebar entry is not
   // sufficient: reject direct URL navigation for every non-admin account too.
   if (!isApi && path === '/ai-learning' && !account.admin) {
+    return NextResponse.redirect(new URL('/', req.url));
+  }
+  // "SG Latest News" (added 2026-09-23) — Vincent, on the new page: "目前
+  // 由于在开发阶段，我要你只开放权限给 Vincent一个人先可以看到，其他人先隐
+  // 藏起来". Same hard middleware block as /ai-learning above, not just a
+  // hidden sidebar entry — direct URL navigation must also be rejected for
+  // everyone else while this stays in development.
+  if (!isApi && path === '/sg-news' && !account.canViewSgNews) {
     return NextResponse.redirect(new URL('/', req.url));
   }
   // Some accounts only see one page (Vincent, 2026-08-17 — an Accounting-team

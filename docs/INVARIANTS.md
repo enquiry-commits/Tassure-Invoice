@@ -1022,6 +1022,27 @@ again.
   because `Date.now()` genuinely reads as "now" at a glance; only running
   it against real data and checking the row's actual persisted `status`
   caught it.
+- **INV-CRON-016** — An external-site Playwright fetch (`lib/sg-news-
+  fetch.ts`, built 2026-09-23 for the "SG Latest News" feature) must treat
+  a single source's failure as a normal, expected, per-source outcome —
+  never let one source's failure abort the whole run. Confirmed for real,
+  not just designed defensively: a live local run against all 9 real
+  sources (ACRA/IRAS/MOM/ICA/ISCA/CSIS/Straits Times/Business Times/
+  Zaobao) hit two entirely different real failure modes in one batch —
+  CSIS returned a hard `403 Forbidden` to headless Chrome (bot-protection,
+  reproducible, not transient), and Straits Times simply needed longer
+  than a 30s `domcontentloaded` timeout on a slow load (succeeded on retry
+  at 45s, no code change needed otherwise). A third class — `ERR_NAME_
+  NOT_RESOLVED` on 3 domains simultaneously in one local run, confirmed via
+  direct `nslookup` to be this sandbox's own DNS resolver timing out, not
+  a real site problem — is an environment limitation of local dev, not a
+  production signal either way. All three classes land in the SAME
+  designed degradation path: `fetchAndExtractSource()` returns `{error}`,
+  the sync route (`app/api/sg-news/sync/route.ts`) records it in
+  `sg_news_sync_state` and `sources_failed` and moves on to the next
+  source. Do not chase CSIS's 403 with stealth/evasion techniques — it is
+  documented as an expected, tolerated per-source failure in
+  `lib/sg-news-sources.ts`, not a bug.
 
 ## QuickBooks / invoice (INV-QB)
 
@@ -2717,6 +2738,27 @@ again.
   screenshot.)*
 
 ## AI Assistant / chatbot (INV-AI)
+
+- **INV-AI-007** — When a forced-tool-call response asks the model to echo
+  back an identifying field alongside generated content (so the real
+  caller-supplied data — a URL, a date, anything that must stay factually
+  exact — can be re-attached afterward rather than trusted from the
+  model's own retyping), key that re-attachment lookup on the field the
+  model was told to copy VERBATIM, never on a second field it was free to
+  paraphrase. Found and fixed 2026-09-23 building `lib/sg-news-digest.ts`:
+  the first version keyed its `byKey` re-derivation map on `` `${source
+  name}|${title}` `` — `title` is copied verbatim by instruction, but
+  `source` (e.g. "ACRA", "The Straits Times") had no such instruction and
+  the model was free to phrase it differently, so any near-miss would
+  silently fail the lookup and null out a real `url`/`publishedLabel` with
+  no error anywhere — a silent data-loss bug, not a crash. Fixed by keying
+  on `title` alone (already the de-dup key one layer up in `app/api/
+  sg-news/sync/route.ts`, so collisions across sources are already rare by
+  construction). Same root cause class as `lib/reports-narrative.ts`
+  pre-computing YoY figures in code instead of asking the model to compute
+  them — the fix here is the matching-key version of that same rule:
+  never depend on the model reproducing something byte-exact unless the
+  prompt actually constrains it to.
 
 - **INV-AI-006** — The automated quality spot-check
   (`lib/ai-quality/review.ts`, `ai_quality_reviews`, `/ai-quality`, item 6 of

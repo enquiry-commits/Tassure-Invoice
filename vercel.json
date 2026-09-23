@@ -67,6 +67,10 @@
     {
       "path": "/api/ai-quality/review",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/sg-news/sync",
+      "schedule": "30 22 * * *"
     }
   ]
 }

@@ -44,6 +44,17 @@ export type ApprovedAccount = {
   // never asked for. If nothing ends up using this flag beyond AI Learning,
   // consider renaming it to reflect that narrower scope.
   canViewActivityInsights?: boolean;
+  // Gates the new "SG Latest News" page/nav item and its API routes
+  // (app/sg-news, app/api/sg-news/*) — daily ACRA/IRAS/MOM/ICA/ISCA/CSIS +
+  // Straits Times/Business Times/Zaobao monitoring. Added 2026-09-23,
+  // Vincent-only while the feature is still in development: "目前由于在开
+  // 发阶段，我要你只开放权限给 Vincent一个人先可以看到，其他人先隐藏起
+  // 来". A dedicated flag, not `admin` — same reasoning this file's own
+  // comments already give for `canViewReports`/`canViewAsOthers`: this
+  // happens to be Vincent-only TODAY, but is conceptually its own
+  // permission, and should stay easy to hand to someone else later without
+  // that silently also handing them Appearance Settings/AI Learning.
+  canViewSgNews?: boolean;
   // When set, this account is confined to exactly this one page (path +
   // required query params, e.g. AR Reminder is the 'ar' tab on /billing —
   // see components/Sidebar.tsx's tree for the canonical href). Enforced in
@@ -54,7 +65,7 @@ export type ApprovedAccount = {
 };
 
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
-  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true },
   { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
   { name: 'Samuell Ng', email: 'samuellng@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
   // New login account, added 2026-09-02 specifically to grant this

@@ -57,7 +57,12 @@ export type AutomationSource =
   // Added 2026-09-22 — daily automated AI-reply quality spot-check (item 6
   // of Vincent's "AI Agent/My Tasks 少一些东西" review; see
   // app/api/ai-quality/review/route.ts, lib/ai-quality/review.ts).
-  | 'ai_quality_review';
+  | 'ai_quality_review'
+  // Added 2026-09-23 — "SG Latest News" (app/api/sg-news/sync/route.ts):
+  // daily ACRA/IRAS/MOM/ICA/ISCA/CSIS + Straits Times/Business Times/
+  // Zaobao monitoring, per Vincent's own spec. Vincent-only page while in
+  // development (lib/approved-accounts.ts's canViewSgNews).
+  | 'sg_news_sync';
 
 type JsonSummary = Record<string, unknown>;
 

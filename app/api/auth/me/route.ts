@@ -21,6 +21,7 @@ export async function GET() {
       admin: account.admin ?? false,
       canViewReports: account.canViewReports ?? false,
       canViewActivityInsights: account.canViewActivityInsights ?? false,
+      canViewSgNews: account.canViewSgNews ?? false,
     },
   });
 }

@@ -32,6 +32,9 @@ const SOURCES = [
   'ai_learning',
   // Added 2026-09-22 — see app/api/ai-quality/review/route.ts.
   'ai_quality_review',
+  // Added 2026-09-23, deliberately not skipped this time — see
+  // app/api/sg-news/sync/route.ts.
+  'sg_news_sync',
 ] as const;
 
 export const dynamic = 'force-dynamic';

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText, ListChecks, BarChart3, ShieldCheck } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, ListChecks, BarChart3, ShieldCheck, Newspaper } from 'lucide-react';
 
 // `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
 // yet (see NavImg below) — currently Proposal Generator (a link out to a
@@ -134,6 +134,14 @@ const ADMIN_NODE: Node = {
 // for leadership, deliberately not part of `tree` for the same reason as
 // ADMIN_NODE above (only a handful of accounts ever see it).
 const REPORTS_NODE: Node = { label: 'Reports', href: '/reports', icon: BarChart3 };
+
+// Added 2026-09-23 — Vincent: "我要单独做一个一级标题页面（SG Latest
+// News）在My Tasks 一级标题下方" (directly below My Tasks). Spliced in
+// AFTER Reports below so it lands at My-Tasks-index+1 and pushes Reports
+// down one, matching that literal wording — for the one account
+// (Vincent's) that has both flags today, order is My Tasks → SG Latest
+// News → Reports.
+const SG_NEWS_NODE: Node = { label: 'SG Latest News', href: '/sg-news', icon: Newspaper };
 
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
@@ -373,7 +381,7 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
   );
 }
 
-export default function Sidebar({ restrictedTo, isAdmin, canViewReports }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean }) {
+export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canViewSgNews }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean; canViewSgNews?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
   let level1 = level1For(restrictedTo);
   if (canViewReports && !restrictedTo) {
@@ -381,6 +389,12 @@ export default function Sidebar({ restrictedTo, isAdmin, canViewReports }: { res
     level1 = myTasksIdx >= 0
       ? [...level1.slice(0, myTasksIdx + 1), REPORTS_NODE, ...level1.slice(myTasksIdx + 1)]
       : [...level1, REPORTS_NODE];
+  }
+  if (canViewSgNews && !restrictedTo) {
+    const myTasksIdx = level1.findIndex(n => n.href === '/my-tasks');
+    level1 = myTasksIdx >= 0
+      ? [...level1.slice(0, myTasksIdx + 1), SG_NEWS_NODE, ...level1.slice(myTasksIdx + 1)]
+      : [...level1, SG_NEWS_NODE];
   }
   // The complete Admin group is intentionally Vincent-only and remains the
   // final level-1 item in the sidebar.
