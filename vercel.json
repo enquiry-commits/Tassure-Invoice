@@ -71,6 +71,10 @@
     {
       "path": "/api/sg-news/sync",
       "schedule": "30 22 * * *"
+    },
+    {
+      "path": "/api/reports/narrative-cron",
+      "schedule": "0 22 * * 0"
     }
   ]
 }

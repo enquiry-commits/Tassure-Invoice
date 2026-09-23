@@ -35,7 +35,21 @@ const SOURCES = [
   // Added 2026-09-23, deliberately not skipped this time — see
   // app/api/sg-news/sync/route.ts.
   'sg_news_sync',
+  // Added 2026-09-23 — see app/api/reports/narrative-cron/route.ts. WEEKLY,
+  // not daily — see STALE_HOURS below for why this needs its own threshold.
+  'reports_narrative',
 ] as const;
+
+// Every source above defaults to a 30h staleness threshold (see `stale`
+// below) — correct for the daily crons this dashboard was built around, but
+// wrong for a genuinely weekly one: reports_narrative would show
+// "attention" for ~6 of every 7 days even when working exactly as
+// designed. Per-source override, checked before the 30h default.
+const STALE_HOURS: Partial<Record<(typeof SOURCES)[number], number>> = {
+  // 8 days: one day of slack past the 7-day cadence before actually
+  // flagging a missed run, not the moment the 7th day ticks over.
+  reports_narrative: 24 * 8,
+};
 
 export const dynamic = 'force-dynamic';
 
@@ -174,7 +188,7 @@ export async function GET(req: NextRequest) {
     const successAgeHours = lastSuccess
       ? Math.round(((now - new Date(lastSuccess.finished_at ?? lastSuccess.started_at).getTime()) / 3_600_000) * 10) / 10
       : null;
-    const stale = successAgeHours == null || successAgeHours > 30;
+    const stale = successAgeHours == null || successAgeHours > (STALE_HOURS[source] ?? 30);
     const unhealthy = latest?.status === 'failed' || stale;
     return {
       source,

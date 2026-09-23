@@ -62,7 +62,14 @@ export type AutomationSource =
   // daily ACRA/IRAS/MOM/ICA/ISCA/CSIS + Straits Times/Business Times/
   // Zaobao monitoring, per Vincent's own spec. Vincent-only page while in
   // development (lib/approved-accounts.ts's canViewSgNews).
-  | 'sg_news_sync';
+  | 'sg_news_sync'
+  // Added 2026-09-23 — weekly AI Analysis generation for the Reports page
+  // (app/api/reports/narrative-cron/route.ts), replacing the old on-
+  // demand/24h-cache generation per Vincent's explicit "don't waste
+  // tokens" instruction. WEEKLY, not daily like every other source above —
+  // see app/api/automation/health/route.ts's own STALE_HOURS override,
+  // needed so this doesn't show as permanently "attention" between runs.
+  | 'reports_narrative';
 
 type JsonSummary = Record<string, unknown>;
 

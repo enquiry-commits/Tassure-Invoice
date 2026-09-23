@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  BarChart3, Users, UserPlus, UserMinus, TrendingUp, TrendingDown, PieChart, Wallet, Compass, Download, X, Sparkles, RefreshCw, Database,
+  BarChart3, Users, UserPlus, UserMinus, TrendingUp, TrendingDown, PieChart, Wallet, Compass, Download, X, Sparkles, Database,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { Donut, VBars, HBars, LineChart } from '@/components/dashboard/Charts';
@@ -382,10 +382,15 @@ export default function ReportsPage() {
   // AI narrative — its own effect/fetch, deliberately independent of `data`
   // above: it has its own (slower, LLM-backed) endpoint, and the numbers
   // must render immediately rather than wait on it. See app/api/reports/
-  // narrative/route.ts for the 24h cache + lib/reports-narrative.ts for the
-  // prompt itself — Vincent: "能不能...装好一个金融分析师和企业规划师的Ai
-  // 分析助手...让这些数据不会只是单单的数字了", picking "auto-generated
-  // narrative" over a chat panel so this always shows something on load.
+  // narrative/route.ts (a PURE cache read, no generation path at all since
+  // 2026-09-23) and app/api/reports/narrative-cron/route.ts (the only
+  // writer — a weekly cron, Monday 06:00 SGT) + lib/reports-narrative.ts
+  // for the prompt itself. Vincent: "能不能...装好一个金融分析师和企业规划
+  // 师的Ai分析助手...让这些数据不会只是单单的数字了", picking "auto-
+  // generated narrative" over a chat panel so this always shows something
+  // on load. No manual refresh button (removed 2026-09-23, "为了不要浪费
+  // Token...不能refresh") — this view only ever reads whatever the weekly
+  // cron last wrote.
   //
   // Structured, not prose (round 2) — "文字没有优先级"/"排列也不整齐": a
   // single string can never GUARANTEE visual hierarchy no matter how the
@@ -407,28 +412,22 @@ export default function ReportsPage() {
     notYetProvenZh: string[]; notYetProvenEn: string[];
     nextActionZh: string; nextActionEn: string;
   };
-  const [narrative, setNarrative] = useState<{ insights: NarrativeInsight[]; summaryZh: string; summaryEn: string; generatedAt: string; cached: boolean } | null>(null);
+  const [narrative, setNarrative] = useState<{ insights: NarrativeInsight[]; summaryZh: string; summaryEn: string; generatedAt: string } | null>(null);
   const [narrativeLang, setNarrativeLang] = useState<'zh' | 'en'>('zh');
-  // Starts true (not false) specifically so the initial mount's effect below
-  // never needs to set it synchronously itself — a synchronous setState
-  // inside an effect body is a real lint error (react-hooks/set-state-in-
-  // effect), not just style; only the deferred setNarrativeLoading(false)
-  // inside the fetch's own .finally() runs from there, which this rule
-  // doesn't flag. The manual refresh button's own click handler is a real
-  // event handler, not an effect, so it's free to set this synchronously.
   const [narrativeLoading, setNarrativeLoading] = useState(true);
   const [narrativeError, setNarrativeError] = useState<string | null>(null);
 
-  const fetchNarrative = (refresh?: boolean) => {
-    fetch(`/api/reports/narrative${refresh ? '?refresh=true' : ''}`).then(async r => {
+  useEffect(() => {
+    if (!authorized) return;
+    fetch('/api/reports/narrative').then(async r => {
       const body = await r.json();
       if (!r.ok) throw new Error(body.error || 'Failed to load AI analysis');
-      setNarrative({ insights: body.narrative.insights, summaryZh: body.narrative.summaryZh, summaryEn: body.narrative.summaryEn, generatedAt: body.generatedAt, cached: !!body.cached });
+      // narrative is null when the weekly cron hasn't produced a row yet
+      // (fresh deploy, or before the first Monday run) — not an error.
+      setNarrative(body.narrative ? { insights: body.narrative.insights, summaryZh: body.narrative.summaryZh, summaryEn: body.narrative.summaryEn, generatedAt: body.generatedAt } : null);
       setNarrativeError(null);
     }).catch(e => setNarrativeError(e.message)).finally(() => setNarrativeLoading(false));
-  };
-  const refreshNarrative = () => { setNarrativeLoading(true); fetchNarrative(true); };
-  useEffect(() => { if (authorized) fetchNarrative(); }, [authorized]);
+  }, [authorized]);
 
   const CONFIDENCE_LABEL: Record<NarrativeInsight['confidence'], { zh: string; en: string }> = {
     high: { zh: '高置信度', en: 'High confidence' },
@@ -479,7 +478,9 @@ export default function ReportsPage() {
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* Both languages already sit in the one fetched object (see
                 lib/reports-narrative.ts) — this only ever flips which field
-                renders, never triggers a second request. */}
+                renders, never triggers a second request. No refresh button
+                (removed 2026-09-23, "不能refresh") — the weekly cron
+                (app/api/reports/narrative-cron/route.ts) is the only writer. */}
             <div style={{ display: 'flex', background: 'rgba(255,255,255,.1)', borderRadius: 7, padding: 2 }}>
               {(['zh', 'en'] as const).map(l => (
                 <button key={l} onClick={() => setNarrativeLang(l)}
@@ -489,19 +490,18 @@ export default function ReportsPage() {
                 </button>
               ))}
             </div>
-            <button onClick={refreshNarrative} disabled={narrativeLoading}
-              title="Regenerate"
-              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,.75)', background: 'rgba(255,255,255,.1)', border: 'none', borderRadius: 7, padding: '5px 10px', cursor: narrativeLoading ? 'default' : 'pointer' }}>
-              <RefreshCw size={11} style={{ animation: narrativeLoading ? 'spin 1s linear infinite' : 'none' }} />
-              {narrativeLoading ? (narrativeLang === 'zh' ? '生成中…' : 'Working…') : (narrativeLang === 'zh' ? '重新生成' : 'Refresh')}
-            </button>
           </div>
         </div>
         {narrativeError && (
           <div style={{ fontSize: 12.5, color: '#fecaca', lineHeight: 1.6 }}>{narrativeError}</div>
         )}
-        {!narrativeError && narrativeLoading && !narrative && (
-          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.65)' }}>{narrativeLang === 'zh' ? '正在生成分析…' : 'Generating analysis…'}</div>
+        {!narrativeError && narrativeLoading && (
+          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.65)' }}>{narrativeLang === 'zh' ? '加载中…' : 'Loading…'}</div>
+        )}
+        {!narrativeError && !narrativeLoading && !narrative && (
+          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,.65)' }}>
+            {narrativeLang === 'zh' ? '分析将于下周一早上6点（新加坡时间）生成，请稍候。' : 'Analysis will be generated next Monday at 6am SGT.'}
+          </div>
         )}
         {!narrativeError && narrative && (
           <>
@@ -551,8 +551,8 @@ export default function ReportsPage() {
               {narrativeLang === 'zh' ? narrative.summaryZh : narrative.summaryEn}
             </div>
             <div style={{ marginTop: 8, fontSize: 10.5, color: 'rgba(255,255,255,.4)' }}>
-              {narrative.cached ? (narrativeLang === 'zh' ? '基于缓存的分析 · ' : 'Cached · ') : ''}
               {narrativeLang === 'zh' ? '生成于 ' : 'Generated '}{new Date(narrative.generatedAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}
+              {narrativeLang === 'zh' ? ' · 每周一 6:00（新加坡时间）自动更新' : ' · Auto-updates every Monday 6am SGT'}
             </div>
           </>
         )}

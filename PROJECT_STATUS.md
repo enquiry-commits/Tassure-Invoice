@@ -1812,6 +1812,33 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Reports' AI Analysis moved to a weekly-only cron, no manual refresh
+  (INV-DATA-063).** Vincent: "为了不要浪费Token，这个AI Analysis，一周只
+  做一次更新描述，不能refresh, 并且这个更新是按照每星期一早上6点更新" (to
+  avoid wasting tokens, update once a week only, no manual refresh, every
+  Monday 6am). New `app/api/reports/narrative-cron/route.ts` is now the
+  ONLY caller of `generateReportsNarrative()` — cron-only, `vercel.json`
+  `"0 22 * * 0"` (22:00 UTC Sunday = 06:00 SGT Monday). The page's own
+  `app/api/reports/narrative/route.ts` is now a PURE cache read — no
+  generation on cache miss/staleness, no `?refresh=true` at all (removed
+  server-side, not just the UI button — a button-only fix would still let
+  anyone hit the URL directly and burn a real call). Returns `narrative:
+  null` (200, not an error) when nothing's been generated yet;
+  `app/reports/page.tsx` shows "will be generated next Monday 6am SGT"
+  instead of an error, and the now-pointless `cached` flag / refresh
+  button / `RefreshCw` import were removed. `reports_narrative` added to
+  `lib/automation-sync.ts`'s `AutomationSource` union and the Automation
+  Health dashboard's `SOURCES`, with its own 8-day staleness threshold
+  (`STALE_HOURS` override) instead of the other sources' flat 30h — a
+  weekly job would otherwise show false "attention" 6 days out of 7.
+  `npx tsc --noEmit`/`eslint`/`npm run build` (cold) all clean, confirms
+  both narrative routes compile as separate functions. **Not verified
+  against a real run** — the cron hasn't fired yet (first run is the
+  Monday after deploy), and there's no way to trigger it locally
+  (`OPENAI_API_KEY`/`CRON_SECRET` are Vercel-only) — flagged as an open
+  item, not assumed working. Full details: `docs/INVARIANTS.md`
+  INV-DATA-063.
+
 - **Reports' AI Analysis switched from Anthropic to OpenAI (INV-DATA-062),
   while the bug below was still unresolved.** Vincent: "额度用完了，那么先
   换成 Open Ai 去生成 Report 这边的Ai分析" (Anthropic credit ran out,

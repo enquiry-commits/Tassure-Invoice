@@ -24,6 +24,7 @@ const CRON_PATHS = new Set([
   '/api/ai-learning/analyze-all',
   '/api/soa-owners/audit',
   '/api/sg-news/sync',
+  '/api/reports/narrative-cron',
 ]);
 
 export async function proxy(req: NextRequest) {

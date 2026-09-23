@@ -2757,6 +2757,54 @@ again.
     (provider-agnostic — only exercises `validateNarrative()`).
     Confirmation is only possible via Vincent reloading the Reports page.
 
+- **INV-DATA-063** — Reports' AI Analysis moved from on-demand generation
+  (24h cache + a manual "重新生成" button) to a WEEKLY cron, no manual
+  trigger at all, per Vincent: "为了不要浪费Token，这个AI Analysis，一周只
+  做一次更新描述，不能refresh, 并且这个更新是按照每星期一早上6点更新" (to
+  avoid wasting tokens, update once a week only, no manual refresh, every
+  Monday 6am).
+  - New `app/api/reports/narrative-cron/route.ts` is now the ONLY caller of
+    `generateReportsNarrative()` in the whole app — cron-only (added to
+    `proxy.ts`'s `CRON_PATHS` + `vercel.json`'s `"0 22 * * 0"`, 22:00 UTC
+    Sunday = 06:00 SGT Monday, the same UTC+8 conversion every other cron
+    in that file already uses), wrapped in `withAutomationRun('reports_
+    narrative', ...)` like every other scheduled job.
+  - `app/api/reports/narrative/route.ts` (the page's own read endpoint) is
+    now a PURE cache read — no generation on a cache miss, no staleness
+    check, no `?refresh=true`. Removing the capability server-side, not
+    just hiding the UI button, was deliberate: a button-only fix would
+    still let anyone hit the URL with `?refresh=true` and burn a real API
+    call, exactly what Vincent asked to stop. Returns `narrative: null`
+    (200, not an error) when no row exists yet or the only row is
+    shape-stale — `app/reports/page.tsx` renders this as "analysis will be
+    generated next Monday 6am SGT," not an error banner.
+  - `app/reports/page.tsx`'s manual refresh button (and the `cached`
+    boolean it depended on, which no longer means anything once there's
+    only ever one write path) removed entirely, along with the now-unused
+    `RefreshCw` import.
+  - `reports_narrative` added to `lib/automation-sync.ts`'s
+    `AutomationSource` union AND `app/api/automation/health/route.ts`'s
+    `SOURCES` (per that file's own repeatedly-rediscovered gap: a real
+    `AutomationSource` not listed there is invisible to Vincent's health
+    dashboard — already happened for `teamwork_secretary`, `ai_learning`,
+    `ai_quality_review`). Unlike every other source in that file
+    (daily crons, flagged "attention" after a flat 30h without a success),
+    a WEEKLY job needs its own threshold — flagging it "attention" for ~6
+    of every 7 days between runs would be pure false-alarm noise, not a
+    real signal. Added a `STALE_HOURS` per-source override map (defaulting
+    to the existing 30h for every other source, 192h/8 days for
+    `reports_narrative` — one day of slack past the 7-day cadence).
+  - **Not verified against a real production run** — the cron hasn't fired
+    yet (first scheduled run is the next Monday after deploy) and there is
+    no way to trigger it locally (`OPENAI_API_KEY`/`CRON_SECRET` are both
+    Vercel-only). Whether the FIRST cache row lands correctly, and whether
+    the health dashboard's new `reports_narrative` tile behaves as
+    designed, can only be confirmed after that first real run — flagged
+    to Vincent as an open item, not silently assumed working.
+  - `npx tsc --noEmit`, `npx eslint` (every changed file), `npm run build`
+    (cold, confirms both `/api/reports/narrative` and `/api/reports/
+    narrative-cron` compile as separate serverless functions) all clean.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined
