@@ -17,16 +17,26 @@ export const preferredRegion = 'sin1';
 const NARRATIVE_STALE_MS = 24 * 60 * 60 * 1000;
 
 // The `narrative` column is plain `text` (no migration needed for round 2's
-// structured/bilingual rework — see lib/reports-narrative.ts's own header):
-// stores JSON.stringify(ReportsNarrative), parsed back on read. A row
-// written by round 1 (a plain prose string, from before this change) is not
-// valid JSON — caught and treated as a cache miss rather than crashing, so
-// the one real row Vincent already generated live doesn't need manual
-// cleanup; it just naturally gets replaced by the next real generation.
+// structured/bilingual rework, or round 3's Reports V3 Phase 1 schema
+// change — see lib/reports-narrative.ts's own header): stores
+// JSON.stringify(ReportsNarrative), parsed back on read. A row written by
+// an EARLIER schema version is not valid against the CURRENT shape —
+// caught and treated as a cache miss rather than crashing or rendering
+// with missing fields, so an old cached row never needs manual cleanup; it
+// just naturally gets replaced by the next real generation. Round 3
+// (2026-09-23) added required observed/metricRefs/notYetProven/nextAction
+// fields and made driver nullable — a round-2 cached row has `bodyZh`
+// instead, which the new shape check below correctly rejects.
 function parseCachedNarrative(raw: string): ReportsNarrative | null {
   try {
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed?.insights) ? parsed : null;
+    if (!Array.isArray(parsed?.insights) || !parsed.insights.length) return null;
+    const shapeOk = parsed.insights.every((i: Record<string, unknown>) =>
+      typeof i.observedZh === 'string' && typeof i.observedEn === 'string'
+      && Array.isArray(i.metricRefs) && Array.isArray(i.notYetProvenZh) && Array.isArray(i.notYetProvenEn)
+      && typeof i.nextActionZh === 'string' && typeof i.nextActionEn === 'string'
+      && typeof i.confidence === 'string' && (i.driverZh === null || typeof i.driverZh === 'string'));
+    return shapeOk ? parsed : null;
   } catch {
     return null;
   }

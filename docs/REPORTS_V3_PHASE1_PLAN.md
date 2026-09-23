@@ -1,9 +1,17 @@
 # Reports V3 — Phase 1 Implementation Plan (Analytics Correctness)
 
-**Status: plan only, per Vincent's explicit instruction ("Do not start Phase
-2 until Phase 1 has been implemented and validated" / "provide the detailed
-implementation plan for PHASE 1 only" before changing more production
-code). Nothing beyond this document has been written this turn.**
+**Status: IMPLEMENTED AND VALIDATED (2026-09-23).** Approved with 7
+explicit refinements (client-flow quality design changed from this plan's
+original zero-tolerance proposal; signal kept 3-level and never renamed to
+"severity"; driver made nullable; `metricRefs` added; comparable-period
+validation made metric-specific, not "any %"; exact schema given; 4 named
+test cases). Built exactly as refined, not as originally drafted below —
+see `docs/INVARIANTS.md` INV-DATA-060 for what actually shipped, including
+one real bug this phase's own test suite caught (`current_quarter`
+comparison tolerance) and one real adjacent bug found but deliberately not
+fixed in this change (`parseFlexibleDate`'s garbage-year acceptance). This
+document is kept as the historical record of the original proposal, not
+updated to match the final shape line-by-line.
 
 Scope: Vincent's 8-item Phase 1 list, from "The audit is approved... We
 will follow this order." Cross-referenced against

@@ -44,13 +44,21 @@ type ComparableRevenue = {
   revenuePctChange: number | null; invoiceCountPctChange: number | null;
   comparable: boolean; comparabilityReason: string;
 };
+// Page-local copy of lib/reports-data.ts's DataQuality, kept in sync by
+// hand — same convention as ComparableRevenue above.
+type DataQualityStatus = 'normal' | 'minor_issues' | 'partial_data' | 'data_quality_warning' | 'unavailable';
+type DataQuality = { parseableRecords: number; unparseableRecords: number; coveragePct: number; status: DataQualityStatus };
 interface ReportsData {
   generatedAt: string;
   kpis: { activeClients: number; newThisYear: number; churnedThisYear: number; netGrowthThisYear: number };
   clientTypeDonut: Pt[];
   serviceMix: Pt[];
   sourceDonut: Pt[];
-  flow: { years: string[]; newClientsTrend: Pt[]; churnedTrend: Pt[]; newByYearRows: Record<string, FlowRow[]>; churnedByYearRows: Record<string, FlowRow[]> };
+  flow: {
+    years: string[]; newClientsTrend: Pt[]; churnedTrend: Pt[];
+    newByYearRows: Record<string, FlowRow[]>; churnedByYearRows: Record<string, FlowRow[]>;
+    newQuality: DataQuality; churnedQuality: DataQuality;
+  };
   revenue: { years: string[]; invoiceCountTrend: Pt[]; revenueTrendThousands: Pt[]; comparableYoy: ComparableRevenue };
   picWorkload: Pt[];
   companyRows: CompanyRow[];
@@ -386,7 +394,19 @@ export default function ReportsPage() {
   // distinct row instead of paragraphs of prose. Bilingual per-field, both
   // languages already in the same fetched object — the 中/EN toggle below
   // just switches which field it reads, no second request.
-  type NarrativeInsight = { signal: 'good' | 'watch' | 'warning'; titleZh: string; titleEn: string; bodyZh: string; bodyEn: string };
+  // Reports V3 Phase 1 (2026-09-23) — replaced the old flat titleZh/bodyZh
+  // shape with a real FACT/INFERENCE/HYPOTHESIS/ACTION structure; driver is
+  // nullable (the model must never invent a causal explanation just to
+  // fill the field) and confidence is its own axis, independent of signal.
+  type NarrativeInsight = {
+    signal: 'good' | 'watch' | 'warning'; confidence: 'high' | 'medium' | 'low';
+    titleZh: string; titleEn: string;
+    observedZh: string; observedEn: string;
+    metricRefs: string[];
+    driverZh: string | null; driverEn: string | null;
+    notYetProvenZh: string[]; notYetProvenEn: string[];
+    nextActionZh: string; nextActionEn: string;
+  };
   const [narrative, setNarrative] = useState<{ insights: NarrativeInsight[]; summaryZh: string; summaryEn: string; generatedAt: string; cached: boolean } | null>(null);
   const [narrativeLang, setNarrativeLang] = useState<'zh' | 'en'>('zh');
   // Starts true (not false) specifically so the initial mount's effect below
@@ -410,6 +430,11 @@ export default function ReportsPage() {
   const refreshNarrative = () => { setNarrativeLoading(true); fetchNarrative(true); };
   useEffect(() => { if (authorized) fetchNarrative(); }, [authorized]);
 
+  const CONFIDENCE_LABEL: Record<NarrativeInsight['confidence'], { zh: string; en: string }> = {
+    high: { zh: '高置信度', en: 'High confidence' },
+    medium: { zh: '中置信度', en: 'Medium confidence' },
+    low: { zh: '低置信度', en: 'Low confidence' },
+  };
   const SIGNAL_STYLE: Record<NarrativeInsight['signal'], { color: string; bg: string; labelZh: string; labelEn: string }> = {
     good: { color: '#6ee7b7', bg: 'rgba(110,231,183,.12)', labelZh: '健康', labelEn: 'Good' },
     watch: { color: '#fbbf24', bg: 'rgba(251,191,36,.12)', labelZh: '关注', labelEn: 'Watch' },
@@ -483,14 +508,40 @@ export default function ReportsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {narrative.insights.map((ins, i) => {
                 const s = SIGNAL_STYLE[ins.signal];
+                const c = CONFIDENCE_LABEL[ins.confidence];
+                const driver = narrativeLang === 'zh' ? ins.driverZh : ins.driverEn;
+                const notYetProven = narrativeLang === 'zh' ? ins.notYetProvenZh : ins.notYetProvenEn;
                 return (
                   <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 10, background: 'rgba(255,255,255,.05)', borderLeft: `3px solid ${s.color}` }}>
                     <span style={{ flexShrink: 0, height: 20, padding: '0 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', letterSpacing: '.02em' }}>
                       {narrativeLang === 'zh' ? s.labelZh : s.labelEn}
                     </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 4 }}>{narrativeLang === 'zh' ? ins.titleZh : ins.titleEn}</div>
-                      <div style={{ fontSize: 12.5, lineHeight: 1.7, color: 'rgba(255,255,255,.8)' }}>{narrativeLang === 'zh' ? ins.bodyZh : ins.bodyEn}</div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{narrativeLang === 'zh' ? ins.titleZh : ins.titleEn}</span>
+                        {/* Confidence is metadata, not a visual centerpiece —
+                            dashboard-design skill's own "do not overuse
+                            confidence badges visually" guidance. */}
+                        <span style={{ fontSize: 9.5, fontWeight: 700, color: 'rgba(255,255,255,.45)', border: '1px solid rgba(255,255,255,.18)', borderRadius: 999, padding: '1px 7px' }}>
+                          {narrativeLang === 'zh' ? c.zh : c.en}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12.5, lineHeight: 1.7, color: 'rgba(255,255,255,.85)' }}>{narrativeLang === 'zh' ? ins.observedZh : ins.observedEn}</div>
+                      {driver && (
+                        <div style={{ fontSize: 12, lineHeight: 1.7, color: 'rgba(255,255,255,.65)', marginTop: 5 }}>
+                          <span style={{ fontWeight: 700, color: 'rgba(255,255,255,.4)' }}>{narrativeLang === 'zh' ? '推测 · ' : 'Driver · '}</span>{driver}
+                        </div>
+                      )}
+                      {notYetProven.length > 0 && (
+                        <div style={{ fontSize: 11.5, lineHeight: 1.7, color: 'rgba(255,255,255,.5)', marginTop: 5 }}>
+                          <span style={{ fontWeight: 700, color: 'rgba(255,255,255,.4)' }}>{narrativeLang === 'zh' ? '尚未证实 · ' : 'Not yet proven · '}</span>
+                          {notYetProven.join(' / ')}
+                        </div>
+                      )}
+                      <div style={{ fontSize: 12, lineHeight: 1.7, color: '#a7f3d0', marginTop: 6 }}>
+                        <span style={{ fontWeight: 700 }}>{narrativeLang === 'zh' ? '下一步 · ' : 'Next · '}</span>
+                        {narrativeLang === 'zh' ? ins.nextActionZh : ins.nextActionEn}
+                      </div>
                     </div>
                   </div>
                 );

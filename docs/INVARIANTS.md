@@ -2414,6 +2414,108 @@ again.
   run lint` on the changed files, and `npm run build` all clean. See
   `docs/MANAGEMENT_ANALYST_GAP_ANALYSIS.md` §0 for the original audit that
   found this bug, written hours before it was fixed.
+- **INV-DATA-060** — Two durable rules from Reports V3 Phase 1
+  (2026-09-23, `docs/REPORTS_V3_PHASE1_PLAN.md`, approved with Vincent's own
+  refinements):
+
+  1. **A period's own day-count is not always exactly reproducible by
+     calendar-shifting.** `lib/reporting-period.ts`'s `current_quarter`
+     default comparison (shift both endpoints back 3 calendar months)
+     preserves calendar ALIGNMENT (same day-of-quarter) but not exact
+     day-count — quarters are not a fixed length (Jul-Sep is 92 days,
+     Apr-Jun is 91), so a partial Q3 window shifted back 3 months can
+     legitimately land 1-3 days short. Found by this file's own test suite
+     (`test-reporting-period.ts`), not a screenshot. `checkComparable()`
+     now tolerates up to 3 days' difference — enough to absorb this
+     calendar-length noise, nowhere near enough to let the dangerous case
+     (YTD vs a full prior year, ~100 days) slip through; both are asserted
+     directly in the test file. `ytd`/`previous_ytd` and `ttm`/
+     `previous_ttm` are exact (0-day difference) by construction and are
+     unaffected by this tolerance.
+
+  2. **A "missing data" signal must never be forced onto a dimension the
+     source data can't actually support.** `quickbooks_invoices` has a
+     clean year boundary (zero rows before 2024-01-02), so INV-DATA-059's
+     null-for-absent-year fix is safe there. `master_list.join_date`/
+     `update_date` has NO such boundary (Tassure's client base predates
+     the trend window) — Vincent's own correction to the original plan:
+     do not null out a whole year over a few parse failures, and do not
+     force an unparseable date into a year it cannot be reliably assigned
+     to. `lib/reports-data.ts`'s `computeClientFlow()` now tracks parse
+     success/failure as a GLOBAL count per series (new vs churned — two
+     different source fields, two different coverage rates), not
+     attributed to any single year, exposed as `{ parseableRecords,
+     unparseableRecords, coveragePct, status }` with thresholds Vincent
+     specified directly (100% normal, ≥95% minor_issues, ≥90% partial_data,
+     else data_quality_warning). Verified against real data: 1,599
+     `master_list` rows fetched live — new-client dating 98% coverage
+     (25 unparseable), churned-client dating 96.4% (17 unparseable), both
+     correctly landing in `minor_issues`.
+
+     **A real, adjacent bug surfaced by this same verification, not fixed
+     in this change**: `parseFlexibleDate()`'s final fallback
+     (`new Date(s)`) accepts garbage input as a "successful" parse for
+     some real rows — `newByYear` came back with entries for 2027, 2028,
+     and a bare `44420` (almost certainly an Excel date-serial number that
+     leaked through as raw text and got misread as a literal year). These
+     don't currently reach the screen (the trend chart only ever shows
+     `years = [thisYear-4 … thisYear]`, so 2027/2028/44420 fall outside
+     the displayed window), but they DO mean `newQuality.coveragePct`
+     (98%) is optimistic — some of what's counted as "parseable" actually
+     parsed to nonsense, not a real date. Flagged to Vincent as a known
+     limitation, not silently fixed here — tightening `parseFlexibleDate`'s
+     own sanity bounds (e.g. reject a parsed year outside some reasonable
+     [2000, thisYear+2] range) is a real, scoped follow-up, deliberately
+     kept out of this change to avoid touching the shared parser's
+     behavior for every other caller in the same commit as the quality-
+     tracking feature.
+
+  Also consolidated in the same change: `app/api/reports/route.ts` used to
+  carry its OWN separate inline copy of the entire client-flow computation
+  (counts + drill-down row lists + its own duplicate `parseFlexibleDate`),
+  never calling `lib/reports-data.ts`'s `computeClientFlow()` at all, while
+  that shared function's own copy (used by the chat assistant's portfolio-
+  summary tool) only built the counts. Folded into one function — the
+  route now calls it directly — rather than applying the new quality-
+  tracking logic to two separate implementations that could drift apart
+  again.
+
+  Also: `lib/reports-narrative.ts`'s comparable-period enforcement is now
+  METRIC-SPECIFIC, not "any percentage present + comparable=false = reject"
+  — an insight is only rejected when its own `metricRefs` actually cites
+  `revenue_yoy`/`invoice_count_yoy` while `comparableYoy.comparable` is
+  false; an unrelated percentage (Vincent's own example: "Tax usage =
+  49.8%", a point-in-time `service_mix` figure) must never be flagged just
+  for containing a "%" sign. `validateNarrative()` also rejects any
+  `metricRefs` citation of a `status: 'planned'` entry in `lib/metric-
+  catalogue.ts` (nothing computes it yet) and any citation of a metricId
+  that doesn't exist in the catalogue at all. On a validation failure,
+  `generateReportsNarrative()` retries ONCE with the specific violations
+  fed back as a correction instruction ("reject / regenerate", not a
+  silent text patch); a second failure throws a real error rather than
+  serving an invalid analysis. `driverZh`/`driverEn` are now nullable —
+  the model must write `null` rather than invent a causal explanation the
+  evidence doesn't support. `confidence` (`high`/`medium`/`low`) is a new,
+  independent field from `signal` (kept as `good`/`watch`/`warning` per
+  Vincent's own correction — "'good' is not semantically a severity
+  level," so it was never renamed to "severity"). All 4 of Vincent's own
+  approved test cases (A: warning+low confidence is valid; B: driver=null
+  is valid; C: an unrelated percentage during comparable=false passes; D:
+  citing revenue_yoy during comparable=false fails) plus 6 more covering
+  the catalogue-integrity rules are pinned in
+  `test-reports-narrative-guards.ts`. `app/api/reports/narrative/
+  route.ts`'s cache-shape validation was tightened the same way it already
+  was for the ROUND 1→2 transition (no migration — the cache column is
+  plain `text`) so an old-shape cached row is treated as a cache miss, not
+  rendered with missing fields.
+
+  **Not verified against a real live Claude call** — no `ANTHROPIC_API_KEY`
+  exists in this machine's local `.env.local` (production-only, set
+  directly in Vercel), so `generateReportsNarrative()`'s actual model
+  output could only be verified structurally (the `validateNarrative()`
+  unit tests above), not end-to-end against a real generation. `npx tsc
+  --noEmit`, `npm run lint` (changed files), and `npm run build` all
+  clean.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

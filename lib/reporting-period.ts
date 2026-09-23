@@ -158,19 +158,31 @@ export function resolvePeriod(type: PeriodType, asOfDate: string, customRange?: 
 // The mandatory check from spec §5: before showing ANY period-over-period
 // figure, validate day-count and completeness match — never just assume
 // two periods are comparable because their TYPES sound related.
+// Found via this file's own test suite (test-reporting-period.ts), not a
+// screenshot: current_quarter's default comparison is built by shifting
+// BOTH endpoints back 3 calendar months (see buildReportingContext below),
+// which preserves calendar alignment (same day-of-quarter) but NOT exact
+// day-count — quarters are not a fixed length (a Jul-Sep quarter is 92
+// days, an Apr-Jun quarter is 91), so shifting a 84-day partial Q3 window
+// back 3 months can legitimately land on an 83-day window. That 1-3 day
+// wobble is a calendar-arithmetic artifact of a genuinely equivalent
+// comparison, not the dangerous case this check exists to catch (YTD vs a
+// full prior year differs by ~100 days). A small tolerance distinguishes
+// the two: it still rejects anything resembling partial-vs-full, while
+// accepting the month-length noise inherent to calendar-aligned
+// month/quarter shifting. ytd/previous_ytd and ttm/previous_ttm are exact
+// (0-day difference) by construction and are unaffected by this widening.
+const COMPARABILITY_TOLERANCE_DAYS = 3;
+
 function checkComparable(period: ResolvedPeriod, comparison: ResolvedPeriod): { comparable: boolean; reason: string } {
-  if (period.days !== comparison.days) {
+  const diff = Math.abs(period.days - comparison.days);
+  if (diff > COMPARABILITY_TOLERANCE_DAYS) {
     return {
       comparable: false,
       reason: `Periods are not the same length (${period.label}: ${period.days} days vs ${comparison.label}: ${comparison.days} days) — a period-over-period figure here would compare a partial period against a full one.`,
     };
   }
-  // A period whose own end is capped at asOfDate (still in progress) must
-  // be compared against an equally-capped comparison window, not a
-  // complete one that merely happens to have the same day-count by
-  // coincidence (unlikely given the day-count check above already ran, but
-  // checked explicitly so the reason message is honest either way).
-  return { comparable: true, reason: 'Same period length, both periods used consistent completeness.' };
+  return { comparable: true, reason: diff === 0 ? 'Same period length, both periods used consistent completeness.' : `Period lengths differ by ${diff} day(s) — calendar month-length variation from aligning to the same day-of-period, within tolerance.` };
 }
 
 export function buildReportingContext(params: {

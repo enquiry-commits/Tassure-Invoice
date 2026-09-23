@@ -192,24 +192,87 @@ export function parseFlexibleDate(raw: unknown): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+// Reports V3 Phase 1, "Client Flow data quality" (Vincent's approved plan
+// refinement, 2026-09-23) — deliberately DIFFERENT from revenue's Missing
+// != Zero fix (INV-DATA-059). quickbooks_invoices has a clean, provable
+// boundary (zero rows before 2024-01-02), so "this year never appears in
+// the aggregation" reliably means "no data collected." master_list has no
+// such boundary — Tassure's client base predates the trend window, so a
+// year with a low count could mean "genuinely few new/churned clients" OR
+// "join_date/update_date text for that year failed to parse." These are
+// NOT the same fact and must not be collapsed into one number.
+//
+// Per Vincent's explicit instruction: do NOT null out a whole year over a
+// few parse failures (zero-tolerance was rejected), and do NOT force an
+// unparseable date into a year it cannot be reliably assigned to — a
+// failure that never successfully parsed has no known year, so it is
+// tracked as a global "unassigned" count instead, attached once (not
+// per-year, which would misleadingly imply a per-year signal this data
+// cannot actually support).
+export type DataQualityStatus = 'normal' | 'minor_issues' | 'partial_data' | 'data_quality_warning' | 'unavailable';
+export type DataQuality = { parseableRecords: number; unparseableRecords: number; coveragePct: number; status: DataQualityStatus };
+
+function classifyQuality(parseable: number, unparseable: number): DataQuality {
+  const total = parseable + unparseable;
+  if (total === 0) return { parseableRecords: 0, unparseableRecords: 0, coveragePct: 0, status: 'unavailable' };
+  const coveragePct = Math.round((parseable / total) * 1000) / 10;
+  // Thresholds per Vincent's own spec: 100% normal, >=95% minor note,
+  // 90-95% partial-data warning, <90% strong warning.
+  const status: DataQualityStatus = coveragePct >= 100 ? 'normal' : coveragePct >= 95 ? 'minor_issues' : coveragePct >= 90 ? 'partial_data' : 'data_quality_warning';
+  return { parseableRecords: parseable, unparseableRecords: unparseable, coveragePct, status };
+}
+
+export type FlowRow = { companyName: string; uen: string | null };
+
+// Consolidated 2026-09-23 (Reports V3 Phase 1) — app/api/reports/route.ts
+// used to carry its OWN separate inline copy of this exact loop (counts +
+// per-year drill-down row lists), never calling this shared function at
+// all, while this function's own copy (used by the chat assistant's
+// portfolio-summary tool) only built the counts. Two implementations of
+// the same business rule is exactly the drift risk this codebase's own
+// FEATURE_MAP.md "high-risk shared logic" table exists to flag — folded
+// into one function, now the single source both callers use, rather than
+// applying the new quality-tracking logic to both copies separately.
 export function computeClientFlow(masterList: Record<string, unknown>[]) {
   const newByYear: Record<number, number> = {};
   const churnedByYear: Record<number, number> = {};
+  const newRowsByYear: Record<number, FlowRow[]> = {};
+  const churnedRowsByYear: Record<number, FlowRow[]> = {};
+  let newParseable = 0, newUnparseable = 0;
+  let churnedParseable = 0, churnedUnparseable = 0;
   for (const m of masterList) {
-    const jd = parseFlexibleDate(m.join_date);
-    if (jd) {
-      const y = jd.getFullYear();
-      newByYear[y] = (newByYear[y] ?? 0) + 1;
+    // Only a NON-EMPTY join_date that fails to parse counts as an
+    // "unparseable" record — a genuinely blank field is a different gap
+    // (never recorded at all, not a parsing failure) and is out of scope
+    // for this specific quality signal.
+    const joinRaw = typeof m.join_date === 'string' ? m.join_date.trim() : '';
+    if (joinRaw) {
+      const jd = parseFlexibleDate(m.join_date);
+      if (jd) {
+        const y = jd.getFullYear();
+        newByYear[y] = (newByYear[y] ?? 0) + 1;
+        (newRowsByYear[y] ??= []).push({ companyName: m.company_name as string, uen: (m.roc_no as string | null) ?? null });
+        newParseable++;
+      } else newUnparseable++;
     }
     if (m.list_type === 'terminated' || m.list_type === 'strike_off') {
-      const ud = parseFlexibleDate(m.update_date);
-      if (ud) {
-        const y = ud.getFullYear();
-        churnedByYear[y] = (churnedByYear[y] ?? 0) + 1;
+      const updateRaw = typeof m.update_date === 'string' ? m.update_date.trim() : '';
+      if (updateRaw) {
+        const ud = parseFlexibleDate(m.update_date);
+        if (ud) {
+          const y = ud.getFullYear();
+          churnedByYear[y] = (churnedByYear[y] ?? 0) + 1;
+          (churnedRowsByYear[y] ??= []).push({ companyName: m.company_name as string, uen: (m.roc_no as string | null) ?? null });
+          churnedParseable++;
+        } else churnedUnparseable++;
       }
     }
   }
-  return { newByYear, churnedByYear };
+  return {
+    newByYear, churnedByYear, newRowsByYear, churnedRowsByYear,
+    newQuality: classifyQuality(newParseable, newUnparseable),
+    churnedQuality: classifyQuality(churnedParseable, churnedUnparseable),
+  };
 }
 
 export function computePicWorkload(arRows: Record<string, unknown>[]) {

@@ -1765,6 +1765,85 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Reports V3 Phase 1 implemented and validated (INV-DATA-060).** Vincent
+  approved `docs/REPORTS_V3_PHASE1_PLAN.md` with 7 explicit refinements,
+  then "Proceed with Phase 1 implementation only." All 8 Phase 1 items now
+  done (3 were already shipped in the prior turn: comparable period engine,
+  Missing≠Zero for revenue, YTD labeling — this entry covers the remaining
+  5, rebuilt per Vincent's refinements rather than the original plan's
+  simpler version):
+  - **Metric Catalogue** (`lib/metric-catalogue.ts`, new) — a
+    documentation/registry layer describing 13 already-computed metrics
+    (`status: 'available'`/`'partial'`, each with its real owning
+    function) plus 8 Phase 2/3/4 metrics as `status: 'planned'` — nothing
+    recomputed, purely descriptive, but load-bearing: the narrative
+    validation guard below checks citations against it.
+  - **Client Flow data quality** — Vincent's own correction to the
+    original plan's zero-tolerance design: `computeClientFlow()`
+    (`lib/reports-data.ts`) now tracks join_date/update_date parse
+    success as a GLOBAL per-series count (`{ parseableRecords,
+    unparseableRecords, coveragePct, status }`, thresholds Vincent
+    specified: 100% normal / ≥95% minor / ≥90% partial / else warning) —
+    never nulls a whole year over a few failures, never force-assigns an
+    unparseable date to a year it can't be attributed to. Verified against
+    1,599 real `master_list` rows: 98%/96.4% coverage, both `minor_issues`.
+    Surfaced in the Reports page's own Client Flow note (now dynamic, real
+    numbers, not a static disclaimer). **A real, adjacent bug found by this
+    same verification, not fixed here**: `parseFlexibleDate()`'s fallback
+    parse accepts garbage as "successful" for some rows (`newByYear` had
+    entries for 2027/2028 and a bare `44420` — an Excel serial number
+    misread as a year) — invisible on screen today (outside the 5-year
+    trend window) but means the 98% coverage figure is optimistic. Flagged
+    as a known limitation, not silently patched.
+  - **Consolidated a real pre-existing duplication** found while doing the
+    above: `app/api/reports/route.ts` had its OWN separate inline copy of
+    the entire client-flow computation (never called `computeClientFlow()`
+    at all) — folded into one function now, the route calls it directly.
+  - **FACT/INFERENCE/HYPOTHESIS/ACTION narrative schema**
+    (`lib/reports-narrative.ts`, rewritten) — `ReportsInsight` now has
+    `observed` (FACT), `driver: string | null` (INFERENCE, nullable per
+    Vincent's explicit instruction — the model must never invent a causal
+    explanation to satisfy the schema), `notYetProven: string[]`
+    (HYPOTHESIS), `nextAction` (ACTION), a new independent `confidence`
+    field, `metricRefs: string[]`, and `signal` kept as `good`/`watch`/
+    `warning` — NOT renamed to "severity" (Vincent: "'good' is not
+    semantically a severity level").
+  - **Metric-specific comparable-period validation** — Vincent's own
+    correction to the original plan's cruder "any % + comparable=false =
+    reject" design: `validateNarrative()` only rejects an insight that
+    actually cites `revenue_yoy`/`invoice_count_yoy` in its `metricRefs`
+    while `comparableYoy.comparable` is false; an unrelated percentage
+    (Vincent's own example, "Tax usage = 49.8%") is never touched. Also
+    rejects citing a nonexistent metricId or a `status: 'planned'` one.
+    On failure, `generateReportsNarrative()` retries ONCE with the
+    specific violations fed back as a correction instruction, then throws
+    a real error rather than ever serving an invalid analysis.
+  - **UI updated** (`app/reports/page.tsx`) — the AI Analysis card now
+    renders Observed → Driver (only if not null) → Not Yet Proven (only if
+    non-empty) → Next Action as 4 distinct lines per insight, plus a
+    confidence tag next to the existing signal badge.
+  - **Tests**: `test-reporting-period.ts` (new, 17 cases, including a REAL
+    bug this session's own test suite caught: `current_quarter`'s default
+    comparison can differ by 1-3 days from calendar month-length variation
+    — `checkComparable()` now tolerates ≤3 days, verified this does NOT
+    swallow the dangerous ~100-day YTD-vs-full-year case) and
+    `test-reports-narrative-guards.ts` (new, 11 cases — all 4 of Vincent's
+    own approved A/B/C/D cases plus 6 catalogue-integrity cases).
+  - `app/api/reports/narrative/route.ts`'s cache-shape validation
+    tightened the same way it already was for the round 1→2 transition —
+    no migration, the cache column is plain `text`; an old-shape cached
+    row is now correctly treated as a cache miss.
+  - `npx tsc --noEmit`, `npm run lint` (changed files), `npm run build`
+    all clean. **Not verified against a real live Claude call** — no
+    `ANTHROPIC_API_KEY` in this machine's local `.env.local` (production-
+    only, set in Vercel) — verified structurally via the test suite
+    instead. `computeReportsData()`'s full real-data pipeline (including
+    the new Client Flow consolidation) WAS run live against production
+    Supabase: 914 active clients, +150 new/-88 churned this year,
+    comparableYoy +16.0% revenue (comparable: true).
+  - **No Phase 2 work started** — confirmed per Vincent's explicit
+    instruction. Full details: `docs/INVARIANTS.md` INV-DATA-060.
+
 - **Reports V3 P0: real comparable-period engine, Missing≠Zero fix,
   Revenue Performance card, Customer Source data-quality card
   (INV-DATA-059).** Vincent's "Reports V3 — Management Analytics Upgrade

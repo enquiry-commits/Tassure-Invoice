@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
 import { customerSourceLabel } from '@/lib/customer-source';
-import { buildReportsCompanyRows, computeRevenueTrend, computeComparableRevenue, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT, type ComparableRevenue } from '@/lib/reports-data';
+import { buildReportsCompanyRows, computeRevenueTrend, computeComparableRevenue, computeClientFlow, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT, type ComparableRevenue, type DataQuality, type FlowRow } from '@/lib/reports-data';
 import { pageAll } from '@/lib/page-all';
 import { normalize } from '@/lib/company-name';
 import { REPORT_COLORS, REPORT_PALETTE } from '@/lib/chart-colors';
@@ -49,7 +49,8 @@ type Row = Record<string, unknown>;
 // Data Is Not Zero") — kept in sync with components/dashboard/Charts.tsx's
 // own identical widening.
 type Pt = { label: string; value: number | null; color?: string };
-type FlowRow = { companyName: string; uen: string | null };
+// FlowRow now imported from lib/reports-data.ts (2026-09-23 consolidation
+// — see computeClientFlow's own header comment).
 
 // Exported shape of computeReportsData()'s return — kept in sync BY HAND
 // with app/reports/page.tsx's own identical `ReportsData` interface (that
@@ -63,45 +64,26 @@ export interface ReportsData {
   clientTypeDonut: Pt[];
   serviceMix: Pt[];
   sourceDonut: Pt[];
-  flow: { years: string[]; newClientsTrend: Pt[]; churnedTrend: Pt[]; newByYearRows: Record<string, FlowRow[]>; churnedByYearRows: Record<string, FlowRow[]> };
+  flow: {
+    years: string[]; newClientsTrend: Pt[]; churnedTrend: Pt[];
+    newByYearRows: Record<string, FlowRow[]>; churnedByYearRows: Record<string, FlowRow[]>;
+    // Global (not per-year) data-quality signal for join_date/update_date
+    // parsing — see lib/reports-data.ts:computeClientFlow's own comment
+    // for why this can't honestly be attributed per-year.
+    newQuality: DataQuality; churnedQuality: DataQuality;
+  };
   revenue: { years: string[]; invoiceCountTrend: Pt[]; revenueTrendThousands: Pt[]; comparableYoy: ComparableRevenue };
   picWorkload: Pt[];
   companyRows: ReturnType<typeof buildReportsCompanyRows>;
   notes: { clientType: string; flow: string; source: string; revenue: string };
 }
 
-// master_list.join_date/update_date are free text typed by staff over the
-// years — confirmed via live sampling (see the 2026-09-02 direction-
-// analysis conversation) to mix M/D/Y ("4/21/22"), D/M/Y-ish with dots
-// ("24.05.2024") and "DD Mon YYYY" ("07 Jul 2026"), with no single
-// consistent format. This is a best-effort parser, not a guarantee — the
-// Reports UI labels the flow chart accordingly rather than presenting it
-// as exact. Ambiguous D/M vs M/D slash dates are read as M/D/Y (US-style),
-// matching the one unambiguous sample seen during research ("4/21/22" —
-// 21 can only be a day).
-const MONTH_ABBR = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-function parseFlexibleDate(raw: unknown): Date | null {
-  if (typeof raw !== 'string' || !raw.trim()) return null;
-  const s = raw.trim();
-
-  const named = s.match(/^(\d{1,2})\s+([A-Za-z]{3,})\s+(\d{4})$/);
-  if (named) {
-    const mi = MONTH_ABBR.indexOf(named[2].slice(0, 3).toLowerCase());
-    if (mi >= 0) return new Date(Number(named[3]), mi, Number(named[1]));
-  }
-  const dotted = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/);
-  if (dotted) {
-    const yr = dotted[3].length === 2 ? 2000 + Number(dotted[3]) : Number(dotted[3]);
-    return new Date(yr, Number(dotted[2]) - 1, Number(dotted[1]));
-  }
-  const slashed = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (slashed) {
-    const yr = slashed[3].length === 2 ? 2000 + Number(slashed[3]) : Number(slashed[3]);
-    return new Date(yr, Number(slashed[1]) - 1, Number(slashed[2]));
-  }
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d;
-}
+// master_list.join_date/update_date parsing (mixed M/D/Y, dotted, "DD Mon
+// YYYY" formats, no single consistent format) now lives in
+// lib/reports-data.ts:parseFlexibleDate / computeClientFlow — this route
+// used to carry its own byte-identical duplicate of both; consolidated
+// 2026-09-23 (Reports V3 Phase 1) so the new quality-tracking logic exists
+// in exactly one place, not two that could silently drift apart.
 
 // Extracted 2026-09-22 from GET's own body (mechanical move, behavior
 // unchanged) so lib/reports-narrative.ts's AI narrative generator can call
@@ -178,35 +160,16 @@ export async function computeReportsData(): Promise<ReportsData> {
 
   // ── Client flow: new (join_date) vs churned (update_date on terminated/
   //    strike_off — an informal proxy, not a guaranteed transition-date
-  //    field; see this route's own top comment and parseFlexibleDate's). ──
-  const newByYear: Record<number, number> = {};
-  const churnedByYear: Record<number, number> = {};
-  // Per-year row lists for the "New This Year"/"Churned This Year" KPI-card
-  // drill-down (2026-09-03) — sourced straight from master_list, never by
-  // joining back to companies, because a struck-off company can be fully
-  // ABSENT from companies (confirmed live in app/api/late-filing/route.ts's
-  // own comment: "a company fully struck off and removed from `companies`
-  // entirely" — e.g. ADVANCE BRIGHT GLOBAL, FULLRICH INTERNATIONAL). Joining
-  // back for company_type/SSIC would silently under-populate exactly the
-  // churned rows most likely to need it.
-  const newRowsByYear: Record<number, { companyName: string; uen: string | null }[]> = {};
-  const churnedRowsByYear: Record<number, { companyName: string; uen: string | null }[]> = {};
-  for (const m of masterList) {
-    const jd = parseFlexibleDate(m.join_date);
-    if (jd) {
-      const y = jd.getFullYear();
-      newByYear[y] = (newByYear[y] ?? 0) + 1;
-      (newRowsByYear[y] ??= []).push({ companyName: m.company_name as string, uen: (m.roc_no as string | null) ?? null });
-    }
-    if (m.list_type === 'terminated' || m.list_type === 'strike_off') {
-      const ud = parseFlexibleDate(m.update_date);
-      if (ud) {
-        const y = ud.getFullYear();
-        churnedByYear[y] = (churnedByYear[y] ?? 0) + 1;
-        (churnedRowsByYear[y] ??= []).push({ companyName: m.company_name as string, uen: (m.roc_no as string | null) ?? null });
-      }
-    }
-  }
+  //    field). Per-year row lists power the "New This Year"/"Churned This
+  //    Year" KPI-card drill-down (2026-09-03) — sourced straight from
+  //    master_list inside computeClientFlow, never by joining back to
+  //    companies, because a struck-off company can be fully ABSENT from
+  //    companies (confirmed live in app/api/late-filing/route.ts's own
+  //    comment: "a company fully struck off and removed from `companies`
+  //    entirely" — e.g. ADVANCE BRIGHT GLOBAL, FULLRICH INTERNATIONAL).
+  //    Joining back for company_type/SSIC would silently under-populate
+  //    exactly the churned rows most likely to need it. ──────────────────
+  const { newByYear, churnedByYear, newRowsByYear, churnedRowsByYear, newQuality, churnedQuality } = computeClientFlow(masterList);
   // Reports V3 §13 — "clearly label 2026 YTD rather than 2026" whenever
   // the current year genuinely isn't over yet (true every day except real
   // Dec 31). Presentation-only: relabels the LAST chart point's display
@@ -247,13 +210,17 @@ export async function computeReportsData(): Promise<ReportsData> {
     flow: {
       years: years.map(String), newClientsTrend, churnedTrend,
       newByYearRows: newRowsByYear, churnedByYearRows: churnedRowsByYear,
+      newQuality, churnedQuality,
     },
     revenue: { years: years.map(String), invoiceCountTrend, revenueTrendThousands: revenueTrend, comparableYoy },
     picWorkload,
     companyRows,
     notes: {
       clientType: 'Legal entity structure (Pte Ltd / Sole Prop / LLP, etc.) — not an industry classification. See the Explore section below for a real SSIC industry breakdown.',
-      flow: 'Based on master_list.join_date (client start) and .update_date on Terminated/Strike Off rows (an informal proxy for when status changed, not a guaranteed transition-date field) — dates are staff-typed free text in inconsistent formats, so treat this as directional, not exact.',
+      // Reports V3 Phase 1 — was a static disclaimer string; now states the
+      // REAL computed coverage for both series, so a reader sees an actual
+      // number instead of a generic "treat this as directional" caveat.
+      flow: `Based on master_list.join_date (client start, ${newQuality.coveragePct}% of non-blank values parse successfully) and .update_date on Terminated/Strike Off rows (an informal proxy for when status changed, not a guaranteed transition-date field, ${churnedQuality.coveragePct}% parse successfully) — dates are staff-typed free text in inconsistent formats; a record whose date fails to parse is excluded from every year's count (never guessed into one) and counted in the coverage figure above instead.`,
       source: '"Unknown" is expected for most of the existing roster — customer_source is a new field staff tag going forward from Company 360, not backfilled from history.',
       revenue: 'Per-company revenue is not offered as an Explore metric — attributing quickbooks_invoices to a specific company reliably needs the same fuzzy company-name matching lib/company-360.ts uses for one company at a time (docs/FEATURE_MAP.md flags that matching as high-risk shared logic); running it across the whole roster for a leadership-facing aggregate risks misattributed figures in a way a single Company 360 lookup does not. The Revenue/Invoice Volume chart above stays company-agnostic (a plain by-year total) for that reason.',
     },

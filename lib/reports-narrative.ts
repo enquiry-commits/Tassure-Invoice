@@ -1,5 +1,6 @@
 import 'server-only';
 import type { ReportsData } from '@/app/api/reports/route';
+import { METRIC_CATALOGUE, getMetric } from '@/lib/metric-catalogue';
 
 /**
  * Turns Reports' own numbers into a written analysis — Vincent, after
@@ -22,30 +23,46 @@ import type { ReportsData } from '@/app/api/reports/route';
  * has CLIENT-BASE and TOP-LINE BILLING data. Forcing those ratios in would
  * mean inventing the missing inputs.
  *
- * Structured output (added same day, round 2) — "文字没有优先级"/"排列也不
- * 整齐": the first version returned one prose blob, which rendered as an
- * undifferentiated wall of text no matter how the prompt asked it to read
- * as prioritized. A plain string can't GUARANTEE visual hierarchy — only
- * real structure can. Forced via an Anthropic tool call (input_schema,
- * tool_choice pinned to it) rather than asking for JSON in prose, which is
- * the reliable way to get structured output from the Messages API — the
- * page renders each `insights[]` entry as its own distinct row (signal
- * badge + title + body), not prose paragraphs. Bilingual for the same
- * reason as the requested toggle button: BOTH languages come back in the
- * same call and get cached together, so switching languages on the page is
- * instant (no second API round-trip, no regenerate).
- *
  * Direct Anthropic call, same reliable model/endpoint app/api/assistant/
- * route.ts's claudeAnswer() already uses in production (confirmed live via
- * real ai_agent_runs rows) — see docs/INVARIANTS.md INV-AI-006 for why this
- * is NOT lib/ai/openai.ts's multi-model path.
+ * route.ts's claudeAnswer() already uses in production. Bilingual — both
+ * languages come back in the same call and cache together.
+ *
+ * Reports V3 Phase 1 (2026-09-23, Vincent's approved plan +
+ * refinements) — this file's own schema was rewritten a second time in
+ * the same phase: FACT/INFERENCE/HYPOTHESIS/ACTION structure
+ * (observed/driver/notYetProven/nextAction), confidence split out from
+ * signal (never renamed to "severity" — Vincent: "'good' is not
+ * semantically a severity level"), driver made NULLABLE (the model must
+ * never invent a causal driver just to satisfy the schema), every insight
+ * now carries `metricRefs` citing real lib/metric-catalogue.ts entries,
+ * and comparable-period validation is now METRIC-SPECIFIC — only an
+ * insight that actually cites revenue_yoy/invoice_count_yoy while
+ * comparableYoy.comparable is false gets rejected; an unrelated
+ * percentage (e.g. "Tax usage = 49.8%", a point-in-time service_mix
+ * figure) must never be flagged just for containing a "%" sign.
  */
 
 const NARRATIVE_MODEL = process.env.ASSISTANT_MODEL || 'claude-sonnet-5';
 
 export type ReportsSignal = 'good' | 'watch' | 'warning';
-export type ReportsInsight = { signal: ReportsSignal; titleZh: string; titleEn: string; bodyZh: string; bodyEn: string };
+export type ReportsConfidence = 'high' | 'medium' | 'low';
+export type ReportsInsight = {
+  signal: ReportsSignal;
+  confidence: ReportsConfidence;
+  titleZh: string; titleEn: string;
+  observedZh: string; observedEn: string;
+  metricRefs: string[];
+  driverZh: string | null; driverEn: string | null;
+  notYetProvenZh: string[]; notYetProvenEn: string[];
+  nextActionZh: string; nextActionEn: string;
+};
 export type ReportsNarrative = { insights: ReportsInsight[]; summaryZh: string; summaryEn: string };
+
+// Only metrics the model is actually allowed to cite — 'planned' entries
+// (nothing computes them yet) are deliberately excluded from what's shown
+// to the model at all, not just flagged after the fact, so there is
+// nothing in its own context tempting it to reference one.
+const CITABLE_METRICS = METRIC_CATALOGUE.filter(m => m.status !== 'planned');
 
 // Deliberately NOT the full companyRows array (900+ objects, mostly
 // irrelevant to a narrative and a real prompt-size/cost concern) — just the
@@ -61,25 +78,13 @@ export type ReportsNarrative = { insights: ReportsInsight[]; summaryZh: string; 
 //
 // Fixed 2026-09-22 (Reports V3 spec, docs/MANAGEMENT_ANALYST_GAP_ANALYSIS.md
 // §0) — this used to derive "YoY" from the trend series' own last two
-// year-buckets: the current year's bucket is only ever partial-through-the-
-// year (2026 = Jan-Sep so far) while every prior bucket is a full 12
-// months, so that comparison was silently 2026 YTD vs all of 2025, exactly
-// the failure mode the spec calls out by name. Now uses
+// year-buckets, comparing 2026 YTD against all of 2025. Now uses
 // data.revenue.comparableYoy — a real YTD-vs-previous-YTD figure
-// (lib/reporting-period.ts, same day-count both sides by construction) —
-// and passes its own `comparable`/`comparabilityReason` straight through so
-// the model is told explicitly when NOT to present a YoY number, rather
-// than silently computing one anyway.
+// (lib/reporting-period.ts, same day-count both sides by construction).
 function summarizeForPrompt(data: ReportsData) {
   const flowByYear = data.flow.years.map((y, i) => ({
     year: y, newClients: data.flow.newClientsTrend[i]?.value ?? null, churned: data.flow.churnedTrend[i]?.value ?? null,
   }));
-  // Raw multi-year series, null-preserving ("Missing Data Is Not Zero" —
-  // a year with no QuickBooks data at all must never look like a real
-  // S$0 year to the model). This is CONTEXT for the model to describe the
-  // overall shape, not something it should compute a period-over-period
-  // percentage from itself — that's exactly what comparableYoy below is
-  // for, already validated.
   const revenueByYear = data.revenue.years.map((y, i) => ({
     year: y, invoiceCount: data.revenue.invoiceCountTrend[i]?.value ?? null, revenueThousandsSGD: data.revenue.revenueTrendThousands[i]?.value ?? null,
   }));
@@ -92,11 +97,17 @@ function summarizeForPrompt(data: ReportsData) {
 
   return {
     generatedAt: data.generatedAt,
+    // The full set of metricIds the model is allowed to cite in any
+    // insight's metricRefs — 'partial' entries carry their own
+    // `limitation` text, which the model must repeat whenever it cites
+    // that metric (enforced by the system prompt, not just documented).
+    citableMetrics: CITABLE_METRICS.map(m => ({ metricId: m.metricId, name: m.name, status: m.status, limitation: m.limitation ?? null })),
     kpis: data.kpis,
     clientTypeMix: data.clientTypeDonut,
     serviceMix: data.serviceMix,
     customerSourceMix: data.sourceDonut,
     clientFlowByYear: flowByYear,
+    clientFlowDataQuality: { newClients: data.flow.newQuality, churnedClients: data.flow.churnedQuality },
     revenueByYear,
     // The ONLY period-over-period figure this prompt hands the model —
     // already validated comparable (or explicitly marked not comparable,
@@ -126,13 +137,21 @@ const ANALYSIS_TOOL = {
         items: {
           type: 'object' as const,
           properties: {
-            signal: { type: 'string' as const, enum: ['good', 'watch', 'warning'] },
+            signal: { type: 'string' as const, enum: ['good', 'watch', 'warning'], description: '这条洞察本身重不重要/要不要关注——good=健康, watch=需要留意, warning=需要注意的风险' },
+            confidence: { type: 'string' as const, enum: ['high', 'medium', 'low'], description: '独立于 signal 的判断：这个结论本身有多可靠？一条 warning 级别的信号完全可以只有 medium/low 置信度（问题真实存在，但原因还不确定）' },
             titleZh: { type: 'string' as const, description: '一句话标题，不超过16个汉字，不是完整句子，是标签式短语' },
             titleEn: { type: 'string' as const, description: 'Short headline, under 8 words, phrase not a sentence' },
-            bodyZh: { type: 'string' as const, description: '2-4句解读，带具体数字支撑' },
-            bodyEn: { type: 'string' as const, description: '2-4 sentences of explanation, with specific supporting numbers' },
+            observedZh: { type: 'string' as const, description: 'FACT——直接来自数据的客观陈述，带具体数字，不包含任何解读或原因推测' },
+            observedEn: { type: 'string' as const, description: 'FACT — an objective, data-grounded statement with specific numbers, no interpretation or causal reasoning' },
+            metricRefs: { type: 'array' as const, items: { type: 'string' as const }, description: '这条 insight 引用的真实 metricId 列表（必须来自下面给你的 citableMetrics，不能编造）——observed 里提到的每个数字都应该能在这里找到对应的 metricId' },
+            driverZh: { type: ['string', 'null'], description: 'INFERENCE——对 observed 事实的合理解读，必须有把握才写；如果证据不足以支撑任何解读，就填 null，绝不为了填满这个字段而编一个原因' },
+            driverEn: { type: ['string', 'null'], description: 'INFERENCE — a reasonable read of the observed fact; use null if the evidence does not actually support any interpretation, never invent one to fill the field' },
+            notYetProvenZh: { type: 'array' as const, items: { type: 'string' as const }, description: 'HYPOTHESIS——尚未证实的可能解释列表，每条都是一个具体的、未来可以去验证的可能性' },
+            notYetProvenEn: { type: 'array' as const, items: { type: 'string' as const }, description: 'HYPOTHESIS — a list of specific, not-yet-proven possible explanations, each independently verifiable later' },
+            nextActionZh: { type: 'string' as const, description: 'ACTION——具体的下一步分析或操作建议，不是泛泛的"持续关注"' },
+            nextActionEn: { type: 'string' as const, description: 'ACTION — a concrete next analysis or operational step, not generic "keep monitoring"' },
           },
-          required: ['signal', 'titleZh', 'titleEn', 'bodyZh', 'bodyEn'],
+          required: ['signal', 'confidence', 'titleZh', 'titleEn', 'observedZh', 'observedEn', 'metricRefs', 'driverZh', 'driverEn', 'notYetProvenZh', 'notYetProvenEn', 'nextActionZh', 'nextActionEn'],
         },
       },
       summaryZh: { type: 'string' as const, description: '1句话范围说明：这份分析基于什么数据，不涉及什么（成本/利润率等）' },
@@ -142,36 +161,84 @@ const ANALYSIS_TOOL = {
   },
 };
 
-export async function generateReportsNarrative(data: ReportsData): Promise<ReportsNarrative> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured — the AI analysis cannot run.');
+function buildSystemPrompt(): string {
+  return `你是 Tassure（新加坡企业服务公司，做公司秘书、提名董事、账目/税务等业务）的资深财务分析师与企业规划顾问，直接向老板 Vincent 汇报。你的分析方法遵循新加坡财务分析的专业规范（信号灯快速评估、同比趋势分析纪律、新加坡数字格式惯例、免责声明），但只应用在下面真正给你的数据范围内。
 
-  const evidence = summarizeForPrompt(data);
-  const system = `你是 Tassure（新加坡企业服务公司，做公司秘书、提名董事、账目/税务等业务）的资深财务分析师与企业规划顾问，直接向老板 Vincent 汇报。你的分析方法遵循新加坡财务分析的专业规范（信号灯快速评估、同比趋势分析纪律、新加坡数字格式惯例、免责声明），但只应用在下面真正给你的数据范围内。
+你会拿到公司 Reports 页面上真实的汇总数据。你要通过 submit_analysis 这个工具提交结构化的分析结果——每条 insight 必须按 FACT → INFERENCE → HYPOTHESIS → ACTION 的顺序组织，不是把所有内容揉成一段话：
 
-你会拿到公司 Reports 页面上真实的汇总数据（客户数、新增/流失、服务组合、收入趋势、员工工作量，以及已经算好的同比增长率）。你要通过 submit_analysis 这个工具提交结构化的分析结果——每条 insight 是一个独立的信号/发现，不是把所有内容揉成一段话。
+- observed（FACT）：直接来自数据的客观陈述，带具体数字。绝不能包含"因为/所以/说明/反映了"这类解读词——纯陈述事实。
+- driver（INFERENCE，可以是 null）：对 observed 事实的合理解读。**如果证据不足以支撑任何解读，driverZh/driverEn 必须是 null，绝不能为了填满这个字段编一个听起来合理的原因**——没有把握就是没有把握，写 null 比编一个不确定的解读更诚实。
+- notYetProven（HYPOTHESIS）：尚未证实的可能解释，列出具体的、未来可验证的可能性（不是"可能有很多原因"这种空话）。
+- nextAction（ACTION）：具体的下一步分析或操作建议。
 
-专业规范（来自新加坡财务分析方法论，应用于本次数据范围）：
-- 每条 insight 必须先判断信号：good（🟢健康/积极）、watch（🟡需要关注）、warning（🔴需要注意的风险）——按重要性排序，最值得老板先看到的排第一条。
-- 同比分析纪律（硬性）：唯一允许提及的"同比/YoY"数字是 comparableRevenueYoy 里已经算好的——它是真正等长的两个区间（今年至今 vs 去年同一段日期，不是去年整年），只有当它的 comparable 字段为 true 时才能把 revenuePctChange/invoiceCountPctChange 说成"同比增长/下降 X%"；如果 comparable 为 false，必须照 comparabilityReason 原样说明数据不可比，绝对不能自己拿 revenueByYear 里任意两年的数字相减算百分比——那个数组只用来描述多年走势的形状（比如"逐年上升"），不能自己心算百分比或增长率。revenueByYear/clientFlowByYear 里任何一年的 value 是 null，代表这个系统对那一年完全没有数据（不是营收为0），必须原样说"这一年没有数据"，不能说成"零收入"或跳过不提。
-- 数字格式：金额用 S$ 前缀（如 S$1.23M 或 S$123,000），百分比保留1位小数（如 12.3%），不用整数估算百分比。
-- 范围边界：dataScopeCaveat 字段说明了这份数据不包含什么（成本、利润率、资产负债表、现金流）——绝对不要评论"盈利能力""利润率""财务健康"这类需要成本/资产负债数据才能判断的话题，只分析客户基础、服务结构、收入趋势、人力配置这些真正有数据支撑的方面。
-- titleZh/titleEn 是短标签，不是句子——好比一个新闻标题，body 里才展开解释和数字。
-- 每条 insight 都需要中文和英文两个版本，内容对应一致（不是逐字翻译，但传达同一个判断和同一组数字）。
+metricRefs 规则（硬性）：
+- 每条 insight 的 metricRefs 必须引用下面 citableMetrics 里真实存在的 metricId，不能编造一个不存在的 id。
+- observed 里提到的每一个数字，都应该能在 metricRefs 里找到对应支撑它的 metricId。
+- citableMetrics 里 status 为 "partial" 的指标，如果引用了，必须在 observed 或 driver 里原样带出它自己的 limitation 说明（例如日期解析覆盖率不是100%），不能假装它是精确数字。
+- citableMetrics 里没有出现的任何指标（比如 GRR/NRR/service_attach_rate 这些还没做出来的）绝对不能引用或提及为"我们算出的数据"——如果某个分析方向理论上有价值但系统里没有这个指标，在 nextAction 里说"需要先建立这个指标"，不要假装引用了它。
+
+同比分析纪律（硬性，且是 metricRefs 级别的规则，不是"看到百分号就拦"）：
+- 唯一允许说成"同比/YoY"的数字是 comparableRevenueYoy 里已经算好的 revenuePctChange/invoiceCountPctChange——只有当 comparableRevenueYoy.comparable 为 true 时，引用了 metricRefs 里 "revenue_yoy" 或 "invoice_count_yoy" 的 insight 才能把这个数字说成"同比增长/下降 X%"。
+- 如果 comparableRevenueYoy.comparable 为 false，任何引用 "revenue_yoy"/"invoice_count_yoy" 的 insight 都必须改用 comparabilityReason 原样说明数据不可比，不能给出任何"同比"百分比。
+- 这条规则只约束 revenue_yoy/invoice_count_yoy 这两个指标本身——**其他指标里出现的百分比（比如 service_mix 里"Tax 使用率 49.8%"这种时点占比）跟同比可比性完全无关，正常引用，不要因为看到百分号就联想到同比规则**。
+- revenueByYear/clientFlowByYear 里任何一年的 value 是 null，代表这个系统对那一年完全没有数据，必须原样说"这一年没有数据"，不能说成"零"或跳过不提。
+
+专业规范：
+- 每条 insight 先判断 signal（good/watch/warning，按重要性排序，最值得老板先看到的排第一条）和独立的 confidence（high/medium/low）——这两个是不同的轴：一条 warning 信号完全可以只有 medium 甚至 low 的置信度（问题真实存在，但原因还不确定），不要把两者混为一谈。
+- 数字格式：金额用 S$ 前缀（如 S$1.23M），百分比保留1位小数（如 12.3%）。
+- 范围边界：dataScopeCaveat 说明了这份数据不包含成本、利润率、资产负债表、现金流——绝对不要评论"盈利能力""利润率""财务健康"。
+- titleZh/titleEn 是短标签，不是句子。每条 insight 都需要中文和英文两个版本，内容对应一致。
 
 硬性规则：
 - 只根据给你的真实数据做判断，绝不编造数据里没有的事实、没有的客户名、没有的原因。
-- 如果某个结论只是可能性而不是确定的，要明确说"可能是""值得关注"，不要说得像确定的事实。
-- 数据不足以支撑判断的地方，直接说数据不够、需要补充什么，不要硬编一个分析出来。
-- 提交 2-4 条 insights，覆盖：这期数据里最值得注意的信号（好的或坏的，带同比数字支撑）、一个具体的风险提醒、一个具体的机会或建议方向——不要重复内容相近的信号。
-- summaryZh/summaryEn 是最后的范围说明（1句话：这是基于客户数/服务量/开票收入数据的判断，不涉及成本或利润率，这部分数据系统里没有），不是又一条 insight。`;
+- notYetProven 里的每一条都要是具体的可能性，不要写"可能有很多因素"这种空话。
+- 提交 2-4 条 insights，不要重复内容相近的信号。
+- summaryZh/summaryEn 是最后的范围说明，不是又一条 insight。`;
+}
 
+// Reports V3 Phase 1 — deterministic validation, applied to the FINAL
+// output before it is ever returned/cached (same "guard the final text,
+// not an intermediate draft" lesson INV-AI-004 already established for the
+// chat assistant). Two independent checks:
+//
+// 1. metricRefs integrity — every cited id must be a real catalogue entry,
+//    and a 'planned' (not yet built) metric must never be cited at all,
+//    per Vincent's explicit instruction.
+// 2. Metric-SPECIFIC comparable-period enforcement — only an insight
+//    citing revenue_yoy/invoice_count_yoy while comparableYoy.comparable
+//    is false is rejected; an insight with an unrelated percentage (e.g.
+//    a service_mix attach share) must never be flagged just for
+//    containing a "%" — this replaced an earlier, cruder "any percentage
+//    + comparable:false = reject" design specifically because it would
+//    have wrongly rejected exactly that kind of claim (Vincent's own
+//    worked example, "Tax usage = 49.8%").
+export type NarrativeValidation = { valid: boolean; errors: string[] };
+
+export function validateNarrative(narrative: ReportsNarrative, data: ReportsData): NarrativeValidation {
+  const errors: string[] = [];
+  const yoyComparable = data.revenue.comparableYoy.comparable;
+  for (const insight of narrative.insights) {
+    for (const ref of insight.metricRefs) {
+      const metric = getMetric(ref);
+      if (!metric) { errors.push(`Insight "${insight.titleEn}" cites unknown metricRef "${ref}" — not a real catalogue entry.`); continue; }
+      if (metric.status === 'planned') errors.push(`Insight "${insight.titleEn}" cites "${ref}", a PLANNED metric with nothing computing it yet — must never be cited by the production narrative.`);
+    }
+    const citesRevenueYoy = insight.metricRefs.includes('revenue_yoy') || insight.metricRefs.includes('invoice_count_yoy');
+    if (citesRevenueYoy && !yoyComparable) {
+      errors.push(`Insight "${insight.titleEn}" cites revenue_yoy/invoice_count_yoy while comparableRevenueYoy.comparable is false — a YoY figure was presented without a valid comparable period.`);
+    }
+  }
+  return { valid: errors.length === 0, errors };
+}
+
+async function callClaude(system: string, evidence: unknown): Promise<ReportsNarrative> {
+  const apiKey = process.env.ANTHROPIC_API_KEY!;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
       model: NARRATIVE_MODEL,
-      max_tokens: 2000,
+      max_tokens: 2600,
       system,
       tools: [ANALYSIS_TOOL],
       tool_choice: { type: 'tool', name: 'submit_analysis' },
@@ -185,4 +252,25 @@ export async function generateReportsNarrative(data: ReportsData): Promise<Repor
   const result = toolUse.input as ReportsNarrative;
   if (!Array.isArray(result.insights) || !result.insights.length) throw new Error('Claude returned an empty analysis.');
   return result;
+}
+
+export async function generateReportsNarrative(data: ReportsData): Promise<ReportsNarrative> {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured — the AI analysis cannot run.');
+
+  const evidence = summarizeForPrompt(data);
+  const system = buildSystemPrompt();
+
+  const first = await callClaude(system, evidence);
+  const firstCheck = validateNarrative(first, data);
+  if (firstCheck.valid) return first;
+
+  // One retry, with the SPECIFIC violations fed back as an explicit
+  // correction instruction — "reject / regenerate", per Vincent's own
+  // instruction, not a silent text patch over a wrong claim.
+  const retrySystem = `${system}\n\n上一次提交的分析违反了以下硬性规则，请重新生成，这次务必遵守：\n${firstCheck.errors.map(e => `- ${e}`).join('\n')}`;
+  const retry = await callClaude(retrySystem, evidence);
+  const retryCheck = validateNarrative(retry, data);
+  if (retryCheck.valid) return retry;
+
+  throw new Error(`AI analysis failed validation after retry: ${retryCheck.errors.join('; ')}`);
 }
