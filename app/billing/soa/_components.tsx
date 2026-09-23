@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Mail, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
@@ -273,14 +274,57 @@ function SoaDraftPopover({
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
+  // 2026-09-23, third attempt at this same bug: opening upward (first
+  // attempt) and then raising this popover's own z-index (second attempt)
+  // both still got clipped — Vincent, twice more, on rows at different
+  // scroll positions: "还是被线挡到" / "被信封挡到". Root cause neither fix
+  // touched: this popover was `position: absolute` inside the row, and the
+  // row's own card ancestor (`.system-list-shell` in globals.css) has
+  // `overflow: hidden` for its rounded corners — CSS clips content past an
+  // `overflow: hidden` ancestor's edge regardless of z-index; z-index only
+  // orders siblings that are ALREADY visible, it cannot rescue something
+  // the ancestor is already cutting off. Same root cause for the 'button'
+  // variant inside SoaDetail's modal. Fixed properly this time via a
+  // React portal straight to `document.body` — `position: fixed`, sized
+  // from the trigger's own getBoundingClientRect(), so this popover is no
+  // longer a descendant of ANY overflow:hidden/scrolling ancestor at all.
+  //
+  // Always opens DOWNWARD — Vincent, immediately after: "为什么Outstanding
+  // 的弹窗是往上的，Billing的信封弹窗往下，我要的是全部都是往下的" (why does
+  // this one open upward while Billing's own envelope popover opens
+  // downward — every one of them should open downward). Billing Drafts'
+  // own equivalent popover (app/billing/page.tsx) already opens downward;
+  // this matches it rather than picking a direction per available space.
+  const updatePosition = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({ top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) });
+  };
 
   useEffect(() => {
     if (!isOpen) return;
     const onDocClick = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) onOpenChange(false);
+      const target = e.target as Node;
+      if (popoverRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
+      onOpenChange(false);
     };
+    // Portaled content no longer moves with the row's own scroll container,
+    // so close it on any scroll (this list's, a parent's, or the window's —
+    // `capture: true` catches all of them since scroll doesn't bubble)
+    // rather than let it drift away from the trigger that opened it.
+    const onScroll = () => onOpenChange(false);
     document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', updatePosition);
+    };
   }, [isOpen, onOpenChange]);
 
   const selectedSender = senders.find(s => s.id === senderId) ?? null;
@@ -293,6 +337,7 @@ function SoaDraftPopover({
     if (!isOpen) {
       const wanted = templates.find(t => t.name === company.reminderProgress.nextTemplateName);
       if (wanted && wanted.id !== selectedTemplateId) setSelectedTemplateId(wanted.id);
+      updatePosition();
     }
     onOpenChange(!isOpen);
   };
@@ -314,38 +359,19 @@ function SoaDraftPopover({
   return (
     <div style={{ position: 'relative', display: 'inline-flex' }} onClick={e => e.stopPropagation()}>
       {variant === 'icon' ? (
-        <button title={qbCompany === 'ALL' ? 'Draft Email — all sources' : `Draft Email — ${qbCompany}`} onClick={toggleOpen}
+        <button ref={triggerRef} title={qbCompany === 'ALL' ? 'Draft Email — all sources' : `Draft Email — ${qbCompany}`} onClick={toggleOpen}
           style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: isOpen ? '#1d3a5c' : '#94a3b8' }}>
           <Mail size={15} />
         </button>
       ) : (
-        <button onClick={toggleOpen} disabled={!company.invoiceCount}
+        <button ref={triggerRef} onClick={toggleOpen} disabled={!company.invoiceCount}
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 18px', borderRadius: 8, border: 'none', background: !company.invoiceCount ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: !company.invoiceCount ? 'default' : 'pointer' }}>
           <Send size={14} />Draft Email
         </button>
       )}
-      {isOpen && (
-        <div ref={popoverRef} style={{
-          position: 'absolute', right: 0, zIndex: 30, background: '#fff',
-          // 2026-09-17 fix: the 'button' variant sits inside SoaDetail's
-          // modal, whose outer wrapper has `overflow: hidden` (for the
-          // header's rounded-corner gradient) — opening downward like the
-          // 'icon' variant used to do put most of the popover past that
-          // wrapper's own bottom edge, clipping it almost entirely (real
-          // bug, seen live: only a sliver of "Draft Email — 1V CAPITAL PTE.
-          // LTD." was visible). Opening UPWARD keeps the whole popover
-          // within the modal's own rendered bounds instead.
-          //
-          // 2026-09-23: the 'icon' variant (List row) hit the exact same
-          // class of bug — Vincent, on a row near the bottom of the
-          // scrollable list card: "这个Draft的弹窗要放到最上方，不然被卡片
-          // 的线挡到" (the popup needs to open upward, otherwise the card's
-          // own edge cuts it off). That list sits in a container with
-          // `overflowY: 'auto'` and a capped height (see SoaBillingViewInner
-          // below), so a downward popover on a row near the bottom is just
-          // as clipped as the button variant was inside its modal. Both
-          // variants now open upward.
-          bottom: '100%', marginBottom: 4,
+      {isOpen && pos && createPortal(
+        <div ref={popoverRef} onClick={e => e.stopPropagation()} style={{
+          position: 'fixed', zIndex: 9999, background: '#fff', ...pos,
           border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 260, padding: 12,
         }}>
           <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>
@@ -371,7 +397,8 @@ function SoaDraftPopover({
               {drafting ? 'Drafting…' : 'Draft'}
             </button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

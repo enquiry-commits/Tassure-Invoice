@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useLayoutEffect, useState, useCallback, useRef, useMemo, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   RefreshCw, ChevronDown, ChevronLeft, ChevronRight,
@@ -1609,6 +1610,10 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
   }, []);
   const selectedSender = senders.find(s => s.id === senderId) ?? null;
   const [draftPopoverFor, setDraftPopoverFor] = useState<number | null>(null);
+  // Computed from the trigger button's own getBoundingClientRect() at click
+  // time — see draftPopoverRef's own comment for why this now renders
+  // through a portal instead of `position: absolute` inside the row.
+  const [draftPopoverPos, setDraftPopoverPos] = useState<{ top: number; right: number } | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
   // Set once quickEmailDraft has created the draft row and Draft Helper is
@@ -1751,12 +1756,31 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
     return () => window.removeEventListener('keydown', h);
   }, [expanded]);
 
+  // 2026-09-23: this popover used to be `position: absolute` inside its
+  // row, clipped by the list card's own `overflow: hidden` (.system-list-
+  // shell in globals.css) regardless of z-index — same root cause as SOA's
+  // own Draft Email popover (app/billing/soa/_components.tsx), fixed the
+  // same way: a React portal straight to `document.body`, `position: fixed`
+  // via the trigger button's own getBoundingClientRect() (draftPopoverPos),
+  // opening downward (Vincent: "我要的是全部都是往下的" — every one of these
+  // popovers should open downward, matching this one's own existing
+  // direction). draftPopoverRef still gets attached to the portaled div, so
+  // this outside-click check keeps working unchanged — DOM containment
+  // doesn't care where in the React tree an element is mounted.
   const draftPopoverRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (draftPopoverFor === null) return;
     const onClickOutside = (e: MouseEvent) => { if (draftPopoverRef.current && !draftPopoverRef.current.contains(e.target as Node)) setDraftPopoverFor(null); };
+    // Portaled content no longer scrolls with its row, so close on any
+    // scroll (capture: true catches every scrollable ancestor, since
+    // scroll doesn't bubble) rather than let it drift from its trigger.
+    const onScroll = () => setDraftPopoverFor(null);
     document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      window.removeEventListener('scroll', onScroll, true);
+    };
   }, [draftPopoverFor]);
 
 
@@ -2085,10 +2109,12 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                       scroll (or browser zoom-out, his workaround) just to
                       reach the Draft Email icon — same fix as the SOA pages'
                       own Mail-icon column (app/billing/soa/_components.tsx).
-                      Still a valid positioning context for the popover's own
-                      `position: absolute` below — sticky establishes one the
-                      same way relative did. backgroundColor: 'inherit' picks
-                      up whatever this row's own background currently is
+                      The popover itself no longer positions off of this cell
+                      (it portals to document.body now — see draftPopoverRef's
+                      own comment), but this sticky wrapper still pins the
+                      icon itself to the visible edge either way.
+                      backgroundColor: 'inherit' picks up whatever this row's
+                      own background currently is
                       (default/hover/selected, set via CSS classes with
                       !important) so the pinned cell never shows a mismatched
                       patch as other columns scroll underneath it. */}
@@ -2097,15 +2123,19 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                         e.stopPropagation();
                         setDraftError(null); setNeedsManualEmail(false); setManualToEmail(''); setManualCcEmail(''); setPreviewRow(null);
                         const opening = draftPopoverFor !== c.companyId;
+                        if (opening) {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setDraftPopoverPos({ top: rect.bottom + 4, right: Math.max(8, window.innerWidth - rect.right) });
+                        }
                         setDraftPopoverFor(opening ? c.companyId : null);
                         if (opening) void resolveDraftPreview(c);
                       }}
                       style={{ border: 'none', background: 'transparent', padding: 4, cursor: 'pointer', display: 'flex', color: draftPopoverFor === c.companyId ? '#1d3a5c' : '#94a3b8' }}>
                       <Mail size={15} />
                     </button>
-                    {draftPopoverFor === c.companyId && (
+                    {draftPopoverFor === c.companyId && draftPopoverPos && createPortal(
                       <div ref={draftPopoverRef} onClick={e => e.stopPropagation()} style={{
-                        position: 'absolute', top: '100%', right: 0, marginTop: 4, zIndex: 30, background: '#fff',
+                        position: 'fixed', zIndex: 9999, background: '#fff', ...draftPopoverPos,
                         border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 260, padding: 12,
                       }}>
                         <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>Email Drafts — {c.companyName}</div>
@@ -2156,7 +2186,8 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                               </button>
                             </div>
                           </>
-                      </div>
+                      </div>,
+                      document.body,
                     )}
                   </div>
                 </div>
