@@ -785,21 +785,14 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           </div>
         )}
         <div style={{ display: 'flex', justifyContent: 'center' }}>
-          {/* Vincent, 2026-09-23: only the combined/Total row needs its own
-              Draft Email icon — a per-source child row (TAB source balance,
-              TAO source balance, etc.) drafting separately would split one
-              client's reminder into multiple emails, which is never the
-              intent (see buildSoaDraft's own combined-total behavior). */}
-          {!opts.child && (
-            <SoaDraftPopover
-              company={c} qbCompany={rowCompany(c)} me={draftPickers.me}
-              senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
-              templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
-              isOpen={draftPopoverFor === rowKey(c)} onOpenChange={open => setDraftPopoverFor(open ? rowKey(c) : null)}
-              variant="icon"
-              onDrafted={(draft, sender) => { setSendModalDraft(draft); setSendModalSender(sender); }}
-            />
-          )}
+          <SoaDraftPopover
+            company={c} qbCompany={rowCompany(c)} me={draftPickers.me}
+            senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
+            templates={draftPickers.templates} selectedTemplateId={draftPickers.selectedTemplateId} setSelectedTemplateId={draftPickers.setSelectedTemplateId}
+            isOpen={draftPopoverFor === rowKey(c)} onOpenChange={open => setDraftPopoverFor(open ? rowKey(c) : null)}
+            variant="icon"
+            onDrafted={(draft, sender) => { setSendModalDraft(draft); setSendModalSender(sender); }}
+          />
         </div>
       </div>
     );
