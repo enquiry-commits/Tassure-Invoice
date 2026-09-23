@@ -835,8 +835,13 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             unconditionally (this cell renders for both child and non-child
             rows via renderSourceRow) so the column band stays visually
             consistent as the row scrolls horizontally, even on a child row
-            where the popover itself is intentionally omitted below. */}
-        <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 1, backgroundColor: 'inherit' }}>
+            where the popover itself is intentionally omitted below.
+            zIndex 3, not 1: this `position: sticky` cell creates its own
+            stacking context, so the popover it contains (zIndex 30 on its
+            own) can never out-rank a SIBLING stacking context with a higher
+            zIndex no matter how high its own number is — see this cell's
+            own zIndex comment further down for the real bug this caused. */}
+        <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 3, backgroundColor: 'inherit' }}>
           {/* Vincent, 2026-09-23: only the combined/Total row needs its own
               Draft Email icon — a per-source child row (TAB source balance,
               TAO source balance, etc.) drafting separately would split one
@@ -1112,8 +1117,20 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           whatever this row's own background currently is
                           (default/hover/soa-group-open, all set via CSS classes
                           with !important) so the pinned cell never shows a
-                          mismatched patch as other columns scroll underneath it. */}
-                      <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 1, backgroundColor: 'inherit' }}>
+                          mismatched patch as other columns scroll underneath it.
+                          zIndex 3, not the original 1 — confirmed live 2026-09-23:
+                          `position: sticky` makes this cell its own stacking
+                          context, so its child popover (its own zIndex 30) could
+                          never out-rank the sticky column header row above
+                          (zIndex 2, see the header's own comment) when opened
+                          upward from a row near the top — a child's z-index can
+                          never lift it past a sibling of its OWN ancestor's
+                          stacking context, regardless of how high that child's
+                          number is. Vincent: "这个肯定是要在最上层的不能被卡片
+                          的线条挡到" (this has to be on top, must not be blocked
+                          by the card's lines) — the header's own sticky border
+                          was exactly what was cutting across the popover. */}
+                      <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 3, backgroundColor: 'inherit' }}>
                         <SoaDraftPopover
                           company={combined} qbCompany={draftScope} me={draftPickers.me}
                           senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
