@@ -239,7 +239,7 @@ export function NdSection({ nd }: { nd: Company360['nomineeDirector'] }) {
 
 export function CommsSection({ drafts }: { drafts: Company360['communications']['drafts'] }) {
   return (
-    <DataCard title="Communications" icon={<Mail size={15} color="#fff" />} count={drafts.length} empty="No client communications sent to this company yet.">
+    <DataCard title="Email Status" icon={<Mail size={15} color="#fff" />} count={drafts.length} empty="No client communications sent to this company yet.">
       {/* Genuinely equal 5-way column split matching the header card's own
           grid (2026-09-04, Vincent: "分成5等分列宽和 第一模块的5等分列宽一致",
           then "上下没有对齐" once the first attempt — table colgroup

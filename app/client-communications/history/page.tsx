@@ -310,7 +310,7 @@ export default function DeliveryHistoryPage() {
 
   return (
     <div>
-      <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Client Communications</div>
+      <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Email Status</div>
       <CommsTabs />
 
       <div style={{ marginBottom: 14 }}>

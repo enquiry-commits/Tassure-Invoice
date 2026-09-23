@@ -66,7 +66,7 @@ export default function TemplatesSendersPage() {
 
   return (
     <div>
-      <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Client Communications</div>
+      <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Email Status</div>
       <CommsTabs />
 
       <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 14 }}>

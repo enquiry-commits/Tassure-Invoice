@@ -86,7 +86,7 @@ const tree: Node[] = [
         ],
       },
       {
-        id: 'client-communications', label: 'Client Communications',
+        id: 'client-communications', label: 'Email Status',
         children: [
           { label: 'Email Drafts', href: '/client-communications/campaigns' },
           { label: 'History', href: '/client-communications/history' },

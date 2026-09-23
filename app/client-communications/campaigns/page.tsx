@@ -536,7 +536,7 @@ export default function EmailDraftWorkbenchPage() {
           </div>
         </div>
       )}
-      <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Client Communications</div>
+      <div className="mb-4 text-sm text-slate-500">Dashboard › Billing System › Email Status</div>
       <CommsTabs />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
