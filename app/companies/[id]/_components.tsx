@@ -4,7 +4,7 @@ import { formatStaffName, nameForEmail } from '@/lib/staff-directory';
 import { effectiveOwner } from '@/lib/soa-data';
 import { AGING_BUCKETS, TXN_TYPE_TAGS, oldestAgingBucket } from '@/lib/soa';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
-import { SoaAllDownloadButton } from '@/components/billing/SoaDownloadPopover';
+import { SoaSourceBadgeButton } from '@/components/billing/SoaDownloadPopover';
 import { SoaReminderStatus } from '@/components/billing/SoaReminderStatus';
 import { DataCard } from './DataCard';
 import { CommsSection } from './CommsSection';
@@ -87,9 +87,11 @@ export function MatchQualityNote({ warnings }: { warnings: string[] }) {
 const GRID_4_COLS = 'repeat(4, minmax(0,1fr))';
 const GRID_5_COLS = 'repeat(5, minmax(0,1fr))';
 const GRID_6_COLS = 'repeat(6, minmax(0,1fr))';
-// OutstandingSection only (2026-09-18, its new Download column) — same
-// "N columns, N-equal split" rule as every constant above, just for 7.
-const GRID_8_COLS = 'repeat(8, minmax(0,1fr))';
+// OutstandingSection only — same "N columns, N-equal split" rule as every
+// constant above. Was 8 (2026-09-18's own dedicated Download column);
+// dropped back to 7 on 2026-09-23 when that column's function moved into
+// the Source column itself — see OutstandingSection's own comment.
+const GRID_7_COLS = 'repeat(7, minmax(0,1fr))';
 
 export function ArAgmSection({ cycles }: { cycles: Company360['arReminderCycles'] }) {
   return (
@@ -277,12 +279,25 @@ export function NdSection({ nd }: { nd: Company360['nomineeDirector'] }) {
 // Main PIC会不会比较好呢" — "Owner" read oddly for what's really "the one
 // person assigned to this company's collections"). Display label only —
 // effectiveOwner() and every underlying field/table name are unchanged.
+//
+// 2026-09-23: "Company" reverted back to "Source", and the value itself
+// became a clickable badge — Vincent: "我要把后面的两个按钮置入到 Company
+// 的那个TAB/TAO那边，这个的UI按钮设计和 Outstanding All 那边的一样，也是
+// 点击 TAB，就可以下载 SOA PDF...然后把Company 换成 Source" (move the
+// trailing Download SOA PDF button's function into the Company/TAB-TAO
+// column itself, same UI as Outstanding "All"'s own clickable Source
+// badges, then rename Company back to Source). The dedicated Download
+// column (added 2026-09-18) is gone — SoaSourceBadgeButton
+// (components/billing/SoaDownloadPopover.tsx) now sits where the plain
+// TAB/TAC/TAO text used to, one click = that row's own SOA PDF, no popover
+// needed since (unlike the "All" page's group rows) a row here is always
+// exactly one book.
 
 export function OutstandingSection({ outstanding }: { outstanding: Company360['outstanding'] }) {
   return (
     <DataCard title="Outstanding" icon={<Receipt size={15} color="#fff" />} count={outstanding.length} empty="No outstanding balance on TAB/TAC/TAO for this company.">
-      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_8_COLS, gap: 16, padding: '10px 16px' }}>
-        <div>Invoice No.</div><div>Company</div><div>Reminder</div><div>Aging</div><div>Total Balance</div><div>Due Date</div><div>Main PIC</div><div />
+      <div className="list-column-header-gray" style={{ display: 'grid', gridTemplateColumns: GRID_7_COLS, gap: 16, padding: '10px 16px' }}>
+        <div>Invoice No.</div><div>Source</div><div>Reminder</div><div>Aging</div><div>Total Balance</div><div>Due Date</div><div>Main PIC</div>
       </div>
       {outstanding.map((r, i) => {
         // "欠下多久了...主要显示是最久的是欠了多久时间，比如最久的是 91+，
@@ -292,7 +307,7 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
         const oldest = oldestAgingBucket(r.aging);
         const oldestLabel = oldest ? AGING_BUCKETS.find(b => b.key === oldest)?.label : null;
         return (
-          <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_8_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
+          <div key={i} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_7_COLS, gap: 16, padding: '10px 16px', alignItems: 'start' }}>
             {/* Vincent, 2026-09-08: "Invoice 换成 Invoice No. , 格式要参考
                 Invoice No. 列的字体格式" — same page's own Invoices section
                 again: its Invoice No. cell is bare inherited text with no
@@ -335,14 +350,12 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
                 );
               }) : '—'}
             </div>
-            {/* Vincent, 2026-09-08: "Source 换成 Company（和截图那边一样，
-                包括字体和格式大小）" — points at this exact page's own
-                Invoices section, whose "Company" column shows this same
-                TAB/TAC/TAO value as bare inherited text, no badge — so
-                match that literally (no custom style at all) rather than
-                keep a separate pill look for what both sections already
-                agree is the same value. */}
-            <div>{r.qbCompany}</div>
+            {/* Renamed back to "Source" and made clickable, 2026-09-23 — see
+                OutstandingSection's own header comment for the full
+                request. Supersedes the 2026-09-08 "match Invoices' own
+                plain-text Company column" styling — a clickable download
+                badge can't also be bare inherited text. */}
+            <div><SoaSourceBadgeButton companyName={r.companyName} book={r.qbCompany} /></div>
             <div><SoaReminderStatus progress={r.reminderProgress} /></div>
             <div>
               {/* Vincent, 2026-09-08: "放成黄色显示" — yellow, distinct from
@@ -368,15 +381,6 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
               {r.lineItems.length ? r.lineItems.map((item, idx) => <div key={`${item.txnType}-${item.docNumber}-${idx}`}>{fmtDate(item.dueDate)}</div>) : '—'}
             </div>
             <div style={{ fontSize: 11, color: effectiveOwner(r) ? '#1e3a5f' : '#94a3b8' }}>{effectiveOwner(r) || '—'}</div>
-            {/* Vincent, 2026-09-18: "在最右边加多一个列 For 复制那个弹窗All
-                的SOA PDF 下载按钮功能" — the exact same "Download SOA PDF"
-                button + TAB/TAO/All(TAB+TAO) picker SoaDetail's own modal
-                has (see components/billing/SoaDownloadPopover.tsx), reached
-                straight from this row instead of opening the modal first.
-                One row per book means a company owing on 2 books shows this
-                button twice — "好像这边有两个就要有2个一样的All 按钮"
-                confirms that's expected, not a bug to dedupe away. */}
-            <div><SoaAllDownloadButton companyName={r.companyName} /></div>
           </div>
         );
       })}

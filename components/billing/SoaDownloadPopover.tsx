@@ -166,3 +166,45 @@ export function SoaAllDownloadButton({ companyName }: { companyName: string }) {
     </span>
   );
 }
+
+/**
+ * A single-book Source badge that IS the download button — one click, no
+ * popover/picker, since the caller already knows exactly which book this
+ * row is (unlike SoaAllDownloadButton above, which has to first fetch which
+ * books this company even has a balance on). Added 2026-09-23 for Company
+ * 360's Outstanding table (app/companies/[id]/_components.tsx) — Vincent:
+ * "我要把后面的两个按钮置入到 Company 的那个TAB/TAO那边...这个的UI按钮设
+ * 计和 Outstanding All 那边的一样，也是点击 TAB，就可以下载 SOA PDF...然后
+ * 把Company 换成 Source" (move the trailing Download button's function into
+ * the Company/Source column itself, same UI as the Outstanding "All" page's
+ * own clickable Source badges, and rename that column back to "Source").
+ * Same border+white-fill styling as that page's own badges
+ * (app/billing/soa/_components.tsx) — one visual language for "this badge
+ * downloads a PDF when clicked," not two independently-evolving ones.
+ */
+export function SoaSourceBadgeButton({ companyName, book }: { companyName: string; book: QbCompany }) {
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onClick = async () => {
+    setDownloading(true); setError(null);
+    try {
+      await downloadSoaPdf(companyName, book);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <button onClick={onClick} disabled={downloading} title={error ?? `Download ${book} SOA PDF`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
+        padding: '2px 7px', borderRadius: 5, border: '1px solid #b8c7d6', background: error ? 'var(--status-danger-tint)' : '#fff',
+        color: error ? 'var(--status-danger)' : '#1e3a5f', cursor: downloading ? 'default' : 'pointer',
+      }}>
+      {downloading ? <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} /> : book}
+    </button>
+  );
+}

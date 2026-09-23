@@ -1822,6 +1822,31 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Company 360's Outstanding table: "Company" reverted back to "Source",
+  and the dedicated Download SOA PDF column merged into it.** Vincent: "我
+  要把后面的两个按钮置入到 Company 的那个TAB/TAO那边，这个的UI按钮设计和
+  Outstanding All 那边的一样，也是点击 TAB，就可以下载 SOA PDF...然后把
+  Company 换成 Source" — move the trailing Download button's function into
+  the Company/TAB-TAO column itself, same UI as the Outstanding "All"
+  page's own clickable Source badges (the border+white-fill style from
+  earlier the same day), then rename Company back to Source. New
+  `SoaSourceBadgeButton` (`components/billing/SoaDownloadPopover.tsx`,
+  alongside the existing `SoaAllDownloadButton`/`SoaDownloadPopover`) is a
+  single-book click = single download, no popover needed — unlike the
+  "All" page's group rows, a row in this table is always exactly one book
+  (`OutstandingSection`'s own established invariant: "never merged"), so
+  there's no multi-source case to handle here. `app/companies/[id]/
+  _components.tsx`: the dedicated Download column (added 2026-09-18) is
+  gone — `GRID_8_COLS` dropped to `GRID_7_COLS` — and the old plain-text
+  "Company" cell (`{r.qbCompany}`) is now `<SoaSourceBadgeButton
+  companyName={r.companyName} book={r.qbCompany} />`. `OutstandingSection`
+  itself stays a server component (no `'use client'`) — rendering a client
+  component as a child is the same already-established pattern the old
+  `SoaAllDownloadButton` used here. `npx tsc --noEmit`, `npx eslint` (both
+  changed files), `npm run build` (cold) all clean. Reuses the exact same
+  border/white-fill styling already verified earlier today for the "All"
+  page's own badges — no new visual pattern needing a fresh repro.
+
 - **Corrected same-day (again): the merged Source badge now has a visible
   border, not just a shared click target.** Vincent, after confirming the
   merged-click-target fix worked: "由于按钮的颜色和行的颜色一样样，所以看
