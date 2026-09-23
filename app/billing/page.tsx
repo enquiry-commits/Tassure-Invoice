@@ -1006,12 +1006,19 @@ function BacklogNoticeBadge({ years }: { years: number[] }) {
 // app/api/quickbooks/create-invoice/route.ts's resolveParentBillAddr). This
 // link is persistent (companies.parent_company_id), not a per-invoice
 // choice — set once here, applies to every future cycle until changed.
+// Vincent, 2026-09-23: "母公司的UI设计就设计成按钮的轮廓就可以了，底色是
+// 白色就OK了，以后有母公司都是这种处理显示" — outline only, white fill, for
+// every future parent-company badge too. This is the one shared component
+// every current call site already renders through (app/billing/page.tsx's
+// billing list, x2) — kept it that way rather than inlining the style at
+// each call site, so a future one automatically matches without needing
+// this same request again.
 function ParentCompanyBadge({ name }: { name: string | null | undefined }) {
   if (!name) return null;
   return (
     <span title={`Invoices for this company show "${name}" as the Bill-To name/address`} style={{
-      display: 'inline-flex', alignItems: 'center', gap: 3, background: '#eef2ff', color: '#4338ca',
-      border: '1px solid #e0e7ff', borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700,
+      display: 'inline-flex', alignItems: 'center', gap: 3, background: '#fff', color: '#4338ca',
+      border: '1px solid #c7d2fe', borderRadius: 4, padding: '1px 5px', fontSize: 9, fontWeight: 700,
       whiteSpace: 'nowrap', cursor: 'help', flexShrink: 0,
     }}>
       <Building2 size={9} />{name}
