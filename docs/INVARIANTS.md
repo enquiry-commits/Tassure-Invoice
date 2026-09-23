@@ -357,6 +357,31 @@ again.
   to staff to type TERMINATED into remarks manually"). This does NOT change
   INV-DATA-014's separate, staff-typed exact-match `TERMINATED`/`STRIKE
   OFF` remarks convention — only the auto-written marker LINE is affected.
+- **INV-AR-015** — Clearing the `⚠ LATE FILING:` marker text is NOT the
+  same as removing the row from the AR Reminder page — Vincent, immediately
+  after INV-AR-014 shipped, pointed at the exact same two companies still
+  fully visible as dated rows: "terminated了，就不可能要做AR了" (once
+  terminated, there is no AR left to do at all — a terminated company must
+  not appear on AR Reminder AT ALL, not just show up unflagged). Confirmed
+  root cause: a separate, un-guarded fallback loop in `late-filing/sync`
+  (the "manual/legacy" pass, for `late_filing_companies` rows not matched
+  to an active company this run) mirrors into `ar_reminder` unconditionally
+  — it never checked `Resolved:`/termination status before writing, so it
+  could re-introduce a marker on a Terminated or Resolved company on a
+  later run even after INV-AR-013's reconciliation cleared it. Fixed by
+  adding a THIRD pass, run last: for every UEN confirmed Terminated/
+  Striking Off (same `companies`-then-`master_list` lookup as INV-AR-013),
+  set `ar_reminder.status = 'Excluded'` on every one of its non-Excluded
+  rows — the exact same reversible soft-hide `DELETE /api/ar-reminder`
+  already uses for the page's own trash-can button (re-adding the same
+  entity/cycle restores it; see that route). Because this pass runs LAST
+  and re-queries fresh, it self-corrects even if the legacy loop re-wrote a
+  row earlier in the same run — deliberately not also fixing that loop's
+  own missing guard, since a last-writer-wins cleanup pass is lower-risk
+  than changing an existing loop's conditions. Scoped to exact UEN matches
+  only (never the normalized-name fallback used elsewhere in this file) —
+  bulk-hiding a row is higher-consequence than clearing a text marker, so
+  it only acts where the match is exact.
 
 ## PIC / staff assignment (INV-PIC)
 

@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-23 (FIXED, round 2 same day: clearing the marker text wasn't enough — Vincent, immediately after round 1 shipped, pointing at the same two companies: "terminated了，就不可能要做AR了" — a Terminated company must not appear on AR Reminder at all).
+
+Found the reason round 1's fix alone wouldn't have held: a THIRD, separate spot in `late-filing/sync` — the pre-existing "manual/legacy" fallback loop (mirrors `late_filing_companies` rows not matched to an active company this run) — mirrors into `ar_reminder` completely unconditionally, with no `Resolved:`/termination check at all. It would have kept re-writing a marker onto a Terminated company's row on later runs even after round 1's reconciliation cleared it. Rather than edit that loop's own conditions (higher risk of disturbing behavior for OTHER rows it legitimately still needs to mirror), added a fourth, LAST-running pass instead: for every UEN confirmed Terminated/Striking Off, set `ar_reminder.status = 'Excluded'` on all its non-Excluded rows — the exact same reversible soft-hide the page's own trash-can button already uses (`DELETE /api/ar-reminder`; re-adding the same entity/cycle restores it). Because it runs last and re-queries fresh each time, it self-corrects regardless of what an earlier pass in the same run did. Scoped to exact UEN matches only, never the fuzzy normalized-name fallback used elsewhere in this file — a bulk hide is higher-consequence than clearing a text marker. New `docs/INVARIANTS.md` entry: INV-AR-015.
+
+Side effect confirmed correct, not accidental: excluding these rows also removes them from the "Owes FY ⟨year⟩" backlog badge (`app/api/ar-reminder/route.ts`'s `staleOverdue` query already filters `status.neq.Excluded`), so ZJJ/TAFOS's backlog notices clear along with the LATE badge. This does NOT touch MITRADE's own separate "Owes FY 2021" badge — MITRADE is `tw_status='Active'`, not terminated, so that one stays exactly as explained to Vincent: a real gap in `ar_reminder.filling_date` that needs a human to verify against ACRA/TeamWork before anyone types a date into it (never auto-filled — historical business data, not a workflow flag).
+
+`npx tsc --noEmit` / `npx eslint` both clean. Same verification limits as round 1 — next scheduled run or a manual "Refresh" click, then confirm ZJJ/TAFOS no longer appear anywhere on the AR Reminder page (not just unflagged).
+
+Previous entry follows.
+
 Last updated: 2026-09-23 (FIXED: AR Reminder tab was showing a stale "⚠ LATE FILING" badge on companies that are Resolved or already ACRA-terminated — Hoe Chyi, relayed by Vincent: MITRADE GROUP still late despite being marked Resolved on the Late Filing page; TAFOS CAPITAL (F.K.A. LWL EDUCATION CONSULTANCY) still late despite `companies.tw_status = 'Terminated'`).
 
 Root cause is TWO independent gaps in `app/api/late-filing/sync/route.ts`'s "mirror into AR Reminder" design (`LATE_FILING_MARKER` written into `ar_reminder.remarks`), confirmed against real production rows via a temporary read-only Supabase query (deleted after use, never committed):

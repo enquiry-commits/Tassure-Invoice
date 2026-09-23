@@ -695,6 +695,44 @@ async function syncLateFiling(run: AutomationRun) {
     // separate, staff-typed TERMINATED/STRIKE OFF exact-match remarks
     // convention is untouched.
     let reconciled = 0;
+    let excludedTerminated = 0;
+
+    // Shared termination lookup for both passes below — built once,
+    // regardless of whether any marker currently exists, since Step C
+    // (excluding a terminated company's AR Reminder rows entirely) must run
+    // even for a company whose rows never carried a marker in the first
+    // place (e.g. a fresh cycle AR Generate inserted before the company
+    // later terminated).
+    const { data: allCompanies } = await supabase
+      .from('companies')
+      .select('registration_no, company_name, is_active, tw_status');
+    const companyByUen = new Map<string, { is_active: boolean; tw_status: string | null }>();
+    const companyByName = new Map<string, { is_active: boolean; tw_status: string | null }>();
+    for (const co of allCompanies ?? []) {
+      const info = { is_active: co.is_active === true, tw_status: (co.tw_status as string | null) ?? null };
+      const uen = co.registration_no ? String(co.registration_no).trim().toUpperCase() : null;
+      if (uen) companyByUen.set(uen, info);
+      if (co.company_name) companyByName.set(normalize(co.company_name), info);
+    }
+    // Fallback for companies TeamWork sync already removed from
+    // `companies` entirely (INV-DATA-030: "routinely REMOVED ... while
+    // master_list keeps its full historical record") — "is this company
+    // terminated" must still be answerable from master_list's own
+    // lifecycle category in that case, not silently treated as active.
+    const { data: terminatedMasterList } = await supabase
+      .from('master_list')
+      .select('roc_no')
+      .in('list_type', ['terminated', 'strike_off']);
+    const terminatedUens = new Set((terminatedMasterList ?? [])
+      .map(r => (r.roc_no ? String(r.roc_no).trim().toUpperCase() : null))
+      .filter((v): v is string => !!v));
+    const isTerminatedCompany = (uenKey: string | null, entityName: string) => {
+      const companyInfo = (uenKey ? companyByUen.get(uenKey) : undefined) ?? companyByName.get(normalize(entityName));
+      return companyInfo
+        ? (!companyInfo.is_active || ['Terminated', 'Striking Off'].includes(companyInfo.tw_status ?? ''))
+        : (uenKey ? terminatedUens.has(uenKey) : false);
+    };
+
     const { data: markedRows, error: markedError } = await supabase
       .from('ar_reminder')
       .select('id, entity_name, uen, remarks')
@@ -716,37 +754,10 @@ async function syncLateFiling(run: AutomationRun) {
       const freshByName = new Map((freshManual ?? [])
         .map(row => [row.company_name.toLowerCase(), row]));
 
-      const { data: allCompanies } = await supabase
-        .from('companies')
-        .select('registration_no, company_name, is_active, tw_status');
-      const companyByUen = new Map<string, { is_active: boolean; tw_status: string | null }>();
-      const companyByName = new Map<string, { is_active: boolean; tw_status: string | null }>();
-      for (const co of allCompanies ?? []) {
-        const info = { is_active: co.is_active === true, tw_status: (co.tw_status as string | null) ?? null };
-        const uen = co.registration_no ? String(co.registration_no).trim().toUpperCase() : null;
-        if (uen) companyByUen.set(uen, info);
-        if (co.company_name) companyByName.set(normalize(co.company_name), info);
-      }
-      // Fallback for companies TeamWork sync already removed from
-      // `companies` entirely (INV-DATA-030: "routinely REMOVED ... while
-      // master_list keeps its full historical record") — "is this company
-      // terminated" must still be answerable from master_list's own
-      // lifecycle category in that case, not silently treated as active.
-      const { data: terminatedMasterList } = await supabase
-        .from('master_list')
-        .select('roc_no')
-        .in('list_type', ['terminated', 'strike_off']);
-      const terminatedUens = new Set((terminatedMasterList ?? [])
-        .map(r => (r.roc_no ? String(r.roc_no).trim().toUpperCase() : null))
-        .filter((v): v is string => !!v));
-
       for (const row of markedRows) {
         if (controller.signal.aborted) throw abortError(controller.signal);
         const uenKey = row.uen ? String(row.uen).trim().toUpperCase() : null;
-        const companyInfo = (uenKey ? companyByUen.get(uenKey) : undefined) ?? companyByName.get(normalize(row.entity_name));
-        const isTerminated = companyInfo
-          ? (!companyInfo.is_active || ['Terminated', 'Striking Off'].includes(companyInfo.tw_status ?? ''))
-          : (uenKey ? terminatedUens.has(uenKey) : false);
+        const isTerminated = isTerminatedCompany(uenKey, row.entity_name);
 
         const lfExisting = (uenKey ? freshByUen.get(uenKey) : undefined) ?? freshByName.get(row.entity_name.toLowerCase());
         const lfRemarks = lfExisting?.remarks ?? '';
@@ -793,6 +804,47 @@ async function syncLateFiling(run: AutomationRun) {
       }
     }
 
+    // Vincent, 2026-09-23, direct follow-up to the INV-AR-013/014 bug
+    // report: clearing the marker text isn't enough — "terminated了，就不
+    // 可能要做AR了" (once terminated, there's no AR left to do at all), so a
+    // Terminated/Striking Off company's AR Reminder rows must not appear on
+    // the page AT ALL, not just show up unflagged. `status = 'Excluded'` is
+    // the exact same reversible soft-hide the trash-can button on this page
+    // already uses (DELETE /api/ar-reminder sets this, and re-adding the
+    // same entity/cycle restores it — see that route) — never a hard
+    // delete, and every other field on the row (remarks, dates, PIC) is
+    // left untouched in case a company is un-terminated later.
+    //
+    // Scoped to UEN matches only (never the fuzzy normalized-name fallback
+    // the marker-reconciliation pass above uses) — a bulk hide is much
+    // higher-consequence than clearing a badge's text if it ever matched
+    // the wrong company, so this only acts where the match is exact.
+    // Confirmed necessary, not just cosmetic: ZJJ FAMILY OFFICE and TAFOS
+    // CAPITAL (F.K.A. LWL EDUCATION CONSULTANCY) are both genuinely
+    // Terminated yet were still fully visible, dated rows on the AR
+    // Reminder tab.
+    const terminatedUenKeys = [...companyByUen.entries()]
+      .filter(([, info]) => !info.is_active || ['Terminated', 'Striking Off'].includes(info.tw_status ?? ''))
+      .map(([uen]) => uen);
+    const allTerminatedUenKeys = [...new Set([...terminatedUenKeys, ...terminatedUens])];
+    if (allTerminatedUenKeys.length) {
+      const { data: terminatedArRows, error: terminatedArError } = await supabase
+        .from('ar_reminder')
+        .select('id')
+        .in('uen', allTerminatedUenKeys)
+        .or('status.is.null,status.neq.Excluded');
+      if (terminatedArError) errors++;
+      for (const row of terminatedArRows ?? []) {
+        if (controller.signal.aborted) throw abortError(controller.signal);
+        const { error: excludeError } = await supabase.from('ar_reminder').update({
+          status: 'Excluded',
+          updated_by_email: 'system:late-filing',
+          updated_by_name: 'Late Filing Sync',
+        }).eq('id', row.id);
+        if (excludeError) errors++; else excludedTerminated++;
+      }
+    }
+
     const result = {
       ok: errors === 0 && eotErrors === 0,
       checked: targets.length,
@@ -803,6 +855,7 @@ async function syncLateFiling(run: AutomationRun) {
       refreshed,
       movedToReview,
       reconciled,
+      excludedTerminated,
       insertedNames,
       ar_reminder_rows_inserted: arInserted,
       ar_reminder_rows_noted: arNoted,
