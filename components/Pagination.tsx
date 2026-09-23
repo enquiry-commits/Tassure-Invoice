@@ -53,24 +53,44 @@ function pageList(page: number, totalPages: number): (number | '…')[] {
 // AR Reminder, SOA, Master List/Active Client, Reports, TAO, Late Filing,
 // Address Service, Companies) — every one of them renders through this
 // shared component, so this is the single point that actually covers "全系
-// 统". Walks up from the clicked button to find the nearest ancestor that's
-// ACTUALLY scrolling (scrollHeight > clientHeight) and resets its scrollTop
-// — deliberately not a fixed class-name lookup (e.g. '.system-list-scroll'),
-// since not every page that renders this bar uses that exact class, and a
-// generic DOM walk keeps working regardless. Falls back to the window/page
-// scroll for a list with no scrollable ancestor of its own.
+// 统".
+//
+// First attempt (same day) walked straight UP from the clicked button
+// looking for a scrolling ancestor and did nothing — confirmed still
+// broken live. Root cause: PaginationBar is rendered as a SIBLING right
+// after the scrollable list div (`<div className="system-list-scroll"
+// style={{overflowY:'auto', ...}}>…rows…</div><PaginationBar .../>`),
+// never inside it — so walking straight up from the button never passes
+// through the actual scroll container at all; it only reaches shared
+// wrapper divs that were never scrolling themselves, then gives up.
+// Fixed by walking up to each ancestor in turn and, AT each level,
+// searching its full subtree (not just the direct path to the button) for
+// the first genuinely scrolling element — this finds the list div via the
+// nearest common ancestor instead of assuming it's a direct ancestor.
+// Deliberately not a fixed class-name lookup (e.g. '.system-list-scroll'),
+// since not every page that renders this bar uses that exact class.
+function findScrollable(root: Element): HTMLElement | null {
+  if (root instanceof HTMLElement && root.scrollHeight > root.clientHeight + 1) return root;
+  for (const child of root.children) {
+    const found = findScrollable(child);
+    if (found) return found;
+  }
+  return null;
+}
+
 function scrollPageToTop(button: HTMLElement) {
-  // Stop at <body> rather than checking it: in standards mode the
+  // Stop at <body> rather than searching inside it: in standards mode the
   // document's own scroll is owned by <html>/`window`, not `body.scrollTop`
   // (setting that silently no-ops in most browsers), so treat reaching body
   // as "no specific scrollable ancestor" and fall through to window.scrollTo.
-  let node: HTMLElement | null = button;
-  while (node && node !== document.body) {
-    if (node.scrollHeight > node.clientHeight + 1) {
-      node.scrollTop = 0;
+  let ancestor: HTMLElement | null = button.parentElement;
+  while (ancestor && ancestor !== document.body) {
+    const scrollable = findScrollable(ancestor);
+    if (scrollable) {
+      scrollable.scrollTop = 0;
       return;
     }
-    node = node.parentElement;
+    ancestor = ancestor.parentElement;
   }
   window.scrollTo({ top: 0 });
 }
