@@ -2517,6 +2517,73 @@ again.
   --noEmit`, `npm run lint` (changed files), and `npm run build` all
   clean.
 
+- **INV-DATA-061** — INV-DATA-060 shipped and, within hours, broke the
+  Reports page's AI Analysis card in production: "Claude returned an empty
+  analysis" (Vincent's screenshot, 2026-09-23), exactly the caveat at the
+  end of INV-DATA-060 warning that the new schema was never exercised
+  against a real live call. Root cause (most likely; could not be
+  reproduced locally — no `ANTHROPIC_API_KEY` outside Vercel) and fix, two
+  independent contributors:
+
+  1. **A JSON Schema union `type` (`['string', 'null']`) is not a safe way
+     to express a nullable field inside an Anthropic forced tool-use
+     schema.** It's valid JSON Schema, but `driverZh`/`driverEn` used it to
+     satisfy "driver must be nullable," and this shipped as the most likely
+     cause of the model's tool-call output coming back malformed enough
+     that `insights` was empty/missing. Replaced with the same nullable
+     CONTRACT expressed a different way on the wire: `driverZh`/`driverEn`
+     are now a required plain `string` in the schema, with an explicit
+     "empty string `\"\"` means no driver" convention in both the field
+     description and the system prompt. `normalizeInsight()`
+     (`lib/reports-narrative.ts`) converts `""` back to real `null`
+     immediately inside `callClaude()`, before the result ever reaches
+     `validateNarrative()`, the cache, or `app/reports/page.tsx` — every
+     downstream consumer still sees the `driverZh: string | null` the
+     exported `ReportsInsight` type promises; only the wire format changed.
+     **Rule: never give an Anthropic forced-tool-use schema a union `type`
+     for nullability — use a sentinel value (empty string, or a documented
+     placeholder) and normalize it back to the real type in code.**
+
+  2. **`max_tokens` must be sized for the CURRENT schema, not left at
+     whatever an earlier, smaller schema used.** INV-DATA-060's rewrite grew
+     the schema from 5 fields to 14 required fields per insight (two of
+     them bilingual arrays), across up to 4 insights — but `max_tokens` was
+     only bumped 2000→2600, a value sized for the old schema. A response
+     that hits the token ceiling mid-JSON can come back with no usable
+     `tool_use.input` — the same failure mode INV-DATA-047 already
+     documented and fixed elsewhere in this codebase
+     (`app/api/assistant/route.ts`'s `claudeAnswer()`, 1024→4096). Raised to
+     4096 here too, matching that established value rather than a new
+     number chosen ad hoc.
+
+  Also fixed in the same change, a separate definite bug (not just a
+  suspected contributor): `generateReportsNarrative()`'s one retry only
+  triggered when `callClaude()` succeeded but `validateNarrative()` found a
+  rule violation — a THROWN error from `callClaude()` itself (API error,
+  malformed/empty response — i.e. exactly this bug's own symptom) propagated
+  immediately with zero retry attempts, the worse outcome for what should be
+  the more recoverable case. Both call sites now go through one `attempt()`
+  helper that catches either failure mode uniformly and feeds the specific
+  reason back into the retry's system prompt.
+
+  **Why this wasn't caught by `test-reports-narrative-guards.ts` before
+  shipping**: that suite only unit-tests `validateNarrative()` against mock
+  `ReportsNarrative` objects — it has never made a real Anthropic API call
+  and could not have reproduced a live tool-use schema/response bug. This is
+  a real gap, not a test that was skipped; closing it would require either
+  a live API key available at test time or a recorded/replayed response
+  fixture, neither of which exists yet. Flagged, not silently left
+  undocumented.
+
+  **Still not verified against a real live Claude call** — same
+  `ANTHROPIC_API_KEY`-not-available-locally limitation as INV-DATA-060.
+  Verified: `npx tsc --noEmit` clean, `npx eslint lib/reports-narrative.ts`
+  clean, `npm run build` (cold, `.next` removed first) clean, and all 11
+  existing `test-reports-narrative-guards.ts` cases still pass unchanged
+  (that file only exercises `validateNarrative()`, which this fix did not
+  touch). The actual fix can only be confirmed once Vincent reloads the
+  Reports page against production.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

@@ -144,8 +144,19 @@ const ANALYSIS_TOOL = {
             observedZh: { type: 'string' as const, description: 'FACT——直接来自数据的客观陈述，带具体数字，不包含任何解读或原因推测' },
             observedEn: { type: 'string' as const, description: 'FACT — an objective, data-grounded statement with specific numbers, no interpretation or causal reasoning' },
             metricRefs: { type: 'array' as const, items: { type: 'string' as const }, description: '这条 insight 引用的真实 metricId 列表（必须来自下面给你的 citableMetrics，不能编造）——observed 里提到的每个数字都应该能在这里找到对应的 metricId' },
-            driverZh: { type: ['string', 'null'], description: 'INFERENCE——对 observed 事实的合理解读，必须有把握才写；如果证据不足以支撑任何解读，就填 null，绝不为了填满这个字段而编一个原因' },
-            driverEn: { type: ['string', 'null'], description: 'INFERENCE — a reasonable read of the observed fact; use null if the evidence does not actually support any interpretation, never invent one to fill the field' },
+            // Kept as a required plain string (never `type: ['string','null']`)
+            // — a union-type JSON Schema field is technically valid but is
+            // exactly the kind of thing that risks going wrong silently
+            // inside a forced tool-call: found live 2026-09-23 (Vincent's
+            // screenshot, "Claude returned an empty analysis") immediately
+            // after this schema shipped. The nullable CONTRACT is kept via
+            // an explicit empty-string convention instead — universally
+            // supported, no ambiguity — and normalizeInsight() below
+            // converts "" back to a real `null` before this ever reaches a
+            // caller, so ReportsInsight's own `driverZh: string | null`
+            // type is unaffected.
+            driverZh: { type: 'string' as const, description: 'INFERENCE——对 observed 事实的合理解读，必须有把握才写；如果证据不足以支撑任何解读，就填空字符串 ""，绝不为了填满这个字段而编一个原因' },
+            driverEn: { type: 'string' as const, description: 'INFERENCE — a reasonable read of the observed fact; use an empty string "" if the evidence does not actually support any interpretation, never invent one to fill the field' },
             notYetProvenZh: { type: 'array' as const, items: { type: 'string' as const }, description: 'HYPOTHESIS——尚未证实的可能解释列表，每条都是一个具体的、未来可以去验证的可能性' },
             notYetProvenEn: { type: 'array' as const, items: { type: 'string' as const }, description: 'HYPOTHESIS — a list of specific, not-yet-proven possible explanations, each independently verifiable later' },
             nextActionZh: { type: 'string' as const, description: 'ACTION——具体的下一步分析或操作建议，不是泛泛的"持续关注"' },
@@ -167,7 +178,7 @@ function buildSystemPrompt(): string {
 你会拿到公司 Reports 页面上真实的汇总数据。你要通过 submit_analysis 这个工具提交结构化的分析结果——每条 insight 必须按 FACT → INFERENCE → HYPOTHESIS → ACTION 的顺序组织，不是把所有内容揉成一段话：
 
 - observed（FACT）：直接来自数据的客观陈述，带具体数字。绝不能包含"因为/所以/说明/反映了"这类解读词——纯陈述事实。
-- driver（INFERENCE，可以是 null）：对 observed 事实的合理解读。**如果证据不足以支撑任何解读，driverZh/driverEn 必须是 null，绝不能为了填满这个字段编一个听起来合理的原因**——没有把握就是没有把握，写 null 比编一个不确定的解读更诚实。
+- driver（INFERENCE，可以留空）：对 observed 事实的合理解读。**如果证据不足以支撑任何解读，driverZh/driverEn 必须提交空字符串 ""，绝不能为了填满这个字段编一个听起来合理的原因**——没有把握就是没有把握，留空比编一个不确定的解读更诚实。
 - notYetProven（HYPOTHESIS）：尚未证实的可能解释，列出具体的、未来可验证的可能性（不是"可能有很多原因"这种空话）。
 - nextAction（ACTION）：具体的下一步分析或操作建议。
 
@@ -231,6 +242,19 @@ export function validateNarrative(narrative: ReportsNarrative, data: ReportsData
   return { valid: errors.length === 0, errors };
 }
 
+// "" -> null for driverZh/driverEn — see the comment on ANALYSIS_TOOL's
+// driverZh field above for why the wire format uses an empty string. Every
+// caller (validateNarrative, app/reports/page.tsx's {driver && (...)}
+// rendering, the cache-shape check in app/api/reports/narrative/route.ts)
+// gets the real `string | null` the exported ReportsInsight type promises.
+function normalizeInsight(insight: ReportsInsight): ReportsInsight {
+  return {
+    ...insight,
+    driverZh: insight.driverZh === '' ? null : insight.driverZh,
+    driverEn: insight.driverEn === '' ? null : insight.driverEn,
+  };
+}
+
 async function callClaude(system: string, evidence: unknown): Promise<ReportsNarrative> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -238,7 +262,17 @@ async function callClaude(system: string, evidence: unknown): Promise<ReportsNar
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
     body: JSON.stringify({
       model: NARRATIVE_MODEL,
-      max_tokens: 2600,
+      // 4096, not the original 2600 — matches app/api/assistant/route.ts's
+      // own claudeAnswer() (INV-DATA-047: the exact same "output silently
+      // truncated by too-small max_tokens" failure mode, fixed there by
+      // raising 1024 -> 4096). The Phase 1 schema is ~3x the old one (14
+      // required fields incl. two bilingual arrays per insight, up to 4
+      // insights) — 2600 was sized for the OLD, smaller schema and is a
+      // second plausible contributor (alongside the driverZh/En union-type
+      // schema fix above) to the live "Claude returned an empty analysis"
+      // bug: a response cut off mid-JSON by hitting max_tokens can come
+      // back with no usable tool_use.input at all.
+      max_tokens: 4096,
       system,
       tools: [ANALYSIS_TOOL],
       tool_choice: { type: 'tool', name: 'submit_analysis' },
@@ -251,7 +285,28 @@ async function callClaude(system: string, evidence: unknown): Promise<ReportsNar
   if (!toolUse?.input) throw new Error('Claude did not return a structured analysis.');
   const result = toolUse.input as ReportsNarrative;
   if (!Array.isArray(result.insights) || !result.insights.length) throw new Error('Claude returned an empty analysis.');
-  return result;
+  return { ...result, insights: result.insights.map(normalizeInsight) };
+}
+
+// One attempt: call Claude, then validate. Returns the narrative on success,
+// or the reason it failed (a thrown error from callClaude — API error,
+// malformed/empty tool-use response — OR a validateNarrative() rule
+// violation) so generateReportsNarrative() can retry EITHER kind uniformly.
+// Previously only a validation failure retried; a thrown error propagated
+// immediately with zero retry attempts, so a one-off transient/malformed
+// response (the more recoverable case, not a substantive rule violation)
+// got the worse treatment. Found live 2026-09-23 alongside the driverZh/En
+// schema bug via the same screenshot ("Claude returned an empty analysis").
+async function attempt(system: string, evidence: unknown, data: ReportsData): Promise<{ narrative: ReportsNarrative } | { narrative: null; errors: string[] }> {
+  let narrative: ReportsNarrative;
+  try {
+    narrative = await callClaude(system, evidence);
+  } catch (err) {
+    return { narrative: null, errors: [err instanceof Error ? err.message : String(err)] };
+  }
+  const check = validateNarrative(narrative, data);
+  if (check.valid) return { narrative };
+  return { narrative: null, errors: check.errors };
 }
 
 export async function generateReportsNarrative(data: ReportsData): Promise<ReportsNarrative> {
@@ -260,17 +315,16 @@ export async function generateReportsNarrative(data: ReportsData): Promise<Repor
   const evidence = summarizeForPrompt(data);
   const system = buildSystemPrompt();
 
-  const first = await callClaude(system, evidence);
-  const firstCheck = validateNarrative(first, data);
-  if (firstCheck.valid) return first;
+  const first = await attempt(system, evidence, data);
+  if (first.narrative) return first.narrative;
 
-  // One retry, with the SPECIFIC violations fed back as an explicit
+  // One retry, with the SPECIFIC failure reason fed back as an explicit
   // correction instruction — "reject / regenerate", per Vincent's own
-  // instruction, not a silent text patch over a wrong claim.
-  const retrySystem = `${system}\n\n上一次提交的分析违反了以下硬性规则，请重新生成，这次务必遵守：\n${firstCheck.errors.map(e => `- ${e}`).join('\n')}`;
-  const retry = await callClaude(retrySystem, evidence);
-  const retryCheck = validateNarrative(retry, data);
-  if (retryCheck.valid) return retry;
+  // instruction, not a silent text patch over a wrong claim. Works the same
+  // whether the first attempt threw or just failed validation.
+  const retrySystem = `${system}\n\n上一次提交的分析未能通过校验，请重新生成，这次务必遵守：\n${first.errors.map(e => `- ${e}`).join('\n')}`;
+  const second = await attempt(retrySystem, evidence, data);
+  if (second.narrative) return second.narrative;
 
-  throw new Error(`AI analysis failed validation after retry: ${retryCheck.errors.join('; ')}`);
+  throw new Error(`AI analysis failed after retry: ${second.errors.join('; ')}`);
 }

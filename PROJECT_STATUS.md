@@ -1765,6 +1765,49 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Fixed a live production bug from the Phase 1 ship above: AI Analysis
+  card showing "Claude returned an empty analysis." (INV-DATA-061).**
+  Vincent, hours after Phase 1 deployed: "vercel 通过了，但是" + a
+  screenshot of the exact error string. Two plausible independent
+  contributors, both fixed (could not reproduce locally — no
+  `ANTHROPIC_API_KEY` outside Vercel, so root cause is inferred from code
+  review, not a captured failing request):
+  1. `driverZh`/`driverEn` used a JSON Schema union `type: ['string',
+     'null']` to express nullability inside the Anthropic forced-tool-use
+     schema — valid JSON Schema, but risky under forced tool-use. Changed
+     to a required plain `string`, with an explicit "empty string means no
+     driver" convention (schema description + system prompt), and a new
+     `normalizeInsight()` step inside `callClaude()` converts `""` back to
+     real `null` before anything downstream (validation, cache, the page)
+     ever sees it — the exported `ReportsInsight.driverZh: string | null`
+     type is unaffected.
+  2. `max_tokens` was only raised 2000→2600 when the Phase 1 schema grew
+     from 5 fields to 14 (two of them bilingual arrays) per insight, up to
+     4 insights — sized for the OLD schema. Raised to 4096, matching
+     `app/api/assistant/route.ts`'s own `claudeAnswer()` (INV-DATA-047,
+     same failure class: output silently truncated by too-small
+     `max_tokens`).
+  Also fixed, a separate definite bug found while reading this code (not
+  just a suspected contributor): `generateReportsNarrative()`'s one retry
+  only triggered on a validation failure, never on `callClaude()` itself
+  throwing (an API error, or exactly this bug's "empty analysis" throw) —
+  a transient/malformed response got zero retries, worse treatment than a
+  substantive rule violation got. Both paths now go through one `attempt()`
+  helper that retries either failure mode uniformly.
+  **Real test-coverage gap surfaced by this bug, documented not silently
+  left**: `test-reports-narrative-guards.ts` only unit-tests
+  `validateNarrative()` against mock data — it has never made a live
+  Anthropic call and could not have caught a live tool-use schema bug;
+  closing that gap needs a real API key or a recorded-response fixture at
+  test time, neither of which exists yet.
+  `npx tsc --noEmit`, `npx eslint lib/reports-narrative.ts`, and `npm run
+  build` (cold, `.next` removed first) all clean. All 11 existing
+  `test-reports-narrative-guards.ts` cases still pass unchanged (this fix
+  didn't touch `validateNarrative()`). **Still not verified against a real
+  live Claude call** — same local `ANTHROPIC_API_KEY` limitation as Phase 1
+  below; the real confirmation is Vincent reloading the Reports page.
+  Full details: `docs/INVARIANTS.md` INV-DATA-061.
+
 - **Reports V3 Phase 1 implemented and validated (INV-DATA-060).** Vincent
   approved `docs/REPORTS_V3_PHASE1_PLAN.md` with 7 explicit refinements,
   then "Proceed with Phase 1 implementation only." All 8 Phase 1 items now
