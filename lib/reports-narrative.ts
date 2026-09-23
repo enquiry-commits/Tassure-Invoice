@@ -131,6 +131,27 @@ const ANALYSIS_TOOL = {
   input_schema: {
     type: 'object' as const,
     properties: {
+      // First property, and first in `required` below — with `tool_choice`
+      // forced, Claude never gets an unconstrained chain-of-thought pass
+      // before generating arguments; it plans and writes at the same time.
+      // insights[] asks for a lot per item (14 required fields, bilingual,
+      // FACT/INFERENCE/HYPOTHESIS/ACTION structure) with zero scratch
+      // space — a documented weakness of forced tool-use on complex
+      // schemas. This field exists only to give the model somewhere to
+      // plan before committing to the structured fields; it is stripped
+      // out of the result before anything (validation, cache, the page)
+      // ever sees it. Added 2026-09-23 as a SECOND attempt at "Claude
+      // returned an empty analysis" — the first attempt (removing the
+      // driverZh/En union type, raising max_tokens 2600->4096) did NOT
+      // resolve it: Vincent reported the identical error afterward. This
+      // is a reasoned guess, not a confirmed fix — nothing here could be
+      // verified against a real API call (see callClaude()'s new logging
+      // below, added specifically because this file had NO server-side
+      // diagnostics at all for this failure before now).
+      planningNotes: {
+        type: 'string' as const,
+        description: '内部草稿区，不会展示给用户——正式填写 insights 之前，先在这里用几句话想清楚：这次数据里最值得报告的2-4个方向分别是什么、每个大致的 signal/confidence、driver 有没有把握（没把握就打算留空）。想清楚了再往下正式填写。',
+      },
       insights: {
         type: 'array' as const,
         minItems: 2, maxItems: 4,
@@ -168,7 +189,7 @@ const ANALYSIS_TOOL = {
       summaryZh: { type: 'string' as const, description: '1句话范围说明：这份分析基于什么数据，不涉及什么（成本/利润率等）' },
       summaryEn: { type: 'string' as const, description: '1-sentence scope note: what this analysis is based on and what it does not cover (cost/margin etc.)' },
     },
-    required: ['insights', 'summaryZh', 'summaryEn'],
+    required: ['planningNotes', 'insights', 'summaryZh', 'summaryEn'],
   },
 };
 
@@ -281,11 +302,37 @@ async function callClaude(system: string, evidence: unknown): Promise<ReportsNar
   });
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
-  const toolUse = (json.content as Array<{ type: string; input?: unknown }>).find(b => b.type === 'tool_use');
-  if (!toolUse?.input) throw new Error('Claude did not return a structured analysis.');
-  const result = toolUse.input as ReportsNarrative;
-  if (!Array.isArray(result.insights) || !result.insights.length) throw new Error('Claude returned an empty analysis.');
-  return { ...result, insights: result.insights.map(normalizeInsight) };
+  const content = Array.isArray(json.content) ? (json.content as Array<{ type: string; input?: unknown }>) : [];
+  const toolUse = content.find(b => b.type === 'tool_use');
+  // This file previously logged NOTHING server-side on either failure path
+  // below — a real gap, confirmed 2026-09-23 when "Claude returned an
+  // empty analysis" recurred in production after a first fix attempt and
+  // there was nothing in Vercel's function logs to diagnose WHY beyond the
+  // generic message the user already sees. Logging the actual shape of
+  // Claude's response (never the full evidence/system prompt — no need,
+  // and evidence includes real business figures) so the next occurrence is
+  // diagnosable from Vercel's logs instead of requiring another guess.
+  if (!toolUse?.input) {
+    console.error('[reports-narrative] no usable tool_use block', {
+      stopReason: json.stop_reason,
+      contentBlockTypes: content.map(b => b.type),
+    });
+    throw new Error('Claude did not return a structured analysis.');
+  }
+  // `planningNotes` (a scratchpad field, see ANALYSIS_TOOL above) is
+  // deliberately NOT part of ReportsNarrative — dropped here rather than
+  // destructured-and-discarded so no unused-binding lint warning either.
+  const result = toolUse.input as ReportsNarrative & { planningNotes?: string };
+  if (!Array.isArray(result.insights) || !result.insights.length) {
+    console.error('[reports-narrative] tool_use.input has no usable insights', {
+      stopReason: json.stop_reason,
+      inputKeys: Object.keys(toolUse.input as object),
+      rawInput: JSON.stringify(toolUse.input).slice(0, 3000),
+    });
+    throw new Error('Claude returned an empty analysis.');
+  }
+  const narrative: ReportsNarrative = { insights: result.insights, summaryZh: result.summaryZh, summaryEn: result.summaryEn };
+  return { ...narrative, insights: narrative.insights.map(normalizeInsight) };
 }
 
 // One attempt: call Claude, then validate. Returns the narrative on success,

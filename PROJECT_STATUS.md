@@ -1807,6 +1807,25 @@ one focused Git commit.
   live Claude call** — same local `ANTHROPIC_API_KEY` limitation as Phase 1
   below; the real confirmation is Vincent reloading the Reports page.
   Full details: `docs/INVARIANTS.md` INV-DATA-061.
+  **Correction, same day**: this did NOT fix it — Vincent reloaded and got
+  the identical error on both attempts ("AI analysis failed after retry:
+  Claude returned an empty analysis."), a deterministic failure, not a
+  one-off. Root cause is still genuinely unknown: this file had **zero
+  server-side logging** on this path, so even Vercel's own logs had
+  nothing beyond the message already shown on screen. Fixed that first —
+  `callClaude()` now logs `stop_reason` and either the response's
+  content-block types or the actual keys/truncated JSON of a malformed
+  `tool_use.input` — the next occurrence is now diagnosable instead of
+  requiring another guess. Also added one more mitigation, explicitly
+  flagged as unverified: a required `planningNotes` scratch field, first
+  in the schema, giving the model somewhere to plan before committing to
+  the 14-required-field insight objects — forced `tool_choice` allows no
+  free chain-of-thought pass, a documented weakness for complex schemas.
+  `npx tsc --noEmit`/`eslint`/`npm run build` all clean, same 11 tests
+  unchanged and passing. **Do not treat this round as confirmed working**
+  — only the logging is a sure improvement; confirmation is still only
+  possible via a live reload. Full details: `docs/INVARIANTS.md`
+  INV-DATA-061 (amended, not a new number — same bug, same day).
 
 - **Reports V3 Phase 1 implemented and validated (INV-DATA-060).** Vincent
   approved `docs/REPORTS_V3_PHASE1_PLAN.md` with 7 explicit refinements,

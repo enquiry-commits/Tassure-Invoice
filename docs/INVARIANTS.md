@@ -2584,6 +2584,45 @@ again.
   touch). The actual fix can only be confirmed once Vincent reloads the
   Reports page against production.
 
+  **Correction, same day**: this did NOT fix it. Vincent reloaded and got
+  the identical error, both attempts ("AI analysis failed after retry:
+  Claude returned an empty analysis."), meaning it's deterministic given
+  the current data/schema, not a one-off. Neither hypothesized cause above
+  is confirmed wrong — there's still no way to know, because this file had
+  **zero server-side logging** on this failure path: `callClaude()` just
+  threw a fixed string, so even Vercel's own function logs had nothing
+  beyond what the user already saw on screen. Two things landed in the
+  immediate follow-up, one load-bearing and one speculative:
+
+  - **Load-bearing**: `callClaude()` now logs (`console.error`, visible in
+    Vercel's Function/Runtime logs) `stop_reason` and either the response's
+    content-block types (if no `tool_use` block was found at all) or the
+    actual keys and a truncated JSON dump of `tool_use.input` (if a
+    tool_use block WAS found but `insights` came back missing/empty — the
+    branch this bug has hit twice now). This is the only way this bug gets
+    diagnosed with real data instead of a third guess; nothing here proves
+    a specific root cause yet.
+  - **Speculative, explicitly not confirmed**: added a required
+    `planningNotes` scratch-string field as the FIRST property in
+    `ANALYSIS_TOOL.input_schema` (`lib/reports-narrative.ts`), stripped
+    out of the result before it's ever returned. Forced `tool_choice`
+    gives Claude no free chain-of-thought pass before generating tool
+    arguments — it plans and writes simultaneously — and `insights[]` asks
+    for a lot per item (14 required fields, bilingual, FACT/INFERENCE/
+    HYPOTHESIS/ACTION structure) with previously zero scratch space; a
+    documented weakness of forced tool-use on complex schemas, and a
+    standard (if unverified here) mitigation. **Do not treat this as a
+    confirmed fix in any future entry** until it's actually verified
+    against a live response — if it recurs a third time, the logging above
+    is what should drive the next actual diagnosis, not another schema
+    guess.
+  - `npx tsc --noEmit`, `npx eslint lib/reports-narrative.ts`, `npm run
+    build` (cold) all clean; all 11 `test-reports-narrative-guards.ts`
+    cases unchanged and passing (still only exercises `validateNarrative()`
+    — cannot exercise either change above, which both live inside
+    `callClaude()`). Confirmation is, again, only possible via Vincent
+    reloading the Reports page against production.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined
