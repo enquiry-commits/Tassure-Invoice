@@ -1018,24 +1018,46 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       <div style={{ padding: '0 6px', textAlign: 'center' }}>
                         <SoaReminderGroupStatus items={group.rows.map(row => ({ source: rowCompany(row), progress: row.reminderProgress }))} />
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 4, flexWrap: 'nowrap', whiteSpace: 'nowrap' }}>
-                        {sources.map(source => {
-                          const key = `${group.key}:${source}`;
-                          const isDownloading = downloadingBadges.has(key);
-                          const badgeError = badgeDownloadErrors[key];
-                          return (
-                            <button key={source} title={badgeError ?? `Download ${source} SOA PDF`}
-                              onClick={event => { event.stopPropagation(); void downloadSourceBadge(key, group.companyName, source); }}
-                              disabled={isDownloading}
-                              style={{
+                      {/* ONE click target for the whole badge group, not one
+                          button per badge — Vincent, 2026-09-23, after seeing
+                          the first version: "这个我看到，还是被当成两个来单
+                          独按，我希望是可以变成一个区块，不管我按左按右，只
+                          要在这个范围点击就是自动两个PDF一起下载" (still
+                          being treated as two separate presses — wants one
+                          block where clicking anywhere, left or right,
+                          downloads all the books' PDFs together). A single
+                          click now fires downloadSourceBadge() once per
+                          source in this group (2 separate PDF files, not the
+                          existing combined-into-one-PDF 'ALL' option — he
+                          asked for "两个PDF一起下载", two PDFs, not one merged
+                          one). Each pill still shows its OWN per-book
+                          loading/error state (so if TAB succeeds and TAO
+                          fails, only the TAO pill turns red) — only the click
+                          target and disabled state are now shared. */}
+                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <button
+                          title={sources.length > 1 ? `Download ${sources.join(' + ')} SOA PDFs` : `Download ${sources[0]} SOA PDF`}
+                          onClick={event => {
+                            event.stopPropagation();
+                            for (const source of sources) void downloadSourceBadge(`${group.key}:${source}`, group.companyName, source);
+                          }}
+                          disabled={sources.some(source => downloadingBadges.has(`${group.key}:${source}`))}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap', whiteSpace: 'nowrap', border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}>
+                          {sources.map(source => {
+                            const key = `${group.key}:${source}`;
+                            const isDownloading = downloadingBadges.has(key);
+                            const badgeError = badgeDownloadErrors[key];
+                            return (
+                              <span key={source} style={{
                                 display: 'inline-flex', alignItems: 'center', gap: 3, flex: '0 0 auto', fontSize: 9.5, fontWeight: 800,
-                                padding: '2px 6px', borderRadius: 5, border: 'none', cursor: isDownloading ? 'default' : 'pointer',
+                                padding: '2px 6px', borderRadius: 5,
                                 background: badgeError ? 'var(--status-danger-tint)' : '#dfe7f0', color: badgeError ? 'var(--status-danger)' : '#1e3a5f',
                               }}>
-                              {isDownloading ? <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} /> : source}
-                            </button>
-                          );
-                        })}
+                                {isDownloading ? <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} /> : source}
+                              </span>
+                            );
+                          })}
+                        </button>
                       </div>
                       {AGING_BUCKETS.map(bucket => {
                         const value = combined.aging[bucket.key];

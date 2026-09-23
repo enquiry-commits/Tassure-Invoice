@@ -1822,6 +1822,30 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Corrected same-day: the multi-source group row's Source badges are
+  now ONE click target, not still-separate buttons.** Vincent, after
+  seeing the first version: "这个我看到，还是被当成两个来单独按，我希望是
+  可以变成一个区块，不管我按左按右，只要在这个范围点击就是自动两个PDF一
+  起下载" (still treated as two separate presses — wants one block where
+  clicking anywhere, left or right, downloads all the books' PDFs
+  together). Each pill (TAB/TAO/TAC) is now a plain, non-interactive
+  `<span>` wrapped in ONE outer `<button>` that fires
+  `downloadSourceBadge()` once per source when clicked — 2 separate PDF
+  files download for a 2-source group (not the existing merged-into-one
+  `'ALL'` option; he explicitly asked for "两个PDF一起下载", two PDFs, not
+  one combined one). Every pill still shows its OWN per-book loading/error
+  color independently (so a TAB success + TAO failure only turns the TAO
+  pill red) — only the click target and disabled state are now shared.
+  Per-source/child rows (only ever one badge each) were already correct
+  and untouched. **Verified empirically**: built a minimal isolated HTML
+  reproduction (button wrapping 2 spans, deleted after use), clicked
+  directly on the SECOND span, and confirmed the outer button's single
+  handler fires exactly once via normal event bubbling — proving either
+  side of the merged badge triggers the same combined download, not just
+  the button's own padding area. `npx tsc --noEmit` clean, `npx eslint`
+  clean (same 2 pre-existing warnings elsewhere in the file), `npm run
+  build` (cold) clean.
+
 - **SOA Outstanding > All: each Source badge (TAB/TAC/TAO) is now a
   one-click PDF download**, per Vincent's screenshots + "我希望是连接这
   SOA PDF的链接...置入到 Source 的列内，点击 TAB就会和点击（Download SOA
