@@ -1804,6 +1804,42 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Reports' AI Analysis switched from Anthropic to OpenAI (INV-DATA-062),
+  while the bug below was still unresolved.** Vincent: "额度用完了，那么先
+  换成 Open Ai 去生成 Report 这边的Ai分析" (Anthropic credit ran out,
+  switch to OpenAI for this feature for now) — a plausible real
+  explanation for INV-DATA-061's "empty analysis" symptom, though never
+  confirmed against actual logs (the Vercel API token on file could list
+  deployments but not read runtime logs or env vars — a narrower grant
+  than expected, chased and abandoned rather than spending more time on
+  it). `lib/reports-narrative.ts`'s `generateReportsNarrative()` now calls
+  a new `callOpenAI()` instead of `callClaude()`, reusing the SAME shared
+  `lib/ai/openai.ts` helper (`openAIJson`) the My Tasks assistant's own
+  synthesis step already uses in production — not a new integration. New
+  `OPENAI_ANALYSIS_SCHEMA` mirrors the Anthropic tool schema's fields
+  exactly (same descriptions, same `planningNotes` scratch field, same
+  `driverZh`/`driverEn` `""` -> `null` convention via the same shared
+  `normalizeInsight()`) in OpenAI's strict-mode shape (`additionalProperties:
+  false` + every field in `required`, at EVERY object level including the
+  nested insight items). `maxOutputTokens: 4096` explicitly set — the
+  helper's own default (1200) is sized for smaller schemas elsewhere and
+  would likely truncate this one. Also fixed a real, separate bug found
+  while wiring this up: `reports_narrative_cache.model` was a hardcoded
+  `process.env.ASSISTANT_MODEL || 'claude-sonnet-5'` string, which would
+  have silently mislabeled every OpenAI-generated row — now exported as
+  `ACTIVE_NARRATIVE_MODEL` from the model actually used.
+  `callClaude()`/`ANALYSIS_TOOL` are deliberately KEPT (not deleted) —
+  Vincent said "先" (for now); reverting is meant to be a one-line change
+  in `attempt()`. `npx tsc --noEmit`, `npx eslint` (both changed files),
+  `npm run build` (cold) all clean; the same 11
+  `test-reports-narrative-guards.ts` cases still pass (provider-agnostic).
+  **Not verified against a real live OpenAI call** — same
+  `OPENAI_API_KEY`-not-available-locally limitation as every other AI
+  change this session; whether `OPENAI_API_KEY` is even configured in
+  Vercel production was inferred (My Tasks' own OpenAI features already
+  ship there) rather than directly confirmed. Full details:
+  `docs/INVARIANTS.md` INV-DATA-062.
+
 - **Fixed a live production bug from the Phase 1 ship above: AI Analysis
   card showing "Claude returned an empty analysis." (INV-DATA-061).**
   Vincent, hours after Phase 1 deployed: "vercel 通过了，但是" + a

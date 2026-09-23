@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
 import { computeReportsData } from '@/app/api/reports/route';
-import { generateReportsNarrative, type ReportsNarrative } from '@/lib/reports-narrative';
+import { generateReportsNarrative, ACTIVE_NARRATIVE_MODEL, type ReportsNarrative } from '@/lib/reports-narrative';
 
 export const preferredRegion = 'sin1';
 
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
     const data = await computeReportsData();
     const narrative = await generateReportsNarrative(data);
     const now = new Date().toISOString();
-    const { error: insertErr } = await sb.from('reports_narrative_cache').insert({ narrative: JSON.stringify(narrative), model: process.env.ASSISTANT_MODEL || 'claude-sonnet-5', generated_at: now });
+    const { error: insertErr } = await sb.from('reports_narrative_cache').insert({ narrative: JSON.stringify(narrative), model: ACTIVE_NARRATIVE_MODEL, generated_at: now });
     if (insertErr) {
       // A failed cache WRITE must not throw away a real, already-generated
       // analysis — the reader still gets today's write-up, it just won't be

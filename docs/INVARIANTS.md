@@ -2668,6 +2668,59 @@ again.
     `callClaude()`). Confirmation is, again, only possible via Vincent
     reloading the Reports page against production.
 
+- **INV-DATA-062** — Reports' AI Analysis provider switched from Anthropic
+  to OpenAI, 2026-09-23, per Vincent's explicit instruction: "额度用完了，
+  那么先换成 Open Ai 去生成 Report 这边的Ai分析" (Anthropic credit ran out,
+  switch to OpenAI for this feature for now). This was decided while
+  INV-DATA-061's "Claude returned an empty analysis" was STILL an open,
+  unconfirmed bug — Vincent's own explanation (exhausted Anthropic
+  credits) is a genuinely plausible root cause for that exact symptom (a
+  quota-exhausted account can plausibly produce a degenerate/empty
+  tool-use response rather than a clean HTTP error), though this was never
+  confirmed against real Vercel logs — the two hypothesized code-level
+  fixes in INV-DATA-061 remain unverified, not proven wrong.
+  - `lib/reports-narrative.ts`'s `generateReportsNarrative()` now calls a
+    new `callOpenAI()` (via `attempt()`) instead of `callClaude()`, using
+    the SAME shared `lib/ai/openai.ts` helper (`openAIJson()`) the My
+    Tasks assistant's own synthesis step already uses in production
+    (INV-AI-003) — not a new integration, a second caller of an existing
+    one. Model: `openAIModel('primary')` (`OPENAI_ASSISTANT_MODEL` env var,
+    default `gpt-5.6-terra`), exported as `ACTIVE_NARRATIVE_MODEL` so
+    `app/api/reports/narrative/route.ts`'s cache-row `model` field records
+    the real generating model instead of a stale hardcoded Anthropic name
+    (a real, separate mislabeling bug this fix also closed).
+  - New `OPENAI_ANALYSIS_SCHEMA` mirrors `ANALYSIS_TOOL`'s fields
+    (identical semantics/descriptions, same `planningNotes` scratch field,
+    same `driverZh`/`driverEn` "" -> null convention via the same shared
+    `normalizeInsight()`) but in OpenAI Structured Outputs' strict-mode
+    shape: `additionalProperties: false` on every object level (top-level
+    AND each insight item — a real, silent gap if omitted on the nested
+    one) and every property listed in `required` (strict mode has no
+    concept of an optional field). `maxOutputTokens: 4096` explicitly
+    overridden — `openAIJson()`'s own default (1200) is sized for much
+    smaller schemas elsewhere in this codebase and would very likely
+    truncate this one, the same class of risk INV-DATA-061 already raised
+    for the Anthropic side.
+  - `callClaude()`/`ANALYSIS_TOOL` are DELIBERATELY KEPT, not deleted —
+    Vincent said "先" (for now), implying Anthropic may return once
+    credits are restored. Reverting is meant to be a one-line change in
+    `attempt()` (`callOpenAI` -> `callClaude`), not a rebuild. Marked with
+    an `eslint-disable-next-line no-unused-vars` on `callClaude` itself
+    (genuinely unused right now, not oversight) rather than deleted.
+  - **Not verified against a real live OpenAI call** — same
+    `OPENAI_API_KEY`-not-available-locally limitation this file already had
+    for `ANTHROPIC_API_KEY`. Also could not directly confirm
+    `OPENAI_API_KEY` is actually configured in Vercel production — the
+    Vercel API token on file could list deployments but returned "Could
+    not retrieve Project Settings" for `vercel env ls`, a narrower grant
+    than expected; inferred (not confirmed) from the fact that the My
+    Tasks assistant's own OpenAI-backed features already ship successfully
+    in production. `npx tsc --noEmit`, `npx eslint` (both changed files),
+    `npm run build` (cold) all clean; the same 11
+    `test-reports-narrative-guards.ts` cases pass unchanged
+    (provider-agnostic — only exercises `validateNarrative()`).
+    Confirmation is only possible via Vincent reloading the Reports page.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

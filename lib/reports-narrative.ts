@@ -1,6 +1,7 @@
 import 'server-only';
 import type { ReportsData } from '@/app/api/reports/route';
 import { METRIC_CATALOGUE, getMetric } from '@/lib/metric-catalogue';
+import { openAIJson, openAIModel } from '@/lib/ai/openai';
 
 /**
  * Turns Reports' own numbers into a written analysis — Vincent, after
@@ -40,9 +41,32 @@ import { METRIC_CATALOGUE, getMetric } from '@/lib/metric-catalogue';
  * comparableYoy.comparable is false gets rejected; an unrelated
  * percentage (e.g. "Tax usage = 49.8%", a point-in-time service_mix
  * figure) must never be flagged just for containing a "%" sign.
+ *
+ * PROVIDER SWITCHED TO OPENAI, 2026-09-23 ("额度用完了，那么先换成 Open Ai
+ * 去生成 Report 这边的Ai分析" — Anthropic credit ran out, switch to OpenAI
+ * for this feature for now). This was decided WHILE "Claude returned an
+ * empty analysis" was still an open, unconfirmed bug two fix attempts had
+ * failed to resolve — Vincent's own explanation (exhausted credits) may
+ * well BE the real root cause of that bug (a 200 OK with a degenerate/
+ * empty tool-use response is a plausible shape for a quota-exhausted
+ * account, though this was never confirmed against real logs). Either
+ * way, `generateReportsNarrative()` now calls `callOpenAI()` via the same
+ * `lib/ai/openai.ts` helper the My Tasks assistant's own synthesis step
+ * already uses in production (INV-AI-003) — same "tool facts are
+ * authoritative" discipline, same JSON-schema-strict structured-output
+ * approach. `callClaude()`/`ANALYSIS_TOOL` below are DELIBERATELY KEPT,
+ * not deleted — Vincent said "先" (for now), implying Anthropic may come
+ * back once credits are restored; switching the active provider back is
+ * meant to be a one-line change (in `attempt()`), not a rewrite.
  */
 
 const NARRATIVE_MODEL = process.env.ASSISTANT_MODEL || 'claude-sonnet-5';
+// The model actually producing the narrative right now — exported so
+// app/api/reports/narrative/route.ts can record accurate provenance in
+// reports_narrative_cache.model instead of the old hardcoded Anthropic
+// model name, which would otherwise silently mislabel every OpenAI-
+// generated row as "claude-sonnet-5".
+export const ACTIVE_NARRATIVE_MODEL = openAIModel('primary');
 
 export type ReportsSignal = 'good' | 'watch' | 'warning';
 export type ReportsConfidence = 'high' | 'medium' | 'low';
@@ -125,6 +149,56 @@ function summarizeForPrompt(data: ReportsData) {
   };
 }
 
+// OpenAI Structured Outputs (strict mode) requires every property in
+// `required` (no truly optional fields — same "" -> null sentinel
+// convention as the Anthropic schema below covers nullability) and
+// `additionalProperties: false` on EVERY object level, not just the top
+// one — omitting it on a nested object is a real, silent validation gap
+// under strict mode, so it's repeated on both the top-level object and
+// each insight item below. Field descriptions are intentionally the same
+// text as ANALYSIS_TOOL's — same semantics, two provider-specific shapes.
+const OPENAI_ANALYSIS_SCHEMA = {
+  type: 'object' as const,
+  additionalProperties: false,
+  properties: {
+    planningNotes: {
+      type: 'string' as const,
+      description: '内部草稿区，不会展示给用户——正式填写 insights 之前，先在这里用几句话想清楚：这次数据里最值得报告的2-4个方向分别是什么、每个大致的 signal/confidence、driver 有没有把握（没把握就打算留空）。想清楚了再往下正式填写。',
+    },
+    insights: {
+      type: 'array' as const,
+      minItems: 2, maxItems: 4,
+      items: {
+        type: 'object' as const,
+        additionalProperties: false,
+        properties: {
+          signal: { type: 'string' as const, enum: ['good', 'watch', 'warning'], description: '这条洞察本身重不重要/要不要关注——good=健康, watch=需要留意, warning=需要注意的风险' },
+          confidence: { type: 'string' as const, enum: ['high', 'medium', 'low'], description: '独立于 signal 的判断：这个结论本身有多可靠？一条 warning 级别的信号完全可以只有 medium/low 置信度（问题真实存在，但原因还不确定）' },
+          titleZh: { type: 'string' as const, description: '一句话标题，不超过16个汉字，不是完整句子，是标签式短语' },
+          titleEn: { type: 'string' as const, description: 'Short headline, under 8 words, phrase not a sentence' },
+          observedZh: { type: 'string' as const, description: 'FACT——直接来自数据的客观陈述，带具体数字，不包含任何解读或原因推测' },
+          observedEn: { type: 'string' as const, description: 'FACT — an objective, data-grounded statement with specific numbers, no interpretation or causal reasoning' },
+          metricRefs: { type: 'array' as const, items: { type: 'string' as const }, description: '这条 insight 引用的真实 metricId 列表（必须来自下面给你的 citableMetrics，不能编造）——observed 里提到的每个数字都应该能在这里找到对应的 metricId' },
+          driverZh: { type: 'string' as const, description: 'INFERENCE——对 observed 事实的合理解读，必须有把握才写；如果证据不足以支撑任何解读，就填空字符串 ""，绝不为了填满这个字段而编一个原因' },
+          driverEn: { type: 'string' as const, description: 'INFERENCE — a reasonable read of the observed fact; use an empty string "" if the evidence does not actually support any interpretation, never invent one to fill the field' },
+          notYetProvenZh: { type: 'array' as const, items: { type: 'string' as const }, description: 'HYPOTHESIS——尚未证实的可能解释列表，每条都是一个具体的、未来可以去验证的可能性' },
+          notYetProvenEn: { type: 'array' as const, items: { type: 'string' as const }, description: 'HYPOTHESIS — a list of specific, not-yet-proven possible explanations, each independently verifiable later' },
+          nextActionZh: { type: 'string' as const, description: 'ACTION——具体的下一步分析或操作建议，不是泛泛的"持续关注"' },
+          nextActionEn: { type: 'string' as const, description: 'ACTION — a concrete next analysis or operational step, not generic "keep monitoring"' },
+        },
+        required: ['signal', 'confidence', 'titleZh', 'titleEn', 'observedZh', 'observedEn', 'metricRefs', 'driverZh', 'driverEn', 'notYetProvenZh', 'notYetProvenEn', 'nextActionZh', 'nextActionEn'],
+      },
+    },
+    summaryZh: { type: 'string' as const, description: '1句话范围说明：这份分析基于什么数据，不涉及什么（成本/利润率等）' },
+    summaryEn: { type: 'string' as const, description: '1-sentence scope note: what this analysis is based on and what it does not cover (cost/margin etc.)' },
+  },
+  required: ['planningNotes', 'insights', 'summaryZh', 'summaryEn'],
+};
+
+// Kept but NOT currently called — see the file header's 2026-09-23 note.
+// This is a working, previously-shipped Anthropic implementation, not
+// dead code; reverting the provider back is meant to be a one-line change
+// in attempt() below, not rebuilding this from scratch.
 const ANALYSIS_TOOL = {
   name: 'submit_analysis',
   description: 'Submit the structured financial/business analysis for the Reports page.',
@@ -276,6 +350,9 @@ function normalizeInsight(insight: ReportsInsight): ReportsInsight {
   };
 }
 
+// Kept for a one-line revert back to Anthropic (see file header + attempt()
+// below), not dead code left behind by an incomplete refactor.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function callClaude(system: string, evidence: unknown): Promise<ReportsNarrative> {
   const apiKey = process.env.ANTHROPIC_API_KEY!;
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -335,19 +412,48 @@ async function callClaude(system: string, evidence: unknown): Promise<ReportsNar
   return { ...narrative, insights: narrative.insights.map(normalizeInsight) };
 }
 
-// One attempt: call Claude, then validate. Returns the narrative on success,
-// or the reason it failed (a thrown error from callClaude — API error,
-// malformed/empty tool-use response — OR a validateNarrative() rule
-// violation) so generateReportsNarrative() can retry EITHER kind uniformly.
-// Previously only a validation failure retried; a thrown error propagated
-// immediately with zero retry attempts, so a one-off transient/malformed
-// response (the more recoverable case, not a substantive rule violation)
-// got the worse treatment. Found live 2026-09-23 alongside the driverZh/En
-// schema bug via the same screenshot ("Claude returned an empty analysis").
+// Active provider since 2026-09-23 — see the file header. Same structured-
+// output approach as callClaude() (forced schema, planningNotes scratch
+// field, "" -> null driver convention via the shared normalizeInsight()),
+// via the shared lib/ai/openai.ts helper already proven in production by
+// the My Tasks assistant's own synthesis step.
+async function callOpenAI(system: string, evidence: unknown): Promise<ReportsNarrative> {
+  const result = await openAIJson<ReportsNarrative & { planningNotes?: string }>({
+    model: ACTIVE_NARRATIVE_MODEL,
+    schemaName: 'reports_analysis',
+    schema: OPENAI_ANALYSIS_SCHEMA,
+    instructions: system,
+    input: `这是本次 Reports 的真实数据：\n\n${JSON.stringify(evidence, null, 2)}\n\n请提交你的分析。`,
+    // Same reasoning as callClaude()'s max_tokens: 14 required bilingual
+    // fields per insight, up to 4 insights, is a large structured output —
+    // openAIJson()'s own default (1200) is sized for much smaller schemas
+    // elsewhere in this codebase and would very likely truncate this one.
+    maxOutputTokens: 4096,
+    timeoutMs: 55_000,
+  });
+  if (!Array.isArray(result.insights) || !result.insights.length) {
+    console.error('[reports-narrative] openai returned no usable insights', { keys: Object.keys(result) });
+    throw new Error('OpenAI returned an empty analysis.');
+  }
+  const narrative: ReportsNarrative = { insights: result.insights, summaryZh: result.summaryZh, summaryEn: result.summaryEn };
+  return { ...narrative, insights: narrative.insights.map(normalizeInsight) };
+}
+
+// One attempt: call the active provider, then validate. Returns the
+// narrative on success, or the reason it failed (a thrown error — API
+// error, malformed/empty structured response — OR a validateNarrative()
+// rule violation) so generateReportsNarrative() can retry EITHER kind
+// uniformly. Previously only a validation failure retried; a thrown error
+// propagated immediately with zero retry attempts, so a one-off transient/
+// malformed response (the more recoverable case, not a substantive rule
+// violation) got the worse treatment. Found live 2026-09-23 alongside the
+// driverZh/En schema bug via the same screenshot ("Claude returned an
+// empty analysis"). To revert to Anthropic, change callOpenAI to callClaude
+// on the next line — everything else in this function is provider-agnostic.
 async function attempt(system: string, evidence: unknown, data: ReportsData): Promise<{ narrative: ReportsNarrative } | { narrative: null; errors: string[] }> {
   let narrative: ReportsNarrative;
   try {
-    narrative = await callClaude(system, evidence);
+    narrative = await callOpenAI(system, evidence);
   } catch (err) {
     return { narrative: null, errors: [err instanceof Error ? err.message : String(err)] };
   }
@@ -357,7 +463,7 @@ async function attempt(system: string, evidence: unknown, data: ReportsData): Pr
 }
 
 export async function generateReportsNarrative(data: ReportsData): Promise<ReportsNarrative> {
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured — the AI analysis cannot run.');
+  if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured — the AI analysis cannot run.');
 
   const evidence = summarizeForPrompt(data);
   const system = buildSystemPrompt();
