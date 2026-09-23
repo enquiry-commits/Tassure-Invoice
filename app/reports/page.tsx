@@ -419,7 +419,9 @@ export default function ReportsPage() {
     nextActionZh: string; nextActionEn: string;
   };
   const [narrative, setNarrative] = useState<{ insights: NarrativeInsight[]; summaryZh: string; summaryEn: string; generatedAt: string } | null>(null);
-  const [narrativeLang, setNarrativeLang] = useState<'zh' | 'en'>('zh');
+  // Defaults to English (2026-09-23, Vincent: "这部分显示以英文为先，用户
+  // 有需要才自行切换成中文") — users switch to Chinese themselves if needed.
+  const [narrativeLang, setNarrativeLang] = useState<'zh' | 'en'>('en');
   const [narrativeLoading, setNarrativeLoading] = useState(true);
   const [narrativeError, setNarrativeError] = useState<string | null>(null);
   // Separate from narrativeLoading (the initial page-load fetch) — a manual
