@@ -1941,13 +1941,22 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
           <div style={{ minWidth: isMobile ? undefined : 1320 }}>
           {!isMobile && <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: billingListColumns, columnGap: 10, padding: '10px 14px', borderLeft: '3px solid transparent', alignItems: 'center' }}>
-            {['', 'Company Name', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC', 'Remarks', ''].map((h, i) => (
-              i === 5
-                ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>ND (TAC)</div>
-                : (i >= 2 && i <= 8)
-                ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>{h}</div>
-                : <div key={i} style={{ padding: '0 6px' }}>{h}</div>
-            ))}
+            {(() => {
+              const headers = ['', 'Company Name', 'Billing Status', 'FYE', 'Renewal Services', '', 'Annual Obligations', 'TAB Invoice', 'TAC Invoice', 'PIC', 'Remarks', ''];
+              // Last column (the Mail-icon header slot, always blank) is
+              // sticky-right to match the row's own sticky Mail-icon cell
+              // below — see that cell's own comment for why. No explicit
+              // background needed, .list-column-header-gray > * already
+              // sets one on every header cell.
+              return headers.map((h, i) => {
+                const stickyStyle = i === headers.length - 1 ? { position: 'sticky' as const, right: 0, zIndex: 1 } : {};
+                return i === 5
+                  ? <div key={i} style={{ padding: '0 6px', textAlign: 'center' }}>ND (TAC)</div>
+                  : (i >= 2 && i <= 8)
+                  ? <div key={i} style={{ padding: '0 6px', textAlign: 'center', ...stickyStyle }}>{h}</div>
+                  : <div key={i} style={{ padding: '0 6px', ...stickyStyle }}>{h}</div>;
+              });
+            })()}
           </div>}
           {loading && !data && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>}
           {!loading && arList.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>No AR Reminder batch for {month} {year}. Generate/review it on the AR Reminder tab first.</div>}
@@ -2068,7 +2077,22 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                   <div style={{ padding: '0 6px' }} onClick={e => e.stopPropagation()}>
                     <EditField id={c.companyId} field="billing_remarks" value={c.billingRemarks} onSave={handleArSave} multiline />
                   </div>
-                  <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+                  {/* Sticky to the scroll container's right edge — 2026-09-23,
+                      Vincent: this is the LAST column of a wide fixed-width
+                      grid (billingListColumns), so on a narrower viewport
+                      (e.g. the sidebar expanded, eating into content width)
+                      it sat past the visible edge, forcing a horizontal
+                      scroll (or browser zoom-out, his workaround) just to
+                      reach the Draft Email icon — same fix as the SOA pages'
+                      own Mail-icon column (app/billing/soa/_components.tsx).
+                      Still a valid positioning context for the popover's own
+                      `position: absolute` below — sticky establishes one the
+                      same way relative did. backgroundColor: 'inherit' picks
+                      up whatever this row's own background currently is
+                      (default/hover/selected, set via CSS classes with
+                      !important) so the pinned cell never shows a mismatched
+                      patch as other columns scroll underneath it. */}
+                  <div style={{ position: 'sticky', right: 0, zIndex: 1, backgroundColor: 'inherit', display: 'flex', justifyContent: 'center' }}>
                     <button title="Email Drafts" onClick={e => {
                         e.stopPropagation();
                         setDraftError(null); setNeedsManualEmail(false); setManualToEmail(''); setManualCcEmail(''); setPreviewRow(null);

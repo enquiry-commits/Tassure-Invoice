@@ -2903,6 +2903,51 @@ again.
   bigger, unrequested task. `npx tsc --noEmit`, `npx eslint`, `npm run
   build` (cold) all clean.
 
+- **INV-DATA-065** — A wide, horizontally-scrollable `display: grid` list
+  (fixed-px `gridTemplateColumns`, wrapped in `.system-list-scroll`'s
+  `overflow: auto`) must give its trailing interactive column (a Mail/
+  action icon) `position: sticky; right: 0; background-color: inherit`,
+  not leave it as a plain cell at the natural end of the grid. Found live
+  2026-09-23: Vincent — "当被挤压到宽度，信封就会出现在不对的位置...就是
+  导致我每次要在浏览器ZOOM小画面尺寸" (when squeezed for width, the
+  envelope icon ends up in the wrong position, forcing him to zoom the
+  browser out every time). Root cause, confirmed by computing the real
+  minimum width: `app/billing/soa/_components.tsx`'s `soaListColumns` (14
+  columns, mostly fixed px) sums to ~1650px of REQUIRED width — comfortably
+  wider than the available content area once the sidebar is expanded (less
+  space left for `<main>`). The table already scrolls horizontally
+  correctly, but the Mail-icon column — the very LAST column, 36px wide —
+  sat at the natural end of that scroll, so reaching it required either
+  scrolling all the way right or (Vincent's own workaround) zooming the
+  whole browser out to shrink everything enough to fit without scrolling.
+  `app/billing/page.tsx`'s Billing Drafts row (`billingListColumns`, same
+  fixed-grid pattern, same trailing Mail-icon column) has the identical
+  structural bug — Vincent confirmed directly: "其实这个情况不只是出现在
+  这个页面" (this isn't only happening on this one page). Fixed in both
+  files (both the header's blank trailing cell AND every row variant's
+  Mail-icon cell — SOA's group row, SOA's per-source child row, and
+  Billing Drafts' row) by adding `position: 'sticky', right: 0, zIndex: 1,
+  backgroundColor: 'inherit'` to that one cell — `backgroundColor:
+  'inherit'` rather than a hardcoded color specifically because
+  `.system-list-row`'s own background (default/hover/selected/
+  soa-group-open/soa-group-child, all `!important`-guarded CSS classes)
+  varies per row state, and `inherit` tracks the parent's live computed
+  value automatically instead of needing to be kept in sync by hand.
+  **Verified empirically, not just reasoned about** — built an isolated
+  static HTML reproduction (real CSS custom properties, real
+  `soaListColumns` grid template, deleted after use) in the browser tool
+  and drove `scrollLeft` directly via JS to a PARTIAL scroll position
+  (enough to reveal Source through Total, well before PIC/Main PIC/
+  Remarks); without the fix the Mail icon would only appear after
+  scrolling all the way right, but with it, it stayed pinned at the right
+  edge at every scroll position tested, exactly the desired behavior. This
+  same technique (sticky-right on a wide grid's trailing action column)
+  applies to any FUTURE wide `display: grid` list in this codebase with a
+  small trailing icon/action column — worth applying proactively rather
+  than waiting for the same zoom-workaround complaint again. `npx tsc
+  --noEmit`, `npx eslint` (both changed files), `npm run build` (cold) all
+  clean.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

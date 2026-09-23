@@ -784,7 +784,13 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             <SoaRemarksInput value={c.remarks} onSave={value => updateSoaRemarks(c.companyName, value)} />
           </div>
         )}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
+        {/* Sticky to the scroll container's right edge — same fix and
+            reasoning as the group row's own Mail-icon cell above. Applied
+            unconditionally (this cell renders for both child and non-child
+            rows via renderSourceRow) so the column band stays visually
+            consistent as the row scrolls horizontally, even on a child row
+            where the popover itself is intentionally omitted below. */}
+        <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 1, backgroundColor: 'inherit' }}>
           {/* Vincent, 2026-09-23: only the combined/Total row needs its own
               Draft Email icon — a per-source child row (TAB source balance,
               TAO source balance, etc.) drafting separately would split one
@@ -903,9 +909,14 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
               {(qbCompany === 'ALL'
                 ? ['', 'Company Name', 'Reminder', 'Source', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', 'Remarks', '']
                 : ['', 'Company Name', 'Reminder', ...AGING_BUCKETS.map(b => b.label), 'Total', 'PIC', 'Main PIC', 'Remarks', '']
-              ).map((h, i) => {
+              ).map((h, i, all) => {
                 const isCenter = h !== '' && h !== 'Company Name' && h !== 'Remarks';
-                return <div key={i} style={{ padding: '0 6px', textAlign: isCenter ? 'center' : 'left' }}>{h}</div>;
+                // Last column (the Mail-icon header slot, always blank) is
+                // sticky-right to match the body cells below it — no
+                // explicit background needed, .list-column-header-gray > *
+                // already sets one on every header cell.
+                const isLast = i === all.length - 1;
+                return <div key={i} style={{ padding: '0 6px', textAlign: isCenter ? 'center' : 'left', ...(isLast ? { position: 'sticky' as const, right: 0, zIndex: 1 } : {}) }}>{h}</div>;
               })}
             </div>
             {companies === null && <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>}
@@ -991,7 +1002,18 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       <div style={{ padding: '0 6px' }} onClick={event => event.stopPropagation()}>
                         <SoaRemarksInput value={group.rows[0].remarks} onSave={value => updateSoaRemarks(group.companyName, value)} />
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      {/* Sticky to the scroll container's right edge — 2026-09-23,
+                          Vincent: this is the LAST column of a wide fixed-width
+                          grid (soaListColumns), so on a narrower viewport (e.g.
+                          the sidebar expanded, eating into content width) it sat
+                          past the visible edge, forcing a horizontal scroll (or
+                          browser zoom-out, his workaround) just to reach the
+                          Draft Email icon. backgroundColor: 'inherit' picks up
+                          whatever this row's own background currently is
+                          (default/hover/soa-group-open, all set via CSS classes
+                          with !important) so the pinned cell never shows a
+                          mismatched patch as other columns scroll underneath it. */}
+                      <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 1, backgroundColor: 'inherit' }}>
                         <SoaDraftPopover
                           company={combined} qbCompany={draftScope} me={draftPickers.me}
                           senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}

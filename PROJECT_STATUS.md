@@ -1822,6 +1822,34 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Fixed the Mail-icon column getting squeezed out of view on wide list
+  tables when the sidebar is expanded (INV-DATA-065).** Vincent: "当被挤
+  压到宽度，信封就会出现在不对的位置...就是导致我每次要在浏览器ZOOM小画面
+  尺寸" (squeezed for width, the envelope icon lands in the wrong place —
+  forces him to zoom the browser out every time) — confirmed happening on
+  both SOA Outstanding (`app/billing/soa/_components.tsx`) and Billing
+  Drafts (`app/billing/page.tsx`): "其实这个情况不只是出现在这个页面."
+  Root cause: both pages' list rows use a wide, mostly-fixed-px `display:
+  grid` (~1650px real minimum width for SOA) inside a horizontally-
+  scrollable container — correct on its own, but the trailing Mail-icon
+  column (36-38px, the very last column) just sat at the natural end of
+  that scroll, so reaching it needed scrolling all the way right, which on
+  a narrower viewport (sidebar expanded) Vincent was instead working
+  around by zooming the whole browser out. Fixed by making that one cell
+  (header + every row variant: SOA's group row, SOA's per-source child
+  row, Billing Drafts' row) `position: sticky; right: 0;
+  background-color: inherit` — pinned to the scroll container's right
+  edge regardless of scroll position, `inherit` so it automatically
+  tracks whichever of the row's own background states (default/hover/
+  selected/etc., all CSS-class-driven) currently applies. **Verified
+  empirically** — built an isolated HTML reproduction with the real CSS
+  variables and grid template, drove `scrollLeft` via JS to a partial
+  scroll position, and confirmed the icon stays pinned at every position
+  tested (not just reasoned about from reading the CSS). `npx tsc
+  --noEmit`, `npx eslint`, `npm run build` (cold) all clean. Full details
+  incl. the reusable pattern for future wide tables: `docs/INVARIANTS.md`
+  INV-DATA-065.
+
 - **Fixed a real status-default bug: moving a company to Strike Off
   claimed "STRUCK OFF" before TeamWork ever confirmed it (INV-DATA-064).**
   Vincent flagged YOUWE SOLUTIONS PTE. LTD showing "STRUCK OFF" on the
