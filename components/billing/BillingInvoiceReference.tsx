@@ -74,7 +74,19 @@ export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'inv
         background: status === 'error' ? '#fee2e2' : '#f2f6f8',
         color: status === 'error' ? '#b91c1c' : '#31506f',
         fontSize: 9.5, fontWeight: 800, lineHeight: 1.25, whiteSpace: 'nowrap',
-        opacity: muted ? 0.72 : 1, border: 'none', cursor: status === 'loading' ? 'wait' : 'pointer',
+        opacity: muted ? 0.72 : 1,
+        // Visible border, 2026-09-23 — Vincent, after seeing the new
+        // Source-badge outline on Company 360's Outstanding table: "那个按
+        // 钮轮廓好看很多，能不能把INVOICE 的也设计成这种按钮UI轮廓，但是文字
+        // 不变...这个要作用全部的页面，包括360/AR Billing Drafts" (that
+        // button outline looks much better, apply the same look here too,
+        // text unchanged, across every page). This is the ONE shared chip
+        // component every one of those pages already renders (see this
+        // file's own header comment), so a single change here reaches all
+        // of them — no separate edit needed per page. Text/background/
+        // color are all untouched, only the border is new.
+        border: `1px solid ${status === 'error' ? '#fca5a5' : '#b8c7d6'}`,
+        cursor: status === 'loading' ? 'wait' : 'pointer',
         fontFamily: 'inherit',
       }}>
       {status === 'loading' && <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} />}

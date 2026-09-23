@@ -1822,6 +1822,24 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **The "TAB #02610894"-style Invoice No. chip gets the same visible
+  border as the new Source badges, app-wide in one edit.** Vincent, after
+  seeing Company 360's new Source badge outline: "那个按钮轮廓好看很多，
+  能不能把INVOICE 的也设计成这种按钮UI轮廓，但是文字不变...这个要作用全部
+  的页面，包括360/AR Billing Drafts" (that button outline looks much
+  better, give the Invoice chip the same treatment, text unchanged, across
+  every page). `components/billing/BillingInvoiceReference.tsx` is the ONE
+  shared chip component every one of those pages already renders
+  (extracted 2026-09-16 specifically so there's exactly one
+  implementation) — added `border: 1px solid #b8c7d6` (or `#fca5a5` on its
+  existing error state), same border color as the Source badges, text/
+  background/color all untouched. One file changed, reaches Company 360,
+  Billing Drafts, and the SOA detail modal automatically (confirmed via
+  `grep -rl BillingInvoiceReference` — also reaches `TaoInvoiceBuilder.tsx`
+  as a natural side effect, not separately requested but harmless/
+  consistent). `npx tsc --noEmit`, `npx eslint`, `npm run build` (cold) all
+  clean.
+
 - **Company 360's Outstanding table: "Company" reverted back to "Source",
   and the dedicated Download SOA PDF column merged into it.** Vincent: "我
   要把后面的两个按钮置入到 Company 的那个TAB/TAO那边，这个的UI按钮设计和
