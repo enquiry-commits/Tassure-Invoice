@@ -1822,6 +1822,27 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Corrected same-day (again): the merged Source badge now has a visible
+  border, not just a shared click target.** Vincent, after confirming the
+  merged-click-target fix worked: "由于按钮的颜色和行的颜色一样样，所以看
+  不出按钮的轮廓" (the button's fill color matched the group row's own
+  background — `.system-list-row--soa-group-open`'s `#dfe7f0` — once open,
+  so its outline was invisible; same complaint, now about the visual
+  outline rather than the click behavior). Changed the outer button from
+  borderless/transparent to `border: 1px solid #b8c7d6` with a white fill,
+  and removed the individual pill backgrounds (`#dfe7f0`) each source span
+  used to have — per-book state now shows as text color only (red on
+  error), so a 2-source group reads as one bordered "TAB TAO" chip against
+  ANY row background, not 2 separately-colored pills. **Process note**: this
+  exact fix was actually implemented and empirically verified (isolated
+  HTML repro, screenshotted against both row backgrounds) in the SAME
+  working session as the previous click-target fix, but got left
+  uncommitted when a Vercel build-failure investigation interrupted before
+  the commit step — caught only because Vincent reported still not seeing
+  it after a hard refresh, which prompted checking `git status` and finding
+  the fix sitting in the working tree the whole time. Committed and pushed
+  now. `npx tsc --noEmit` clean, `npm run build` (cold) clean.
+
 - **Corrected same-day: the multi-source group row's Source badges are
   now ONE click target, not still-separate buttons.** Vincent, after
   seeing the first version: "这个我看到，还是被当成两个来单独按，我希望是

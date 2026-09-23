@@ -1035,6 +1035,20 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           fails, only the TAO pill turns red) — only the click
                           target and disabled state are now shared. */}
                       <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        {/* Real border + a white fill (not the badge blue
+                            #dfe7f0 the pills used to have) — 2026-09-23,
+                            Vincent: "由于按钮的颜色和行的颜色一样样，所以看
+                            不出按钮的轮廓" (the button's color matched the
+                            row's own background, so its outline was
+                            invisible) once the group row is open, whose
+                            background is that exact #dfe7f0. White + a
+                            visible border reads as one bounded chip against
+                            either row background (open #dfe7f0 or default
+                            white), not just against one of them. Individual
+                            pill backgrounds removed — per-book state now
+                            shows as text color only (red on error), so 2
+                            sources reads as one "TAB TAO" chip, not 2
+                            differently-colored ones. */}
                         <button
                           title={sources.length > 1 ? `Download ${sources.join(' + ')} SOA PDFs` : `Download ${sources[0]} SOA PDF`}
                           onClick={event => {
@@ -1042,7 +1056,10 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                             for (const source of sources) void downloadSourceBadge(`${group.key}:${source}`, group.companyName, source);
                           }}
                           disabled={sources.some(source => downloadingBadges.has(`${group.key}:${source}`))}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap', whiteSpace: 'nowrap', border: 'none', background: 'none', padding: 0, cursor: 'pointer' }}>
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'nowrap', whiteSpace: 'nowrap',
+                            border: '1px solid #b8c7d6', borderRadius: 6, background: '#fff', padding: '3px 8px', cursor: 'pointer',
+                          }}>
                           {sources.map(source => {
                             const key = `${group.key}:${source}`;
                             const isDownloading = downloadingBadges.has(key);
@@ -1050,8 +1067,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                             return (
                               <span key={source} style={{
                                 display: 'inline-flex', alignItems: 'center', gap: 3, flex: '0 0 auto', fontSize: 9.5, fontWeight: 800,
-                                padding: '2px 6px', borderRadius: 5,
-                                background: badgeError ? 'var(--status-danger-tint)' : '#dfe7f0', color: badgeError ? 'var(--status-danger)' : '#1e3a5f',
+                                color: badgeError ? 'var(--status-danger)' : '#1e3a5f',
                               }}>
                                 {isDownloading ? <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} /> : source}
                               </span>
