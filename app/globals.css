@@ -191,11 +191,20 @@ body {
 }
 
 /* Remarks is company-level metadata and now lives below Company Name, so
-   the visual frame can cover the complete row without an absolute overlay. */
+   the visual frame can cover the complete row without an absolute overlay.
+   2026-09-23, Vincent: "会覆盖到2级表头" — this frame's z-index (was 4) sat
+   ABOVE the sticky column-header row's own z-index (2, .list-column-
+   header-gray in app/billing/soa/_components.tsx), so whenever the first
+   expanded group in the list scrolled up under that sticky header, this
+   purely decorative border (pointer-events: none, only ever meant to frame
+   the group against the plain row backgrounds below it) drew right over
+   the header text. Dropped to 1 — still above the unstyled row
+   backgrounds, but the header (his own explicit "一级表头和2级表头要放成
+   最高层级") always wins now. */
 .soa-company-group--open::after {
   content: '';
   position: absolute;
-  z-index: 4;
+  z-index: 1;
   pointer-events: none;
   top: 0;
   bottom: 0;
