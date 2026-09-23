@@ -150,7 +150,7 @@ async function syncLateFiling(run: AutomationRun) {
 
     const { data: existingManual, error: existingError } = await supabase
       .from('late_filing_companies')
-      .select('id, uen, company_name, remarks, financial_year_end, next_agm_due_date, manual_fields, resolved_but_still_overdue_since');
+      .select('id, uen, company_name, remarks, financial_year_end, next_agm_due_date, manual_fields, resolved_but_still_overdue_since, mirrored_ar_reminder_id');
     if (existingError) throw new Error(`Unable to load Late Filing records: ${existingError.message}`);
 
     const byUen = new Map((existingManual ?? [])
@@ -665,56 +665,132 @@ async function syncLateFiling(run: AutomationRun) {
       else movedToReview++;
     }
 
-    // Vincent, 2026-08-20: late_filing_companies.remarks is authoritative
-    // over ar_reminder's mirrored "⚠ LATE FILING:" line, continuously —
-    // not just at first-write time. Runs over EVERY row ever mirrored
-    // (mirrored_ar_reminder_id set), not only ones this run evaluated, so
-    // a staff "Resolved" click made directly on the Late Filing page
-    // (outside a sync run) and a staff edit that wiped the marker line on
-    // the AR Reminder side both get corrected on the next run. Only the
-    // marker LINE is ever touched — whatever else staff wrote in that
-    // remarks field is preserved.
+    // Vincent, 2026-09-23: this used to walk FORWARD from late_filing_
+    // companies rows (`.not('mirrored_ar_reminder_id', 'is', null)`), which
+    // silently skipped two real cases confirmed live — (a) a row marked
+    // Resolved whose mirrored_ar_reminder_id was never backfilled (a legacy
+    // row, or one Resolved before ever passing through the "currently
+    // flagged" branch that sets that column — confirmed: MITRADE GROUP,
+    // Resolved on Late Filing since 2026-08-21 but still showing "⚠ LATE
+    // FILING: Overdue 1678 days" on AR Reminder to this day), and (b) a
+    // marker whose late_filing_companies source row no longer exists at all
+    // because the company left the active roster (confirmed: TAFOS CAPITAL
+    // F.K.A. LWL EDUCATION CONSULTANCY — companies.tw_status='Terminated',
+    // no late_filing_companies row, yet AR Reminder still showed "⚠ LATE
+    // FILING: Overdue 2439 days" from before it was terminated). Walking
+    // the OTHER direction — every ar_reminder row that currently HAS the
+    // marker — can never again depend on a link column staying populated,
+    // and doubles as this run's backfill for that same link column (so
+    // lib/my-tasks-data.ts's own `.not('mirrored_ar_reminder_id', 'is',
+    // null)` staff-task query stops missing the exact same rows).
+    //
+    // Also implements Vincent's own decision (2026-09-23, in response to
+    // this exact bug report): once a company is Terminated/Striking Off —
+    // checked against `companies` first, falling back to `master_list`'s
+    // own lifecycle category per INV-DATA-030 for the companies TeamWork
+    // sync has already removed entirely from the `companies` table — any
+    // outstanding LATE FILING marker on it auto-clears. Staff no longer
+    // need to manually notice and Resolve a company that's already gone.
+    // This only ever touches the auto-written marker LINE; INV-DATA-014's
+    // separate, staff-typed TERMINATED/STRIKE OFF exact-match remarks
+    // convention is untouched.
     let reconciled = 0;
-    const { data: mirroredRows, error: mirroredError } = await supabase
-      .from('late_filing_companies')
-      .select('id, remarks, mirrored_ar_reminder_id')
-      .not('mirrored_ar_reminder_id', 'is', null);
-    if (mirroredError) errors++;
-    for (const lf of mirroredRows ?? []) {
-      if (controller.signal.aborted) throw abortError(controller.signal);
-      const { data: arRow } = await supabase.from('ar_reminder')
-        .select('id, remarks').eq('id', lf.mirrored_ar_reminder_id).maybeSingle();
-      if (!arRow) continue; // mirrored row deleted since — nothing to reconcile
+    const { data: markedRows, error: markedError } = await supabase
+      .from('ar_reminder')
+      .select('id, entity_name, uen, remarks')
+      .ilike('remarks', `%${LATE_FILING_MARKER}%`);
+    if (markedError) errors++;
 
-      const lfRemarks = lf.remarks ?? '';
-      const resolved = /^Resolved:/i.test(lfRemarks);
-      // AUTO:/Review: both keep the marker showing — Review means "looks
-      // clear but not yet confirmed," so stay cautious and keep it
-      // visible until a human actually resolves it. Strip whichever
-      // label prefix is present so the marker's trailing text always
-      // reflects Late Filing's OWN current wording.
-      const desired = resolved ? null
-        : `${LATE_FILING_MARKER} ${lfRemarks.replace(/^(AUTO|Review):\s*/i, '')}`;
+    if (markedRows?.length) {
+      // Fresh query, not the byUen/byName maps built at the top of this
+      // function before the main loop ran — a company flagged for the
+      // FIRST time this very run only exists in late_filing_companies from
+      // here on, so reusing the pre-loop snapshot would see no matching row
+      // for it and wrongly treat its brand-new marker as an orphan.
+      const { data: freshManual } = await supabase
+        .from('late_filing_companies')
+        .select('id, uen, company_name, remarks, mirrored_ar_reminder_id');
+      const freshByUen = new Map((freshManual ?? [])
+        .filter(row => row.uen)
+        .map(row => [String(row.uen).trim().toUpperCase(), row]));
+      const freshByName = new Map((freshManual ?? [])
+        .map(row => [row.company_name.toLowerCase(), row]));
 
-      const lines = (arRow.remarks ?? '').split('\n');
-      const hasMarker = lines[0]?.startsWith(LATE_FILING_MARKER);
-      const rest = hasMarker ? lines.slice(1) : lines;
-
-      let next: string | null;
-      if (desired === null) {
-        if (!hasMarker) continue; // already absent
-        next = rest.join('\n') || null;
-      } else {
-        if (hasMarker && lines[0] === desired) continue; // already in sync
-        next = [desired, ...rest].join('\n');
+      const { data: allCompanies } = await supabase
+        .from('companies')
+        .select('registration_no, company_name, is_active, tw_status');
+      const companyByUen = new Map<string, { is_active: boolean; tw_status: string | null }>();
+      const companyByName = new Map<string, { is_active: boolean; tw_status: string | null }>();
+      for (const co of allCompanies ?? []) {
+        const info = { is_active: co.is_active === true, tw_status: (co.tw_status as string | null) ?? null };
+        const uen = co.registration_no ? String(co.registration_no).trim().toUpperCase() : null;
+        if (uen) companyByUen.set(uen, info);
+        if (co.company_name) companyByName.set(normalize(co.company_name), info);
       }
+      // Fallback for companies TeamWork sync already removed from
+      // `companies` entirely (INV-DATA-030: "routinely REMOVED ... while
+      // master_list keeps its full historical record") — "is this company
+      // terminated" must still be answerable from master_list's own
+      // lifecycle category in that case, not silently treated as active.
+      const { data: terminatedMasterList } = await supabase
+        .from('master_list')
+        .select('roc_no')
+        .in('list_type', ['terminated', 'strike_off']);
+      const terminatedUens = new Set((terminatedMasterList ?? [])
+        .map(r => (r.roc_no ? String(r.roc_no).trim().toUpperCase() : null))
+        .filter((v): v is string => !!v));
 
-      const { error: reconcileError } = await supabase.from('ar_reminder').update({
-        remarks: next,
-        updated_by_email: 'system:late-filing',
-        updated_by_name: 'Late Filing Sync',
-      }).eq('id', arRow.id);
-      if (reconcileError) errors++; else reconciled++;
+      for (const row of markedRows) {
+        if (controller.signal.aborted) throw abortError(controller.signal);
+        const uenKey = row.uen ? String(row.uen).trim().toUpperCase() : null;
+        const companyInfo = (uenKey ? companyByUen.get(uenKey) : undefined) ?? companyByName.get(normalize(row.entity_name));
+        const isTerminated = companyInfo
+          ? (!companyInfo.is_active || ['Terminated', 'Striking Off'].includes(companyInfo.tw_status ?? ''))
+          : (uenKey ? terminatedUens.has(uenKey) : false);
+
+        const lfExisting = (uenKey ? freshByUen.get(uenKey) : undefined) ?? freshByName.get(row.entity_name.toLowerCase());
+        const lfRemarks = lfExisting?.remarks ?? '';
+        const resolved = /^Resolved:/i.test(lfRemarks);
+
+        // AUTO:/Review: both keep the marker showing — Review means "looks
+        // clear but not yet confirmed," so stay cautious and keep it visible
+        // until a human actually resolves it (or the company terminates).
+        // No matching late_filing_companies row AND not confirmed
+        // terminated is an orphan with nothing left to re-derive text from —
+        // clear it rather than leave an unexplained, unmaintainable marker.
+        const desired = (isTerminated || resolved || !lfExisting) ? null
+          : `${LATE_FILING_MARKER} ${lfRemarks.replace(/^(AUTO|Review):\s*/i, '')}`;
+
+        const lines = (row.remarks ?? '').split('\n');
+        const hasMarker = lines[0]?.startsWith(LATE_FILING_MARKER);
+        const rest = hasMarker ? lines.slice(1) : lines;
+
+        let next: string | null | undefined;
+        if (desired === null) {
+          if (hasMarker) next = rest.join('\n') || null;
+        } else if (!hasMarker || lines[0] !== desired) {
+          next = [desired, ...rest].join('\n');
+        }
+
+        if (next !== undefined) {
+          const { error: reconcileError } = await supabase.from('ar_reminder').update({
+            remarks: next,
+            updated_by_email: 'system:late-filing',
+            updated_by_name: 'Late Filing Sync',
+          }).eq('id', row.id);
+          if (reconcileError) errors++; else reconciled++;
+        }
+
+        // Self-heal the link column so it can never again silently stop
+        // pointing at this row's real mirror (see this block's own header
+        // comment) — independent of whether the marker text itself changed
+        // above.
+        if (lfExisting && lfExisting.mirrored_ar_reminder_id !== row.id) {
+          await supabase.from('late_filing_companies')
+            .update({ mirrored_ar_reminder_id: row.id })
+            .eq('id', lfExisting.id);
+        }
+      }
     }
 
     const result = {

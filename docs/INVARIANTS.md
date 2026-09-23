@@ -321,6 +321,42 @@ again.
   **mode** (most common fye_month/year) of the last 30 invoices, never
   simply "most recently created" — one out-of-sequence invoice can
   otherwise hijack the whole page's default.
+- **INV-AR-013** — A reconciliation pass that mirrors one table's state onto
+  another (Late Filing → AR Reminder's `⚠ LATE FILING:` marker, via
+  `late_filing_companies.mirrored_ar_reminder_id`) must never depend on a
+  link column staying populated on the SOURCE side — walk it FROM the
+  written-to side (every `ar_reminder` row that currently carries the
+  marker) instead, so a missing/never-backfilled link can't hide a stale
+  row from ever being revisited. Confirmed live 2026-09-23 on two real
+  companies: MITRADE GROUP had been marked `Resolved:` on the Late Filing
+  page since 2026-08-21, but its `late_filing_companies.mirrored_ar_
+  reminder_id` was `null` (never backfilled — it was Resolved without ever
+  passing through the "currently flagged" branch that sets that column), so
+  the old forward-only reconciliation (`.not('mirrored_ar_reminder_id',
+  'is', null)`) never looked at it — its `ar_reminder` row still showed "⚠
+  LATE FILING: Overdue 1678 days" a month later. TAFOS CAPITAL (F.K.A. LWL
+  EDUCATION CONSULTANCY) was worse: genuinely `tw_status='Terminated'` with
+  no `late_filing_companies` row left at all, yet its `ar_reminder` row
+  still carried a stale marker from before it terminated, with nothing in
+  the old design able to ever revisit a marker whose source row no longer
+  exists. `app/api/late-filing/sync/route.ts`'s reconciliation now queries
+  `ar_reminder WHERE remarks ILIKE '%⚠ LATE FILING:%'` directly and, for
+  each hit, independently re-derives the correct state (checks `companies`
+  first, falls back to `master_list`'s lifecycle category per INV-DATA-030
+  for companies removed from `companies` entirely) rather than trusting a
+  potentially-stale link — and self-heals that same link column on every
+  run it finds out of sync, so a second consumer of it
+  (`lib/my-tasks-data.ts`'s own `.not('mirrored_ar_reminder_id', 'is',
+  null)` staff-task query) stops silently missing the same rows.
+- **INV-AR-014** — Once a company is Terminated/Striking Off (checked
+  against `companies.is_active`/`tw_status`, falling back to
+  `master_list.list_type` per INV-DATA-030 when the `companies` row is
+  gone), any outstanding `⚠ LATE FILING:` marker on its `ar_reminder` rows
+  auto-clears — Vincent's own explicit decision, 2026-09-23, made in
+  response to the INV-AR-013 bug report (chose "auto-clear" over "leave it
+  to staff to type TERMINATED into remarks manually"). This does NOT change
+  INV-DATA-014's separate, staff-typed exact-match `TERMINATED`/`STRIKE
+  OFF` remarks convention — only the auto-written marker LINE is affected.
 
 ## PIC / staff assignment (INV-PIC)
 
