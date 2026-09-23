@@ -604,8 +604,22 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     // (and the Excel export's own matching filter) is untouched.
     const list = (companies ?? []).filter(c => c.totalOutstanding > 0);
     if (!picFilter) return list;
-    return list.filter(c => effectiveOwner(c) === picFilter || (!effectiveOwner(c) && c.picOptions.includes(picFilter)));
-  }, [companies, picFilter]);
+    const ownsRow = (c: Row) => effectiveOwner(c) === picFilter || (!effectiveOwner(c) && c.picOptions.includes(picFilter));
+    // Vincent, 2026-09-23, on the "All" view specifically: "当一家公司有好
+    // 几个Source, 大家都有责任一起去追这个公司其他Source的欠款" — filtering
+    // "My book" to one person must keep that company's WHOLE combined card
+    // (every source), not narrow it down to just the one source row she
+    // happens to own. Confirmed live: SANEX EASTERN TRADE (TAB/TAC/TAO, 3
+    // different owners) collapsed to a single bare TAO row once filtered to
+    // its TAO owner — the other 2 sources, which that same person shares
+    // responsibility for chasing, silently disappeared. Every OTHER qbCompany
+    // tab (TAB/TAC/TAO alone) has no multi-source grouping to begin with —
+    // one row already IS one whole company there — so this only changes
+    // behavior on 'ALL'; every other tab keeps the original per-row filter.
+    if (qbCompany !== 'ALL') return list.filter(ownsRow);
+    const matchingKeys = new Set(list.filter(ownsRow).map(c => allCompanyGroupKey(c.companyName)));
+    return list.filter(c => matchingKeys.has(allCompanyGroupKey(c.companyName)));
+  }, [companies, picFilter, qbCompany]);
 
   // KPI cards follow the PIC scope (this IS "her own dashboard" once she's
   // picked herself) but not the free-text search box, which stays a
@@ -836,12 +850,18 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             rows via renderSourceRow) so the column band stays visually
             consistent as the row scrolls horizontally, even on a child row
             where the popover itself is intentionally omitted below.
-            zIndex 3, not 1: this `position: sticky` cell creates its own
-            stacking context, so the popover it contains (zIndex 30 on its
-            own) can never out-rank a SIBLING stacking context with a higher
-            zIndex no matter how high its own number is — see this cell's
-            own zIndex comment further down for the real bug this caused. */}
-        <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 3, backgroundColor: 'inherit' }}>
+            zIndex only rises to 3 (above the sticky header's own 2) WHILE
+            this row's popover is actually open — a `position: sticky` cell
+            creates its own stacking context, so the popover it contains
+            (zIndex 30 on its own) can never out-rank a SIBLING stacking
+            context with a higher zIndex no matter how high its own number
+            is (see this cell's own zIndex comment further down for the
+            live bug this caused). Left permanently at 3 instead, the idle
+            icon itself — not just an open popover — pokes above the header
+            at the sticky-right/sticky-top corner (confirmed live the same
+            day, Vincent: "信封的层级也是不能比表头更上层"); staying at 1
+            while closed keeps the plain icon exactly where it was. */}
+        <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: draftPopoverFor === rowKey(c) ? 3 : 1, backgroundColor: 'inherit' }}>
           {/* Vincent, 2026-09-23: only the combined/Total row needs its own
               Draft Email icon — a per-source child row (TAB source balance,
               TAO source balance, etc.) drafting separately would split one
@@ -1118,19 +1138,27 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           (default/hover/soa-group-open, all set via CSS classes
                           with !important) so the pinned cell never shows a
                           mismatched patch as other columns scroll underneath it.
-                          zIndex 3, not the original 1 — confirmed live 2026-09-23:
-                          `position: sticky` makes this cell its own stacking
-                          context, so its child popover (its own zIndex 30) could
-                          never out-rank the sticky column header row above
-                          (zIndex 2, see the header's own comment) when opened
-                          upward from a row near the top — a child's z-index can
-                          never lift it past a sibling of its OWN ancestor's
-                          stacking context, regardless of how high that child's
-                          number is. Vincent: "这个肯定是要在最上层的不能被卡片
-                          的线条挡到" (this has to be on top, must not be blocked
-                          by the card's lines) — the header's own sticky border
-                          was exactly what was cutting across the popover. */}
-                      <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: 3, backgroundColor: 'inherit' }}>
+                          zIndex only rises to 3 (above the sticky header's own
+                          2) WHILE this row's popover is actually open —
+                          confirmed live 2026-09-23: `position: sticky` makes
+                          this cell its own stacking context, so its child
+                          popover (its own zIndex 30) could never out-rank the
+                          sticky column header row above (zIndex 2, see the
+                          header's own comment) when opened upward from a row
+                          near the top — a child's z-index can never lift it
+                          past a sibling of its OWN ancestor's stacking
+                          context, regardless of how high that child's number
+                          is. Vincent: "这个肯定是要在最上层的不能被卡片的线
+                          条挡到" (this has to be on top, must not be blocked
+                          by the card's lines) — the header's own sticky
+                          border was exactly what was cutting across the
+                          popover. Left permanently at 3 instead, the idle
+                          icon itself — not just an open popover — pokes
+                          above the header at the sticky-right/sticky-top
+                          corner (also confirmed live the same day: "信封的
+                          层级也是不能比表头更上层"); staying at 1 while
+                          closed keeps the plain icon exactly where it was. */}
+                      <div style={{ display: 'flex', justifyContent: 'center', position: 'sticky', right: 0, zIndex: draftPopoverFor === groupDraftKey ? 3 : 1, backgroundColor: 'inherit' }}>
                         <SoaDraftPopover
                           company={combined} qbCompany={draftScope} me={draftPickers.me}
                           senders={draftPickers.senders} senderId={draftPickers.senderId} setSenderId={draftPickers.setSenderId}
