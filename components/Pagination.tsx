@@ -45,6 +45,36 @@ function pageList(page: number, totalPages: number): (number | '…')[] {
   return out;
 }
 
+// Vincent, 2026-09-23: "当我在看到第1页的最下方点击去第2页的时候，应该是
+// 要显示第2页的第一行的，而不是第2页的下方行，这个要全系统都是这样处理分
+// 页" — changing page must always land on that new page's own top row, never
+// wherever the previous page happened to be scrolled to. Fixed once, here,
+// rather than at each of PaginationBar's ~9 call sites (MasterListTable,
+// AR Reminder, SOA, Master List/Active Client, Reports, TAO, Late Filing,
+// Address Service, Companies) — every one of them renders through this
+// shared component, so this is the single point that actually covers "全系
+// 统". Walks up from the clicked button to find the nearest ancestor that's
+// ACTUALLY scrolling (scrollHeight > clientHeight) and resets its scrollTop
+// — deliberately not a fixed class-name lookup (e.g. '.system-list-scroll'),
+// since not every page that renders this bar uses that exact class, and a
+// generic DOM walk keeps working regardless. Falls back to the window/page
+// scroll for a list with no scrollable ancestor of its own.
+function scrollPageToTop(button: HTMLElement) {
+  // Stop at <body> rather than checking it: in standards mode the
+  // document's own scroll is owned by <html>/`window`, not `body.scrollTop`
+  // (setting that silently no-ops in most browsers), so treat reaching body
+  // as "no specific scrollable ancestor" and fall through to window.scrollTo.
+  let node: HTMLElement | null = button;
+  while (node && node !== document.body) {
+    if (node.scrollHeight > node.clientHeight + 1) {
+      node.scrollTop = 0;
+      return;
+    }
+    node = node.parentElement;
+  }
+  window.scrollTo({ top: 0 });
+}
+
 export function PaginationBar({ page, totalPages, total, startIndex, pageCount, onPage }: {
   page: number; totalPages: number; total: number; startIndex: number; pageCount: number;
   onPage: (p: number) => void;
@@ -57,19 +87,23 @@ export function PaginationBar({ page, totalPages, total, startIndex, pageCount, 
     color: active ? '#fff' : disabled ? '#cbd5e1' : '#475569',
     cursor: disabled ? 'default' : 'pointer',
   });
+  const goToPage = (p: number, e: React.MouseEvent<HTMLButtonElement>) => {
+    scrollPageToTop(e.currentTarget);
+    onPage(p);
+  };
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, padding: '10px 4px 2px' }}>
       <span style={{ fontSize: 12, color: '#94a3b8' }}>
         Showing {startIndex + 1}–{startIndex + pageCount} of {total}
       </span>
       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-        <button style={btn(false, page <= 1)} disabled={page <= 1} onClick={() => onPage(page - 1)}>‹</button>
+        <button style={btn(false, page <= 1)} disabled={page <= 1} onClick={e => goToPage(page - 1, e)}>‹</button>
         {pageList(page, totalPages).map((p, i) =>
           p === '…'
             ? <span key={`e${i}`} style={{ fontSize: 12, color: '#94a3b8', padding: '0 2px' }}>…</span>
-            : <button key={p} style={btn(p === page)} onClick={() => onPage(p)}>{p}</button>
+            : <button key={p} style={btn(p === page)} onClick={e => goToPage(p, e)}>{p}</button>
         )}
-        <button style={btn(false, page >= totalPages)} disabled={page >= totalPages} onClick={() => onPage(page + 1)}>›</button>
+        <button style={btn(false, page >= totalPages)} disabled={page >= totalPages} onClick={e => goToPage(page + 1, e)}>›</button>
       </div>
     </div>
   );
