@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  BarChart3, Users, UserPlus, UserMinus, TrendingUp, TrendingDown, PieChart, Wallet, Compass, Download, X, Sparkles, Database,
+  BarChart3, Users, UserPlus, UserMinus, TrendingUp, TrendingDown, PieChart, Wallet, Compass, Download, X, Sparkles, RefreshCw, Database,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { Donut, VBars, HBars, LineChart } from '@/components/dashboard/Charts';
@@ -362,10 +362,16 @@ export default function ReportsPage() {
   const [data, setData] = useState<ReportsData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flowDrilldown, setFlowDrilldown] = useState<'new' | 'churned' | null>(null);
+  // Gates the manual refresh button below — Vincent specifically, not any
+  // admin (see app/api/reports/narrative-cron/route.ts's own auth check,
+  // the actual enforcement point; this only controls whether the button
+  // renders at all for everyone else).
+  const [isVincent, setIsVincent] = useState(false);
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.ok ? r.json() : null).then(result => {
       if (!result?.user?.canViewReports) { router.replace('/'); return; }
+      setIsVincent(result.user.email?.toLowerCase() === 'vincent@tassure.com');
       setAuthorized(true);
     }).catch(() => router.replace('/'));
   }, [router]);
@@ -416,18 +422,38 @@ export default function ReportsPage() {
   const [narrativeLang, setNarrativeLang] = useState<'zh' | 'en'>('zh');
   const [narrativeLoading, setNarrativeLoading] = useState(true);
   const [narrativeError, setNarrativeError] = useState<string | null>(null);
+  // Separate from narrativeLoading (the initial page-load fetch) — a manual
+  // regenerate is a much longer wait (computeReportsData + a real OpenAI
+  // call, up to ~2 minutes) and needs its own spinner state so the initial
+  // load's brief flash doesn't get confused with it.
+  const [narrativeRegenerating, setNarrativeRegenerating] = useState(false);
 
-  useEffect(() => {
-    if (!authorized) return;
+  const fetchNarrative = () => {
     fetch('/api/reports/narrative').then(async r => {
       const body = await r.json();
       if (!r.ok) throw new Error(body.error || 'Failed to load AI analysis');
-      // narrative is null when the weekly cron hasn't produced a row yet
-      // (fresh deploy, or before the first Monday run) — not an error.
+      // narrative is null when nothing has been generated yet (fresh
+      // deploy, before the first Monday run) — not an error.
       setNarrative(body.narrative ? { insights: body.narrative.insights, summaryZh: body.narrative.summaryZh, summaryEn: body.narrative.summaryEn, generatedAt: body.generatedAt } : null);
       setNarrativeError(null);
     }).catch(e => setNarrativeError(e.message)).finally(() => setNarrativeLoading(false));
-  }, [authorized]);
+  };
+  useEffect(() => { if (authorized) fetchNarrative(); }, [authorized]);
+
+  // Vincent-only manual trigger (app/api/reports/narrative-cron/route.ts
+  // enforces this server-side too — this button is a UI convenience, not
+  // the real access boundary). Calls the SAME route the weekly cron calls,
+  // then re-reads the cache so the page picks up the row it just wrote —
+  // no separate "refresh" code path duplicated in the read endpoint.
+  const refreshNarrative = () => {
+    setNarrativeRegenerating(true);
+    setNarrativeError(null);
+    fetch('/api/reports/narrative-cron').then(async r => {
+      const body = await r.json();
+      if (!r.ok || body.ok === false) throw new Error(body.error || 'Failed to regenerate AI analysis');
+      fetchNarrative();
+    }).catch(e => setNarrativeError(e.message)).finally(() => setNarrativeRegenerating(false));
+  };
 
   const CONFIDENCE_LABEL: Record<NarrativeInsight['confidence'], { zh: string; en: string }> = {
     high: { zh: '高置信度', en: 'High confidence' },
@@ -478,9 +504,7 @@ export default function ReportsPage() {
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
             {/* Both languages already sit in the one fetched object (see
                 lib/reports-narrative.ts) — this only ever flips which field
-                renders, never triggers a second request. No refresh button
-                (removed 2026-09-23, "不能refresh") — the weekly cron
-                (app/api/reports/narrative-cron/route.ts) is the only writer. */}
+                renders, never triggers a second request. */}
             <div style={{ display: 'flex', background: 'rgba(255,255,255,.1)', borderRadius: 7, padding: 2 }}>
               {(['zh', 'en'] as const).map(l => (
                 <button key={l} onClick={() => setNarrativeLang(l)}
@@ -490,6 +514,21 @@ export default function ReportsPage() {
                 </button>
               ))}
             </div>
+            {/* Vincent-only (2026-09-23: "保留那个 refresh 按钮给我，但是
+                其他人是看不到的...只有Vincent可以选择强制 refresh") —
+                everyone else only ever sees whatever the weekly cron last
+                wrote. Server-side enforcement lives in app/api/reports/
+                narrative-cron/route.ts; hiding the button here is just UI
+                convenience on top of that, same "hide the entry point, but
+                the real check lives in the route" pattern as /ai-learning. */}
+            {isVincent && (
+              <button onClick={refreshNarrative} disabled={narrativeRegenerating}
+                title="Regenerate (Vincent only)"
+                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,.75)', background: 'rgba(255,255,255,.1)', border: 'none', borderRadius: 7, padding: '5px 10px', cursor: narrativeRegenerating ? 'default' : 'pointer' }}>
+                <RefreshCw size={11} style={{ animation: narrativeRegenerating ? 'spin 1s linear infinite' : 'none' }} />
+                {narrativeRegenerating ? (narrativeLang === 'zh' ? '生成中…' : 'Working…') : (narrativeLang === 'zh' ? '重新生成' : 'Refresh')}
+              </button>
+            )}
           </div>
         </div>
         {narrativeError && (

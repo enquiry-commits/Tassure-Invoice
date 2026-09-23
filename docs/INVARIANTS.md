@@ -2830,6 +2830,31 @@ again.
     (cold, confirms both `/api/reports/narrative` and `/api/reports/
     narrative-cron` compile as separate serverless functions) all clean.
 
+  **Amended, same day**: "no manual refresh" softened to "no manual refresh
+  for anyone but Vincent" — his own immediate follow-up: "这样有一点不方便，
+  这样我觉得保留那个 refresh 按钮给我，但是其他人是看不到的...只有Vincent
+  可以选择强制 refresh". `app/api/reports/narrative-cron/route.ts`'s GET
+  now accepts a SECOND caller beyond the cron bearer token: any request
+  that isn't the cron must be a real session AND `account.email ===
+  'vincent@tassure.com'` — the SAME hardcoded-to-Vincent check (not a
+  generic `account.admin` flag) `app/api/automation/health/route.ts`
+  already uses, kept consistent rather than inventing a second convention.
+  `app/reports/page.tsx` re-adds the refresh button, gated behind a new
+  `isVincent` state (from `/api/auth/me`'s `user.email`) — this is UI
+  convenience only, matching the established "/ai-learning" pattern:
+  hiding the entry point is not the real access boundary, the route's own
+  check is. Clicking it calls `/api/reports/narrative-cron` directly (the
+  SAME route the weekly cron calls — no second, duplicated generation code
+  path reintroduced into the read endpoint), then re-reads the cache. Each
+  run INSERTS a new row rather than updating one in place, so whatever's
+  currently shown never changes mid-week on its own — confirmed as the
+  intended design, not just an implementation detail, by Vincent's own
+  explicit statement: "生成出来的内容就不变了，直到下次更新显示." `npx tsc
+  --noEmit`, `npx eslint` (both changed files), `npm run build` (cold) all
+  clean. Still not verified against a real trigger (same
+  `OPENAI_API_KEY`/`CRON_SECRET` local-access limitation) — the manual path
+  is code-reviewed and compiles, not yet proven by an actual click.
+
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
 - **INV-HELPER-001** — Multiple To/CC/BCC addresses stored newline-joined

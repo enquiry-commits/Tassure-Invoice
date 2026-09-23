@@ -1822,6 +1822,25 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Amended same-day: the weekly-cron Reports narrative (INV-DATA-063
+  below) gets a Vincent-only manual refresh back.** His immediate
+  follow-up after seeing the "will generate next Monday" empty state:
+  "这样有一点不方便，这样我觉得保留那个 refresh 按钮给我，但是其他人是看不
+  到的...只有Vincent可以选择强制 refresh". `app/api/reports/narrative-
+  cron/route.ts`'s GET now accepts a real logged-in session too, not just
+  the cron bearer token — gated to `account.email === 'vincent@tassure.com'`
+  specifically (same hardcoded check `app/api/automation/health/route.ts`
+  already uses, not a generic admin flag). `app/reports/page.tsx`'s refresh
+  button is back, shown only when a new `isVincent` state (from `/api/auth/
+  me`) is true — UI convenience on top of the route's own real check, same
+  pattern as `/ai-learning`. The button calls the cron route directly (no
+  second generation path re-added to the read endpoint), then re-reads the
+  cache. Confirmed the "content only changes when a new row is written"
+  design is intentional, not incidental — Vincent's own words: "生成出来的
+  内容就不变了，直到下次更新显示." `npx tsc --noEmit`/`eslint`/`npm run
+  build` (cold) all clean. Not yet verified by an actual click (same
+  Vercel-only `OPENAI_API_KEY`/`CRON_SECRET` limitation).
+
 - **Reports' AI Analysis moved to a weekly-only cron, no manual refresh
   (INV-DATA-063).** Vincent: "为了不要浪费Token，这个AI Analysis，一周只
   做一次更新描述，不能refresh, 并且这个更新是按照每星期一早上6点更新" (to
