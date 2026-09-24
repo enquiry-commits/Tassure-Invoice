@@ -275,9 +275,14 @@ again.
   `is_css_client` / `css_client_inactive` per UEN across ALL its `companies`
   rows (active if ANY row is; inactive only if there are CSS Client rows and
   none is active) — it used to be last-write-wins, so a stale pre-fix
-  orphan row (GOLDEN BRIDGE MARTEC's old row 1770, still on file) could flip
+  orphan row (GOLDEN BRIDGE MARTEC's old row 1770) could flip
   a correctly Active UEN to inactive depending on row order. Any per-UEN flag
-  computed from `companies` must be order-independent. *(source: 2026-09-24,
+  computed from `companies` must be order-independent. That one orphan was
+  also deleted outright (removed 2026-09-24, Vincent-authorized, backed up
+  first, after a sweep of 48 tables found nothing referencing `companies`
+  id 1770 via company_id/parent_company_id); the `missing_from_teamwork`
+  exception it kept raising closed on the next run. A leftover duplicate row
+  is still handled by the order-independent rule above if one ever reappears. *(source: 2026-09-24,
   Vincent: "没有办法彻底的清除这些问题吗？因为TW明明都写道很清楚是Active了".)*
 
 ## AR/AGM cycle & ar_reminder data lifecycle (INV-AR)
