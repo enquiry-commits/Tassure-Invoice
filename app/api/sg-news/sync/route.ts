@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { withAutomationRun, type AutomationRun } from '@/lib/automation-sync';
+import { getRequestAccount } from '@/lib/request-account';
 import { SG_NEWS_SOURCES } from '@/lib/sg-news-sources';
 import { fetchAndExtractSource, type ExtractedNewsItem } from '@/lib/sg-news-fetch';
 import { generateDailyDigest } from '@/lib/sg-news-digest';
@@ -98,6 +99,24 @@ async function syncSgNews(run: AutomationRun): Promise<NextResponse> {
   });
 }
 
+// proxy.ts lets a request with the exact CRON_SECRET bearer straight through
+// and otherwise only checks "signed in as ANY approved account" — it never
+// guards API routes by permission. So the manual "手动运行一次" trigger must be
+// gated here: without this, any signed-in staff account could start a full
+// run (9 Playwright fetches + Claude calls) by opening this URL, despite the
+// page itself being Vincent-only. Compared against the real secret, not just
+// "has a Bearer header" (automationTrigger()'s test), so a made-up
+// Authorization header cannot skip the account check.
+function isCronRequest(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  return !!secret && req.headers.get('authorization') === `Bearer ${secret}`;
+}
+
 export async function GET(req: NextRequest) {
+  if (!isCronRequest(req)) {
+    const account = await getRequestAccount(req);
+    if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+    if (!account.canViewSgNews) return NextResponse.json({ error: 'Your account cannot run SG Latest News.' }, { status: 403 });
+  }
   return withAutomationRun(req, 'sg_news_sync', syncSgNews, 15);
 }

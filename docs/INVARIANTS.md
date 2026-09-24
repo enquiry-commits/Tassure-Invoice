@@ -1128,6 +1128,24 @@ again.
   that same change, checked by looking at the actual `sg_news_sync_state`/
   `automation_sync_runs` row after its first real deploy — do not assume
   a clean local build means the Vercel Lambda will find the browser.**
+- **INV-CRON-018** — A route that serves BOTH a cron and a browser "run now"
+  button must gate the browser case itself. `proxy.ts` only bypasses auth
+  for the exact `CRON_SECRET` bearer on a `CRON_PATHS` entry and otherwise
+  checks "signed in as ANY approved account" — it never guards API routes
+  by permission. `/api/sg-news/sync` (built 2026-09-23 as Vincent-only)
+  shipped with no in-route check, so any signed-in staff account could
+  start a full run (9 Playwright fetches + Claude calls) just by opening
+  the URL, even though the page and the report API were gated. Found
+  2026-09-24 by the independent design review of the Quotation work; fixed
+  by testing the exact secret (`!!secret && header === \`Bearer ${secret}\``)
+  and otherwise requiring the account flag. Do NOT use
+  `automationTrigger()` for this: it only tests "has a Bearer header", so a
+  made-up `Authorization` header defeats it. Also noted, not fixed here:
+  `app/api/reports/narrative-cron/route.ts` compares the header against
+  `Bearer ${process.env.CRON_SECRET}` with no truthiness check, which would
+  match the literal `Bearer undefined` if the secret were ever unset — left
+  to the separate cron-hygiene follow-up along with `ai_quality_review`
+  (see `docs/CURRENT_STATE.md`).
 
 ## QuickBooks / invoice (INV-QB)
 
