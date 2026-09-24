@@ -299,18 +299,20 @@ call site that should be converted to `pageAll()`, and a table that keeps
 appearing is approaching a real problem.
 **Guards:** `docs/INVARIANTS.md` INV-DATA-006, INV-DATA-066.
 
-### REG-024 — Master List status: Terminated Services reads Terminated, Move stamps TeamWork's wording (after ANY change to `lib/master-list-status.ts`, `teamwork/sync`'s status block, the Move route or a Move menu)
+### REG-024 — Master List status: Move stamps the placeholder, only TeamWork writes "Terminated" (after ANY change to `lib/master-list-status.ts`, `teamwork/sync`'s status block, the Move route or a Move menu)
 Run `npx tsx test-master-list-status.ts` — it must print `ALL OK`. Then against real
-data: (1) after a `teamwork/sync` run, its JSON reports
-`master_list_terminated_defaults` and the Terminated Services page shows no
-"YES", blank or hand-typed status — the only non-Terminated values left are
-rows TeamWork itself reports as something else (2026-09-24: 7 "Active", 2
-"Striking Off"; fix those in TeamWork, do not force them here). (2) Move a
-test row Active Client → Terminated Services: it must show "Terminated" (not
-"TERMINATED") and the next sync must not change it; Move → Strike Off must show
-"Striking Off". (3) A row whose Status was typed by hand (manual lock) must keep
-what was typed through a sync. (4) `audit_log` shows the old value for every
-rewritten row, `changed_by = 'system:terminated-list-default'`.
+data: (1) Move a test row Active Client → Terminated Services: it must show
+"Terminate" (NOT "Terminated"); Move → Strike Off must show "Striking Off". After
+the next `teamwork/sync` a row whose company TeamWork lists as Terminated must
+have become "Terminated" — that change is the confirmation — and a row TeamWork
+does not list must still say "Terminate". (2) After a sync run, its JSON
+reports `master_list_terminated_defaults` and the Terminated Services page shows
+no "YES", blank or hand-typed status: the only values left are "Terminate",
+"Terminated", and rows TeamWork itself reports as something else (2026-09-24: 7
+"Active", 2 "Striking Off"; fix those in TeamWork, do not force them here).
+(3) A row whose Status was typed by hand (manual lock) must keep what was typed
+through a sync. (4) `audit_log` shows the old value for every rewritten row,
+`changed_by = 'system:terminated-list-default'`.
 **Guards:** `docs/INVARIANTS.md` INV-DATA-064, INV-DATA-067.
 
 ---

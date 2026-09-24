@@ -3216,64 +3216,80 @@ again.
   smaller than the unordered failure).
 
 - **INV-DATA-067** — Master List `status` mirrors TeamWork's own company
-  Status, and a row TeamWork can say NOTHING about must not keep a legacy
-  placeholder. Found 2026-09-24: the colleague who works the Strike Off /
-  Terminated Services lists (relayed by Vincent) — "strike off & terminate的
-  status 不要自己变…follow teamwork", then "你可以帮我把之前的都放Terminate 吗
-  — 就是不是terminated status 的…一直比较好"; Vincent: "这个处理一下，并且避免
-  下次发生同样问题". Measured against TeamWork's live list (1,382 companies,
-  matched by UEN) the 269 Terminated Services rows were: 63 "Terminated"
-  (correct, mirrored), 1 more "Terminated" (company not in TeamWork), 10 "TERMINATED" (the old Move
-  placeholder; company not in TeamWork), **180 "YES"** (178 not in TeamWork at
-  all + 2 in TeamWork with a blank status), 7 "Active" and 2 "Striking Off"
-  (TeamWork itself says so), and 6 hand-typed leftovers ("RENAMED", "to be
-  terminate", "terminate", blank, "Mary", "NO"). Root cause: the nightly
-  sync's status block (2026-09-04) only ever writes rows TeamWork has a
-  non-blank status for, so a company TeamWork no longer lists keeps whatever
-  was imported or typed FOREVER — that is how 180 "YES" survived in a list
-  called Terminated. Second, smaller cause: the Move menu stamped
-  "TERMINATED" (upper case) and the next night's sync rewrote it to
-  TeamWork's "Terminated" — a status visibly "changing by itself" (the
-  Strike Off half of that was INV-DATA-064). Rules, all in
-  `lib/master-list-status.ts` (one framework-free file; the sync, the Move
-  route and the pages import it): (1) TeamWork's non-blank status wins,
-  and a manual lock (`manual_fields.status`) beats everything — unchanged;
-  (2) a Terminated Services row TeamWork cannot inform (UEN not in TeamWork,
-  or a blank TeamWork status) must read "Terminated" — case-insensitive, so
-  "TERMINATED" is left alone rather than rewritten just to change its case;
-  (3) the Move placeholder is TeamWork's own wording and is decided by the
-  SERVER (`placeholderStatusForMove()` in `app/api/master-list/move/route.ts`,
-  which ignores a client-sent `statusValue` for these two lists): Strike Off
-  → "Striking Off", Terminated Services → "Terminated"; the Active Client
-  page imports the constants instead of typing literals, so a stale browser
-  tab or a copy-pasted string can't bring back a different word. **A row
-  TeamWork itself reports as non-terminated is deliberately NOT forced**
-  ("follow teamwork"; forcing it would be undone by the next sync anyway):
-  7 companies still "Active" in TeamWork although filed under Terminated
-  Services (XSPY, SINGAPORE CHINESE ARTS CENTER, SATORISYS, HALOFUN, ANABLE
-  MANAGEMENT SERVICES, ARK PARTNERS MANAGEMENT, SINO MINING HEAVY INDUSTRIES
-  — the same 7 flagged on 2026-09-04 and still open) and 2 "Striking Off"
-  (WEIOT, ALLIED CHANCE INTERNATIONAL LIMITED (SINGAPORE BRANCH)). Those need
-  a TeamWork-side fix (or a move back to Active Client); the "TW CSS Clients"
-  card on the Terminated Services page lists the Active ones. The planner
-  takes TWO TeamWork inputs on purpose — the mirror map AND the set of every
-  UEN with any non-blank TeamWork status — because the sync skips a few
+  Status; in Terminated Services "Terminate" and "Terminated" are DIFFERENT on
+  purpose, and a row TeamWork can say nothing about must not keep a legacy
+  placeholder. **"Terminate" is the placeholder** — the row was filed here (by
+  a Move, by hand, by an old import) but TeamWork has not confirmed it.
+  **"Terminated" is TeamWork's own word**, which only ever arrives when the
+  nightly sync copies it, so it means CONFIRMED. Vincent: "Move 到 Terminated
+  现在放的 'Terminate'…和TW确认后才变成 Terminated". The overnight change from
+  "Terminate" to "Terminated" is the confirmation signal, not a bug, and a row
+  that still says "Terminate" after a sync is exactly the kind to review
+  ("看看之前有没有错误显示的 或者没有同步正确的"). **Lesson — this entry's first
+  version got it wrong:** commit 15a6c57 "unified" the Move placeholder and the
+  backfill to TeamWork's final "Terminated" so that nothing would "change by
+  itself"; that claims a confirmation that has not happened (the INV-DATA-064
+  "STRUCK OFF" mistake again) and erases the very signal the design relies on.
+  Vincent caught it the same evening, before anything was written (no sync had
+  run since the push; `audit_log` had no `system:terminated-list-default`
+  rows); 5af0e63 fixed it. Never "tidy" a placeholder into the confirmed word.
+  Found 2026-09-24: the colleague who works the Strike Off / Terminated
+  Services lists (relayed by Vincent) — "strike off & terminate的status 不要
+  自己变…follow teamwork", then "你可以帮我把之前的都放Terminate 吗 — 就是不是
+  terminated status 的…一直比较好"; Vincent: "这个处理一下，并且避免下次发生同样
+  问题". Measured against TeamWork's live list (1,382 companies, matched by
+  UEN) the 269 Terminated Services rows were: 63 "Terminated" (correct,
+  mirrored), 1 more "Terminated" (company not in TeamWork), 10 "TERMINATED"
+  (the old Move placeholder; company not in TeamWork), **180 "YES"** (178 not
+  in TeamWork at all + 2 in TeamWork with a blank status), 7 "Active" and 2
+  "Striking Off" (TeamWork itself says so), and 6 hand-typed leftovers
+  ("RENAMED", "to be terminate", "terminate", blank, "Mary", "NO"). Root cause:
+  the nightly sync's status block (2026-09-04) only ever writes rows TeamWork
+  has a non-blank status for, so a company TeamWork no longer lists keeps
+  whatever was imported or typed FOREVER — that is how 180 "YES" survived in a
+  list called Terminated. Rules, all in `lib/master-list-status.ts` (one
+  framework-free file; the sync, the Move route and the pages import it):
+  (1) TeamWork's non-blank status wins, and a manual lock
+  (`manual_fields.status`) beats everything — unchanged; (2) a Terminated
+  Services row TeamWork cannot inform (UEN not in TeamWork, or a blank
+  TeamWork status) that does not already say Terminate / Terminated (any case)
+  becomes "Terminate" — a row already saying "TERMINATED" or "Terminated" is
+  left alone, neither rewritten to change its case nor downgraded; (3) the
+  Move placeholder is decided by the SERVER (`placeholderStatusForMove()` in
+  `app/api/master-list/move/route.ts`, which ignores a client-sent
+  `statusValue` for these two lists): Strike Off → "Striking Off" (TeamWork's
+  own in-progress wording, INV-DATA-064), Terminated Services → "Terminate";
+  the Active Client page imports the constants instead of typing literals, so
+  a stale browser tab or a copy-pasted string can't bring back a different
+  word. **A row TeamWork itself reports as non-terminated is deliberately NOT
+  forced** ("follow teamwork"; forcing it would be undone by the next sync
+  anyway): 7 companies still "Active" in TeamWork although filed under
+  Terminated Services (XSPY, SINGAPORE CHINESE ARTS CENTER, SATORISYS, HALOFUN,
+  ANABLE MANAGEMENT SERVICES, ARK PARTNERS MANAGEMENT, SINO MINING HEAVY
+  INDUSTRIES — the same 7 flagged on 2026-09-04 and still open) and 2 "Striking
+  Off" (WEIOT, ALLIED CHANCE INTERNATIONAL LIMITED (SINGAPORE BRANCH)). Those
+  need a TeamWork-side fix (or a move back to Active Client); the "TW CSS
+  Clients" card on the Terminated Services page lists the Active ones. The
+  planner takes TWO TeamWork inputs on purpose — the mirror map AND the set of
+  every UEN with any non-blank TeamWork status — because the sync skips a few
   TeamWork records (ambiguous name, duplicate stub, INV-TW-023) before it
   fills the mirror map, and a company TeamWork DOES describe must never be
   mistaken for one it knows nothing about. The sync reports
   `master_list_terminated_defaults`; each change is audit-logged with the old
   value (`changed_by = 'system:terminated-list-default'`, filtered out of
   human team-activity like every `system:` writer). Dry run against the live
-  data: exactly 186 rows change (180 "YES" + the 6 odd values), all in
-  Terminated Services, 0 pending TeamWork-mirror changes. Guards:
-  `test-master-list-status.ts` (the planner incl. the real 269-row shape, and
+  data: exactly 185 rows change to "Terminate" (180 "YES" + "RENAMED", "to be
+  terminate", blank, "Mary", "NO"), all in Terminated Services, 0 pending
+  TeamWork-mirror changes. Guards: `test-master-list-status.ts` (the planner
+  incl. the real 269-row shape, the Terminate/Terminated distinction, and
   source guards that fail if the Move route, the page or the sync go back to
-  their own copy of the rule). NOT covered, needs Vincent: Strike Off's own
+  their own copy of the rule or the Terminated Services Move target becomes
+  the final word). NOT covered, needs Vincent: Strike Off's own
   TeamWork-unknown leftovers (5 "YES", 1 blank — "Struck Off" vs "Striking
   Off" is a business call, INV-DATA-064: never claim more than is known), and
   Active Client's Move placeholder "YES" (rewritten to "Active" by the next
-  sync for rows TeamWork knows — the same "changes by itself" shape, not
-  asked for).
+  sync for rows TeamWork knows — the same overnight-change shape, and by the
+  same logic an intended confirmation signal, so left alone).
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
