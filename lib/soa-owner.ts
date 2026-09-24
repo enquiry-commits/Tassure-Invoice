@@ -54,12 +54,33 @@ export interface OwnerInvoiceSignal {
 // reflected by their LATEST invoice than an average across their history
 // (a staff handoff should show up immediately, not get diluted by old
 // invoices tagged to whoever had it before).
+//
+// Two invoices on the SAME day (a month-end batch) are a genuine tie, and
+// this used to be settled by whatever order the database happened to return
+// the rows in — so the answer could flip between runs (HAN KUN LLP's TAO
+// suggestion did, on 2026-09-17: a `stale_confirmed_pic` exception opened and
+// closed itself). The tie is now broken explicitly, by the lower (earlier-
+// created) QuickBooks Id: measured 2026-09-24 against all 411 real TAB/TAO
+// customers, that reproduces what the old unordered read returned in practice
+// for every one of them, and it agrees with the human-confirmed PIC in the
+// one tie that has one (HAN KUN LLP TAO → Lee Jing Fei). The opposite rule
+// (later-created first) would move exactly two real suggestions, including
+// that one away from its confirmed PIC. Not a rule Vincent stated — see
+// docs/INVARIANTS.md INV-DATA-066 before changing it.
+function compareQbIds(a: string, b: string): number {
+  const aNum = /^[0-9]+$/.test(a);
+  const bNum = /^[0-9]+$/.test(b);
+  if (aNum && bNum) return Number(a) - Number(b); // QuickBooks Ids are numeric strings: "9689" < "18268"
+  if (aNum !== bNum) return aNum ? -1 : 1;
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 export function computeSuggestedOwner(
   invoices: OwnerInvoiceSignal[],
   classNamesByInvoice: Map<string, string[]>,
   company: QbCompany,
 ): string | null {
-  const sorted = [...invoices].sort((a, b) => b.txnDate.localeCompare(a.txnDate));
+  const sorted = [...invoices].sort((a, b) => b.txnDate.localeCompare(a.txnDate) || compareQbIds(a.qbInvoiceId, b.qbInvoiceId));
   for (const inv of sorted) {
     for (const className of classNamesByInvoice.get(inv.qbInvoiceId) ?? []) {
       const resolved = resolveStaffName(className);

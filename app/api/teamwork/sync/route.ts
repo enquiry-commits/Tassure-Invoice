@@ -420,7 +420,8 @@ async function syncTeamworkCompanies() {
     // an unpaginated select silently truncates — page through it explicitly.
     const mlRows: { id: number; company_name: string; nd_active: boolean | null; nominee_director: string | null; manual_fields: Record<string, boolean> | null }[] = [];
     for (let start = 0; ; start += 1000) {
-      const { data: page } = await supabase.from('master_list').select('id, company_name, nd_active, nominee_director, manual_fields').range(start, start + 999);
+      // .order('id') is required for stable paging (INV-DATA-066).
+      const { data: page } = await supabase.from('master_list').select('id, company_name, nd_active, nominee_director, manual_fields').order('id', { ascending: true }).range(start, start + 999);
       mlRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }
@@ -466,7 +467,7 @@ async function syncTeamworkCompanies() {
     const acRows: { id: number; roc_no: string | null; invoice_address: string | null; internal_code: string | null; manual_fields: Record<string, boolean> | null }[] = [];
     for (let start = 0; ; start += 1000) {
       const { data: page } = await supabase.from('master_list')
-        .select('id, roc_no, invoice_address, internal_code, manual_fields').eq('list_type', 'active_client').range(start, start + 999);
+        .select('id, roc_no, invoice_address, internal_code, manual_fields').eq('list_type', 'active_client').order('id', { ascending: true }).range(start, start + 999);
       acRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }
@@ -581,7 +582,7 @@ async function syncTeamworkCompanies() {
     const acRows: { id: number; roc_no: string | null; email: string | null; manual_fields: Record<string, boolean> | null }[] = [];
     for (let start = 0; ; start += 1000) {
       const { data: page } = await supabase.from('master_list')
-        .select('id, roc_no, email, manual_fields').eq('list_type', 'active_client').range(start, start + 999);
+        .select('id, roc_no, email, manual_fields').eq('list_type', 'active_client').order('id', { ascending: true }).range(start, start + 999);
       acRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }
@@ -632,7 +633,7 @@ async function syncTeamworkCompanies() {
     const mlStatusRows: { id: number; roc_no: string | null; status: string | null; manual_fields: Record<string, boolean> | null }[] = [];
     for (let start = 0; ; start += 1000) {
       const { data: page } = await supabase.from('master_list')
-        .select('id, roc_no, status, manual_fields').range(start, start + 999);
+        .select('id, roc_no, status, manual_fields').order('id', { ascending: true }).range(start, start + 999);
       mlStatusRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }

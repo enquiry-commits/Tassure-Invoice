@@ -308,7 +308,14 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
       .select('qb_invoice_id, class_name')
       .eq('qb_company', company)
       .in('qb_invoice_id', unpaidInvoiceIds)
-      .not('class_name', 'is', null);
+      .not('class_name', 'is', null)
+      // Line order, not "whatever order the database returns" — the owner
+      // suggestion takes the FIRST resolvable class it meets, so an invoice
+      // with two differently-classed lines used to yield an arbitrary owner
+      // that could flip between page loads (INV-DATA-066). Same rule in both
+      // computeSoaRows() and legacyComputeSoaRows().
+      .order('qb_invoice_id', { ascending: true })
+      .order('line_num', { ascending: true });
     if (itemsError) throw new Error(itemsError.message);
     for (const item of items ?? []) {
       if (!item.class_name) continue;
@@ -445,7 +452,14 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
       .select('qb_invoice_id, class_name')
       .eq('qb_company', company)
       .in('qb_invoice_id', unpaidInvoiceIds)
-      .not('class_name', 'is', null);
+      .not('class_name', 'is', null)
+      // Line order, not "whatever order the database returns" — the owner
+      // suggestion takes the FIRST resolvable class it meets, so an invoice
+      // with two differently-classed lines used to yield an arbitrary owner
+      // that could flip between page loads (INV-DATA-066). Same rule in both
+      // computeSoaRows() and legacyComputeSoaRows().
+      .order('qb_invoice_id', { ascending: true })
+      .order('line_num', { ascending: true });
     if (itemsError) throw new Error(itemsError.message);
     for (const item of items ?? []) {
       if (!item.class_name) continue;

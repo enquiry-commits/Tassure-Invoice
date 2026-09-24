@@ -89,8 +89,9 @@ Confirm the manual value is completely untouched afterward.
 ### REG-011 — Large-list pagination
 On a large Master List page (Active Clients), confirm the displayed total
 row count matches the real underlying row count — not silently capped at
-1000.
-**Guards:** INV-DATA-006.
+1000 — and that no row appears twice (a count can match while duplicates and
+gaps cancel out; compare DISTINCT ids, see REG-023).
+**Guards:** INV-DATA-006, INV-DATA-066.
 
 ### REG-012 — Chinese name entry
 Type a Chinese company name or PIC name into any inline-edit table cell.
@@ -272,6 +273,31 @@ first). Permissions: an account WITHOUT `canViewQuotation` gets a redirect to
 sidebar entry; re-run REG-016's flag check for every account (only Vincent
 has `canViewQuotation`).
 **Guards:** `docs/INVARIANTS.md` INV-QB-024, INV-DATA-066.
+
+### REG-023 — Paging returns every row exactly once (after ANY change to `lib/page-all.ts`, `lib/supabase.ts` or a paged query)
+Run `npx tsx test-page-all.ts`, `npx tsx test-supabase-auto-page.ts`,
+`npx tsx test-paging-guard.ts` and `npx tsx test-soa-owner-tiebreak.ts` — each
+must print `ALL OK`. Then against real
+data: (1) through the real `pageAll()`, read the multi-page shapes that
+matter and compare with the same query fetched sequentially ordered by `id` —
+today's set: `quickbooks_invoices` year-filtered (2,326 rows: the AR Reminder
+shape that used to lose 309), `quickbooks_invoices` since 2024 (8,047),
+`quickbooks_invoice_items` (18,973), `master_list` (1,599), `email_drafts`
+(2,039) — every row present once, zero duplicates, over several repeats (the
+instability is plan-dependent; one clean run proves nothing). (2) A plain
+`createAdminClient().from('master_list').select('id')` returns 1,599 rows, not
+1,000. (3) On the AR Reminder page, expand a 2026 row whose invoice used to
+vanish (LOYANG BESTCONN TRADING & SERVICES, April 2026 → 02611026; ASIA BLUE,
+June 2026 → 02610940; ECAPTIAL, June 2026 → 02610948 + 02680266) and confirm
+"QB Invoices" lists it. (3b) SOA Main-PIC suggestions must stay put: with no
+confirmed PIC MINYOTECH PTE. LTD. (TAB) suggests Hoo Seng Xin, and HAN KUN LLP
+(TAO) suggests Lee Jing Fei (= its confirmed PIC, so `soa_owner_audit` must NOT
+list it) — those two are the only customers the same-day tie-break can move
+(INV-DATA-066 part 3). (4) Watch the Vercel logs for `[supabase] unpaginated
+read of "<table>" hit the 1000-row cap` after a few days: each line names a
+call site that should be converted to `pageAll()`, and a table that keeps
+appearing is approaching a real problem.
+**Guards:** `docs/INVARIANTS.md` INV-DATA-006, INV-DATA-066.
 
 ---
 

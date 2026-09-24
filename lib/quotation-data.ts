@@ -53,16 +53,13 @@ async function loadWindowInvoices(supabase: SupabaseClient, windowStart: string)
   const probe = await supabase.from('quickbooks_invoices').select('*', { count: 'exact', head: true }).gte('txn_date', windowStart);
   if (probe.error) throw new QuotationDataError(probe.error.message);
 
-  // .order('id') is REQUIRED: unordered .range() paging is not stable in
-  // PostgREST. Measured on this very table (a txn_date-filtered query, 2,324
-  // rows): unordered paging returned 650 DUPLICATED rows and 650 MISSING
-  // ones — silently, no error — while ordering by the unique id returned all
-  // 2,324 exactly once (docs/INVARIANTS.md INV-DATA-066).
+  // pageAll() orders every page by the unique id (INV-DATA-066) — this exact
+  // txn_date-filtered read is what first exposed that unordered offset paging
+  // silently duplicated 650 rows and dropped 650 others out of 2,324.
   const loaded = (await pageAll(() => supabase
     .from('quickbooks_invoices')
     .select('id, qb_company, qb_invoice_id, invoice_no, txn_date, customer_name, total_amt, balance, status')
-    .gte('txn_date', windowStart)
-    .order('id', { ascending: true }))) as InvoiceDb[];
+    .gte('txn_date', windowStart))) as InvoiceDb[];
 
   // A short/duplicated load raises nothing — it would just turn real invoices
   // into a confident-looking "not found". Refuse instead.

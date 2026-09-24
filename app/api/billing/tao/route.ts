@@ -68,7 +68,13 @@ export async function computeTaoCompanies(): Promise<TaoCompanyRow[]> {
       .from('quickbooks_invoices')
       .select('customer_name, invoice_no, txn_date, total_amt')
       .eq('qb_company', 'TAO')
-      .order('txn_date', { ascending: false })) as Promise<QbInvoice[]>,
+      .order('txn_date', { ascending: false })
+      // Several invoices on the SAME day: the highest invoice number is the
+      // "last" one. Without this the winner was arbitrary — 11 companies'
+      // "Last TAO Invoice" changed between runs/implementations
+      // (INV-DATA-066). The database `id` is NOT a usable proxy for
+      // "newest": for older invoices it runs in the opposite direction.
+      .order('invoice_no', { ascending: false })) as Promise<QbInvoice[]>,
   ]);
   if (companiesRes.error) throw new Error(companiesRes.error.message);
 

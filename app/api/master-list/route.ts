@@ -269,7 +269,8 @@ export async function GET(req: NextRequest) {
     // before deploying, not assumed correct from the diff alone.
     const allMasterListRows: { roc_no: string | null }[] = [];
     for (let start = 0; ; start += 1000) {
-      const { data: page } = await supabase.from('master_list').select('roc_no').range(start, start + 999);
+      // .order('id') is required for stable paging (INV-DATA-066).
+      const { data: page } = await supabase.from('master_list').select('roc_no').order('id', { ascending: true }).range(start, start + 999);
       allMasterListRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }

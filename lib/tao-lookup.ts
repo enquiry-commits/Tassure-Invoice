@@ -119,7 +119,10 @@ export async function previewTaoBilling(companyQuery: string): Promise<TaoLookup
     pageAll(() => sb.from('quickbooks_invoices')
       .select('customer_name, invoice_no, txn_date, total_amt')
       .eq('qb_company', 'TAO')
-      .order('txn_date', { ascending: false })) as Promise<Array<{
+      .order('txn_date', { ascending: false })
+      // Same-day tie: highest invoice number = "last" — identical to
+      // app/api/billing/tao/route.ts (INV-DATA-066).
+      .order('invoice_no', { ascending: false })) as Promise<Array<{
         customer_name: string; invoice_no: string; txn_date: string | null; total_amt: number | null;
       }>>,
   ]);

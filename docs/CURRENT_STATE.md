@@ -134,6 +134,8 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
 
 ## Active issues
 
+**Supabase paging / 1,000-row-cap safeguards are new and not yet seen in production (2026-09-24).** `pageAll()` now orders every page by a unique key and throws on a failed page; `createAdminClient()` completes any plain read that hits PostgREST's 1,000-row cap (`lib/supabase-auto-page.ts`); 5 hand-written `.range()` loops got an ordering; SOA/TAO same-day ties use explicit rules (INV-DATA-066, REG-023). Verified against the real database and fake backends from a dev machine only — nothing has run on Vercel yet. After the first deploy check: (1) the AR Reminder rows that used to lose 2026 invoices (LOYANG BESTCONN, ASIA BLUE, ECAPTIAL) now list them; (2) the Vercel logs — a `[supabase] unpaginated read of "<table>" hit the 1000-row cap` warning is expected and harmless (it names a call site worth converting to `pageAll()`), whereas `[supabase] read of "<table>" hit the 1000-row cap and could NOT be completed` or `[supabase] auto-pagination failed` are real problems (kill switch: `SUPABASE_AUTO_PAGINATE=0`); (3) `soa_owner_audit` stays free of HAN KUN LLP (TAO) — if it reappears, the same-day tie rule in `lib/soa-owner.ts` has changed. Not covered: an explicit `.limit(N)` above 1,000 (none exists today) and offset drift when a table changes between two page requests of one read.
+
 **`ai_quality_review` nightly cron has NEVER run (found 2026-09-24).** The
 daily cron for `/api/ai-quality/review` (`0 23 * * *`) is in `vercel.json`,
 but its path is missing from `proxy.ts`'s `CRON_PATHS` allowlist, so every

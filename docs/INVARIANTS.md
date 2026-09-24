@@ -1289,7 +1289,9 @@ again.
   have attributed the client to the wrong person. `lib/soa-owner.ts`'s
   `computeSuggestedOwner()` is the one place this priority is implemented;
   any other feature that needs "the real owner" from QB data must reuse
-  it, not re-derive its own Location-first shortcut. Both write paths
+  it, not re-derive its own Location-first shortcut. Its same-day tie-break
+  (lower QuickBooks Id first) is explicit and deliberate — INV-DATA-066 part 3
+  says why and what would move. Both write paths
   into `quickbooks_invoices.location_name`/`quickbooks_invoice_items
   .class_name` — the full-year sync (`app/api/quickbooks/sync/route.ts`)
   AND the webhook-driven incremental sync (`lib/quickbooks-invoice-
@@ -1765,7 +1767,11 @@ again.
 - **INV-DATA-006** — `master_list`/any >1000-row table must always be
   queried with explicit `range()` pagination in server routes needing "all
   rows" — PostgREST's default 1000-row cap has silently truncated queries
-  more than once in this codebase.
+  more than once in this codebase. **Since 2026-09-24 this is enforced
+  centrally, not just by convention** — see INV-DATA-066: `pageAll()` now
+  orders every page uniquely, and `createAdminClient()` completes any plain
+  read that hits the cap (logging which call site did, so it can be converted
+  to an explicit `pageAll()`).
 - **INV-DATA-007** — A newly-added column with page-specific rendering
   must never be added to the shared default `COLUMNS` array used by pages
   that don't pass an explicit `fields` prop — it silently "leaks" onto
@@ -3100,32 +3106,109 @@ again.
   --noEmit`, `npx eslint` (both changed files), `npm run build` (cold) all
   clean.
 
-- **INV-DATA-066** — Every `pageAll()` / `.range()` paginated read must carry
-  a deterministic `.order()` on a UNIQUE column (`id`) — unordered (or
-  non-unique-ordered) paging is not stable in PostgREST and fails SILENTLY:
-  no error, just duplicated and missing rows. Measured 2026-09-24 while
-  building the Quotation trace, on the real `quickbooks_invoices` table with
-  a `txn_date >= '2026-01-01'` filter (2,324 rows): unordered paging returned
-  650 duplicated rows and therefore 650 MISSING ones (1,674 distinct of 2,324
-  — 28% wrong), including exactly the two invoices the check was looking
-  for (TAO `02660590`, TAB `02610673`); adding `.order('id')` returned all
-  2,324 exactly once. The confusing part is that it is plan-dependent:
-  two existing query shapes tested the same day (`computeTaoCompanies()`'s
-  TAO items query, 4,049 rows; its TAO invoices query, 2,769 rows) happened
-  to return complete results unordered / ordered by the non-unique
-  `txn_date`, so "it works on this table" proves nothing. `pageAll()` also
-  swallows query errors and returns `[]`, so a new read must (1) probe with
-  an error-returning head count first (a missing table otherwise reads as
-  "no rows"), and (2) compare the number of DISTINCT ids loaded to that
-  count and fail loudly on a mismatch — `lib/quotation-data.ts`'s
-  `loadWindowInvoices()` is the reference implementation. `app/api/billing/
-  renewals/route.ts` already carries a "unique tiebreaker so parallel page
-  boundaries are stable" comment (`invoice_no` + `line_num`), so this is a
-  known class, not new; but older `pageAll` call sites that order by
-  nothing/a non-unique key (e.g. `computeTaoCompanies()`,
-  `legacyComputeSoaRows()`) have NOT been audited — not proven safe, just not
-  observed failing. If a displayed count ever disagrees with the underlying
-  table, suspect this first.
+- **INV-DATA-066** — Supabase reads must never silently return an incomplete
+  or duplicated row set. Two failure modes, both SILENT (no error, no
+  warning), both measured on real data 2026-09-24 and now closed centrally:
+  1. **Unstable offset paging.** `.range()`/`pageAll()` without a total order
+     is not stable in PostgREST — pages overlap and skip rows. On the real
+     `quickbooks_invoices` table with a `txn_date` filter (2,324 rows) 307 to
+     650 rows came back duplicated and the same number MISSING, depending on
+     the exact filter. It was LIVE on the AR Reminder page
+     (`app/api/ar-reminder/route.ts`, the year-filtered invoice lookup that
+     was introduced ~2026-09-14 as "a pure completeness fix"): the 2,326
+     invoices of 2026 came back as 2,017 distinct, so 182 of the 638 AR rows
+     that really have a 2026 invoice showed an incomplete "QB Invoices" list
+     in their row detail and 34 showed none (identical on every load, e.g.
+     LOYANG BESTCONN Apr 2026 → 02611026, ASIA BLUE Jun 2026 → 02610940). That
+     panel is display-only; Billing Drafts' "not invoiced yet" logic reads the
+     renewals route's data instead. Fix: `lib/page-all.ts` appends a unique
+     `id` tiebreaker (AFTER the caller's own ordering) to EVERY page request,
+     and a failed page now THROWS — it used to be swallowed, and if it was the
+     last page of a wave the "short page means done" check ended the read
+     early. The 5 hand-rolled `.range()` loops (`master-list` route, 4 in
+     `teamwork/sync`) got `.order('id')`.
+  2. **The 1,000-row cap on unpaginated reads.** This project's PostgREST
+     returns at most 1,000 rows for a read that does not page (`limit=1500`
+     and `Range: 0-1499` are capped too); a truncated response carries
+     `Content-Range: 0-999/*`. Real, present-day loss: the assistant's Master
+     List edit tool (`lib/company-update-lookup.ts`) and former-client lookup
+     (`lib/company-deep-lookup.ts`) read `master_list` (1,599 rows)
+     unpaginated and could not see 599 of them — 218 of the 788 ACTIVE clients
+     among them ("has no Master List row, so there is nothing to edit
+     there"); `billing/compare` reads whole years of invoices (2.3-2.9K rows).
+     And weeks away: `generated_invoices` 945 rows (+41/month), `ar_reminder`
+     917 (+50/month), `companies` 952 (+10/month), each under dozens of
+     unpaginated reads (a static scan flagged 122 candidate reads on
+     near/over-cap tables outside `pageAll`, many of them bounded by filters).
+     Fix, at the one place every server-side read goes through:
+     `lib/supabase-auto-page.ts`, installed by `createAdminClient()`,
+     re-issues a plain GET read that came back with EXACTLY the cap signature
+     (no explicit limit/offset/Range, no count preference, not
+     single-object/RPC) with a unique `id` tiebreaker appended to its ordering
+     and returns every page. Anything else is returned untouched, and if
+     completing fails the original response comes back unchanged. Each
+     completion logs `[supabase] unpaginated read of "<table>" hit the
+     1000-row cap` — a call site that shows up there should be converted to
+     `pageAll()`; the safety net is not a licence to skip pagination. Kill
+     switch: `SUPABASE_AUTO_PAGINATE=0`.
+  3. **Same-day ties are now settled by an explicit rule, not by row order.**
+     Two places used to depend on whichever order the database happened to
+     return tied rows in (measured by running old and new code SIMULTANEOUSLY
+     on the same data: the row SETS were identical, only tied rows moved).
+     (a) The SOA Main-PIC suggestion (`computeSuggestedOwner()` in
+     `lib/soa-owner.ts`) takes the first resolvable Class of the most recent
+     invoice, and a month-end batch of same-day invoices is a tie. It flipped
+     between runs: HAN KUN LLP (TAO) opened and self-resolved a
+     `stale_confirmed_pic` exception on 2026-09-17 purely because of that.
+     The tie now goes to the lower (earlier-created) QuickBooks Id, compared
+     numerically. Measured on all 411 TAB/TAO customers, only TWO are
+     sensitive to the choice at all (MINYOTECH TAB, HAN KUN LLP TAO); this rule
+     reproduces the old code's usual answer for both (Hoo Seng Xin, Lee Jing
+     Fei — the latter is also its human-confirmed PIC), so nothing visible on
+     the SOA pages moved. The opposite rule (later-created wins) would have
+     changed both (Tey Shemin, Clarence Saw) and put HAN KUN LLP back into
+     `soa_owner_audit` every night. This is NOT a rule Vincent stated: if the
+     business wants "the later-created invoice decides", flip the sign in
+     `compareQbIds` and expect exactly those two to change
+     (`test-soa-owner-tiebreak.ts`). The class lines inside one invoice are
+     read in `(qb_invoice_id, line_num)` order for the same reason.
+     (b) TAO's display-only "last invoice" (`computeTaoCompanies()`,
+     `previewTaoBilling()`): a tie on the last billing day now goes to the
+     highest `invoice_no` ("last" = most recently issued). The database `id`
+     is NOT a usable "newest" proxy (only 10 of 83 same-day groups agree with
+     invoice-number order), so the paging `id` tiebreak alone would have been
+     deterministic but meaningless; and the old output followed no coherent
+     rule either (it matched neither ascending nor descending). Measured
+     2026-09-24, 8 of 810 TAO rows show a different invoice because of it (e.g.
+     BLUEWHALE 02660605 → 02660606, HAN KUN LLP 02660512 → 02660518, Kim Pan
+     Investment 02660299 → 02660300); the field is display-only and never
+     prices anything. Comparing two runs of `computeTaoCompanies()` by company
+     NAME alone is a trap: some companies legitimately appear on 2 rows (one
+     per matched TAO customer name — JULLY TECHNOLOGIES, TARGET CAPITAL
+     MANAGEMENT, APOLLO CAPITAL MANAGEMENT), and the order of those rows moves
+     between runs; compare the multiset of rows per (id, name) instead.
+  Guards: `test-page-all.ts` (a fake backend that reproduces the instability —
+  the OLD implementation fails on it with the same 650-missing figure),
+  `test-supabase-auto-page.ts` (the real supabase-js client over a mini
+  PostgREST fake: completes truncated reads and leaves everything else
+  byte-for-byte alone), `test-paging-guard.ts` (static: every hand-written
+  `.range(` outside `page-all.ts` must be ordered; `createClient` may only be
+  called in `lib/supabase.ts` so nothing bypasses the safety net). Verified on
+  the real database: all 18 real multi-page query shapes returned exactly the
+  true rows in every repeated run through the fixed `pageAll` (the AR shape was
+  the one that failed before), and plain unpaginated reads of `master_list`
+  (1,599), `quickbooks_invoices` (8,047), `quickbooks_invoice_items` (18,973)
+  and `email_drafts` (2,039) now come back complete in 1 to 2 seconds. Known
+  and NOT fixed: an explicit `.limit(N)` with N > 1,000 is still capped by the
+  server (the wrapper deliberately leaves a caller-set limit alone). Audited
+  2026-09-24: no call site does that today — the largest are
+  `app/api/teamwork/sync-secretary/route.ts` (≤ 900), `lib/audit-lookup.ts`
+  (exactly 1,000 = the cap, so nothing is hidden) and `lib/team-activity.ts`
+  (`cap = 400`); every other `.limit()` is ≤ 500. A NEW `.limit(2000)` would
+  quietly reintroduce the cap — use `pageAll()` for anything that can exceed
+  1,000 rows. Also not fixed: offset paging can still duplicate or skip a row
+  if the table changes between two page requests of one read (rare, and far
+  smaller than the unordered failure).
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
