@@ -253,6 +253,32 @@ again.
   exact number like this, check for a duplicate UEN before assuming a
   filter or a sync-timing issue. *(source: 2026-09-11, Vincent: "这种的要
   修复，避免下次出现一样的情况".)*
+- **INV-TW-023** — INV-TW-022's UEN fallback assumes an id change means
+  TeamWork REISSUED the id (old id gone). TeamWork can also hold TWO LIVE
+  records for one UEN at once — a real one (client code + Internal CSS
+  Status "Active") and a blank stub (no code, empty status). Confirmed
+  2026-09-24 against the real `getCompanies` feed: exactly 3 UENs
+  (SHENGYA (SG) 1522 real / 1462 stub, A.I.R. INVESTMENT 1534 / 1468,
+  XGC SINGAPORE 978 / YANGGU 976), matching `internal_id_reregistered: 3` in
+  every nightly run. With both live, the fallback re-keyed the ONE
+  `companies` row between them every night, and both patches landed on it —
+  when the stub's blank status won, `tw_status` became null and `is_active`
+  false, so a company TeamWork plainly shows as Active appeared under "Inactive
+  in TeamWork" on the Active Client page (Shi Ming: "Shengya 为什么会变成
+  inactive?"), intermittently. Rule: when 2+ live records share a UEN, only
+  the canonical one (`lib/teamwork-duplicate-uen.ts`: has client code, then
+  Active, then any status, then higher id) is ever matched or applied; the
+  rest are skipped and raised as the `duplicate_uen_in_teamwork` automation
+  exception so staff can delete the stub in TeamWork — the sync must be
+  correct WITHOUT that cleanup, the exception is hygiene only. The Master
+  List page has the mirror-image rule: `app/api/master-list/route.ts` derives
+  `is_css_client` / `css_client_inactive` per UEN across ALL its `companies`
+  rows (active if ANY row is; inactive only if there are CSS Client rows and
+  none is active) — it used to be last-write-wins, so a stale pre-fix
+  orphan row (GOLDEN BRIDGE MARTEC's old row 1770, still on file) could flip
+  a correctly Active UEN to inactive depending on row order. Any per-UEN flag
+  computed from `companies` must be order-independent. *(source: 2026-09-24,
+  Vincent: "没有办法彻底的清除这些问题吗？因为TW明明都写道很清楚是Active了".)*
 
 ## AR/AGM cycle & ar_reminder data lifecycle (INV-AR)
 

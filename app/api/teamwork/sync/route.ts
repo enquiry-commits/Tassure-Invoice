@@ -6,6 +6,7 @@ import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { AutomationRun, automationTrigger, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { todaySGT } from '@/lib/date';
 import { getSessionCookie } from '@/lib/teamwork-agm';
+import { findDuplicateUenRecords } from '@/lib/teamwork-duplicate-uen';
 import { syncTeamworkCampaignRecipients } from '@/lib/teamwork-recipients';
 import { syncTeamworkContactPersons } from '@/lib/teamwork-contact-report';
 import { logFieldChange } from '@/lib/audit-log';
@@ -197,10 +198,35 @@ async function syncTeamworkCompanies() {
   const inserts: Record<string, unknown>[] = [];
   const unknownPicIds: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
   const ambiguousNames: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
-  let matched = 0, backfilled = 0, skippedAmbiguous = 0, reregistered = 0;
+  let matched = 0, backfilled = 0, skippedAmbiguous = 0, reregistered = 0, skippedDuplicateRecords = 0;
   const reregisteredCompanies: Array<{ name: string; old_internal_id: string; new_internal_id: string }> = [];
+  // INV-TW-023: TeamWork can hold two LIVE records for one UEN (a real one
+  // plus a blank stub). Without this, the UEN fallback below treated each
+  // night's "other" record as a reissued id and re-keyed the row back and
+  // forth between them — landing on the blank stub (no status) marked the
+  // company inactive (SHENGYA, A.I.R., XGC, 2026-09-24). Only the canonical
+  // record per UEN is ever matched/applied; the rest are skipped and surfaced
+  // as an exception so staff can delete the stub in TeamWork.
+  const { canonicalIdByUen, recordsByUen } = findDuplicateUenRecords(twList);
+  const duplicateUenRecords: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
+  for (const [uen, records] of recordsByUen) {
+    const canonical = records.find(r => r.company_id === canonicalIdByUen.get(uen))!;
+    duplicateUenRecords.push({
+      key: uen,
+      name: (canonical.company_name ?? '').trim().toUpperCase(),
+      details: {
+        canonical_teamwork_id: canonical.company_id,
+        ignored_records: records
+          .filter(r => r.company_id !== canonical.company_id)
+          .map(r => ({ teamwork_id: r.company_id, name: r.company_name, client_code: r.client_id || null, status: r.status || null })),
+      },
+    });
+  }
 
   for (const tw of twList) {
+    const dupCanonicalId = canonicalIdByUen.get((tw.company_registration_Num ?? '').trim().toUpperCase());
+    if (dupCanonicalId && dupCanonicalId !== tw.company_id) { skippedDuplicateRecords++; continue; }
+
     // Uppercased at the source — TeamWork's own API sometimes returns a
     // company name in mixed case (confirmed: 19 companies, e.g. "Bao
     // Fortune Shipping (G) Pte. Ltd.", inconsistent with every other
@@ -509,6 +535,7 @@ async function syncTeamworkCompanies() {
     }))),
     replaceAutomationExceptions('teamwork_companies', 'unknown_pic_id', unknownPicIds),
     replaceAutomationExceptions('teamwork_companies', 'ambiguous_company_name', ambiguousNames),
+    replaceAutomationExceptions('teamwork_companies', 'duplicate_uen_in_teamwork', duplicateUenRecords),
   ]);
 
   let recipientSync: Awaited<ReturnType<typeof syncTeamworkCampaignRecipients>> | null = null;
@@ -669,6 +696,7 @@ async function syncTeamworkCompanies() {
     inserted: insertedCount,
     inserted_names: dedupedInserts.map(r => r.company_name),
     skipped_ambiguous_names: skippedAmbiguous,
+    skipped_duplicate_uen_records: skippedDuplicateRecords,
     rows_missing_from_teamwork: missingFromTw,
     campaign_recipients: recipientSync,
     contact_person_fill_in: contactPersonFillIn,

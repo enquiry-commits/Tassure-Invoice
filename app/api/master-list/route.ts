@@ -164,15 +164,25 @@ export async function GET(req: NextRequest) {
   // into is_css_client.
   const cssClientByUen = new Map<string, boolean>();
   const cssClientInactiveByUen = new Map<string, boolean>();
+  const cssSeenByUen = new Set<string>();
   for (const c of companies ?? []) {
     const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
     if (!uen) continue;
     twUens.add(uen);
     if (c.fye_month) twFyeByUen.set(uen, c.fye_month);
     const isCssClient = c.client_type === 'CSS Client';
-    cssClientByUen.set(uen, isCssClient && c.is_active === true);
-    cssClientInactiveByUen.set(uen, isCssClient && c.is_active !== true);
+    // One UEN can legitimately have more than one `companies` row (a stale
+    // pre-fix duplicate like GOLDEN BRIDGE MARTEC's old row 1770, see
+    // INV-TW-022/023). These used to be plain last-write-wins, so which row
+    // the loop happened to visit LAST decided the flags — an old inactive
+    // orphan could flip a correctly Active company to "Inactive in
+    // TeamWork". A UEN is an active CSS Client if ANY of its rows is, and
+    // only "inactive" when it has CSS Client row(s) and none of them is
+    // active, whatever order the rows come back in.
+    cssClientByUen.set(uen, (cssClientByUen.get(uen) ?? false) || (isCssClient && c.is_active === true));
+    if (isCssClient) cssSeenByUen.add(uen);
   }
+  for (const uen of cssSeenByUen) cssClientInactiveByUen.set(uen, cssClientByUen.get(uen) !== true);
 
   // Active Client only: pull ACC/TAX PIC from ar_reminder (joined by UEN —
   // same exact-match approach as tw_fye above). This is the only list type
