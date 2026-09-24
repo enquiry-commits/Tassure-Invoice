@@ -8,10 +8,12 @@ import { placeholderStatusForMove } from '@/lib/master-list-status';
 //
 // Strike Off / Terminated Services: the status stamped here is a PLACEHOLDER
 // until the next nightly TeamWork sync confirms it, and it is decided HERE,
-// not by the browser (docs/INVARIANTS.md INV-DATA-067 / INV-DATA-064) — TeamWork's
-// own wording ("Striking Off", "Terminated"), so the sync has nothing to change
-// the next night. Vincent, relaying the colleague who works those lists:
-// "strike off & terminate的status 不要自己变…follow teamwork".
+// not by the browser (docs/INVARIANTS.md INV-DATA-067 / INV-DATA-064):
+// "Striking Off" (TeamWork's own in-progress wording) and "Terminate". The
+// final "Terminated" is TeamWork's word and only appears once the sync copies
+// it — Vincent: "Move 到 Terminated 现在放的 'Terminate'…和TW确认后才变成
+// Terminated". The colleague who works those lists: "strike off & terminate的
+// status 不要自己变…follow teamwork".
 //
 // 2026-09-09: this route had NO server-side auth check at all — the only
 // gate was a client-side window.confirm() in components/MasterListTable.tsx

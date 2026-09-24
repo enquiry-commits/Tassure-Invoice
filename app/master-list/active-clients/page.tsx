@@ -1,5 +1,5 @@
 import MasterListTable from '@/components/MasterListTable';
-import { STRIKING_OFF_STATUS, TERMINATED_STATUS } from '@/lib/master-list-status';
+import { STRIKING_OFF_STATUS, TERMINATE_PLACEHOLDER } from '@/lib/master-list-status';
 
 // Reduced, reordered column set per user request — everything else (Update
 // Date, Sec Agent, KYC Year, Corp Tax, E-filing Auth, A/C, Audit, GST,
@@ -59,14 +59,16 @@ export default function ActiveClientsPage() {
       // it runs — this default is deliberately a starting placeholder, not a
       // claim of fact.
       //
-      // Both placeholders are TeamWork's OWN wording, and app/api/master-list/
-      // move/route.ts now decides them server-side too (INV-DATA-067) — Terminated
-      // Services used to stamp 'TERMINATED', which the next night's sync rewrote
-      // to 'Terminated' (Master List colleague: "strike off & terminate的status
-      // 不要自己变…follow teamwork"). Import the constants; don't type the literals.
+      // Both values are PLACEHOLDERS until the next nightly TeamWork sync confirms
+      // them, and app/api/master-list/move/route.ts decides them server-side too
+      // (INV-DATA-067): Strike Off -> 'Striking Off' (TeamWork's own in-progress
+      // wording), Terminated Services -> 'Terminate'. TeamWork's final word
+      // 'Terminated' is deliberately NOT stamped here — it only appears once
+      // TeamWork confirms (Vincent: "Move 到 Terminated 现在放的 'Terminate'…和TW
+      // 确认后才变成 Terminated"). Import the constants; don't type the literals.
       moveTargets={[
         { type: 'strike_off', label: 'Strike Off',          statusValue: STRIKING_OFF_STATUS },
-        { type: 'terminated', label: 'Terminated Services', statusValue: TERMINATED_STATUS },
+        { type: 'terminated', label: 'Terminated Services', statusValue: TERMINATE_PLACEHOLDER },
       ]}
     />
   );

@@ -4,7 +4,19 @@
 // predecessor INV-DATA-064 is the same lesson for the Strike Off move).
 //
 // The column mirrors TeamWork's own company Status — Vincent: "MASTER LIST
-// 这边的 ACTIVE 就是TW里面的 STATUS". Three rules follow from that:
+// 这边的 ACTIVE 就是TW里面的 STATUS". Two words matter for Terminated Services,
+// and they are DIFFERENT on purpose:
+//
+//   "Terminate"  = the PLACEHOLDER. The row was filed here (by hand, by a
+//                  Move, by an old import) but TeamWork has not confirmed it.
+//   "Terminated" = TeamWork's own word. It appears only when the nightly sync
+//                  copies it from TeamWork, so it means CONFIRMED.
+//
+// Vincent: "Move 到 Terminated 现在放的 'Terminate'…和TW确认后才变成
+// Terminated". The change from "Terminate" to "Terminated" overnight is the
+// confirmation signal, not a bug — and a row that still says "Terminate"
+// after a sync is exactly the kind Vincent wants to look at ("看看之前有没有
+// 错误显示的 或者没有同步正确的"). Rules:
 //
 //   1. TeamWork wins. When TeamWork has a non-blank Status for the row's UEN,
 //      that is what the row shows, whichever list it sits in (a manual edit
@@ -12,23 +24,27 @@
 //
 //   2. A row TeamWork can say nothing about — its UEN is not in TeamWork at
 //      all, or TeamWork's status is blank — and that sits in Terminated
-//      Services must read "Terminated". Nothing else will ever correct it:
-//      180 such rows kept a legacy "YES" for months (plus "NO", "terminate",
-//      "to be terminate", "RENAMED", even a person's name), because the sync
-//      only ever touches rows TeamWork knows. The colleague who works that
-//      list asked for exactly this ("不是 terminated status 的…一直比较好").
-//      A row TeamWork DOES report as something else (e.g. still "Active") is
-//      NOT forced: "follow TeamWork" stands, and the disagreement is a
-//      TeamWork-side fix, not something to hide here.
+//      Services must read "Terminate" (unless it already says Terminate /
+//      Terminated). Nothing else will ever correct it: 180 such rows kept a
+//      legacy "YES" for months (plus "NO", "to be terminate", "RENAMED", even
+//      a person's name), because the sync only ever touches rows TeamWork
+//      knows. The colleague who works that list asked for exactly this
+//      ("你可以帮我把之前的都放Terminate 吗 — 就是不是terminated status 的…一直
+//      比较好"). A row TeamWork DOES report as something else (e.g. still
+//      "Active") is NOT forced: "follow TeamWork" stands, and the
+//      disagreement is a TeamWork-side fix, not something to hide here.
 //
-//   3. Moving a row into Strike Off / Terminated Services stamps a
-//      PLACEHOLDER until the next sync can confirm it: TeamWork's own wording
-//      ("Striking Off" — never the more final "STRUCK OFF", INV-DATA-064 — and
-//      "Terminated"), so the next night's sync has nothing to change, and the
-//      SERVER decides it, so a stale browser tab can't reintroduce a
-//      different literal.
+//   3. Moving a row into Strike Off / Terminated Services stamps the
+//      PLACEHOLDER until the next sync can confirm it — "Striking Off" (TeamWork's
+//      own in-progress wording, never the more final "STRUCK OFF", INV-DATA-064)
+//      and "Terminate" — and the SERVER decides it, so a stale browser tab
+//      can't reintroduce a different literal. Do NOT "tidy" the placeholder
+//      into TeamWork's final word: stamping "Terminated" at Move time would
+//      claim a confirmation that has not happened (the 2026-09-24 first
+//      version of this file did exactly that, and Vincent corrected it).
 
-export const TERMINATED_STATUS = 'Terminated';
+export const TERMINATED_STATUS = 'Terminated';        // TeamWork's word — confirmed
+export const TERMINATE_PLACEHOLDER = 'Terminate';     // ours — filed here, not yet confirmed by TeamWork
 export const STRIKING_OFF_STATUS = 'Striking Off';
 
 // Only the lists whose status TeamWork itself can already contradict need a
@@ -36,18 +52,20 @@ export const STRIKING_OFF_STATUS = 'Striking Off';
 // sends (Active Client's own "YES", see app/master-list/*/page.tsx).
 const MOVE_PLACEHOLDER_BY_LIST = new Map<string, string>([
   ['strike_off', STRIKING_OFF_STATUS],
-  ['terminated', TERMINATED_STATUS],
+  ['terminated', TERMINATE_PLACEHOLDER],
 ]);
 
 export function placeholderStatusForMove(targetListType: string): string | undefined {
   return MOVE_PLACEHOLDER_BY_LIST.get(targetListType);
 }
 
-// Case-insensitive on purpose: the old Move placeholder was "TERMINATED", and
-// rewriting a correct word only to change its case would itself be a status
-// that "changes by itself".
-export function isTerminatedStatus(status: string | null | undefined): boolean {
-  return String(status ?? '').trim().toLowerCase() === TERMINATED_STATUS.toLowerCase();
+// "Terminate" (placeholder) or "Terminated" (confirmed), any case — the old
+// Move placeholder was "TERMINATED", and rewriting a status that already says
+// the right thing only to change its case would itself be a status that
+// "changes by itself".
+export function isTerminateOrTerminated(status: string | null | undefined): boolean {
+  const s = String(status ?? '').trim().toLowerCase();
+  return s === TERMINATE_PLACEHOLDER.toLowerCase() || s === TERMINATED_STATUS.toLowerCase();
 }
 
 export type MasterListStatusRow = {
@@ -95,8 +113,8 @@ export function planMasterListStatusPatches(
 
     if (row.list_type !== 'terminated') continue;
     if (uen && twUensWithStatus.has(uen)) continue;
-    if (isTerminatedStatus(row.status)) continue;
-    patches.push({ id: row.id, oldValue: row.status, newValue: TERMINATED_STATUS, reason: 'terminated_list_default' });
+    if (isTerminateOrTerminated(row.status)) continue;
+    patches.push({ id: row.id, oldValue: row.status, newValue: TERMINATE_PLACEHOLDER, reason: 'terminated_list_default' });
   }
   return patches;
 }

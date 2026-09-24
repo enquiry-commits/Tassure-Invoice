@@ -631,9 +631,10 @@ async function syncTeamworkCompanies() {
   // until cleared back to empty.
   //
   // The rules themselves (TeamWork wins; a Terminated Services row TeamWork
-  // can say nothing about reads "Terminated"; a manual lock beats both) live
-  // in lib/master-list-status.ts so the Move route and this sync can't drift
-  // apart — INV-DATA-067.
+  // can say nothing about reads "Terminate" — the placeholder, "Terminated" is
+  // TeamWork's own word and only ever arrives from TeamWork; a manual lock
+  // beats both) live in lib/master-list-status.ts so the Move route and this
+  // sync can't drift apart — INV-DATA-067.
   let masterListStatusUpdated = 0, masterListStatusErrors = 0, masterListTerminatedDefaults = 0;
   {
     const mlStatusRows: { id: number; list_type: string | null; roc_no: string | null; status: string | null; manual_fields: Record<string, boolean> | null }[] = [];
@@ -708,7 +709,7 @@ async function syncTeamworkCompanies() {
     master_list_status_updates: masterListStatusUpdated,
     master_list_status_errors: masterListStatusErrors,
     // Of master_list_status_updates: Terminated Services rows TeamWork had
-    // nothing to say about, set to "Terminated" (INV-DATA-067).
+    // nothing to say about, set to the "Terminate" placeholder (INV-DATA-067).
     master_list_terminated_defaults: masterListTerminatedDefaults,
     inserted: insertedCount,
     inserted_names: dedupedInserts.map(r => r.company_name),
