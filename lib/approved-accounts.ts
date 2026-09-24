@@ -55,6 +55,17 @@ export type ApprovedAccount = {
   // permission, and should stay easy to hand to someone else later without
   // that silently also handing them Appearance Settings/AI Learning.
   canViewSgNews?: boolean;
+  // Gates the new Billing System › Quotation page/nav item and its API routes
+  // (app/billing/quotation, app/api/billing/quotation, and the manual-refresh
+  // trigger of app/api/quickbooks/estimates/sync) — QuickBooks Estimates and,
+  // once one is Closed, which book (TAB/TAC/TAO) its invoice was issued in.
+  // Added 2026-09-24, Vincent-only while the trace is being checked against
+  // real data (answered via AskUserQuestion: "先只开放给 Vincent"). Its own
+  // flag, not `admin`/`canViewSgNews`, for the same reason those two are
+  // separate: Vincent-only TODAY, but conceptually its own permission that
+  // should be easy to hand to Chelsea/Finance later without also handing them
+  // anything else.
+  canViewQuotation?: boolean;
   // When set, this account is confined to exactly this one page (path +
   // required query params, e.g. AR Reminder is the 'ar' tab on /billing —
   // see components/Sidebar.tsx's tree for the canonical href). Enforced in
@@ -65,7 +76,7 @@ export type ApprovedAccount = {
 };
 
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
-  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true },
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true, canViewQuotation: true },
   { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
   { name: 'Samuell Ng', email: 'samuellng@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
   // New login account, added 2026-09-02 specifically to grant this

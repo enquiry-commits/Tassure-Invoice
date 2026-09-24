@@ -79,6 +79,12 @@ export async function proxy(req: NextRequest) {
   if (!isApi && path === '/sg-news' && !account.canViewSgNews) {
     return NextResponse.redirect(new URL('/', req.url));
   }
+  // Billing System › Quotation (added 2026-09-24) — Vincent-only while the
+  // Estimate → invoice trace is being checked against real data. Same hard
+  // middleware block as /sg-news above, not just a hidden sidebar entry.
+  if (!isApi && path === '/billing/quotation' && !account.canViewQuotation) {
+    return NextResponse.redirect(new URL('/', req.url));
+  }
   // Some accounts only see one page (Vincent, 2026-08-17 — an Accounting-team
   // group confined to AR Reminder). Page navigation only, same as the rest of
   // this file: API routes stay reachable so the allowed page's own fetches

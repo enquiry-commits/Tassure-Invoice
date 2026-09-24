@@ -134,7 +134,19 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
 
 ## Active issues
 
-None currently known-broken as of this writing, but the TeamWork
+**`ai_quality_review` nightly cron has NEVER run (found 2026-09-24).** The
+daily cron for `/api/ai-quality/review` (`0 23 * * *`) is in `vercel.json`,
+but its path is missing from `proxy.ts`'s `CRON_PATHS` allowlist, so every
+nightly call is treated as unauthenticated and rejected — confirmed with real
+data: `automation_sync_runs` has zero rows for source `ai_quality_review`,
+while `ai_learning`/`soa_owner_audit`/`sg_news_sync` show a successful cron
+run every night. This is the exact failure INV-CRON-011 warns about. A
+separate follow-up task was raised to add the path (deliberately not folded
+into the Quotation change: enabling it starts a nightly Anthropic-spending
+job Vincent is not expecting from an unrelated change). Until it lands, the
+"立即抽查" button on `/ai-quality` is the only way reviews get produced.
+
+None other currently known-broken as of this writing, but the TeamWork
 automation collision (see Automation health above) is a real, recent
 recurrence of a previously-"fixed" problem — treat its fix as
 **unconfirmed until 5-7 real clean days are observed**, not resolved. See

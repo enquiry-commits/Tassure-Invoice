@@ -1605,6 +1605,84 @@ again.
   from `lib/statement-pdf`) rather than leaving dead code disabled in
   place. `npx tsc --noEmit`, `npx eslint`, `npm run build` (cold) all
   clean.
+- **INV-QB-024** — Billing System › Quotation (`app/billing/quotation`,
+  `lib/quickbooks-estimates.ts`, `lib/quotation-trace.ts`,
+  `lib/quotation-data.ts`; Vincent, 2026-09-24, Vincent-only via
+  `canViewQuotation`) lists QuickBooks **Estimates** and, once one is
+  Closed, shows which book(s) the resulting invoice(s) were issued in. Facts
+  confirmed against real data (read live from all three books, not assumed)
+  that a future change here must keep true:
+  1. **A "Quotation" is the QuickBooks Estimate entity** — "PI" + YY +
+     sequence (`PI260067`), one numbering shared across books. Live: 48 of
+     50 estimates dated since 2024 are in TAB, 2 in TAO, 0 in TAC. The
+     prefix is NOT a reliable filter: 2 of 50 carry no PI number (a Closed
+     one numbered like an invoice, `02610474`, and a Pending `260041`) —
+     never filter on it.
+  2. **`LinkedTxn` (Estimate → Invoice) exists only when both are in the
+     SAME company file.** All 39 real Closed estimates carry a same-book link,
+     but the invoices Chelsea issued for the same quotation in ANOTHER book
+     have no link anywhere in QuickBooks — exactly the case Vincent asked
+     the page to trace ("你可以从TAB/TAO/TAC追踪到Chelsea 开在哪个Source").
+     Real workflow shape: 18 of the 39 also have invoices in another book
+     (16 TAC, 4 TAB, found by name), and for 10 of those 18 the traced
+     invoices add up EXACTLY to the quotation total (PI260088 $8,050 = TAB
+     $2,000 linked + TAC $6,050 by name).
+  3. **The trace** (`traceQuotations()`, pure — no DB/QuickBooks imports,
+     covered by `test-quotation-trace.ts`): (a) `quickbooks_link` from
+     LinkedTxn for an estimate in ANY status (a link to an invoice missing
+     from our synced data is kept as unresolved and still counts as linked
+     in the estimate's own book — never dropped); plus (b) `name_match`, for
+     CLOSED estimates only: same `normalize()` key on the invoice's customer
+     name, not Voided, dated from the quotation date to `TRACE_GRACE_DAYS`
+     (7) after the estimate's last update, and not already QuickBooks-linked
+     to a different estimate. Exact match only — Vincent declined fuzzy
+     candidates. Names differ by case across books (TAB/TAC store UPPERCASE,
+     TAO mixed case) so raw equality would be wrong; `normalize()` fixes
+     that.
+  4. **Why the upper bound**: without one, every later invoice for the same
+     customer qualifies — after `PI260067` closed (2026-07-30) Bestar had 4
+     unrelated invoices across TAB/TAC/TAO in August; with the bound none of
+     them is listed. **Why the numbers are shown, not just the chips**: real
+     data has noise the rule cannot tell from signal (PI260068 also matched a
+     stray $5.50 TAB invoice; PI260043's own linked TAB invoice already equals
+     its total while an unrelated $6,000 TAC invoice also matched by name), so
+     each row shows "Traced X vs quotation Y", marks ● (QuickBooks-confirmed)
+     vs ○ (matched by name), highlights an amount that equals the quotation,
+     and flags a split whose sum equals it — nothing auto-decides which
+     candidate belongs. `amountMatches` is `null` (not false) for a non-SGD
+     quotation: `quickbooks_invoices` has no currency column (INV-QB-016).
+  5. **Known, accepted edges** (Vincent's call, not bugs): a typo'd
+     quotation name traces to nothing (`Baolaipo Electrics` vs `Electronics`
+     is a real example); `normalize()` merges different-jurisdiction
+     same-name companies (2 of 1,326 real invoice-name keys: `Menusifu Sdn.
+     Bhd.`/`Pte. Ltd.`, `Spring Mud Pte. Ltd.`/`Limited`); the "closed on"
+     date is the estimate's last-updated time, which any later edit moves.
+  6. **Read LIVE, not mirrored** (unlike Invoice/CreditMemo): INV-QB-021
+     already records Vincent's stance that QuickBooks changes must not wait
+     for a daily sync, INV-QB-014 is the precedent for live reads where
+     freshness matters, and volume is tiny (~50 estimates). The first
+     design was a daily Supabase mirror + cron; an independent design
+     review, then this same rule, flipped it — the trace is deliberately
+     source-agnostic, so a mirror can be added later without touching it.
+     Live-read safeguards that must stay: `qbQuery()` returns `[]` for an
+     odd/empty response and returns `COUNT(*)` as a bare number (it reads
+     the FIRST key of `QueryResponse`), so `fetchBook()` requires a numeric
+     COUNT and refuses a fetch that returns fewer distinct estimates —
+     otherwise a Fault-inside-a-200 would render as a confident "this book
+     has no quotations"; each book has its own 25s timeout and failure pill
+     ("missing ≠ none" is stated on the page); estimates are limited to
+     `thisYearSGT()-2` onward because `quickbooks_invoices` only holds that
+     window (an older Closed quotation's invoice could not be found and would
+     read as a misleading "not found").
+  7. **Not done, and how to make it exact**: no PI reference exists anywhere
+     in synced invoices (measured: 0 invoice numbers start with PI, 0 line
+     descriptions mention a PI number). If cross-book tracing ever needs to
+     be exact, the fix is a process rule (write the PI number in the
+     invoice's Memo/Private Note) plus syncing that field — not a smarter
+     name match. QuickBooks has never delivered an Estimate webhook event
+     (only Invoice/Payment/JournalEntry/Deposit/CreditMemo); real-time push
+     would need an Intuit-dashboard subscription and is not needed while
+     reads are live.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
@@ -2977,6 +3055,33 @@ again.
   than waiting for the same zoom-workaround complaint again. `npx tsc
   --noEmit`, `npx eslint` (both changed files), `npm run build` (cold) all
   clean.
+
+- **INV-DATA-066** — Every `pageAll()` / `.range()` paginated read must carry
+  a deterministic `.order()` on a UNIQUE column (`id`) — unordered (or
+  non-unique-ordered) paging is not stable in PostgREST and fails SILENTLY:
+  no error, just duplicated and missing rows. Measured 2026-09-24 while
+  building the Quotation trace, on the real `quickbooks_invoices` table with
+  a `txn_date >= '2026-01-01'` filter (2,324 rows): unordered paging returned
+  650 duplicated rows and therefore 650 MISSING ones (1,674 distinct of 2,324
+  — 28% wrong), including exactly the two invoices the check was looking
+  for (TAO `02660590`, TAB `02610673`); adding `.order('id')` returned all
+  2,324 exactly once. The confusing part is that it is plan-dependent:
+  two existing query shapes tested the same day (`computeTaoCompanies()`'s
+  TAO items query, 4,049 rows; its TAO invoices query, 2,769 rows) happened
+  to return complete results unordered / ordered by the non-unique
+  `txn_date`, so "it works on this table" proves nothing. `pageAll()` also
+  swallows query errors and returns `[]`, so a new read must (1) probe with
+  an error-returning head count first (a missing table otherwise reads as
+  "no rows"), and (2) compare the number of DISTINCT ids loaded to that
+  count and fail loudly on a mismatch — `lib/quotation-data.ts`'s
+  `loadWindowInvoices()` is the reference implementation. `app/api/billing/
+  renewals/route.ts` already carries a "unique tiebreaker so parallel page
+  boundaries are stable" comment (`invoice_no` + `line_num`), so this is a
+  known class, not new; but older `pageAll` call sites that order by
+  nothing/a non-unique key (e.g. `computeTaoCompanies()`,
+  `legacyComputeSoaRows()`) have NOT been audited — not proven safe, just not
+  observed failing. If a displayed count ever disagrees with the underlying
+  table, suspect this first.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

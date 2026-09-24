@@ -253,6 +253,26 @@ the on-screen Outstanding/SOA total changes within roughly a minute,
 without waiting for the daily cron.
 **Guards:** `docs/INVARIANTS.md` INV-QB-021.
 
+### REG-022 — Quotation trace matches QuickBooks and never silently loses rows
+Run `npx tsx test-quotation-trace.ts` (pure join, 33 fixture checks — must
+print `ALL OK`). Then against real data (`npx tsx --env-file=.env.local` a
+scratch script calling `loadQuotationData()` from `lib/quotation-data.ts`):
+confirm (1) every book reports `ok` and each book's `count` equals what
+`SELECT COUNT(*) FROM Estimate WHERE TxnDate >= '<windowStart>'` returns in
+QuickBooks itself — TAO 2 / TAC 0 were true on 2026-09-24, TAB 48; (2)
+`PI260067` (TAO) traces to TAO `02660590` as a QuickBooks link with the amount
+highlighted; (3) a split quotation such as `PI260088` shows TAB `02611060` (●)
+plus TAC `02680304` (○) and "Traced S$8,050.00 = quotation S$8,050.00"; (4)
+Bestar's later August invoices (`02660637`/`02660638`/`02610944`/`02680264`) do
+NOT appear under `PI260067`; (5) invoice loading is complete — distinct ids
+loaded equals the head count of `quickbooks_invoices` on/after `windowStart`
+(the loader throws on a mismatch; if it ever does, look at INV-DATA-066
+first). Permissions: an account WITHOUT `canViewQuotation` gets a redirect to
+`/` on `/billing/quotation`, a 403 from `GET /api/billing/quotation`, and no
+sidebar entry; re-run REG-016's flag check for every account (only Vincent
+has `canViewQuotation`).
+**Guards:** `docs/INVARIANTS.md` INV-QB-024, INV-DATA-066.
+
 ---
 
 ## Automation priority

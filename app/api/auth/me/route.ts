@@ -22,6 +22,7 @@ export async function GET() {
       canViewReports: account.canViewReports ?? false,
       canViewActivityInsights: account.canViewActivityInsights ?? false,
       canViewSgNews: account.canViewSgNews ?? false,
+      canViewQuotation: account.canViewQuotation ?? false,
     },
   });
 }

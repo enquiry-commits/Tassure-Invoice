@@ -143,6 +143,16 @@ const REPORTS_NODE: Node = { label: 'Reports', href: '/reports', icon: BarChart3
 // News → Reports.
 const SG_NEWS_NODE: Node = { label: 'SG Latest News', href: '/sg-news', icon: Newspaper };
 
+// Added 2026-09-24 — Vincent: "我要多一个2级标题在Billing System, 这个2级标题
+// （Quotation）放在Billing Drafts 2级标题下方". A level-2 LEAF (one page, with
+// Source filter chips on the page itself) rather than a group with per-book
+// sub-pages: unlike Outstanding, the interesting split here is not by book.
+// Vincent-only for now (canViewQuotation), so it is spliced into the
+// 'billing' group in Sidebar() below instead of living in the static `tree`
+// every account sees — there is no per-child permission filtering anywhere
+// else in this file, only level-1 splices like Reports/SG News above.
+const QUOTATION_NODE: Node = { label: 'Quotation', href: '/billing/quotation' };
+
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
 const SIDEBAR_GROUP_IDS = [...groupIds(tree), ADMIN_NODE.id!];
@@ -381,7 +391,7 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
   );
 }
 
-export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canViewSgNews }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean; canViewSgNews?: boolean }) {
+export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canViewSgNews, canViewQuotation }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean; canViewSgNews?: boolean; canViewQuotation?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
   let level1 = level1For(restrictedTo);
   if (canViewReports && !restrictedTo) {
@@ -395,6 +405,18 @@ export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canView
     level1 = myTasksIdx >= 0
       ? [...level1.slice(0, myTasksIdx + 1), SG_NEWS_NODE, ...level1.slice(myTasksIdx + 1)]
       : [...level1, SG_NEWS_NODE];
+  }
+  if (canViewQuotation && !restrictedTo) {
+    level1 = level1.map(n => {
+      if (n.id !== 'billing' || !n.children) return n;
+      const draftsIdx = n.children.findIndex(c => c.id === 'billing-drafts');
+      return {
+        ...n,
+        children: draftsIdx >= 0
+          ? [...n.children.slice(0, draftsIdx + 1), QUOTATION_NODE, ...n.children.slice(draftsIdx + 1)]
+          : [...n.children, QUOTATION_NODE],
+      };
+    });
   }
   // The complete Admin group is intentionally Vincent-only and remains the
   // final level-1 item in the sidebar.
