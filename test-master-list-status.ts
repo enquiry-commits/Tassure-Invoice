@@ -1,18 +1,22 @@
 // lib/master-list-status.ts — the Master List `status` rules (docs/INVARIANTS.md
 // INV-DATA-067). The real-data shapes below are the ones found on 2026-09-24 in
-// the Terminated Services list (269 rows): 180 kept a legacy "YES", a few had
-// hand-typed junk ("NO", "terminate", "Mary"), 7 are still "Active" in TeamWork.
+// the Terminated Services list (269 rows): 180 kept a legacy "YES", 10 the old
+// Move placeholder "TERMINATED", a few had hand-typed junk ("NO", "terminate",
+// "Mary"), 7 are still "Active" in TeamWork.
 //
 // The two words are different on purpose: "Terminate" is the placeholder (filed
 // here, TeamWork has not confirmed), "Terminated" is TeamWork's own word and
 // only ever arrives from TeamWork (Vincent: "Move 到 Terminated 现在放的
-// 'Terminate'…和TW确认后才变成 Terminated").
+// 'Terminate'…和TW确认后才变成 Terminated"). And case matters (Vincent:
+// "terminate 要改成 Terminate", "TERMINATED 要换成 Terminate 或者是 Terminated,
+// 这个要按照TW，如果TW有Status 显示就换成 TW的status, 如果没有就和Move的显示一样
+// Terminate").
 //
 // Run: npx tsx test-master-list-status.ts
 import { readFileSync } from 'fs';
 import {
-  TERMINATED_STATUS, TERMINATE_PLACEHOLDER, STRIKING_OFF_STATUS, placeholderStatusForMove, isTerminateOrTerminated,
-  planMasterListStatusPatches, type MasterListStatusRow,
+  TERMINATED_STATUS, TERMINATE_PLACEHOLDER, STRIKING_OFF_STATUS, placeholderStatusForMove,
+  isTerminatePlaceholder, isTeamWorkTerminated, planMasterListStatusPatches, type MasterListStatusRow,
 } from './lib/master-list-status';
 
 let fail = 0;
@@ -48,28 +52,33 @@ console.log('\n--- rule 1: TeamWork wins (unchanged behaviour) ---');
     const p = plan([row({ status: 'Terminate' })], [['200000001A', 'Terminated']]);
     return p.length === 1 && p[0].oldValue === 'Terminate' && p[0].newValue === 'Terminated' && p[0].reason === 'teamwork';
   })());
+  check('… and it turns the old "TERMINATED" placeholder into TeamWork\'s word when TeamWork has a status', (() => {
+    const p = plan([row({ status: 'TERMINATED' })], [['200000001A', 'Terminated']]);
+    return p.length === 1 && p[0].newValue === 'Terminated' && p[0].reason === 'teamwork';
+  })());
 }
 
-console.log('\n--- rule 2: Terminated Services rows TeamWork cannot inform -> "Terminate" ---');
+console.log('\n--- rule 2: Terminated Services rows TeamWork cannot inform -> exactly "Terminate" ---');
 {
-  const legacy = ['YES', 'NO', 'terminated by client', 'to be terminate', 'RENAMED', 'Mary', 'Active', 'Struck Off', null, '', '  '];
-  for (const status of legacy) {
+  const rewritten = ['YES', 'NO', 'to be terminate', 'RENAMED', 'Mary', 'Active', 'Struck Off', null, '', '  ',
+    'terminate', 'TERMINATE', 'TERMINATED', 'terminated', 'Terminated by client'];
+  for (const status of rewritten) {
     const p = plan([row({ status })]);
-    check(`status ${JSON.stringify(status)} -> "Terminate"`, p.length === 1 && p[0].newValue === TERMINATE_PLACEHOLDER && p[0].reason === 'terminated_list_default' && p[0].oldValue === status);
+    check(`status ${JSON.stringify(status)} -> "Terminate"`, p.length === 1 && p[0].newValue === 'Terminate' && p[0].reason === 'terminated_list_default' && p[0].oldValue === status);
   }
-  check('"Terminate" (the placeholder) is left alone', plan([row({ status: 'Terminate' })]).length === 0);
-  check('"terminate" (any case) is left alone', plan([row({ status: 'terminate' })]).length === 0);
-  check('"Terminated" is left alone — never turned back into the placeholder', plan([row({ status: 'Terminated' })]).length === 0);
-  check('"TERMINATED" (the old Move placeholder) is left alone — no rewrite just to change case', plan([row({ status: 'TERMINATED' })]).length === 0);
+  check('"terminate" -> "Terminate" (Vincent: "terminate 要改成 Terminate")', (() => { const p = plan([row({ status: 'terminate' })]); return p.length === 1 && p[0].newValue === 'Terminate'; })());
+  check('"TERMINATED" -> "Terminate" when TeamWork has nothing (Vincent: "如果没有就和Move的显示一样 Terminate")', (() => { const p = plan([row({ status: 'TERMINATED' })]); return p.length === 1 && p[0].newValue === 'Terminate'; })());
+  check('exactly "Terminate" (the placeholder) is left alone', plan([row({ status: 'Terminate' })]).length === 0 && plan([row({ status: ' Terminate ' })]).length === 0);
+  check('TeamWork\'s exact "Terminated" is left alone when TeamWork is silent — never downgraded to the placeholder', plan([row({ status: 'Terminated' })]).length === 0 && plan([row({ status: ' Terminated ' })]).length === 0);
   check('the rule never writes TeamWork\'s final word', plan([row({ status: 'YES' })]).every(p => p.newValue !== TERMINATED_STATUS));
   check('a row with no UEN at all still gets the placeholder', plan([row({ roc_no: null, status: 'YES' })]).length === 1);
-  check('a manual lock beats the placeholder too', plan([row({ manual_fields: { status: true }, status: 'YES' })]).length === 0);
+  check('a manual lock beats the placeholder too', plan([row({ manual_fields: { status: true }, status: 'TERMINATED' })]).length === 0);
   check('TeamWork "Active" for a Terminated Services row is NOT forced (follow TeamWork)', (() => {
     const p = plan([row({ status: 'Terminate' })], [['200000001A', 'Active']]);
     return p.length === 1 && p[0].newValue === 'Active' && p[0].reason === 'teamwork';
   })());
   check('TeamWork knows the company (status present) but the sync skipped its record -> no placeholder', plan([row({ status: 'YES' })], [], ['200000001A']).length === 0);
-  check('only the Terminated Services list gets the placeholder', ['strike_off', 'active_client', 'ad_hoc', 'name_change', 'mas', 'inactive_old', null].every(list_type => plan([row({ list_type, status: 'YES' })]).length === 0));
+  check('only the Terminated Services list gets the placeholder', ['strike_off', 'active_client', 'ad_hoc', 'name_change', 'mas', 'inactive_old', null].every(list_type => plan([row({ list_type, status: 'TERMINATED' })]).length === 0));
 }
 
 console.log('\n--- the real 2026-09-24 shape of the Terminated Services list ---');
@@ -88,18 +97,26 @@ console.log('\n--- the real 2026-09-24 shape of the Terminated Services list ---
   // The two "in TeamWork, blank status" rows are deliberately NOT in `known`: a
   // TeamWork record without a status tells the sync nothing.
   const p = plan(rows, mirror);
-  // 178 + 2 "YES", plus RENAMED / "to be terminate" / blank / "Mary" / "NO" = 185; the existing "terminate" is already the placeholder
-  check('269 rows in, exactly 185 rewritten to "Terminate" (180 YES + RENAMED, "to be terminate", blank, Mary, NO)', rows.length === 269 && p.filter(x => x.reason === 'terminated_list_default').length === 185 && p.every(x => x.newValue === 'Terminate'));
+  // 180 "YES" + 10 "TERMINATED" + RENAMED / "to be terminate" / "terminate" / blank / "Mary" / "NO" = 196
+  check('269 rows in, exactly 196 rewritten to "Terminate" (180 YES + 10 TERMINATED + 6 odd values)', rows.length === 269 && p.filter(x => x.reason === 'terminated_list_default').length === 196 && p.every(x => x.newValue === 'Terminate'));
   check('the 9 rows TeamWork still reports as Active / Striking Off are untouched', p.filter(x => x.reason === 'teamwork').length === 0);
-  check('the 63 confirmed "Terminated" rows and the 10 old "TERMINATED" ones are untouched', p.length === 185);
+  check('the 63 confirmed "Terminated" rows and the 1 TeamWork-spelled "Terminated" without a TeamWork record are untouched', p.length === 196);
+  const after = new Map<string, number>();
+  const patched = new Map(p.map(x => [x.id, x.newValue]));
+  for (const r of rows) { const s = patched.get(r.id) ?? r.status ?? '(null)'; after.set(s, (after.get(s) ?? 0) + 1); }
+  check('afterwards the list holds only Terminate (196), Terminated (64), Active (7), Striking Off (2)',
+    JSON.stringify([...after.entries()].sort()) === JSON.stringify([['Active', 7], ['Striking Off', 2], ['Terminate', 196], ['Terminated', 64]]), JSON.stringify([...after.entries()]));
 }
 
 console.log('\n--- rule 3: the Move placeholder ---');
 {
   check('Terminated Services -> "Terminate" (NOT TeamWork\'s final "Terminated")', placeholderStatusForMove('terminated') === 'Terminate' && placeholderStatusForMove('terminated') !== TERMINATED_STATUS);
+  check('… and it is exactly what the nightly rule writes for an unconfirmed row', plan([row({ status: 'YES' })])[0].newValue === placeholderStatusForMove('terminated'));
   check('Strike Off -> "Striking Off", never the final "STRUCK OFF" (INV-DATA-064)', placeholderStatusForMove('strike_off') === 'Striking Off' && STRIKING_OFF_STATUS === 'Striking Off');
   check('other targets are left to the caller', ['active_client', 'ad_hoc', 'mas', '', 'constructor', '__proto__', 'toString'].every(t => placeholderStatusForMove(t) === undefined));
-  check('isTerminateOrTerminated: both words, any case, nothing fuzzy', isTerminateOrTerminated('TERMINATED') && isTerminateOrTerminated(' terminate ') && isTerminateOrTerminated('Terminated') && !isTerminateOrTerminated('to be terminate') && !isTerminateOrTerminated('terminating') && !isTerminateOrTerminated(null));
+  check('the two predicates compare exactly (case included), nothing fuzzy',
+    isTerminatePlaceholder('Terminate') && isTerminatePlaceholder(' Terminate ') && !isTerminatePlaceholder('terminate') && !isTerminatePlaceholder('TERMINATED') && !isTerminatePlaceholder('Terminated') && !isTerminatePlaceholder(null)
+    && isTeamWorkTerminated('Terminated') && isTeamWorkTerminated(' Terminated ') && !isTeamWorkTerminated('TERMINATED') && !isTeamWorkTerminated('terminated') && !isTeamWorkTerminated('Terminate') && !isTeamWorkTerminated(null));
 }
 
 console.log('\n--- source guards: nothing bypasses the shared rules ---');

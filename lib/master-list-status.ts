@@ -24,15 +24,25 @@
 //
 //   2. A row TeamWork can say nothing about — its UEN is not in TeamWork at
 //      all, or TeamWork's status is blank — and that sits in Terminated
-//      Services must read "Terminate" (unless it already says Terminate /
-//      Terminated). Nothing else will ever correct it: 180 such rows kept a
-//      legacy "YES" for months (plus "NO", "to be terminate", "RENAMED", even
-//      a person's name), because the sync only ever touches rows TeamWork
-//      knows. The colleague who works that list asked for exactly this
-//      ("你可以帮我把之前的都放Terminate 吗 — 就是不是terminated status 的…一直
-//      比较好"). A row TeamWork DOES report as something else (e.g. still
-//      "Active") is NOT forced: "follow TeamWork" stands, and the
-//      disagreement is a TeamWork-side fix, not something to hide here.
+//      Services must read exactly "Terminate" (same as a fresh Move), unless
+//      it already says exactly "Terminate" or TeamWork's exact "Terminated".
+//      Case matters: Vincent, 2026-09-24, "terminate 要改成 Terminate" and
+//      "TERMINATED 要换成 Terminate 或者是 Terminated, 这个要按照TW，如果TW有
+//      Status 显示就换成 TW的status, 如果没有就和Move的显示一样 Terminate" — so
+//      "terminate", "TERMINATED", "terminated" are all rewritten (a TeamWork-
+//      known row already got TeamWork's word from rule 1). Only the EXACT
+//      "Terminated" is kept when TeamWork is silent: it is TeamWork's own
+//      spelling, so it was most likely mirrored earlier, and a company
+//      dropping out of one TeamWork response must not downgrade a confirmed
+//      status to a placeholder and back. Nothing else will ever correct the
+//      rest: 180 such rows kept a legacy "YES" for months (plus "NO", "to be
+//      terminate", "RENAMED", even a person's name), because the sync only
+//      ever touches rows TeamWork knows. The colleague who works that list
+//      asked for exactly this ("你可以帮我把之前的都放Terminate 吗 — 就是不是
+//      terminated status 的…一直比较好"). A row TeamWork DOES report as
+//      something else (e.g. still "Active") is NOT forced: "follow TeamWork"
+//      stands, and the disagreement is a TeamWork-side fix, not something to
+//      hide here.
 //
 //   3. Moving a row into Strike Off / Terminated Services stamps the
 //      PLACEHOLDER until the next sync can confirm it — "Striking Off" (TeamWork's
@@ -59,13 +69,17 @@ export function placeholderStatusForMove(targetListType: string): string | undef
   return MOVE_PLACEHOLDER_BY_LIST.get(targetListType);
 }
 
-// "Terminate" (placeholder) or "Terminated" (confirmed), any case — the old
-// Move placeholder was "TERMINATED", and rewriting a status that already says
-// the right thing only to change its case would itself be a status that
-// "changes by itself".
-export function isTerminateOrTerminated(status: string | null | undefined): boolean {
-  const s = String(status ?? '').trim().toLowerCase();
-  return s === TERMINATE_PLACEHOLDER.toLowerCase() || s === TERMINATED_STATUS.toLowerCase();
+// The two words are compared EXACTLY, case included. The old Move placeholder
+// was "TERMINATED" and staff typed "terminate"; neither is the placeholder or
+// TeamWork's word, and Vincent wants them replaced (rule 2 above).
+export function isTerminatePlaceholder(status: string | null | undefined): boolean {
+  return String(status ?? '').trim() === TERMINATE_PLACEHOLDER;
+}
+
+// TeamWork's own spelling — written by the sync, so TeamWork's silence must
+// not downgrade it.
+export function isTeamWorkTerminated(status: string | null | undefined): boolean {
+  return String(status ?? '').trim() === TERMINATED_STATUS;
 }
 
 export type MasterListStatusRow = {
@@ -113,7 +127,7 @@ export function planMasterListStatusPatches(
 
     if (row.list_type !== 'terminated') continue;
     if (uen && twUensWithStatus.has(uen)) continue;
-    if (isTerminateOrTerminated(row.status)) continue;
+    if (isTerminatePlaceholder(row.status) || isTeamWorkTerminated(row.status)) continue;
     patches.push({ id: row.id, oldValue: row.status, newValue: TERMINATE_PLACEHOLDER, reason: 'terminated_list_default' });
   }
   return patches;

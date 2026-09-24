@@ -307,7 +307,8 @@ the next `teamwork/sync` a row whose company TeamWork lists as Terminated must
 have become "Terminated" — that change is the confirmation — and a row TeamWork
 does not list must still say "Terminate". (2) After a sync run, its JSON
 reports `master_list_terminated_defaults` and the Terminated Services page shows
-no "YES", blank or hand-typed status: the only values left are "Terminate",
+no "YES", blank, "terminate" / "TERMINATED" (case matters) or other hand-typed
+status: the only values left are exactly "Terminate",
 "Terminated", and rows TeamWork itself reports as something else (2026-09-24: 7
 "Active", 2 "Striking Off"; fix those in TeamWork, do not force them here).
 (3) A row whose Status was typed by hand (manual lock) must keep what was typed

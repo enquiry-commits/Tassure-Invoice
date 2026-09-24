@@ -3252,9 +3252,15 @@ again.
   (1) TeamWork's non-blank status wins, and a manual lock
   (`manual_fields.status`) beats everything — unchanged; (2) a Terminated
   Services row TeamWork cannot inform (UEN not in TeamWork, or a blank
-  TeamWork status) that does not already say Terminate / Terminated (any case)
-  becomes "Terminate" — a row already saying "TERMINATED" or "Terminated" is
-  left alone, neither rewritten to change its case nor downgraded; (3) the
+  TeamWork status) becomes exactly "Terminate" — same as a fresh Move —
+  unless it already says exactly "Terminate" or TeamWork's exact
+  "Terminated" (kept: TeamWork's own spelling, so one TeamWork response that
+  omits a company must not downgrade a confirmed status). CASE MATTERS
+  (Vincent, 2026-09-24: "terminate 要改成 Terminate"; "TERMINATED 要换成
+  Terminate 或者是 Terminated, 这个要按照TW，如果TW有Status 显示就换成 TW的
+  status, 如果没有就和Move的显示一样 Terminate"): "terminate", "TERMINATED",
+  "terminated" are rewritten; a row TeamWork knows already got TeamWork's
+  own word from rule 1; (3) the
   Move placeholder is decided by the SERVER (`placeholderStatusForMove()` in
   `app/api/master-list/move/route.ts`, which ignores a client-sent
   `statusValue` for these two lists): Strike Off → "Striking Off" (TeamWork's
@@ -3278,9 +3284,12 @@ again.
   `master_list_terminated_defaults`; each change is audit-logged with the old
   value (`changed_by = 'system:terminated-list-default'`, filtered out of
   human team-activity like every `system:` writer). Dry run against the live
-  data: exactly 185 rows change to "Terminate" (180 "YES" + "RENAMED", "to be
-  terminate", blank, "Mary", "NO"), all in Terminated Services, 0 pending
-  TeamWork-mirror changes. Guards: `test-master-list-status.ts` (the planner
+  data: exactly 196 rows change to "Terminate" (180 "YES", the 10 old
+  "TERMINATED", and "RENAMED", "to be terminate", "terminate", blank, "Mary",
+  "NO"), all in Terminated Services, 0 pending TeamWork-mirror changes;
+  afterwards the list holds 196 "Terminate", 64 "Terminated" (63 mirrored + 1
+  TeamWork-spelled row TeamWork does not list), 7 "Active", 2 "Striking Off".
+  Guards: `test-master-list-status.ts` (the planner
   incl. the real 269-row shape, the Terminate/Terminated distinction, and
   source guards that fail if the Move route, the page or the sync go back to
   their own copy of the rule or the Terminated Services Move target becomes
