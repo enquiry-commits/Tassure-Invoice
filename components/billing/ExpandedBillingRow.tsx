@@ -114,6 +114,10 @@ function ParentCompanyPicker({ companyId, parentCompanyId, parentCompanyName, on
   );
 }
 
+// Which company's invoice a "Generate" click is for. null = whichever sides
+// are still pending (the original combined button, unchanged).
+type GenerateScope = 'TAB' | 'TAC' | null;
+
 type EditableLine = {
   service: string;
   productService: string;   // exact QB Product/Service item
@@ -642,24 +646,40 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
   // dialog the moment it's clicked. "Confirm the latest period" and
   // "incomplete period" stay hard blocks — those are real data gaps, not
   // something a human can just confirm past.
-  const blockingPeriodErrors: string[] = [];
-  const overlapWarnings: string[] = [];
-  for (const line of included) {
-    if (!['Secretary', 'Address', 'ND'].includes(line.service)) continue;
-    if (line.periodNeedsReview && !line.periodReviewed) {
-      blockingPeriodErrors.push(`${line.service}: confirm the latest period against QuickBooks.`);
+  const periodChecksFor = (checkedLines: EditableLine[]) => {
+    const blocking: string[] = [];
+    const overlaps: string[] = [];
+    for (const line of checkedLines) {
+      if (!['Secretary', 'Address', 'ND'].includes(line.service)) continue;
+      if (line.periodNeedsReview && !line.periodReviewed) {
+        blocking.push(`${line.service}: confirm the latest period against QuickBooks.`);
+      }
+      const issue = servicePeriodOverlapError(
+        line.service,
+        parseInvoicePeriod(line.description, line.service),
+        line.previousPeriodEnd,
+      );
+      if (issue?.kind === 'incomplete') blocking.push(issue.message);
+      else if (issue?.kind === 'overlap') overlaps.push(issue.message);
     }
-    const issue = servicePeriodOverlapError(
-      line.service,
-      parseInvoicePeriod(line.description, line.service),
-      line.previousPeriodEnd,
-    );
-    if (issue?.kind === 'incomplete') blockingPeriodErrors.push(issue.message);
-    else if (issue?.kind === 'overlap') overlapWarnings.push(issue.message);
-  }
+    return { blocking, overlaps };
+  };
+  const { blocking: blockingPeriodErrors, overlaps: overlapWarnings } = periodChecksFor(included);
   const hasPeriodError = blockingPeriodErrors.length > 0;
   const hasOverlapWarning = overlapWarnings.length > 0;
+  // Per-company versions of the same checks, for the separate "Generate TAB" /
+  // "Generate TAC" buttons (2026-09-24): a TAC period problem must not hold
+  // the TAB invoice hostage, and vice versa — each button only answers for
+  // the lines it will actually send. The combined button keeps using the
+  // aggregate values above, exactly as before.
+  const tabChecks = periodChecksFor(includedTab);
+  const tacChecks = periodChecksFor(includedTac);
   const [overlapConfirmModal, setOverlapConfirmModal] = useState<string[] | null>(null);
+  // Which company the pending overlap-confirm dialog belongs to (null = the
+  // combined button), so "Generate anyway" re-submits the SAME scope the
+  // person originally clicked, not everything still pending.
+  const [overlapScope, setOverlapScope] = useState<GenerateScope>(null);
+  const lastGenerateScope = useRef<GenerateScope>(null);
 
   // Once a company already has an invoice this cycle, it's edited via its
   // own "Save … changes" button (see renderSaveButton) instead of the
@@ -669,18 +689,29 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
   const needsGenerateTac = hasTac && !tacInvoice;
   const showGenerateButton = needsGenerateTab || needsGenerateTac;
 
-  const createInvoice = async (overlapConfirmed = false) => {
-    if (hasPeriodError) {
-      setDraftResult({ ok: false, msg: blockingPeriodErrors.join(' ') });
+  // `scope` (2026-09-24, Vincent forwarding a colleague: "可以做分开的
+  // generate吗 — 就是tab一个button tac一个"): 'TAB' / 'TAC' generates only
+  // that company's invoice; null is the original combined behaviour. Safe on
+  // the server as-is: create-invoice reserves (idempotency_key, qb_company)
+  // per company, so one key covering two separate clicks creates each
+  // company once and a retry of the same one replays instead of duplicating.
+  const createInvoice = async (overlapConfirmed = false, scope: GenerateScope = null) => {
+    lastGenerateScope.current = scope;
+    const scopedChecks = scope === 'TAB' ? tabChecks : scope === 'TAC' ? tacChecks : { blocking: blockingPeriodErrors, overlaps: overlapWarnings };
+    if (scopedChecks.blocking.length > 0) {
+      setDraftResult({ ok: false, msg: scopedChecks.blocking.join(' ') });
       return;
     }
     // Pop the confirm dialog instead of blocking outright — Vincent,
-    // 2026-08-19. Only reached on the FIRST click; createInvoice(true) from
-    // the modal's own "Generate anyway" button skips straight past this.
-    if (hasOverlapWarning && !overlapConfirmed) {
-      setOverlapConfirmModal(overlapWarnings);
+    // 2026-08-19. Only reached on the FIRST click; createInvoice(true, scope)
+    // from the modal's own "Generate anyway" button skips straight past this.
+    if (scopedChecks.overlaps.length > 0 && !overlapConfirmed) {
+      setOverlapScope(scope);
+      setOverlapConfirmModal(scopedChecks.overlaps);
       return;
     }
+    const sendTab = needsGenerateTab && scope !== 'TAC';
+    const sendTac = needsGenerateTac && scope !== 'TAB';
     setDrafting(true); setDraftResult(null);
     try {
       const fyeYear = cycleFye ? +cycleFye.slice(-4) : currentYear;
@@ -703,8 +734,8 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           pic: c.pic ?? undefined,
           // A company that already has an invoice this cycle is edited via
           // saveInvoiceEdit/renderSaveButton instead — never re-created here.
-          tabLines: needsGenerateTab ? includedTab.map(toApiLine) : [],
-          tacLines: needsGenerateTac ? includedTac.map(toApiLine) : [],
+          tabLines: sendTab ? includedTab.map(toApiLine) : [],
+          tacLines: sendTac ? includedTac.map(toApiLine) : [],
           fyeMonth: c.fyeMonth, fyeYear, fyeCycle: cycleFye ?? null,
           idempotencyKey: invoiceRequestKey,
           docNumbers: invoiceNumbers,
@@ -725,6 +756,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       // error; confirming retries with overlapConfirmed:true.
       if (res.status === 409 && json.overlapConfirmationRequired && !overlapConfirmed) {
         const warnings = [...(json.overlapWarnings?.tab ?? []), ...(json.overlapWarnings?.tac ?? [])];
+        setOverlapScope(scope);
         setOverlapConfirmModal(warnings.length ? warnings : ['This invoice period overlaps one already on file.']);
         return;
       }
@@ -779,7 +811,10 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           ...(json.tab?.qbId && json.tab?.invoiceNo ? [{ company: 'TAB' as const, qbId: String(json.tab.qbId), invoiceNo: String(json.tab.invoiceNo), total: json.tab.total ?? 0 }] : []),
           ...(json.tac?.qbId && json.tac?.invoiceNo ? [{ company: 'TAC' as const, qbId: String(json.tac.qbId), invoiceNo: String(json.tac.invoiceNo), total: json.tac.total ?? 0 }] : []),
         ];
-        setGeneratedPdfs(pdfs);
+        // MERGE, don't replace: tabInvoice/tacInvoice are derived from this
+        // list, so a TAC-only generation replacing it would drop the TAB
+        // entry and silently put the panel back into "TAB not generated yet".
+        setGeneratedPdfs(prev => [...prev.filter(p => !pdfs.some(n => n.company === p.company)), ...pdfs]);
         setPdfResult(null);
         setDraftResult({ ok: true, msg: `Created in QuickBooks — ${parts.join(' · ')}${errs.length ? `  ⚠ ${errs.join('; ')}` : ''} · review & send from QB` });
       } else {
@@ -801,7 +836,9 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       if (!res.ok) { setDraftResult({ ok: false, msg: json.error ?? `Could not create the customer in QuickBooks ${company}.` }); return; }
       setMissingCustomerCompanies(prev => prev.filter(x => x !== company));
       setDraftResult({ ok: true, msg: `Created "${json.customer.name}" in QuickBooks ${company} — generating the invoice now…` });
-      await createInvoice();
+      // Retry with the SAME scope the person originally clicked — a
+      // TAB-only click must not silently start generating TAC too.
+      await createInvoice(false, lastGenerateScope.current);
     } catch (e: unknown) {
       setDraftResult({ ok: false, msg: e instanceof Error ? e.message : 'Request failed' });
     } finally {
@@ -1233,6 +1270,43 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           const pendingTacCount = needsGenerateTac ? includedTac.length : 0;
           const nothingPending = pendingTabCount + pendingTacCount === 0;
           const disabled = drafting || numberLoading || nothingPending || missingRate || missingInvoiceNumber || hasPeriodError;
+          // Both companies still pending: one button per company (2026-09-24,
+          // a colleague via Vincent: "tab一个button tac一个"), each gated only
+          // by ITS OWN lines' rate / QB number / period checks, plus the
+          // original combined button kept as a lighter secondary action so
+          // nothing that worked before is taken away.
+          if (pendingTabCount && pendingTacCount) {
+            const wait = drafting || numberLoading;
+            const tabReason = includedTab.some(l => !l.rate) ? 'Fill in the highlighted rate(s) first'
+              : !invoiceNumbers.TAB ? 'Confirm the QB TAB invoice number'
+              : tabChecks.blocking[0] ?? '';
+            const tacReason = includedTac.some(l => !l.rate) ? 'Fill in the highlighted rate(s) first'
+              : !invoiceNumbers.TAC ? 'Confirm the QB TAC invoice number'
+              : tacChecks.blocking[0] ?? '';
+            const sideStyle = (off: boolean, primary: boolean): React.CSSProperties => ({
+              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8,
+              border: primary ? 'none' : `1px solid ${off ? '#cbd5e1' : '#0f766e'}`,
+              cursor: off ? 'not-allowed' : 'pointer',
+              background: primary ? (off ? '#94a3b8' : '#0f766e') : '#fff',
+              color: primary ? '#fff' : (off ? '#94a3b8' : '#0f766e'),
+              fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+            });
+            const tabOff = wait || !!tabReason;
+            const tacOff = wait || !!tacReason;
+            return (
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={() => createInvoice(false, 'TAB')} disabled={tabOff} title={tabReason || undefined} style={sideStyle(tabOff, true)}>
+                  {drafting ? 'Generating…' : `Generate TAB Invoice (S$${totalTab.toLocaleString()})`}
+                </button>
+                <button onClick={() => createInvoice(false, 'TAC')} disabled={tacOff} title={tacReason || undefined} style={sideStyle(tacOff, true)}>
+                  {drafting ? 'Generating…' : `Generate TAC Invoice (S$${totalTac.toLocaleString()})`}
+                </button>
+                <button onClick={() => createInvoice()} disabled={disabled} title="Generate both invoices in one go" style={sideStyle(disabled, false)}>
+                  Both (TAB + TAC)
+                </button>
+              </div>
+            );
+          }
           return (
             <button
               onClick={() => createInvoice()}
@@ -1244,7 +1318,6 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
               }}>
               {
                 drafting ? 'Generating…'
-                : pendingTabCount && pendingTacCount ? 'Generate 2 Invoices (TAB + TAC)'
                 : pendingTacCount ? 'Generate Invoice in QB (TAC)'
                 : 'Generate Invoice in QB (TAB)'
               }
@@ -1320,7 +1393,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
               style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
               Cancel
             </button>
-            <button onClick={() => { setOverlapConfirmModal(null); void createInvoice(true); }}
+            <button onClick={() => { setOverlapConfirmModal(null); void createInvoice(true, overlapScope); }}
               style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: 'var(--status-warning)', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
               Generate anyway
             </button>

@@ -1,5 +1,17 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-09-24 (NEW: separate "Generate TAB Invoice" / "Generate TAC Invoice" buttons in the Billing Drafts invoice builder — a colleague via Vincent: "可以做分开的generate吗 — 就是tab一个button tac一个 你得空才弄").
+
+When both TAB and TAC are still pending, `components/billing/ExpandedBillingRow.tsx` (the single editor the Billing page AND the AI assistant's modal both render) now shows one button per company — each with its own subtotal — plus the original combined action kept as a lighter secondary "Both (TAB + TAC)" so nothing that worked is removed. When only one side is pending the button is unchanged. Each per-company button is gated only by ITS OWN lines (rate filled, QB number confirmed, period check) — a TAC period problem no longer blocks generating TAB, and the disabled button's tooltip says why. `createInvoice(overlapConfirmed, scope)` sends only that company's lines; the overlap-confirm dialog and the "Create customer in QB" retry both re-submit the SAME scope the person originally clicked, so a TAB-only click can never silently start creating TAC.
+
+**Server needed no change, verified by reading `app/api/quickbooks/create-invoice/route.ts`:** reservations, their status updates and the `generated_invoices` upsert are all keyed `(idempotency_key, qb_company)`, and only companies that actually have lines are "active" — so one panel key covering two separate clicks creates each company exactly once, and re-clicking the same company replays instead of duplicating. One real trap fixed on the client: a successful generation used to REPLACE `generatedPdfs`, and `tabInvoice`/`tacInvoice` are derived from that list — a TAC-only run would have dropped the TAB entry and put the panel back into "TAB not generated yet". It now merges by company.
+
+`npx tsc --noEmit` clean; `npx eslint` shows the same 5 pre-existing findings before and after (`git stash` comparison — and see the process note below). **Not exercised end-to-end**: doing so creates real QuickBooks invoices. REG-004/REG-005 should be run once after deploy on a company with both TAB and TAC pending: click TAB, then TAC, confirm both invoices exist as unsent QB drafts and BOTH "Save … PDF" buttons are still present afterwards.
+
+Process note (mine): I compared lint before/after with `git stash` while another session had uncommitted edits in the same working tree; a file it wrote in the meantime made `git stash pop` fail. Nothing was lost — the stash was kept, I restored all four affected files from it (verified byte-identical to the stash, apart from the `import` line that session added meanwhile) and dropped it. Don't use `git stash` for comparisons in this repo while another session is active; compare against `git show HEAD:<file>` instead.
+
+Previous entry follows.
+
 Last updated: 2026-09-24 (FIXED, root-cause sweep: Supabase reads could silently return duplicated or MISSING rows — unstable offset paging and the 1,000-row cap — Vincent, after I reported the trap while building Quotation: "这个要处理干净").
 
 While building Billing System › Quotation my first dry run silently lost 650 of 2,324 invoices with no error (INV-DATA-066 was written for that). I told Vincent the older code was unaudited; his answer was to clean the whole class up rather than leave it. Measured on the real database first, then fixed at the source instead of site by site.
