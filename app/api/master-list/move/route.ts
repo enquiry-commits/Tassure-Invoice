@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
+import { placeholderStatusForMove } from '@/lib/master-list-status';
 
 // Move a row from its current list_type to another (e.g. Active Client → Strike Off),
 // carrying over all shared fields and re-stamping status/row_order for the destination list.
+//
+// Strike Off / Terminated Services: the status stamped here is a PLACEHOLDER
+// until the next nightly TeamWork sync confirms it, and it is decided HERE,
+// not by the browser (docs/INVARIANTS.md INV-DATA-067 / INV-DATA-064) — TeamWork's
+// own wording ("Striking Off", "Terminated"), so the sync has nothing to change
+// the next night. Vincent, relaying the colleague who works those lists:
+// "strike off & terminate的status 不要自己变…follow teamwork".
 //
 // 2026-09-09: this route had NO server-side auth check at all — the only
 // gate was a client-side window.confirm() in components/MasterListTable.tsx
@@ -39,7 +47,7 @@ export async function POST(req: NextRequest) {
     ...rest,
     list_type: targetType,
     row_order: nextOrder,
-    status: statusValue ?? rest.status,
+    status: placeholderStatusForMove(targetType) ?? statusValue ?? rest.status,
   };
 
   const { data: inserted, error: insertErr } = await supabase.from('master_list').insert(newRecord).select().single();

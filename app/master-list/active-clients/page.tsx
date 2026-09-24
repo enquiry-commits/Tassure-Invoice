@@ -1,4 +1,5 @@
 import MasterListTable from '@/components/MasterListTable';
+import { STRIKING_OFF_STATUS, TERMINATED_STATUS } from '@/lib/master-list-status';
 
 // Reduced, reordered column set per user request — everything else (Update
 // Date, Sec Agent, KYC Year, Corp Tax, E-filing Auth, A/C, Audit, GST,
@@ -57,9 +58,15 @@ export default function ActiveClientsPage() {
       // it to whatever TeamWork's real status turns out to be the next time
       // it runs — this default is deliberately a starting placeholder, not a
       // claim of fact.
+      //
+      // Both placeholders are TeamWork's OWN wording, and app/api/master-list/
+      // move/route.ts now decides them server-side too (INV-DATA-067) — Terminated
+      // Services used to stamp 'TERMINATED', which the next night's sync rewrote
+      // to 'Terminated' (Master List colleague: "strike off & terminate的status
+      // 不要自己变…follow teamwork"). Import the constants; don't type the literals.
       moveTargets={[
-        { type: 'strike_off', label: 'Strike Off',          statusValue: 'Striking Off' },
-        { type: 'terminated', label: 'Terminated Services', statusValue: 'TERMINATED' },
+        { type: 'strike_off', label: 'Strike Off',          statusValue: STRIKING_OFF_STATUS },
+        { type: 'terminated', label: 'Terminated Services', statusValue: TERMINATED_STATUS },
       ]}
     />
   );

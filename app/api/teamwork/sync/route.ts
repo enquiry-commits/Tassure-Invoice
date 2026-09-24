@@ -10,6 +10,7 @@ import { findDuplicateUenRecords } from '@/lib/teamwork-duplicate-uen';
 import { syncTeamworkCampaignRecipients } from '@/lib/teamwork-recipients';
 import { syncTeamworkContactPersons } from '@/lib/teamwork-contact-report';
 import { logFieldChange } from '@/lib/audit-log';
+import { planMasterListStatusPatches } from '@/lib/master-list-status';
 
 // Vincent, 2026-08-29: this route used to call getSessionCookie() twice —
 // once independently inside syncTeamworkCampaignRecipients, once inside
@@ -628,21 +629,31 @@ async function syncTeamworkCompanies() {
   // 就是TW里面的 STATUS." Same manual_fields protection as every other
   // auto-synced field: a staff edit locks the row and stops future overwrites
   // until cleared back to empty.
-  let masterListStatusUpdated = 0, masterListStatusErrors = 0;
+  //
+  // The rules themselves (TeamWork wins; a Terminated Services row TeamWork
+  // can say nothing about reads "Terminated"; a manual lock beats both) live
+  // in lib/master-list-status.ts so the Move route and this sync can't drift
+  // apart — INV-DATA-067.
+  let masterListStatusUpdated = 0, masterListStatusErrors = 0, masterListTerminatedDefaults = 0;
   {
-    const mlStatusRows: { id: number; roc_no: string | null; status: string | null; manual_fields: Record<string, boolean> | null }[] = [];
+    const mlStatusRows: { id: number; list_type: string | null; roc_no: string | null; status: string | null; manual_fields: Record<string, boolean> | null }[] = [];
     for (let start = 0; ; start += 1000) {
       const { data: page } = await supabase.from('master_list')
-        .select('id, roc_no, status, manual_fields').order('id', { ascending: true }).range(start, start + 999);
+        .select('id, list_type, roc_no, status, manual_fields').order('id', { ascending: true }).range(start, start + 999);
       mlStatusRows.push(...(page ?? []));
       if (!page || page.length < 1000) break;
     }
-    const statusPatches = mlStatusRows.flatMap(r => {
-      if (!r.roc_no || r.manual_fields?.status) return [];
-      const twStat = statusByRegNo.get(String(r.roc_no).trim().toUpperCase());
-      if (!twStat || twStat === r.status) return [];
-      return [{ id: r.id, oldValue: r.status, newValue: twStat }];
-    });
+    // Every UEN for which ANY TeamWork record has a non-blank Status — wider
+    // than statusByRegNo, which the loop above only fills for records it did
+    // not skip (ambiguous name / duplicate stub). A row whose company
+    // TeamWork does describe must not be mistaken for one it knows nothing
+    // about.
+    const twUensWithStatus = new Set<string>();
+    for (const tw of twList) {
+      const uen = (tw.company_registration_Num ?? '').trim().toUpperCase();
+      if (uen && (tw.status ?? '').trim()) twUensWithStatus.add(uen);
+    }
+    const statusPatches = planMasterListStatusPatches(mlStatusRows, statusByRegNo, twUensWithStatus);
     for (let i = 0; i < statusPatches.length; i += 10) {
       const results = await Promise.all(statusPatches.slice(i, i + 10).map(async p => {
         const { error: err } = await supabase.from('master_list')
@@ -650,8 +661,10 @@ async function syncTeamworkCompanies() {
         if (err) return err.message;
         await logFieldChange(supabase, {
           tableName: 'master_list', rowId: p.id, field: 'status',
-          oldValue: p.oldValue, newValue: p.newValue, changedBy: 'system:teamwork',
+          oldValue: p.oldValue, newValue: p.newValue,
+          changedBy: p.reason === 'teamwork' ? 'system:teamwork' : 'system:terminated-list-default',
         });
+        if (p.reason === 'terminated_list_default') masterListTerminatedDefaults++;
         return null;
       }));
       for (const err of results) err ? masterListStatusErrors++ : masterListStatusUpdated++;
@@ -694,6 +707,9 @@ async function syncTeamworkCompanies() {
     active_client_email_errors: activeClientEmailErrors,
     master_list_status_updates: masterListStatusUpdated,
     master_list_status_errors: masterListStatusErrors,
+    // Of master_list_status_updates: Terminated Services rows TeamWork had
+    // nothing to say about, set to "Terminated" (INV-DATA-067).
+    master_list_terminated_defaults: masterListTerminatedDefaults,
     inserted: insertedCount,
     inserted_names: dedupedInserts.map(r => r.company_name),
     skipped_ambiguous_names: skippedAmbiguous,
