@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { openAIConfigured, openAIJson, openAIModel, openAIText } from './openai';
+import { SOP_ROUTING_TERMS } from '../client-comms-sop';
 
 export type AgentRoute = 'claude_only' | 'claude_then_openai' | 'openai_only';
 
@@ -20,11 +21,19 @@ const INTERNAL_TERMS = /(Tassure|My Tasks|Billing|QuickBooks|SOA|outstanding|欠
 const MUTATION_TERMS = /(修改|更新|生成|开单|指派|标记|发送|draft|create|update|change|assign|mark|resolve|confirm)/i;
 const COMPLEX_TERMS = /(分析|比较|总结|判断|为什么|趋势|风险|优先|建议|综合|大家|团队|最近.*做|analy[sz]e|compare|summari[sz]e|trend|risk|priorit|recommend)/i;
 
+// Tassure's own secretarial SOP (get_sop_guide, lib/client-comms-sop.ts) is
+// internal knowledge too, but a question about it often names no company or
+// client ("股份转让要准备什么") — without this it could be routed to the
+// OpenAI-only general answer and never reach that tool.
+function isInternal(text: string): boolean {
+  return INTERNAL_TERMS.test(text) || SOP_ROUTING_TERMS.test(text);
+}
+
 function fallbackRoute(text: string, hasAttachments: boolean): RouteDecision {
   if (hasAttachments) return { route: 'claude_only', reason: 'attachments stay on the established Claude path', risk: 'medium' };
   if (MUTATION_TERMS.test(text)) return { route: 'claude_then_openai', reason: 'operation preview requires a second-model wording and safety review', risk: 'high' };
-  if (INTERNAL_TERMS.test(text) && COMPLEX_TERMS.test(text)) return { route: 'claude_then_openai', reason: 'complex internal analysis benefits from synthesis over live tool evidence', risk: 'medium' };
-  if (INTERNAL_TERMS.test(text)) return { route: 'claude_only', reason: 'direct internal lookup uses the mature live-data tool path', risk: 'medium' };
+  if (isInternal(text) && COMPLEX_TERMS.test(text)) return { route: 'claude_then_openai', reason: 'complex internal analysis benefits from synthesis over live tool evidence', risk: 'medium' };
+  if (isInternal(text)) return { route: 'claude_only', reason: 'direct internal lookup uses the mature live-data tool path', risk: 'medium' };
   return { route: 'openai_only', reason: 'general external question does not require Tassure data', risk: 'low' };
 }
 
@@ -40,10 +49,10 @@ export async function routeAssistantTurn(params: {
   // mutating intent is already explicit. Besides being cheaper, this keeps
   // enough of the route's 60-second budget for Claude's real tool calls and
   // an optional final synthesis.
-  if (INTERNAL_TERMS.test(params.latestText) || MUTATION_TERMS.test(params.latestText)) return fallback;
+  if (isInternal(params.latestText) || MUTATION_TERMS.test(params.latestText)) return fallback;
   // Short follow-ups such as "这个呢？" inherit an internal conversation's
   // trust boundary even when the latest sentence contains no system noun.
-  if (params.latestText.trim().length < 80 && INTERNAL_TERMS.test(params.transcript)) {
+  if (params.latestText.trim().length < 80 && isInternal(params.transcript)) {
     return { route: 'claude_only', reason: 'ambiguous follow-up remains on the internal-data path', risk: 'medium' };
   }
   try {
@@ -64,6 +73,7 @@ export async function routeAssistantTurn(params: {
 - claude_only: direct lookup in Tassure live data or an ordinary system question.
 - claude_then_openai: multi-company/person synthesis, management analysis, ambiguity, or any proposed data-changing action. Claude executes the established internal tools; OpenAI reviews and synthesizes.
 - openai_only: ONLY a clearly general/external knowledge question that needs no Tassure, company, customer, invoice, staff, task, email, or other internal data.
+- How Tassure itself handles a corporate-secretarial job or what to tell/ask a client about it (incorporation, transfer-in, share transfer/allotment, annual return, dormant companies, payment chasing, explaining an ND agreement/S156/indemnity/engagement letter) is answered from Tassure's internal SOP: never openai_only.
 Be conservative: ambiguous references and follow-ups stay on Claude. Attachments never reach this router. Return only the schema.`,
       input: params.transcript.slice(-12_000),
       maxOutputTokens: 300,
@@ -71,7 +81,7 @@ Be conservative: ambiguous references and follow-ups stay on Claude. Attachments
     });
     // A deterministic boundary overrides an unsafe model route. Internal
     // data and mutations must never be sent to an OpenAI-only answer path.
-    if ((INTERNAL_TERMS.test(params.latestText) || MUTATION_TERMS.test(params.latestText)) && decision.route === 'openai_only') return fallback;
+    if ((isInternal(params.latestText) || MUTATION_TERMS.test(params.latestText)) && decision.route === 'openai_only') return fallback;
     return decision;
   } catch {
     return fallback;

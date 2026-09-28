@@ -3496,6 +3496,37 @@ again.
 
 ## AI Assistant / chatbot (INV-AI)
 
+- **INV-AI-008** — A knowledge tool added to the My Tasks assistant has
+  three traps, all found 2026-09-28 while adding `get_sop_guide` (the
+  secretarial team's client-communication SOP, `lib/client-comms-sop.ts`),
+  none of which would ever surface as an error:
+  (1) `claudeAnswer()` cuts every tool result to
+  `JSON.stringify(result).slice(0, 6000)` before the model sees it, so a
+  payload over 6000 chars reaches the model as truncated, invalid JSON —
+  and the `note` carrying the tool's caveats sits LAST in every object, so
+  it is the first thing cut. Build the exact payload in a pure module and
+  test its real size (`test-sop-guide.ts` holds every SOP topic ≤ 5600;
+  the largest, `annual_return`, is ~4.8K).
+  (2) `lib/ai/orchestrator.ts` only keeps a turn on Claude
+  deterministically when it matches `INTERNAL_TERMS`/`MUTATION_TERMS`;
+  anything else goes to the learned router, which may pick `openai_only` —
+  and that path has no Claude tools at all. SOP questions often name no
+  company or client ("股份转让要准备什么", "S156 是什么"), so they could
+  silently get a web answer instead of Tassure's own SOP. Such a tool needs
+  its own terms in the deterministic guard (`SOP_ROUTING_TERMS`, checked by
+  `isInternal()` everywhere `INTERNAL_TERMS` used to be), per INV-AI-003.
+  (3) Vincent's rule for this knowledge (2026-09-28: "先上流程和文件解释，
+  日期/金额等确认后补"): the source document's specific dates, fees,
+  penalties, tax rates, monetary thresholds and statutory deadlines are
+  NOT shipped until the team confirms them — `PENDING_REVIEW` names each
+  held-back part by title only, and the tool note tells the model never to
+  present a figure for those as Tassure's position (Tassure's own prices
+  come only from `service_pricing_lookup`). `test-sop-guide.ts` fails if a
+  held-back figure (e.g. the AR penalty, the ND fee, the DPO fee, tax
+  tiers) appears anywhere in the payload. When one is confirmed, move it
+  into `SOP_SECTIONS` and drop it from `PENDING_REVIEW` in the same change,
+  updating the test's list.
+
 - **INV-AI-007** — When a forced-tool-call response asks the model to echo
   back an identifying field alongside generated content (so the real
   caller-supplied data — a URL, a date, anything that must stay factually

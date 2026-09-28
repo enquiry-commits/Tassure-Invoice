@@ -381,6 +381,19 @@ conversation** — same "code-complete, verified via diagnostic script, not
 yet a real click-through" caveat as everything else in this section; the
 next real My Tasks/AssistantWidget chat session is the first real test.
 
+**2026-09-28 — the assistant can now answer from the secretarial team's
+own SOP (`get_sop_guide`, INV-AI-008), process/document parts only.**
+Held back until the team confirms the figures (listed in
+`lib/client-comms-sop.ts`'s `PENDING_REVIEW`; the assistant says these are
+"not confirmed yet" instead of quoting a number): DPO section, director
+contact/alternate address, share-capital amounts/deadline/example,
+first-FYE advice, tax exemption/ECI, filing-deadline table, audit/XBRL, AR
+follow-up/overdue scripts with the penalty, dormant relevant company, ND
+fee/interest clause, and the standard "公司什么时候年检" answer. Also
+waiting on the colleague: one payment-chasing script had an unclear word
+("还麻烦您这集团安排…", dropped). Not yet exercised in a live chat; like
+every Claude-path My Tasks answer it needs Anthropic credit.
+
 ## Known risks (not bugs — things worth remembering before relying on data)
 
 - **Billing draft auto-fill accuracy varies by field** — Secretary ~85%

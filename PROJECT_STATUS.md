@@ -1963,6 +1963,41 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **My Tasks assistant gains the secretarial team's own SOP as a
+  topic-lookup tool, `get_sop_guide` (INV-AI-008).** Source: a colleague's
+  "Communication anf Useful form details.docx" (client-communication
+  scripts + plain-language explanations of internal documents). Vincent
+  chose a per-topic lookup over pasting the playbook into the cached
+  system prompt (it is about the size of the whole existing prompt), and
+  "先上流程和文件解释，日期/金额等确认后补". New `lib/client-comms-sop.ts`:
+  11 topics (incorporation, transfer_in, annual_return, share_transfer,
+  share_allotment, payment_chasing, nd_agreement, section_156,
+  letter_of_indemnity, engagement_letter, new_company_documents), each
+  block tagged `client` (the team's own wording staff may send) or `staff`
+  (internal checklist/note, never pasted to a client), source wording
+  split at item level with only unambiguous typo fixes (listed in the
+  file header). Held back until confirmed, named in `PENDING_REVIEW`
+  without figures: DPO section, director contact/alternate address, share
+  capital amounts/deadline/example, first-FYE advice, tax exemption/ECI,
+  filing-deadline table, audit/XBRL, AR follow-up/overdue scripts (with
+  penalty), dormant relevant company, ND fee/interest clause, and the
+  "公司什么时候年检" answer. Left out entirely: unanswered FAQ lists
+  (share allotment's are listed as "no standard answer"), the "Sharing"
+  section (named client cases). `app/api/assistant/route.ts`: tool
+  definition + dispatch + one TOOL ROUTING line; `lib/ai/orchestrator.ts`:
+  `isInternal()` adds `SOP_ROUTING_TERMS` to the deterministic
+  keep-on-Claude guard, plus one router-instruction line, so an SOP
+  question naming no company can't be sent to the OpenAI-only answer.
+  `npx tsx test-sop-guide.ts` all passing (content per topic, 50+ held-back
+  fragments absent, typo fixes, no internal notes in client blocks,
+  payload ≤ 5600 vs the 6000-char tool_result cut, 16 SOP phrasings route
+  to Claude / 4 general ones don't); `npx tsc --noEmit` clean; `npx eslint`
+  clean on the 4 files (1 pre-existing warning, `hiddenNote`, not in this
+  diff); `npm run build` clean. **Not verified in a live chat** — no local
+  Anthropic key; the first real My Tasks question on one of these topics
+  is the first real test, and it only works while the Anthropic balance
+  has credit (My Tasks has no OpenAI fallback for Claude-path turns).
+
 - **TAO's "Last TAO Invoice" column gets the same button UI as TAB/TAC
   Invoice — and becomes genuinely clickable (INV-QB-025).** Vincent:
   "Last TAO Invoice 的那个UI也是做成按钮的UI设计." Swapped

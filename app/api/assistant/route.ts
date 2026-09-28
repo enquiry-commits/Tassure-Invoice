@@ -18,6 +18,7 @@ import { getCustomerProfileSummary } from '@/lib/customer-profile-lookup';
 import { lookupCompanyDeep } from '@/lib/company-deep-lookup';
 import { listCompanies, type CompanyListFilters } from '@/lib/company-list-lookup';
 import { searchDocuments } from '@/lib/document-search-lookup';
+import { getSopGuide, SOP_TOPICS } from '@/lib/client-comms-sop';
 import { getTrademarkSummary } from '@/lib/trademark-lookup';
 import { getUpcomingDeadlines } from '@/lib/deadlines-lookup';
 import { getRecentChanges } from '@/lib/audit-lookup';
@@ -590,6 +591,18 @@ async function documentSearchTool(input: Record<string, unknown>) {
     ...result,
     note: `Real full-text search over the internal NAS document index — file CONTENT, not just names. totalMatched is the real match count; only the first ${result.returned} are returned${result.truncated ? ' (truncated — say so)' : ''}. Each result's snippet is a short excerpt around the match, not the whole file — never claim to know the full document contents beyond it. companyId/companyName/companyLink are only set when the file's containing folder confidently matched a real company at index time; when they are null, say the file is not linked to a specific company rather than guessing one from the filename. The file itself is on the office NAS and cannot be opened from here — point the user at companyLink (that company's page) or the raw topFolder/fileName so they can find it themselves on the office network.`,
   };
+}
+
+// Added 2026-09-28 — get_sop_guide, the secretarial team's own
+// client-communication SOP (lib/client-comms-sop.ts, from a colleague's
+// "Communication anf Useful form details.docx"). Vincent chose a topic-keyed
+// lookup over pasting the whole playbook into the cached static prompt: the
+// model fetches ONE topic only when a question needs it. The payload, its
+// note and its pendingReview list (parts with dates/fees/penalties held back
+// until confirmed) are all built in the lib so test-sop-guide.ts checks the
+// exact object sent here.
+function sopGuideTool(input: Record<string, unknown>) {
+  return getSopGuide(String(input.topic ?? ''));
 }
 
 // Added 2026-09-09 — "下个月有哪些deadline" had no answer: AR filing, AGM
@@ -1612,6 +1625,7 @@ TOOL ROUTING — pick by the SHAPE of the question first, then the topic. Severa
 - What a PERSON has been doing → recent_activity_summary. Which FIELD changed on a record → recent_changes. Who used the system today → active_users_today. The caller's own habits → my_activity_pattern.
 - Anything that CHANGES data → the preview_* tools only, never claim you did it yourself.
 - Looking for an actual FILE/document (合同/表单/资料/文件 on the office NAS, not data already in this system) → search_documents. This searches real file CONTENT on \\Rainbow, not company records — for a company's data itself (directors/invoices/status/etc), use company_deep_lookup instead.
+- How TASSURE ITSELF handles a secretarial job or what to say/ask a client about it — what to collect or confirm for incorporation, transfer-in (转秘书), share transfer, share allotment, annual return incl. dormant cases, payment-chasing wording, or explaining an internal document (ND agreement, S156, letter of indemnity, engagement letter, the 15 new-company documents) in plain language → get_sop_guide, the secretarial team's own SOP. Also use it before drafting a message to a client on one of those topics. For 流程/需要多久 it has the step-by-step timeline; add service_pricing_lookup when the fee or package scope also matters. Its pendingReview parts are not confirmed yet — never quote a figure for them as Tassure's position.
 If two tools could fit, say which one you used when you answer, so a surprising number can be traced.
 
 When the user asks you to actually CHANGE something on an AR Reminder cycle — mark it prepared/sent/received/AGM-held/filed, assign a Secretary/Accounts/Tax PIC, or set remarks (e.g. "把 XX 的年报标记为已申报", "把 XX 指派给 Chelsea") — use preview_ar_update. It is READ-ONLY: it shows the real current value and what it would become, and the user gets a Confirm button on the card. Their click is what performs the update — never say or imply you have already made the change, are making it, or will make it yourself; say what will change and ask them to confirm on the card. If they ask for a field that isn't in the allowed list, say plainly which fields you can change rather than trying a different field name.
@@ -1685,6 +1699,9 @@ const CLAUDE_TOOLS = [
     companyId: { type: 'number', description: 'Restrict to files linked to one specific company (its companies.id, from a prior company_deep_lookup/search_company/list_companies result) — omit to search all files' },
     limit: { type: 'number', description: 'How many results to return, default 10, max 50' },
   }, required: ['query'] } },
+  { name: 'get_sop_guide', description: "Tassure's OWN internal secretarial SOP — the secretarial team's client-communication notes: what to collect/confirm with a client, the team's own wording to send, process steps with estimated working-day timelines, and plain-language explanations of Tassure's internal legal documents. Use it for questions like 客户要注册公司需要什么资料 / 转秘书要跟客户确认什么 / 股份转让或增资要准备什么 / 年检第一次提醒怎么跟客户说 / dormant 公司要确认什么 / 催款怎么说 / 怎么跟客户解释 ND agreement、S156、engagement letter / 新公司那15份文件是做什么的 — and before drafting a message to a client on one of these topics. Returns ONE topic per call; call again for another. It is NOT live data about any company (use company_deep_lookup) and NOT a price list (use service_pricing_lookup). Parts of the source with specific fees, penalties, tax rates, thresholds or statutory deadlines (DPO, director contact address, share-capital amounts, first-FYE advice, tax/ECI/filing deadlines/audit/XBRL, AR follow-up scripts with penalties, dormant relevant company, ND fee) are still awaiting internal confirmation and appear only as pendingReview titles without figures — never present a figure for those as Tassure's position.", input_schema: { type: 'object', properties: {
+    topic: { type: 'string', enum: [...SOP_TOPICS], description: 'incorporation = new company registration (documents to collect, pre-incorporation signing forms, identity check, talking points, timeline); transfer_in = taking over an existing company\'s secretarial service (转秘书); annual_return = AR/AGM first reminder, reply once documents arrive, dormant checks, accounting-document lists; share_transfer = 转股; share_allotment = 增资扩股; payment_chasing = unpaid service-fee reminders; nd_agreement / section_156 / letter_of_indemnity / engagement_letter = explaining that document to a client; new_company_documents = what each of the 15 new-company documents is for' },
+  }, required: ['topic'] } },
   { name: 'upcoming_deadlines', description: 'REAL, live UNIFIED deadline view across AR filing deadlines, AGM deadlines and trademark renewals — plus everything already OVERDUE. Use for "下个月有哪些deadline", "接下来要交什么", "哪些逾期了". Shows when a deadline was formally EXTENDED (EOT) and what the original date was. For "who should we chase about late filing" specifically, late_filing_summary is the authoritative list (it applies extra rules this raw view does not).', input_schema: { type: 'object', properties: { days: { type: 'number', description: 'How many days ahead to look, default 30, max 365' } } } },
   { name: 'preview_ar_update', description: "Preview a change to ONE AR Reminder cycle — marking it prepared/sent/received/AGM-held/FILED, assigning a PIC, or setting remarks. READ-ONLY: it shows the real current value and what it would become; the user gets a Confirm button on the card and ONLY their click performs the update. Use whenever the user asks to update/mark/set/assign something on an AR cycle (e.g. \"把 XX 的年报标记为已申报\", \"把 XX 指派给 Chelsea\"). Pass value as a date like '03 Apr 2026' for date fields, a staff name for PIC fields, or null/empty to clear. Never claim you performed the update yourself.", input_schema: { type: 'object', properties: {
     company: { type: 'string', description: 'Company name, partial match is fine' },
@@ -1823,6 +1840,7 @@ async function runTool(name: string, input: Record<string, unknown>, account: Ap
   if (name === 'company_deep_lookup') return companyDeepLookup(String(input.company ?? ''));
   if (name === 'list_companies') return companyListTool(input);
   if (name === 'search_documents') return documentSearchTool(input);
+  if (name === 'get_sop_guide') return sopGuideTool(input);
   if (name === 'upcoming_deadlines') return upcomingDeadlinesTool(typeof input.days === 'number' ? input.days : undefined);
   if (name === 'preview_ar_update') return arUpdatePreviewTool(account, input);
   if (name === 'preview_email_draft') return emailDraftPreviewTool(account, input);
