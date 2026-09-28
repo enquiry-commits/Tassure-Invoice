@@ -11,6 +11,7 @@ import { syncTeamworkCampaignRecipients } from '@/lib/teamwork-recipients';
 import { syncTeamworkContactPersons } from '@/lib/teamwork-contact-report';
 import { logFieldChange } from '@/lib/audit-log';
 import { planMasterListStatusPatches } from '@/lib/master-list-status';
+import { isTeamworkStub, planCompanyStatusPatch } from '@/lib/company-lifecycle';
 
 // Vincent, 2026-08-29: this route used to call getSessionCookie() twice —
 // once independently inside syncTeamworkCampaignRecipients, once inside
@@ -43,8 +44,15 @@ import { planMasterListStatusPatches } from '@/lib/master-list-status';
 //    backfills internal_id so the next run matches directly.
 //  - Only overwrite most fields with a NON-EMPTY TeamWork value; never blank
 //    registration_no / fye_month / best_email because TeamWork has a gap.
-//    Internal CSS Status is the exception: it is always authoritative, and
-//    an empty value means Not Specified (therefore not Active).
+//    Internal CSS Status follows the SAME rule since 2026-09-28 (it used to
+//    be the exception, with blank meaning "not Active"): an explicit status
+//    is authoritative and mirrored; a BLANK one is "unknown" and never
+//    changes a company's status — lib/company-lifecycle.ts's
+//    planCompanyStatusPatch(), docs/INVARIANTS.md INV-TW-024. Vincent:
+//    "只能由真的" — only the real TeamWork record may decide a status.
+//  - A TeamWork "stub" (no client code AND no status) can never claim,
+//    re-key or create a company row (isTeamworkStub()) — it is only
+//    reported, so staff can delete it in TeamWork.
 //  - Never touch company_name on existing rows (manual typo fixes live here)
 //    and never touch QB-derived service fields (has_*, *_pic, …).
 //  - Unmatched TeamWork records are inserted only when Internal CSS Status is
@@ -199,6 +207,11 @@ async function syncTeamworkCompanies() {
   const inserts: Record<string, unknown>[] = [];
   const unknownPicIds: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
   const ambiguousNames: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
+  // INV-TW-024 — every time a blank TeamWork record/status was NOT allowed to
+  // change a company, it lands in one of these, surfaced on Automation Health.
+  const stubRecordsIgnored: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
+  const blankStatusIgnored: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
+  const trackedRecordsBlank: Array<{ key: string; name: string; details: Record<string, unknown> }> = [];
   let matched = 0, backfilled = 0, skippedAmbiguous = 0, reregistered = 0, skippedDuplicateRecords = 0;
   const reregisteredCompanies: Array<{ name: string; old_internal_id: string; new_internal_id: string }> = [];
   // INV-TW-023: TeamWork can hold two LIVE records for one UEN (a real one
@@ -240,6 +253,13 @@ async function syncTeamworkCompanies() {
     const regNo   = (tw.company_registration_Num ?? '').trim() || null;
     let row = byInternal.get(tw.company_id) ?? null;
     let matchedViaRegNo = false;
+    // A stub (no client code AND no status) is never allowed to CLAIM a row
+    // through the name/UEN healing paths below — INV-TW-024. This is what
+    // stops "the real record is missing from one night's response, only the
+    // blank stub is there" from re-keying XGC-style rows onto the stub. A
+    // row already keyed to a stub (byInternal) still matches, but its status
+    // can't move: planCompanyStatusPatch() ignores a blank status.
+    const stub = isTeamworkStub(tw);
 
     if (!row && twName) {
       const cand = byName.get(normalize(twName));
@@ -248,7 +268,8 @@ async function syncTeamworkCompanies() {
         ambiguousNames.push({ key: tw.company_id, name: twName, details: { normalized_name: normalize(twName) } });
         continue;
       }
-      if (cand) { row = cand; backfilled++; }
+      if (cand && stub) stubRecordsIgnored.push({ key: tw.company_id, name: twName, details: { blocked_from_claiming_company_id: cand.id, via: 'name' } });
+      else if (cand) { row = cand; backfilled++; }
     }
 
     // UEN fallback — see byRegNo's own comment above. Only reached when the
@@ -258,10 +279,14 @@ async function syncTeamworkCompanies() {
     if (!row && regNo) {
       const cand = byRegNo.get(regNo.toUpperCase());
       if (cand && cand.internal_id && cand.internal_id !== tw.company_id) {
-        row = cand;
-        matchedViaRegNo = true;
-        reregistered++;
-        reregisteredCompanies.push({ name: twName, old_internal_id: cand.internal_id, new_internal_id: tw.company_id });
+        if (stub) {
+          stubRecordsIgnored.push({ key: tw.company_id, name: twName, details: { blocked_from_claiming_company_id: cand.id, via: 'uen', kept_internal_id: cand.internal_id } });
+        } else {
+          row = cand;
+          matchedViaRegNo = true;
+          reregistered++;
+          reregisteredCompanies.push({ name: twName, old_internal_id: cand.internal_id, new_internal_id: tw.company_id });
+        }
       }
     }
 
@@ -296,8 +321,19 @@ async function syncTeamworkCompanies() {
       if (regNo  && regNo  !== (row.registration_no ?? '').trim())   patch.registration_no = regNo;
       if (clientCode && clientCode !== row.internal_code)            patch.internal_code = clientCode;
       if (type   && type   !== row.company_type)                     patch.company_type = type;
-      if (status !== row.tw_status)                                  patch.tw_status = status;
-      if (internalCssActive !== (row.is_active === true))             patch.is_active = internalCssActive;
+      // Status: the ONE shared rule (lib/company-lifecycle.ts, INV-TW-024) —
+      // explicit status mirrored, blank never changes anything. Both blank
+      // outcomes are reported: a known status held against a blank one, or a
+      // tracked company TeamWork has never given a status (it can never get
+      // AR generated until someone completes it in TeamWork).
+      const statusPlan = planCompanyStatusPatch(row, tw.status);
+      Object.assign(patch, statusPlan.patch);
+      if (!status) {
+        (statusPlan.blankIgnored ? blankStatusIgnored : trackedRecordsBlank).push({
+          key: tw.company_id, name: twName || row.company_name,
+          details: { company_id: row.id, kept_status: row.tw_status ?? null, teamwork_record_is_stub: stub },
+        });
+      }
       // TeamWork's bulk fye_date field is known-stale (it can sit unchanged
       // for years after a company's real AGM/AR cycles moved to a new FYE
       // month — see ar-reminder/sync-workflow's self-correction, which
@@ -538,6 +574,9 @@ async function syncTeamworkCompanies() {
     replaceAutomationExceptions('teamwork_companies', 'unknown_pic_id', unknownPicIds),
     replaceAutomationExceptions('teamwork_companies', 'ambiguous_company_name', ambiguousNames),
     replaceAutomationExceptions('teamwork_companies', 'duplicate_uen_in_teamwork', duplicateUenRecords),
+    replaceAutomationExceptions('teamwork_companies', 'stub_record_ignored', stubRecordsIgnored),
+    replaceAutomationExceptions('teamwork_companies', 'blank_status_ignored', blankStatusIgnored),
+    replaceAutomationExceptions('teamwork_companies', 'tracked_record_blank', trackedRecordsBlank),
   ]);
 
   let recipientSync: Awaited<ReturnType<typeof syncTeamworkCampaignRecipients>> | null = null;
@@ -715,6 +754,10 @@ async function syncTeamworkCompanies() {
     inserted_names: dedupedInserts.map(r => r.company_name),
     skipped_ambiguous_names: skippedAmbiguous,
     skipped_duplicate_uen_records: skippedDuplicateRecords,
+    // INV-TW-024: blank TeamWork evidence that was refused (never applied).
+    stub_records_ignored: stubRecordsIgnored.length,
+    blank_status_ignored: blankStatusIgnored.length,
+    tracked_records_blank: trackedRecordsBlank.length,
     rows_missing_from_teamwork: missingFromTw,
     campaign_recipients: recipientSync,
     contact_person_fill_in: contactPersonFillIn,

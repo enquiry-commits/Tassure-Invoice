@@ -284,6 +284,41 @@ again.
   exception it kept raising closed on the next run. A leftover duplicate row
   is still handled by the order-independent rule above if one ever reappears. *(source: 2026-09-24,
   Vincent: "没有办法彻底的清除这些问题吗？因为TW明明都写道很清楚是Active了".)*
+  **Extended by INV-TW-024** (2026-09-28): the "only the real record" rule now
+  also covers a stub arriving ALONE and a real record arriving BLANK.
+- **INV-TW-024** — Only the REAL TeamWork record may ever change a company's
+  status. Two rules, both in `lib/company-lifecycle.ts` and nowhere else:
+  (1) a TeamWork "stub" (`isTeamworkStub()`: no client code AND no status —
+  TeamWork keeps 254 of them) can never CLAIM a `companies` row through the
+  name or UEN healing paths in `app/api/teamwork/sync/route.ts` (INV-TW-022's
+  UEN re-key included) — it can only be reported (`stub_record_ignored`);
+  (2) `companies.tw_status`/`is_active` change ONLY when TeamWork gives an
+  EXPLICIT status (`planCompanyStatusPatch()`): a blank status is "unknown",
+  never "not Active" — it can't demote a known status (`blank_status_ignored`)
+  and a tracked company TeamWork has never given a status is reported so
+  staff complete it (`tracked_record_blank`; 2 today: EVOP (SINGAPORE)
+  INTERNATIONAL, flagged "CSS Client" in TeamWork, and WORLD PRECISION
+  MACHINERY — both can never get AR generated until TeamWork is completed).
+  An explicit Terminated/Striking Off/Struck-Off/… still goes straight
+  through. This REPLACES this route's old documented exception "Internal CSS
+  Status ... an empty value means Not Specified (therefore not Active)".
+  Vincent, 2026-09-28, after XGC SINGAPORE's March 2026 AR cycle vanished
+  days before its deadline: "这个是严格不允许发生的问题，只能由真的" — only the
+  real record decides. **Why INV-TW-023 alone wasn't enough** (proved by
+  replaying XGC's real companies row and its real TeamWork records — real
+  978, stub 976 — through the old and new cascade, read-only): INV-TW-023
+  closed the case where TeamWork returns BOTH records (and the old code even
+  depended on their ORDER — stub last flipped XGC inactive, stub first did
+  not), but TWO more paths still hid XGC's AR under the old rule: (a) one
+  night where the real record is missing from TeamWork's response and only
+  the stub is there — the UEN fallback re-keyed the row onto the stub; (b)
+  the real record coming back with a blank status. Under INV-TW-024 all
+  three leave XGC Active; a genuine "Terminated" still terminates it.
+  Behaviour-neutral on the day it shipped (dry run against live TeamWork:
+  0 status writes differ from the old rule, 0 stubs blocked, 0 statuses
+  held) — purely preventive. Guards: `test-company-lifecycle.ts` (rules +
+  source guards that fail if `teamwork/sync` writes `tw_status`/`is_active`
+  any other way, or lets a stub heal-match).
 
 ## AR/AGM cycle & ar_reminder data lifecycle (INV-AR)
 
@@ -487,6 +522,57 @@ again.
   as the original (this one was: INV-AR-015 shipped 2026-09-23, and its own
   `allTerminatedUenKeys` diverged from the `isTerminatedCompany()` a few
   lines above it that same commit).
+  **Superseded by INV-AR-017** (same day): both passes now call one shared
+  `lib/company-lifecycle.ts` index, and wrongly-hidden rows self-restore.
+
+- **INV-AR-017** — Every decision and action that can hide an AR Reminder
+  row because a company "looks terminated" goes through
+  `lib/company-lifecycle.ts`, with six layers, so no live client's AR can
+  silently disappear again — whatever the cause (Vincent, 2026-09-28: "我要一
+  个彻底永决后患的彻底的一整套逻辑"). (1) IDENTITY and (2) STATUS WRITES — see
+  INV-TW-024. (3) DECISION: `buildLifecycleIndex()` is the ONE definition of
+  "terminated" — an explicit, non-Active TeamWork status; blank/null/unknown
+  is NEVER terminated (the old copies used `!is_active`, which made "unknown"
+  mean "terminated"); several `companies` rows for one UEN count as
+  terminated only if ALL of them are, in any order (INV-TW-023's
+  order-independence rule); Master List's terminated/strike_off lists only
+  when no `companies` row exists (INV-DATA-030, INV-AR-016).
+  `app/api/late-filing/sync/route.ts` has no private copy left — both its
+  marker pass and its exclusion pass call the index, and a failed
+  `companies`/`master_list` read now THROWS instead of letting an empty index
+  hand every decision to the Master List fallback. (4) REVERSIBLE ACTION: a
+  row this pass hid is auto-restored on the next run once its company is no
+  longer terminated, to the EXACT status it had (`planArAutoRestores()`,
+  actor `system:late-filing-restore`). Who hid a row is read from
+  `ar_reminder_audit` — written by a DB trigger on every update, so no code
+  path can skip it — and only the LATEST transition to 'Excluded' by
+  `system:late-filing` qualifies: staff trash-can exclusions, INV-AR-001's
+  FYE-correction exclusions (`system:teamwork`) and anything without an audit
+  trail are never touched (today: 28 system / 19 FYE / 2 script / 1 staff).
+  This is what XGC lacked: INV-TW-023 was fixed 2026-09-24, but its
+  wrongly-hidden row stayed hidden until 09-28 because the old pass was
+  one-directional. (5) CIRCUIT BREAKERS: more than 10 rows to hide
+  (`MAX_AUTO_EXCLUSIONS_PER_RUN`) or restore in ONE run does NOTHING and
+  raises `ar_mass_exclusion_blocked` / `ar_mass_restore_blocked` on
+  Automation Health — the safe failure is "a terminated company's AR stays
+  visible a little longer" (staff can still trash rows by hand). The first
+  run of INV-AR-015 (2026-09-23 03:53 UTC) hid 12+ rows in one go, the
+  wrongful ones among them; it would have been stopped. (6) SAFETY NET:
+  every run checks the OUTCOME — any company TeamWork shows Active whose AR
+  rows ALL sit Excluded raises `active_company_ar_all_hidden`, whatever the
+  mechanism (a future bug, a wrong FYE correction, a mistaken trash click);
+  XGC's 2026-09-23 state would have alerted the next morning. Tripwire:
+  `test-company-lifecycle.ts` also fails if ANY new code path in `app/`/`lib/`
+  writes `status: 'Excluded'` beyond the 3 reviewed ones (AR Reminder trash
+  can, `ar-reminder/sync-workflow` FYE correction, this pass) — a new one
+  must be checked against these rules before it joins the list.
+  Behaviour-neutral on the day it shipped (dry run against the live DB:
+  0 UENs change their "terminated" answer, 0 exclusions, 0 restores,
+  0 safety-net alerts). **Lesson** (the cluster behind INV-TW-023,
+  INV-DATA-067, INV-AR-016 and this entry): every place that re-derived "is
+  this company terminated" on its own was a fresh chance to get it wrong, and
+  each wrong copy hid real clients' AR. There is now exactly one; add to it,
+  never beside it.
 
 ## PIC / staff assignment (INV-PIC)
 

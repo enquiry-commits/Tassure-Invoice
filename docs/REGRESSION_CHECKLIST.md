@@ -333,6 +333,22 @@ for a company whose `companies.is_active=true` currently shows
 `status='Excluded'` with `updated_by_email='system:late-filing'`.
 **Guards:** `docs/INVARIANTS.md` INV-AR-013, INV-AR-014, INV-AR-015, INV-AR-016.
 
+### REG-026 — Only the real TeamWork record changes a company; no live client's AR can silently vanish (after ANY change to `lib/company-lifecycle.ts`, `teamwork/sync`'s matching/status code, or `late-filing/sync`'s termination/exclusion code)
+Run `npx tsx test-company-lifecycle.ts` — it must print `ALL OK` (rules,
+replayed incidents, source guards, and the "who may write status 'Excluded'"
+tripwire). Then after the next real runs: (1) `teamwork/sync`'s JSON reports
+`stub_records_ignored`, `blank_status_ignored`, `tracked_records_blank` —
+each one is a TeamWork record that was REFUSED, and the matching
+`teamwork_companies` exceptions on Automation Health name them (2026-09-28
+baseline: 0 / 0 / 2 — EVOP (SINGAPORE) INTERNATIONAL, WORLD PRECISION
+MACHINERY). (2) `late-filing/sync`'s JSON: `activeCompaniesWithAllArHidden`
+must be 0; `exclusionBlocked`/`restoreBlocked` 0 unless a real mass event is
+under review; `restoredExcluded` explains itself in `ar_reminder_audit`
+(actor `system:late-filing-restore`). (3) Spot-check the replay: XGC
+SINGAPORE (UEN 202006514R) stays `tw_status='Active'`, `internal_id='978'`,
+its March 2026 AR cycle `Pending`.
+**Guards:** `docs/INVARIANTS.md` INV-TW-022, INV-TW-023, INV-TW-024, INV-AR-015, INV-AR-016, INV-AR-017.
+
 ---
 
 ## Automation priority

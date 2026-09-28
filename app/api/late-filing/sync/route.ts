@@ -2,8 +2,13 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { parseDmy, parseLatestDmy, toIsoDate, getSessionCookie, fetchAgmList } from '@/lib/teamwork-agm';
-import { AutomationRun, withAutomationRun } from '@/lib/automation-sync';
+import { AutomationRun, withAutomationRun, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { normalize } from '@/lib/company-name';
+import { pageAll } from '@/lib/page-all';
+import {
+  buildLifecycleIndex, planArAutoExclusions, planArAutoRestores, findActiveCompaniesWithAllArHidden,
+  AR_SYSTEM_EXCLUDER, AR_SYSTEM_RESTORER, MAX_AUTO_EXCLUSIONS_PER_RUN, MAX_AUTO_RESTORES_PER_RUN,
+} from '@/lib/company-lifecycle';
 import { todaySGT } from '@/lib/date';
 
 /**
@@ -703,35 +708,31 @@ async function syncLateFiling(run: AutomationRun) {
     // even for a company whose rows never carried a marker in the first
     // place (e.g. a fresh cycle AR Generate inserted before the company
     // later terminated).
-    const { data: allCompanies } = await supabase
+    //
+    // Since 2026-09-28 (INV-AR-017) "is this company terminated" is answered
+    // ONLY by lib/company-lifecycle.ts's buildLifecycleIndex() — the one shared
+    // rule (explicit non-Active TeamWork status; blank/unknown is NEVER
+    // terminated; several rows for one UEN count as terminated only if all of
+    // them are; Master List only when no companies row exists). This file used
+    // to carry its own copies of that rule, and a copy that drifted
+    // (INV-AR-016) hid 14 live clients' AR cycles. Do not re-derive it here.
+    const { data: allCompanies, error: allCompaniesError } = await supabase
       .from('companies')
-      .select('registration_no, company_name, is_active, tw_status');
-    const companyByUen = new Map<string, { is_active: boolean; tw_status: string | null }>();
-    const companyByName = new Map<string, { is_active: boolean; tw_status: string | null }>();
-    for (const co of allCompanies ?? []) {
-      const info = { is_active: co.is_active === true, tw_status: (co.tw_status as string | null) ?? null };
-      const uen = co.registration_no ? String(co.registration_no).trim().toUpperCase() : null;
-      if (uen) companyByUen.set(uen, info);
-      if (co.company_name) companyByName.set(normalize(co.company_name), info);
-    }
+      .select('registration_no, company_name, tw_status');
+    // A failed read must never be mistaken for "no companies" — with an empty
+    // index, the Master List fallback would decide for everyone.
+    if (allCompaniesError) throw new Error(`Unable to load companies for the termination check: ${allCompaniesError.message}`);
     // Fallback for companies TeamWork sync already removed from
     // `companies` entirely (INV-DATA-030: "routinely REMOVED ... while
     // master_list keeps its full historical record") — "is this company
     // terminated" must still be answerable from master_list's own
     // lifecycle category in that case, not silently treated as active.
-    const { data: terminatedMasterList } = await supabase
+    const { data: terminatedMasterList, error: terminatedMasterListError } = await supabase
       .from('master_list')
       .select('roc_no')
       .in('list_type', ['terminated', 'strike_off']);
-    const terminatedUens = new Set((terminatedMasterList ?? [])
-      .map(r => (r.roc_no ? String(r.roc_no).trim().toUpperCase() : null))
-      .filter((v): v is string => !!v));
-    const isTerminatedCompany = (uenKey: string | null, entityName: string) => {
-      const companyInfo = (uenKey ? companyByUen.get(uenKey) : undefined) ?? companyByName.get(normalize(entityName));
-      return companyInfo
-        ? (!companyInfo.is_active || ['Terminated', 'Striking Off'].includes(companyInfo.tw_status ?? ''))
-        : (uenKey ? terminatedUens.has(uenKey) : false);
-    };
+    if (terminatedMasterListError) throw new Error(`Unable to load Master List lifecycle rows: ${terminatedMasterListError.message}`);
+    const lifecycle = buildLifecycleIndex(allCompanies ?? [], (terminatedMasterList ?? []).map(r => r.roc_no as string | null));
 
     const { data: markedRows, error: markedError } = await supabase
       .from('ar_reminder')
@@ -757,7 +758,7 @@ async function syncLateFiling(run: AutomationRun) {
       for (const row of markedRows) {
         if (controller.signal.aborted) throw abortError(controller.signal);
         const uenKey = row.uen ? String(row.uen).trim().toUpperCase() : null;
-        const isTerminated = isTerminatedCompany(uenKey, row.entity_name);
+        const isTerminated = lifecycle.isTerminated(uenKey, row.entity_name);
 
         const lfExisting = (uenKey ? freshByUen.get(uenKey) : undefined) ?? freshByName.get(row.entity_name.toLowerCase());
         const lfRemarks = lfExisting?.remarks ?? '';
@@ -824,50 +825,96 @@ async function syncLateFiling(run: AutomationRun) {
     // Terminated yet were still fully visible, dated rows on the AR
     // Reminder tab.
     //
-    // Found 2026-09-28, a real bug in THIS pass since the day it shipped
-    // (2026-09-23): it must use the exact same "companies row wins,
-    // master_list is a fallback ONLY when no companies row exists" rule
-    // `isTerminatedCompany()` above already implements correctly — but this
-    // pass built its own, separate `allTerminatedUenKeys` by unconditionally
-    // UNIONING every master_list terminated/strike_off UEN in regardless of
-    // whether that UEN also has a live, genuinely Active `companies` row.
-    // `master_list` can carry a stale "terminated"/"strike_off" row for a
-    // company TeamWork itself still shows Active (the exact "7 companies
-    // still Active in TeamWork although filed under Terminated Services"
-    // gap flagged the same day this file's own INV-DATA-067 comment
-    // describes) — every one of those got its real, current AR cycle
-    // wrongly Excluded, invisible on the page, the first night this pass
-    // ran after being filed there. Confirmed live: 14 real ar_reminder rows
-    // across 11 companies (ANABLE MANAGEMENT SERVICES, SHENGYA (SG), A.I.R
-    // INVESTMENT MANAGEMENT, HALOFUN, XSPY, SATORISYS, SINGAPORE CHINESE
-    // ARTS CENTRE, SINO MINING HEAVY INDUSTRIES ×2, ARK PARTNERS MANAGEMENT
-    // ×2, XGC SINGAPORE) — found because XGC's own March 2026 cycle went
-    // missing from the AR list days before its filing deadline. `.filter()`
-    // through `isTerminatedCompany()` below closes it at the source, so this
-    // pass can never again disagree with the marker-clearing pass just above
-    // it about what "terminated" means. See docs/INVARIANTS.md INV-AR-016.
-    const terminatedUenKeys = [...companyByUen.entries()]
-      .filter(([, info]) => !info.is_active || ['Terminated', 'Striking Off'].includes(info.tw_status ?? ''))
-      .map(([uen]) => uen);
-    const allTerminatedUenKeys = [...new Set([...terminatedUenKeys, ...terminatedUens])]
-      .filter(uen => isTerminatedCompany(uen, ''));
-    if (allTerminatedUenKeys.length) {
+    // Found 2026-09-28 (INV-AR-016): this pass once built its own terminated
+    // set that trusted a stale Master List row over a live, Active company —
+    // 14 real AR cycles across 11 companies were hidden, XGC SINGAPORE's
+    // March 2026 cycle days before its deadline among them. Since INV-AR-017
+    // the DECISION comes only from the shared lifecycle index above, and the
+    // ACTION is guarded three ways (all rules in lib/company-lifecycle.ts):
+    //   1. circuit breaker — more than MAX_AUTO_EXCLUSIONS_PER_RUN rows to
+    //      hide in one run hides NOTHING and raises an alert: a mass hide
+    //      always needs a person, and the safe failure is "a terminated
+    //      company's AR stays visible a little longer";
+    //   2. auto-restore — a row THIS pass hid comes back the next run once its
+    //      company is no longer terminated; anything a person (or another
+    //      process) excluded is never touched;
+    //   3. safety net — an Active company whose AR rows are ALL hidden raises
+    //      an alert every run, whatever the cause.
+    const terminatedUenKeys = lifecycle.terminatedUens();
+    let exclusionCandidates: Array<{ id: number; uen: string | null; entity_name: string | null }> = [];
+    if (terminatedUenKeys.length) {
       const { data: terminatedArRows, error: terminatedArError } = await supabase
         .from('ar_reminder')
-        .select('id')
-        .in('uen', allTerminatedUenKeys)
+        .select('id, uen, entity_name')
+        .in('uen', terminatedUenKeys)
         .or('status.is.null,status.neq.Excluded');
       if (terminatedArError) errors++;
-      for (const row of terminatedArRows ?? []) {
-        if (controller.signal.aborted) throw abortError(controller.signal);
-        const { error: excludeError } = await supabase.from('ar_reminder').update({
-          status: 'Excluded',
-          updated_by_email: 'system:late-filing',
-          updated_by_name: 'Late Filing Sync',
-        }).eq('id', row.id);
-        if (excludeError) errors++; else excludedTerminated++;
+      exclusionCandidates = terminatedArRows ?? [];
+    }
+    const exclusionPlan = planArAutoExclusions(exclusionCandidates, lifecycle);
+    for (const row of exclusionPlan.toExclude) {
+      if (controller.signal.aborted) throw abortError(controller.signal);
+      const { error: excludeError } = await supabase.from('ar_reminder').update({
+        status: 'Excluded',
+        updated_by_email: AR_SYSTEM_EXCLUDER,
+        updated_by_name: 'Late Filing Sync',
+      }).eq('id', row.id);
+      if (excludeError) errors++; else excludedTerminated++;
+    }
+
+    // Auto-restore: which pass hid each Excluded row is read from
+    // ar_reminder_audit (written by a DB trigger on EVERY update, so it can't
+    // be skipped by a code path) — the LATEST transition to 'Excluded' decides.
+    // Rows hidden by staff (trash can), by the FYE-correction pass
+    // (system:teamwork) or by anything else keep their state.
+    let restoredExcluded = 0;
+    const { data: excludedRows, error: excludedRowsError } = await supabase
+      .from('ar_reminder')
+      .select('id, uen, entity_name')
+      .eq('status', 'Excluded')
+      .not('uen', 'is', null);
+    if (excludedRowsError) errors++;
+    const excludedIds = (excludedRows ?? []).map(r => r.id as number);
+    const lastExclusion = new Map<number, { by: string | null; statusBefore: string | null; at: string }>();
+    if (excludedIds.length) {
+      const transitions = await pageAll(() => supabase.from('ar_reminder_audit')
+        .select('id, ar_reminder_id, old_value, changed_by_email, changed_at')
+        .in('ar_reminder_id', excludedIds)
+        .eq('field_name', 'status')
+        .eq('new_value', 'Excluded')) as Array<{ ar_reminder_id: number; old_value: string | null; changed_by_email: string | null; changed_at: string }>;
+      for (const t of transitions) {
+        const prev = lastExclusion.get(t.ar_reminder_id);
+        if (!prev || t.changed_at > prev.at) lastExclusion.set(t.ar_reminder_id, { by: t.changed_by_email, statusBefore: t.old_value, at: t.changed_at });
       }
     }
+    const restorePlan = planArAutoRestores((excludedRows ?? []).map(r => ({
+      id: r.id as number, uen: r.uen as string | null, entity_name: r.entity_name as string | null,
+      lastExclusion: lastExclusion.get(r.id as number) ?? null,
+    })), lifecycle);
+    for (const r of restorePlan.toRestore) {
+      if (controller.signal.aborted) throw abortError(controller.signal);
+      const { error: restoreError } = await supabase.from('ar_reminder').update({
+        status: r.restoreTo,
+        updated_by_email: AR_SYSTEM_RESTORER,
+        updated_by_name: 'Late Filing Sync (auto-restore)',
+      }).eq('id', r.id).eq('status', 'Excluded');
+      if (restoreError) errors++; else restoredExcluded++;
+    }
+
+    // Safety net — judge the OUTCOME after every change above.
+    const arForSafetyNet = await pageAll(() => supabase.from('ar_reminder').select('id, uen, status')) as Array<{ uen: string | null; status: string | null }>;
+    const activeWithAllArHidden = findActiveCompaniesWithAllArHidden(allCompanies ?? [], arForSafetyNet);
+    await Promise.all([
+      replaceAutomationExceptions('late_filing', 'ar_mass_exclusion_blocked', exclusionPlan.blocked
+        ? exclusionPlan.candidates.map(r => ({ key: String(r.id), name: r.entity_name ?? null, details: { uen: r.uen, limit: MAX_AUTO_EXCLUSIONS_PER_RUN, candidates: exclusionPlan.candidates.length } }))
+        : []),
+      replaceAutomationExceptions('late_filing', 'ar_mass_restore_blocked', restorePlan.blocked
+        ? restorePlan.candidates.map(r => ({ key: String(r.id), name: r.entity_name ?? null, details: { uen: r.uen, limit: MAX_AUTO_RESTORES_PER_RUN, candidates: restorePlan.candidates.length } }))
+        : []),
+      replaceAutomationExceptions('late_filing', 'active_company_ar_all_hidden', activeWithAllArHidden.map(c => ({
+        key: c.uen, name: c.name, details: { hidden_rows: c.hiddenRows },
+      }))),
+    ]);
 
     const result = {
       ok: errors === 0 && eotErrors === 0,
@@ -880,6 +927,11 @@ async function syncLateFiling(run: AutomationRun) {
       movedToReview,
       reconciled,
       excludedTerminated,
+      // INV-AR-017 — reversible hiding, circuit breakers, safety net.
+      restoredExcluded,
+      exclusionBlocked: exclusionPlan.blocked ? exclusionPlan.candidates.length : 0,
+      restoreBlocked: restorePlan.blocked ? restorePlan.candidates.length : 0,
+      activeCompaniesWithAllArHidden: activeWithAllArHidden.length,
       insertedNames,
       ar_reminder_rows_inserted: arInserted,
       ar_reminder_rows_noted: arNoted,
