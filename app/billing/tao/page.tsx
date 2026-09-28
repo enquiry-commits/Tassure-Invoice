@@ -15,6 +15,10 @@ import TaoInvoiceBuilder, { fmtMoney, fmtDate, TaoInvoiceRef } from '@/component
 
 const taoListColumns = '32px minmax(230px,1.55fr) 120px 130px 110px 100px';
 
+// "+ Add new company" modal's Service(s) picker — hidden 2026-09-28, see
+// that block's own comment for the exact request/why-hidden-not-deleted.
+const SHOW_SERVICE_PICKER = false;
+
 // Curated real TAO product/service names (from actual QuickBooks TAO line
 // items) — picking one of these resolves to the exact QB Item via
 // buildInvoiceLineArray's exact match (lib/qb-invoice-conventions.ts), so the
@@ -287,15 +291,30 @@ export default function TaoBillingPage() {
                     <div style={{ marginTop: 5, fontSize: 11, color: 'var(--status-danger)' }}>That doesn&apos;t look like a valid Singapore UEN.</div>
                   )}
 
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#64748b', margin: '14px 0 5px' }}>Service(s)</label>
-                  <div style={{ display: 'flex', gap: 16 }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#334155' }}>
-                      <input type="checkbox" checked={newCompanyAccounts} onChange={e => setNewCompanyAccounts(e.target.checked)} />Accounts
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#334155' }}>
-                      <input type="checkbox" checked={newCompanyTax} onChange={e => setNewCompanyTax(e.target.checked)} />Tax
-                    </label>
-                  </div>
+                  {/* Hidden 2026-09-28, Vincent: "Service(s)的部分就先不显
+                      示了，隐藏起来" then, on clarifying: "应该是说这个功能
+                      先不需要" (this feature isn't needed for now) — "先"
+                      (for now) is why this is a hidden UI block, not a
+                      deletion: newCompanyAccounts/newCompanyTax state,
+                      submitNewCompany's payload, and canSubmit's own gate
+                      are all UNCHANGED, still submitting the same {accounts:
+                      true, tax: false} default every add used before this
+                      picker existed (2026-09-22's own explicit-choice
+                      feature) — re-enabling later is just un-hiding this
+                      block, not rebuilding it. */}
+                  {SHOW_SERVICE_PICKER && (
+                    <>
+                      <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#64748b', margin: '14px 0 5px' }}>Service(s)</label>
+                      <div style={{ display: 'flex', gap: 16 }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#334155' }}>
+                          <input type="checkbox" checked={newCompanyAccounts} onChange={e => setNewCompanyAccounts(e.target.checked)} />Accounts
+                        </label>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#334155' }}>
+                          <input type="checkbox" checked={newCompanyTax} onChange={e => setNewCompanyTax(e.target.checked)} />Tax
+                        </label>
+                      </div>
+                    </>
+                  )}
 
                   {addCompanyError && (
                     <div style={{ marginTop: 14, fontSize: 12, color: 'var(--status-danger)', fontWeight: 600, lineHeight: 1.5 }}>{addCompanyError}</div>

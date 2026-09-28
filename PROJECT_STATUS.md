@@ -1937,6 +1937,20 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **TAO's "+ Add new company" modal: Service(s) picker hidden, not
+  removed.** Vincent: "Service(s)的部分就先不显示了，隐藏起来", then
+  clarifying "应该是说这个功能先不需要" (this feature isn't needed for
+  now) — "先" (for now) is why `app/billing/tao/page.tsx` gates that whole
+  label+checkboxes block behind a new `SHOW_SERVICE_PICKER = false`
+  constant instead of deleting it. `newCompanyAccounts`/`newCompanyTax`
+  state, `submitNewCompany`'s payload, and `canSubmit`'s own gate are all
+  unchanged — every add still submits `{accounts: true, tax: false}`, the
+  same default this explicit-choice picker used before it existed
+  (2026-09-22's own feature). Re-enabling later is un-hiding this block,
+  not rebuilding it. `npx tsc --noEmit` clean, `npx eslint` clean (6
+  pre-existing warnings elsewhere in the file, unrelated — confirmed via
+  `git diff`'s own line ranges), `npm run build` (cold) clean.
+
 - **Removed the merged SOA PDF's "Other Adjustments" page — a deliberate,
   informed reversal of a real prior fix, not an oversight (INV-QB-023).**
   Vincent: "SOA 的这个页面不需要生成." This page (Payment/Journal Entry/
