@@ -117,21 +117,17 @@ function AutoTextarea({ value, onChange, style }: { value: string; onChange: (v:
   );
 }
 
-// Small local equivalent of app/billing/page.tsx's BillingInvoiceReference —
-// that one is typed to 'TAB' | 'TAC' and not exported, so this page carries
-// its own TAO-flavoured version rather than widening a shared private helper.
-export function TaoInvoiceRef({ invoiceNo }: { invoiceNo?: string | null }) {
-  if (!invoiceNo) return <span style={{ color: '#94a3b8', fontSize: 10, whiteSpace: 'nowrap' }}>No history</span>;
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', width: 'fit-content', maxWidth: '100%',
-      padding: '2px 5px', borderRadius: 4, background: '#f2f6f8', color: '#31506f',
-      fontSize: 9.5, fontWeight: 800, lineHeight: 1.25, whiteSpace: 'nowrap',
-    }}>
-      TAO #{invoiceNo.replace(/^TAO/i, '')}
-    </span>
-  );
-}
+// TaoInvoiceRef (a local, non-clickable, differently-styled equivalent of
+// app/billing/page.tsx's BillingInvoiceReference) was removed 2026-09-28 —
+// Vincent: "Last TAO Invoice 的那个UI也是做成按钮的UI设计" (give it the
+// same button UI as TAB/TAC Invoice). BillingInvoiceReference's own
+// `company` prop was already widened to accept 'TAO' (2026-09-16) but had
+// no real caller yet — app/billing/tao/page.tsx now uses it directly
+// instead, which also makes this column genuinely clickable (opens the
+// real QuickBooks PDF), not just visually matching. See
+// displayInvoiceNo()'s own comment (components/billing/
+// ExpandedBillingRow.tsx) for the one real gap this surfaced (TAO's own
+// "TAO" prefix was never stripped there before).
 
 
 

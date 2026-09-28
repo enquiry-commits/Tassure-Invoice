@@ -11,7 +11,8 @@ import type { TaoCompanyRow } from '@/app/api/billing/tao/route';
 import type { TaoServiceHistoryItem } from '@/app/api/billing/tao/service-history/route';
 // The builder + its shared display helpers now live in components/billing/
 // so the chat assistant can open the SAME builder (see that file's header).
-import TaoInvoiceBuilder, { fmtMoney, fmtDate, TaoInvoiceRef } from '@/components/billing/TaoInvoiceBuilder';
+import TaoInvoiceBuilder, { fmtMoney, fmtDate } from '@/components/billing/TaoInvoiceBuilder';
+import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 
 const taoListColumns = '32px minmax(230px,1.55fr) 120px 130px 110px 100px';
 
@@ -404,7 +405,19 @@ export default function TaoBillingPage() {
                       ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, background: '#fff', border: '1px solid #bbf7d0', color: '#15803d', fontSize: 9.5, fontWeight: 750 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#15803d' }} />Billed</span>
                       : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, background: '#fff', border: '1px solid #fed7aa', color: '#c2410c', fontSize: 9.5, fontWeight: 750 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#c2410c' }} />Never billed</span>}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'center' }}><TaoInvoiceRef invoiceNo={c.lastInvoice?.invoiceNo} /></div>
+                  {/* Swapped from the old local TaoInvoiceRef to the shared
+                      chip, 2026-09-28 — Vincent: "Last TAO Invoice 的那个UI
+                      也是做成按钮的UI设计" (same button UI as TAB/TAC
+                      Invoice). Genuinely clickable now too, opens the real
+                      QuickBooks PDF — TaoInvoiceRef never was. No
+                      stopPropagation wrapper, matching app/billing/page.tsx's
+                      own TAB/TAC Invoice cell exactly (same row-click-to-
+                      expand context, same lack of one there) rather than
+                      introducing new, inconsistent click behavior between
+                      pages that are meant to look and act alike. */}
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <BillingInvoiceReference company="TAO" invoiceNo={c.lastInvoice?.invoiceNo} />
+                  </div>
                   <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(c.lastInvoice?.txnDate ?? null)}</div>
                   <div style={{ textAlign: 'center', fontSize: 11, color: '#374151', fontWeight: 600 }}>{c.lastInvoice ? fmtMoney(c.lastInvoice.totalAmt ?? 0) : '—'}</div>
                 </div>

@@ -1949,6 +1949,32 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **TAO's "Last TAO Invoice" column gets the same button UI as TAB/TAC
+  Invoice — and becomes genuinely clickable (INV-QB-025).** Vincent:
+  "Last TAO Invoice 的那个UI也是做成按钮的UI设计." Swapped
+  `app/billing/tao/page.tsx` from its own local, non-clickable
+  `TaoInvoiceRef` (`components/billing/TaoInvoiceBuilder.tsx`) to the
+  shared `BillingInvoiceReference` chip TAB/TAC Invoice already uses —
+  same border+white-fill styling, and now it actually opens the real
+  QuickBooks PDF on click, which `TaoInvoiceRef` never did. Surfaced a
+  real, separate gap while wiring this up: `displayInvoiceNo()`'s
+  prefix-stripping regex was widened for TAB/TAC only when
+  `BillingInvoiceReference.company` itself was widened to accept `'TAO'`
+  back on 2026-09-16 — this is the first real TAO caller, and without the
+  fix it would have rendered a doubled "TAO #TAO02660519". Fixed the regex
+  to also strip TAO, removed the now-fully-superseded `TaoInvoiceRef`
+  entirely (confirmed via `grep -rl` it had exactly one real caller, now
+  migrated) rather than leaving it as dead code. Deliberately did NOT add
+  a `stopPropagation` wrapper around the new chip, even though it sits
+  inside a row with its own click-to-expand handler — checked
+  `app/billing/page.tsx`'s own TAB/TAC Invoice cell first and it has no
+  such wrapper either in the identical context, so matching that exactly
+  keeps click behavior consistent across all three pages rather than
+  introducing an unrequested, page-specific difference. `npx tsc --noEmit`
+  clean, `npx eslint` clean (pre-existing warnings/errors in the same 3
+  files, confirmed unrelated via `git diff`'s own line ranges), `npm run
+  build` (cold) clean. Full details: `docs/INVARIANTS.md` INV-QB-025.
+
 - **TAO's "+ Add new company" modal: Service(s) picker hidden, not
   removed.** Vincent: "Service(s)的部分就先不显示了，隐藏起来", then
   clarifying "应该是说这个功能先不需要" (this feature isn't needed for

@@ -1734,6 +1734,33 @@ again.
      (only Invoice/Payment/JournalEntry/Deposit/CreditMemo); real-time push
      would need an Intuit-dashboard subscription and is not needed while
      reads are live.
+- **INV-QB-025** — `displayInvoiceNo()`'s (`components/billing/
+  ExpandedBillingRow.tsx`) leading-prefix strip must cover EVERY book
+  `BillingInvoiceReference`'s `company` prop accepts, not just whichever
+  ones happened to have a real caller when a prop widening shipped. Found
+  live 2026-09-28: `company` was widened `'TAB' | 'TAC'` → the full
+  `QbCompany` (adding `'TAO'`) back on 2026-09-16 specifically so a future
+  TAO caller could reuse the shared chip — but `displayInvoiceNo()`'s own
+  regex was never updated alongside it (`/^(?:TAB|TAC)(?=...)/i`, no TAO),
+  a gap invisible until `app/billing/tao/page.tsx`'s "Last TAO Invoice"
+  column became the first real TAO caller (2026-09-28, Vincent: "Last TAO
+  Invoice 的那个UI也是做成按钮的UI设计" — give it the same button UI as
+  TAB/TAC Invoice, switching it from its own local, non-clickable
+  `TaoInvoiceRef` to the shared chip). Real TAO `invoice_no` values carry a
+  literal "TAO" prefix (e.g. "TAO02660519"), same as TAB's "INV"/TAC's
+  "TAC" — without this fix the chip would have rendered a doubled
+  "TAO #TAO02660519". Fixed by widening the regex to
+  `/^(?:TAB|TAC|TAO)(?=...)/i`. General lesson, same shape as INV-QB-022's
+  own: widening a shared component's TYPE (accepting a new value) does not
+  automatically widen every OTHER piece of logic that assumes the old,
+  narrower set — grep for every regex/switch/lookup keyed on the type
+  being widened, not just the one call site prompting the widening.
+  `TaoInvoiceRef` (the now-fully-superseded local duplicate) was removed
+  entirely rather than left as dead code — confirmed via `grep -rl
+  TaoInvoiceRef` it had exactly one real caller, now migrated. `npx tsc
+  --noEmit` clean, `npx eslint` clean (pre-existing warnings/errors
+  elsewhere in the same 3 files, confirmed unrelated via `git diff`'s own
+  line ranges), `npm run build` (cold) clean.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

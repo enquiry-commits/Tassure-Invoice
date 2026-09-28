@@ -135,9 +135,19 @@ type EditableLine = {
 type InvoiceNumberState = { TAB: string; TAC: string };
 type GeneratedPdf = { company: 'TAB' | 'TAC'; invoiceNo: string; qbId: string; total: number };
 
+// Widened to also strip TAO, 2026-09-28 — app/billing/tao/page.tsx's own
+// "Last TAO Invoice" column switched from its own local, non-clickable
+// TaoInvoiceRef (components/billing/TaoInvoiceBuilder.tsx) to this shared
+// BillingInvoiceReference chip (Vincent: "Last TAO Invoice 的那个UI也是做成
+//按钮的UI设计" — give it the same button UI as TAB/TAC Invoice). Real TAO
+// invoice_no values are stored with a literal "TAO" prefix (e.g.
+// "TAO02660519"), same as TAB/TAC's own "INV"/"TAC" prefixes — this was
+// simply never exercised for TAO before, since BillingInvoiceReference's
+// own `company` prop was widened to accept it (2026-09-16) but no TAO
+// caller existed yet to hit this specific gap.
 export function displayInvoiceNo(invoiceNo: string | null | undefined) {
   const value = String(invoiceNo ?? '').trim();
-  return value.replace(/^(?:TAB|TAC)(?=\d|[\s#:_-])[\s#:_-]*/i, '');
+  return value.replace(/^(?:TAB|TAC|TAO)(?=\d|[\s#:_-])[\s#:_-]*/i, '');
 }
 
 // House naming convention for saved invoice PDFs — TAB: "INV<no>-<company>-S$<amt>",
