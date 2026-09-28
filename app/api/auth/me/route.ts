@@ -23,6 +23,7 @@ export async function GET() {
       canViewActivityInsights: account.canViewActivityInsights ?? false,
       canViewSgNews: account.canViewSgNews ?? false,
       canViewQuotation: account.canViewQuotation ?? false,
+      canViewTurnoverAI: account.canViewTurnoverAI ?? false,
     },
   });
 }

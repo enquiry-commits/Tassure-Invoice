@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText, ListChecks, BarChart3, ShieldCheck, Newspaper } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, ListChecks, BarChart3, ShieldCheck, Newspaper, ScanLine } from 'lucide-react';
 
 // `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
 // yet (see NavImg below) — currently Proposal Generator (a link out to a
@@ -153,9 +153,28 @@ const SG_NEWS_NODE: Node = { label: 'SG Latest News', href: '/sg-news', icon: Ne
 // else in this file, only level-1 splices like Reports/SG News above.
 const QUOTATION_NODE: Node = { label: 'Quotation', href: '/billing/quotation' };
 
+// Added 2026-09-28 — Vincent: reads a client's receipts/invoices with
+// Claude vision and lets Account staff confirm a reconciled turnover total
+// (see app/turnover-ai/*, app/api/turnover-ai/*). A level-1 GROUP (its own
+// 3 sub-pages), same shape as ADMIN_NODE, gated on `canViewTurnoverAI`
+// (Vincent-only for now) rather than folded into Admin — this is a real
+// operational feature for Account, not a governance tool.
+// Routes deliberately never nest as string prefixes of one another
+// (/turnover-ai/inbox, not bare /turnover-ai) — isActive()'s generic
+// `pathname.startsWith(href)` fallback below would otherwise mark Inbox
+// "active" on every one of this group's sub-pages.
+const TURNOVER_AI_NODE: Node = {
+  id: 'turnover-ai', label: 'Turnover AI', icon: ScanLine,
+  children: [
+    { label: 'Inbox', href: '/turnover-ai/inbox' },
+    { label: 'Review Queue', href: '/turnover-ai/review' },
+    { label: 'Summary', href: '/turnover-ai/summary' },
+  ],
+};
+
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
-const SIDEBAR_GROUP_IDS = [...groupIds(tree), ADMIN_NODE.id!];
+const SIDEBAR_GROUP_IDS = [...groupIds(tree), ADMIN_NODE.id!, TURNOVER_AI_NODE.id!];
 const firstLeaf = (n: Node): string => n.href ?? (n.children ? firstLeaf(n.children[0]) : '#');
 
 function findNode(nodes: Node[], href: string): Node | null {
@@ -391,7 +410,7 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
   );
 }
 
-export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canViewSgNews, canViewQuotation }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean; canViewSgNews?: boolean; canViewQuotation?: boolean }) {
+export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canViewSgNews, canViewQuotation, canViewTurnoverAI }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean; canViewSgNews?: boolean; canViewQuotation?: boolean; canViewTurnoverAI?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
   let level1 = level1For(restrictedTo);
   if (canViewReports && !restrictedTo) {
@@ -418,6 +437,7 @@ export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canView
       };
     });
   }
+  if (canViewTurnoverAI && !restrictedTo) level1 = [...level1, TURNOVER_AI_NODE];
   // The complete Admin group is intentionally Vincent-only and remains the
   // final level-1 item in the sidebar.
   if (isAdmin && !restrictedTo) level1 = [...level1, ADMIN_NODE];

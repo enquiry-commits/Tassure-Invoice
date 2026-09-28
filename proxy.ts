@@ -85,6 +85,12 @@ export async function proxy(req: NextRequest) {
   if (!isApi && path === '/billing/quotation' && !account.canViewQuotation) {
     return NextResponse.redirect(new URL('/', req.url));
   }
+  // Turnover AI (added 2026-09-28) — Vincent-only while it's new. Same hard
+  // middleware block as /billing/quotation above, covering all 3 pages
+  // under this prefix (Inbox, Review Queue, Summary).
+  if (!isApi && path.startsWith('/turnover-ai') && !account.canViewTurnoverAI) {
+    return NextResponse.redirect(new URL('/', req.url));
+  }
   // Some accounts only see one page (Vincent, 2026-08-17 — an Accounting-team
   // group confined to AR Reminder). Page navigation only, same as the rest of
   // this file: API routes stay reachable so the allowed page's own fetches

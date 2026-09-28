@@ -66,6 +66,16 @@ export type ApprovedAccount = {
   // should be easy to hand to Chelsea/Finance later without also handing them
   // anything else.
   canViewQuotation?: boolean;
+  // Gates the new "Turnover AI" top-level nav group (app/turnover-ai/*) and
+  // its API routes (app/api/turnover-ai/*) — reads a client's receipts/
+  // invoices with Claude vision and lets Account staff confirm a reconciled
+  // turnover total. Added 2026-09-28, Vincent-only while it's new (answered
+  // via AskUserQuestion: "先只给Vincent"). Its own flag, not `admin`/
+  // `canViewQuotation`, for the same reason every flag above is separate:
+  // Vincent-only TODAY, but conceptually its own permission that should be
+  // easy to hand to the Account team later without also handing them
+  // anything else.
+  canViewTurnoverAI?: boolean;
   // When set, this account is confined to exactly this one page (path +
   // required query params, e.g. AR Reminder is the 'ar' tab on /billing —
   // see components/Sidebar.tsx's tree for the canonical href). Enforced in
@@ -76,7 +86,7 @@ export type ApprovedAccount = {
 };
 
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
-  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true, canViewQuotation: true },
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true, canViewQuotation: true, canViewTurnoverAI: true },
   { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
   { name: 'Samuell Ng', email: 'samuellng@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
   // New login account, added 2026-09-02 specifically to grant this
