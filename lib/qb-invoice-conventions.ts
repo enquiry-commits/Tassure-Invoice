@@ -60,6 +60,33 @@ export async function nextDocNumber(token: string, realmId: string, company: QbC
   return `${prefix}${String(seq + 1).padStart(latest.length - prefix.length, '0')}`;
 }
 
+// Estimate ("Quotation") DocNumbers use a SEPARATE, simpler series from
+// invoices — confirmed live 2026-09-28 by reading each book's actual recent
+// Estimates: "PI" + 2-digit year + 4-digit sequence (e.g. PI260090), with NO
+// per-book series digit. TAB and TAO are independently at PI260090/PI260067
+// right now — that is not a collision: each QB company file (book) is a
+// wholly separate realm with its own DocNumber uniqueness constraint, so two
+// books' Estimate sequences can overlap numerically with no consequence, the
+// same way each book already has its own independent Invoice sequence.
+export async function nextEstimateDocNumber(token: string, realmId: string, txnDate: string): Promise<string | null> {
+  const yy = String(new Date(txnDate).getFullYear()).slice(-2);
+  const prefix = `PI${yy}`;
+  const qr = await qbGet(token, realmId, `SELECT * FROM Estimate WHERE DocNumber LIKE '${prefix}%' ORDER BY DocNumber DESC MAXRESULTS 1`);
+  const latest: string | undefined = qr?.Estimate?.[0]?.DocNumber;
+  if (!latest) return `${prefix}0001`; // first quotation of the year in this book
+  const seq = parseInt(latest.slice(prefix.length), 10);
+  if (isNaN(seq)) return null;
+  return `${prefix}${String(seq + 1).padStart(latest.length - prefix.length, '0')}`;
+}
+
+// Same duplicate-check shape as invoiceDocNumberExists below, against
+// Estimate instead of Invoice — the final check immediately before create.
+export async function estimateDocNumberExists(token: string, realmId: string, docNumber: string): Promise<boolean> {
+  const escaped = docNumber.replace(/'/g, "\\'");
+  const qr = await qbGet(token, realmId, `SELECT * FROM Estimate WHERE DocNumber = '${escaped}' MAXRESULTS 1`);
+  return (qr?.Estimate?.length ?? 0) > 0;
+}
+
 // Exact duplicate check used when staff manually override the suggested
 // number. QuickBooks custom transaction numbers are company-specific, so this
 // must run against the matching TAB/TAC realm immediately before creation.

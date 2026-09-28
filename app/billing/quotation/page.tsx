@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileText, RefreshCw, X, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, Layers, Clock, Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FileText, RefreshCw, X, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, Layers, Clock, Loader2, Plus, Send, Trash2 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
-import { fmtDate } from '@/lib/date';
+import { fmtDate, todaySGT } from '@/lib/date';
+import { QB_CATALOG } from '@/lib/invoice-templates';
 import type { QbCompany } from '@/lib/quickbooks';
 import type { QuotationData, QuotationRow, QuotationTraceInvoice } from '@/app/api/billing/quotation/route';
 
@@ -180,6 +181,190 @@ function Detail({ row, graceDays, onClose }: { row: QuotationRow; graceDays: num
   );
 }
 
+type LineDraft = { service: string; item: string; description: string; qty: number; rate: number };
+
+// Vincent: "那个Quotation页面要可以实际开Quotation的功能" — everything else on
+// this page only ever reads QuickBooks; this is the one write action, kept
+// deliberately simple (see app/api/quickbooks/create-quotation/route.ts's own
+// header comment for what it leaves out and why). requestKey is generated
+// once per open, not per submit, so retrying the exact same failed attempt
+// reuses QuickBooks' own requestid de-dup instead of risking a duplicate.
+function NewQuotationModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const [book, setBook] = useState<QbCompany>('TAB');
+  const [customerName, setCustomerName] = useState('');
+  const [txnDate, setTxnDate] = useState(todaySGT());
+  const [expirationDate, setExpirationDate] = useState('');
+  const [privateNote, setPrivateNote] = useState('');
+  const [lines, setLines] = useState<LineDraft[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [customerNotFound, setCustomerNotFound] = useState(false);
+  const [result, setResult] = useState<{ docNumber: string; totalAmt: number } | null>(null);
+  const requestKey = useRef(globalThis.crypto.randomUUID()).current;
+
+  const total = lines.reduce((s, l) => s + l.qty * l.rate, 0);
+  const canSubmit = customerName.trim() && lines.length > 0 && lines.every(l => l.description.trim() && Number.isFinite(l.rate) && l.qty > 0);
+
+  const submit = async () => {
+    setCreating(true);
+    setError(null);
+    setCustomerNotFound(false);
+    try {
+      const res = await fetch('/api/quickbooks/create-quotation', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          book, companyName: customerName.trim(), txnDate,
+          expirationDate: expirationDate || null,
+          privateNote: privateNote.trim() || null,
+          lines: lines.map(l => ({ service: l.service, productService: l.item, description: l.description, qty: l.qty, rate: l.rate })),
+          requestKey,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        if (res.status === 404) setCustomerNotFound(true);
+        setError(json.error ?? 'Unable to create the quotation.');
+        return;
+      }
+      setResult({ docNumber: json.docNumber, totalAmt: json.totalAmt });
+      onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const createCustomerAndRetry = async () => {
+    setCreatingCustomer(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/quickbooks/create-customer', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company: book, companyName: customerName.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error ?? `Could not create the customer in QuickBooks ${book}.`); return; }
+      setCustomerNotFound(false);
+      await submit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed');
+    } finally {
+      setCreatingCustomer(false);
+    }
+  };
+
+  const inputStyle = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, boxSizing: 'border-box' as const, width: '100%' };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
+        <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>New Quotation</div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
+        </div>
+
+        {result ? (
+          <div style={{ padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#15803d', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
+              <CheckCircle2 size={18} />Quotation {result.docNumber} created in QuickBooks {book}
+            </div>
+            <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 18 }}>
+              S${result.totalAmt.toLocaleString()} · created as a draft (Pending) — review and send it from QuickBooks.
+            </div>
+            <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Done</button>
+          </div>
+        ) : (
+          <div style={{ padding: '16px 20px 20px', display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 10, alignItems: 'center' }}>
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Book</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {(['TAB', 'TAC', 'TAO'] as const).map(b => (
+                  <button key={b} onClick={() => setBook(b)}
+                    style={{ padding: '5px 14px', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: `1px solid ${book === b ? '#1d3a5c' : '#e2e8f0'}`, background: book === b ? '#1d3a5c' : '#fff', color: book === b ? '#fff' : '#475569' }}>
+                    {b}
+                  </button>
+                ))}
+              </div>
+
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Customer</label>
+              <input value={customerName} onChange={e => { setCustomerName(e.target.value); setCustomerNotFound(false); }}
+                placeholder="Exact QuickBooks customer name" style={inputStyle} />
+
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Date</label>
+              <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} style={{ ...inputStyle, width: 160 }} />
+
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Expires</label>
+              <input type="date" value={expirationDate} onChange={e => setExpirationDate(e.target.value)} style={{ ...inputStyle, width: 160 }} />
+            </div>
+
+            <div>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', marginBottom: 6 }}>Lines</div>
+              {lines.length > 0 && (
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: 8, overflow: 'hidden' }}>
+                  {lines.map((l, i) => (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 56px 90px 24px', gap: 6, alignItems: 'center', padding: '6px 8px', borderTop: i ? '1px solid #f1f5f9' : 'none' }}>
+                      <input value={l.description} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, description: e.target.value } : x))} style={{ ...inputStyle, fontSize: 12 }} />
+                      <input type="number" min={0} step={1} value={l.qty} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, qty: Number(e.target.value) || 0 } : x))} style={{ ...inputStyle, textAlign: 'right' }} />
+                      <input type="number" min={0} step={0.01} value={l.rate} onChange={e => setLines(prev => prev.map((x, j) => j === i ? { ...x, rate: Number(e.target.value) || 0 } : x))} style={{ ...inputStyle, textAlign: 'right' }} />
+                      <button onClick={() => setLines(prev => prev.filter((_, j) => j !== i))} title="Remove line" style={{ border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', display: 'flex' }}><Trash2 size={13} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <select value="" onChange={e => {
+                  const found = QB_CATALOG.find(x => x.item === e.target.value);
+                  if (!found) return;
+                  setLines(prev => [...prev, { service: found.service, item: found.item, description: found.label, qty: 1, rate: found.rate }]);
+                }}
+                style={{ ...inputStyle, cursor: 'pointer' }}>
+                <option value="">+ Add a line…</option>
+                {[...new Set(QB_CATALOG.map(x => x.category))].map(cat => (
+                  <optgroup key={cat} label={cat}>
+                    {QB_CATALOG.filter(x => x.category === cat).map(x => (
+                      <option key={x.item} value={x.item}>{x.label}{x.rate ? `  ·  S$${x.rate.toLocaleString()}` : ''}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 4 }}>Note (optional)</label>
+              <textarea value={privateNote} onChange={e => setPrivateNote(e.target.value)} rows={2} style={{ ...inputStyle, fontFamily: 'inherit', resize: 'vertical' }} />
+            </div>
+
+            {error && (
+              <div style={{ padding: '9px 11px', borderRadius: 8, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 12, fontWeight: 600 }}>
+                {error}
+                {customerNotFound && (
+                  <div style={{ marginTop: 8 }}>
+                    <button onClick={createCustomerAndRetry} disabled={creatingCustomer}
+                      style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: creatingCustomer ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: creatingCustomer ? 'default' : 'pointer' }}>
+                      {creatingCustomer ? 'Creating…' : `Create "${customerName.trim()}" in QuickBooks ${book}`}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+              <div style={{ fontSize: 13, color: '#334155' }}>Total <strong style={{ fontSize: 16, color: '#0f766e' }}>S${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
+              <button onClick={submit} disabled={!canSubmit || creating}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, border: 'none', cursor: (!canSubmit || creating) ? 'not-allowed' : 'pointer', background: (!canSubmit || creating) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                {creating ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={14} />}
+                {creating ? 'Creating…' : 'Create Quotation'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
 export default function QuotationPage() {
   const [data, setData] = useState<QuotationData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -188,6 +373,7 @@ export default function QuotationPage() {
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | QbCompany>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   // No setState before the fetch starts — react-hooks/set-state-in-effect
   // rejects a synchronous set at the top of an effect body. The refresh
@@ -286,6 +472,10 @@ export default function QuotationPage() {
                 {b.ok ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}{b.book}{b.ok ? ` ${b.count}` : ' failed'}
               </span>
             ))}
+            <button onClick={() => setShowCreate(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: 'none', background: '#0f766e', color: '#fff', fontSize: 12, cursor: 'pointer', fontWeight: 700 }}>
+              <Plus size={13} />New Quotation
+            </button>
             <button onClick={() => { setRefreshing(true); load(); }} disabled={refreshing}
               style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', fontSize: 12, cursor: refreshing ? 'default' : 'pointer', fontWeight: 600 }}>
               {refreshing ? <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={13} />}Refresh from QuickBooks
@@ -345,6 +535,12 @@ export default function QuotationPage() {
       <PaginationBar page={page} totalPages={totalPages} total={total} startIndex={startIndex} pageCount={pageItems.length} onPage={setPage} />
 
       {detailRow && data && <Detail row={detailRow} graceDays={data.traceGraceDays} onClose={() => setExpanded(null)} />}
+      {showCreate && (
+        <NewQuotationModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setRefreshing(true); load(); }}
+        />
+      )}
     </div>
   );
 }
