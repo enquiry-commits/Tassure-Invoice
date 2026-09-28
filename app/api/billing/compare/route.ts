@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { thisYearSGT } from '@/lib/date';
 import { normalize, matchScore } from '@/lib/company-name';
+import { onlyActiveCompanies } from '@/lib/company-lifecycle';
 
 
 export async function GET(req: NextRequest) {
@@ -21,10 +22,9 @@ export async function GET(req: NextRequest) {
   if (invErr) return NextResponse.json({ error: invErr.message }, { status: 500 });
 
   // ── Companies with service flags ──────────────────────────────────────────
-  const { data: companies, error: compErr } = await supabase
+  const { data: companies, error: compErr } = await onlyActiveCompanies(supabase
     .from('companies')
-    .select('id, company_name, has_annual_return, has_agm, has_xbrl, has_nd, has_accounts, has_tax, uses_address, is_active, fye_month, pic')
-    .eq('is_active', true);
+    .select('id, company_name, has_annual_return, has_agm, has_xbrl, has_nd, has_accounts, has_tax, uses_address, is_active, fye_month, pic'));
   if (compErr) return NextResponse.json({ error: compErr.message }, { status: 500 });
 
   // ── AR reminder workflow data (for filing status) ─────────────────────────

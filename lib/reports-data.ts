@@ -14,6 +14,7 @@
 // high-risk shared logic, and no risk of misattributing one company's
 // join_date onto a different company with a similar name.
 import { buildReportingContext, pctChange } from './reporting-period';
+import { isActiveCompany, isEndedMasterListType } from './company-lifecycle';
 
 export type ReportsCompanyRow = {
   id: number;
@@ -55,7 +56,9 @@ export function buildReportsCompanyRows(companies: CompanyRaw[], masterList: Mas
       customerSource: (c.customer_source as string | null) ?? null,
       twStatus: (c.tw_status as string | null) ?? null,
       pic: (c.pic as string | null) ?? null,
-      isActive: (c.is_active as boolean | null) ?? null,
+      // The one shared "on the active roster" answer (lib/company-lifecycle.ts)
+      // — every Reports/assistant consumer filters on this field.
+      isActive: isActiveCompany(c as { is_active?: boolean | null }),
       joinDate: uen ? (joinDateByUen.get(uen) ?? null) : null,
       usesAddress: (c.uses_address as boolean | null) ?? null,
       hasNd: (c.has_nd as boolean | null) ?? null,
@@ -255,7 +258,7 @@ export function computeClientFlow(masterList: Record<string, unknown>[]) {
         newParseable++;
       } else newUnparseable++;
     }
-    if (m.list_type === 'terminated' || m.list_type === 'strike_off') {
+    if (isEndedMasterListType(m.list_type as string | null)) {
       const updateRaw = typeof m.update_date === 'string' ? m.update_date.trim() : '';
       if (updateRaw) {
         const ud = parseFlexibleDate(m.update_date);

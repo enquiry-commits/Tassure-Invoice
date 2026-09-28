@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { resolveCompany, normalize } from '@/lib/company-name';
 import { computeTaoCompanies } from '@/app/api/billing/tao/route';
+import { onlyActiveCompanies } from '@/lib/company-lifecycle';
 
 /**
  * READ-ONLY view of a company's TAO (ACC) billing history (2026-09-10).
@@ -80,7 +81,7 @@ export async function previewTaoBilling(companyQuery: string): Promise<TaoLookup
   // extracted rather than re-derived.
   const [taoCompanies, coRows] = await Promise.all([
     computeTaoCompanies(),
-    sb.from('companies').select('id, company_name, has_accounts, has_tax, services_manual').eq('is_active', true),
+    onlyActiveCompanies(sb.from('companies').select('id, company_name, has_accounts, has_tax, services_manual')),
   ]);
   const companies = (coRows.data ?? []) as CompanyLite[];
 

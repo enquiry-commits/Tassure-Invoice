@@ -6,6 +6,7 @@ import { customerSourceLabel } from '@/lib/customer-source';
 import { buildReportsCompanyRows, computeRevenueTrend, computeComparableRevenue, computeClientFlow, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT, type ComparableRevenue, type DataQuality, type FlowRow } from '@/lib/reports-data';
 import { pageAll } from '@/lib/page-all';
 import { normalize } from '@/lib/company-name';
+import { isActiveCompany } from '@/lib/company-lifecycle';
 import { REPORT_COLORS, REPORT_PALETTE } from '@/lib/chart-colors';
 
 // Reports — customer-profile analytics for leadership (Vincent, Cindy,
@@ -119,7 +120,7 @@ export async function computeReportsData(): Promise<ReportsData> {
 
   const companyRows = buildReportsCompanyRows(companies, masterList);
 
-  const active = companies.filter(c => c.is_active);
+  const active = companies.filter(c => isActiveCompany(c as { is_active?: boolean | null }));
 
   // ── Client type mix (legal entity structure — company_type, NOT SSIC) ───
   const typeCount: Record<string, number> = {};

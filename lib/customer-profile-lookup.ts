@@ -5,6 +5,7 @@ import { createAdminClient } from './supabase';
 import { pageAll } from './page-all';
 import { buildReportsCompanyRows, computeClientFlow, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT } from './reports-data';
 import { customerSourceLabel } from './customer-source';
+import { isActiveCompany } from './company-lifecycle';
 
 // A real capability gap Vincent flagged, 2026-09-09: asked "客户最大是什么
 // 类型的客户？从事什么行业的？" (what type/industry is our biggest client),
@@ -104,7 +105,7 @@ export async function getCustomerProfileSummary(): Promise<CustomerProfileSummar
   const locationCounts = new Map<string, number>();
   let totalUsingAddress = 0;
   for (const c of companies) {
-    if (!c.is_active || !c.uses_address) continue;
+    if (!isActiveCompany(c as { is_active?: boolean | null }) || !c.uses_address) continue;
     totalUsingAddress += 1;
     const loc = (c.address_service_location as string | null) ?? '(unspecified)';
     locationCounts.set(loc, (locationCounts.get(loc) ?? 0) + 1);

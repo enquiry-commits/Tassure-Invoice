@@ -5,6 +5,7 @@ import { applyCampaignRecipientRules, buildDefaultCcList, parseEmailList, recipi
 import { findStaffEmails } from '@/lib/staff-directory';
 import { computeAllSoaRows, loadArAgingSnapshot } from '@/lib/soa-data';
 import type { QbCompany } from '@/lib/quickbooks';
+import { onlyActiveCompanies } from '@/lib/company-lifecycle';
 
 /**
  * Shared company/invoice resolution for Client Communications, used by both
@@ -85,10 +86,9 @@ export function pickContact(company: CompanyRow | null, extraPicValues: (string 
 }
 
 export async function loadCompanies(supabase: SupabaseClient): Promise<CompanyRow[]> {
-  const { data } = await supabase
+  const { data } = await onlyActiveCompanies(supabase
     .from('companies')
-    .select('id, company_name, best_email, primary_contact, tw_to_emails, tw_cc_emails, tw_recipient_source, tw_recipient_synced_at, pic')
-    .eq('is_active', true);
+    .select('id, company_name, best_email, primary_contact, tw_to_emails, tw_cc_emails, tw_recipient_source, tw_recipient_synced_at, pic'));
   return (data ?? []) as CompanyRow[];
 }
 

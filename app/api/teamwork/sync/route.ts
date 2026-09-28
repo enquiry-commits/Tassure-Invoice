@@ -11,7 +11,7 @@ import { syncTeamworkCampaignRecipients } from '@/lib/teamwork-recipients';
 import { syncTeamworkContactPersons } from '@/lib/teamwork-contact-report';
 import { logFieldChange } from '@/lib/audit-log';
 import { planMasterListStatusPatches } from '@/lib/master-list-status';
-import { isTeamworkStub, planCompanyStatusPatch } from '@/lib/company-lifecycle';
+import { isTeamworkStub, isActiveStatus, planCompanyStatusPatch, statusFieldsForNewCompany, findLifecycleInconsistencies } from '@/lib/company-lifecycle';
 
 // Vincent, 2026-08-29: this route used to call getSessionCookie() twice —
 // once independently inside syncTeamworkCampaignRecipients, once inside
@@ -293,7 +293,7 @@ async function syncTeamworkCompanies() {
     const clientCode = (tw.client_id ?? '').trim() || null;
     const type    = (tw.type ?? '').trim() || null;
     const status  = (tw.status ?? '').trim() || null;
-    const internalCssActive = (status ?? '').toLowerCase() === 'active';
+    const internalCssActive = isActiveStatus(status);
     const fyeMon  = fyeMonthOf(tw.fye_date);
     const fyeDay  = fyeDayOf(tw.fye_date);
     const email   = (tw.company_email_address ?? '').trim() || null;
@@ -385,10 +385,10 @@ async function syncTeamworkCompanies() {
         best_email: email,
         pic: resolvedPic && !/^\d+$/.test(resolvedPic) ? resolvedPic : null,
         // Client classification mirrors TeamWork's Client column; roster
-        // inclusion remains governed only by Internal CSS Status.
+        // inclusion remains governed only by Internal CSS Status — written by
+        // the SAME shared rule as every update (INV-TW-024), never a literal.
         client_type: clientType,
-        tw_status: 'Active',
-        is_active: true,
+        ...statusFieldsForNewCompany(tw.status),
         is_non_client: isShareholder,
         uses_address: regAddr ? usesOurAddress(regAddr) : false,
         address_service_location: regAddr ? matchOurAddress(regAddr) : null,
@@ -564,6 +564,17 @@ async function syncTeamworkCompanies() {
     else insertedCount = dedupedInserts.length;
   }
 
+  // Every roster in the app reads companies.is_active alone (the ONE shared
+  // definition, lib/company-lifecycle.ts), so is_active and tw_status must
+  // never contradict each other. The status rule above heals any row TeamWork
+  // gives an explicit status, so this is judged on the run's END state (rows
+  // as read + this run's patches; a failed update shows in updateErrors) —
+  // anything left is a row no TeamWork status reaches, reported every run.
+  const patchById = new Map(updates.map(u => [u.id, u.patch]));
+  const lifecycleInconsistencies = findLifecycleInconsistencies(
+    (rows ?? []).map(r => ({ ...r, ...(patchById.get(r.id) ?? {}) }) as typeof r),
+  ).map(r => ({ key: String(r.id), name: r.company_name, details: { tw_status: r.tw_status, is_active: r.is_active } }));
+
   const teamworkIds = new Set(twList.map(item => item.company_id));
   const missingRows = (rows ?? []).filter(r => r.internal_id && !teamworkIds.has(r.internal_id));
   const missingFromTw = missingRows.length;
@@ -577,6 +588,7 @@ async function syncTeamworkCompanies() {
     replaceAutomationExceptions('teamwork_companies', 'stub_record_ignored', stubRecordsIgnored),
     replaceAutomationExceptions('teamwork_companies', 'blank_status_ignored', blankStatusIgnored),
     replaceAutomationExceptions('teamwork_companies', 'tracked_record_blank', trackedRecordsBlank),
+    replaceAutomationExceptions('teamwork_companies', 'lifecycle_fields_inconsistent', lifecycleInconsistencies),
   ]);
 
   let recipientSync: Awaited<ReturnType<typeof syncTeamworkCampaignRecipients>> | null = null;
@@ -758,6 +770,7 @@ async function syncTeamworkCompanies() {
     stub_records_ignored: stubRecordsIgnored.length,
     blank_status_ignored: blankStatusIgnored.length,
     tracked_records_blank: trackedRecordsBlank.length,
+    lifecycle_fields_inconsistent: lifecycleInconsistencies.length,
     rows_missing_from_teamwork: missingFromTw,
     campaign_recipients: recipientSync,
     contact_person_fill_in: contactPersonFillIn,

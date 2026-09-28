@@ -5,6 +5,7 @@ import { loadCarriedForwardPics } from '@/lib/pic-sync';
 import { withAutomationRun, replaceAutomationExceptions } from '@/lib/automation-sync';
 import { getSessionCookie, fetchAgmList, parseDmy, toIsoDate } from '@/lib/teamwork-agm';
 import { toDateStr, addMonths } from '@/lib/date';
+import { onlyTeamworkActiveCompanies } from '@/lib/company-lifecycle';
 
 /**
  * Auto-generates ar_reminder rows for a rolling 6-month window (current
@@ -74,7 +75,6 @@ import { toDateStr, addMonths } from '@/lib/date';
  */
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const EXCLUDED_STATUSES = ['Striking Off', 'Terminated'];
 const WINDOW_MONTHS = 6;
 const CATCH_UP_CONCURRENCY = 10;
 // Vincent, 2026-08-28: the catch-up pass below (real per-company TeamWork
@@ -112,11 +112,15 @@ async function generateArRows() {
     return { monthName: MONTH_NAMES[idx], monthIndex0: idx, year: currentYear + yearOffset };
   });
 
-  const { data: companies, error } = await supabase
+  // The corporate-secretarial roster — ONE shared definition
+  // (lib/company-lifecycle.ts, INV-AR-017). This used to be
+  // `is_active AND tw_status NOT IN ('Striking Off','Terminated')`, which only
+  // gave the right answer by accident: SQL's `NULL NOT IN (...)` is unknown,
+  // so it also silently dropped the 9 untracked companies with no TeamWork
+  // status. Same 904 companies, now on purpose.
+  const { data: companies, error } = await onlyTeamworkActiveCompanies(supabase
     .from('companies')
-    .select('id, company_name, registration_no, fye_month, fye_day, pic, sec_pic, is_active, tw_status, internal_id')
-    .eq('is_active', true)
-    .not('tw_status', 'in', `(${EXCLUDED_STATUSES.map(s => `"${s}"`).join(',')})`);
+    .select('id, company_name, registration_no, fye_month, fye_day, pic, sec_pic, is_active, tw_status, internal_id'));
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

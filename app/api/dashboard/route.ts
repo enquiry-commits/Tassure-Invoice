@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
+import { isActiveCompany, statusChartBucket } from '@/lib/company-lifecycle';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -16,12 +17,12 @@ export async function GET() {
     sb.from('late_filing_companies').select('*', { count: 'exact', head: true }),
   ]);
 
-  const active = companies.filter(c => c.is_active);
+  const active = companies.filter(isActiveCompany);
 
   // ── Client status (all companies) ────────────────────────────────────────
   const statusCount: Record<string, number> = {};
   for (const c of companies) {
-    const s = c.tw_status && ['Active', 'Striking Off', 'Terminated'].includes(c.tw_status) ? c.tw_status : 'Untracked';
+    const s = statusChartBucket(c.tw_status);
     statusCount[s] = (statusCount[s] ?? 0) + 1;
   }
 

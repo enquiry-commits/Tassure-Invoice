@@ -45,6 +45,7 @@ import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-lin
 import { routeAssistantTurn, openAIGeneralAnswer, synthesizeWithOpenAI, type ToolEvidence } from '@/lib/ai/orchestrator';
 import { openAIConfigured, openAIModel } from '@/lib/ai/openai';
 import { recordAgentRun } from '@/lib/ai/agent-runs';
+import { lifecycleVerdict } from '@/lib/company-lifecycle';
 import { analyzeUserConversations, shouldAnalyzeConversationNow } from '@/lib/ai-learning/conversations';
 import {
   validatePostIncorporateInput,
@@ -373,6 +374,10 @@ async function searchCompany(q: string) {
     results.push({
       name: c.company_name, uen: c.registration_no, fye_month: c.fye_month,
       status: c.tw_status, client_type: c.client_type, active: c.is_active,
+      // The system's own answer to "is this still a client" — the SAME rule
+      // every workflow uses (lib/company-lifecycle.ts). Quote this rather
+      // than re-deriving it from status/active.
+      system_lifecycle: lifecycleVerdict(c),
       services: { address: !!c.uses_address, nd: !!c.has_nd, xbrl: !!c.has_xbrl },
       pic: c.sec_pic ?? c.pic, nominee_directors: ndNames,
       // `ar_reminders` is Annual Return FILING status ("Pending"/"Filed") —

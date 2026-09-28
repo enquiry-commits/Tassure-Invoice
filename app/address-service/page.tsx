@@ -3,6 +3,7 @@ import AddressServiceTable from '@/components/AddressServiceTable';
 import MetricCard from '@/components/MetricCard';
 import { supabase } from '@/lib/supabase';
 import { ADDRESS_SERVICE_LOCATIONS } from '@/lib/address-service';
+import { onlyActiveCompanies } from '@/lib/company-lifecycle';
 import { Building2, Layers3, MapPin } from 'lucide-react';
 
 // Live view of companies.uses_address (kept current by the daily TeamWork
@@ -11,11 +12,10 @@ import { Building2, Layers3, MapPin } from 'lucide-react';
 export const dynamic = 'force-dynamic';
 
 async function getData() {
-  const { data, error } = await supabase
+  const { data, error } = await onlyActiveCompanies(supabase
     .from('companies')
     .select('company_name, registration_no, company_type, pic, best_email, primary_contact, address_service_location')
-    .eq('uses_address', true)
-    .eq('is_active', true)
+    .eq('uses_address', true))
     // Secondary key on id: two rows can share the same company_name (e.g.
     // a genuine TeamWork-side duplicate — same UEN, two internal_id's, see
     // GOLDEN BRIDGE MARTEC, 2026-08-27), and Postgres doesn't guarantee a

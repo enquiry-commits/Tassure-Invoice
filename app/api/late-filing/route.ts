@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { todaySGT, thisYearSGT } from '@/lib/date';
 import { normalize } from '@/lib/company-name';
 import { getRequestAccount } from '@/lib/request-account';
+import { isActiveCompany } from '@/lib/company-lifecycle';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 const MONTH_IDX: Record<string, number> = {
@@ -160,17 +161,25 @@ export async function getLateFilingList(): Promise<LateRow[]> {
   // being wound up instead) kept showing up here forever. Only exclude on a
   // POSITIVE match — a company not found in `companies` at all keeps
   // showing (unmatched, not confirmed inactive).
-  const inactiveNames = new Set<string>();
+  //
+  // "Active" is the ONE shared roster definition (lib/company-lifecycle.ts,
+  // INV-AR-017) — this used to be its own `is_active === false || tw_status
+  // is Striking Off/Terminated` copy. A name counts as inactive only if EVERY
+  // companies row with it is inactive (order-independent, same rule as
+  // INV-TW-023) — the old Set.add hid a company as soon as ANY same-named row
+  // was inactive. Identical 39-name set on the day it changed.
+  const knownNames = new Set<string>();
+  const activeNames = new Set<string>();
   for (const c of companies ?? []) {
     uenMap.set(c.company_name.toLowerCase(), c.registration_no ?? '');
     if (c.pic) {
       companyPicByNorm.set(normalize(c.company_name), c.pic);
       if (c.registration_no) companyPicByUen.set(c.registration_no.toUpperCase(), c.pic);
     }
-    if (c.is_active === false || c.tw_status === 'Striking Off' || c.tw_status === 'Terminated') {
-      inactiveNames.add(c.company_name.toLowerCase());
-    }
+    knownNames.add(c.company_name.toLowerCase());
+    if (isActiveCompany(c)) activeNames.add(c.company_name.toLowerCase());
   }
+  const inactiveNames = new Set([...knownNames].filter(name => !activeNames.has(name)));
 
   // 3. Manual overrides from late_filing_companies table (if exists)
   const { data: manualRows } = await sb

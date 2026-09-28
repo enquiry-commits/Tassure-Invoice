@@ -6,7 +6,8 @@ import { AutomationRun, withAutomationRun, replaceAutomationExceptions } from '@
 import { normalize } from '@/lib/company-name';
 import { pageAll } from '@/lib/page-all';
 import {
-  buildLifecycleIndex, planArAutoExclusions, planArAutoRestores, findActiveCompaniesWithAllArHidden,
+  buildLifecycleIndex, planArAutoExclusions, planArAutoRestores, findActiveCompaniesWithAllArHidden, onlyTeamworkActiveCompanies,
+  ENDED_MASTER_LIST_TYPES,
   AR_SYSTEM_EXCLUDER, AR_SYSTEM_RESTORER, MAX_AUTO_EXCLUSIONS_PER_RUN, MAX_AUTO_RESTORES_PER_RUN,
 } from '@/lib/company-lifecycle';
 import { todaySGT } from '@/lib/date';
@@ -137,11 +138,13 @@ async function syncLateFiling(run: AutomationRun) {
   try {
     const cookie = await getSessionCookie();
 
-    const { data: companies, error: companiesError } = await supabase
+    // Same corporate-secretarial roster as AR Generate — the ONE shared
+    // definition (lib/company-lifecycle.ts). The old `is_active AND tw_status
+    // NOT IN (...)` only excluded status-less companies by the accident of SQL
+    // NULL semantics; identical 904-company set, now on purpose.
+    const { data: companies, error: companiesError } = await onlyTeamworkActiveCompanies(supabase
       .from('companies')
-      .select('id, company_name, internal_id, registration_no')
-      .eq('is_active', true)
-      .not('tw_status', 'in', '("Striking Off","Terminated")')
+      .select('id, company_name, internal_id, registration_no'))
       .not('internal_id', 'is', null);
     if (companiesError) throw new Error(`Unable to load active companies: ${companiesError.message}`);
 
@@ -730,7 +733,7 @@ async function syncLateFiling(run: AutomationRun) {
     const { data: terminatedMasterList, error: terminatedMasterListError } = await supabase
       .from('master_list')
       .select('roc_no')
-      .in('list_type', ['terminated', 'strike_off']);
+      .in('list_type', [...ENDED_MASTER_LIST_TYPES]);
     if (terminatedMasterListError) throw new Error(`Unable to load Master List lifecycle rows: ${terminatedMasterListError.message}`);
     const lifecycle = buildLifecycleIndex(allCompanies ?? [], (terminatedMasterList ?? []).map(r => r.roc_no as string | null));
 

@@ -4,6 +4,8 @@
 // 3 UENs (SHENGYA (SG), A.I.R. INVESTMENT MANAGEMENT, XGC SINGAPORE/YANGGU).
 // docs/INVARIANTS.md INV-TW-023. Kept framework-free so the sync route and a
 // plain `npx tsx` test can both import it.
+import { explicitStatus, isActiveStatus } from './company-lifecycle';
+
 export type TwRecordLite = {
   company_id: string;
   client_id: string | null;
@@ -15,12 +17,12 @@ const normUen = (uen: string | null | undefined) => (uen ?? '').trim().toUpperCa
 
 // Higher wins, compared left to right: has a client code, is Active, has ANY
 // status, then the higher numeric id as a deterministic last tie-break.
+// "Active" / "has a status" are the shared definitions (lib/company-lifecycle.ts).
 function rank(r: TwRecordLite): number[] {
-  const status = (r.status ?? '').trim();
   return [
     (r.client_id ?? '').trim() ? 1 : 0,
-    status.toLowerCase() === 'active' ? 1 : 0,
-    status ? 1 : 0,
+    isActiveStatus(r.status) ? 1 : 0,
+    explicitStatus(r.status) ? 1 : 0,
     Number(r.company_id) || 0,
   ];
 }

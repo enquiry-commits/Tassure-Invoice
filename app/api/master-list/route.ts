@@ -6,6 +6,7 @@ import { getRequestAccount } from '@/lib/request-account';
 import { logFieldChange } from '@/lib/audit-log';
 import { syncPicToArReminder, type PicField } from '@/lib/pic-sync';
 import { toIsoDateValue } from '@/lib/date';
+import { isActiveCssClient, isEndedMasterListType } from '@/lib/company-lifecycle';
 
 // See app/api/ar-reminder/route.ts's identical comment (2026-09-14) — this
 // route was also missing region pinning next to Supabase's Tokyo project,
@@ -136,7 +137,7 @@ export async function GET(req: NextRequest) {
   // ambiguous dd/mm-vs-mm/dd conventions (lib/date.ts's toIsoDateValue,
   // shared with the display formatter). Unparseable/missing dates sort last
   // rather than being silently dropped or crashing the page.
-  if (type === 'strike_off' || type === 'terminated') {
+  if (isEndedMasterListType(type)) {
     (data ?? []).sort((a, b) => {
       const isoA = toIsoDateValue(a.update_date);
       const isoB = toIsoDateValue(b.update_date);
@@ -179,7 +180,7 @@ export async function GET(req: NextRequest) {
     // TeamWork". A UEN is an active CSS Client if ANY of its rows is, and
     // only "inactive" when it has CSS Client row(s) and none of them is
     // active, whatever order the rows come back in.
-    cssClientByUen.set(uen, (cssClientByUen.get(uen) ?? false) || (isCssClient && c.is_active === true));
+    cssClientByUen.set(uen, (cssClientByUen.get(uen) ?? false) || isActiveCssClient(c));
     if (isCssClient) cssSeenByUen.add(uen);
   }
   for (const uen of cssSeenByUen) cssClientInactiveByUen.set(uen, cssClientByUen.get(uen) !== true);
@@ -278,7 +279,7 @@ export async function GET(req: NextRequest) {
       allMasterListRows.map(r => (r.roc_no ? String(r.roc_no).trim().toUpperCase() : null)).filter((v): v is string => !!v),
     );
     missingCssClients = (companies ?? [])
-      .filter(c => c.client_type === 'CSS Client' && c.is_active === true)
+      .filter(isActiveCssClient)
       .filter(c => {
         const uen = c.registration_no ? String(c.registration_no).trim().toUpperCase() : null;
         return !uen || !knownUens.has(uen);
@@ -295,7 +296,7 @@ export async function GET(req: NextRequest) {
   // master_list row), so this number tracks TeamWork on its own without
   // needing any new automation.
   const twTotalClientCount = type === 'active_client'
-    ? (companies ?? []).filter(c => c.client_type === 'CSS Client' && c.is_active === true).length
+    ? (companies ?? []).filter(isActiveCssClient).length
     : 0;
 
   return NextResponse.json({ type, total: enriched.length, data: enriched, missingCssClients, twTotalClientCount });

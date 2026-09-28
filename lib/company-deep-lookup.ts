@@ -3,6 +3,7 @@ import 'server-only';
 import { createAdminClient } from './supabase';
 import { normalize, resolveCompany } from './company-name';
 import { getCompany360 } from './company-360';
+import { lifecycleVerdict, type LifecycleVerdict } from './company-lifecycle';
 
 // Added 2026-09-09 — the single highest-leverage chat-assistant gap found
 // in a full review of what data exists vs. what chat can reach: the vast
@@ -43,6 +44,10 @@ export type CompanyDeepLookupResult =
       uen: string | null;
       lifecycleStatus: string | null; // master_list.status, e.g. "STRUCK OFF"
       masterListCategories: string[];
+      // The system's OWN answer to "is this company still a client"
+      // (lib/company-lifecycle.ts lifecycleVerdict — the same rule every
+      // workflow uses). Quote this; never re-derive it from the raw fields.
+      systemLifecycle: LifecycleVerdict;
       joinDate: string | null;
       lastUpdateDate: string | null;
       fye: string | null;
@@ -77,6 +82,11 @@ export type CompanyDeepLookupResult =
       // does hold 268 terminated + 263 struck-off companies. Answering
       // "Active" for a terminated client is a wrong answer, not a gap.
       masterListCategories: string[];
+      // The system's OWN answer (lib/company-lifecycle.ts lifecycleVerdict):
+      // the live companies row wins over Master List — a stale "terminated"
+      // Master List row must not make a live Active client read as former
+      // (INV-AR-016). Quote this; never re-derive it from status/categories.
+      systemLifecycle: LifecycleVerdict;
       parentCompanyName: string | null;
       // Real contact routing — bestEmail is what Client Communications
       // actually sends to; "这家公司的邮箱是什么" is a high-frequency
@@ -182,6 +192,7 @@ export async function lookupCompanyDeep(companyQuery: string): Promise<CompanyDe
         uen: (mlMatch.roc_no as string | null) ?? null,
         lifecycleStatus: (mlMatch.status as string | null) ?? null,
         masterListCategories: categories,
+        systemLifecycle: lifecycleVerdict(null, categories),
         joinDate: (mlMatch.join_date as string | null) ?? null,
         lastUpdateDate: (mlMatch.update_date as string | null) ?? null,
         fye: (mlMatch.fye as string | null) ?? null,
@@ -225,6 +236,7 @@ export async function lookupCompanyDeep(companyQuery: string): Promise<CompanyDe
     customerSource: c360.company.customerSource,
     industry: c360.company.ssicDescription1,
     masterListCategories: [...new Set(c360.masterList.map(m => (m.list_type as string | null) ?? '(uncategorised)'))],
+    systemLifecycle: lifecycleVerdict({ is_active: c360.company.isActive, tw_status: c360.company.twStatus }),
     parentCompanyName: c360.company.parentCompanyName,
     bestEmail: c360.company.bestEmail,
     primaryContactName: c360.company.primaryContact?.contactName ?? null,

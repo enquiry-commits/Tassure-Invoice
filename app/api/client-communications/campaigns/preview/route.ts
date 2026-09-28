@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
 import type { QbCompany } from '@/lib/quickbooks';
+import { onlyActiveCompanies } from '@/lib/company-lifecycle';
 import {
   loadCompanies, loadInvoicesByCompany, loadAutoTargetNames, loadAlreadySent, loadArPicByCompany, loadLastReminderSentAt, buildRow, makeCompanyFinder,
   type CompanyRow,
@@ -88,9 +89,9 @@ export async function GET(req: NextRequest) {
   // on which company this resolves to) rather than before them, so the
   // common case costs one round trip, not two.
   const [exactMatch, invoicesByCompany, alreadySent, arPicByCompany, lastReminderSentAtByCompany] = await Promise.all([
-    supabase.from('companies')
-      .select('id, company_name, best_email, primary_contact, tw_to_emails, tw_cc_emails, tw_recipient_source, tw_recipient_synced_at, pic')
-      .eq('is_active', true).eq('company_name', lookup).maybeSingle()
+    onlyActiveCompanies(supabase.from('companies')
+      .select('id, company_name, best_email, primary_contact, tw_to_emails, tw_cc_emails, tw_recipient_source, tw_recipient_synced_at, pic'))
+      .eq('company_name', lookup).maybeSingle()
       .then(r => r.data as CompanyRow | null),
     loadInvoicesByCompany(supabase, type, fyeMonth, fyeYear),
     loadAlreadySent(supabase, type, fyeMonth, fyeYear),

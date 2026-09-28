@@ -2,6 +2,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase';
 import { resolveCompany, normalize } from '@/lib/company-name';
 import { CUSTOMER_SOURCE_OPTIONS, customerSourceLabel } from '@/lib/customer-source';
+import { onlyActiveCompanies } from '@/lib/company-lifecycle';
 
 /**
  * READ-ONLY preview of a company-settings change (2026-09-10).
@@ -153,9 +154,8 @@ export async function previewCompanyUpdate(
     return previewTrademarkUpdate(sb, trimmed, field as `trademark:${TrademarkChatField}`, rawValue, applicationNumber);
   }
 
-  const { data: rows } = await sb.from('companies')
-    .select('id, company_name, has_accounts, has_tax, has_xbrl, services_manual, customer_source, parent_company_id')
-    .eq('is_active', true);
+  const { data: rows } = await onlyActiveCompanies(sb.from('companies')
+    .select('id, company_name, has_accounts, has_tax, has_xbrl, services_manual, customer_source, parent_company_id'));
   const list = (rows ?? []) as Row[];
 
   const resolution = resolveCompany(trimmed, list, c => c.company_name);

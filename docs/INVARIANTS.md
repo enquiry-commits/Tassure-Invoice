@@ -573,6 +573,70 @@ again.
   this company terminated" on its own was a fresh chance to get it wrong, and
   each wrong copy hid real clients' AR. There is now exactly one; add to it,
   never beside it.
+  **Extended by INV-AR-018** (same day): the one-definition rule now covers
+  every feature's "is this still a client" check, not only AR hiding.
+
+- **INV-AR-018** — "Is this company still a client?" has exactly ONE
+  definition, and every feature calls it — none keeps its own (Vincent,
+  2026-09-28: "把'这家公司是否终止'这个判断收成唯一一份共享逻辑，所有功能都调用同一份，
+  不再各自维护一份自己的判断"). A full audit found the question answered on
+  its own in 35 places across 20 files, with THREE different meanings of
+  "active": `is_active` alone (913 companies — Address Service, Billing
+  compare, Client Comms, Dashboard, Reports…), `is_active AND tw_status NOT IN
+  ('Striking Off','Terminated')` (AR Generate, Late Filing sync) and
+  exact-case `tw_status = 'Active'` (Billing Drafts, Companies page) — plus
+  hand-kept status lists (Dashboard, Late Filing page), two spellings of
+  Master List's "ended" categories, and private "is it Active" string tests
+  (TeamWork sync's new-company gate, INV-TW-023's duplicate ranking). All now
+  import from `lib/company-lifecycle.ts` §7–9: `isActiveStatus()` (the only
+  string test), `isActiveCompany()`/`onlyActiveCompanies()` (the active
+  roster), `isTeamworkActiveCompany()`/`onlyTeamworkActiveCompanies()` (the
+  corporate-secretarial roster — AR Generate, Late Filing sync, Billing
+  Drafts and the Companies page share it, so a company that gets an AR cycle
+  can't be missing from Billing Drafts), `isActiveCssClient()`,
+  `isTrackedByTeamwork()`, `ENDED_MASTER_LIST_TYPES`/`isEndedMasterListType()`,
+  `lifecycleVerdict()` (what the assistant and company lookups tell people:
+  `system_lifecycle`/`systemLifecycle`) and `statusChartBucket()`; the only
+  lifecycle VALUES written outside `planCompanyStatusPatch()` are
+  `statusFieldsForNewCompany()` and `NEW_UNTRACKED_CLIENT`. Two real bugs the
+  audit found: (a) **SQL NULL trap** — AR Generate's roster excluded the 9
+  companies with NO TeamWork status (YHS group, HAN KUN LLP, TASSURE ASIA
+  OUTSOURCEZ, SINGAPORE CAMBRIDGE…) only because SQL's `NULL NOT IN (…)` is
+  NULL, never true — right by accident; the obvious "simplify it to
+  is_active" refactor would have started generating AR for 9 non-TeamWork
+  clients (913 vs 904 — caught on real data before shipping). Never express a
+  roster as `NOT IN` on a nullable column; say what it INCLUDES. (b) **TAO
+  delete guard** — `DELETE /api/billing/tao` refused only when `tw_status`
+  was set, so EVOP (SINGAPORE) INTERNATIONAL (TeamWork id 1725, a CSS Client)
+  and WORLD PRECISION MACHINERY — TeamWork records with a blank status —
+  could be hard-deleted as "untracked", and since those records are stubs
+  (INV-TW-024) the sync would never re-create them. "Tracked by TeamWork" is
+  now `internal_id` OR a status. Also closed: `companies.is_active` DEFAULTs
+  to true, so an insert that omits it puts a company on the active roster —
+  `statusFieldsForNewCompany()` always writes BOTH fields; the Late Filing
+  page's hide-by-name rule is order-independent ("inactive" only if EVERY
+  same-named row is, as INV-TW-023); `teamwork/sync` reports
+  `lifecycle_fields_inconsistent` on its end-of-run state, because every
+  roster trusts `is_active` alone. Pinned on purpose: hide and restore are
+  ONE predicate — a system-hidden AR row comes back once its company is no
+  longer PROVEN terminated, not "only once proven Active"; that tightening
+  looks safer and is the wrong direction (a stray reminder is visible and
+  can be trashed; a vanished one misses a filing deadline). Guard:
+  `test-company-lifecycle.ts`'s "one definition" check fails on ANY query
+  filter, literal, comparison or status list on `is_active`/`tw_status`,
+  TeamWork's status words or the ended Master List categories outside the
+  module (Master List status TEXT in `lib/master-list-status.ts` excepted —
+  INV-DATA-067), allows raw reads only at 14 reviewed DISPLAY sites (exact
+  count per file), and requires the four critical rosters to call
+  `onlyTeamworkActiveCompanies()` (a filter that simply vanished would pass a
+  "no private copy" check). Negative control: against 5423360 it reports 25
+  private copies in 17 files. Behaviour-neutral on real data, by id: AR 904,
+  Billing Drafts 794, Companies 904, active roster 913, Address Service 375,
+  Late Filing hide-set 39, Master List ended rows 533 — all identical; only
+  TAO "tracked" changed (941 → 943, the fix). **Lesson:** need to know if a
+  company is active / terminated / tracked? Import it from
+  `lib/company-lifecycle.ts`; if the helper you need doesn't exist, add it
+  THERE with a test — never a local copy, not even a "harmless" one-liner.
 
 ## PIC / staff assignment (INV-PIC)
 

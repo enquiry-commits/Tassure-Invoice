@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
+import { isTrackedByTeamwork, NEW_UNTRACKED_CLIENT } from '@/lib/company-lifecycle';
 
 // GET /api/billing/tao — company list for ACC's own Accounts/Tax billing
 // page (app/billing/tao/page.tsx). Deliberately NOT the FYE-cycle renewal
@@ -58,7 +59,7 @@ export async function computeTaoCompanies(): Promise<TaoCompanyRow[]> {
   const currentYear = thisYearSGT();
 
   const [companiesRes, qbItemsRes, taoInvoicesRes] = await Promise.all([
-    supabase.from('companies').select('id, company_name, has_accounts, has_tax, services_manual, tw_status'),
+    supabase.from('companies').select('id, company_name, has_accounts, has_tax, services_manual, tw_status, internal_id'),
     pageAll(() => supabase
       .from('quickbooks_invoice_items')
       .select('customer_name, service_type')
@@ -128,7 +129,10 @@ export async function computeTaoCompanies(): Promise<TaoCompanyRow[]> {
         lastInvoice: lastByName.get(name)
           ? { invoiceNo: lastByName.get(name)!.invoice_no, txnDate: lastByName.get(name)!.txn_date, totalAmt: lastByName.get(name)!.total_amt }
           : null,
-        trackedByTeamWork: !!companyMatch?.tw_status,
+        // Linked to TeamWork at all — its record id, not just "has a status"
+        // (lib/company-lifecycle.ts). A TeamWork company whose record is blank
+        // (EVOP (SINGAPORE) INTERNATIONAL) has no status but is still one.
+        trackedByTeamWork: !!companyMatch && isTrackedByTeamwork(companyMatch),
       };
     })
     .sort((a, b) => a.companyName.localeCompare(b.companyName));
@@ -265,7 +269,7 @@ export async function POST(req: NextRequest) {
 
   const { data: inserted, error: insertError } = await supabase
     .from('companies')
-    .insert({ company_name: name, registration_no: uen, has_accounts: wantAccounts, has_tax: wantTax, is_active: true })
+    .insert({ company_name: name, registration_no: uen, has_accounts: wantAccounts, has_tax: wantTax, ...NEW_UNTRACKED_CLIENT })
     .select('id, company_name')
     .single();
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 503 });
@@ -339,14 +343,20 @@ export async function DELETE(req: NextRequest) {
   const supabase = createAdminClient();
   const { data: company, error: companyError } = await supabase
     .from('companies')
-    .select('id, company_name, registration_no, tw_status')
+    .select('id, company_name, registration_no, tw_status, internal_id')
     .eq('id', companyId)
     .maybeSingle();
   if (companyError) return NextResponse.json({ error: companyError.message }, { status: 503 });
   if (!company) return NextResponse.json({ error: 'Company not found — it may already have been removed.' }, { status: 404 });
 
-  if (company.tw_status) {
-    return NextResponse.json({ error: `"${company.company_name}" has been synced from TeamWork (status: ${company.tw_status}) — it's a real tracked client, not something this can remove.` }, { status: 409 });
+  // "Has TeamWork ever synced this company" = linked to a TeamWork record
+  // (lib/company-lifecycle.ts isTrackedByTeamwork) — NOT "has a status". This
+  // used to read tw_status alone, so a TeamWork company whose record is blank
+  // (EVOP (SINGAPORE) INTERNATIONAL, a "CSS Client" in TeamWork; WORLD
+  // PRECISION MACHINERY) passed as "not tracked" and could be hard-deleted
+  // here — and, being a stub, would never be re-created by the sync.
+  if (isTrackedByTeamwork(company)) {
+    return NextResponse.json({ error: `"${company.company_name}" has been synced from TeamWork${company.tw_status ? ` (status: ${company.tw_status})` : ''} — it's a real tracked client, not something this can remove.` }, { status: 409 });
   }
 
   let blockers: string[];

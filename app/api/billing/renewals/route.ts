@@ -4,6 +4,7 @@ import { todaySGT } from '@/lib/date';
 import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { isValidEmail } from '@/lib/campaign-recipients';
+import { onlyTeamworkActiveCompanies } from '@/lib/company-lifecycle';
 import {
   buildAnnualRenewalFeeMap,
   compareRenewalPeriodProductLines,
@@ -165,11 +166,15 @@ export async function computeAllCompanyBilling(withinDays: number): Promise<{ to
     carriedItems,
     { data: generatedRows },
   ] = await Promise.all([
-    supabase
+    // Billing Drafts' roster: the ONE shared "TeamWork-active" definition
+    // (lib/company-lifecycle.ts) — the same one AR Generate uses, so a company
+    // that gets an AR cycle can't be missing from Billing Drafts. Was an
+    // exact-case `tw_status = 'Active'`: a TeamWork "ACTIVE" would have
+    // dropped the client from billing while AR still generated for it.
+    onlyTeamworkActiveCompanies(supabase
       .from('companies')
       .select('id, company_name, registration_no, fye_month, pic, sec_pic, has_nd, uses_address, has_xbrl, tw_status, client_type, is_active, best_email, primary_contact, parent_company_id, bill_to_care_of, bill_to_care_of_addr_source, bill_to_care_of_addr_custom, bill_to_attn')
-      .eq('client_type', 'CSS Client')
-      .eq('tw_status', 'Active'),
+      .eq('client_type', 'CSS Client')),
     supabase
       .from('nd_appointments')
       .select('company_name, nd_id, appointment_date')

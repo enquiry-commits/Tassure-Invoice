@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
 import { loadRenameMap } from '@/lib/company-rename';
+import { onlyTeamworkActiveCompanies } from '@/lib/company-lifecycle';
 
 const today = todaySGT;
 
@@ -37,7 +38,8 @@ export async function GET(req: NextRequest) {
 
   // The Companies roster is governed only by TeamWork Internal CSS Status.
   // CSS Client / Shareholder flags and Entity Status are not roster gates.
-  let q = supabase.from('companies').select('*').eq('tw_status', 'Active');
+  // One shared definition (lib/company-lifecycle.ts), case-insensitive.
+  let q = onlyTeamworkActiveCompanies(supabase.from('companies').select('*'));
 
   if (search) {
     q = q.or(`company_name.ilike.%${search}%,registration_no.ilike.%${search}%`);

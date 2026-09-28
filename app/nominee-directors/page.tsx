@@ -3,6 +3,7 @@ import NDSubroleReview, { type NDSubroleReviewItem } from '@/components/NDSubrol
 import MetricCard from '@/components/MetricCard';
 import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
+import { isActiveCssClient } from '@/lib/company-lifecycle';
 import { AlertTriangle, BriefcaseBusiness, UserCheck, Users } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -44,7 +45,7 @@ async function getData() {
   // normalize() (handles "(F.K.A. ...)"/spacing variants) since nd_appointments
   // only stores a plain company_name string, no id to join on.
   const activeCssClientNames = new Set(
-    (companies ?? []).filter(c => c.is_active === true && c.client_type === 'CSS Client').map(c => normalize(c.company_name)),
+    (companies ?? []).filter(isActiveCssClient).map(c => normalize(c.company_name)),
   );
   const taggedAppts = (appts ?? []).map(a => ({ ...a, is_company_active: activeCssClientNames.has(normalize(a.company_name)) }));
 
