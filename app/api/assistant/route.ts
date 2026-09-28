@@ -258,7 +258,13 @@ export function applyCapabilityGuards(text: string, opts: { toolNames: string[];
 }
 
 // ── System map: single source for both engines ──────────────────────────────
-const PAGES = [
+// This list is the assistant's ONLY map of the app: a page missing here is a
+// page Claude will confidently say doesn't exist (Quotation, 2026-09-28 —
+// INV-AI-002). `access` marks a page only some accounts may open (proxy.ts
+// hard-blocks the rest): the static map flags it, dynamicSystemPrompt() states
+// whether THIS user can open it, and intentAnswer()'s navigation skips it for
+// accounts without access.
+const PAGES: { label: string; href: string; kw: string[]; access?: (account: ApprovedAccount) => boolean }[] = [
   { label: 'Dashboard 总览',        href: '/',                          kw: ['dashboard', '总览', '首页', 'overview', '主页'] },
   { label: 'Companies 公司库',      href: '/companies',                 kw: ['companies', '公司库', '公司列表', '所有公司'] },
   { label: 'Active Client 在任客户', href: '/master-list/active-clients', kw: ['active client', '在任客户', 'master list', '主名单'] },
@@ -272,9 +278,14 @@ const PAGES = [
   { label: 'AR Reminder 年报提醒',  href: '/billing?tab=ar',            kw: ['ar reminder', 'ar', '年报', 'annual return', '提醒'] },
   { label: 'Late Filing 迟报监控',  href: '/late-filing',               kw: ['late filing', '迟报', 'late'] },
   { label: 'Billing Drafts 开单草稿', href: '/billing?tab=billing',     kw: ['billing', '开单', '发票', 'invoice', 'draft', '账单'] },
+  { label: 'Quotation 报价单',      href: '/billing/quotation',         kw: ['quotation', '报价单'], access: account => !!account.canViewQuotation },
   { label: 'Email Drafts 邮件草稿', href: '/client-communications/campaigns', kw: ['email drafts', '邮件草稿', 'client communications', 'campaign', 'outlook helper'] },
   { label: 'Email Activity 邮件记录', href: '/client-communications/history', kw: ['email activity', '邮件记录', 'delivery history', 'history', 'prepared'] },
 ];
+
+function pagesFor(account: ApprovedAccount | null | undefined) {
+  return PAGES.filter(p => !p.access || (account ? p.access(account) : false));
+}
 
 const FAQ: { kw: string[]; a: string }[] = [
   { kw: ['为什么这行还不能ready', '为什么不能ready', '还不能 ready', '不能勾选ready', 'status怎么看', 'item to review'],
@@ -1562,9 +1573,16 @@ WHEN ASKED WHAT YOU CAN DO ("你能做什么", "有什么功能", "help", "怎�
 End by inviting one concrete next question. Never claim an ability you do not have — you cannot send emails, create QuickBooks invoices by yourself, or change data without the user's click.
 
 System map (link pages with markdown, e.g. [开单草稿](/billing?tab=billing)):
-${PAGES.map(p => `- ${p.label}: ${p.href}`).join('\n')}
+${PAGES.map(p => `- ${p.label}: ${p.href}${p.access ? ' (restricted — link it only if the page-access line with the current user details says this user can open it)' : ''}`).join('\n')}
 
 When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location given in the next message.
+
+QUOTATION PAGE (Billing System › Quotation, /billing/quotation) — it exists; never say there is no quotation page or feature. It is restricted: check the page-access line with the current user details first; if this user cannot open it, say plainly it is not open to their account yet (Vincent can grant access) and do not hand them the link. How to use it, for a user who can:
+- It lists every QuickBooks Estimate (报价单, "PI…" numbers) across TAB / TAC / TAO, read live from QuickBooks ("Refresh from QuickBooks" re-reads it), dated from the start of the synced invoice window.
+- The four top cards are clickable filters: Open Quotations (not closed yet, with the oldest one's age in days), Closed, Invoiced in 2+ Books, and Closed · No Invoice Found. There is also a search box (PI number or customer) and a Source filter (All / TAB / TAC / TAO).
+- For a Closed quotation, the "Invoice Source (traced)" column shows which book(s) its invoice(s) went to: ● = QuickBooks itself recorded the conversion (Copy to invoice, same book), ○ = matched by customer name only, so check the amount, ✓ = amount equals the quotation. Each invoice chip opens the real QuickBooks PDF. Clicking a row opens its detail: the traced invoices with paid/unpaid status, the quotation's own lines, and location/expiry/note.
+- "New Quotation" creates a REAL QuickBooks Estimate: choose the book (TAB/TAC/TAO), type the exact QuickBooks customer name (if that book has no such customer, the page offers to create it), set the date and an optional expiry and note, add lines from the service list (description, qty and rate editable), then "Create Quotation". It is created as a Pending draft; staff review and send it from QuickBooks itself.
+You have no tool that reads or creates quotations: explain the page and link it, but never claim you looked one up, created one or sent one. For Tassure's standard list prices (what to quote), service_pricing_lookup is the source.
 
 WHO MAY ASK ABOUT WHOM (personal activity only — this restricts NOTHING about client data, companies, invoicing, arrears, SOA, deadlines; every account can use all of that in full). It applies only to questions about a PERSON's own tasks / activity / whereabouts / "what did X do" / "what is X responsible for". Ranks: Vincent (owner) — no one may look up his activity. Partners (Cindy, Samuell, Yee Soon, Leonard, Teo Siok Fieng) — only Vincent may; partners cannot see each other. Leaders (Jay Tay, Lim Hoe Chyi, Hoo Seng Xin, Clarence Saw, Lina Chan, Felicia Chee) — Vincent, partners and OTHER leaders may. Everyone else (all remaining staff, including Chelsea) — any of them may look up any other, they can see each other freely. The TOOLS enforce this; when one returns permission_denied, relay its message and STOP trying to get that person's activity another way — but the same request rephrased as a company question ("what changed on <company>") is fine and you should offer it. team_activity / active_users_today silently drop people the caller may not see and tell you how many were hidden — never name a hidden person or hint at what they did.
 
@@ -1669,6 +1687,7 @@ Current user location:
 - Path: ${context?.pathname ?? 'unknown'}
 
 Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}.
+Page access for this user (restricted pages only): ${PAGES.filter(p => p.access).map(p => `${p.label} (${p.href}) — ${account && p.access?.(account) ? 'CAN open it' : 'CANNOT open it (not granted to this account)'}`).join('; ')}.
 ${memoryBlock}`;
 }
 
@@ -2280,7 +2299,7 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
 
   // 5. Navigation with a verb: 去/打开/带我/open/go
   if (/(去|打开|带我|跳转|open |go to |进入|看看)/.test(t)) {
-    for (const p of PAGES) if (p.kw.some(k => t.includes(k))) return `好的,带你去 **${p.label}**\n\n[点击打开](${p.href})`;
+    for (const p of pagesFor(account)) if (p.kw.some(k => t.includes(k))) return `好的,带你去 **${p.label}**\n\n[点击打开](${p.href})`;
   }
 
   // 6. ND person lookup: "XX 有哪些公司 / 挂了几家"
@@ -2312,7 +2331,7 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
   }
 
   // 8. Bare page name without a verb ("late filing", "开单草稿")
-  for (const p of PAGES) if (p.kw.some(k => k.length >= 2 && t.includes(k))) {
+  for (const p of pagesFor(account)) if (p.kw.some(k => k.length >= 2 && t.includes(k))) {
     return `你要找的应该是 **${p.label}**\n\n[点击打开](${p.href})`;
   }
 
@@ -2330,7 +2349,7 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
     '· **页面导航** — 如 "打开开单草稿"',
     '· **流程问题** — 如 "怎么开单"、"To 和 CC 的规则是什么"、"Prepared 后去哪里看"',
     '',
-    `快捷入口:${PAGES.slice(0, 5).map(p => `[${p.label}](${p.href})`).join(' ')} [Email Drafts](/client-communications/campaigns)`,
+    `快捷入口:${pagesFor(account).slice(0, 5).map(p => `[${p.label}](${p.href})`).join(' ')} [Email Drafts](/client-communications/campaigns)`,
   ].join('\n');
 }
 

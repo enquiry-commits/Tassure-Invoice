@@ -1973,6 +1973,32 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Assistant said the Quotation page doesn't exist — now it knows the
+  page, how to use it, and who can open it (INV-AI-009).** Diagnosed from
+  production records first (read-only): My Tasks had been falling back to
+  the generic keyword menu since 2026-09-23 because the Claude API call
+  was failing — first "credit balance is too low", then (2026-09-28 15:43
+  SGT) "You have reached your specified API usage limits", i.e. the
+  organisation's self-set monthly spend limit, which topping up credit
+  does not lift. Vincent raised it; at 16:32 SGT the same question got a
+  real Claude answer again, but a wrong one: "系统里没有单独一个叫
+  「Quotation」的模块/页面", zero tools called. Root cause: `PAGES` (the
+  assistant's system map) was never updated when Quotation shipped on
+  2026-09-24. Added it with an `access` predicate (`canViewQuotation`),
+  a how-to paragraph in `staticSystemPrompt()` (cards/filters, the ●/○/✓
+  invoice trace, New Quotation creating a Pending QuickBooks Estimate, no
+  chat tool reads or creates quotations), a per-request "page access"
+  line in `dynamicSystemPrompt()`, and `pagesFor()` so the fallback
+  engine's navigation never hands a gated link to an account without
+  access. Also confirmed for Vincent from the same records: OpenAI is
+  wired into My Tasks only as router / general-question answerer /
+  synthesis layer — since provenance tracking began (2026-09-21), 8 turns:
+  Claude 5, keyword fallback 3, OpenAI final answer 0; it is not a backup
+  when Claude fails. `npx tsc --noEmit` clean, `npx eslint` clean (the
+  one pre-existing `hiddenNote` warning), `npm run build` clean. **Not
+  verified in a live chat yet** — confirm by re-asking "Hi Quotation 怎么样
+  使用" after the deploy.
+
 - **My Tasks assistant gains the secretarial team's own SOP as a
   topic-lookup tool, `get_sop_guide` (INV-AI-008).** Source: a colleague's
   "Communication anf Useful form details.docx" (client-communication

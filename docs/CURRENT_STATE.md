@@ -396,6 +396,19 @@ waiting on the colleague: one payment-chasing script had an unclear word
 ("还麻烦您这集团安排…", dropped). Not yet exercised in a live chat; like
 every Claude-path My Tasks answer it needs Anthropic credit.
 
+**2026-09-28 — My Tasks was on the keyword fallback 2026-09-23 → 09-28
+(Anthropic credit, then the org's self-set monthly spend limit; Vincent
+raised it, Claude answering again from 16:32 SGT).** If the generic
+"我可以帮你: 查公司…" menu comes back, the real API error is in
+`ai_agent_runs.error`. OpenAI is not a failover for Claude-path turns.
+The assistant's system map (`PAGES`, INV-AI-009) now includes Quotation,
+but these real pages are still missing from it, so the assistant may not
+know or link them: SOA (`/billing/soa/tab|tac|tao|all` — partly covered by
+the outstanding-balance tool's own links), TAO billing (`/billing/tao`),
+Reports (`/reports`, gated), My Tasks, Post Incorporate, Trademark (master
+records / in progress), EOT, Email templates / drafts, Activity Insights,
+SG News, AI Learning, AI Quality, Appearance (all gated).
+
 ## Known risks (not bugs — things worth remembering before relying on data)
 
 - **Billing draft auto-fill accuracy varies by field** — Secretary ~85%

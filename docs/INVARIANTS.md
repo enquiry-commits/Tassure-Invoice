@@ -3582,6 +3582,28 @@ again.
 
 ## AI Assistant / chatbot (INV-AI)
 
+- **INV-AI-009** — `PAGES` in `app/api/assistant/route.ts` is the
+  assistant's ONLY map of the app (rendered into the static prompt's
+  "System map" and used by `intentAnswer()`'s keyword navigation). A page
+  that ships without being added there is a page the assistant will
+  confidently say does not exist. Found live 2026-09-28: Billing System ›
+  Quotation (`/billing/quotation`, shipped 2026-09-24) was never added;
+  Vincent asked "Hi Quotation 怎么样使用" and Claude answered "我这边系统里
+  没有单独一个叫「Quotation」的模块/页面" with ZERO tools called
+  (`ai_messages` 310 / `ai_agent_runs` 8). The generic capability-denial
+  guard (INV-AI-004) did not fire because the reply was phrased as a
+  clarifying question, which that guard deliberately exempts. Fixed by
+  adding the page to `PAGES` with an `access` predicate
+  (`canViewQuotation`) plus a how-to paragraph in `staticSystemPrompt()`.
+  A gated page must carry `access`: the static (cached, shared) map only
+  flags it as restricted, `dynamicSystemPrompt()` states per request
+  whether THIS account can open each restricted page, and `pagesFor()`
+  hides it from the fallback engine's navigation for everyone else — so a
+  staff member is told the page isn't open to them instead of being handed
+  a link `proxy.ts` will bounce. Rule: a new page (or a new gate on an
+  existing one) updates `PAGES` in the same change. As of this entry
+  about 15 existing pages are still missing (see `docs/CURRENT_STATE.md`).
+
 - **INV-AI-008** — A knowledge tool added to the My Tasks assistant has
   three traps, all found 2026-09-28 while adding `get_sop_guide` (the
   secretarial team's client-communication SOP, `lib/client-comms-sop.ts`),
