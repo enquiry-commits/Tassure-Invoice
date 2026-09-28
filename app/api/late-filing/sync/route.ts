@@ -823,10 +823,34 @@ async function syncLateFiling(run: AutomationRun) {
     // CAPITAL (F.K.A. LWL EDUCATION CONSULTANCY) are both genuinely
     // Terminated yet were still fully visible, dated rows on the AR
     // Reminder tab.
+    //
+    // Found 2026-09-28, a real bug in THIS pass since the day it shipped
+    // (2026-09-23): it must use the exact same "companies row wins,
+    // master_list is a fallback ONLY when no companies row exists" rule
+    // `isTerminatedCompany()` above already implements correctly — but this
+    // pass built its own, separate `allTerminatedUenKeys` by unconditionally
+    // UNIONING every master_list terminated/strike_off UEN in regardless of
+    // whether that UEN also has a live, genuinely Active `companies` row.
+    // `master_list` can carry a stale "terminated"/"strike_off" row for a
+    // company TeamWork itself still shows Active (the exact "7 companies
+    // still Active in TeamWork although filed under Terminated Services"
+    // gap flagged the same day this file's own INV-DATA-067 comment
+    // describes) — every one of those got its real, current AR cycle
+    // wrongly Excluded, invisible on the page, the first night this pass
+    // ran after being filed there. Confirmed live: 14 real ar_reminder rows
+    // across 11 companies (ANABLE MANAGEMENT SERVICES, SHENGYA (SG), A.I.R
+    // INVESTMENT MANAGEMENT, HALOFUN, XSPY, SATORISYS, SINGAPORE CHINESE
+    // ARTS CENTRE, SINO MINING HEAVY INDUSTRIES ×2, ARK PARTNERS MANAGEMENT
+    // ×2, XGC SINGAPORE) — found because XGC's own March 2026 cycle went
+    // missing from the AR list days before its filing deadline. `.filter()`
+    // through `isTerminatedCompany()` below closes it at the source, so this
+    // pass can never again disagree with the marker-clearing pass just above
+    // it about what "terminated" means. See docs/INVARIANTS.md INV-AR-016.
     const terminatedUenKeys = [...companyByUen.entries()]
       .filter(([, info]) => !info.is_active || ['Terminated', 'Striking Off'].includes(info.tw_status ?? ''))
       .map(([uen]) => uen);
-    const allTerminatedUenKeys = [...new Set([...terminatedUenKeys, ...terminatedUens])];
+    const allTerminatedUenKeys = [...new Set([...terminatedUenKeys, ...terminatedUens])]
+      .filter(uen => isTerminatedCompany(uen, ''));
     if (allTerminatedUenKeys.length) {
       const { data: terminatedArRows, error: terminatedArError } = await supabase
         .from('ar_reminder')

@@ -414,6 +414,80 @@ again.
   bulk-hiding a row is higher-consequence than clearing a text marker, so
   it only acts where the match is exact.
 
+- **INV-AR-016** — `app/api/late-filing/sync/route.ts`'s termination-exclusion
+  pass (INV-AR-015, "once a company is Terminated/Striking Off, exclude its
+  `ar_reminder` rows") must decide "is this UEN terminated" through the EXACT
+  SAME function the marker-clearing pass just above it uses
+  (`isTerminatedCompany()`: a `companies` row, if one exists, always wins;
+  `master_list`'s lifecycle category is consulted ONLY when no `companies`
+  row exists at all) — never a second, independently-built set. Found
+  2026-09-28: a colleague's message relayed by Vincent — "XGC - March 2026,
+  missing in AR list...如果有公司AR 跳不出来对我们deadline 影响很大的" (if a
+  company's AR doesn't show up it seriously hits our deadline); Vincent:
+  "这个情况处理一下". Root cause: `allTerminatedUenKeys` (the set this pass
+  actually excludes against) was built as
+  `[...terminatedUenKeys, ...terminatedUens]` — an UNCONDITIONAL union of
+  companies-confirmed-terminated UENs with EVERY UEN sitting in
+  `master_list`'s `terminated`/`strike_off` lists, regardless of whether that
+  UEN ALSO has a live, genuinely Active `companies` row. `master_list` can
+  and does carry a stale terminated/strike_off row for a company TeamWork
+  itself still shows Active — the exact gap INV-DATA-067 records 7 real
+  examples of (XSPY, SINGAPORE CHINESE ARTS CENTRE, SATORISYS, HALOFUN,
+  ANABLE MANAGEMENT SERVICES, ARK PARTNERS MANAGEMENT, SINO MINING HEAVY
+  INDUSTRIES) — every one of those 7 had a real, current AR cycle wrongly
+  `Excluded` (invisible on the AR Reminder page) the first night this pass
+  ran after being filed there, and will again on every future run until
+  their `master_list` entry is corrected, because the code bug — not just
+  the stale data — was the thing actually excluding them.
+  Confirmed live, 2026-09-28: **14 real `ar_reminder` rows across 11
+  companies** wrongly `Excluded` since this pass shipped (audit-confirmed
+  `Pending → Excluded`, `changed_by: system:late-filing`): ANABLE MANAGEMENT
+  SERVICES, SHENGYA (SG) — also a real INV-TW-023 duplicate-stub victim, its
+  `companies.is_active` really was false at the moment of exclusion — A.I.R
+  INVESTMENT MANAGEMENT (same), HALOFUN, XSPY, SATORISYS, SINGAPORE CHINESE
+  ARTS CENTRE, SINO MINING HEAVY INDUSTRIES (×2 FYE cycles), ARK PARTNERS
+  MANAGEMENT (×2 FYE cycles), XGC SINGAPORE (the reported case — also an
+  INV-TW-023 victim), plus 2 older ones (MAPLE GROVE CAPITAL VCC, BEAUTY
+  ASSET PTE LTD) whose underlying data has since self-corrected. Of these,
+  7 still have a wrong `master_list` entry today (the INV-DATA-067 list) —
+  WITHOUT this fix they would be re-excluded on the very next run; WITH it,
+  once restored, they stay restored regardless of `master_list`, since
+  `companies` now always wins whenever a live companies row exists. The other
+  5 were only ever excluded because of a since-self-corrected `companies` row
+  (INV-TW-023, for SHENGYA/A.I.R/XGC) or older, no-longer-reproducible data —
+  the code fix is still required for them going forward, just not visibly
+  triggered by today's live data. Separately confirmed CORRECT and
+  left untouched: 25 genuinely-terminated rows, plus 3 rows for companies
+  TeamWork sync has already removed from `companies` entirely (MIX POINT —
+  Liquidation in Progress, ADVANCE BRIGHT GLOBAL, FULLRICH INTERNATIONAL —
+  both Struck-Off, INV-AR-013's own cited examples) where the `master_list`
+  fallback is exactly correct.
+  Fix: `allTerminatedUenKeys` is now the union filtered THROUGH
+  `isTerminatedCompany()` (`.filter(uen => isTerminatedCompany(uen, ''))`)
+  instead of trusted as-is — one line, reuses the already-correct function
+  rather than re-deriving the rule a second time, so the two passes can never
+  disagree again. Verified against real production data before shipping (not
+  assumed): re-ran both the OLD and NEW set-construction logic against the
+  live `companies`/`master_list` tables — the 12 wrongfully-included UENs all
+  flip to excluded-from-the-terminated-set under the fix, the 3 genuine
+  fallback UENs stay included, confirmed by name/UEN, not just count.
+  **Data NOT yet restored as of this writing** — the corrective write
+  (flipping the 14 rows' `status` back to `'Pending'`, matching their own
+  audit-confirmed prior value, compare-and-swap on `status='Excluded'`) was
+  attempted and blocked by the session's permission guard (ad-hoc production
+  write); Vincent needs to either approve that specific write or apply it
+  himself. The code fix alone stops any NEW row from being wrongly excluded,
+  but does nothing for a row already sitting `Excluded` — this class of pass
+  is one-directional by design (INV-AR-015) and was never meant to
+  self-heal a row it wrongly touched.
+  **Lesson**: whenever a pass re-derives "is this thing terminated/inactive"
+  a second time anywhere in the same file that already has a correct,
+  tested version of that exact check, make the second one CALL the first —
+  never trust that a copy will stay in sync, even one written the same day
+  as the original (this one was: INV-AR-015 shipped 2026-09-23, and its own
+  `allTerminatedUenKeys` diverged from the `isTerminatedCompany()` a few
+  lines above it that same commit).
+
 ## PIC / staff assignment (INV-PIC)
 
 - **INV-PIC-001** — `resolveTeamworkPic()` must split and resolve

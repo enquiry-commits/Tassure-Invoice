@@ -316,6 +316,23 @@ through a sync. (4) `audit_log` shows the old value for every rewritten row,
 `changed_by = 'system:terminated-list-default'`.
 **Guards:** `docs/INVARIANTS.md` INV-DATA-064, INV-DATA-067.
 
+### REG-025 — Terminated-exclusion pass never disagrees with the marker-clearing pass about "is this UEN terminated" (after ANY change to `app/api/late-filing/sync/route.ts`)
+Against real data: build the same two sets the route builds internally
+(`terminatedUenKeys` from `companies`, `terminatedUens` from `master_list`
+`terminated`/`strike_off`) and confirm every UEN in their union that ALSO has
+a live `companies` row with `is_active=true` and `tw_status` NOT in
+`['Terminated','Striking Off']` is excluded from the final
+`allTerminatedUenKeys` (i.e. `isTerminatedCompany(uen, '')` returns false for
+it) — a company whose `master_list` entry is stale must never be excluded
+from AR Reminder while its live `companies` row says Active. Confirm the
+opposite too: a UEN with NO `companies` row at all but a `master_list`
+`terminated`/`strike_off` entry still IS excluded (the real fallback case —
+MIX POINT PTE. LTD., ADVANCE BRIGHT GLOBAL, FULLRICH INTERNATIONAL are the
+known real examples). After a real run, spot-check that no `ar_reminder` row
+for a company whose `companies.is_active=true` currently shows
+`status='Excluded'` with `updated_by_email='system:late-filing'`.
+**Guards:** `docs/INVARIANTS.md` INV-AR-013, INV-AR-014, INV-AR-015, INV-AR-016.
+
 ---
 
 ## Automation priority
