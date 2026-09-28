@@ -641,7 +641,32 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     // what's actually shown. Display-only, on top of computeSoaRows()'s
     // complete result — the underlying sync/detail-modal/Company 360 data
     // (and the Excel export's own matching filter) is untouched.
-    const list = (companies ?? []).filter(c => c.totalOutstanding > 0);
+    //
+    // Vincent, 2026-09-28, pointing at a real garbage row: a QuickBooks
+    // customer literally named "0" (TAB, $4,522) — a manually-entered
+    // opening-balance Journal Entry with no real invoice ever billed to it,
+    // so computeSuggestedOwner() has no Class/Location signal to work with
+    // and nobody has (or realistically could) confirm a Main PIC either —
+    // "先把没有PIC的先Hide 起来，不是去掉，而是先不显示，后续可以还是要开放
+    // 回去的" (hide rows with no PIC for now — not delete, just don't show;
+    // it should still be possible to bring them back later). Same reversible
+    // shape as the totalOutstanding filter just above, computed fresh every
+    // render off the exact fields the PIC/Main PIC columns already show
+    // (never a stored flag) — the moment a company gets a real Class-tagged
+    // invoice or someone confirms a Main PIC, it reappears with no extra code
+    // needed. Only hides when BOTH columns would show nothing at all
+    // (`picOptions.length === 0`, so no suggested candidate either) — a
+    // company with unconfirmed-but-suggested PIC candidates still shows,
+    // since that's a real, legitimate collections target, just not
+    // rubber-stamped yet. Verified against real data before shipping: hides
+    // 13 of 399 currently-listed companies across TAB/TAO (0 on TAC) —
+    // mostly tiny same-shape Journal-Entry-only balances (as low as $5.50),
+    // but 2 are real, non-trivial invoice-based amounts with simply no Class
+    // tag (TASSURE ASIA OUTSOURCEZ PTE LTD $16,377.25, WOLVEZ CAPITAL PTE.
+    // LTD. $4,450) — see PROJECT_STATUS.md's 2026-09-28 entry for the full
+    // list; those may need a Main PIC assigned rather than staying hidden.
+    const hasAnyPic = (c: Row) => c.picOptions.length > 0 || !!effectiveOwner(c);
+    const list = (companies ?? []).filter(c => c.totalOutstanding > 0 && hasAnyPic(c));
     if (!picFilter) return list;
     const ownsRow = (c: Row) => effectiveOwner(c) === picFilter || (!effectiveOwner(c) && c.picOptions.includes(picFilter));
     // Vincent, 2026-09-23, on the "All" view specifically: "当一家公司有好
