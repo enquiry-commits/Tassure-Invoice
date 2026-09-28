@@ -155,26 +155,17 @@ const QUOTATION_NODE: Node = { label: 'Quotation', href: '/billing/quotation' };
 
 // Added 2026-09-28 — Vincent: reads a client's receipts/invoices with
 // Claude vision and lets Account staff confirm a reconciled turnover total
-// (see app/turnover-ai/*, app/api/turnover-ai/*). A level-1 GROUP (its own
-// 3 sub-pages), same shape as ADMIN_NODE, gated on `canViewTurnoverAI`
-// (Vincent-only for now) rather than folded into Admin — this is a real
-// operational feature for Account, not a governance tool.
-// Routes deliberately never nest as string prefixes of one another
-// (/turnover-ai/inbox, not bare /turnover-ai) — isActive()'s generic
-// `pathname.startsWith(href)` fallback below would otherwise mark Inbox
-// "active" on every one of this group's sub-pages.
-const TURNOVER_AI_NODE: Node = {
-  id: 'turnover-ai', label: 'Turnover AI', icon: ScanLine,
-  children: [
-    { label: 'Inbox', href: '/turnover-ai/inbox' },
-    { label: 'Review Queue', href: '/turnover-ai/review' },
-    { label: 'Summary', href: '/turnover-ai/summary' },
-  ],
-};
+// (see app/turnover-ai/page.tsx, app/api/turnover-ai/*). Originally a
+// 3-sub-page group (Inbox/Review Queue/Summary); Vincent, once he saw it:
+// "这个能不能全部内容只在一个页面不要分散" — one page, not spread across
+// separate routes, so this is now a single level-1 LEAF like Post
+// Incorporate (the 3 sections became in-page tabs on that one page
+// instead). Gated on `canViewTurnoverAI` (Vincent-only for now).
+const TURNOVER_AI_NODE: Node = { label: 'Turnover AI', href: '/turnover-ai', icon: ScanLine };
 
 const groupIds = (nodes: Node[]): string[] =>
   nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
-const SIDEBAR_GROUP_IDS = [...groupIds(tree), ADMIN_NODE.id!, TURNOVER_AI_NODE.id!];
+const SIDEBAR_GROUP_IDS = [...groupIds(tree), ADMIN_NODE.id!];
 const firstLeaf = (n: Node): string => n.href ?? (n.children ? firstLeaf(n.children[0]) : '#');
 
 function findNode(nodes: Node[], href: string): Node | null {

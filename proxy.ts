@@ -86,9 +86,9 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL('/', req.url));
   }
   // Turnover AI (added 2026-09-28) — Vincent-only while it's new. Same hard
-  // middleware block as /billing/quotation above, covering all 3 pages
-  // under this prefix (Inbox, Review Queue, Summary).
-  if (!isApi && path.startsWith('/turnover-ai') && !account.canViewTurnoverAI) {
+  // middleware block as /billing/quotation above. One page (Inbox/Review
+  // Queue/Summary are in-page tabs, not separate routes).
+  if (!isApi && path === '/turnover-ai' && !account.canViewTurnoverAI) {
     return NextResponse.redirect(new URL('/', req.url));
   }
   // Some accounts only see one page (Vincent, 2026-08-17 — an Accounting-team
