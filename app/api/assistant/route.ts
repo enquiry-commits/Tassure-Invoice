@@ -19,6 +19,7 @@ import { lookupCompanyDeep } from '@/lib/company-deep-lookup';
 import { listCompanies, type CompanyListFilters } from '@/lib/company-list-lookup';
 import { searchDocuments } from '@/lib/document-search-lookup';
 import { getSopGuide, SOP_TOPICS } from '@/lib/client-comms-sop';
+import { PAGES, pagesFor, matchPage, pageAccessLine } from '@/lib/assistant-pages';
 import { getTrademarkSummary } from '@/lib/trademark-lookup';
 import { getUpcomingDeadlines } from '@/lib/deadlines-lookup';
 import { getRecentChanges } from '@/lib/audit-lookup';
@@ -258,34 +259,8 @@ export function applyCapabilityGuards(text: string, opts: { toolNames: string[];
 }
 
 // ── System map: single source for both engines ──────────────────────────────
-// This list is the assistant's ONLY map of the app: a page missing here is a
-// page Claude will confidently say doesn't exist (Quotation, 2026-09-28 —
-// INV-AI-002). `access` marks a page only some accounts may open (proxy.ts
-// hard-blocks the rest): the static map flags it, dynamicSystemPrompt() states
-// whether THIS user can open it, and intentAnswer()'s navigation skips it for
-// accounts without access.
-const PAGES: { label: string; href: string; kw: string[]; access?: (account: ApprovedAccount) => boolean }[] = [
-  { label: 'Dashboard 总览',        href: '/',                          kw: ['dashboard', '总览', '首页', 'overview', '主页'] },
-  { label: 'Companies 公司库',      href: '/companies',                 kw: ['companies', '公司库', '公司列表', '所有公司'] },
-  { label: 'Active Client 在任客户', href: '/master-list/active-clients', kw: ['active client', '在任客户', 'master list', '主名单'] },
-  { label: 'Ad-Hoc',                href: '/master-list/ad-hoc',        kw: ['ad-hoc', 'ad hoc', '临时'] },
-  { label: 'MAS',                   href: '/master-list/mas',           kw: ['mas'] },
-  { label: 'Strike Off',            href: '/master-list/strike-off',    kw: ['strike off', 'strike-off', '除名'] },
-  { label: 'Terminated Services',   href: '/master-list/terminated',    kw: ['terminated', '终止'] },
-  { label: 'Change Co Name',        href: '/master-list/name-change',   kw: ['name change', '改名', 'change co name'] },
-  { label: 'Nominee Directors 提名董事', href: '/nominee-directors',    kw: ['nominee', 'nd', '提名董事', '挂名董事'] },
-  { label: 'Address Service 地址服务', href: '/address-service',        kw: ['address', '地址'] },
-  { label: 'AR Reminder 年报提醒',  href: '/billing?tab=ar',            kw: ['ar reminder', 'ar', '年报', 'annual return', '提醒'] },
-  { label: 'Late Filing 迟报监控',  href: '/late-filing',               kw: ['late filing', '迟报', 'late'] },
-  { label: 'Billing Drafts 开单草稿', href: '/billing?tab=billing',     kw: ['billing', '开单', '发票', 'invoice', 'draft', '账单'] },
-  { label: 'Quotation 报价单',      href: '/billing/quotation',         kw: ['quotation', '报价单'], access: account => !!account.canViewQuotation },
-  { label: 'Email Drafts 邮件草稿', href: '/client-communications/campaigns', kw: ['email drafts', '邮件草稿', 'client communications', 'campaign', 'outlook helper'] },
-  { label: 'Email Activity 邮件记录', href: '/client-communications/history', kw: ['email activity', '邮件记录', 'delivery history', 'history', 'prepared'] },
-];
-
-function pagesFor(account: ApprovedAccount | null | undefined) {
-  return PAGES.filter(p => !p.access || (account ? p.access(account) : false));
-}
+// PAGES / pagesFor / matchPage / pageAccessLine live in lib/assistant-pages.ts
+// (the assistant's only map of the app — INV-AI-009), imported above.
 
 const FAQ: { kw: string[]; a: string }[] = [
   { kw: ['为什么这行还不能ready', '为什么不能ready', '还不能 ready', '不能勾选ready', 'status怎么看', 'item to review'],
@@ -1573,7 +1548,9 @@ WHEN ASKED WHAT YOU CAN DO ("你能做什么", "有什么功能", "help", "怎�
 End by inviting one concrete next question. Never claim an ability you do not have — you cannot send emails, create QuickBooks invoices by yourself, or change data without the user's click.
 
 System map (link pages with markdown, e.g. [开单草稿](/billing?tab=billing)):
-${PAGES.map(p => `- ${p.label}: ${p.href}${p.access ? ' (restricted — link it only if the page-access line with the current user details says this user can open it)' : ''}`).join('\n')}
+${PAGES.map(p => `- ${p.label}: ${p.href} — ${p.desc}${p.access ? ' (restricted)' : ''}`).join('\n')}
+Each company also has its own Company 360 page at /companies/<its id> (open it from Companies).
+This is the complete list of pages — if a user names one, it exists; never say a page on this list doesn't exist. Pages marked (restricted) are open only to some accounts: before linking one, check the page-access line given with the current user details, and if this user can't open it, say it isn't open to their account yet (Vincent can grant access) instead of linking it. That same line says when an account is confined to a single page.
 
 When the user says "this page", "this row", or asks a vague how-to question, prioritize the current location given in the next message.
 
@@ -1687,7 +1664,7 @@ Current user location:
 - Path: ${context?.pathname ?? 'unknown'}
 
 Current logged-in staff member: ${account ? `${account.name} (${account.email})` : 'unknown / not identified'}.
-Page access for this user (restricted pages only): ${PAGES.filter(p => p.access).map(p => `${p.label} (${p.href}) — ${account && p.access?.(account) ? 'CAN open it' : 'CANNOT open it (not granted to this account)'}`).join('; ')}.
+${pageAccessLine(account)}
 ${memoryBlock}`;
 }
 
@@ -2299,7 +2276,8 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
 
   // 5. Navigation with a verb: 去/打开/带我/open/go
   if (/(去|打开|带我|跳转|open |go to |进入|看看)/.test(t)) {
-    for (const p of pagesFor(account)) if (p.kw.some(k => t.includes(k))) return `好的,带你去 **${p.label}**\n\n[点击打开](${p.href})`;
+    const p = matchPage(t, account);
+    if (p) return `好的,带你去 **${p.label}**\n\n[点击打开](${p.href})`;
   }
 
   // 6. ND person lookup: "XX 有哪些公司 / 挂了几家"
@@ -2331,9 +2309,8 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
   }
 
   // 8. Bare page name without a verb ("late filing", "开单草稿")
-  for (const p of pagesFor(account)) if (p.kw.some(k => k.length >= 2 && t.includes(k))) {
-    return `你要找的应该是 **${p.label}**\n\n[点击打开](${p.href})`;
-  }
+  const bare = matchPage(t, account, 2);
+  if (bare) return `你要找的应该是 **${bare.label}**\n\n[点击打开](${bare.href})`;
 
   // 9. Fallback: capabilities
   return [

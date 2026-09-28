@@ -1983,6 +1983,30 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **The assistant's map of the app now covers every real page (INV-AI-009
+  completed).** Vincent: "要，一次补全". Added the 21 pages still missing
+  after the Quotation fix — SOA All/TAB/TAC/TAO, TAO billing, Reports,
+  My Tasks, Post Incorporate, Trademark Master Records / In Progress,
+  EOT, Email Templates, SG Latest News, Turnover AI Inbox / Review Queue /
+  Summary (shipped earlier today), Proposal Generator, and the 4 Admin
+  pages — each with a one-line description and the same access gate the
+  page itself enforces (canViewReports / canViewSgNews / canViewQuotation
+  / canViewTurnoverAI / admin; AR-Reminder-only accounts see only AR
+  Reminder + My Tasks). The map moved from `app/api/assistant/route.ts`
+  into `lib/assistant-pages.ts` so it can be tested; the static prompt now
+  says the list is complete and how to treat (restricted) pages, and the
+  per-request access line comes from `pageAccessLine()`. The keyword
+  fallback's navigation now picks the most specific matching keyword
+  instead of the first entry in list order. `npx tsx
+  test-assistant-pages.ts` 147/147 (every `app/**/page.tsx` mapped, every
+  `proxy.ts` gate mirrored, real accounts Vincent/Chelsea/Cindy/Jay,
+  navigation precedence); `npx tsc --noEmit` clean for these files (a
+  concurrent session's in-progress `test-company-lifecycle.ts` had a
+  transient error at one point, not part of this change); `npx eslint`
+  clean (1 pre-existing warning); `npm run build` clean. Only this
+  change's hunks of `route.ts` were committed — another session had
+  uncommitted edits in the same file. **Not verified in a live chat yet.**
+
 - **Assistant said the Quotation page doesn't exist — now it knows the
   page, how to use it, and who can open it (INV-AI-009).** Diagnosed from
   production records first (read-only): My Tasks had been falling back to

@@ -3582,7 +3582,7 @@ again.
 
 ## AI Assistant / chatbot (INV-AI)
 
-- **INV-AI-009** — `PAGES` in `app/api/assistant/route.ts` is the
+- **INV-AI-009** — `PAGES` (now `lib/assistant-pages.ts`) is the
   assistant's ONLY map of the app (rendered into the static prompt's
   "System map" and used by `intentAnswer()`'s keyword navigation). A page
   that ships without being added there is a page the assistant will
@@ -3601,8 +3601,23 @@ again.
   hides it from the fallback engine's navigation for everyone else — so a
   staff member is told the page isn't open to them instead of being handed
   a link `proxy.ts` will bounce. Rule: a new page (or a new gate on an
-  existing one) updates `PAGES` in the same change. As of this entry
-  about 15 existing pages are still missing (see `docs/CURRENT_STATE.md`).
+  existing one) updates `PAGES` in the same change.
+
+  Completed the same day (Vincent: "要，一次补全"): 21 more real pages had
+  never been added (SOA ×4, TAO billing, Reports, My Tasks, Post
+  Incorporate, Trademark ×2, EOT, Email Templates, SG News, Turnover AI ×3
+  — shipped that very day — Proposal Generator, and the 4 Admin pages).
+  The map moved out of `route.ts` into `lib/assistant-pages.ts` so it can
+  be tested: `test-assistant-pages.ts` fails if any `app/**/page.tsx` has
+  no entry (only login, redirect-only routes and the per-company
+  `/companies/[id]` are exempt), if a `proxy.ts` hard-block's path lacks
+  the same gate in `access`, or if a real account sees the wrong pages
+  (`canOpenPage()` also mirrors `restrictedTo`: the AR-Reminder-only
+  accounts get exactly AR Reminder + My Tasks). Each entry now carries a
+  one-line `desc` of what the page does. Keyword navigation now takes the
+  MOST SPECIFIC matching keyword (`matchPage()`), not the first entry in
+  list order — the bare 'ar' keyword used to claim anything containing
+  "ar" ("turnover summary", "share transfer").
 
 - **INV-AI-008** — A knowledge tool added to the My Tasks assistant has
   three traps, all found 2026-09-28 while adding `get_sop_guide` (the

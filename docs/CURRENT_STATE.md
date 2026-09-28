@@ -401,13 +401,12 @@ every Claude-path My Tasks answer it needs Anthropic credit.
 raised it, Claude answering again from 16:32 SGT).** If the generic
 "我可以帮你: 查公司…" menu comes back, the real API error is in
 `ai_agent_runs.error`. OpenAI is not a failover for Claude-path turns.
-The assistant's system map (`PAGES`, INV-AI-009) now includes Quotation,
-but these real pages are still missing from it, so the assistant may not
-know or link them: SOA (`/billing/soa/tab|tac|tao|all` — partly covered by
-the outstanding-balance tool's own links), TAO billing (`/billing/tao`),
-Reports (`/reports`, gated), My Tasks, Post Incorporate, Trademark (master
-records / in progress), EOT, Email templates / drafts, Activity Insights,
-SG News, AI Learning, AI Quality, Appearance (all gated).
+The assistant's system map (`lib/assistant-pages.ts`, INV-AI-009) now
+covers every real page, each with a one-line description and the same
+access gate the page enforces; `test-assistant-pages.ts` fails when a new
+page ships without an entry. The keyword fallback engine's static help
+texts (`FAQ`, `currentPageHelp()`) were not rewritten — only its page
+navigation uses the full map.
 
 ## Known risks (not bugs — things worth remembering before relying on data)
 
