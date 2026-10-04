@@ -71,18 +71,29 @@ function CreatedBy({ row }: { row: QuotationRow }) {
 // One traced invoice: ● = QuickBooks itself recorded the conversion,
 // ○ = matched by customer name only. The chip is the shared
 // BillingInvoiceReference ("TAB #02611060", opens the real QuickBooks PDF).
+//
+// Vincent, 2026-10-04: "设计的稍微整齐顺眼一点，现在感觉一堆内容堆积在一起" —
+// rendered as one line per invoice inside TraceSummary's shared grid
+// (marker | chip | amount), so chips and right-aligned amounts line up
+// vertically across invoices instead of wrapping side by side.
+const TRACE_GRID = '10px auto 1fr 14px';
 function TracedInvoice({ inv, currency }: { inv: QuotationTraceInvoice; currency: string | null }) {
   const confirmed = inv.via === 'quickbooks_link';
+  const voided = inv.status === 'Voided';
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+    <>
       <span title={confirmed ? 'Confirmed by QuickBooks (converted with Copy to invoice)' : 'Matched by customer name — not recorded in QuickBooks'}
         style={{ fontSize: 9, lineHeight: 1, color: confirmed ? '#15803d' : '#94a3b8' }}>{confirmed ? '●' : '○'}</span>
-      <BillingInvoiceReference company={inv.source} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} muted={inv.status === 'Voided'} />
-      <span style={{ fontSize: 10.5, fontWeight: inv.amountMatches ? 800 : 500, color: inv.amountMatches ? '#15803d' : '#64748b' }}>
-        {money(inv.totalAmt, currency)}{inv.amountMatches ? ' ✓' : ''}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+        <BillingInvoiceReference company={inv.source} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} muted={voided} />
+        {voided && <span style={{ fontSize: 9, fontWeight: 800, color: '#b91c1c', letterSpacing: '.03em' }}>VOID</span>}
       </span>
-      {inv.status === 'Voided' && <span style={{ fontSize: 9.5, fontWeight: 700, color: '#b91c1c' }}>VOID</span>}
-    </span>
+      <span style={{ textAlign: 'right', fontSize: 11, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontWeight: inv.amountMatches ? 700 : 500, color: voided ? '#94a3b8' : inv.amountMatches ? '#15803d' : '#475569', textDecoration: voided ? 'line-through' : undefined }}>
+        {money(inv.totalAmt, currency)}
+      </span>
+      <span title={inv.amountMatches ? 'This invoice alone equals the quotation' : undefined}
+        style={{ fontSize: 11, fontWeight: 800, color: '#15803d', textAlign: 'center' }}>{inv.amountMatches ? '✓' : ''}</span>
+    </>
   );
 }
 
@@ -94,21 +105,31 @@ function TraceSummary({ row }: { row: QuotationRow }) {
   // A single invoice that already equals the quotation needs no extra line.
   const showReconcile = t.invoices.length > 0 && !(t.invoices.length === 1 && t.invoices[0].amountMatches);
   const comparable = !row.currency || row.currency === 'SGD';
+  const diff = t.tracedTotal - row.totalAmt;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '2px 0' }}>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px' }}>
+    <div style={{ maxWidth: 300, padding: '2px 0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: TRACE_GRID, alignItems: 'center', columnGap: 6, rowGap: 4 }}>
         {shown.map(inv => <TracedInvoice key={`${inv.source}|${inv.qbInvoiceId}`} inv={inv} currency={row.currency} />)}
-        {t.invoices.length > shown.length && <span style={{ fontSize: 10.5, color: '#94a3b8' }}>+{t.invoices.length - shown.length} more</span>}
-        {t.unresolvedLinkedInvoiceIds.map(id => (
-          <span key={id} title="QuickBooks says this quotation was converted to this invoice, but it is not in the synced invoice data (deleted, older than the sync window, or not synced yet)"
-            style={{ fontSize: 10.5, color: '#94a3b8' }}>● {row.source} invoice id {id} (not in synced data)</span>
-        ))}
       </div>
+      {t.invoices.length > shown.length && (
+        <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 3, paddingLeft: 16 }}>+{t.invoices.length - shown.length} more</div>
+      )}
+      {t.unresolvedLinkedInvoiceIds.map(id => (
+        <div key={id} title="QuickBooks says this quotation was converted to this invoice, but it is not in the synced invoice data (deleted, older than the sync window, or not synced yet)"
+          style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 3 }}>● {row.source} invoice id {id} (not in synced data)</div>
+      ))}
       {showReconcile && comparable && t.invoices.length > 0 && (
-        <div style={{ fontSize: 10, color: t.sumMatchesTotal ? '#15803d' : '#94a3b8', fontWeight: t.sumMatchesTotal ? 700 : 500 }}>
-          {t.sumMatchesTotal
-            ? `Traced ${money(t.tracedTotal, row.currency)} = quotation ${money(row.totalAmt, row.currency)} ✓`
-            : `Traced ${money(t.tracedTotal, row.currency)} vs quotation ${money(row.totalAmt, row.currency)}`}
+        <div style={{ display: 'grid', gridTemplateColumns: TRACE_GRID, alignItems: 'center', columnGap: 6, marginTop: 5, paddingTop: 5, borderTop: '1px dashed #e2e8f0', fontSize: 10.5 }}>
+          <span />
+          <span style={{ color: '#94a3b8', fontWeight: 600 }}>
+            {t.sumMatchesTotal
+              ? 'Total = quotation'
+              : `${diff > 0 ? 'Over' : 'Short'} by ${money(Math.abs(diff), row.currency)}`}
+          </span>
+          <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontWeight: 700, color: t.sumMatchesTotal ? '#15803d' : '#b45309' }}>
+            {money(t.tracedTotal, row.currency)}
+          </span>
+          <span style={{ fontWeight: 800, color: '#15803d', textAlign: 'center' }}>{t.sumMatchesTotal ? '✓' : ''}</span>
         </div>
       )}
     </div>

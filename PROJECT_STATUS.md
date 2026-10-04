@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-04 (Two UI tidy-ups — SOA "My book" picker follow-up, and Quotation's "Invoice Source (traced)" cell).
+
+**SOA "My book" picker (`app/billing/soa/_components.tsx`, commit 4d7a9c5).** Vincent: "Chelsea 和Esther不需要归类部门, corporate 部门不需要分Malaysia的额外显示, 这个UI设计导致被遮盖了, 无法下滑和看完整". `picFilterGroups` now lists Management members as standalone names (no department header) and folds every "<Team> (Malaysia)" into its parent team — picker-only regrouping, `lib/staff-directory.ts`'s `team` values untouched. The dropdown was `position: absolute` inside an overflow-clipped card (bottom cut off, inner scroll unreachable); now portaled to `document.body` with `position: fixed`, right-aligned to the trigger, `maxHeight` capped to the remaining viewport — same pattern as `SoaDraftPopover`.
+
+**Quotation "Invoice Source (traced)" (`app/billing/quotation/page.tsx`).** Vincent: "设计的稍微整齐顺眼一点，现在感觉一堆内容堆积在一起". Traced invoices were inline chips wrapping side by side; now one invoice per line in a shared grid (marker | chip | right-aligned tabular amount | ✓), and the reconcile line is a dashed-separated total row on the same grid ("Total = quotation ✓" in green, or "Over/Short by S$x" with the traced total in amber). Display-only — trace data and match logic unchanged.
+
+**Verification.** `npx tsc --noEmit` clean for both. Not click-tested (no login in the Browser pane) — check on production after Vercel deploys.
+
+Previous entry follows.
+
 Last updated: 2026-10-04 (Diagnosed why the Dashboard shows "Late Filing never" — Vincent: "这边的late filling是什么情况", pointing at the Automation Health badge).
 
 **What's actually happening — confirmed against real data, not guessed.** Late Filing is NOT failing to run: every day since 2026-09-23 it has completed real work (906 companies checked, ~14-15 `late_filing_companies` rows refreshed, ~16-17 flagged, ~17-18 AR Reminder markers reconciled, finishes in a consistent ~120s), but EVERY one of those 11 runs also logged 4-5 silent write errors among roughly 16 different `errors++` sites in `app/api/late-filing/sync/route.ts`, none of which ever captured what actually failed or why — just a bare counter. `withAutomationRun` (`lib/automation-sync.ts`) marks the WHOLE run `status: 'failed'` the instant `errors > 0`, so the run has never once recorded a `status: 'success'` row since 09-23 — that's the literal reason the dashboard's `successAgeHours` is `null` and renders "never", even though the sync is doing the overwhelming majority of its job correctly every single day.
