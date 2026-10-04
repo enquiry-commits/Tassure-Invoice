@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
-import { getApprovedAccount, APPROVED_ACCOUNTS, allowedPagesFor } from '@/lib/approved-accounts';
+import { getApprovedAccount, APPROVED_ACCOUNTS } from '@/lib/approved-accounts';
+import { WORKSPACES } from '@/lib/workspaces';
 import { computeMyTasks } from '@/lib/my-tasks-data';
 import { generateMyTasksBrief } from '@/lib/my-tasks-brief';
 import { getRecentActivity } from '@/lib/recent-activity';
@@ -98,17 +99,24 @@ export async function GET(req: NextRequest) {
   // pattern as `brief` above.
   const recentActivity = await getRecentActivity(account.email).catch(() => []);
 
+  // Rewritten to Chinese + updated for the widened scope, 2026-09-22 —
+  // same "这个提醒的任务...没有做好" review. Still says plainly what's NOT
+  // covered (honesty stays the point of this line, not just its language)
+  // rather than implying the reminder is now complete. Since the department
+  // split (2026-10-04) a section the account's department can't open is
+  // left out, and the note names exactly which ones are shown.
+  const sections = [
+    'AR Reminder',
+    tasks.lateFiling && 'Late Filing',
+    tasks.soaCollections && 'SOA 欠款催收',
+    tasks.trademarkRenewals && '商标续期',
+  ].filter((s): s is string => !!s);
+  const scopeNote = sections.length === 4
+    ? 'My Tasks 目前覆盖 AR Reminder、Late Filing、SOA 欠款催收和商标续期——Nominee Director 复核和 Client Communications 待发邮件还没有纳入。'
+    : `${viewingAs ? `${viewingAs.name} 的账号` : '你的账号'}属于 ${WORKSPACES[account.workspace].title}——只显示该部门能打开的页面对应的任务：${sections.join('、')}。`;
+
   return NextResponse.json({
-    scope: tasks.arOnly ? 'ar-only' : 'full',
-    // Rewritten to Chinese + updated for the widened scope, 2026-09-22 —
-    // same "这个提醒的任务...没有做好" review. Still says plainly what's
-    // NOT covered (honesty stays the point of this line, not just its
-    // language) rather than implying the reminder is now complete.
-    scopeNote: tasks.arOnly
-      ? (viewingAs
-          ? `${viewingAs.name} 的账号只有 AR Reminder 权限——只显示 TA 的 AR Reminder 任务。`
-          : '你的账号只有 AR Reminder 权限——只显示你的 AR Reminder 任务。')
-      : 'My Tasks 目前覆盖 AR Reminder、Late Filing、SOA 欠款催收和商标续期——Nominee Director 复核和 Client Communications 待发邮件还没有纳入。',
+    scopeNote,
     generatedAt: todaySGT(),
     brief,
     recentActivity,
@@ -124,7 +132,7 @@ export async function GET(req: NextRequest) {
     // passing ?viewAs= never gets this list back (403 above, before this
     // point).
     viewableAccounts: realAccount.canViewAsOthers
-      ? APPROVED_ACCOUNTS.map(a => ({ email: a.email, name: a.name, restrictedTo: a.restrictedTo ?? null, allowedPages: allowedPagesFor(a) }))
+      ? APPROVED_ACCOUNTS.map(a => ({ email: a.email, name: a.name, workspaceTitle: WORKSPACES[a.workspace].title }))
       : undefined,
   });
 }

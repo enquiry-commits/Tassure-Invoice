@@ -3,202 +3,27 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense, useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, FileText, ListChecks, BarChart3, ShieldCheck, Newspaper, ScanLine } from 'lucide-react';
+import { ChevronDown, ChevronRight, ListChecks, BarChart3, ShieldCheck, Newspaper, ScanLine } from 'lucide-react';
+import { NAV_TREE, filterNav, navGroupIds, type NavNode as Node, type NavIcon } from '@/lib/nav-tree';
 
-// `icon` is a fallback for a level-1 entry that has no custom 3D PNG asset
-// yet (see NavImg below) — currently Proposal Generator (a link out to a
-// separate Vercel app, hence `external`) and My Tasks.
-type Node = { label: string; href?: string; img?: string; icon?: typeof FileText; external?: boolean; id?: string; children?: Node[] };
-
-// One tree. Level 1 nodes carry a 3D image icon; everything nested is icon-free
-// and indented with curved connector rails (see reference design).
-const tree: Node[] = [
-  { label: 'Dashboard', href: '/',          img: '/nav/dashboard.png' },
-  { label: 'My Tasks',  href: '/my-tasks',  icon: ListChecks },
-  { label: 'Companies', href: '/companies', img: '/nav/companies.png' },
-  {
-    id: 'master-list', label: 'Master List', img: '/nav/master-list.png',
-    children: [
-      {
-        id: 'active-clients', label: 'Active Clients',
-        children: [
-          { label: 'Active Client', href: '/master-list/active-clients' },
-          { label: 'Ad-Hoc',        href: '/master-list/ad-hoc' },
-          { label: 'MAS',           href: '/master-list/mas' },
-        ],
-      },
-      {
-        id: 'strike-off', label: 'Strike Off / Terminated',
-        children: [
-          { label: 'Strike Off',          href: '/master-list/strike-off' },
-          { label: 'Terminated Services', href: '/master-list/terminated' },
-          { label: 'EOT',                 href: '/master-list/eot' },
-          { label: 'Change Co Name',      href: '/master-list/name-change' },
-        ],
-      },
-      {
-        id: 'trademark', label: 'Trademark',
-        children: [
-          { label: 'Master Records', href: '/master-list/trademark/master-records' },
-          { label: 'In Progress',    href: '/master-list/trademark/in-progress' },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'billing', label: 'Billing System', img: '/nav/billing.png',
-    children: [
-      { label: 'Nominee Directors', href: '/nominee-directors' },
-      { label: 'Address Service',   href: '/address-service' },
-      { label: 'AR Reminder',       href: '/billing?tab=ar' },
-      { label: 'Late Filing',       href: '/late-filing' },
-      {
-        id: 'billing-drafts', label: 'Billing Drafts',
-        children: [
-          { label: 'TAB / TAC', href: '/billing?tab=billing' },
-          // ACC's own Accounts/Tax billing, separate from Chelsea's TAB/TAC
-          // flow above — a plain leaf, no restrictedTo (Vincent, 2026-09-05:
-          // "这个暂时先不限制，所有人都看得到").
-          { label: 'TAO',       href: '/billing/tao' },
-        ],
-      },
-      // Collections — every client with an unpaid balance, aged the same way
-      // as QuickBooks' own AR Aging report. Vincent, 2026-09-07: "把 SOA 放
-      // 成一个单独的2级标题,然后把 TAB/TAC/TAO分成3个不同的3级标题,数据分开"
-      // — its own level-2 group (sibling of Billing Drafts, not nested
-      // inside it), split into 3 separate level-3 pages, one per QuickBooks
-      // system — a TAB balance never shows on the TAC or TAO book. Label
-      // renamed from "SOA" to "Outstanding" same day, per Vincent — routes
-      // (/billing/soa/...) and the "SOA" name used internally (API,
-      // soa_owners, lib/soa*.ts, page titles) are untouched, this is purely
-      // the sidebar's own display text.
-      {
-        id: 'soa', label: 'Outstanding',
-        children: [
-          // Vincent, 2026-09-07: "在 Outstanding -TAB的上面加多一个3级标题
-          // （All）" — every TAB/TAC/TAO row together, un-deduplicated (see
-          // lib/soa-data.ts's computeAllSoaRows). Owner edits made here are
-          // the same soa_owners writes the 3 pages below make, not a copy.
-          { label: 'All', href: '/billing/soa/all' },
-          { label: 'TAB', href: '/billing/soa/tab' },
-          { label: 'TAC', href: '/billing/soa/tac' },
-          { label: 'TAO', href: '/billing/soa/tao' },
-        ],
-      },
-      {
-        id: 'client-communications', label: 'Email Status',
-        children: [
-          { label: 'Email Drafts', href: '/client-communications/campaigns' },
-          { label: 'History', href: '/client-communications/history' },
-        ],
-      },
-    ],
-  },
-  { label: 'Post Incorporate', href: '/post-incorporate', img: '/nav/post-incorporate.png' },
-  // Separate Vercel app (different domain — no shared session cookie), so
-  // this goes through an SSO handoff route instead of the raw URL: it signs
-  // a short-lived token for whoever's already logged in here, so Proposal
-  // Generator can log them in itself without a second Google screen.
-  { label: 'Proposal Generator', href: '/sso/proposal-generator', img: '/nav/proposal-generator.png', external: true },
-];
-
-// Appended only for the one account with admin:true (Vincent). Appearance
-// Settings, AI Learning and Activity Insights are governance tools, grouped
-// as level-2 entries instead of competing with the system's operational
-// level-1 navigation.
-//
-// Activity Insights moved in here 2026-09-09 (Vincent: "这个放在 Admin 内
-// 的 2级标题...并且只有Vincent 可以看到") — it used to be its own level-1
-// item, spliced in for every account with `canViewActivityInsights`
-// (Vincent/Cindy/Samuell/Yee Soon). Nesting it under Admin, which only ever
-// renders for `isAdmin` (Vincent), makes it Vincent-only in the nav; the
-// page (app/activity-insights/page.tsx) and its API
-// (app/api/activity/insights/route.ts) were updated to match — both now
-// gate on `admin` instead of `canViewActivityInsights`. That flag itself is
-// left alone on Cindy/Samuell/Yee Soon's accounts (lib/approved-accounts.ts)
-// since it still gates unrelated real features (the AI Learning candidates
-// cross-staff view) — only the Activity Insights page/nav moved, not the
-// flag's other meaning.
-const ADMIN_NODE: Node = {
-  id: 'admin', label: 'Admin', icon: ShieldCheck,
-  children: [
-    { label: 'Appearance Settings', href: '/admin/appearance' },
-    { label: 'AI Learning', href: '/ai-learning' },
-    { label: 'AI Quality', href: '/ai-quality' },
-    { label: 'Activity Insights', href: '/activity-insights' },
-  ],
+// The tree itself lives in lib/nav-tree.ts (shared with MobileNav). This file
+// only draws it: level 1 nodes carry a 3D image icon (or a lucide fallback
+// for entries with no custom PNG yet); everything nested is icon-free and
+// indented with curved connector rails (see reference design). What an
+// account sees is the tree filtered through its department workspace
+// (lib/workspaces.ts via AppShell's canOpen) — the same rule proxy.ts
+// enforces, so the menu never offers a page that would bounce.
+const ICONS: Record<NavIcon, typeof ListChecks> = {
+  'list-checks': ListChecks, newspaper: Newspaper, 'bar-chart': BarChart3, 'scan-line': ScanLine, 'shield-check': ShieldCheck,
 };
 
-// Spliced in right after My Tasks (2026-09-03) for accounts with
-// `canViewReports` (lib/approved-accounts.ts) — customer-profile analytics
-// for leadership, deliberately not part of `tree` for the same reason as
-// ADMIN_NODE above (only a handful of accounts ever see it).
-const REPORTS_NODE: Node = { label: 'Reports', href: '/reports', icon: BarChart3 };
+function LucideIcon({ name, size, style }: { name: NavIcon; size: number; style?: React.CSSProperties }) {
+  const Icon = ICONS[name];
+  return <Icon size={size} style={style} />;
+}
 
-// Added 2026-09-23 — Vincent: "我要单独做一个一级标题页面（SG Latest
-// News）在My Tasks 一级标题下方" (directly below My Tasks). Spliced in
-// AFTER Reports below so it lands at My-Tasks-index+1 and pushes Reports
-// down one, matching that literal wording — for the one account
-// (Vincent's) that has both flags today, order is My Tasks → SG Latest
-// News → Reports.
-const SG_NEWS_NODE: Node = { label: 'SG Latest News', href: '/sg-news', icon: Newspaper };
-
-// Added 2026-09-24 — Vincent: "我要多一个2级标题在Billing System, 这个2级标题
-// （Quotation）放在Billing Drafts 2级标题下方". A level-2 LEAF (one page, with
-// Source filter chips on the page itself) rather than a group with per-book
-// sub-pages: unlike Outstanding, the interesting split here is not by book.
-// Vincent-only for now (canViewQuotation), so it is spliced into the
-// 'billing' group in Sidebar() below instead of living in the static `tree`
-// every account sees — there is no per-child permission filtering anywhere
-// else in this file, only level-1 splices like Reports/SG News above.
-const QUOTATION_NODE: Node = { label: 'Quotation', href: '/billing/quotation' };
-
-// Added 2026-09-28 — Vincent: reads a client's receipts/invoices with
-// Claude vision and lets Account staff confirm a reconciled turnover total
-// (see app/turnover-ai/page.tsx, app/api/turnover-ai/*). Originally a
-// 3-sub-page group (Inbox/Review Queue/Summary); Vincent, once he saw it:
-// "这个能不能全部内容只在一个页面不要分散" — one page, not spread across
-// separate routes, so this is now a single level-1 LEAF like Post
-// Incorporate (the 3 sections became in-page tabs on that one page
-// instead). Gated on `canViewTurnoverAI` (Vincent-only for now).
-const TURNOVER_AI_NODE: Node = { label: 'Turnover AI', href: '/turnover-ai', icon: ScanLine };
-
-const groupIds = (nodes: Node[]): string[] =>
-  nodes.flatMap(n => (n.children ? [n.id!, ...groupIds(n.children)] : []));
-const SIDEBAR_GROUP_IDS = [...groupIds(tree), ADMIN_NODE.id!];
+const SIDEBAR_GROUP_IDS = navGroupIds(NAV_TREE);
 const firstLeaf = (n: Node): string => n.href ?? (n.children ? firstLeaf(n.children[0]) : '#');
-
-function findNode(nodes: Node[], href: string): Node | null {
-  for (const n of nodes) {
-    if (n.href === href) return n;
-    if (n.children) {
-      const found = findNode(n.children, href);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-// An account with `restrictedTo` set (lib/approved-accounts.ts) sees only
-// its allowed pages (`allowedPages` from /api/auth/me — its home page plus
-// `alsoAllowed`, e.g. AR Reminder + TAO Billing for the Accounting/Tax team
-// since 2026-10-04) plus My Tasks (2026-08-31 — every restricted account
-// gets a personalized My Tasks view too, scoped server-side to just what
-// their account already has access to; proxy.ts carries the matching routing
-// exception) — never the full tree with everything else hidden. Falls back
-// to the full tree if no href can be found (a stale value shouldn't lock
-// someone out of the whole nav).
-// A nested leaf's own label can be too terse once it stands alone at the top level.
-const STANDALONE_LABEL: Record<string, string> = { '/billing/tao': 'TAO Billing' };
-function level1For(restrictedTo: string | null | undefined, allowedPages?: readonly string[] | null): Node[] {
-  if (!restrictedTo) return tree;
-  const hrefs = allowedPages?.length ? allowedPages : [restrictedTo];
-  const nodes = hrefs.map(href => findNode(tree, href)).filter((n): n is Node => !!n);
-  if (!nodes.length) return tree;
-  const myTasks = findNode(tree, '/my-tasks');
-  const restrictedNodes = nodes.map(node => ({ label: (node.href && STANDALONE_LABEL[node.href]) || node.label, href: node.href, img: '/nav/billing.png' }));
-  return myTasks ? [...restrictedNodes, myTasks] : restrictedNodes;
-}
 
 const RAIL = 'rgba(255,255,255,0.18)';
 // Appearance Settings (lib/theme-tokens.ts) controls these two — previously
@@ -240,10 +65,9 @@ function Level1({ node, active, expanded, onToggle }:
     (e.currentTarget as HTMLElement).style.background = on ? HOVER_BG : 'transparent';
     (e.currentTarget as HTMLElement).style.color = on ? '#fff' : 'rgba(255,255,255,0.92)';
   };
-  const Icon = node.icon;
   const inner = (
     <>
-      {node.img ? <NavImg src={node.img} size={23} /> : Icon ? <Icon size={20} style={{ flexShrink: 0 }} /> : null}
+      {node.img ? <NavImg src={node.img} size={23} /> : node.icon ? <LucideIcon name={node.icon} size={20} style={{ flexShrink: 0 }} /> : null}
       <span style={{ flex: 1 }}>{node.label}</span>
       {onToggle && (expanded ? <ChevronDown size={15} style={{ opacity: 0.7 }} /> : <ChevronRight size={15} style={{ opacity: 0.7 }} />)}
     </>
@@ -364,7 +188,6 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
       <>
         {level1.map(n => {
           const active = n.href ? act(n.href) : false;
-          const Icon = n.icon;
           return (
             <Link key={n.id ?? n.href} href={firstLeaf(n)} title={n.label}
               target={n.external ? '_blank' : undefined} rel={n.external ? 'noopener noreferrer' : undefined}
@@ -378,7 +201,7 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
               onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = HOVER_BG; }}
               onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
             >
-              {n.img ? <NavImg src={n.img} size={24} /> : Icon ? <Icon size={21} /> : null}
+              {n.img ? <NavImg src={n.img} size={24} /> : n.icon ? <LucideIcon name={n.icon} size={21} /> : null}
             </Link>
           );
         })}
@@ -406,37 +229,11 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
   );
 }
 
-export default function Sidebar({ restrictedTo, allowedPages, isAdmin, canViewReports, canViewSgNews, canViewQuotation, canViewTurnoverAI }: { restrictedTo?: string | null; allowedPages?: readonly string[] | null; isAdmin?: boolean; canViewReports?: boolean; canViewSgNews?: boolean; canViewQuotation?: boolean; canViewTurnoverAI?: boolean }) {
+// `ready` is false until /api/auth/me has answered: the menu stays empty
+// rather than briefly showing pages outside the person's department.
+export default function Sidebar({ ready, canOpen }: { ready: boolean; canOpen: (href: string) => boolean }) {
   const [collapsed, setCollapsed] = useState(false);
-  let level1 = level1For(restrictedTo, allowedPages);
-  if (canViewReports && !restrictedTo) {
-    const myTasksIdx = level1.findIndex(n => n.href === '/my-tasks');
-    level1 = myTasksIdx >= 0
-      ? [...level1.slice(0, myTasksIdx + 1), REPORTS_NODE, ...level1.slice(myTasksIdx + 1)]
-      : [...level1, REPORTS_NODE];
-  }
-  if (canViewSgNews && !restrictedTo) {
-    const myTasksIdx = level1.findIndex(n => n.href === '/my-tasks');
-    level1 = myTasksIdx >= 0
-      ? [...level1.slice(0, myTasksIdx + 1), SG_NEWS_NODE, ...level1.slice(myTasksIdx + 1)]
-      : [...level1, SG_NEWS_NODE];
-  }
-  if (canViewQuotation && !restrictedTo) {
-    level1 = level1.map(n => {
-      if (n.id !== 'billing' || !n.children) return n;
-      const draftsIdx = n.children.findIndex(c => c.id === 'billing-drafts');
-      return {
-        ...n,
-        children: draftsIdx >= 0
-          ? [...n.children.slice(0, draftsIdx + 1), QUOTATION_NODE, ...n.children.slice(draftsIdx + 1)]
-          : [...n.children, QUOTATION_NODE],
-      };
-    });
-  }
-  if (canViewTurnoverAI && !restrictedTo) level1 = [...level1, TURNOVER_AI_NODE];
-  // The complete Admin group is intentionally Vincent-only and remains the
-  // final level-1 item in the sidebar.
-  if (isAdmin && !restrictedTo) level1 = [...level1, ADMIN_NODE];
+  const level1 = ready ? filterNav(NAV_TREE, canOpen) : [];
 
   useEffect(() => {
     if (localStorage.getItem('sidebar-collapsed') === 'true') setCollapsed(true);
@@ -476,7 +273,7 @@ export default function Sidebar({ restrictedTo, allowedPages, isAdmin, canViewRe
         <Suspense fallback={
           level1.map(n => (
             <div key={n.id ?? n.href} style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: 11, padding: collapsed ? '9px 0' : '8px 12px', margin: collapsed ? '0 6px' : '0 8px', color: '#fff' }}>
-              {n.img ? <NavImg src={n.img} size={collapsed ? 24 : 22} /> : n.icon ? <n.icon size={collapsed ? 21 : 20} /> : null}
+              {n.img ? <NavImg src={n.img} size={collapsed ? 24 : 22} /> : n.icon ? <LucideIcon name={n.icon} size={collapsed ? 21 : 20} /> : null}
               {!collapsed && <span className="font-semibold text-sm">{n.label}</span>}
             </div>
           ))

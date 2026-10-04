@@ -1,4 +1,5 @@
 import { canAccountOpen, type ApprovedAccount } from './approved-accounts';
+import { WORKSPACES } from './workspaces';
 
 // The My Tasks assistant's map of the app (app/api/assistant/route.ts renders
 // it into the static prompt's "System map" and uses it for the keyword
@@ -7,11 +8,13 @@ import { canAccountOpen, type ApprovedAccount } from './approved-accounts';
 // docs/INVARIANTS.md INV-AI-009). test-assistant-pages.ts fails when a real
 // app/**/page.tsx has no entry here.
 //
-// `access` must be the SAME gate proxy.ts / the page itself enforces: the
-// static map only flags the page "(restricted)", pageAccessLine() states per
-// request whether THIS account can open it, and pagesFor() hides it from the
-// keyword engine's navigation for everyone else. `desc` is what the model
-// tells a user the page is for — keep it to what the page actually does.
+// Who can open a page is decided by canAccountOpen() — the account's
+// department workspace plus, for a flag-gated page, its own flag (the same
+// rule proxy.ts enforces). `access` repeats a page's flag so the static,
+// shared map can mark it "(restricted)"; pageAccessLine() states per request
+// exactly which pages THIS account opens, and pagesFor() hides every other
+// one from the keyword engine's navigation. `desc` is what the model tells a
+// user the page is for — keep it to what the page actually does.
 //
 // Deliberately NOT `server-only`: pure data + string logic, so the test can
 // import it (same as lib/client-comms-sop.ts).
@@ -50,7 +53,7 @@ export const PAGES: SystemPage[] = [
   { label: 'My Tasks 我的任务',     href: '/my-tasks',                  kw: ['my tasks', '我的任务'], desc: "the user's own tasks (AR, Late Filing, SOA collections, trademarks) and this AI chat" },
   { label: 'Reports 报表',          href: '/reports',                   kw: ['reports', '报表'], access: account => !!account.canViewReports, desc: 'management analytics: client profile and mix, revenue and workload trends, with a weekly AI analysis' },
   { label: 'SG Latest News 新加坡资讯', href: '/sg-news',               kw: ['sg news', 'sg latest news', '新闻'], access: account => !!account.canViewSgNews, desc: 'daily digest of ACRA/IRAS/MOM/ICA/ISCA/CSIS updates and Straits Times/Business Times/Zaobao news, for Tassure staff' },
-  { label: 'Turnover AI 流水', href: '/turnover-ai', kw: ['turnover ai', 'turnover', '流水', '项目', '上传单据', '复核队列', '流水汇总'], access: account => !!account.canViewTurnoverAI, desc: "Projects list — one folder per client/job. Open a project to upload receipts/invoices (AI reads each file into individual receipts, up to 100 at once, any number of rounds), confirm/edit/reject each one (the only step that makes it count), and see its running turnover total, all on that project's own page. Originals and per-receipt detail are kept 3 days then cleared automatically; the confirmed total stays in the folder. A project can be deleted by staff; optional per-project GST breakout" },
+  { label: 'Turnover AI 流水', href: '/turnover-ai', kw: ['turnover ai', 'turnover', '流水', '项目', '上传单据', '复核队列', '流水汇总'], access: account => !!account.canViewTurnoverAI, desc: "Projects list (searchable by name) — one folder per client/job, renamable. Open a project to upload receipts/invoices (AI reads each file into individual receipts, up to 100 at once, any number of rounds); every receipt counts toward the project's running turnover total the moment it is read — no confirm step. Staff fix any field directly in the table (it saves on its own) and Ignore a duplicate/mistake to exclude it (Restore undoes that); High/Medium/Low confidence is only a hint where to double-check. Originals and per-receipt detail are kept 3 days then cleared automatically; the total stays in the folder. A project can be deleted by staff; optional per-project GST breakout" },
   { label: 'Proposal Generator',    href: '/sso/proposal-generator',    kw: ['proposal generator'], desc: 'opens the separate Proposal Generator app in a new tab, signed in automatically' },
   { label: 'Appearance Settings 外观设置', href: '/admin/appearance',  kw: ['appearance settings', '外观设置'], access: isAdmin, desc: 'system appearance settings' },
   { label: 'AI Learning',           href: '/ai-learning',               kw: ['ai learning'], access: isAdmin, desc: "review the assistant's learned-preference candidates before they become memories" },
@@ -58,14 +61,12 @@ export const PAGES: SystemPage[] = [
   { label: 'Activity Insights',     href: '/activity-insights',         kw: ['activity insights'], access: isAdmin, desc: 'staff usage analytics from recorded page visits and actions' },
 ];
 
-// Mirrors proxy.ts: an account with `restrictedTo` reaches only its allowed pages (canAccountOpen)
-// (plus My Tasks); every other page also needs its own `access` gate to pass.
+// Mirrors proxy.ts exactly: canAccountOpen() (department pages + flags), and
+// a gated entry's own `access` on top as a belt-and-braces repeat of its flag.
 export function canOpenPage(page: SystemPage, account: ApprovedAccount | null | undefined): boolean {
   if (!account) return !page.access;
-  if (account.restrictedTo) {
-    const url = new URL(page.href, 'https://app.local');
-    if (url.pathname !== '/my-tasks' && !canAccountOpen(account, url.pathname, url.searchParams)) return false;
-  }
+  const url = new URL(page.href, 'https://app.local');
+  if (!canAccountOpen(account, url.pathname, url.searchParams)) return false;
   return page.access ? page.access(account) : true;
 }
 
@@ -87,11 +88,7 @@ export function matchPage(t: string, account: ApprovedAccount | null | undefined
 
 export function pageAccessLine(account: ApprovedAccount | null | undefined): string {
   if (!account) return 'Page access: this user could not be identified — only link pages not marked (restricted).';
-  if (account.restrictedTo) {
-    return `Page access: this account is confined to ${pagesFor(account).map(p => p.label).join(', ')} — every other page is blocked for it, so never link or suggest one.`;
-  }
-  const gated = PAGES.filter(p => p.access);
-  const can = gated.filter(p => canOpenPage(p, account)).map(p => p.label);
-  const cannot = gated.filter(p => !canOpenPage(p, account)).map(p => p.label);
-  return `Page access for this user (restricted pages only): CAN open ${can.join(', ') || 'none'}; CANNOT open ${cannot.join(', ') || 'none'}.`;
+  const can = pagesFor(account).map(p => p.label);
+  const cannot = PAGES.filter(p => !canOpenPage(p, account)).map(p => p.label);
+  return `Page access — this account is in ${WORKSPACES[account.workspace].title}: CAN open ${can.join(', ') || 'none'}; CANNOT open ${cannot.join(', ') || 'none'} (blocked for this account — never link or suggest those).`;
 }

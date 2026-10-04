@@ -15,9 +15,7 @@ import {
 } from '@/components/assistant/ChatCards';
 import { fmtDate } from '@/lib/date';
 
-type SessionUser = { email: string; name: string; restrictedTo?: string | null; admin?: boolean };
-// How a restricted account's allowed pages read in the View-as list.
-const RESTRICTED_PAGE_LABEL: Record<string, string> = { '/billing?tab=ar': 'AR Reminder', '/billing/tao': 'TAO Billing' };
+type SessionUser = { email: string; name: string; admin?: boolean };
 
 type ArTask = {
   id: number; entityName: string; uen: string | null; fyeMonth: string; fyeYear: number;
@@ -44,7 +42,6 @@ type RecentActivityItem = {
   detail: string;
 };
 type MyTasksResponse = {
-  scope: 'full' | 'ar-only';
   scopeNote: string;
   // Vincent, 2026-09-08: "每天打开My Tasks 的时候 AI助手会提醒今天可能会
   // 需要完成的任务" — a short daily-priority sentence (lib/my-tasks-brief.ts),
@@ -59,6 +56,8 @@ type MyTasksResponse = {
   // caseworkers) — the empty state below reads differently for each.
   everAssigned: boolean;
   arReminder: { overdue: ArTask[]; staleOverdue: ArTask[]; dueSoon: ArTask[] };
+  // Each null when this account's department can't open that section's
+  // page (lib/my-tasks-data.ts) — the section's card and table are hidden.
   lateFiling: { needsAttention: LateFilingTask[] } | null;
   soaCollections: SoaTask[] | null;
   trademarkRenewals: TrademarkTask[] | null;
@@ -71,7 +70,7 @@ type MyTasksResponse = {
   // canViewAsOthers — see app/api/my-tasks/route.ts's own comment. Absent
   // (not just empty) for everyone else, so its mere presence is what
   // gates the picker below.
-  viewableAccounts?: { email: string; name: string; restrictedTo: string | null; allowedPages?: string[] | null }[];
+  viewableAccounts?: { email: string; name: string; workspaceTitle: string }[];
 };
 
 // Vincent, 2026-09-08, on the FIRST version of this banner (before the
@@ -633,7 +632,7 @@ export default function MyTasksPage() {
             <option value="">View as: Me ({user?.name})</option>
             {data.viewableAccounts.filter(a => a.email !== user?.email).map(a => (
               <option key={a.email} value={a.email}>
-                View as: {a.name}{a.restrictedTo ? ` (${(a.allowedPages ?? [a.restrictedTo]).map(p => RESTRICTED_PAGE_LABEL[p] ?? p).join(' + ')} only)` : ''}
+                View as: {a.name} ({a.workspaceTitle})
               </option>
             ))}
           </select>
@@ -978,13 +977,13 @@ export default function MyTasksPage() {
                     <MetricCard onClick={() => setCat('ALL')} active={cat === 'ALL'} value={counts?.total ?? 0} label="All Tasks" sub="AR, Late Filing, SOA & Trademark" icon={<ListChecks size={16} />} color="#1e3a5f" ariaLabel="Show all tasks" />
                     <MetricCard onClick={() => setCat('overdue')} active={cat === 'overdue'} value={(counts?.arOverdue ?? 0) + (counts?.arStaleOverdue ?? 0)} label="AR Overdue" sub="past due, not filed" icon={<AlertTriangle size={16} />} color="#dc2626" ariaLabel="Filter by AR overdue" />
                     <MetricCard onClick={() => setCat('dueSoon')} active={cat === 'dueSoon'} value={counts?.arDueSoon ?? 0} label="AR Due Soon" sub="due within 14 days" icon={<Clock size={16} />} color="#b45309" ariaLabel="Filter by AR due soon" />
-                    {data?.scope === 'full' && (
+                    {data?.lateFiling && (
                       <MetricCard onClick={() => setCat('lateFiling')} active={cat === 'lateFiling'} value={counts?.lateFiling ?? 0} label="Late Filing" sub="flagged, mine to chase" icon={<CalendarClock size={16} />} color="#7c3aed" ariaLabel="Filter by Late Filing" />
                     )}
-                    {data?.scope === 'full' && (
+                    {data?.soaCollections && (
                       <MetricCard onClick={() => setCat('soaCollections')} active={cat === 'soaCollections'} value={counts?.soaCollections ?? 0} label="SOA Collections" sub="money owed, mine to chase" icon={<AlertTriangle size={16} />} color="#0f766e" ariaLabel="Filter by SOA collections" />
                     )}
-                    {data?.scope === 'full' && (
+                    {data?.trademarkRenewals && (
                       <MetricCard onClick={() => setCat('trademarkRenewals')} active={cat === 'trademarkRenewals'} value={counts?.trademarkRenewals ?? 0} label="Trademark Renewals" sub="expiring within 180 days" icon={<CalendarClock size={16} />} color="#a16207" ariaLabel="Filter by Trademark renewals" />
                     )}
                   </div>
@@ -1022,9 +1021,9 @@ export default function MyTasksPage() {
                         </>
                       )}
                       {showDueSoon && arRows && <ArTaskTable rows={arRows.dueSoon} title="AR Due Soon" tone="warning" />}
-                      {showLate && data?.scope === 'full' && <LateFilingTable rows={lateRows} />}
-                      {showSoa && data?.scope === 'full' && <SoaTaskTable rows={soaRows} />}
-                      {showTrademark && data?.scope === 'full' && <TrademarkTaskTable rows={trademarkRows} />}
+                      {showLate && data?.lateFiling && <LateFilingTable rows={lateRows} />}
+                      {showSoa && data?.soaCollections && <SoaTaskTable rows={soaRows} />}
+                      {showTrademark && data?.trademarkRenewals && <TrademarkTaskTable rows={trademarkRows} />}
                     </>
                   )}
                 </>

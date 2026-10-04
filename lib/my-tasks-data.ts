@@ -6,7 +6,7 @@ import { findStaffEmails } from './staff-directory';
 import { normalize } from './company-name';
 import { computeAllSoaRows, effectiveOwner } from './soa-data';
 import { getTrademarkSummary } from './trademark-lookup';
-import type { ApprovedAccount } from './approved-accounts';
+import { canAccountOpen, type ApprovedAccount } from './approved-accounts';
 import type { QbCompany } from './quickbooks';
 
 // Shared by GET /api/my-tasks (the on-screen list) and GET /api/assistant's
@@ -38,7 +38,13 @@ import type { QbCompany } from './quickbooks';
 // this codebase yet) — see docs/CURRENT_STATE.md's Pending improvements
 // for why those still need a real decision from Vincent before being added
 // the same way.
-const AR_ONLY_RESTRICTION = '/billing?tab=ar';
+//
+// Each section beyond AR Reminder appears only when the account's
+// department opens that section's own page (the 2026-08-31 rule: My Tasks is
+// scoped "to only the areas their account already has access to") — read
+// through canAccountOpen() since the department split (2026-10-04), not a
+// string comparison against the old AR-only `restrictedTo`, which would have
+// silently handed TCS ACCOUNT/TAX every section the moment that field went.
 const DUE_SOON_DAYS = 14;
 const TRADEMARK_EXPIRING_SOON_DAYS = 180;
 
@@ -69,17 +75,15 @@ export type SoaTask = { companyName: string; qbCompany: QbCompany; totalOutstand
 export type TrademarkTask = { companyName: string; applicationNumber: string | null; markExpiredDate: string; daysUntilDue: number };
 
 export type MyTasksData = {
-  arOnly: boolean;
   arReminder: {
     overdue: Record<string, unknown>[];
     staleOverdue: Record<string, unknown>[];
     dueSoon: Record<string, unknown>[];
   };
+  // Each of these three is null (not computed at all — no extra queries)
+  // when the account's department can't open that section's page: Late
+  // Filing, Outstanding, Trademark.
   lateFiling: { needsAttention: Record<string, unknown>[] } | null;
-  // Both null for an AR-only restricted account, same gate as lateFiling
-  // above — those 6 accounts' only other page is AR Reminder itself, so
-  // there is no reason to spend the extra queries computing sections they
-  // could never have seen anywhere else in the app either.
   soaCollections: SoaTask[] | null;
   trademarkRenewals: TrademarkTask[] | null;
   counts: {
@@ -101,7 +105,13 @@ export type MyTasksData = {
 };
 
 export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksData> {
-  const arOnly = account.restrictedTo === AR_ONLY_RESTRICTION;
+  const opens = (href: string) => {
+    const url = new URL(href, 'https://app.local');
+    return canAccountOpen(account, url.pathname, url.searchParams);
+  };
+  const showLateFiling = opens('/late-filing');
+  const showSoa = opens('/billing/soa/all');
+  const showTrademark = opens('/master-list/trademark/master-records');
   const supabase = createAdminClient();
   const today = todaySGT();
   const thisYear = thisYearSGT();
@@ -144,7 +154,7 @@ export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksD
   dueSoon.sort(sortByDue);
 
   let lateFiling: { needsAttention: Record<string, unknown>[] } | null = null;
-  if (!arOnly) {
+  if (showLateFiling) {
     const { data: lateRows, error: lateError } = await supabase
       .from('late_filing_companies')
       .select('id, company_name, uen, financial_year_end, next_agm_due_date, remarks, mirrored_ar_reminder_id')
@@ -186,7 +196,7 @@ export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksD
   // features already fan out from (docs/FEATURE_MAP.md), so this can never
   // silently disagree with what the SOA/Outstanding pages themselves show.
   let soaCollections: SoaTask[] | null = null;
-  if (!arOnly) {
+  if (showSoa) {
     const allSoaRows = await computeAllSoaRows();
     soaCollections = allSoaRows
       .filter(row => row.totalOutstanding > 0 && findStaffEmails(effectiveOwner(row)).includes(account.email))
@@ -203,7 +213,7 @@ export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksD
   // getTrademarkSummary()'s own existing 180-day window, not a new
   // threshold invented here.
   let trademarkRenewals: TrademarkTask[] | null = null;
-  if (!arOnly) {
+  if (showTrademark) {
     const { expiringSoon } = await getTrademarkSummary(TRADEMARK_EXPIRING_SOON_DAYS);
     if (expiringSoon.length) {
       const { data: companyRows } = await supabase.from('companies').select('company_name, pic, sec_pic');
@@ -222,7 +232,6 @@ export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksD
   }
 
   return {
-    arOnly,
     arReminder: { overdue, staleOverdue, dueSoon },
     lateFiling,
     soaCollections,

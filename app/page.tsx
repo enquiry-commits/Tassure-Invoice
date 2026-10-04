@@ -9,6 +9,7 @@ import {
   BriefcaseBusiness, Sparkles, FileSpreadsheet, Download, ChevronDown,
 } from 'lucide-react';
 import QBConnectButton from '@/components/QBConnectButton';
+import { useSession } from '@/components/SessionContext';
 import { Donut, VBars, HBars } from '@/components/dashboard/Charts';
 import { REPORT_COLORS } from '@/lib/chart-colors';
 
@@ -103,12 +104,17 @@ function Card({ title, eyebrow, icon, children, action, style }: {
   );
 }
 
+// The Dashboard's numbers are company-wide and shared by every department
+// ("数据还是共通的"), but its links only go where the viewer's department can
+// actually go (lib/workspaces.ts) — a card/action pointing at a page outside
+// it renders as plain, non-clickable, instead of bouncing them back home.
 function Kpi({ label, value, sub, Icon, tint, href }: {
   label: string; value: number | string; sub: string; Icon: typeof Building2; tint: string; href: string;
 }) {
+  const { canOpen } = useSession();
   return (
     <MetricCard
-      href={href}
+      href={canOpen(href) ? href : undefined}
       className="dashboard-kpi"
       value={value}
       label={label}
@@ -122,8 +128,11 @@ function Kpi({ label, value, sub, Icon, tint, href }: {
 function ActionItem({ title, description, value, href, color, background, Icon }: {
   title: string; description: string; value: number | string; href: string; color: string; background: string; Icon: typeof AlertTriangle;
 }) {
-  return (
-    <Link href={href} className="dashboard-action" style={{ display: 'grid', gridTemplateColumns: '38px 1fr auto', alignItems: 'center', gap: 12, padding: '13px 0', textDecoration: 'none', borderBottom: '1px solid #eef2f6' }}>
+  const { canOpen } = useSession();
+  const linked = canOpen(href);
+  const style: React.CSSProperties = { display: 'grid', gridTemplateColumns: '38px 1fr auto', alignItems: 'center', gap: 12, padding: '13px 0', textDecoration: 'none', borderBottom: '1px solid #eef2f6' };
+  const inner = (
+    <>
       <span style={{ width: 38, height: 38, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', color, background }}><Icon size={17} /></span>
       <span>
         <span style={{ display: 'block', fontSize: 12.5, fontWeight: 750, color: DASHBOARD_COLORS.ink }}>{title}</span>
@@ -131,13 +140,18 @@ function ActionItem({ title, description, value, href, color, background, Icon }
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <strong style={{ fontSize: 19, color, letterSpacing: '-.02em' }}>{value}</strong>
-        <ArrowRight size={13} style={{ color: '#cbd5e1' }} />
+        {linked && <ArrowRight size={13} style={{ color: '#cbd5e1' }} />}
       </span>
-    </Link>
+    </>
   );
+  return linked
+    ? <Link href={href} className="dashboard-action" style={style}>{inner}</Link>
+    : <div style={style}>{inner}</div>;
 }
 
 function TextLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const { canOpen } = useSession();
+  if (!canOpen(href)) return null;
   return <Link href={href} style={{ fontSize: 11.5, color: DASHBOARD_COLORS.teal, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>{children}<ArrowRight size={12} /></Link>;
 }
 

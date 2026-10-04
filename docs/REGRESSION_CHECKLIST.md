@@ -115,10 +115,12 @@ Log in as a staff member with `pic`/`acc_pic`/`tax_pic` assignments
 including at least one alias/initial value (e.g. "YH", "Kah Ye"). Confirm
 `/my-tasks` shows exactly their rows (all three PIC fields checked) and
 excludes `late_filing_companies` rows with no `mirrored_ar_reminder_id`.
-Log in as one of the 6 AR-Reminder-restricted accounts — confirm
-`/my-tasks` is reachable, the sidebar shows exactly two items, the
-response's `lateFiling` is `null` (not empty), and `/companies/[id]`
-stays unreachable (redirects to `/billing?tab=ar`, unchanged).
+Since the department split (2026-10-04) My Tasks shows a section only if
+the account's department opens that section's page: log in as a TCS
+ACCOUNT or TAX account (e.g. Jay Tay) — confirm the AR and SOA Collections
+sections show, the response's `lateFiling` and `trademarkRenewals` are
+`null` (not empty), and the scope note names "TCS ACCOUNT"; as TCS FINANCE
+(Chelsea) all four sections show.
 **Guards:** none yet in `docs/INVARIANTS.md` — this is the first feature
 built on PIC-based task attribution; add an INV-PIC entry here if a real
 attribution bug is ever found.
@@ -150,12 +152,19 @@ Separately: after ANY future change to `ApprovedAccount` gating logic in
 every account that should have it — this exact class of regression shipped
 once already (2026-09-02: switching My Tasks' View-As gate from `admin` to
 the new `canViewAsOthers` silently dropped Vincent's own access, since his
-account only had `admin: true` at the time). Since 2026-10-04 also run
-`npx tsx test-account-access.ts` (`ALL OK`): the 8 Accounting/Tax accounts
-(`restrictedTo` + `alsoAllowed`) open exactly AR Reminder + TAO Billing
-(+ My Tasks) — log in as one (e.g. Jay Tay) and confirm the sidebar shows
-those three, `/billing/tao` opens, and `/billing?tab=billing` or
-`/companies` sends them back to AR Reminder.
+account only had `admin: true` at the time). Since 2026-10-04 (department
+split, INV-DATA-069) also run `npx tsx test-account-access.ts` and
+`npx tsx test-assistant-pages.ts` (`ALL OK` / `ALL PASSED`): every one of
+the 21 accounts opens exactly its department's routes. Then log in as one
+account per department and confirm the header title (TCS FINANCE, TCS
+ACCOUNT, …), the sidebar AND the phone menu: Jay Tay (ACCOUNT) sees
+Dashboard, My Tasks, Companies, Billing System (AR Reminder, Billing Drafts
+TAB/TAC + TAO, Quotation, Outstanding ×4) and Turnover AI, lands on AR
+Reminder, and `/late-filing` sends him back there; Clarence (TAX) the same
+without Turnover AI; Chelsea (FINANCE) has Master List but `/post-incorporate`
+sends her to the Dashboard. As Vincent, 切换部门 → TCS FINANCE shows
+"预览中" and Finance's menu while every page still opens for him; Cindy's
+picker has no TCS ADMIN.
 **Guards:** none yet in `docs/INVARIANTS.md` — Reports is new; the
 permission-flag-independence lesson above is currently only recorded here
 and in `PROJECT_STATUS.md`'s 2026-09-02 entry.

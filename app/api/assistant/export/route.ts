@@ -18,9 +18,9 @@ import type { CompanyListFilters } from '@/lib/company-list-lookup';
  * companyListTool() in ../route.ts.
  *
  * Permissions mirror the PAGE each list belongs to, using the same
- * canAccountOpen() check the assistant's own billing tools use — a
- * restricted account (restrictedTo: '/billing?tab=ar') must not be able to
- * download the full client roster just because chat can compose the query.
+ * canAccountOpen() check the assistant's own billing tools use — an account
+ * whose department can't open a list's page (lib/workspaces.ts) must not be
+ * able to download it just because chat can compose the query.
  */
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';

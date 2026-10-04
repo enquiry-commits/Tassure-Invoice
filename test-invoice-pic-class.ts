@@ -127,7 +127,7 @@ console.log('\n--- TAO: QuickBooks\' own settings restored ("尽量还原QB本�
   check('every account whose name is a TAO Location has it as its TAO Location (17)', withTao.length === 17 && withTao.every(a => a.qbLocations!.TAO === a.name && TAO_LOCATIONS.has(a.name))
     && APPROVED_ACCOUNTS.filter(a => TAO_LOCATIONS.has(a.name)).every(a => a.qbLocations?.TAO === a.name), withTao.map(a => a.name).join(', '));
   check('… and adding it changed no TAB / TAC Location and no permission', (APPROVED_ACCOUNTS.find(a => a.name === 'Hoo Seng Xin')?.qbLocations?.TAC === 'Seng Xin')
-    && APPROVED_ACCOUNTS.filter(a => a.restrictedTo).length === 8 && !!APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.admin && !APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.qbLocations?.TAO);
+    && APPROVED_ACCOUNTS.filter(a => a.workspace === 'account' || a.workspace === 'tax').length === 8 && !!APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.admin && !APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.qbLocations?.TAO);
 }
 
 console.log('\n--- source guards: the routes and the popup use the shared rules ---');

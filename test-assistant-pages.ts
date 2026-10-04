@@ -3,9 +3,9 @@
 // — it had simply never been added to this map. Pins:
 //   1. every real app/**/page.tsx has an entry (a new page that isn't added
 //      fails here instead of being silently denied by the assistant);
-//   2. every page proxy.ts hard-blocks carries the SAME gate in `access`;
-//   3. real accounts see exactly the pages they can open (incl. the
-//      AR-Reminder-only accounts);
+//   2. every flag-gated page rule (lib/workspaces.ts — the rule proxy.ts
+//      enforces) carries the SAME gate in `access`, and only those do;
+//   3. real accounts see exactly the pages their department opens;
 //   4. keyword navigation picks the most specific page.
 //
 // Run: npx tsx test-assistant-pages.ts
@@ -13,6 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import { PAGES, canOpenPage, pagesFor, matchPage, pageAccessLine } from './lib/assistant-pages';
 import { getApprovedAccount, type ApprovedAccount } from './lib/approved-accounts';
+import { pageRuleFor } from './lib/workspaces';
 
 let fail = 0;
 const check = (label: string, cond: boolean, detail = '') => {
@@ -50,20 +51,18 @@ for (const p of PAGES) {
 }
 check('hrefs are unique', new Set(PAGES.map(p => p.href)).size === PAGES.length);
 
-console.log('\n--- proxy.ts hard-blocks match each entry\'s access gate ---');
-const proxySource = fs.readFileSync(path.join(process.cwd(), 'proxy.ts'), 'utf8');
-const gates = [
-  ...[...proxySource.matchAll(/path === '([^']+)' && !account\.(\w+)/g)].map(m => ({ path: m[1], flag: m[2], prefix: false })),
-  ...[...proxySource.matchAll(/path\.startsWith\('([^']+)'\) && !account\.(\w+)/g)].map(m => ({ path: m[1], flag: m[2], prefix: true })),
-];
-check('found the proxy.ts gates to compare against', gates.length >= 4, `${gates.length}`);
-const bare: ApprovedAccount = { name: 'Test Staff', email: 'test@example.com' };
-for (const gate of gates) {
-  const entries = PAGES.filter(p => gate.prefix ? pathnameOf(p.href).startsWith(gate.path) : pathnameOf(p.href) === gate.path);
-  check(`${gate.path} (${gate.flag}) has a map entry`, entries.length > 0);
-  for (const e of entries) {
-    check(`${e.href}: blocked without ${gate.flag}`, !canOpenPage(e, bare));
-    check(`${e.href}: open with ${gate.flag}`, canOpenPage(e, { ...bare, [gate.flag]: true } as ApprovedAccount));
+console.log('\n--- each entry\'s access gate matches the page rule proxy.ts enforces ---');
+// An admin-workspace test account, so only the page's own flag decides.
+const bare: ApprovedAccount = { name: 'Test Staff', email: 'test@example.com', workspace: 'admin' };
+for (const p of PAGES) {
+  const url = new URL(p.href, 'https://app.local');
+  const gate = pageRuleFor(url.pathname, url.searchParams)?.gate;
+  if (gate) {
+    check(`${p.href}: marked restricted (${gate})`, !!p.access);
+    check(`${p.href}: blocked without ${gate}`, !canOpenPage(p, bare));
+    check(`${p.href}: open with ${gate}`, canOpenPage(p, { ...bare, [gate]: true }));
+  } else {
+    check(`${p.href}: not marked restricted (no per-account flag)`, !p.access);
   }
 }
 
@@ -72,22 +71,24 @@ const vincent = getApprovedAccount('vincent@tassure.com');
 const chelsea = getApprovedAccount('chelsea@tassure.com');
 const cindy = getApprovedAccount('cindyzhang@tassure.com');
 const jay = getApprovedAccount('jaytay@tassure.com');
-check('test accounts exist', !!vincent && !!chelsea && !!cindy && !!jay);
+const clarence = getApprovedAccount('clarencesaw@tassure.com');
+check('test accounts exist', !!vincent && !!chelsea && !!cindy && !!jay && !!clarence);
 const labels = (a: ApprovedAccount | null) => pagesFor(a).map(p => p.href);
 check('Vincent can open every page', pagesFor(vincent).length === PAGES.length);
-const GATED_FOR_STAFF = ['/billing/quotation', '/reports', '/sg-news', '/turnover-ai', '/admin/appearance', '/ai-learning', '/ai-quality', '/activity-insights'];
-check('Chelsea cannot open any gated page', GATED_FOR_STAFF.every(h => !labels(chelsea).includes(h)), labels(chelsea).filter(h => GATED_FOR_STAFF.includes(h)).join(', '));
-check('Chelsea can open the ordinary pages', ['/companies', '/billing/soa/all', '/billing/tao', '/master-list/eot', '/post-incorporate', '/my-tasks'].every(h => labels(chelsea).includes(h)));
-check('Cindy can open Reports', labels(cindy).includes('/reports'));
-check('Cindy cannot open Quotation or Activity Insights (admin-only page)', !labels(cindy).includes('/billing/quotation') && !labels(cindy).includes('/activity-insights'));
-// Accounting/Tax team (2026-10-04): AR Reminder + TAO Billing, where they issue TAO invoices.
-check('Jay (Accounting) sees exactly AR Reminder + TAO Billing + My Tasks', JSON.stringify(labels(jay).sort()) === JSON.stringify(['/billing/tao', '/billing?tab=ar', '/my-tasks']), labels(jay).join(', '));
+// TCS FINANCE (2026-10-04): Billing System (incl. Quotation) + Master List, not Post Incorporate / Proposal Generator.
+check('Chelsea (Finance) opens Companies, Outstanding, TAO, Master List, Quotation, My Tasks', ['/companies', '/billing/soa/all', '/billing/tao', '/master-list/eot', '/billing/quotation', '/my-tasks'].every(h => labels(chelsea).includes(h)));
+check('Chelsea cannot open Post Incorporate, Proposal Generator, Reports, SG News, Turnover AI or the admin pages', ['/post-incorporate', '/sso/proposal-generator', '/reports', '/sg-news', '/turnover-ai', '/admin/appearance', '/ai-learning', '/ai-quality', '/activity-insights'].every(h => !labels(chelsea).includes(h)), labels(chelsea).join(', '));
+check('Cindy (Management) opens Reports and Quotation', labels(cindy).includes('/reports') && labels(cindy).includes('/billing/quotation'));
+check('Cindy cannot open Turnover AI, SG News or Activity Insights', ['/turnover-ai', '/sg-news', '/activity-insights'].every(h => !labels(cindy).includes(h)));
+const ACC_TAX_PAGES = ['/', '/billing/quotation', '/billing/soa/all', '/billing/soa/tab', '/billing/soa/tac', '/billing/soa/tao', '/billing/tao', '/billing?tab=ar', '/billing?tab=billing', '/companies', '/my-tasks'];
+check('Jay (TCS ACCOUNT) sees exactly Dashboard, Companies, AR Reminder, Billing Drafts, Quotation, Outstanding, My Tasks, Turnover AI', JSON.stringify(labels(jay).sort()) === JSON.stringify([...ACC_TAX_PAGES, '/turnover-ai'].sort()), labels(jay).join(', '));
+check('Clarence (TCS TAX) sees the same minus Turnover AI', JSON.stringify(labels(clarence).sort()) === JSON.stringify([...ACC_TAX_PAGES].sort()), labels(clarence).join(', '));
 check('unidentified caller sees no gated page', pagesFor(null).every(p => !p.access));
 
 console.log('\n--- page-access line ---');
-check('Vincent: nothing blocked', pageAccessLine(vincent).includes('CANNOT open none'));
-check('Chelsea: nothing gated open', pageAccessLine(chelsea).includes('CAN open none'));
-check('Jay: confined line names both pages', pageAccessLine(jay).includes('confined to') && pageAccessLine(jay).includes('AR Reminder') && pageAccessLine(jay).includes('TAO Billing'));
+check('Vincent: nothing blocked', pageAccessLine(vincent).includes('TCS ADMIN') && pageAccessLine(vincent).includes('CANNOT open none'));
+check('Chelsea: department named, Post Incorporate blocked', pageAccessLine(chelsea).includes('TCS FINANCE') && /CANNOT open .*Post Incorporate/.test(pageAccessLine(chelsea)));
+check('Jay: department named, AR Reminder and TAO Billing open, Late Filing blocked', pageAccessLine(jay).includes('TCS ACCOUNT') && /CAN open .*AR Reminder.*TAO Billing.*; CANNOT/.test(pageAccessLine(jay)) && /CANNOT open .*Late Filing/.test(pageAccessLine(jay)));
 
 console.log('\n--- keyword navigation picks the most specific page ---');
 const nav = (t: string, a: ApprovedAccount | null, min = 1) => matchPage(t, a, min)?.href ?? null;
@@ -98,8 +99,11 @@ check('"tao billing" → TAO Billing, not Billing Drafts', nav('tao billing', vi
 check('"trademark in progress" → In Progress', nav('trademark in progress', vincent) === '/master-list/trademark/in-progress');
 check('"开单草稿" still → Billing Drafts', nav('开单草稿', chelsea) === '/billing?tab=billing');
 check('"late filing" still → Late Filing', nav('late filing', chelsea) === '/late-filing');
-check('Chelsea asking for quotation gets no link to it', nav('quotation 怎么用', chelsea, 2) !== '/billing/quotation');
+check('Chelsea asking for quotation gets it (open to every department since 2026-10-04)', nav('quotation 怎么用', chelsea, 2) === '/billing/quotation');
 check('Vincent asking for quotation gets it', nav('quotation 怎么用', vincent, 2) === '/billing/quotation');
+check('Jay asking for late filing gets no link to it (not a TCS ACCOUNT page)', nav('late filing', jay) !== '/late-filing');
+check('Clarence asking for turnover gets no Turnover AI link (TCS TAX has none)', nav('turnover ai', clarence) !== '/turnover-ai');
+check('Jay asking for turnover gets Turnover AI', nav('turnover ai', jay) === '/turnover-ai');
 
 console.log(`\n=== ${fail === 0 ? 'ALL PASSED' : `${fail} FAILURE(S)`} ===`);
 process.exit(fail === 0 ? 0 : 1);

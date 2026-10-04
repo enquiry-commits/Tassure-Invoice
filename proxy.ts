@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
-import { getApprovedAccount, canAccountOpen } from '@/lib/approved-accounts';
+import { getApprovedAccount, canAccountOpen, workspaceHome } from '@/lib/approved-accounts';
 
 // Intuit cannot carry a Tassure Google session. The webhook route is public at
 // the session layer and authenticates the exact raw request body with Intuit's
@@ -67,45 +67,19 @@ export async function proxy(req: NextRequest) {
     if (isApi) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     return NextResponse.redirect(new URL('/login', req.url));
   }
-  // AI-learning governance is Vincent-only. Hiding the sidebar entry is not
-  // sufficient: reject direct URL navigation for every non-admin account too.
-  if (!isApi && path === '/ai-learning' && !account.admin) {
-    return NextResponse.redirect(new URL('/', req.url));
-  }
-  // "SG Latest News" (added 2026-09-23) — Vincent, on the new page: "目前
-  // 由于在开发阶段，我要你只开放权限给 Vincent一个人先可以看到，其他人先隐
-  // 藏起来". Same hard middleware block as /ai-learning above, not just a
-  // hidden sidebar entry — direct URL navigation must also be rejected for
-  // everyone else while this stays in development.
-  if (!isApi && path === '/sg-news' && !account.canViewSgNews) {
-    return NextResponse.redirect(new URL('/', req.url));
-  }
-  // Billing System › Quotation (added 2026-09-24) — Vincent-only while the
-  // Estimate → invoice trace is being checked against real data. Same hard
-  // middleware block as /sg-news above, not just a hidden sidebar entry.
-  if (!isApi && path === '/billing/quotation' && !account.canViewQuotation) {
-    return NextResponse.redirect(new URL('/', req.url));
-  }
-  // Turnover AI (added 2026-09-28) — Vincent-only while it's new. Same hard
-  // middleware block as /billing/quotation above. Covers both the Projects
-  // list (/turnover-ai) and a project's own detail page
-  // (/turnover-ai/project/:id, added 2026-10-04 — see that page's own
-  // header comment for why Projects replaced the old Inbox/Review/Summary
-  // tabs).
-  if (!isApi && path.startsWith('/turnover-ai') && !account.canViewTurnoverAI) {
-    return NextResponse.redirect(new URL('/', req.url));
-  }
-  // Some accounts only see one page (Vincent, 2026-08-17 — an Accounting-team
-  // group confined to AR Reminder). Page navigation only, same as the rest of
-  // this file: API routes stay reachable so the allowed page's own fetches
-  // (and shared ones like /api/auth/me) keep working.
-  // /my-tasks is an explicit, deliberate exception (2026-08-31): every
-  // restricted account still gets a personalized My Tasks view, scoped by
-  // app/api/my-tasks/route.ts itself (not by this file) to only the areas
-  // their account already has access to — this widens which PAGE they can
-  // reach, never which DATA they can see.
-  if (!isApi && account.restrictedTo && path !== '/my-tasks' && !canAccountOpen(account, path, req.nextUrl.searchParams)) {
-    return NextResponse.redirect(new URL(account.restrictedTo, req.url));
+  // Every page is opened through ONE rule: the account's department
+  // workspace (lib/workspaces.ts) plus, for a gated page, its own flag —
+  // admin for the Admin pages and AI Learning, canViewSgNews, canViewQuotation,
+  // canViewTurnoverAI (which used to be four separate hard blocks here), and
+  // the page list itself (which replaced the Accounting/Tax team's
+  // `restrictedTo`, 2026-08-17 → 2026-10-04). Vincent, 2026-10-04: a page
+  // outside the list is really blocked, not just hidden from the menu. Page
+  // navigation only: API routes stay reachable — the data stays shared
+  // across departments ("数据还是共通的，只是显示的区别"), and the pages a
+  // department does open still fetch what they need. The 切换部门 preview is
+  // display-only and never reaches this check.
+  if (!isApi && !canAccountOpen(account, path, req.nextUrl.searchParams)) {
+    return NextResponse.redirect(new URL(workspaceHome(account), req.url));
   }
   return response;
 }

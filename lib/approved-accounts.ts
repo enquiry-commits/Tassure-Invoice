@@ -1,8 +1,24 @@
 import { staffMentionCandidates } from './staff-directory';
+import { canSubjectOpen, WORKSPACES, type WorkspaceId } from './workspaces';
 
 export type ApprovedAccount = {
   name: string;
   email: string;
+  // The TCS department this login belongs to — decides its page list, home
+  // page and header title (lib/workspaces.ts). Required on purpose: a new
+  // account that nobody placed in a department fails to compile instead of
+  // silently defaulting to "every page". Not lib/staff-directory.ts's `team`
+  // (there "Management" means Esther/Chelsea and Cindy is "Partners", and that
+  // field drives SOA-owner and assistant logic), and not QuickBooks'
+  // Department/Location (`qbLocations` below).
+  workspace: WorkspaceId;
+  // Shows the 切换部门 (switch department) picker next to Logout. Display
+  // only: it changes the menu and title shown, never what the account may
+  // open — proxy.ts, every API and the assistant keep using the real account.
+  // Its own flag, not `canViewAsOthers` (View As substitutes a whole identity;
+  // this only previews a menu) — Vincent, 2026-10-04: Vincent + Cindy/
+  // Samuell/Yee Soon.
+  canSwitchWorkspace?: boolean;
   // The QuickBooks Location (Department) an invoice this person generates is
   // tagged with, per book — Location marks WHO keyed the invoice in
   // (INV-QB-013). TAO decided 2026-10-04 (Vincent: "尽量还原QB本来有的设定"):
@@ -61,71 +77,67 @@ export type ApprovedAccount = {
   // (app/billing/quotation, app/api/billing/quotation, and the manual-refresh
   // trigger of app/api/quickbooks/estimates/sync) — QuickBooks Estimates and,
   // once one is Closed, which book (TAB/TAC/TAO) its invoice was issued in.
-  // Added 2026-09-24, Vincent-only while the trace is being checked against
-  // real data (answered via AskUserQuestion: "先只开放给 Vincent"). Its own
-  // flag, not `admin`/`canViewSgNews`, for the same reason those two are
-  // separate: Vincent-only TODAY, but conceptually its own permission that
-  // should be easy to hand to Chelsea/Finance later without also handing them
-  // anything else.
+  // Added 2026-09-24, Vincent-only while the trace was being checked against
+  // real data. Opened to every department 2026-10-04 (Vincent, choosing
+  // "所有部门" when the departments were split — New Quotation creates a REAL
+  // QuickBooks Estimate). Kept as its own explicit per-account flag anyway: the
+  // workspace page list and this flag must agree (test-account-access.ts), so
+  // moving someone into a department never grants it as a side effect.
   canViewQuotation?: boolean;
   // Gates the new "Turnover AI" top-level nav group (app/turnover-ai/*) and
   // its API routes (app/api/turnover-ai/*) — reads a client's receipts/
   // invoices with Claude vision and lets Account staff confirm a reconciled
-  // turnover total. Added 2026-09-28, Vincent-only while it's new (answered
-  // via AskUserQuestion: "先只给Vincent"). Its own flag, not `admin`/
-  // `canViewQuotation`, for the same reason every flag above is separate:
-  // Vincent-only TODAY, but conceptually its own permission that should be
-  // easy to hand to the Account team later without also handing them
-  // anything else.
+  // turnover total. Added 2026-09-28, Vincent-only while it was new. Opened to
+  // TCS ACCOUNT 2026-10-04 (Vincent's department list: ACCOUNT gets Turnover
+  // AI, TAX does not; MANAGEMENT kept as is). Explicit per account for the
+  // same reason as `canViewQuotation` above.
   canViewTurnoverAI?: boolean;
-  // When set, this account is confined to this page (path + required query
-  // params, e.g. AR Reminder is the 'ar' tab on /billing — see
-  // components/Sidebar.tsx's tree for the canonical href) plus any
-  // `alsoAllowed` pages. It is the account's home: where it lands and is
-  // redirected back to. Enforced in proxy.ts (page navigation only — API
-  // routes are unaffected) and mirrored in the sidebar, the assistant's page
-  // map and its billing tools — all through canAccountOpen() below.
-  restrictedTo?: string;
-  // Extra pages a `restrictedTo` account may ALSO open. Added 2026-10-04 for
-  // the Accounting/Tax team (Vincent: "TAO 这边就是主要给 ACC 和 TAX 去开单
-  // 的") — they issue the TAO invoices, so TAO Billing joins AR Reminder.
-  alsoAllowed?: readonly string[];
 };
 
+// Grouped by TCS department (Vincent, 2026-10-04 — see lib/workspaces.ts for
+// each department's pages). SX/SM/MQ/KY/HC resolved against
+// lib/staff-directory.ts's own aliases; SHEMIN is listed separately, so SM is
+// Ang Shi Ming.
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
-  { name: 'Vincent Seow', email: 'vincent@tassure.com', admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true, canViewQuotation: true, canViewTurnoverAI: true },
-  { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
-  { name: 'Samuell Ng', email: 'samuellng@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
+  // TCS ADMIN
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', workspace: 'admin', canSwitchWorkspace: true, admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true, canViewQuotation: true, canViewTurnoverAI: true },
+  // TCS MANAGEMENT
+  { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', workspace: 'management', canSwitchWorkspace: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewQuotation: true },
+  { name: 'Samuell Ng', email: 'samuellng@tassure.com', workspace: 'management', canSwitchWorkspace: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewQuotation: true },
   // New login account, added 2026-09-02 specifically to grant this
   // permission (Vincent confirmed the real login email directly: "准确是
   // Tan Yee Soon (yeesoon@tassure.com)") — previously only existed in
   // lib/staff-directory.ts (used for PIC-matching text, not login) with no
   // way to actually sign in at all.
-  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, qbLocations: { TAO: 'Tan Yee Soon' } },
-  { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', qbLocations: { TAB: 'Lim Hoe Chyi', TAC: 'Lim Hoe Chyi', TAO: 'Lim Hoe Chyi' } },
-  { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', qbLocations: { TAB: 'Hoo Seng Xin', TAC: 'Seng Xin', TAO: 'Hoo Seng Xin' } },
-  { name: 'Jenny Lai', email: 'jennylai@tassure.com', qbLocations: { TAB: 'Jenny Lai', TAC: 'Jenny Lai', TAO: 'Jenny Lai' } },
-  { name: 'Chin Kah Ye', email: 'kahye@tassure.com', qbLocations: { TAB: 'Chin Kah Ye', TAC: 'Kah Ye', TAO: 'Chin Kah Ye' } },
-  { name: 'Ang Shi Ming', email: 'shiming@tassure.com', qbLocations: { TAB: 'Ang Shi Ming', TAC: 'Shi Ming', TAO: 'Ang Shi Ming' } },
-  { name: 'Tey Shemin', email: 'shemin@tassure.com', qbLocations: { TAB: 'Tey Shemin', TAC: 'Shemin', TAO: 'Tey Shemin' } },
-  { name: 'Tan Min Quan', email: 'minquan@tassure.com' },
-  { name: 'Esther Loo', email: 'esther@tassure.com', qbLocations: { TAB: 'Esther Loo', TAC: 'Esther Loo', TAO: 'Esther Loo' } },
-  { name: 'Chelsea Ang', email: 'chelsea@tassure.com', qbLocations: { TAB: 'Chelsea Ang', TAC: 'Chelsea Ang', TAO: 'Chelsea Ang' } },
-  // Vincent, 2026-08-17 (Clarence Saw added 2026-08-27; Quinnie Tan and
-  // Victoria Yap 2026-10-04): these 8 (the
-  // Accounting / Tax team) only see AR Reminder — plus, since 2026-10-04, TAO
-  // Billing, where they issue the TAO invoices ("TAO 这边就是主要给 ACC 和
-  // TAX 去开单的"). Everything else in the system is hidden/blocked for them.
-  { name: 'Jay Tay', email: 'jaytay@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Jay Tay' } },
-  { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Lee Jing Fei' } },
-  { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Tee Yu Heng' } },
-  { name: 'Vernice Chai', email: 'vernice@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Vernice Chai' } },
-  { name: 'Chee Wei En', email: 'weien@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Chee Wei En' } },
-  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Clarence Saw' } },
-  // Tax team, added 2026-10-04 (Vincent: "开，用名录邮箱") — emails as in lib/staff-directory.ts;
-  // same access as the rest of Accounting/Tax: AR Reminder + TAO Billing.
-  { name: 'Quinnie Tan', email: 'quinnietan@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Quinnie Tan' } },
-  { name: 'Victoria Yap', email: 'victoriayap@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Victoria Yap' } },
+  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', workspace: 'management', canSwitchWorkspace: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewQuotation: true, qbLocations: { TAO: 'Tan Yee Soon' } },
+  // TCS SECRETARIAL
+  { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Lim Hoe Chyi', TAC: 'Lim Hoe Chyi', TAO: 'Lim Hoe Chyi' } },
+  { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Hoo Seng Xin', TAC: 'Seng Xin', TAO: 'Hoo Seng Xin' } },
+  { name: 'Jenny Lai', email: 'jennylai@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Jenny Lai', TAC: 'Jenny Lai', TAO: 'Jenny Lai' } },
+  { name: 'Chin Kah Ye', email: 'kahye@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Chin Kah Ye', TAC: 'Kah Ye', TAO: 'Chin Kah Ye' } },
+  { name: 'Ang Shi Ming', email: 'shiming@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Ang Shi Ming', TAC: 'Shi Ming', TAO: 'Ang Shi Ming' } },
+  { name: 'Tey Shemin', email: 'shemin@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Tey Shemin', TAC: 'Shemin', TAO: 'Tey Shemin' } },
+  { name: 'Tan Min Quan', email: 'minquan@tassure.com', workspace: 'secretarial', canViewQuotation: true },
+  // TCS FINANCE
+  { name: 'Esther Loo', email: 'esther@tassure.com', workspace: 'finance', canViewQuotation: true, qbLocations: { TAB: 'Esther Loo', TAC: 'Esther Loo', TAO: 'Esther Loo' } },
+  { name: 'Chelsea Ang', email: 'chelsea@tassure.com', workspace: 'finance', canViewQuotation: true, qbLocations: { TAB: 'Chelsea Ang', TAC: 'Chelsea Ang', TAO: 'Chelsea Ang' } },
+  // TCS ACCOUNT (Jay is the head) — AR Reminder was their only page from
+  // 2026-08-17 and stays their home; TAO Billing joined 2026-10-04 ("TAO 这边
+  // 就是主要给 ACC 和 TAX 去开单的"); the department split the same day opened
+  // Dashboard, Companies, all of Billing Drafts, Quotation, Outstanding and
+  // Turnover AI. They only have a TAO QuickBooks Location, so a TAB/TAC
+  // invoice they generate carries none — same as any account without one.
+  { name: 'Jay Tay', email: 'jaytay@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAO: 'Jay Tay' } },
+  { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAO: 'Lee Jing Fei' } },
+  { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAO: 'Tee Yu Heng' } },
+  { name: 'Vernice Chai', email: 'vernice@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAO: 'Vernice Chai' } },
+  { name: 'Chee Wei En', email: 'weien@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAO: 'Chee Wei En' } },
+  // TCS TAX (Clarence is the head; Quinnie Tan and Victoria Yap added
+  // 2026-10-04 with their staff-directory emails) — same pages as TCS
+  // ACCOUNT except Turnover AI.
+  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', workspace: 'tax', canViewQuotation: true, qbLocations: { TAO: 'Clarence Saw' } },
+  { name: 'Quinnie Tan', email: 'quinnietan@tassure.com', workspace: 'tax', canViewQuotation: true, qbLocations: { TAO: 'Quinnie Tan' } },
+  { name: 'Victoria Yap', email: 'victoriayap@tassure.com', workspace: 'tax', canViewQuotation: true, qbLocations: { TAO: 'Victoria Yap' } },
 ] as const;
 
 const ACCOUNT_BY_EMAIL = new Map(
@@ -215,32 +227,17 @@ export function resolveViewAsAccount(realAccount: ApprovedAccount, viewAsParam: 
   return { ok: true, account: target, viewingAs: target.email !== realAccount.email };
 }
 
-// Shared by proxy.ts (server-side enforcement) and the sidebar (which nav
-// item to show) so the two never drift apart on what "within the
-// restriction" means. Only requires the restricted href's OWN query params
-// to match — extra params the target page adds itself (a permalink, a
-// filter) don't count as "leaving" the allowed page.
-export function isWithinRestriction(restrictedTo: string, pathname: string, searchParams: URLSearchParams): boolean {
-  const allowed = new URL(restrictedTo, 'http://internal');
-  if (pathname !== allowed.pathname) return false;
-  for (const [key, value] of allowed.searchParams) {
-    if (searchParams.get(key) !== value) return false;
-  }
-  return true;
-}
-
-/** Every page a restricted account may open, its home page first; null = unrestricted. */
-export function allowedPagesFor(account: Pick<ApprovedAccount, 'restrictedTo' | 'alsoAllowed'>): string[] | null {
-  return account.restrictedTo ? [account.restrictedTo, ...(account.alsoAllowed ?? [])] : null;
-}
-
 /**
- * THE "may this account open this page" check — proxy.ts, the sidebar, the
- * assistant's page map and its billing tools all call this, never their own
- * copy. Unrestricted → yes; restricted → only its allowed pages. (/my-tasks
- * is the one deliberate exception, handled by the callers that allow it.)
+ * THE "may this account open this page" check on the server — proxy.ts, the
+ * assistant's page map and billing tools, and My Tasks' sections all call
+ * this, never their own copy. The rule itself lives in lib/workspaces.ts
+ * (canSubjectOpen), which the client nav calls with the same data.
  */
-export function canAccountOpen(account: Pick<ApprovedAccount, 'restrictedTo' | 'alsoAllowed'>, pathname: string, searchParams: URLSearchParams): boolean {
-  const pages = allowedPagesFor(account);
-  return !pages || pages.some(page => isWithinRestriction(page, pathname, searchParams));
+export function canAccountOpen(account: ApprovedAccount, pathname: string, searchParams: URLSearchParams): boolean {
+  return canSubjectOpen(account, pathname, searchParams);
+}
+
+/** Where proxy.ts sends an account that opens a page outside its workspace. */
+export function workspaceHome(account: ApprovedAccount): string {
+  return WORKSPACES[account.workspace].home;
 }

@@ -1,7 +1,8 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { getApprovedAccount, allowedPagesFor } from '@/lib/approved-accounts';
+import { getApprovedAccount } from '@/lib/approved-accounts';
+import { WORKSPACES, switchableWorkspaces, resolveViewWorkspace, VIEW_WORKSPACE_COOKIE } from '@/lib/workspaces';
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -17,9 +18,14 @@ export async function GET() {
     user: {
       email: account.email,
       name: account.name,
-      restrictedTo: account.restrictedTo ?? null,
-      // Every page a restricted account may open (home first) — the sidebar shows exactly these.
-      allowedPages: allowedPagesFor(account),
+      // The department this account belongs to (lib/workspaces.ts) — the
+      // client menu runs the same canSubjectOpen() rule proxy.ts enforces.
+      workspace: account.workspace,
+      // The 切换部门 preview, validated here: only honoured for an account
+      // that may switch, and only to a department it may preview. Display
+      // only — nothing server-side reads this cookie as a permission.
+      viewWorkspace: resolveViewWorkspace(account, cookieStore.get(VIEW_WORKSPACE_COOKIE)?.value),
+      switchableWorkspaces: switchableWorkspaces(account).map(id => ({ id, title: WORKSPACES[id].title })),
       admin: account.admin ?? false,
       canViewReports: account.canViewReports ?? false,
       canViewActivityInsights: account.canViewActivityInsights ?? false,

@@ -3680,6 +3680,45 @@ again.
   `select()` must mirror the GET route's shape exactly — diff the two
   `select()` strings, don't assume `'*'` is enough just because it passed
   typecheck.
+- **INV-DATA-069** — Page access is ONE rule: `lib/workspaces.ts`'s
+  `canSubjectOpen()` — the account's department workspace page list AND,
+  for a gated page, the account's own flag. proxy.ts (via
+  `canAccountOpen()`), the assistant's page map and billing tools, My Tasks'
+  sections, and the client menus (Sidebar, MobileNav, Dashboard links via
+  `components/SessionContext.tsx`) all call it; the menus draw ONE tree,
+  `lib/nav-tree.ts`. Never a hand-written page block in proxy.ts, never a
+  second link list, never a string comparison against a page href to decide
+  scope. Found while building the department split (2026-10-04 — Vincent:
+  "按照部门去区分...数据还是共通的，只是显示的区别", 7 decisions via
+  AskUserQuestion after a 4-agent council review), all real traps of the old
+  per-account `restrictedTo`: (1) `lib/my-tasks-data.ts` decided My Tasks'
+  sections with `account.restrictedTo === '/billing?tab=ar'`, so dropping
+  that field would have silently handed TCS ACCOUNT/TAX every section;
+  (2) `components/MobileNav.tsx` kept its own hard-coded menu that ignored
+  every access rule and had drifted from the desktop one; (3) the old
+  matcher compared whole paths, so opening `/companies` would still have
+  bounced Company 360 (`/companies/123`) — patterns now match segment by
+  segment; (4) deny-by-default for unknown paths redirected static files in
+  `public/` (`/my-tasks-robot.gif`, `/assets/…`), already breaking them for
+  the old AR-only accounts — a path no rule classifies now passes, and
+  `test-account-access.ts` fails on any `app/**/page.tsx` without a rule
+  instead; (5) `/billing` renders AR Reminder for ANY `?tab=` other than
+  `billing`, so the rule normalises the tab the same way. Rules that keep it
+  honest: `ApprovedAccount.workspace` is required (a new account nobody
+  placed fails to compile, it never defaults to "every page"); the per-
+  account flags stay explicit and must agree with the page list for every
+  account (moving someone into a department must never silently grant, e.g.,
+  the power to create real QuickBooks Estimates); every workspace home must
+  be openable (no redirect loop); and the expected access is written out
+  route by route for all 21 accounts in `test-account-access.ts`,
+  independently of the workspace lists — an unapproved list change fails
+  there (negative control: adding Post Incorporate to FINANCE fails both
+  Finance accounts). The 切换部门 picker (Vincent + MANAGEMENT) is display
+  only: a cookie that `/api/auth/me` validates, shown as the previewed
+  department's list ∩ the viewer's own access; proxy.ts, the APIs and the
+  assistant never read it. `staff-directory`'s `team` is NOT the department
+  (there "Management" = Esther/Chelsea and Cindy is "Partners", and it drives
+  SOA-owner/assistant logic), nor is QuickBooks' Department/Location.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
@@ -3804,15 +3843,14 @@ again.
   The map moved out of `route.ts` into `lib/assistant-pages.ts` so it can
   be tested: `test-assistant-pages.ts` fails if any `app/**/page.tsx` has
   no entry (only login, redirect-only routes and the per-company
-  `/companies/[id]` are exempt), if a `proxy.ts` hard-block's path lacks
-  the same gate in `access`, or if a real account sees the wrong pages
-  (`canOpenPage()` also mirrors `restrictedTo`: the Accounting/Tax
-  accounts get exactly AR Reminder + TAO Billing + My Tasks — since
-  2026-10-04 through `alsoAllowed` and lib/approved-accounts.ts's
-  `canAccountOpen()`, the ONE page-access check that proxy.ts, the sidebar,
-  this map and the assistant's billing tools all call. An account may have
-  several allowed pages now, so never test `isWithinRestriction(account
-  .restrictedTo, …)` directly — `test-account-access.ts` fails on it). Each entry now carries a
+  `/companies/[id]` are exempt), if a flag-gated page rule lacks the same
+  gate in `access` (or an ungated page carries one), or if a real account
+  sees the wrong pages (`canOpenPage()` goes through
+  lib/approved-accounts.ts's `canAccountOpen()` — since the 2026-10-04
+  department split that is lib/workspaces.ts's one rule, INV-DATA-069, the
+  same check proxy.ts, the menus, this map and the assistant's billing tools
+  all call; `pageAccessLine()` now names the account's department and lists
+  exactly what it can and cannot open). Each entry now carries a
   one-line `desc` of what the page does. Keyword navigation now takes the
   MOST SPECIFIC matching keyword (`matchPage()`), not the first entry in
   list order — the bare 'ar' keyword used to claim anything containing
