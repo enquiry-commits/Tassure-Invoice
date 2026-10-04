@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-04 (Billing System menu: Quotation now sits right above Billing Drafts, for every department, desktop and phone — Vincent: "这部分的顺序帮大家调整一下， quotation 之后才到 Billing Drafts").
+
+**What changed.** One entry moved in `lib/nav-tree.ts` (the single menu tree both the Sidebar and MobileNav draw). Order now: … AR Reminder, Late Filing, Quotation, Billing Drafts, Outstanding, Email Status (TCS ACCOUNT/TAX: AR Reminder, Quotation, Billing Drafts, Outstanding). **Verification.** Printed each department's filtered Billing System from the same `filterNav()` the menus render (Jay Tay: AR Reminder > Quotation > Billing Drafts > Outstanding; Chelsea: … Late Filing > Quotation > Billing Drafts > …); tsc clean, `test-account-access.ts` ALL OK, eslint clean. Not re-checked by screenshot — the drawing code is unchanged.
+
+Previous entry follows.
+
 Last updated: 2026-10-04 (FIXED: TCS ACCOUNT/TAX's TAB invoices now carry their QuickBooks Location — Vincent: "这个要全部开放啊 为什么只设TAO").
 
 **Why it was only TAO.** An oversight, not a rule: their TAO Locations were mapped that morning when TAO was the only book they could bill in; the department split (previous entry) opened TAB/TAC Billing Drafts to them but changed only page access, and I wrote the Location gap up as a "Watch" instead of fixing it.

@@ -10,7 +10,9 @@
 //   TAB/TAC/TAO分成3个不同的3级标题" — its own level-2 group, one page per
 //   QuickBooks book; "All" added on top the same day. Routes and internal
 //   names stay /billing/soa/... — "Outstanding" is display text only.
-// - Quotation (2026-09-24): a level-2 leaf right below Billing Drafts.
+// - Quotation (2026-09-24): a level-2 leaf, first right below Billing Drafts;
+//   moved right ABOVE it 2026-10-04 (Vincent: "quotation 之后才到 Billing
+//   Drafts" — a quotation comes before the invoice).
 // - SG Latest News (2026-09-23) sits directly below My Tasks, Reports below it.
 // - Turnover AI (2026-09-28): one level-1 leaf, everything on one page.
 // - Admin (Vincent-only governance tools) stays the last level-1 item.
@@ -62,6 +64,7 @@ export const NAV_TREE: NavNode[] = [
       { label: 'Address Service', href: '/address-service' },
       { label: 'AR Reminder', href: '/billing?tab=ar' },
       { label: 'Late Filing', href: '/late-filing' },
+      { label: 'Quotation', href: '/billing/quotation' },
       {
         id: 'billing-drafts', label: 'Billing Drafts',
         children: [
@@ -69,7 +72,6 @@ export const NAV_TREE: NavNode[] = [
           { label: 'TAO', href: '/billing/tao' },
         ],
       },
-      { label: 'Quotation', href: '/billing/quotation' },
       {
         id: 'soa', label: 'Outstanding',
         children: [
