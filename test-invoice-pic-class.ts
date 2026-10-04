@@ -147,10 +147,10 @@ console.log('\n--- source guards: the routes and the popup use the shared rules 
   check('Billing Drafts popup is wide enough for the PIC column (1280)', /maxWidth: 1280/.test(read('app/billing/page.tsx')));
 
   const tao = read('components/billing/TaoInvoiceBuilder.tsx');
-  check('TAO builder sends each line\'s PIC and the Statement memo', /picClassId: effectivePicId\(l\)/.test(tao) && /statementMemos: \{ TAO: memo\.trim\(\) \}/.test(tao));
+  check('TAO builder sends each line\'s PIC and the Statement memo', /picClassId: effectivePicId\(l\)/.test(tao) && /statementMemos: \{ TAO: composeTaoStatementMemo\(included\) \}/.test(tao));
   check('TAO builder restores the PIC with the shared rule, not a local copy', /taoDefaultPicName\(l, picHistory\)/.test(tao) && /taoLineNeedsPic\(l\)/.test(tao));
   const hist = read('app/api/billing/tao/service-history/route.ts');
-  check('TAO history returns each service\'s last PIC, the PIC per service and the last Statement memo', /picClassName: item\.class_name/.test(hist) && /picByService\[item\.service_type\] = item\.class_name/.test(hist) && /PrivateNote/.test(hist));
+  check('TAO history returns each service\'s last PIC and the PIC per service', /picClassName: item\.class_name/.test(hist) && /picByService\[item\.service_type\] = item\.class_name/.test(hist));
   const create = read('app/api/quickbooks/create-invoice/route.ts');
   check('create-invoice writes the Statement memo as PrivateNote, only when given, max 4,000 chars', /\{ PrivateNote: statementMemo\.trim\(\) \}/.test(create) && /m\.length > 4000/.test(create) && /statementMemos\?\.\[company\]/.test(create));
   check('TAO popup is wide enough for the PIC column (1100)', /maxWidth: 1100/.test(read('app/billing/tao/page.tsx')));

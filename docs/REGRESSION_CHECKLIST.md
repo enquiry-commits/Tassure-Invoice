@@ -377,12 +377,14 @@ shows "no matching QuickBooks Class — pick per line". (4) a TAC Nominee
 Director line shows "<initials> · in ND item", never a dropdown. (5) TAO: open
 a client with TAO history (e.g. 1V CAPITAL: Yearly Accounts / Compilation
 = Lee Jing Fei, Corporate Tax = To Be Assign, OPE "— No PIC") — each line's
-PIC is the one on its last QuickBooks line, the Statement memo is the last
-invoice's with the year rolled forward; after generating, QuickBooks must
-show those Classes per line, the generator's own Location, and the memo.
-(6) Statement memo: for a new TAB invoice the memo field reads like staff's
-own (e.g. "Sec,addrs (Oct 2026 - Sep 2027),AR 31.12.2026") and follows the
-ticked lines; after generating, QuickBooks' Statement memo equals it;
+PIC is the one on its last QuickBooks line; after generating, QuickBooks
+must show those Classes per line, the generator's own Location, and a
+Statement memo written from the ticked lines (e.g. "Yearly accounting
+services,Compilation report,Tax YA 2027").
+(6) Statement memo: run `npx tsx test-statement-memo.ts` (`ALL OK`). No
+memo field appears anywhere (it is automatic); after generating a new TAB
+invoice, QuickBooks' Statement memo reads like staff's own and matches the
+ticked lines (e.g. "Sec,addrs (Oct 2026 - Sep 2027),AR 31.12.2026");
 editing an existing invoice leaves its memo untouched.
 **Guards:** `docs/INVARIANTS.md` INV-QB-007, INV-QB-013, INV-QB-026, INV-QB-027.
 

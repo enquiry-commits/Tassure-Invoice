@@ -680,15 +680,9 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
     return () => { clearTimeout(startTimer); controller.abort(); };
   }, [txnDate, hasTac, numberRefreshKey]);
 
-  // QuickBooks' Statement memo per book being generated (Vincent, 2026-10-04:
-  // "只做 Statement memo") — composed live from the ticked lines the way
-  // staff type it by hand (lib/statement-memo.ts); an edit here wins until
-  // reset. Every app-created invoice used to need it typed in afterwards.
-  const [memoOverride, setMemoOverride] = useState<Partial<Record<'TAB' | 'TAC', string>>>({});
   const included = lines.filter(l => l.include);
   const includedTab = included.filter(l => l.service !== 'ND');
   const includedTac = included.filter(l => l.service === 'ND');
-  const memoFor = (company: 'TAB' | 'TAC') => memoOverride[company] ?? composeStatementMemo(company === 'TAB' ? includedTab : includedTac);
   const total = included.reduce((s, l) => s + l.qty * l.rate, 0);
   const totalTab = includedTab.reduce((s, l) => s + l.qty * l.rate, 0);
   const totalTac = includedTac.reduce((s, l) => s + l.qty * l.rate, 0);
@@ -771,6 +765,11 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
     }
     const sendTab = needsGenerateTab && scope !== 'TAC';
     const sendTac = needsGenerateTac && scope !== 'TAB';
+    // QuickBooks' Statement memo per book (INV-QB-027), written from the
+    // lines being sent the way staff type it by hand — automatic and never
+    // shown (Vincent, 2026-10-04: "自动就好了，也不需要特地多一个东西显示这个Memo").
+    const tabMemo = sendTab ? composeStatementMemo(includedTab) : '';
+    const tacMemo = sendTac ? composeStatementMemo(includedTac) : '';
     setDrafting(true); setDraftResult(null);
     try {
       const fyeYear = cycleFye ? +cycleFye.slice(-4) : currentYear;
@@ -798,10 +797,10 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           // saveInvoiceEdit/renderSaveButton instead — never re-created here.
           tabLines: sendTab ? includedTab.map(l => toApiLine(l, 'TAB')) : [],
           tacLines: sendTac ? includedTac.map(l => toApiLine(l, 'TAC')) : [],
-          // QuickBooks' Statement memo per book — only for a book being sent, only when not empty.
+          // Only for a book being sent, only when there is something to say.
           statementMemos: {
-            ...(sendTab && memoFor('TAB').trim() ? { TAB: memoFor('TAB').trim() } : {}),
-            ...(sendTac && memoFor('TAC').trim() ? { TAC: memoFor('TAC').trim() } : {}),
+            ...(tabMemo ? { TAB: tabMemo } : {}),
+            ...(tacMemo ? { TAC: tacMemo } : {}),
           },
           fyeMonth: c.fyeMonth, fyeYear, fyeCycle: cycleFye ?? null,
           idempotencyKey: invoiceRequestKey,
@@ -1165,26 +1164,6 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       </span>
     ) : renderInvoiceNumber(company);
 
-  // The Statement memo field for a book being GENERATED. Not shown when
-  // editing an existing invoice — its memo in QuickBooks is left exactly as
-  // it is (the update never sends PrivateNote).
-  const renderMemoField = (company: 'TAB' | 'TAC') => {
-    if (!(company === 'TAB' ? includedTab : includedTac).length) return null;
-    const edited = memoOverride[company] !== undefined;
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px', whiteSpace: 'nowrap' }}>Statement memo</span>
-        <input value={memoFor(company)} onChange={e => setMemoOverride(prev => ({ ...prev, [company]: e.target.value }))}
-          aria-label={`${company} statement memo`} placeholder="e.g. Sec (Nov 2026 - Oct 2027),AR 31.07.2026"
-          style={{ ...inputStyle, flex: 1, minWidth: 260 }} />
-        {edited
-          ? <button type="button" onClick={() => setMemoOverride(prev => { const next = { ...prev }; delete next[company]; return next; })}
-              style={{ border: 'none', background: 'transparent', color: 'var(--accent-blue)', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>↺ Auto</button>
-          : <span style={{ fontSize: 10, color: '#94a3b8', whiteSpace: 'nowrap' }}>written from the lines · edit if needed</span>}
-      </div>
-    );
-  };
-
   // Per-company Save button + result banner, shown instead of the combined
   // bottom Generate button once that company is in edit mode.
   const renderSaveButton = (company: 'TAB' | 'TAC', invoice: GeneratedPdf) => {
@@ -1306,7 +1285,6 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
             ))}
           </select>
         </div>
-        {!tabInvoice && renderMemoField('TAB')}
         {tabInvoice && renderSaveButton('TAB', tabInvoice)}
       </div>
 
@@ -1382,7 +1360,6 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
                 ))}
               </select>
             </div>
-            {!tacInvoice && renderMemoField('TAC')}
             {tacInvoice && renderSaveButton('TAC', tacInvoice)}
           </div>
           </div>

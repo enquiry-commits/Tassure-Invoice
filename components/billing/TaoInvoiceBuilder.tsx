@@ -24,6 +24,7 @@ import { rollRecurringDescriptionForward } from '@/lib/invoice-period';
 import type { TaoCompanyRow } from '@/app/api/billing/tao/route';
 import type { TaoServiceHistory, TaoServiceHistoryItem } from '@/app/api/billing/tao/service-history/route';
 import { taoDefaultPicName, taoLineNeedsPic, type PicClassOption } from '@/lib/invoice-pic-class';
+import { composeTaoStatementMemo } from '@/lib/statement-memo';
 
 const TAO_PRODUCTS: { label: string; category: string; productService: string; service: string }[] = [
   { label: 'Compilation Report Services', category: 'Accounts', productService: 'Accounts:Compilation Report Services', service: 'Accounts' },
@@ -151,13 +152,12 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
 
   const [historyLoading, setHistoryLoading] = useState(true);
   // QuickBooks' own TAO settings, restored from this client's history
-  // (Vincent, 2026-10-04: "尽量还原QB本来有的设定"): each line's PIC, and the
-  // invoice's Statement memo. The Location is added server-side from the
-  // signed-in account (lib/approved-accounts.ts qbLocations.TAO).
+  // (Vincent, 2026-10-04: "尽量还原QB本来有的设定"): each line's PIC. The
+  // Location is added server-side from the signed-in account
+  // (lib/approved-accounts.ts qbLocations.TAO); the Statement memo is
+  // written from the lines at Generate (INV-QB-027).
   const [picHistory, setPicHistory] = useState<{ lastClassByProduct: Map<string, string | null>; lastClassByService: Record<string, string> }>({ lastClassByProduct: new Map(), lastClassByService: {} });
   const [picOptions, setPicOptions] = useState<{ status: 'loading' | 'ok' | 'error'; classes: PicClassOption[]; error?: string }>({ status: 'loading', classes: [] });
-  const [memo, setMemo] = useState('');
-  const [lastMemo, setLastMemo] = useState<TaoServiceHistory['lastStatementMemo']>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -208,12 +208,6 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
           lastClassByProduct: new Map(items.map(h => [h.productService, h.picClassName ?? null])),
           lastClassByService: json.picByService ?? {},
         });
-        // Statement memo: the last invoice's, years rolled forward one cycle
-        // like the line descriptions ("Tax YA 2026" → "Tax YA 2027") — a
-        // starting guess, never overwriting anything already typed.
-        const last = json.lastStatementMemo ?? null;
-        setLastMemo(last);
-        if (last) setMemo(current => current || rollRecurringDescriptionForward(last.text));
       })
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
@@ -273,8 +267,10 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
             // dropped by JSON → no Class, as before.
             picClassId: effectivePicId(l),
           })),
-          // QuickBooks' Statement memo (PrivateNote) — only when filled in.
-          ...(memo.trim() ? { statementMemos: { TAO: memo.trim() } } : {}),
+          // QuickBooks' Statement memo (PrivateNote), written from the lines
+          // the way staff word it — automatic and never shown (INV-QB-027;
+          // Vincent, 2026-10-04: "自动就好了，也不需要特地多一个东西显示这个Memo").
+          statementMemos: { TAO: composeTaoStatementMemo(included) },
           idempotencyKey: requestKey.current,
           docNumbers: { TAO: docNumber || undefined },
           expectedNextNumbers: { TAO: suggestedNumber || undefined },
@@ -455,21 +451,6 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
             <option key={x.label} value={x.productService || '__custom__'}>{x.label}</option>
           ))}
         </select>
-      </div>
-
-      {/* Statement memo — QuickBooks' PrivateNote, which every hand-made TAO
-          invoice carries (e.g. "Yearly accounting services,Compilation
-          report,Tax YA 2027"). Pre-filled from this client's last TAO
-          invoice with the years rolled forward; edit to match the lines
-          actually ticked. Left empty → none is written, as before. */}
-      <div style={{ marginTop: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Statement memo</span>
-          <span style={{ fontSize: 10, color: '#94a3b8' }}>
-            {lastMemo ? `Last (#${lastMemo.invoiceNo.replace(/^TAO/i, '')}): "${lastMemo.text}"` : historyLoading ? '' : 'No previous memo — e.g. "Tax YA 2026"'}
-          </span>
-        </div>
-        <AutoTextarea value={memo} onChange={setMemo} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.4 }} />
       </div>
 
       {/* Total + Generate */}
