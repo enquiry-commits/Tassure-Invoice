@@ -3794,6 +3794,39 @@ again.
   `client_company_id`) on insert — harmless whatever the live state. Check:
   for any insert, every column in that table's live `required` list without
   a default must be provided.
+- **INV-DATA-072** — A Turnover AI file must either be read in full or say
+  plainly why not, and stay visible until fixed. Fixed 2026-10-05 (Vincent:
+  "超过约 4.5MB 的文件会被挡、HEIC 照片读不了、读失败的文件在项目页看不到 —
+  这个现在处理"; 4-agent council review, each claim re-checked): (1) the
+  real upload ceiling is Vercel's ~4.5MB function request body — over it the
+  platform answers a non-JSON 413 before the route runs, so the route's old
+  15MB check never ran and the file's row showed only a raw JSON parse
+  error (the page now reads a non-JSON reply as 413/504 text); local `next dev`
+  has no such limit, so only a deployed test proves it. The ceiling is now
+  `UPLOAD_MAX_BYTES` (4.4MB) in `lib/turnover-ai-files.ts`, shared by browser
+  and server: photos over it are shrunk in the browser (JPEG, longest edge
+  2576px — Claude's own working size), PDFs over it are stopped before
+  sending with "split it". (2) Claude reads only JPEG/PNG/GIF/WebP images,
+  never HEIC; Windows browsers often give a `.heic` no type at all, so files
+  are matched by type OR extension, HEIC is converted to JPEG in the browser
+  (the browser's own decoder first; where it has none — Chrome/Edge — the
+  `heic-to` libheif decoder is fetched on demand; the stored file is then the
+  .jpg), and the server decides the type from the file's first bytes and
+  refuses raw HEIC with a clear message. (3) A reply cut off at `max_tokens`
+  (was 2048 — about two dozen receipts) still parsed, so a fuller file was
+  marked done with receipts silently missing: now 8192, and `stop_reason
+  === 'max_tokens'` fails the file with "split it". (4) Storage keys are
+  ASCII-only (`{documentId}/original.{ext}`) — Supabase rejects non-ASCII
+  keys and the old `{documentId}/{file name}` key's failure was swallowed,
+  so a Chinese-named e-invoice's original was never stored. (5) A read
+  killed by the time limit (now 300s, was 60s) never reaches its catch and
+  stays 'processing' forever; it is SHOWN as interrupted after 6 minutes
+  (`documentOutcome()`), never written back. (6) Failed and interrupted files
+  are listed on the project page with their reason, and the Projects card
+  counts them separately instead of as files. Verified in a browser harness
+  with a real iPhone HEIC (converted in Chromium to a 1932×2576 JPEG), a 19MB
+  photo (→ 2576px, 3.3MB), a 5MB PDF (stopped, nothing sent) and a mocked
+  non-JSON 413 (readable message); `test-turnover-files.ts` pins the rules.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

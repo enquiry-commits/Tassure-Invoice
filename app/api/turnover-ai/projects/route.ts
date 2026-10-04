@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
 import { createAdminClient } from '@/lib/supabase';
 import { computeCurrencyTotals, mergeCurrencyTotals, type CurrencyTotal } from '@/lib/turnover-ai';
+import { documentOutcome } from '@/lib/turnover-ai-files';
 
 export type TurnoverProject = {
   id: number;
@@ -10,7 +11,10 @@ export type TurnoverProject = {
   gst_enabled: boolean;
   created_by: string;
   created_at: string;
+  // Files read successfully; files that failed or were cut off are counted
+  // separately (2026-10-05 — they used to be included in the file count).
   documentCount: number;
+  unreadCount: number;
   pendingCount: number;
   totals: CurrencyTotal[];
 };
@@ -32,8 +36,8 @@ export async function GET(req: NextRequest) {
 
   const projectIds = (projects ?? []).map(p => p.id);
   const { data: docs } = projectIds.length
-    ? await supabase.from('turnover_documents').select('id, project_id').in('project_id', projectIds)
-    : { data: [] as { id: number; project_id: number }[] };
+    ? await supabase.from('turnover_documents').select('id, project_id, status, uploaded_at').in('project_id', projectIds)
+    : { data: [] as { id: number; project_id: number; status: string; uploaded_at: string }[] };
   const docIds = (docs ?? []).map(d => d.id);
   const { data: items } = docIds.length
     ? await supabase.from('turnover_line_items').select('document_id, review_status, currency, edited_currency, amount, edited_amount').in('document_id', docIds)
@@ -43,7 +47,13 @@ export async function GET(req: NextRequest) {
 
   const docProjectById = new Map((docs ?? []).map(d => [d.id, d.project_id]));
   const docsByProject = new Map<number, number>();
-  for (const d of docs ?? []) docsByProject.set(d.project_id, (docsByProject.get(d.project_id) ?? 0) + 1);
+  const unreadByProject = new Map<number, number>();
+  const now = Date.now();
+  for (const d of docs ?? []) {
+    const outcome = documentOutcome(d.status, d.uploaded_at, now);
+    const counter = outcome === 'done' ? docsByProject : outcome === 'reading' ? null : unreadByProject;
+    if (counter) counter.set(d.project_id, (counter.get(d.project_id) ?? 0) + 1);
+  }
 
   // Vincent, 2026-10-04: "不需要confirm 先，直接计算出Total" — every line
   // except an explicitly-rejected one counts (same rule as the project-
@@ -72,6 +82,7 @@ export async function GET(req: NextRequest) {
       created_by: p.created_by,
       created_at: p.created_at,
       documentCount: docsByProject.get(p.id) ?? 0,
+      unreadCount: unreadByProject.get(p.id) ?? 0,
       pendingCount: pendingByProject.get(p.id) ?? 0,
       totals: mergeCurrencyTotals(snapshotTotals, liveTotals),
     };

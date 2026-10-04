@@ -404,6 +404,21 @@ added, renamed or deactivated, re-read the book's list into
 `test-invoice-pic-class.ts` first.
 **Guards:** `docs/INVARIANTS.md` INV-QB-007, INV-QB-013, INV-QB-026, INV-QB-027, INV-QB-028.
 
+### REG-028 — Turnover AI uploads actually land, at any file size or format staff use (after ANY change to `app/api/turnover-ai/extract/route.ts`, `lib/turnover-ai.ts`'s extraction call, `lib/turnover-ai-files.ts`, `components/turnover-ai/prepare-upload.ts`, the upload loop in `app/turnover-ai/project/[id]/page.tsx`, or the `turnover_documents` / `turnover_line_items` schema)
+Run `npx tsx test-turnover-files.ts` (`ALL OK`). Then on the DEPLOYED site
+(local `next dev` has no 4.5MB limit and a mocked API never runs a real
+insert — INV-DATA-071), signed in: (1) drop one small real PDF into a
+project — it reads, receipts appear, and the file is NOT listed under
+"couldn't be read". (2) drop an iPhone HEIC photo in Chrome/Edge — it
+converts and reads (its receipts' source and "View original" are the
+converted .jpg).
+(3) drop a phone photo over 4.4MB — it is shrunk and reads. (4) drop a PDF
+over 4.4MB — its row says to split it and nothing is sent. (5) a file whose
+read fails shows on the project page with its reason, and the Projects card
+counts it as "couldn't be read", not as a file. (6) a Chinese-named PDF's
+"View original" opens.
+**Guards:** `docs/INVARIANTS.md` INV-DATA-070, INV-DATA-071, INV-DATA-072.
+
 ---
 
 ## Automation priority

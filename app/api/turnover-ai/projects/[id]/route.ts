@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
 import { createAdminClient } from '@/lib/supabase';
 import { computeCurrencyTotals, mergeCurrencyTotals, STORAGE_BUCKET, type CurrencyTotal } from '@/lib/turnover-ai';
+import { documentOutcome, type DocumentOutcome } from '@/lib/turnover-ai-files';
 
 export type TurnoverProjectDocument = {
   id: number;
@@ -9,6 +10,9 @@ export type TurnoverProjectDocument = {
   status: 'processing' | 'done' | 'failed';
   error_message: string | null;
   uploaded_at: string;
+  // status as staff should read it — a read cut off mid-way shows as
+  // 'interrupted' (lib/turnover-ai-files.ts documentOutcome), display only.
+  outcome: DocumentOutcome;
 };
 
 export type TurnoverProjectLineItem = {
@@ -79,7 +83,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   return NextResponse.json({
     project,
-    documents: documents as TurnoverProjectDocument[],
+    documents: (documents ?? []).map(d => ({ ...d, outcome: documentOutcome(d.status, d.uploaded_at, Date.now()) })) as TurnoverProjectDocument[],
     lineItems,
     pendingCount,
     totals,

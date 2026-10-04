@@ -8,6 +8,9 @@ import {
   ExternalLink, Pencil, X, Check, Undo2,
 } from 'lucide-react';
 import { ACCEPT, MAX_FILES_PER_BATCH, INCOMING_PARAM, takeStagedFiles } from '@/components/turnover-ai/upload-handoff';
+import { prepareForUpload } from '@/components/turnover-ai/prepare-upload';
+import { UPLOAD_MAX_BYTES, megabytes } from '@/lib/turnover-ai-files';
+import { logActivity } from '@/lib/activity-client';
 import type { TurnoverProjectDocument, TurnoverProjectLineItem } from '@/app/api/turnover-ai/projects/[id]/route';
 
 // Turnover AI — a single project's own page: upload, review and running
@@ -45,6 +48,13 @@ type ProjectDetail = {
 type UploadRow = { id: string; fileName: string; status: 'uploading' | 'done' | 'error'; message?: string; lineItemCount?: number };
 type ConfidenceFilter = 'all' | 'high' | 'medium' | 'low';
 type CurrencyTotal = { currency: string; total: number; count: number };
+
+function uploadErrorMessage(status: number, serverMessage?: string): string {
+  if (serverMessage) return serverMessage;
+  if (status === 413) return `Too large to upload (over ${megabytes(UPLOAD_MAX_BYTES)}) — split it or save a smaller copy.`;
+  if (status === 504) return 'Reading this file took too long — try a smaller file or fewer pages.';
+  return `Upload failed (HTTP ${status}).`;
+}
 
 // Mirrors lib/turnover-ai.ts's computeCurrencyTotals + mergeCurrencyTotals
 // (can't import that file directly — it's `server-only`). Lets an edit,
@@ -175,16 +185,25 @@ export default function TurnoverProjectPage() {
     const rows: UploadRow[] = list.map((f, i) => ({ id: `${round}-${i}`, fileName: f.name, status: 'uploading' }));
     setUploads(prev => [...rows, ...prev]);
 
+    // One file at a time, prepared first (a PDF over the limit is stopped
+    // with a reason; a HEIC or oversized photo becomes a JPEG) — see
+    // components/turnover-ai/prepare-upload.ts.
     for (const [i, file] of list.entries()) {
       const rowId = rows[i].id;
       try {
+        const prepared = await prepareForUpload(file);
+        if (!prepared.ok) {
+          logActivity('turnover_upload_rejected', { reason: prepared.reason, bytes: file.size });
+          throw new Error(prepared.error);
+        }
         const form = new FormData();
-        form.append('file', file);
+        form.append('file', prepared.file);
         form.append('projectId', String(projectId));
         const res = await fetch('/api/turnover-ai/extract', { method: 'POST', body: form });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error ?? 'Extraction failed');
-        const items = (json.lineItems ?? []) as unknown[];
+        // A platform error (Vercel's 413 body limit, a 504 timeout) isn't JSON.
+        const json = await res.json().catch(() => null) as { error?: string; lineItems?: unknown[] } | null;
+        if (!res.ok || !json) throw new Error(uploadErrorMessage(res.status, json?.error));
+        const items = json.lineItems ?? [];
         setUploads(prev => prev.map(u => u.id === rowId ? { ...u, status: 'done', lineItemCount: items.length } : u));
       } catch (err) {
         setUploads(prev => prev.map(u => u.id === rowId ? { ...u, status: 'error', message: err instanceof Error ? err.message : String(err) } : u));
@@ -271,6 +290,9 @@ export default function TurnoverProjectPage() {
     low: active.filter(i => i.confidence === 'low').length,
   };
   const rejectedCount = items.length - active.length;
+  // Files that never made it into the table: nothing from them is in the
+  // total, and staff only knew while that upload's own row was on screen.
+  const unreadDocuments = detail.documents.filter(d => d.outcome === 'failed' || d.outcome === 'interrupted');
   const columns = detail.project.gst_enabled ? '1.4fr 95px 100px 65px 80px 85px 90px' : '1.5fr 100px 110px 70px 90px 90px';
 
   return (
@@ -348,7 +370,7 @@ export default function TurnoverProjectPage() {
       >
         <UploadCloud size={22} color="#94a3b8" />
         <div style={{ fontSize: 13, color: '#334155', fontWeight: 600 }}>Drag files here, or click to select</div>
-        <div style={{ fontSize: 11.5, color: '#94a3b8' }}>PDF, JPG, PNG, HEIC — up to {MAX_FILES_PER_BATCH} at once; add more rounds into this same project anytime</div>
+        <div style={{ fontSize: 11.5, color: '#94a3b8' }}>PDF (up to {megabytes(UPLOAD_MAX_BYTES)}), JPG, PNG, WEBP, HEIC — up to {MAX_FILES_PER_BATCH} at once; add more rounds into this same project anytime</div>
         <input ref={fileInputRef} type="file" multiple accept={ACCEPT} style={{ display: 'none' }}
           onChange={e => { if (e.target.files) uploadFiles(e.target.files); e.target.value = ''; }} />
       </div>
@@ -368,6 +390,24 @@ export default function TurnoverProjectPage() {
               </span>
             </div>
           ))}
+        </div>
+      )}
+
+      {unreadDocuments.length > 0 && (
+        <div style={{ marginBottom: 18, padding: '12px 16px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 12.5, color: '#991b1b' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 6 }}>
+            <AlertTriangle size={15} />
+            {unreadDocuments.length === 1 ? '1 file couldn’t be read' : `${unreadDocuments.length} files couldn’t be read`} — nothing from {unreadDocuments.length === 1 ? 'it' : 'them'} is in the total
+          </div>
+          {unreadDocuments.map(d => (
+            <div key={d.id} style={{ display: 'flex', gap: 8, padding: '3px 0', borderTop: '1px solid #fee2e2' }}>
+              <span style={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '40%' }}>{d.file_name}</span>
+              <span style={{ color: '#b91c1c' }}>
+                {d.outcome === 'interrupted' ? 'Reading was cut off before it finished — drop it again.' : (d.error_message ?? 'Reading failed.')}
+              </span>
+            </div>
+          ))}
+          <div style={{ marginTop: 6, fontSize: 11.5, color: '#b45309' }}>Fix the file if the reason says so, then drop it into the box above again.</div>
         </div>
       )}
 

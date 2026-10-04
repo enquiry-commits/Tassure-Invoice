@@ -65,7 +65,7 @@ function buildExtractTool(gstEnabled: boolean) {
 
 type ClaudeToolUseBlock = { type: 'tool_use'; name: string; input: { receipts?: unknown[] } };
 type ClaudeContentBlock = ClaudeToolUseBlock | { type: string };
-type ClaudeMessagesResponse = { content?: ClaudeContentBlock[]; error?: { message?: string } };
+type ClaudeMessagesResponse = { content?: ClaudeContentBlock[]; stop_reason?: string; error?: { message?: string } };
 
 export async function extractReceipts(params: { base64: string; mediaType: string; kind: 'image' | 'document'; gstEnabled: boolean }): Promise<ExtractedReceipt[]> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -76,7 +76,9 @@ export async function extractReceipts(params: { base64: string; mediaType: strin
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: ASSISTANT_MODEL,
-      max_tokens: 2048,
+      // 2048 held only about two dozen receipts; a fuller file was cut off
+      // and the rest silently never counted (see the stop_reason check below).
+      max_tokens: 8192,
       tools: [buildExtractTool(params.gstEnabled)],
       tool_choice: { type: 'tool', name: 'record_receipts' },
       system: `You read receipts, invoices and transaction slips for a Singapore corporate-services accounting team calculating a client's turnover. A single uploaded file may contain multiple distinct receipts stitched together (e.g. several photographed slips scanned onto one page) — find and record EVERY one separately, never merge them into one total. Chinese 电子发票 (e-invoices) are usually fully legible: high confidence. A photographed or scanned receipt may be cropped, blurry, or sit under a garbled/rotated underlying text layer — always read the VISIBLE IMAGE directly rather than trusting any text layer. Never invent a vendor, date or amount you cannot actually see: mark it low confidence and say why in confidence_reason instead of guessing silently.${params.gstEnabled ? ' This client also needs the GST amount: only record gst_amount when the receipt itself prints one as an explicit line — never calculate, estimate or back out a GST figure yourself.' : ''}`,
@@ -94,6 +96,11 @@ export async function extractReceipts(params: { base64: string; mediaType: strin
     throw new Error(`Claude extraction failed (${res.status}): ${text.slice(0, 300)}`);
   }
   const json = await res.json() as ClaudeMessagesResponse;
+  // A reply cut off at max_tokens carries an incomplete receipt list that
+  // would still parse — turnover silently under-counted on a file marked
+  // done. Fail it with a reason staff can act on instead.
+  if (json.stop_reason === 'max_tokens') throw new Error('This file holds more receipts than one read can return — split it into smaller files and drop those.');
+  if (json.stop_reason === 'refusal') throw new Error('Claude declined to read this file.');
   const toolUse = (json.content ?? []).find((c): c is ClaudeToolUseBlock => c.type === 'tool_use' && (c as ClaudeToolUseBlock).name === 'record_receipts');
   if (!toolUse) throw new Error('Claude did not return a structured result for this document.');
 

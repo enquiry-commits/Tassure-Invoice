@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2, FolderOpen, X, Search, UploadCloud } from 'lucide-react';
 import { ClientPicker, type ClientSelection } from '@/components/turnover-ai/ClientPicker';
 import { ACCEPT, MAX_FILES_PER_BATCH, INCOMING_PARAM, prepareBatch, stageFiles, type PreparedBatch } from '@/components/turnover-ai/upload-handoff';
+import { UPLOAD_MAX_BYTES, megabytes, pdfTooLargeMessage } from '@/lib/turnover-ai-files';
 import type { TurnoverProject } from '@/app/api/turnover-ai/projects/route';
 
 // Turnover AI — Projects list, the feature's home page. Vincent, after
@@ -53,6 +54,11 @@ function FileSummary({ files }: { files: PreparedBatch }) {
           {total} files — the first {MAX_FILES_PER_BATCH} (by name) are read now; drop the other {files.deferred.length} into the project afterwards.
         </div>
       )}
+      {files.tooLarge.length > 0 && (
+        <div style={{ marginTop: 4, color: '#b45309' }}>
+          {plural(files.tooLarge.length, 'PDF')} over {megabytes(UPLOAD_MAX_BYTES)} set aside — split {files.tooLarge.length === 1 ? 'it' : 'them'} into smaller files first: {files.tooLarge.slice(0, 2).map(f => `${f.name} (${megabytes(f.size)})`).join(', ')}{files.tooLarge.length > 2 ? '…' : ''}
+        </div>
+      )}
       {files.rejected.length > 0 && (
         <div style={{ marginTop: 4, color: '#64748b' }}>
           {plural(files.rejected.length, 'file')} skipped (only PDF, JPG, PNG, WEBP, HEIC can be read): {files.rejected.slice(0, 2).map(f => f.name).join(', ')}{files.rejected.length > 2 ? '…' : ''}
@@ -91,7 +97,7 @@ function NewProjectModal({ files, projects, onClose, onCreated, onUseExisting }:
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not create the project.');
       // Stays "Opening…" until the project page takes over.
-      onCreated({ ...json.project, documentCount: 0, pendingCount: 0, totals: [] });
+      onCreated({ ...json.project, documentCount: 0, unreadCount: 0, pendingCount: 0, totals: [] });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setCreating(false);
@@ -160,6 +166,7 @@ function ProjectCard({ project, onDelete }: { project: TurnoverProject; onDelete
         </div>
         <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
           {project.documentCount} file{project.documentCount === 1 ? '' : 's'}
+          {project.unreadCount > 0 && <span style={{ color: '#b91c1c', fontWeight: 600 }}> · {project.unreadCount} couldn&rsquo;t be read</span>}
           {project.gst_enabled && <span> · GST</span>}
         </div>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -252,10 +259,12 @@ export default function TurnoverAiProjectsPage() {
     if (!list?.length) return;
     const prepared = prepareBatch(list);
     if (!prepared.batch.length) {
-      const folderLike = prepared.rejected.every(f => !f.type);
+      const folderLike = !prepared.tooLarge.length && prepared.rejected.every(f => !f.type);
       setNotice(folderLike
         ? 'A folder can’t be dropped as a whole — open it, select the files inside (Ctrl+A) and drop those.'
-        : `Nothing here can be read — only PDF, JPG, PNG, WEBP or HEIC files (${prepared.rejected.slice(0, 2).map(f => f.name).join(', ')}).`);
+        : prepared.tooLarge.length
+          ? pdfTooLargeMessage(prepared.tooLarge[0].size) + (prepared.tooLarge.length > 1 ? ` (${prepared.tooLarge.length} PDFs are over the limit.)` : '')
+          : `Nothing here can be read — only PDF, JPG, PNG, WEBP or HEIC files (${prepared.rejected.slice(0, 2).map(f => f.name).join(', ')}).`);
       return;
     }
     setNotice(null);

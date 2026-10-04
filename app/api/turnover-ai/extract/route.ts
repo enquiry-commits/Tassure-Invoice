@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
 import { createAdminClient } from '@/lib/supabase';
 import { extractReceipts, findDuplicateSuspect, ensureBucket, STORAGE_BUCKET } from '@/lib/turnover-ai';
+import { sniffKind, MEDIA_TYPE, EXTENSION, UPLOAD_MAX_BYTES, megabytes } from '@/lib/turnover-ai-files';
 
 // POST /api/turnover-ai/extract — the one write path that turns an
 // uploaded file into structured turnover_line_items rows, scoped to a
@@ -9,12 +10,16 @@ import { extractReceipts, findDuplicateSuspect, ensureBucket, STORAGE_BUCKET } f
 // file per request — the client's own up-to-100-at-once batching
 // (app/turnover-ai/project/[id]/page.tsx) just calls this in a loop, so
 // this route itself needs no special handling for large batches.
+//
+// 2026-10-05 (docs/INVARIANTS.md INV-DATA-072): the size ceiling is Vercel's
+// ~4.5MB request body, not the old 15MB check (which could never run); the
+// file's type comes from its own first bytes, not the browser's claim (a
+// .heic often arrives with no type at all); HEIC is converted to JPEG in the
+// browser before it gets here, since Claude can't read it; 300s instead of
+// 60s, so a long multi-page PDF isn't killed mid-read.
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
-
-const ALLOWED_MIME = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic']);
-const MAX_BYTES = 15 * 1024 * 1024;
+export const maxDuration = 300;
 
 export async function POST(req: NextRequest) {
   const account = await getRequestAccount(req);
@@ -28,15 +33,17 @@ export async function POST(req: NextRequest) {
 
   if (!file || !(file instanceof File)) return NextResponse.json({ error: 'A file is required (field name "file").' }, { status: 400 });
   if (!Number.isFinite(projectId)) return NextResponse.json({ error: 'A valid projectId is required.' }, { status: 400 });
-  if (file.size > MAX_BYTES) return NextResponse.json({ error: 'File too large (max 15MB).' }, { status: 400 });
-  const mediaType = file.type || 'application/octet-stream';
-  if (!ALLOWED_MIME.has(mediaType)) return NextResponse.json({ error: `Unsupported file type: ${mediaType || 'unknown'}. Use PDF, JPG, PNG or HEIC.` }, { status: 400 });
+  if (file.size > UPLOAD_MAX_BYTES) return NextResponse.json({ error: `File too large (${megabytes(file.size)}; uploads are limited to ${megabytes(UPLOAD_MAX_BYTES)}).` }, { status: 400 });
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const kind = sniffKind(new Uint8Array(buffer.subarray(0, 16)));
+  if (!kind) return NextResponse.json({ error: 'This file is not a PDF or a supported photo (JPG, PNG, WEBP).' }, { status: 400 });
+  if (kind === 'heic') return NextResponse.json({ error: 'HEIC photos are converted to JPG in the browser before upload — reload the page and drop it again.' }, { status: 415 });
+  const mediaType = MEDIA_TYPE[kind];
 
   const supabase = createAdminClient();
   const { data: project, error: projectErr } = await supabase.from('turnover_projects').select('id, name, client_company_id, gst_enabled').eq('id', projectId).single();
   if (projectErr || !project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
-
-  const buffer = Buffer.from(await file.arrayBuffer());
 
   // client_name is still NOT NULL in production (scripts/add-turnover-ai.sql
   // — the Projects migration never relaxed it). Leaving it out after the
@@ -58,7 +65,11 @@ export async function POST(req: NextRequest) {
   try {
     try {
       await ensureBucket(supabase);
-      const storagePath = `${documentId}/${file.name}`;
+      // ASCII-only key: Supabase Storage rejects non-ASCII keys, and this
+      // catch used to swallow that — a Chinese-named e-invoice's original
+      // was silently never stored ("View original" → 404). The real name
+      // stays in turnover_documents.file_name.
+      const storagePath = `${documentId}/original.${EXTENSION[kind]}`;
       const { error: uploadErr } = await supabase.storage.from(STORAGE_BUCKET).upload(storagePath, buffer, { contentType: mediaType, upsert: true });
       if (!uploadErr) await supabase.from('turnover_documents').update({ storage_path: storagePath }).eq('id', documentId);
     } catch {
@@ -67,8 +78,7 @@ export async function POST(req: NextRequest) {
       // reading over a storage hiccup.
     }
 
-    const kind = mediaType === 'application/pdf' ? 'document' : 'image';
-    const receipts = await extractReceipts({ base64: buffer.toString('base64'), mediaType, kind, gstEnabled: project.gst_enabled });
+    const receipts = await extractReceipts({ base64: buffer.toString('base64'), mediaType, kind: kind === 'pdf' ? 'document' : 'image', gstEnabled: project.gst_enabled });
     if (!receipts.length) {
       await supabase.from('turnover_documents').update({ status: 'failed', error_message: 'No receipts could be identified in this file.' }).eq('id', documentId);
       return NextResponse.json({ error: 'No receipts could be identified in this file.' }, { status: 422 });

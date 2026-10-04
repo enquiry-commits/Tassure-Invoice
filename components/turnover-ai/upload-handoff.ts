@@ -16,22 +16,30 @@
 // module — the project page's `?incoming=N` marker then says so instead of
 // silently showing an empty project.
 
-export const ACCEPTED_TYPES: readonly string[] = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'];
-export const ACCEPT = ACCEPTED_TYPES.join(',');
+import { isReadableFile, kindOf, UPLOAD_MAX_BYTES } from '@/lib/turnover-ai-files';
+
+export { ACCEPT } from '@/lib/turnover-ai-files';
 export const MAX_FILES_PER_BATCH = 100;
 export const INCOMING_PARAM = 'incoming';
 
-export type PreparedBatch = { batch: File[]; deferred: File[]; rejected: File[] };
+export type PreparedBatch = { batch: File[]; deferred: File[]; rejected: File[]; tooLarge: File[] };
 
-/** Same type rule as the extract route; the first 100 readable files by name are this round, the rest wait for the next. */
+/**
+ * The shared file rule (lib/turnover-ai-files.ts — type or extension, so a
+ * .heic with an empty type counts); a PDF over the upload limit is set aside
+ * up front (photos are shrunk on the way, PDFs can't be); the first 100
+ * readable files by name are this round, the rest wait for the next.
+ */
 export function prepareBatch(files: Iterable<File>): PreparedBatch {
   const all = Array.from(files);
-  const readable = all.filter(f => ACCEPTED_TYPES.includes(f.type))
+  const tooLarge = all.filter(f => kindOf(f) === 'pdf' && f.size > UPLOAD_MAX_BYTES);
+  const readable = all.filter(f => isReadableFile(f) && !tooLarge.includes(f))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   return {
     batch: readable.slice(0, MAX_FILES_PER_BATCH),
     deferred: readable.slice(MAX_FILES_PER_BATCH),
-    rejected: all.filter(f => !ACCEPTED_TYPES.includes(f.type)),
+    rejected: all.filter(f => !isReadableFile(f)),
+    tooLarge,
   };
 }
 
