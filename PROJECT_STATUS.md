@@ -1,5 +1,13 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-04 (SHIPPED: login accounts for the Tax team's Quinnie Tan and Victoria Yap — asked whether to create them, Vincent: "开，用名录邮箱").
+
+**What changed.** `lib/approved-accounts.ts` gains Quinnie Tan (quinnietan@tassure.com) and Victoria Yap (victoriayap@tassure.com) — the emails `lib/staff-directory.ts` already listed — with the same access as the rest of Accounting/Tax: AR Reminder (home) + TAO Billing + My Tasks, and their own TAO Location (both are among TAO's 17 Locations), so a TAO invoice either of them generates is tagged with her name like a hand-made one. Every Accounting/Tax staff member in the directory now has a login (8). No other account changed.
+
+**Verification.** `test-account-access.ts` ALL OK (now: all 8 Accounting/Tax staff have a login and are exactly the 8 restricted accounts; each opens AR Reminder + TAO Billing only); `test-invoice-pic-class.ts` (17 TAO Locations configured), `test-assistant-pages.ts`, `test-person-visibility.ts` ALL OK. **Not verified:** their first real Google sign-in — if either address isn't their real login, they will be refused and the email needs correcting here.
+
+Previous entry follows.
+
 Last updated: 2026-10-04 (SHIPPED: the Accounting/Tax team can open TAO Billing — Vincent: "要不要让 ACC 同事也能打开 TAO 开票页？这个是肯定的啊 TAO，这边就是主要给 ACC 和 TAX 去开单的").
 
 **What changed.** The 6 accounts confined to AR Reminder since 2026-08-17 (Accounting: Jay Tay, Lee Jing Fei, Tee Yu Heng, Vernice Chai, Chee Wei En; Tax: Clarence Saw) now also reach TAO Billing: `alsoAllowed: ['/billing/tao']` beside their `restrictedTo` home, which stays AR Reminder (where they land and are sent back to). Every page-access check now goes through ONE function, `canAccountOpen()` in `lib/approved-accounts.ts` — `proxy.ts`, the sidebar (via `/api/auth/me`'s new `allowedPages`), the assistant's page map and its billing tools, the assistant export route and the company renewals API each called `isWithinRestriction(account.restrictedTo, …)` themselves before, which could only ever allow one page. Their sidebar shows AR Reminder, TAO Billing, My Tasks; My Tasks' View-as list labels them "(AR Reminder + TAO Billing only)". Nothing else changed for them (Billing Drafts, SOA, Companies, the Dashboard stay blocked) or for anyone else.

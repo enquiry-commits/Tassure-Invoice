@@ -111,7 +111,8 @@ export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   { name: 'Tan Min Quan', email: 'minquan@tassure.com' },
   { name: 'Esther Loo', email: 'esther@tassure.com', qbLocations: { TAB: 'Esther Loo', TAC: 'Esther Loo', TAO: 'Esther Loo' } },
   { name: 'Chelsea Ang', email: 'chelsea@tassure.com', qbLocations: { TAB: 'Chelsea Ang', TAC: 'Chelsea Ang', TAO: 'Chelsea Ang' } },
-  // Vincent, 2026-08-17 (Clarence Saw added 2026-08-27): these 6 (the
+  // Vincent, 2026-08-17 (Clarence Saw added 2026-08-27; Quinnie Tan and
+  // Victoria Yap 2026-10-04): these 8 (the
   // Accounting / Tax team) only see AR Reminder — plus, since 2026-10-04, TAO
   // Billing, where they issue the TAO invoices ("TAO 这边就是主要给 ACC 和
   // TAX 去开单的"). Everything else in the system is hidden/blocked for them.
@@ -121,6 +122,10 @@ export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   { name: 'Vernice Chai', email: 'vernice@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Vernice Chai' } },
   { name: 'Chee Wei En', email: 'weien@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Chee Wei En' } },
   { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Clarence Saw' } },
+  // Tax team, added 2026-10-04 (Vincent: "开，用名录邮箱") — emails as in lib/staff-directory.ts;
+  // same access as the rest of Accounting/Tax: AR Reminder + TAO Billing.
+  { name: 'Quinnie Tan', email: 'quinnietan@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Quinnie Tan' } },
+  { name: 'Victoria Yap', email: 'victoriayap@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Victoria Yap' } },
 ] as const;
 
 const ACCOUNT_BY_EMAIL = new Map(

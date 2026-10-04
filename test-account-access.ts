@@ -24,7 +24,7 @@ const can = (a: ApprovedAccount | null, href: string) => {
 console.log('--- the Accounting / Tax team ---');
 const accTax = staffByTeam().filter(t => t.team === 'Accounting' || t.team === 'Tax').flatMap(t => t.members);
 const withLogin = accTax.map(s => getApprovedAccount(s.email)).filter((a): a is ApprovedAccount => !!a);
-check('the 6 Accounting/Tax staff with a login are exactly the 6 restricted accounts', withLogin.length === 6
+check('all 8 Accounting/Tax staff have a login, and they are exactly the 8 restricted accounts', withLogin.length === 8 && withLogin.length === accTax.length
   && JSON.stringify(withLogin.map(a => a.email).sort()) === JSON.stringify(APPROVED_ACCOUNTS.filter(a => a.restrictedTo).map(a => a.email).sort()));
 for (const a of withLogin) {
   check(`${a.name}: AR Reminder + TAO Billing, home = AR Reminder`, JSON.stringify(allowedPagesFor(a)) === JSON.stringify(['/billing?tab=ar', '/billing/tao']), JSON.stringify(allowedPagesFor(a)));
@@ -33,7 +33,7 @@ const jay = getApprovedAccount('jaytay@tassure.com');
 check('Jay can open AR Reminder and TAO Billing (also with extra query params)', can(jay, '/billing?tab=ar') && can(jay, '/billing/tao') && can(jay, '/billing/tao?company=X'));
 check('… but still not Billing Drafts, SOA, Companies, Quotation, Reports or the Dashboard', ['/billing?tab=billing', '/billing/soa/all', '/companies', '/billing/quotation', '/reports', '/'].every(h => !can(jay, h)));
 const missing = accTax.filter(s => !getApprovedAccount(s.email)).map(s => s.name);
-console.log(`     (Accounting/Tax staff with no login account yet: ${missing.join(', ') || 'none'})`);
+check('no Accounting/Tax staff member is left without a login (Quinnie Tan, Victoria Yap added 2026-10-04)', missing.length === 0, missing.join(', '));
 
 console.log('\n--- nobody else changed ---');
 const vincent = getApprovedAccount('vincent@tassure.com');

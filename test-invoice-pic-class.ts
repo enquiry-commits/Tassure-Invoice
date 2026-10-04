@@ -124,10 +124,10 @@ console.log('\n--- TAO: QuickBooks\' own settings restored ("尽量还原QB本�
   // Location: TAO's 17 Locations (live, 2026-10-04) are staff full names — each account whose name is one carries it.
   const TAO_LOCATIONS = new Set(['Ang Shi Ming', 'Chee Wei En', 'Chelsea Ang', 'Chin Kah Ye', 'Clarence Saw', 'Esther Loo', 'Hoo Seng Xin', 'Jay Tay', 'Jenny Lai', 'Lee Jing Fei', 'Lim Hoe Chyi', 'Quinnie Tan', 'Tan Yee Soon', 'Tee Yu Heng', 'Tey Shemin', 'Vernice Chai', 'Victoria Yap']);
   const withTao = APPROVED_ACCOUNTS.filter(a => a.qbLocations?.TAO);
-  check('every account whose name is a TAO Location has it as its TAO Location (15)', withTao.length === 15 && withTao.every(a => a.qbLocations!.TAO === a.name && TAO_LOCATIONS.has(a.name))
+  check('every account whose name is a TAO Location has it as its TAO Location (17)', withTao.length === 17 && withTao.every(a => a.qbLocations!.TAO === a.name && TAO_LOCATIONS.has(a.name))
     && APPROVED_ACCOUNTS.filter(a => TAO_LOCATIONS.has(a.name)).every(a => a.qbLocations?.TAO === a.name), withTao.map(a => a.name).join(', '));
   check('… and adding it changed no TAB / TAC Location and no permission', (APPROVED_ACCOUNTS.find(a => a.name === 'Hoo Seng Xin')?.qbLocations?.TAC === 'Seng Xin')
-    && APPROVED_ACCOUNTS.filter(a => a.restrictedTo).length === 6 && !!APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.admin && !APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.qbLocations?.TAO);
+    && APPROVED_ACCOUNTS.filter(a => a.restrictedTo).length === 8 && !!APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.admin && !APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.qbLocations?.TAO);
 }
 
 console.log('\n--- source guards: the routes and the popup use the shared rules ---');
