@@ -2048,6 +2048,30 @@ again.
   Across 470 TAO clients billed in 2026 the restored PIC equals
   QuickBooks' own last PIC on 1,290/1,290 rows. The old TAO builder note
   "TAO invoices never carry one" was wrong.
+- **INV-QB-027** — Every invoice this app generates carries QuickBooks'
+  Statement memo (PrivateNote), written the way staff already write it —
+  never left for someone to type in afterwards, and never rewritten on an
+  edit. Real data (2026-10-04): every app-created invoice had its memo typed
+  in by hand afterwards (60/60 TAB, 20/20 TAC; all 60 latest hand-made TAO
+  invoices carry one too). TAB/TAC: `lib/statement-memo.ts`
+  `composeStatementMemo()` composes it live in the Billing Drafts popup from
+  the lines being invoiced — "Sec,addrs (Apr 2026 - Mar 2027),AR 31.08.2026",
+  "Sec (Oct 2026 - Sep 2027),AR,XBRL 31.12.2026", "XBRL", TAC "ND (Aug 2026 -
+  Jul 2027)" — editable, an edit wins until reset (Vincent: "只做 Statement
+  memo"). TAO: the client's last memo with its year rolled forward
+  (INV-QB-026). Checked against 99 real app-created TAB invoices: identical
+  to what staff typed on 86, TAC 20/20; the other 13 are staff slips
+  (impossible dates like "AR 31.6.2026", a missing month, an addrs/XBRL left
+  out although it IS on the invoice) — don't bend the composer toward them.
+  Non-obvious: a service billed in advance sits on QuickBooks' "Deferred
+  Revenue - Corp Sec / Reg Addr" item WITH its full description (#02611068's
+  only secretarial line) — that counts as Sec/addrs; only the EMPTY deferred
+  twin and discounts are never mentioned. `update-invoice` sends no
+  PrivateNote, so editing an invoice leaves its memo exactly as QuickBooks
+  has it. The "Print later" flag (PrintStatus NeedToPrint on 59/60
+  app-created TAB invoices, which staff leave unset) was deliberately left as
+  it is — Vincent chose the memo only, after hearing it changes nothing a
+  client sees.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

@@ -380,7 +380,11 @@ a client with TAO history (e.g. 1V CAPITAL: Yearly Accounts / Compilation
 PIC is the one on its last QuickBooks line, the Statement memo is the last
 invoice's with the year rolled forward; after generating, QuickBooks must
 show those Classes per line, the generator's own Location, and the memo.
-**Guards:** `docs/INVARIANTS.md` INV-QB-007, INV-QB-013, INV-QB-026.
+(6) Statement memo: for a new TAB invoice the memo field reads like staff's
+own (e.g. "Sec,addrs (Oct 2026 - Sep 2027),AR 31.12.2026") and follows the
+ticked lines; after generating, QuickBooks' Statement memo equals it;
+editing an existing invoice leaves its memo untouched.
+**Guards:** `docs/INVARIANTS.md` INV-QB-007, INV-QB-013, INV-QB-026, INV-QB-027.
 
 ---
 

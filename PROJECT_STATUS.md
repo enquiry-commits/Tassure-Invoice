@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-04 (SHIPPED: new TAB/TAC invoices carry QuickBooks' Statement memo, written the way staff type it — Vincent, after the impact was explained: "只做 Statement memo"; the "Print later" flag stays as it is).
+
+**Why.** Every invoice this app created had its Statement memo (QuickBooks' PrivateNote — e.g. "Sec (Nov 2026 - Oct 2027),AR 31.7.2026", "ND (Aug 2026 - Jul 2027)") typed in by hand afterwards: 60/60 of the latest TAB, 20/20 TAC — one extra open-type-save in QuickBooks per invoice.
+
+**What shipped.** `lib/statement-memo.ts` `composeStatementMemo()` reproduces staff's own convention, read from the 500 latest invoices per book: the periodic services ("Sec", "addrs", "ND") with the service period, then "AR"/"XBRL" with the FYE, then anything else by its QuickBooks item name; an XBRL-only invoice is just "XBRL"; a service billed in advance on the "Deferred Revenue - Corp Sec / Reg Addr" item still counts, the empty deferred twin and discounts never do. The Billing Drafts popup (and its copy in the assistant's chat card) shows a Statement memo field under each book being generated, composed live from the ticked lines and editable ("↺ Auto" resets); Generate sends it (`statementMemos`, written as PrivateNote). Editing an existing invoice never touches its memo.
+
+**Verification.** Composed from the real lines of 99 app-created TAB invoices: identical to the memo staff typed on 86 (punctuation/spacing ignored), TAC 20/20; the other 13 are staff slips (impossible dates "AR 31.6.2026" / "AR 3.05.2026", a missing month, addrs/XBRL left out though on the invoice, extra notes). `test-statement-memo.ts` 15 checks ALL OK (negative control: the popup guards fail on the old code); local preview with a real company (ICON GULF; every write intercepted): the memo read "Sec,addrs (Oct 2026 - Sep 2027)", became "…,AR 31.12.2026" when the AR line was ticked, and Generate sent the edited text. tsc, related suites and `npm run build` clean; eslint unchanged from HEAD. **Not verified:** a real generated invoice in QuickBooks (REG-027 step 6). Docs: `docs/INVARIANTS.md` INV-QB-027; `docs/FEATURE_MAP.md`; `docs/REGRESSION_CHECKLIST.md` REG-027; `docs/CURRENT_STATE.md`.
+
+Previous entry follows.
+
 Last updated: 2026-10-04 (SHIPPED: login accounts for the Tax team's Quinnie Tan and Victoria Yap — asked whether to create them, Vincent: "开，用名录邮箱").
 
 **What changed.** `lib/approved-accounts.ts` gains Quinnie Tan (quinnietan@tassure.com) and Victoria Yap (victoriayap@tassure.com) — the emails `lib/staff-directory.ts` already listed — with the same access as the rest of Accounting/Tax: AR Reminder (home) + TAO Billing + My Tasks, and their own TAO Location (both are among TAO's 17 Locations), so a TAO invoice either of them generates is tagged with her name like a hand-made one. Every Accounting/Tax staff member in the directory now has a login (8). No other account changed.
