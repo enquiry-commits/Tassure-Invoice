@@ -7,7 +7,9 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import {
   getsDefaultPicClass, picLivesInServiceItem, isStaffClassName, matchPicClass, validateLinePicClasses, requiresPicClass, isGovFeeLine,
+  taoLineNeedsPic, taoDefaultPicName,
 } from './lib/invoice-pic-class';
+import { APPROVED_ACCOUNTS } from './lib/approved-accounts';
 import { buildInvoiceLineArray, type DraftLineItem } from './lib/qb-invoice-conventions';
 
 const ROOT = process.env.PIC_GUARD_ROOT ?? process.cwd();
@@ -100,6 +102,34 @@ console.log('\n--- what actually reaches QuickBooks (buildInvoiceLineArray) ---'
   check('editing round-trips every line\'s Class exactly (incl. a legacy "JL" and a deliberate none)', JSON.stringify(classOf(roundTrip)) === JSON.stringify(['Jenny Lai', 'JL', null]), JSON.stringify(classOf(roundTrip)));
 }
 
+console.log('\n--- TAO: QuickBooks\' own settings restored ("尽量还原QB本来有的设定") ---');
+{
+  // Real shape: the 60 latest hand-made TAO invoices — Accounts/Tax lines 100% carry a Class, disbursements 0%.
+  check('Accounts / Tax lines carry a PIC in QuickBooks; disbursement / OPE lines do not', taoLineNeedsPic({ service: 'Accounts' }) && taoLineNeedsPic({ service: 'Tax' }) && !taoLineNeedsPic({ service: 'Disbursement' }) && !taoLineNeedsPic({ service: 'Other' }));
+  const history = {
+    lastClassByProduct: new Map<string, string | null>([
+      ['Accounts:Yearly Accounts Services', 'Tee Yu Heng'], ['Tax:Corporate Tax Services', 'Quinnie Tan'],
+      ['Disbursement:Reimbursement - OPE', null], ['Accounts:Monthly Accounts Services', null],
+    ]),
+    lastClassByService: { Accounts: 'Tee Yu Heng', Tax: 'Quinnie Tan' } as Record<string, string>,
+  };
+  check('a service billed before restores the PIC its last line had', taoDefaultPicName({ service: 'Accounts', productService: 'Accounts:Yearly Accounts Services' }, history) === 'Tee Yu Heng'
+    && taoDefaultPicName({ service: 'Tax', productService: 'Tax:Corporate Tax Services' }, history) === 'Quinnie Tan');
+  check('a new Tax item takes the client\'s current Tax PIC; a new Accounts item its Accounts PIC', taoDefaultPicName({ service: 'Tax', productService: 'Tax:GST Submission Services' }, history) === 'Quinnie Tan'
+    && taoDefaultPicName({ service: 'Accounts', productService: 'Accounts:Account Review' }, history) === 'Tee Yu Heng');
+  check('an Accounts line whose last line had no Class still gets the client\'s Accounts PIC', taoDefaultPicName({ service: 'Accounts', productService: 'Accounts:Monthly Accounts Services' }, history) === 'Tee Yu Heng');
+  check('disbursement / OPE lines start with no PIC, as in QuickBooks', taoDefaultPicName({ service: 'Disbursement', productService: 'Disbursement:Reimbursement - OPE' }, history) === null);
+  check('a client with no TAO history starts with no PIC (nothing to restore)', taoDefaultPicName({ service: 'Tax', productService: 'Tax:Corporate Tax Services' }, { lastClassByProduct: new Map(), lastClassByService: {} }) === null);
+
+  // Location: TAO's 17 Locations (live, 2026-10-04) are staff full names — each account whose name is one carries it.
+  const TAO_LOCATIONS = new Set(['Ang Shi Ming', 'Chee Wei En', 'Chelsea Ang', 'Chin Kah Ye', 'Clarence Saw', 'Esther Loo', 'Hoo Seng Xin', 'Jay Tay', 'Jenny Lai', 'Lee Jing Fei', 'Lim Hoe Chyi', 'Quinnie Tan', 'Tan Yee Soon', 'Tee Yu Heng', 'Tey Shemin', 'Vernice Chai', 'Victoria Yap']);
+  const withTao = APPROVED_ACCOUNTS.filter(a => a.qbLocations?.TAO);
+  check('every account whose name is a TAO Location has it as its TAO Location (15)', withTao.length === 15 && withTao.every(a => a.qbLocations!.TAO === a.name && TAO_LOCATIONS.has(a.name))
+    && APPROVED_ACCOUNTS.filter(a => TAO_LOCATIONS.has(a.name)).every(a => a.qbLocations?.TAO === a.name), withTao.map(a => a.name).join(', '));
+  check('… and adding it changed no TAB / TAC Location and no permission', (APPROVED_ACCOUNTS.find(a => a.name === 'Hoo Seng Xin')?.qbLocations?.TAC === 'Seng Xin')
+    && APPROVED_ACCOUNTS.filter(a => a.restrictedTo).length === 6 && !!APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.admin && !APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.qbLocations?.TAO);
+}
+
 console.log('\n--- source guards: the routes and the popup use the shared rules ---');
 {
   const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
@@ -115,6 +145,15 @@ console.log('\n--- source guards: the routes and the popup use the shared rules 
   check('popup: default PIC comes from the shared rule, not a local copy', /getsDefaultPicClass\(company, l\)/.test(popup) && !/service === 'Secretary' \|\| .*service === 'XBRL'/.test(popup));
   check('live invoice reader returns each line\'s Class', /picClass: classRef\.value \?/.test(read('lib/quickbooks-invoice-lines.ts')));
   check('Billing Drafts popup is wide enough for the PIC column (1280)', /maxWidth: 1280/.test(read('app/billing/page.tsx')));
+
+  const tao = read('components/billing/TaoInvoiceBuilder.tsx');
+  check('TAO builder sends each line\'s PIC and the Statement memo', /picClassId: effectivePicId\(l\)/.test(tao) && /statementMemos: \{ TAO: memo\.trim\(\) \}/.test(tao));
+  check('TAO builder restores the PIC with the shared rule, not a local copy', /taoDefaultPicName\(l, picHistory\)/.test(tao) && /taoLineNeedsPic\(l\)/.test(tao));
+  const hist = read('app/api/billing/tao/service-history/route.ts');
+  check('TAO history returns each service\'s last PIC, the PIC per service and the last Statement memo', /picClassName: item\.class_name/.test(hist) && /picByService\[item\.service_type\] = item\.class_name/.test(hist) && /PrivateNote/.test(hist));
+  const create = read('app/api/quickbooks/create-invoice/route.ts');
+  check('create-invoice writes the Statement memo as PrivateNote, only when given, max 4,000 chars', /\{ PrivateNote: statementMemo\.trim\(\) \}/.test(create) && /m\.length > 4000/.test(create) && /statementMemos\?\.\[company\]/.test(create));
+  check('TAO popup is wide enough for the PIC column (1100)', /maxWidth: 1100/.test(read('app/billing/tao/page.tsx')));
 }
 
 console.log(fail === 0 ? '\nALL OK' : `\n${fail} FAILED`);

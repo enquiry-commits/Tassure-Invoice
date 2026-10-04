@@ -369,7 +369,12 @@ changing anything and confirm in QuickBooks that no line's Class changed.
 (3) for a new invoice, Secretary/XBRL lines pre-fill the company PIC's Class
 and other lines show "— No PIC"; a company whose PIC has no QuickBooks Class
 shows "no matching QuickBooks Class — pick per line". (4) a TAC Nominee
-Director line shows "<initials> · in ND item", never a dropdown.
+Director line shows "<initials> · in ND item", never a dropdown. (5) TAO: open
+a client with TAO history (e.g. 1V CAPITAL: Yearly Accounts / Compilation
+= Lee Jing Fei, Corporate Tax = To Be Assign, OPE "— No PIC") — each line's
+PIC is the one on its last QuickBooks line, the Statement memo is the last
+invoice's with the year rolled forward; after generating, QuickBooks must
+show those Classes per line, the generator's own Location, and the memo.
 **Guards:** `docs/INVARIANTS.md` INV-QB-007, INV-QB-013, INV-QB-026.
 
 ---

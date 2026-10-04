@@ -22,7 +22,8 @@ import { Plus, X, AlertCircle, Mail } from 'lucide-react';
 import { isValidEmail } from '@/lib/campaign-recipients';
 import { rollRecurringDescriptionForward } from '@/lib/invoice-period';
 import type { TaoCompanyRow } from '@/app/api/billing/tao/route';
-import type { TaoServiceHistoryItem } from '@/app/api/billing/tao/service-history/route';
+import type { TaoServiceHistory, TaoServiceHistoryItem } from '@/app/api/billing/tao/service-history/route';
+import { taoDefaultPicName, taoLineNeedsPic, type PicClassOption } from '@/lib/invoice-pic-class';
 
 const TAO_PRODUCTS: { label: string; category: string; productService: string; service: string }[] = [
   { label: 'Compilation Report Services', category: 'Accounts', productService: 'Accounts:Compilation Report Services', service: 'Accounts' },
@@ -63,6 +64,11 @@ type Line = {
   // reference only ("目的是为了让用户知道上一次开单是什么时候，这次还要
   // 不要开单") — null for a brand-new line added via "Add line".
   lastBilled: string | null;
+  // The line's PIC = its QuickBooks Class, like QuickBooks' own per-line
+  // Class column (INV-QB-026). undefined = nobody chose → QuickBooks' own
+  // previous setting for this client is restored (taoDefaultPicName);
+  // null = no PIC; a string = that Class Id.
+  picClassId?: string | null;
 };
 
 let lineKeySeq = 0;
@@ -144,6 +150,27 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
   const requestKey = useRef(globalThis.crypto.randomUUID());
 
   const [historyLoading, setHistoryLoading] = useState(true);
+  // QuickBooks' own TAO settings, restored from this client's history
+  // (Vincent, 2026-10-04: "尽量还原QB本来有的设定"): each line's PIC, and the
+  // invoice's Statement memo. The Location is added server-side from the
+  // signed-in account (lib/approved-accounts.ts qbLocations.TAO).
+  const [picHistory, setPicHistory] = useState<{ lastClassByProduct: Map<string, string | null>; lastClassByService: Record<string, string> }>({ lastClassByProduct: new Map(), lastClassByService: {} });
+  const [picOptions, setPicOptions] = useState<{ status: 'loading' | 'ok' | 'error'; classes: PicClassOption[]; error?: string }>({ status: 'loading', classes: [] });
+  const [memo, setMemo] = useState('');
+  const [lastMemo, setLastMemo] = useState<TaoServiceHistory['lastStatementMemo']>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/quickbooks/pic-classes?company=TAO')
+      .then(async response => {
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.error ?? 'Unable to load QuickBooks classes');
+        return json;
+      })
+      .then(json => { if (!cancelled) setPicOptions({ status: 'ok', classes: json.classes ?? [] }); })
+      .catch(error => { if (!cancelled) setPicOptions({ status: 'error', classes: [], error: error instanceof Error ? error.message : String(error) }); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -174,9 +201,19 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
     setHistoryLoading(true);
     fetch(`/api/billing/tao/service-history?companyName=${encodeURIComponent(company.companyName)}`, { signal: controller.signal })
       .then(res => res.json())
-      .then(json => {
+      .then((json: Partial<TaoServiceHistory>) => {
         const items: TaoServiceHistoryItem[] = json.services ?? [];
         setLines(items.map(h => lineFromHistory(h, TAO_PRODUCTS)));
+        setPicHistory({
+          lastClassByProduct: new Map(items.map(h => [h.productService, h.picClassName ?? null])),
+          lastClassByService: json.picByService ?? {},
+        });
+        // Statement memo: the last invoice's, years rolled forward one cycle
+        // like the line descriptions ("Tax YA 2026" → "Tax YA 2027") — a
+        // starting guess, never overwriting anything already typed.
+        const last = json.lastStatementMemo ?? null;
+        setLastMemo(last);
+        if (last) setMemo(current => current || rollRecurringDescriptionForward(last.text));
       })
       .catch(() => {})
       .finally(() => setHistoryLoading(false));
@@ -193,6 +230,19 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
     setLines(current => [...current, newLine(opt)]);
   };
   const removeLine = (key: number) => setLines(current => current.filter(l => l.key !== key));
+
+  // What a line's PIC is right now: the person's choice, else QuickBooks'
+  // own previous setting for this client (lib/invoice-pic-class.ts
+  // taoDefaultPicName), mapped to an ACTIVE Class. undefined = not known yet
+  // (history or the Class list still loading / unavailable) → nothing sent,
+  // so the server keeps today's classless behaviour rather than guessing.
+  const picDefaultName = (l: Line) => taoDefaultPicName(l, picHistory);
+  const effectivePicId = (l: Line): string | null | undefined => {
+    if (l.picClassId !== undefined) return l.picClassId;
+    if (picOptions.status !== 'ok' || historyLoading) return undefined;
+    const name = picDefaultName(l);
+    return name ? (picOptions.classes.find(o => o.name === name)?.value ?? null) : null;
+  };
 
   const included = lines.filter(l => l.include);
   const total = included.reduce((s, l) => s + (Number(l.rate) || 0) * (Number(l.qty) || 0), 0);
@@ -219,7 +269,12 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
             description: l.description.trim(),
             rate: Number(l.rate),
             qty: Number(l.qty),
+            // The PIC shown in the PIC column (INV-QB-026); undefined is
+            // dropped by JSON → no Class, as before.
+            picClassId: effectivePicId(l),
           })),
+          // QuickBooks' Statement memo (PrivateNote) — only when filled in.
+          ...(memo.trim() ? { statementMemos: { TAO: memo.trim() } } : {}),
           idempotencyKey: requestKey.current,
           docNumbers: { TAO: docNumber || undefined },
           expectedNextNumbers: { TAO: suggestedNumber || undefined },
@@ -267,11 +322,34 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
   // same include-checkbox + uppercase-header table + attached "Add line"
   // footer bar, the same bottom "N lines · Total" + green Generate button +
   // draft disclaimer. Only Status is dropped (that tracks Secretary/Address/
-  // ND renewal-period due-dates, which don't exist for Accounts/Tax) and
-  // there's no PIC/Class note (TAO invoices never carry one — see
-  // lib/qb-invoice-conventions.ts) — a "Last billed" caption takes Status's
-  // place instead, since that's the reference signal that exists here.
+  // ND renewal-period due-dates, which don't exist for Accounts/Tax) — a
+  // "Last billed" caption takes Status's place instead, since that's the
+  // reference signal that exists here. The PIC column is QuickBooks' own
+  // per-line Class: the old note here that "TAO invoices never carry one"
+  // was wrong — staff tag every Accounts/Tax line (2026-10-04, INV-QB-026).
   const inputStyle: React.CSSProperties = { border: '1px solid #cbd5e1', borderRadius: 5, padding: '6px 6px', fontSize: 12, outline: 'none', background: '#fff' };
+  const LINE_GRID = '26px 1.1fr minmax(220px, 2fr) 150px 60px 100px 100px 26px';
+  const renderPicCell = (l: Line) => {
+    const value = effectivePicId(l);
+    const selected = value ?? '';
+    // An Accounts/Tax line normally carries the PIC (100% in QuickBooks) — flag, never block.
+    const missing = value === null && taoLineNeedsPic(l);
+    const lastName = picDefaultName(l);
+    const title = missing
+      ? (lastName ? `Last QuickBooks PIC "${lastName}" is no longer an active Class — pick one` : 'Accounts / Tax lines normally carry the PIC')
+      : 'PIC — the QuickBooks Class on this line';
+    return (
+      <select
+        value={selected}
+        disabled={value === undefined && (picOptions.status === 'loading' || historyLoading)}
+        onChange={e => updateLine(l.key, { picClassId: e.target.value || null })}
+        aria-label="PIC" title={title}
+        style={{ ...inputStyle, width: '94%', fontSize: 11.5, padding: '6px 4px', color: value ? '#334155' : '#94a3b8', borderColor: missing ? '#fbbf24' : '#cbd5e1', background: missing ? '#fffbeb' : '#fff' }}>
+        <option value="">{value === undefined ? (picOptions.status === 'error' ? 'PIC list unavailable' : 'Loading…') : '— No PIC'}</option>
+        {picOptions.classes.map(o => <option key={o.value} value={o.value}>{o.name}</option>)}
+      </select>
+    );
+  };
   const manuallyChanged = !!docNumber && !!suggestedNumber && docNumber !== suggestedNumber;
   const numberBg = manuallyChanged ? '#fffbeb' : '#f8fafc';
   const numberBorder = manuallyChanged ? '#fcd34d' : '#dbe5ee';
@@ -320,9 +398,10 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
           this company has ever been billed for via TAO (unchecked, greyed
           out until ticked — see lineFromHistory above), plus whatever gets
           added via "Add line". */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '26px 1.1fr 2fr 60px 100px 100px 26px', gap: 0, background: '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto', overflowY: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: LINE_GRID, gap: 0, background: '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
           <div /><div>Service</div><div>Description</div>
+          <div>PIC</div>
           <div style={{ textAlign: 'center', padding: '0 8px' }}>Qty</div>
           <div style={{ textAlign: 'center', padding: '0 8px' }}>Rate (S$)</div>
           <div style={{ textAlign: 'right' }}>Amount</div><div />
@@ -331,7 +410,7 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
           <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No prior TAO billing history for this company — add a line below.</div>
         )}
         {lines.map(l => (
-          <div key={l.key} style={{ display: 'grid', gridTemplateColumns: '26px 1.1fr 2fr 60px 100px 100px 26px', gap: 0, alignItems: 'start', padding: '14px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.6 }}>
+          <div key={l.key} style={{ display: 'grid', gridTemplateColumns: LINE_GRID, gap: 0, alignItems: 'start', padding: '14px 10px', borderTop: '1px solid #f1f5f9', background: l.include ? '#fff' : '#fafbfc', opacity: l.include ? 1 : 0.6 }}>
             <input type="checkbox" checked={l.include} onChange={e => updateLine(l.key, { include: e.target.checked })}
               style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e', marginTop: 6 }} />
             <div style={{ paddingTop: 6 }} title={l.productService || undefined}>
@@ -343,6 +422,7 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
             </div>
             <AutoTextarea value={l.description} onChange={v => updateLine(l.key, { description: v })}
               style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
+            {renderPicCell(l)}
             <input type="number" min={1} value={l.qty} onChange={e => updateLine(l.key, { qty: e.target.value })}
               style={{ ...inputStyle, width: 44, textAlign: 'center', justifySelf: 'center' }} />
             <input type="number" min={0} value={l.rate} onChange={e => updateLine(l.key, { rate: e.target.value })}
@@ -375,6 +455,21 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
             <option key={x.label} value={x.productService || '__custom__'}>{x.label}</option>
           ))}
         </select>
+      </div>
+
+      {/* Statement memo — QuickBooks' PrivateNote, which every hand-made TAO
+          invoice carries (e.g. "Yearly accounting services,Compilation
+          report,Tax YA 2027"). Pre-filled from this client's last TAO
+          invoice with the years rolled forward; edit to match the lines
+          actually ticked. Left empty → none is written, as before. */}
+      <div style={{ marginTop: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Statement memo</span>
+          <span style={{ fontSize: 10, color: '#94a3b8' }}>
+            {lastMemo ? `Last (#${lastMemo.invoiceNo.replace(/^TAO/i, '')}): "${lastMemo.text}"` : historyLoading ? '' : 'No previous memo — e.g. "Tax YA 2026"'}
+          </span>
+        </div>
+        <AutoTextarea value={memo} onChange={setMemo} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.4 }} />
       </div>
 
       {/* Total + Generate */}

@@ -3,12 +3,14 @@ import { staffMentionCandidates } from './staff-directory';
 export type ApprovedAccount = {
   name: string;
   email: string;
-  // TAO added to the key type 2026-09-04 for type-consistency with the
-  // widened QbCompany (lib/quickbooks.ts) — no staff has a TAO Location set
-  // yet (Phase 2: deciding whether TAO invoices even use QB Locations is
-  // Vincent's call, not made yet), this is purely so create-invoice/
-  // route.ts's `account.qbLocations?.[company]` still type-checks now that
-  // `company` can be 'TAO'.
+  // The QuickBooks Location (Department) an invoice this person generates is
+  // tagged with, per book — Location marks WHO keyed the invoice in
+  // (INV-QB-013). TAO decided 2026-10-04 (Vincent: "尽量还原QB本来有的设定"):
+  // all 60 latest hand-made TAO invoices carry the operator's Location, and
+  // TAO's 17 Locations are staff full names, so every account whose name is
+  // one of them got its TAO entry (verified against the live TAO list).
+  // Accounts with no matching TAO Location (Vincent, Cindy, Samuell, Min
+  // Quan) create TAO invoices without one, as before.
   qbLocations?: Partial<Record<'TAB' | 'TAC' | 'TAO', string>>;
   // Gates the Appearance Settings editor (app/admin/appearance) and its
   // PATCH route. Vincent only, per his own explicit scoping.
@@ -94,24 +96,24 @@ export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   // Tan Yee Soon (yeesoon@tassure.com)") — previously only existed in
   // lib/staff-directory.ts (used for PIC-matching text, not login) with no
   // way to actually sign in at all.
-  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true },
-  { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', qbLocations: { TAB: 'Lim Hoe Chyi', TAC: 'Lim Hoe Chyi' } },
-  { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', qbLocations: { TAB: 'Hoo Seng Xin', TAC: 'Seng Xin' } },
-  { name: 'Jenny Lai', email: 'jennylai@tassure.com', qbLocations: { TAB: 'Jenny Lai', TAC: 'Jenny Lai' } },
-  { name: 'Chin Kah Ye', email: 'kahye@tassure.com', qbLocations: { TAB: 'Chin Kah Ye', TAC: 'Kah Ye' } },
-  { name: 'Ang Shi Ming', email: 'shiming@tassure.com', qbLocations: { TAB: 'Ang Shi Ming', TAC: 'Shi Ming' } },
-  { name: 'Tey Shemin', email: 'shemin@tassure.com', qbLocations: { TAB: 'Tey Shemin', TAC: 'Shemin' } },
+  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, qbLocations: { TAO: 'Tan Yee Soon' } },
+  { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', qbLocations: { TAB: 'Lim Hoe Chyi', TAC: 'Lim Hoe Chyi', TAO: 'Lim Hoe Chyi' } },
+  { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', qbLocations: { TAB: 'Hoo Seng Xin', TAC: 'Seng Xin', TAO: 'Hoo Seng Xin' } },
+  { name: 'Jenny Lai', email: 'jennylai@tassure.com', qbLocations: { TAB: 'Jenny Lai', TAC: 'Jenny Lai', TAO: 'Jenny Lai' } },
+  { name: 'Chin Kah Ye', email: 'kahye@tassure.com', qbLocations: { TAB: 'Chin Kah Ye', TAC: 'Kah Ye', TAO: 'Chin Kah Ye' } },
+  { name: 'Ang Shi Ming', email: 'shiming@tassure.com', qbLocations: { TAB: 'Ang Shi Ming', TAC: 'Shi Ming', TAO: 'Ang Shi Ming' } },
+  { name: 'Tey Shemin', email: 'shemin@tassure.com', qbLocations: { TAB: 'Tey Shemin', TAC: 'Shemin', TAO: 'Tey Shemin' } },
   { name: 'Tan Min Quan', email: 'minquan@tassure.com' },
-  { name: 'Esther Loo', email: 'esther@tassure.com', qbLocations: { TAB: 'Esther Loo', TAC: 'Esther Loo' } },
-  { name: 'Chelsea Ang', email: 'chelsea@tassure.com', qbLocations: { TAB: 'Chelsea Ang', TAC: 'Chelsea Ang' } },
+  { name: 'Esther Loo', email: 'esther@tassure.com', qbLocations: { TAB: 'Esther Loo', TAC: 'Esther Loo', TAO: 'Esther Loo' } },
+  { name: 'Chelsea Ang', email: 'chelsea@tassure.com', qbLocations: { TAB: 'Chelsea Ang', TAC: 'Chelsea Ang', TAO: 'Chelsea Ang' } },
   // Vincent, 2026-08-17 (Clarence Saw added 2026-08-27): these 6 only see
   // AR Reminder — everything else in the system is hidden/blocked for them.
-  { name: 'Jay Tay', email: 'jaytay@tassure.com', restrictedTo: '/billing?tab=ar' },
-  { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', restrictedTo: '/billing?tab=ar' },
-  { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', restrictedTo: '/billing?tab=ar' },
-  { name: 'Vernice Chai', email: 'vernice@tassure.com', restrictedTo: '/billing?tab=ar' },
-  { name: 'Chee Wei En', email: 'weien@tassure.com', restrictedTo: '/billing?tab=ar' },
-  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', restrictedTo: '/billing?tab=ar' },
+  { name: 'Jay Tay', email: 'jaytay@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Jay Tay' } },
+  { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Lee Jing Fei' } },
+  { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Tee Yu Heng' } },
+  { name: 'Vernice Chai', email: 'vernice@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Vernice Chai' } },
+  { name: 'Chee Wei En', email: 'weien@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Chee Wei En' } },
+  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Clarence Saw' } },
 ] as const;
 
 const ACCOUNT_BY_EMAIL = new Map(

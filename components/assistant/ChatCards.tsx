@@ -1485,7 +1485,7 @@ function TaoBuilderModal({ company, onClose }: { company: TaoCompanyRow; onClose
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 2000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 24, overflowY: 'auto' }}
       onClick={onClose}
     >
-      <div style={{ background: '#fff', borderRadius: 12, width: 1000, maxWidth: '96vw', boxShadow: '0 20px 60px rgba(15,23,42,0.25)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#fff', borderRadius: 12, width: 1100, maxWidth: '96vw', boxShadow: '0 20px 60px rgba(15,23,42,0.25)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '13px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
           <FileCheck2 size={16} color="#1e3a5f" />
           <div style={{ flex: 1, minWidth: 0 }}>

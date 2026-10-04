@@ -31,6 +31,32 @@ export function getsDefaultPicClass(company: string, line: { service: string; pr
 }
 
 /**
+ * TAO (ACC) lines, as QuickBooks has them — the 60 latest hand-made TAO
+ * invoices (2026-10-04): every Accounts/Tax service line carries the PIC's
+ * Class (Corporate Tax 39/39, Compilation 13/13, Yearly 11/11, …), while
+ * disbursement / expense lines never do (OPE 0/29, Reimbursement Control 0/6).
+ */
+export function taoLineNeedsPic(line: { service: string }): boolean {
+  return line.service === 'Accounts' || line.service === 'Tax';
+}
+
+/**
+ * The PIC a TAO line starts with — QuickBooks' own setting restored
+ * (Vincent, 2026-10-04: "尽量还原QB本来有的设定"): the Class this client's
+ * most recent line of the SAME item had; failing that, an Accounts/Tax line
+ * takes the client's most recent Class for that service; anything else none.
+ * Only a starting value — the person can change it in the PIC column.
+ */
+export function taoDefaultPicName(
+  line: { service: string; productService: string },
+  history: { lastClassByProduct: ReadonlyMap<string, string | null>; lastClassByService: Readonly<Record<string, string>> },
+): string | null {
+  const own = line.productService ? history.lastClassByProduct.get(line.productService) ?? null : null;
+  if (own) return own;
+  return taoLineNeedsPic(line) ? (history.lastClassByService[line.service] ?? null) : null;
+}
+
+/**
  * TAC's Nominee Director PIC lives in the ND service item itself
  * ("Nominee Director Fees - WKX"), never in a Class (INV-QB-007) — such a
  * line never takes a per-line Class. Real data: 0 of 257 TAC ND lines in 2026.

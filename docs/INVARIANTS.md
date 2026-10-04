@@ -2034,9 +2034,20 @@ again.
   never one 1,000-row page. Since 2026-01-01 every TAB line Class is a full
   staff name ("Ang Shi Ming"); the 2025 initials ("JL", "ASM") are not
   offered (`isStaffClassName()`), but a line that still carries one keeps it
-  ("JL (current)"). Not yet covered: the TAO builder (`app/billing/tao`)
-  still creates classless lines, although staff tag ~100% of TAO
-  Accounts/Tax lines with a Class by hand.
+  ("JL (current)"). TAO builder (`app/billing/tao`, same day — Vincent:
+  "尽量还原QB本来有的设定"): QuickBooks' own TAO conventions are restored,
+  read from the 60 latest hand-made TAO invoices — a Class on 100% of
+  Accounts/Tax lines and 0% of disbursement/OPE lines, the operator's
+  Location on 60/60, a Statement memo (PrivateNote) on 60/60. Each line
+  starts with the Class its client's last line of the SAME item had, else
+  the client's latest Class for that service, disbursements none
+  (`taoDefaultPicName()`); the invoice carries the operator's TAO Location
+  (`qbLocations.TAO` — every account named like one of TAO's 17 staff
+  Locations, all 15 verified live) and the client's last Statement memo
+  with its year rolled forward ("Tax YA 2026" → "Tax YA 2027"), editable.
+  Across 470 TAO clients billed in 2026 the restored PIC equals
+  QuickBooks' own last PIC on 1,290/1,290 rows. The old TAO builder note
+  "TAO invoices never carry one" was wrong.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

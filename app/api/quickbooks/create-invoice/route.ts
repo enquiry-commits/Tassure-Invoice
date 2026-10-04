@@ -139,6 +139,7 @@ async function createInvoiceInCompany(
   numberMode: InvoiceNumberMode, requestId: string,
   locationName: string | undefined, overlapConfirmed: boolean,
   billToOverride: { careOf?: string | null; addrSource?: 'b' | 'a' | 'custom' | null; addrCustom?: string | null; attn?: string | null } | undefined,
+  statementMemo?: string,
 ): Promise<CompanyResult> {
   const tokenRow = await getValidToken(company);
   if (!tokenRow) return { error: `QuickBooks ${company} not connected` };
@@ -240,6 +241,9 @@ async function createInvoiceInCompany(
     // Default: create as a draft for review in QB — do NOT queue for sending.
     EmailStatus: sendEmail && email ? 'NeedToSend' : 'NotSet',
     ...(billAddrToSend ? { BillAddr: billAddrToSend } : {}),
+    // QuickBooks' "Statement memo" (PrivateNote) — every hand-made TAO
+    // invoice carries one (e.g. "Tax YA 2026"); only sent when given.
+    ...(statementMemo?.trim() ? { PrivateNote: statementMemo.trim() } : {}),
   };
   // Both TAB and TAC enable CustomTxnNumbers. In that mode QuickBooks treats
   // every supplied DocNumber literally; "AUTO_GENERATE" is not a sentinel.
@@ -313,7 +317,7 @@ export async function POST(req: NextRequest) {
     companyName, companyId, email, txnDate, sendEmail, pic,
     tabLines, tacLines, taoLines,
     fyeMonth, fyeYear, fyeCycle, docNumbers, expectedNextNumbers, idempotencyKey,
-    overlapConfirmed, billTo,
+    overlapConfirmed, billTo, statementMemos,
   } = body as {
     companyName: string;
     companyId?: number; // real companies.id — resolves a parent-company Bill-To override, if linked
@@ -340,6 +344,10 @@ export async function POST(req: NextRequest) {
     // generate anyway ("有时候有特别情况") — never trusted for anything
     // OTHER than the overlap check itself; every other validation still runs.
     overlapConfirmed?: boolean;
+    // QuickBooks "Statement memo" (PrivateNote) per book — sent by the TAO
+    // builder (Vincent, 2026-10-04: "尽量还原QB本来有的设定"). Omitted → none,
+    // exactly as before.
+    statementMemos?: Partial<Record<QbCompany, string>>;
   };
 
   if (!companyName || (!tabLines?.length && !tacLines?.length && !taoLines?.length)) {
@@ -364,6 +372,10 @@ export async function POST(req: NextRequest) {
   // Per-line PIC (INV-QB-026): absent, null, or a QuickBooks Class Id.
   if (requestedLines.some(line => line.picClassId !== undefined && line.picClassId !== null && !/^\d+$/.test(String(line.picClassId)))) {
     return NextResponse.json({ error: 'A line PIC must be a QuickBooks Class id.' }, { status: 400 });
+  }
+  // QuickBooks caps PrivateNote at 4,000 characters.
+  if (statementMemos && Object.values(statementMemos).some(m => m !== undefined && (typeof m !== 'string' || m.length > 4000))) {
+    return NextResponse.json({ error: 'A statement memo must be text of at most 4,000 characters.' }, { status: 400 });
   }
 
   // SGT, not UTC (2026-09-10). An invoice raised between 00:00 and 08:00
@@ -519,7 +531,7 @@ export async function POST(req: NextRequest) {
         company, companyName, companyId ?? null, lines, email, date, sendEmail, pic,
         resolvedNumbers[company], numberModes[company] ?? 'sequential',
         quickBooksRequestId(company, idempotencyKey), account.qbLocations?.[company],
-        overlapConfirmed === true, billTo,
+        overlapConfirmed === true, billTo, statementMemos?.[company],
       );
     } catch (error) {
       return {
