@@ -1,0 +1,101 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getRequestAccount } from '@/lib/request-account';
+import { createAdminClient } from '@/lib/supabase';
+import { computeCurrencyTotals, mergeCurrencyTotals, STORAGE_BUCKET, type CurrencyTotal } from '@/lib/turnover-ai';
+
+export type TurnoverProjectDocument = {
+  id: number;
+  file_name: string;
+  status: 'processing' | 'done' | 'failed';
+  error_message: string | null;
+  uploaded_at: string;
+};
+
+export type TurnoverProjectLineItem = {
+  id: number;
+  document_id: number;
+  vendor_name: string | null;
+  txn_date: string | null;
+  amount: number;
+  currency: string | null;
+  gst_amount: number | null;
+  confidence: 'high' | 'medium' | 'low';
+  confidence_reason: string | null;
+  review_status: 'unconfirmed' | 'confirmed' | 'rejected';
+  edited_vendor_name: string | null;
+  edited_txn_date: string | null;
+  edited_amount: number | null;
+  edited_currency: string | null;
+  edited_gst_amount: number | null;
+  is_duplicate_suspect: boolean;
+  file_name: string;
+};
+
+// GET /api/turnover-ai/projects/:id — everything the project detail page
+// needs in one round trip (upload area + review table + totals all live on
+// one page now — see app/turnover-ai/project/[id]/page.tsx's own header
+// comment for why Projects replaced the earlier 3-tab layout).
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const account = await getRequestAccount(req);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+  if (!account.canViewTurnoverAI) return NextResponse.json({ error: 'Your account cannot use Turnover AI.' }, { status: 403 });
+
+  const projectId = Number((await params).id);
+  if (!Number.isFinite(projectId)) return NextResponse.json({ error: 'Invalid project id.' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  const { data: project, error: projectError } = await supabase.from('turnover_projects').select('*').eq('id', projectId).single();
+  if (projectError || !project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
+
+  const { data: documents, error: docsError } = await supabase.from('turnover_documents')
+    .select('id, file_name, status, error_message, uploaded_at').eq('project_id', projectId).order('uploaded_at', { ascending: false });
+  if (docsError) return NextResponse.json({ error: docsError.message }, { status: 500 });
+
+  const docIds = (documents ?? []).map(d => d.id);
+  const { data: items, error: itemsError } = docIds.length
+    ? await supabase.from('turnover_line_items').select('*, turnover_documents(file_name)').in('document_id', docIds).order('created_at', { ascending: false })
+    : { data: [], error: null };
+  if (itemsError) return NextResponse.json({ error: itemsError.message }, { status: 500 });
+
+  const lineItems: TurnoverProjectLineItem[] = (items ?? []).map(i => ({
+    ...i,
+    file_name: (i.turnover_documents as { file_name?: string } | null)?.file_name ?? '',
+  }));
+
+  const confirmed = lineItems.filter(i => i.review_status === 'confirmed');
+  const pendingCount = lineItems.filter(i => i.review_status === 'unconfirmed').length;
+  const liveTotals = computeCurrencyTotals(confirmed);
+  const snapshotTotals = (project.confirmed_totals ?? []) as CurrencyTotal[];
+  const totals = mergeCurrencyTotals(snapshotTotals, liveTotals);
+
+  return NextResponse.json({
+    project,
+    documents: documents as TurnoverProjectDocument[],
+    lineItems,
+    pendingCount,
+    totals,
+  });
+}
+
+// DELETE /api/turnover-ai/projects/:id — Vincent: "要设置给员工可以自己删除
+// 文件夹的功能". Removes the project's original files from Storage first
+// (ON DELETE CASCADE only ever touches Postgres rows, never the Storage
+// objects they pointed to), then the project row — turnover_documents/
+// turnover_line_items cascade automatically.
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const account = await getRequestAccount(req);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+  if (!account.canViewTurnoverAI) return NextResponse.json({ error: 'Your account cannot use Turnover AI.' }, { status: 403 });
+
+  const projectId = Number((await params).id);
+  if (!Number.isFinite(projectId)) return NextResponse.json({ error: 'Invalid project id.' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  const { data: documents } = await supabase.from('turnover_documents').select('storage_path').eq('project_id', projectId);
+  const paths = (documents ?? []).map(d => d.storage_path).filter((p): p is string => Boolean(p));
+  if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths);
+
+  const { error } = await supabase.from('turnover_projects').delete().eq('id', projectId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ success: true });
+}

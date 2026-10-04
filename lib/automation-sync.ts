@@ -69,7 +69,16 @@ export type AutomationSource =
   // tokens" instruction. WEEKLY, not daily like every other source above —
   // see app/api/automation/health/route.ts's own STALE_HOURS override,
   // needed so this doesn't show as permanently "attention" between runs.
-  | 'reports_narrative';
+  | 'reports_narrative'
+  // Added 2026-10-04 — Turnover AI's 3-day retention sweep
+  // (app/api/turnover-ai/cleanup/route.ts): original receipt files and
+  // per-receipt line-item detail are deleted 3 days after upload (Vincent:
+  // "这些数据和PDF只保留3天，3天后就清除"), after folding each affected
+  // project's CONFIRMED totals into turnover_projects.confirmed_totals so
+  // the project folder keeps showing its number — only the underlying
+  // evidence (images, vendor/date detail) is purged, never the total
+  // itself (Vincent, via AskUserQuestion: "保留总数，只清原始文件/明细").
+  | 'turnover_cleanup';
 
 type JsonSummary = Record<string, unknown>;
 

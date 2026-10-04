@@ -25,6 +25,7 @@ const CRON_PATHS = new Set([
   '/api/soa-owners/audit',
   '/api/sg-news/sync',
   '/api/reports/narrative-cron',
+  '/api/turnover-ai/cleanup',
 ]);
 
 export async function proxy(req: NextRequest) {
@@ -86,9 +87,12 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL('/', req.url));
   }
   // Turnover AI (added 2026-09-28) — Vincent-only while it's new. Same hard
-  // middleware block as /billing/quotation above. One page (Inbox/Review
-  // Queue/Summary are in-page tabs, not separate routes).
-  if (!isApi && path === '/turnover-ai' && !account.canViewTurnoverAI) {
+  // middleware block as /billing/quotation above. Covers both the Projects
+  // list (/turnover-ai) and a project's own detail page
+  // (/turnover-ai/project/:id, added 2026-10-04 — see that page's own
+  // header comment for why Projects replaced the old Inbox/Review/Summary
+  // tabs).
+  if (!isApi && path.startsWith('/turnover-ai') && !account.canViewTurnoverAI) {
     return NextResponse.redirect(new URL('/', req.url));
   }
   // Some accounts only see one page (Vincent, 2026-08-17 — an Accounting-team

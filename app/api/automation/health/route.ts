@@ -38,6 +38,9 @@ const SOURCES = [
   // Added 2026-09-23 — see app/api/reports/narrative-cron/route.ts. WEEKLY,
   // not daily — see STALE_HOURS below for why this needs its own threshold.
   'reports_narrative',
+  // Added 2026-10-04 — Turnover AI's 3-day retention sweep, see
+  // app/api/turnover-ai/cleanup/route.ts.
+  'turnover_cleanup',
 ] as const;
 
 // Every source above defaults to a 30h staleness threshold (see `stale`
