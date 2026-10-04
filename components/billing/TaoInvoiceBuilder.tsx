@@ -26,6 +26,17 @@ import type { TaoServiceHistory, TaoServiceHistoryItem } from '@/app/api/billing
 import { taoDefaultPicName, taoLineNeedsPic, type PicClassOption } from '@/lib/invoice-pic-class';
 import { composeTaoStatementMemo } from '@/lib/statement-memo';
 
+// Vincent, 2026-10-04, relaying his boss: "现在在系统内TAO开单的服务并不齐
+// 全" — confirmed live against QuickBooks TAO itself: the real Item catalog
+// there has 129 Service items, this list only ever surfaced 17 of them.
+// Every one of those 17 already matched a real QB item exactly (no silent
+// mismatch), so the fix is purely additive — every entry below is a Tax/
+// Disbursement item that ALREADY exists in QuickBooks TAO today (verified
+// by a live `SELECT * FROM Item WHERE Type = 'Service'` query), just never
+// exposed in this dropdown. No QuickBooks changes made or needed for this
+// part. Deliberately NOT adding the Secretary:/Other: categories (60+ more
+// items) — unclear whether TAO legitimately bills those or they're TAB/
+// TAC's own domain; Vincent's call, not assumed here.
 const TAO_PRODUCTS: { label: string; category: string; productService: string; service: string }[] = [
   { label: 'Compilation Report Services', category: 'Accounts', productService: 'Accounts:Compilation Report Services', service: 'Accounts' },
   { label: 'Yearly Accounts Services',    category: 'Accounts', productService: 'Accounts:Yearly Accounts Services',    service: 'Accounts' },
@@ -36,13 +47,38 @@ const TAO_PRODUCTS: { label: string; category: string; productService: string; s
   { label: 'Personal Tax Services',       category: 'Tax', productService: 'Tax:Personal Tax Services',             service: 'Tax' },
   { label: 'GST Submission Services',     category: 'Tax', productService: 'Tax:GST Submission Services',           service: 'Tax' },
   { label: 'GST Application Services',    category: 'Tax', productService: 'Tax:GST Application Services',          service: 'Tax' },
+  { label: 'GST Audit',                   category: 'Tax', productService: 'Tax:GST Audit',                         service: 'Tax' },
   { label: 'AIS Submission',              category: 'Tax', productService: 'Tax:AIS submission',                    service: 'Tax' },
   { label: 'Form IR8A Preparation',       category: 'Tax', productService: 'Tax:Form IR8A preparation',              service: 'Tax' },
+  { label: 'IR21 Submission',             category: 'Tax', productService: 'Tax:IR21 submission',                   service: 'Tax' },
   { label: 'Certificate of Residence',    category: 'Tax', productService: 'Tax:Certificate of Residence',           service: 'Tax' },
   { label: 'Withholding Tax',             category: 'Tax', productService: 'Tax:Withholding Tax',                    service: 'Tax' },
   { label: 'Dormant Tax Return',          category: 'Tax', productService: 'Tax:Dormant Tax Return',                 service: 'Tax' },
+  { label: 'Estimated Chargeable Income (ECI) Services', category: 'Tax', productService: 'Tax:Estimated chargeable income (ECI) Services', service: 'Tax' },
+  { label: 'Income Tax Audit',            category: 'Tax', productService: 'Tax:Income Tax Audit',                  service: 'Tax' },
+  { label: 'Waiver of Income Tax',        category: 'Tax', productService: 'Tax:Application for waiver of income tax', service: 'Tax' },
+  { label: 'ASK Audit and Registration',  category: 'Tax', productService: 'Tax:ASK Audit and Registration',        service: 'Tax' },
+  { label: 'ASK Renewal Audit',           category: 'Tax', productService: 'Tax:ASK Renewal Audit',                 service: 'Tax' },
+  { label: 'CRS/FATCA Registration',      category: 'Tax', productService: 'Tax:CRS and FATCA data registration',  service: 'Tax' },
+  { label: 'CRS/FATCA Submission',        category: 'Tax', productService: 'Tax:CRS and FATCA data submission',    service: 'Tax' },
+  { label: 'MAS Submission',              category: 'Tax', productService: 'Tax:MAS submission',                   service: 'Tax' },
+  { label: 'Tax Advisory',                category: 'Tax', productService: 'Tax:Tax Advisory',                     service: 'Tax' },
+  { label: 'Tax Query',                   category: 'Tax', productService: 'Tax:Tax Query',                        service: 'Tax' },
   { label: 'Other Tax Services',          category: 'Tax', productService: 'Tax:Other Tax Services',                 service: 'Tax' },
   { label: 'Reimbursement (OPE)',         category: 'Disbursement', productService: 'Disbursement:Reimbursement - OPE', service: 'Disbursement' },
+  { label: 'Reimbursement Control Account', category: 'Disbursement', productService: 'Disbursement:Reimbursement Control Account', service: 'Disbursement' },
+  { label: 'Bank Charges',                category: 'Disbursement', productService: 'Disbursement:Bank Charges',     service: 'Disbursement' },
+  { label: 'Bizfile',                     category: 'Disbursement', productService: 'Disbursement:Bizfile',         service: 'Disbursement' },
+  { label: 'Government Fee – Annual Return', category: 'Disbursement', productService: 'Disbursement:Government fee for filing Annual Return', service: 'Disbursement' },
+  { label: 'Government Fee – Application', category: 'Disbursement', productService: 'Disbursement:Government fee - Application fee', service: 'Disbursement' },
+  { label: 'Government Fee – Card/Visa',  category: 'Disbursement', productService: 'Disbursement:Government fee - Card issuance and multi-journey VIsa', service: 'Disbursement' },
+  { label: 'Government Fee (Other)',      category: 'Disbursement', productService: 'Disbursement:Government Fee (Other)', service: 'Disbursement' },
+  { label: 'Late Lodgement Penalty',      category: 'Disbursement', productService: 'Disbursement:Late lodgement penalty', service: 'Disbursement' },
+  { label: 'Late Submission of Tax Return', category: 'Disbursement', productService: 'Disbursement:Late Submission of Tax Return', service: 'Disbursement' },
+  { label: 'Extension of Time (AGM & AR)', category: 'Disbursement', productService: "Disbursement:Extension of time for AGM & AR", service: 'Disbursement' },
+  { label: 'Composition Amount',          category: 'Disbursement', productService: 'Disbursement:Composition amount', service: 'Disbursement' },
+  { label: 'Certificate of Incorporation', category: 'Disbursement', productService: 'Disbursement:Purchase of Certificate of Incorporation', service: 'Disbursement' },
+  { label: 'Certificate of Good Standing', category: 'Disbursement', productService: 'Disbursement:Purchase of Certificate of Good Standing', service: 'Disbursement' },
   { label: 'Custom / Other…',             category: 'Other', productService: '',                                     service: 'Accounts' },
 ];
 
