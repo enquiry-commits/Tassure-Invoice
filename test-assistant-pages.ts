@@ -31,9 +31,11 @@ function pageRoutes(dir: string, route = ''): string[] {
   return out;
 }
 // Not navigable pages in their own right: the login screen, redirect-only
-// routes kept for old bookmarks, and Company 360 (one per company, described
-// in the prompt as /companies/<its id>).
-const NOT_ON_MAP = new Set(['/login', '/billing/soa', '/ar-reminder', '/client-communications/drafts', '/companies/[id]']);
+// routes kept for old bookmarks, Company 360 (one per company, described
+// in the prompt as /companies/<its id>), and a Turnover AI project's own
+// detail page (one per project, same shape — the assistant points users
+// at /turnover-ai, the Projects list, and they click into their own).
+const NOT_ON_MAP = new Set(['/login', '/billing/soa', '/ar-reminder', '/client-communications/drafts', '/companies/[id]', '/turnover-ai/project/[id]']);
 const mapped = new Set(PAGES.map(p => pathnameOf(p.href)));
 const routes = pageRoutes(path.join(process.cwd(), 'app'));
 for (const route of routes) {
