@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Download,
   ExternalLink, Pencil, X, Check, Undo2,
 } from 'lucide-react';
+import { ACCEPT, MAX_FILES_PER_BATCH, INCOMING_PARAM, takeStagedFiles } from '@/components/turnover-ai/upload-handoff';
 import type { TurnoverProjectDocument, TurnoverProjectLineItem } from '@/app/api/turnover-ai/projects/[id]/route';
 
 // Turnover AI — a single project's own page: upload, review and running
@@ -25,9 +26,10 @@ import type { TurnoverProjectDocument, TurnoverProjectLineItem } from '@/app/api
 // Every table cell is directly editable and saves on blur — no edit mode,
 // no Save button. The only review action left is Ignore (excludes a line
 // from the total) and its undo, Restore.
-
-const ACCEPT = 'application/pdf,image/jpeg,image/png,image/webp,image/heic';
-const MAX_FILES_PER_BATCH = 100;
+//
+// 2026-10-05: files dropped on the Projects list arrive here right after the
+// project is created (components/turnover-ai/upload-handoff.ts) and are read
+// by the same upload loop as a drop on this page.
 
 type ProjectDetail = {
   project: { id: number; name: string; gst_enabled: boolean; created_at: string; confirmed_totals: { currency: string; total: number; count: number }[] };
@@ -37,7 +39,10 @@ type ProjectDetail = {
   totals: { currency: string; total: number; count: number }[];
 };
 
-type UploadRow = { fileName: string; status: 'uploading' | 'done' | 'error'; message?: string; lineItemCount?: number };
+// `id` is unique per file per round: two files with the same name in one
+// round used to share a row match, so the first to finish marked both done
+// and the second one's failure never showed.
+type UploadRow = { id: string; fileName: string; status: 'uploading' | 'done' | 'error'; message?: string; lineItemCount?: number };
 type ConfidenceFilter = 'all' | 'high' | 'medium' | 'low';
 type CurrencyTotal = { currency: string; total: number; count: number };
 
@@ -135,6 +140,11 @@ function LineItemRow({ item, gstEnabled, columns, busy, onPatch, onToggle }: {
 export default function TurnoverProjectPage() {
   const params = useParams();
   const projectId = Number(params.id);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // How many files the Projects list said it was handing over; while it's
+  // in the URL and none arrived, the page says so (see the effect below).
+  const incoming = Number(searchParams.get(INCOMING_PARAM) ?? 0);
 
   const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -161,9 +171,12 @@ export default function TurnoverProjectPage() {
       list = list.slice(0, MAX_FILES_PER_BATCH);
     }
     if (!list.length) return;
-    setUploads(prev => [...list.map(f => ({ fileName: f.name, status: 'uploading' as const })), ...prev]);
+    const round = Date.now().toString(36);
+    const rows: UploadRow[] = list.map((f, i) => ({ id: `${round}-${i}`, fileName: f.name, status: 'uploading' }));
+    setUploads(prev => [...rows, ...prev]);
 
-    for (const file of list) {
+    for (const [i, file] of list.entries()) {
+      const rowId = rows[i].id;
       try {
         const form = new FormData();
         form.append('file', file);
@@ -172,13 +185,39 @@ export default function TurnoverProjectPage() {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? 'Extraction failed');
         const items = (json.lineItems ?? []) as unknown[];
-        setUploads(prev => prev.map(u => u.fileName === file.name && u.status === 'uploading' ? { ...u, status: 'done', lineItemCount: items.length } : u));
+        setUploads(prev => prev.map(u => u.id === rowId ? { ...u, status: 'done', lineItemCount: items.length } : u));
       } catch (err) {
-        setUploads(prev => prev.map(u => u.fileName === file.name && u.status === 'uploading' ? { ...u, status: 'error', message: err instanceof Error ? err.message : String(err) } : u));
+        setUploads(prev => prev.map(u => u.id === rowId ? { ...u, status: 'error', message: err instanceof Error ? err.message : String(err) } : u));
       }
       load();
     }
   }, [projectId, load]);
+
+  // Files handed over from the Projects list, taken exactly once — React
+  // StrictMode runs effects twice in development, and a second take would
+  // read every file again (doubling the total). The ?incoming marker is only
+  // cleared once they actually arrive; if a full page reload lost them on
+  // the way, it stays and the notice below asks for them again.
+  const handoffTaken = useRef(false);
+  useEffect(() => {
+    if (handoffTaken.current) return;
+    handoffTaken.current = true;
+    const files = takeStagedFiles(projectId);
+    if (!files?.length) return;
+    router.replace(`/turnover-ai/project/${projectId}`, { scroll: false });
+    void uploadFiles(files);
+  }, [projectId, router, uploadFiles]);
+
+  // Files are read one at a time from this tab, so closing or reloading it
+  // mid-round silently drops the rest — ask first.
+  const uploading = uploads.some(u => u.status === 'uploading');
+  useEffect(() => {
+    if (!uploading) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [uploading]);
+  const filesLostOnTheWay = incoming > 0 && uploads.length === 0;
 
   const patchItem = async (id: number, body: object) => {
     setBusy(true);
@@ -289,6 +328,17 @@ export default function TurnoverProjectPage() {
         )}
       </div>
 
+      {filesLostOnTheWay && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 12.5, marginBottom: 12 }}>
+          <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+          <span style={{ flex: 1 }}>
+            The {incoming === 1 ? 'file you dropped' : `${incoming} files you dropped`} on the Projects page didn&rsquo;t carry over (the page reloaded on the way here) — drop {incoming === 1 ? 'it' : 'them'} into the box below again.
+          </span>
+          <button onClick={() => router.replace(`/turnover-ai/project/${projectId}`, { scroll: false })} title="Dismiss"
+            style={{ border: 'none', background: 'none', color: '#b45309', cursor: 'pointer', display: 'flex' }}><X size={15} /></button>
+        </div>
+      )}
+
       <div
         onDragOver={e => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
@@ -306,7 +356,7 @@ export default function TurnoverProjectPage() {
       {uploads.length > 0 && (
         <div style={{ marginBottom: 18, border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff', overflow: 'hidden', maxHeight: 220, overflowY: 'auto' }}>
           {uploads.map((u, i) => (
-            <div key={`${u.fileName}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', borderBottom: i < uploads.length - 1 ? '1px solid #f1f5f9' : 'none', fontSize: 12.5 }}>
+            <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', borderBottom: i < uploads.length - 1 ? '1px solid #f1f5f9' : 'none', fontSize: 12.5 }}>
               {u.status === 'uploading' && <Loader2 size={14} color="#94a3b8" style={{ animation: 'spin 1s linear infinite' }} />}
               {u.status === 'done' && <CheckCircle2 size={14} color="#15803d" />}
               {u.status === 'error' && <AlertTriangle size={14} color="#b91c1c" />}

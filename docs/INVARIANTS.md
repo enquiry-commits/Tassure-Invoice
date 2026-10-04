@@ -3757,6 +3757,27 @@ again.
   assistant never read it. `staff-directory`'s `team` is NOT the department
   (there "Management" = Esther/Chelsea and Cindy is "Partners", and it drives
   SOA-owner/assistant logic), nor is QuickBooks' Department/Location.
+- **INV-DATA-070** — Turnover AI files handed from the Projects list to a
+  project page (`components/turnover-ai/upload-handoff.ts`; Vincent,
+  2026-10-05: drop first, name the client, the files go straight in) must
+  be TAKEN exactly once, never peeked: `reactStrictMode` runs effects twice
+  in development, and a second read sends every file to extract again —
+  every receipt counted twice, and the duplicate check can't flag it because
+  both reads race past it. The project page also guards with a ref. The
+  in-memory hand-off only survives a client-side navigation; Next does a
+  full page reload when the browser's build is older than the server's
+  (several deploys a day here), so the target URL carries `?incoming=N`,
+  cleared only once the files arrive — if they didn't, the page says "your
+  N files didn't carry over — drop them again" instead of showing a silently
+  empty project. The project is always created BEFORE any file is read:
+  extract reads the project's `gst_enabled` per file and GST can't be
+  changed later. And an upload round's progress rows are keyed per file,
+  never by file name: keyed by name, two same-named files in one round
+  (scans are routinely all "scan.pdf") let the first completion mark both
+  done, and the second one's failure never showed. Verified in a harness
+  2026-10-05: 2 files → exactly 2 extract calls in dev StrictMode, 105 →
+  exactly 100, the lost-files notice, and two "same.pdf" rows showing done +
+  their own error.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
