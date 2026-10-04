@@ -1,5 +1,17 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-04 (SHIPPED: Turnover AI no longer gates the total on Confirm, and a project can be renamed — Vincent: "文件夹名字可以随时更改的，并且不需要confirm 先，直接计算出Total 如果各别算出的数字不对，员工也可以自己再随时手动修改某个金额").
+
+**What changed, precisely.** Every extracted line now counts toward its project's total the instant AI reads it — no Confirm click required. Only an explicitly-Rejected line is excluded; `review_status` itself is unchanged (`unconfirmed`/`confirmed`/`rejected`, same CHECK constraint), only which statuses the TOTAL treats as countable changed, consistently across all 4 places that compute it: the project-detail route, the Projects-list route, the export route, and the 3-day cleanup job's pre-purge snapshot fold-in (all 4 now `review_status !== 'rejected'` instead of `=== 'confirmed'`). Confirm still exists — it just clears the "needs a glance" flag now, it doesn't gate money. Edit was previously hidden once a line was confirmed (a real bug against "员工也可以自己再随时手动修改某个金额" — anytime, not just pre-confirm); now available regardless of status (except an already-rejected line, which has nothing left to total). Reject likewise now works on an already-confirmed line too, not just a pending one — otherwise there'd be no way to exclude something after glancing at it and confirming, which would have been a dead end.
+
+**Project rename.** New `PATCH /api/turnover-ai/projects/:id` (name only — `gst_enabled` stays set-once-at-creation, since changing it mid-project wouldn't retroactively re-process already-extracted lines). Inline edit on the project page's own title.
+
+**Real impact, checked before shipping, not assumed.** Queried the live data first: 10 real line items exist today, split 4 `confirmed` (the "AAA" test project, SGD 422.50 — unchanged by this) and 6 `unconfirmed` (a second migrated test project, SGD 916.35 combined) that were showing SGD 0 under the old rule and will show their real combined total the moment this deploys. Both are leftover test data from first trying this feature (2026-09-28), not real client bookkeeping, but flagged here so the jump isn't a surprise.
+
+**Verification.** `npx tsc --noEmit` and `npx eslint` clean on every touched file.
+
+Previous entry follows.
+
 Last updated: 2026-10-04 (SHIPPED: TAO's service dropdown now reads QuickBooks live, and staff can add a real new service — Vincent: "这个我觉得最好你先帮我在QB调研好，尽量还原符合QB的情况", then approving the design: "可以开放给全部人，不需要指定的人，并且也要可以直接实时读QuickBooks自己的项目清单").
 
 **Researched QuickBooks' own real structure before writing anything (not guessed, not assumed) — see `lib/tao-services.ts`'s own header for the full trail.** Found: TAO's 129 Service items sit under exactly 5 real "Category" entities (Accounts/Tax/Disbursement/Secretary/Other — their real ids queried live, hardcoded since they're structural); every service item has its own dedicated Income Account; which top-level account a category's items roll up to is NOT 1:1 — Tax (22/22 items) and Disbursement (13/13) each cleanly roll up to one parent, but Secretary splits across 4 different parents (Professional Services/Secretary Services/Payroll Services/Nominee Services) and Accounts mostly uses one with one exception. Verified by walking every real sub-item's actual account ownership, not inferred from a sample.

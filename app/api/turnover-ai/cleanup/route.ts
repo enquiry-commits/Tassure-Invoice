@@ -32,12 +32,18 @@ async function sweep(): Promise<NextResponse> {
     return NextResponse.json({ ok: true, documentsPurged: 0, projectsUpdated: 0, storageErrors: 0 });
   }
 
+  // Vincent, 2026-10-04: "不需要confirm 先，直接计算出Total" — a line
+  // counts toward the project's permanent total unless it was explicitly
+  // rejected, matching the same rule the live project-detail/list routes
+  // now use (see their own comments). Still never folds a 'rejected' line
+  // in, even though its document is expiring and its own row is about to
+  // be deleted along with it.
   const docIds = expiring.map(d => d.id);
   const { data: items, error: itemsErr } = await supabase
     .from('turnover_line_items')
     .select('document_id, review_status, currency, edited_currency, amount, edited_amount')
     .in('document_id', docIds)
-    .eq('review_status', 'confirmed');
+    .neq('review_status', 'rejected');
   if (itemsErr) throw new Error(`Unable to load expiring line items: ${itemsErr.message}`);
 
   type LineItemRow = { document_id: number; review_status: string; currency: string | null; edited_currency: string | null; amount: number; edited_amount: number | null };

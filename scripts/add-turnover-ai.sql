@@ -18,10 +18,17 @@
 -- Two tables: one per uploaded FILE (turnover_documents — a single upload
 -- may bundle several distinct receipts, e.g. a multi-page scan or several
 -- photographed slips on one page) and one per individual RECEIPT the AI
--- pulled out of that file (turnover_line_items). Nothing here counts toward
--- a client's turnover total until a human sets review_status = 'confirmed'
--- (app/api/turnover-ai/summary/route.ts only sums 'confirmed' rows) — the
--- AI's own confidence judgement never auto-confirms anything by itself.
+-- pulled out of that file (turnover_line_items).
+--
+-- UPDATED 2026-10-04 — Vincent: "不需要confirm 先，直接计算出Total 如果各
+-- 别算出的数字不对，员工也可以自己再随时手动修改某个金额". Originally
+-- nothing counted until a human set review_status = 'confirmed'; now every
+-- extracted line counts toward the total immediately (the project-detail/
+-- list/export/cleanup routes all sum every row EXCEPT review_status =
+-- 'rejected' — see those files' own comments). 'confirmed' still exists
+-- (Confirm just clears the "needs a glance" flag) and 'unconfirmed' is
+-- still the default on insert — the CHECK constraint below is unchanged —
+-- only which statuses the total treats as countable changed.
 --
 -- No RLS: read/written exclusively through createAdminClient() (service
 -- role), matching every other feature table added this way (e.g.

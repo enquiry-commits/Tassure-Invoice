@@ -45,21 +45,24 @@ export async function GET(req: NextRequest) {
   const docsByProject = new Map<number, number>();
   for (const d of docs ?? []) docsByProject.set(d.project_id, (docsByProject.get(d.project_id) ?? 0) + 1);
 
+  // Vincent, 2026-10-04: "不需要confirm 先，直接计算出Total" — every line
+  // except an explicitly-rejected one counts (same rule as the project-
+  // detail route; see that file's own comment for the full reasoning).
   const pendingByProject = new Map<number, number>();
-  const confirmedItemsByProject = new Map<number, LineItemRow[]>();
+  const countableItemsByProject = new Map<number, LineItemRow[]>();
   for (const i of (items ?? []) as LineItemRow[]) {
     const projectId = docProjectById.get(i.document_id);
     if (projectId === undefined) continue;
     if (i.review_status === 'unconfirmed') pendingByProject.set(projectId, (pendingByProject.get(projectId) ?? 0) + 1);
-    if (i.review_status === 'confirmed') {
-      const list = confirmedItemsByProject.get(projectId) ?? [];
+    if (i.review_status !== 'rejected') {
+      const list = countableItemsByProject.get(projectId) ?? [];
       list.push(i);
-      confirmedItemsByProject.set(projectId, list);
+      countableItemsByProject.set(projectId, list);
     }
   }
 
   const result: TurnoverProject[] = (projects ?? []).map(p => {
-    const liveTotals = computeCurrencyTotals(confirmedItemsByProject.get(p.id) ?? []);
+    const liveTotals = computeCurrencyTotals(countableItemsByProject.get(p.id) ?? []);
     const snapshotTotals = (p.confirmed_totals ?? []) as CurrencyTotal[];
     return {
       id: p.id,

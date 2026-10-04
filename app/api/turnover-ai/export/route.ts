@@ -28,8 +28,12 @@ export async function GET(req: NextRequest) {
   if (docsErr) return NextResponse.json({ error: docsErr.message }, { status: 500 });
   const docIds = (docs ?? []).map(d => d.id);
 
+  // Matches what the project page's own Total counts (Vincent: "不需要
+  // confirm 先，直接计算出Total") — everything except an explicitly-
+  // rejected line, so the export can never show a different number than
+  // what's displayed on screen.
   const { data: items, error: itemsErr } = docIds.length
-    ? await supabase.from('turnover_line_items').select('*, turnover_documents(file_name)').in('document_id', docIds).eq('review_status', 'confirmed')
+    ? await supabase.from('turnover_line_items').select('*, turnover_documents(file_name)').in('document_id', docIds).neq('review_status', 'rejected')
     : { data: [] as Record<string, unknown>[], error: null };
   if (itemsErr) return NextResponse.json({ error: itemsErr.message }, { status: 500 });
 

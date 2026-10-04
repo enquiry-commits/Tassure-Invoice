@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Download,
-  ExternalLink, Pencil, X,
+  ExternalLink, Pencil, X, Check,
 } from 'lucide-react';
 import type { TurnoverProjectDocument, TurnoverProjectLineItem } from '@/app/api/turnover-ai/projects/[id]/route';
 
@@ -78,6 +78,8 @@ export default function TurnoverProjectPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
 
   const load = useCallback(() => {
     fetch(`/api/turnover-ai/projects/${projectId}`)
@@ -127,6 +129,25 @@ export default function TurnoverProjectPage() {
     }
   };
 
+  // Vincent: "文件夹名字可以随时更改的".
+  const renameProject = async () => {
+    const name = nameDraft.trim();
+    if (!name || !detail) { setRenaming(false); return; }
+    if (name === detail.project.name) { setRenaming(false); return; }
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/turnover-ai/projects/${projectId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Rename failed');
+      setDetail(prev => prev ? { ...prev, project: { ...prev.project, name: json.project.name } } : prev);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+      setRenaming(false);
+    }
+  };
+
   const bulkConfirmHigh = async () => {
     const ids = (detail?.lineItems ?? []).filter(i => i.review_status === 'unconfirmed' && i.confidence === 'high').map(i => i.id);
     if (!ids.length) return;
@@ -157,7 +178,7 @@ export default function TurnoverProjectPage() {
     medium: unconfirmed.filter(i => i.confidence === 'medium').length,
     low: unconfirmed.filter(i => i.confidence === 'low').length,
   };
-  const confirmedTotal = items.filter(i => i.review_status === 'confirmed').length;
+  const rejectedCount = items.filter(i => i.review_status === 'rejected').length;
   const columns = detail.project.gst_enabled ? '1.5fr 85px 100px 80px 70px 85px 120px' : '1.6fr 90px 110px 70px 90px 130px';
 
   return (
@@ -168,7 +189,21 @@ export default function TurnoverProjectPage() {
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{detail.project.name}</h1>
+          {renaming ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input autoFocus value={nameDraft} onChange={e => setNameDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') renameProject(); if (e.key === 'Escape') setRenaming(false); }}
+                style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', border: '1px solid #0f766e', borderRadius: 6, padding: '2px 6px', outline: 'none' }} />
+              <button onClick={renameProject} disabled={busy} title="Save" style={{ border: 'none', background: 'none', color: '#15803d', cursor: 'pointer', display: 'flex' }}><Check size={18} /></button>
+              <button onClick={() => setRenaming(false)} title="Cancel" style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{detail.project.name}</h1>
+              <button onClick={() => { setNameDraft(detail.project.name); setRenaming(true); }} title="Rename project"
+                style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex' }}><Pencil size={14} /></button>
+            </div>
+          )}
           <div style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 2 }}>
             Created {new Date(detail.project.created_at).toLocaleDateString('en-SG')}{detail.project.gst_enabled && ' · GST calculated separately'}
           </div>
@@ -183,19 +218,20 @@ export default function TurnoverProjectPage() {
 
       <div style={{ display: 'flex', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
         {detail.totals.length === 0 && (
-          <div style={{ flex: 1, minWidth: 200, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px', color: '#94a3b8', fontSize: 12.5 }}>No confirmed receipts yet</div>
+          <div style={{ flex: 1, minWidth: 200, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px', color: '#94a3b8', fontSize: 12.5 }}>No receipts yet</div>
         )}
         {detail.totals.map(t => (
           <div key={t.currency} style={{ flex: 1, minWidth: 200, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px' }}>
-            <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>{t.currency} total (confirmed)</div>
+            <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>{t.currency} total</div>
             <div style={{ fontFamily: 'monospace', fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{money(t.total, t.currency)}</div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{t.count} receipt{t.count === 1 ? '' : 's'}</div>
           </div>
         ))}
         {detail.pendingCount > 0 && (
           <div style={{ flex: 1, minWidth: 200, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 14, padding: '18px 20px' }}>
-            <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600, marginBottom: 4 }}>Pending review</div>
+            <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600, marginBottom: 4 }}>Needs a glance</div>
             <div style={{ fontFamily: 'monospace', fontSize: 24, fontWeight: 700, color: '#b45309' }}>{detail.pendingCount}</div>
+            <div style={{ fontSize: 11, color: '#92400e', marginTop: 4 }}>already counted above</div>
           </div>
         )}
       </div>
@@ -236,7 +272,7 @@ export default function TurnoverProjectPage() {
         {(['unconfirmed', 'all'] as const).map(s => (
           <button key={s} onClick={() => setStatusFilter(s)}
             style={{ padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: statusFilter === s ? 'none' : '1px solid #e2e8f0', background: statusFilter === s ? '#0f172a' : '#fff', color: statusFilter === s ? '#fff' : '#475569' }}>
-            {s === 'unconfirmed' ? `Pending review ${counts.all}` : 'All records'}
+            {s === 'unconfirmed' ? `Needs a glance ${counts.all}` : 'All records'}
           </button>
         ))}
         <span style={{ width: 1, height: 18, background: '#e2e8f0', margin: '0 4px' }} />
@@ -288,11 +324,17 @@ export default function TurnoverProjectPage() {
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                 {item.review_status === 'unconfirmed' && (
-                  <>
-                    <button onClick={() => patchItem(item.id, { action: 'confirm' })} disabled={busy} title="Confirm" style={{ border: 'none', background: 'none', color: '#15803d', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Confirm</button>
-                    <button onClick={() => setEditingId(item.id)} title="Edit" style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', display: 'flex' }}><Pencil size={13} /></button>
-                    <button onClick={() => patchItem(item.id, { action: 'reject' })} disabled={busy} title="Ignore" style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>
-                  </>
+                  <button onClick={() => patchItem(item.id, { action: 'confirm' })} disabled={busy} title="Confirm" style={{ border: 'none', background: 'none', color: '#15803d', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Confirm</button>
+                )}
+                {/* Vincent: "员工也可以自己再随时手动修改某个金额" — Edit stays
+                    available whether or not this line has been confirmed yet;
+                    only a rejected line (already excluded from the total) has
+                    nothing left to fix here. */}
+                {item.review_status !== 'rejected' && (
+                  <button onClick={() => setEditingId(item.id)} title="Edit" style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', display: 'flex' }}><Pencil size={13} /></button>
+                )}
+                {item.review_status !== 'rejected' && (
+                  <button onClick={() => patchItem(item.id, { action: 'reject' })} disabled={busy} title="Ignore (excludes it from the total)" style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>
                 )}
                 <a href={`/api/turnover-ai/file/${item.document_id}`} target="_blank" rel="noreferrer" title="View original" style={{ color: '#94a3b8', display: 'flex' }}><ExternalLink size={13} /></a>
               </div>
@@ -302,7 +344,7 @@ export default function TurnoverProjectPage() {
       </div>
 
       <div style={{ marginTop: 12, fontSize: 11, color: '#94a3b8' }}>
-        {items.length} receipt{items.length === 1 ? '' : 's'} total · {confirmedTotal} confirmed · originals and per-receipt detail are kept for 3 days, then cleared (the total above stays).
+        {items.length} receipt{items.length === 1 ? '' : 's'} total{rejectedCount > 0 ? ` · ${rejectedCount} ignored (not counted)` : ''} · every other receipt counts toward the total above automatically · originals and per-receipt detail are kept for 3 days, then cleared (the total stays).
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

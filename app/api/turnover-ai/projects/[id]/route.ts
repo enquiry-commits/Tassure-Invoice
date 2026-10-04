@@ -62,9 +62,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     file_name: (i.turnover_documents as { file_name?: string } | null)?.file_name ?? '',
   }));
 
-  const confirmed = lineItems.filter(i => i.review_status === 'confirmed');
+  // Vincent, 2026-10-04: "不需要confirm 先，直接计算出Total 如果各别算出的
+  // 数字不对，员工也可以自己再随时手动修改某个金额" — every extracted line
+  // counts toward the total immediately, no confirm click required; only an
+  // explicitly-rejected (duplicate/mistake) line is excluded. "Confirm"
+  // still exists (clears the pending-review flag) and "Edit" still exists
+  // (fixes a wrong number, staying counted either way) — neither gates the
+  // total anymore, only Reject does.
+  const countable = lineItems.filter(i => i.review_status !== 'rejected');
   const pendingCount = lineItems.filter(i => i.review_status === 'unconfirmed').length;
-  const liveTotals = computeCurrencyTotals(confirmed);
+  const liveTotals = computeCurrencyTotals(countable);
   const snapshotTotals = (project.confirmed_totals ?? []) as CurrencyTotal[];
   const totals = mergeCurrencyTotals(snapshotTotals, liveTotals);
 
@@ -75,6 +82,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     pendingCount,
     totals,
   });
+}
+
+// PATCH /api/turnover-ai/projects/:id — Vincent: "文件夹名字可以随时更改
+// 的". Rename only, for now — gst_enabled is deliberately left set-once-
+// at-creation (changing it mid-project would silently change what future
+// uploads get checked for without re-processing already-extracted lines).
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const account = await getRequestAccount(req);
+  if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
+  if (!account.canViewTurnoverAI) return NextResponse.json({ error: 'Your account cannot use Turnover AI.' }, { status: 403 });
+
+  const projectId = Number((await params).id);
+  if (!Number.isFinite(projectId)) return NextResponse.json({ error: 'Invalid project id.' }, { status: 400 });
+
+  const body = await req.json().catch(() => ({})) as { name?: string };
+  const name = body.name?.trim();
+  if (!name) return NextResponse.json({ error: 'A project name is required.' }, { status: 400 });
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase.from('turnover_projects').update({ name }).eq('id', projectId).select('*').single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ project: data });
 }
 
 // DELETE /api/turnover-ai/projects/:id — Vincent: "要设置给员工可以自己删除

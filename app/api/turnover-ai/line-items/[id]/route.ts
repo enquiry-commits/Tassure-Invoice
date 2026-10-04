@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
 import { createAdminClient } from '@/lib/supabase';
 
-// PATCH /api/turnover-ai/line-items/:id — the human-review step. Nothing
-// here counts toward a client's turnover until review_status becomes
-// 'confirmed' (see app/api/turnover-ai/summary/route.ts). `edit` always
-// also confirms — there is no "corrected but still unconfirmed" state, a
-// staff member typing a real number in is itself the confirmation.
+// PATCH /api/turnover-ai/line-items/:id — the human-review step. Every
+// line already counts toward the project's turnover total the moment it's
+// extracted (Vincent: "不需要confirm 先，直接计算出Total") — Confirm just
+// clears the pending-review flag, Reject is the only action that excludes
+// a line (see app/api/turnover-ai/projects/[id]/route.ts's own comment).
+// `edit` always also confirms — there is no "corrected but still
+// unconfirmed" state, a staff member typing a real number in is itself
+// the acknowledgement.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const account = await getRequestAccount(req);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
