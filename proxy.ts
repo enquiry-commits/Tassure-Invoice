@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextRequest, NextResponse } from 'next/server';
-import { getApprovedAccount, isWithinRestriction } from '@/lib/approved-accounts';
+import { getApprovedAccount, canAccountOpen } from '@/lib/approved-accounts';
 
 // Intuit cannot carry a Tassure Google session. The webhook route is public at
 // the session layer and authenticates the exact raw request body with Intuit's
@@ -104,7 +104,7 @@ export async function proxy(req: NextRequest) {
   // app/api/my-tasks/route.ts itself (not by this file) to only the areas
   // their account already has access to — this widens which PAGE they can
   // reach, never which DATA they can see.
-  if (!isApi && account.restrictedTo && path !== '/my-tasks' && !isWithinRestriction(account.restrictedTo, path, req.nextUrl.searchParams)) {
+  if (!isApi && account.restrictedTo && path !== '/my-tasks' && !canAccountOpen(account, path, req.nextUrl.searchParams)) {
     return NextResponse.redirect(new URL(account.restrictedTo, req.url));
   }
   return response;

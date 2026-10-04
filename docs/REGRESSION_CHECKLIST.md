@@ -150,7 +150,12 @@ Separately: after ANY future change to `ApprovedAccount` gating logic in
 every account that should have it — this exact class of regression shipped
 once already (2026-09-02: switching My Tasks' View-As gate from `admin` to
 the new `canViewAsOthers` silently dropped Vincent's own access, since his
-account only had `admin: true` at the time).
+account only had `admin: true` at the time). Since 2026-10-04 also run
+`npx tsx test-account-access.ts` (`ALL OK`): the 6 Accounting/Tax accounts
+(`restrictedTo` + `alsoAllowed`) open exactly AR Reminder + TAO Billing
+(+ My Tasks) — log in as one (e.g. Jay Tay) and confirm the sidebar shows
+those three, `/billing/tao` opens, and `/billing?tab=billing` or
+`/companies` sends them back to AR Reminder.
 **Guards:** none yet in `docs/INVARIANTS.md` — Reports is new; the
 permission-flag-independence lesson above is currently only recorded here
 and in `PROJECT_STATUS.md`'s 2026-09-02 entry.

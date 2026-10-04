@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
-import { isWithinRestriction } from '@/lib/approved-accounts';
+import { canAccountOpen } from '@/lib/approved-accounts';
 import { buildWorkbook } from '@/lib/export-columns';
 import { buildChatExport, type ChatExportSpec } from '@/lib/chat-export';
 import type { CompanyListFilters } from '@/lib/company-list-lookup';
@@ -18,7 +18,7 @@ import type { CompanyListFilters } from '@/lib/company-list-lookup';
  * companyListTool() in ../route.ts.
  *
  * Permissions mirror the PAGE each list belongs to, using the same
- * isWithinRestriction() check the assistant's own billing tools use — a
+ * canAccountOpen() check the assistant's own billing tools use — a
  * restricted account (restrictedTo: '/billing?tab=ar') must not be able to
  * download the full client roster just because chat can compose the query.
  */
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
   if (!spec) return NextResponse.json({ error: 'Unknown or incomplete export request' }, { status: 400 });
 
   const page = KIND_PAGE[spec.kind];
-  if (account.restrictedTo && !isWithinRestriction(account.restrictedTo, page.pathname, new URLSearchParams(page.params))) {
+  if (!canAccountOpen(account, page.pathname, new URLSearchParams(page.params))) {
     return NextResponse.json({ error: 'Your account does not have access to this data.' }, { status: 403 });
   }
 

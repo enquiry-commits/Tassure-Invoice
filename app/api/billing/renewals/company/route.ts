@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
-import { isWithinRestriction } from '@/lib/approved-accounts';
+import { canAccountOpen } from '@/lib/approved-accounts';
 import { computeAllCompanyBilling, type CompanyBilling } from '@/app/api/billing/renewals/route';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   // Same gate the assistant's own invoice tools apply: a restricted
   // (AR-Reminder-only) account has no Billing Drafts access, so it must not
   // reach the draft editor through chat either.
-  if (account.restrictedTo && !isWithinRestriction(account.restrictedTo, '/billing', new URLSearchParams({ tab: 'billing' }))) {
+  if (!canAccountOpen(account, '/billing', new URLSearchParams({ tab: 'billing' }))) {
     return NextResponse.json({ error: 'Your account does not have access to Billing Drafts.' }, { status: 403 });
   }
 

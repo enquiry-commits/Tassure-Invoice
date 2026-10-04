@@ -180,19 +180,24 @@ function findNode(nodes: Node[], href: string): Node | null {
 }
 
 // An account with `restrictedTo` set (lib/approved-accounts.ts) sees only
-// that one page plus My Tasks (2026-08-31 — every restricted account gets
-// a personalized My Tasks view too, scoped server-side to just what their
-// account already has access to; proxy.ts carries the matching routing
+// its allowed pages (`allowedPages` from /api/auth/me — its home page plus
+// `alsoAllowed`, e.g. AR Reminder + TAO Billing for the Accounting/Tax team
+// since 2026-10-04) plus My Tasks (2026-08-31 — every restricted account
+// gets a personalized My Tasks view too, scoped server-side to just what
+// their account already has access to; proxy.ts carries the matching routing
 // exception) — never the full tree with everything else hidden. Falls back
-// to the full tree if the href can't be found (a stale value shouldn't
-// lock someone out of the whole nav).
-function level1For(restrictedTo: string | null | undefined): Node[] {
+// to the full tree if no href can be found (a stale value shouldn't lock
+// someone out of the whole nav).
+// A nested leaf's own label can be too terse once it stands alone at the top level.
+const STANDALONE_LABEL: Record<string, string> = { '/billing/tao': 'TAO Billing' };
+function level1For(restrictedTo: string | null | undefined, allowedPages?: readonly string[] | null): Node[] {
   if (!restrictedTo) return tree;
-  const node = findNode(tree, restrictedTo);
-  if (!node) return tree;
+  const hrefs = allowedPages?.length ? allowedPages : [restrictedTo];
+  const nodes = hrefs.map(href => findNode(tree, href)).filter((n): n is Node => !!n);
+  if (!nodes.length) return tree;
   const myTasks = findNode(tree, '/my-tasks');
-  const restrictedNode = { label: node.label, href: node.href, img: '/nav/billing.png' };
-  return myTasks ? [restrictedNode, myTasks] : [restrictedNode];
+  const restrictedNodes = nodes.map(node => ({ label: (node.href && STANDALONE_LABEL[node.href]) || node.label, href: node.href, img: '/nav/billing.png' }));
+  return myTasks ? [...restrictedNodes, myTasks] : restrictedNodes;
 }
 
 const RAIL = 'rgba(255,255,255,0.18)';
@@ -401,9 +406,9 @@ function NavTree({ collapsed, level1 }: { collapsed: boolean; level1: Node[] }) 
   );
 }
 
-export default function Sidebar({ restrictedTo, isAdmin, canViewReports, canViewSgNews, canViewQuotation, canViewTurnoverAI }: { restrictedTo?: string | null; isAdmin?: boolean; canViewReports?: boolean; canViewSgNews?: boolean; canViewQuotation?: boolean; canViewTurnoverAI?: boolean }) {
+export default function Sidebar({ restrictedTo, allowedPages, isAdmin, canViewReports, canViewSgNews, canViewQuotation, canViewTurnoverAI }: { restrictedTo?: string | null; allowedPages?: readonly string[] | null; isAdmin?: boolean; canViewReports?: boolean; canViewSgNews?: boolean; canViewQuotation?: boolean; canViewTurnoverAI?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
-  let level1 = level1For(restrictedTo);
+  let level1 = level1For(restrictedTo, allowedPages);
   if (canViewReports && !restrictedTo) {
     const myTasksIdx = level1.findIndex(n => n.href === '/my-tasks');
     level1 = myTasksIdx >= 0

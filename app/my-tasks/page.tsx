@@ -16,6 +16,8 @@ import {
 import { fmtDate } from '@/lib/date';
 
 type SessionUser = { email: string; name: string; restrictedTo?: string | null; admin?: boolean };
+// How a restricted account's allowed pages read in the View-as list.
+const RESTRICTED_PAGE_LABEL: Record<string, string> = { '/billing?tab=ar': 'AR Reminder', '/billing/tao': 'TAO Billing' };
 
 type ArTask = {
   id: number; entityName: string; uen: string | null; fyeMonth: string; fyeYear: number;
@@ -69,7 +71,7 @@ type MyTasksResponse = {
   // canViewAsOthers — see app/api/my-tasks/route.ts's own comment. Absent
   // (not just empty) for everyone else, so its mere presence is what
   // gates the picker below.
-  viewableAccounts?: { email: string; name: string; restrictedTo: string | null }[];
+  viewableAccounts?: { email: string; name: string; restrictedTo: string | null; allowedPages?: string[] | null }[];
 };
 
 // Vincent, 2026-09-08, on the FIRST version of this banner (before the
@@ -631,7 +633,7 @@ export default function MyTasksPage() {
             <option value="">View as: Me ({user?.name})</option>
             {data.viewableAccounts.filter(a => a.email !== user?.email).map(a => (
               <option key={a.email} value={a.email}>
-                View as: {a.name}{a.restrictedTo ? ' (AR Reminder only)' : ''}
+                View as: {a.name}{a.restrictedTo ? ` (${(a.allowedPages ?? [a.restrictedTo]).map(p => RESTRICTED_PAGE_LABEL[p] ?? p).join(' + ')} only)` : ''}
               </option>
             ))}
           </select>

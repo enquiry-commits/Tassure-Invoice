@@ -8,7 +8,7 @@ import { getPersonActivitySummary, getCompanyActivitySummary } from '@/lib/activ
 import { getRecentActivity, summarizeByKind } from '@/lib/recent-activity';
 import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories';
 import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation, type StoredPreview } from '@/lib/ai-conversations';
-import { findMentionedAccount, resolveViewAsAccount, isWithinRestriction, getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
+import { findMentionedAccount, resolveViewAsAccount, canAccountOpen, getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
 import { previewLateFilingResolve, type LateFilingResolvePreview } from '@/lib/late-filing-lookup';
 import { previewInvoiceEdit, type InvoiceEditPreview, type InvoiceEditChange } from '@/lib/invoice-edit-lookup';
@@ -1264,11 +1264,11 @@ async function recentActivitySummary(account: ApprovedAccount | null, personQuer
 // restricted accounts (`restrictedTo: '/billing?tab=ar'`) cannot open
 // Billing Drafts directly (enforced in proxy.ts) — a chat tool must never
 // become a silent bypass of that same restriction, so this checks the
-// identical isWithinRestriction() rule before returning any billing-draft
+// identical canAccountOpen() rule before returning any billing-draft
 // data, not just relying on the page-level block.
 async function invoiceDraftPreview(account: ApprovedAccount | null, companyQuery: string, fyeYear?: number) {
   if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
-  if (account.restrictedTo && !isWithinRestriction(account.restrictedTo, '/billing', new URLSearchParams({ tab: 'billing' }))) {
+  if (!canAccountOpen(account, '/billing', new URLSearchParams({ tab: 'billing' }))) {
     return { error: true as const, message: `${account.name}'s account does not have access to Billing Drafts, so it cannot preview invoice drafts either. Tell the user plainly this isn't available to their account — do not show any billing data.` };
   }
   const result = await previewInvoiceDraft(companyQuery, fyeYear);
@@ -1342,11 +1342,11 @@ async function lateFilingResolvePreview(account: ApprovedAccount | null, company
 // structured data BEFORE any real lookup happens — lib/invoice-edit-
 // lookup.ts then does the actual matching/diffing against the real
 // current invoice, never trusting Claude's own arithmetic. Gated by the
-// same isWithinRestriction() check as preview_invoice_draft — this reads
+// same canAccountOpen() check as preview_invoice_draft — this reads
 // and would eventually let a user touch the same Billing Drafts data.
 async function invoiceEditPreview(account: ApprovedAccount | null, companyQuery: string, qbCompanyHint: QbCompany | undefined, changes: InvoiceEditChange[]) {
   if (!account) return { error: true as const, message: 'No valid session on this request — ask the user to make sure they are logged in, then try again.' };
-  if (account.restrictedTo && !isWithinRestriction(account.restrictedTo, '/billing', new URLSearchParams({ tab: 'billing' }))) {
+  if (!canAccountOpen(account, '/billing', new URLSearchParams({ tab: 'billing' }))) {
     return { error: true as const, message: `${account.name}'s account does not have access to Billing Drafts, so it cannot preview or edit invoices either. Tell the user plainly this isn't available to their account — do not show any billing data.` };
   }
   if (!changes.length) {

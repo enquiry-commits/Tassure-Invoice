@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { getApprovedAccount } from '@/lib/approved-accounts';
+import { getApprovedAccount, allowedPagesFor } from '@/lib/approved-accounts';
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -18,6 +18,8 @@ export async function GET() {
       email: account.email,
       name: account.name,
       restrictedTo: account.restrictedTo ?? null,
+      // Every page a restricted account may open (home first) — the sidebar shows exactly these.
+      allowedPages: allowedPagesFor(account),
       admin: account.admin ?? false,
       canViewReports: account.canViewReports ?? false,
       canViewActivityInsights: account.canViewActivityInsights ?? false,

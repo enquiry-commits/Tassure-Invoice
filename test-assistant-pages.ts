@@ -80,13 +80,14 @@ check('Chelsea cannot open any gated page', GATED_FOR_STAFF.every(h => !labels(c
 check('Chelsea can open the ordinary pages', ['/companies', '/billing/soa/all', '/billing/tao', '/master-list/eot', '/post-incorporate', '/my-tasks'].every(h => labels(chelsea).includes(h)));
 check('Cindy can open Reports', labels(cindy).includes('/reports'));
 check('Cindy cannot open Quotation or Activity Insights (admin-only page)', !labels(cindy).includes('/billing/quotation') && !labels(cindy).includes('/activity-insights'));
-check('Jay (AR Reminder only) sees exactly AR Reminder + My Tasks', JSON.stringify(labels(jay).sort()) === JSON.stringify(['/billing?tab=ar', '/my-tasks']), labels(jay).join(', '));
+// Accounting/Tax team (2026-10-04): AR Reminder + TAO Billing, where they issue TAO invoices.
+check('Jay (Accounting) sees exactly AR Reminder + TAO Billing + My Tasks', JSON.stringify(labels(jay).sort()) === JSON.stringify(['/billing/tao', '/billing?tab=ar', '/my-tasks']), labels(jay).join(', '));
 check('unidentified caller sees no gated page', pagesFor(null).every(p => !p.access));
 
 console.log('\n--- page-access line ---');
 check('Vincent: nothing blocked', pageAccessLine(vincent).includes('CANNOT open none'));
 check('Chelsea: nothing gated open', pageAccessLine(chelsea).includes('CAN open none'));
-check('Jay: confined line', pageAccessLine(jay).includes('confined to') && pageAccessLine(jay).includes('AR Reminder'));
+check('Jay: confined line names both pages', pageAccessLine(jay).includes('confined to') && pageAccessLine(jay).includes('AR Reminder') && pageAccessLine(jay).includes('TAO Billing'));
 
 console.log('\n--- keyword navigation picks the most specific page ---');
 const nav = (t: string, a: ApprovedAccount | null, min = 1) => matchPage(t, a, min)?.href ?? null;

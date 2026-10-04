@@ -78,13 +78,18 @@ export type ApprovedAccount = {
   // easy to hand to the Account team later without also handing them
   // anything else.
   canViewTurnoverAI?: boolean;
-  // When set, this account is confined to exactly this one page (path +
-  // required query params, e.g. AR Reminder is the 'ar' tab on /billing —
-  // see components/Sidebar.tsx's tree for the canonical href). Enforced in
-  // proxy.ts (redirects away from anything else, page navigation only —
-  // API routes are unaffected) and mirrored in the sidebar (only that one
-  // nav item renders) — see isWithinRestriction() below.
+  // When set, this account is confined to this page (path + required query
+  // params, e.g. AR Reminder is the 'ar' tab on /billing — see
+  // components/Sidebar.tsx's tree for the canonical href) plus any
+  // `alsoAllowed` pages. It is the account's home: where it lands and is
+  // redirected back to. Enforced in proxy.ts (page navigation only — API
+  // routes are unaffected) and mirrored in the sidebar, the assistant's page
+  // map and its billing tools — all through canAccountOpen() below.
   restrictedTo?: string;
+  // Extra pages a `restrictedTo` account may ALSO open. Added 2026-10-04 for
+  // the Accounting/Tax team (Vincent: "TAO 这边就是主要给 ACC 和 TAX 去开单
+  // 的") — they issue the TAO invoices, so TAO Billing joins AR Reminder.
+  alsoAllowed?: readonly string[];
 };
 
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
@@ -106,14 +111,16 @@ export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   { name: 'Tan Min Quan', email: 'minquan@tassure.com' },
   { name: 'Esther Loo', email: 'esther@tassure.com', qbLocations: { TAB: 'Esther Loo', TAC: 'Esther Loo', TAO: 'Esther Loo' } },
   { name: 'Chelsea Ang', email: 'chelsea@tassure.com', qbLocations: { TAB: 'Chelsea Ang', TAC: 'Chelsea Ang', TAO: 'Chelsea Ang' } },
-  // Vincent, 2026-08-17 (Clarence Saw added 2026-08-27): these 6 only see
-  // AR Reminder — everything else in the system is hidden/blocked for them.
-  { name: 'Jay Tay', email: 'jaytay@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Jay Tay' } },
-  { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Lee Jing Fei' } },
-  { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Tee Yu Heng' } },
-  { name: 'Vernice Chai', email: 'vernice@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Vernice Chai' } },
-  { name: 'Chee Wei En', email: 'weien@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Chee Wei En' } },
-  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', restrictedTo: '/billing?tab=ar', qbLocations: { TAO: 'Clarence Saw' } },
+  // Vincent, 2026-08-17 (Clarence Saw added 2026-08-27): these 6 (the
+  // Accounting / Tax team) only see AR Reminder — plus, since 2026-10-04, TAO
+  // Billing, where they issue the TAO invoices ("TAO 这边就是主要给 ACC 和
+  // TAX 去开单的"). Everything else in the system is hidden/blocked for them.
+  { name: 'Jay Tay', email: 'jaytay@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Jay Tay' } },
+  { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Lee Jing Fei' } },
+  { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Tee Yu Heng' } },
+  { name: 'Vernice Chai', email: 'vernice@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Vernice Chai' } },
+  { name: 'Chee Wei En', email: 'weien@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Chee Wei En' } },
+  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', restrictedTo: '/billing?tab=ar', alsoAllowed: ['/billing/tao'], qbLocations: { TAO: 'Clarence Saw' } },
 ] as const;
 
 const ACCOUNT_BY_EMAIL = new Map(
@@ -215,4 +222,20 @@ export function isWithinRestriction(restrictedTo: string, pathname: string, sear
     if (searchParams.get(key) !== value) return false;
   }
   return true;
+}
+
+/** Every page a restricted account may open, its home page first; null = unrestricted. */
+export function allowedPagesFor(account: Pick<ApprovedAccount, 'restrictedTo' | 'alsoAllowed'>): string[] | null {
+  return account.restrictedTo ? [account.restrictedTo, ...(account.alsoAllowed ?? [])] : null;
+}
+
+/**
+ * THE "may this account open this page" check — proxy.ts, the sidebar, the
+ * assistant's page map and its billing tools all call this, never their own
+ * copy. Unrestricted → yes; restricted → only its allowed pages. (/my-tasks
+ * is the one deliberate exception, handled by the callers that allow it.)
+ */
+export function canAccountOpen(account: Pick<ApprovedAccount, 'restrictedTo' | 'alsoAllowed'>, pathname: string, searchParams: URLSearchParams): boolean {
+  const pages = allowedPagesFor(account);
+  return !pages || pages.some(page => isWithinRestriction(page, pathname, searchParams));
 }

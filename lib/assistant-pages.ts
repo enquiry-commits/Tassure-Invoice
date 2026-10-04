@@ -1,4 +1,4 @@
-import { isWithinRestriction, type ApprovedAccount } from './approved-accounts';
+import { canAccountOpen, type ApprovedAccount } from './approved-accounts';
 
 // The My Tasks assistant's map of the app (app/api/assistant/route.ts renders
 // it into the static prompt's "System map" and uses it for the keyword
@@ -58,13 +58,13 @@ export const PAGES: SystemPage[] = [
   { label: 'Activity Insights',     href: '/activity-insights',         kw: ['activity insights'], access: isAdmin, desc: 'staff usage analytics from recorded page visits and actions' },
 ];
 
-// Mirrors proxy.ts: an account with `restrictedTo` reaches only that one page
+// Mirrors proxy.ts: an account with `restrictedTo` reaches only its allowed pages (canAccountOpen)
 // (plus My Tasks); every other page also needs its own `access` gate to pass.
 export function canOpenPage(page: SystemPage, account: ApprovedAccount | null | undefined): boolean {
   if (!account) return !page.access;
   if (account.restrictedTo) {
     const url = new URL(page.href, 'https://app.local');
-    if (url.pathname !== '/my-tasks' && !isWithinRestriction(account.restrictedTo, url.pathname, url.searchParams)) return false;
+    if (url.pathname !== '/my-tasks' && !canAccountOpen(account, url.pathname, url.searchParams)) return false;
   }
   return page.access ? page.access(account) : true;
 }
@@ -88,7 +88,7 @@ export function matchPage(t: string, account: ApprovedAccount | null | undefined
 export function pageAccessLine(account: ApprovedAccount | null | undefined): string {
   if (!account) return 'Page access: this user could not be identified — only link pages not marked (restricted).';
   if (account.restrictedTo) {
-    return `Page access: this account is confined to ${pagesFor(account).map(p => p.label).join(' and ')} — every other page is blocked for it, so never link or suggest one.`;
+    return `Page access: this account is confined to ${pagesFor(account).map(p => p.label).join(', ')} — every other page is blocked for it, so never link or suggest one.`;
   }
   const gated = PAGES.filter(p => p.access);
   const can = gated.filter(p => canOpenPage(p, account)).map(p => p.label);

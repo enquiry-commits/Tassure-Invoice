@@ -3739,8 +3739,13 @@ again.
   no entry (only login, redirect-only routes and the per-company
   `/companies/[id]` are exempt), if a `proxy.ts` hard-block's path lacks
   the same gate in `access`, or if a real account sees the wrong pages
-  (`canOpenPage()` also mirrors `restrictedTo`: the AR-Reminder-only
-  accounts get exactly AR Reminder + My Tasks). Each entry now carries a
+  (`canOpenPage()` also mirrors `restrictedTo`: the Accounting/Tax
+  accounts get exactly AR Reminder + TAO Billing + My Tasks — since
+  2026-10-04 through `alsoAllowed` and lib/approved-accounts.ts's
+  `canAccountOpen()`, the ONE page-access check that proxy.ts, the sidebar,
+  this map and the assistant's billing tools all call. An account may have
+  several allowed pages now, so never test `isWithinRestriction(account
+  .restrictedTo, …)` directly — `test-account-access.ts` fails on it). Each entry now carries a
   one-line `desc` of what the page does. Keyword navigation now takes the
   MOST SPECIFIC matching keyword (`matchPage()`), not the first entry in
   list order — the bare 'ar' keyword used to claim anything containing

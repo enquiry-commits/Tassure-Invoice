@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
-import { getApprovedAccount, APPROVED_ACCOUNTS } from '@/lib/approved-accounts';
+import { getApprovedAccount, APPROVED_ACCOUNTS, allowedPagesFor } from '@/lib/approved-accounts';
 import { computeMyTasks } from '@/lib/my-tasks-data';
 import { generateMyTasksBrief } from '@/lib/my-tasks-brief';
 import { getRecentActivity } from '@/lib/recent-activity';
@@ -124,7 +124,7 @@ export async function GET(req: NextRequest) {
     // passing ?viewAs= never gets this list back (403 above, before this
     // point).
     viewableAccounts: realAccount.canViewAsOthers
-      ? APPROVED_ACCOUNTS.map(a => ({ email: a.email, name: a.name, restrictedTo: a.restrictedTo ?? null }))
+      ? APPROVED_ACCOUNTS.map(a => ({ email: a.email, name: a.name, restrictedTo: a.restrictedTo ?? null, allowedPages: allowedPagesFor(a) }))
       : undefined,
   });
 }
