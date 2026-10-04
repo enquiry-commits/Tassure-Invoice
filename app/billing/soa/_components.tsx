@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Mail, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
-import { allStaffNames } from '@/lib/staff-directory';
+import { allStaffNames, staffByTeam } from '@/lib/staff-directory';
 import { findUniqueBestMatch, normalize } from '@/lib/company-name';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import OutlookHelperReadiness from '@/components/client-communications/OutlookHelperReadiness';
@@ -432,6 +432,84 @@ function useSoaDraftPickers() {
   return { me, senders, senderId, setSenderId, templates, selectedTemplateId, setSelectedTemplateId };
 }
 
+// "My book" — multi-select, grouped by department (Vincent, 2026-10-04:
+// "这个默认是All, 但是我要变成可以多选的, 方便Leader查看部门的人员欠款多少,
+// 所以这边的显示可以按部门区分, 然后分别Leader按照部门选择最近的员工"). A
+// department's checkbox header selects/clears every one of its listed
+// members in one click — the "leader picks her whole department at once"
+// half of the request — while each name underneath still toggles alone.
+// `options`/`groups` both come from SoaBillingViewInner's own picFilterOptions/
+// picFilterGroups (already scoped to names that actually appear in this
+// book's live PIC data); this component only renders and toggles selection.
+function PicMultiSelect({ options, groups, selected, onChange }: {
+  options: string[];
+  groups: { team: string; names: string[] }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onOutside = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onOutside);
+    return () => document.removeEventListener('mousedown', onOutside);
+  }, [open]);
+
+  const hasBadDebt = options.includes('BD');
+  const toggleName = (name: string) =>
+    onChange(selected.includes(name) ? selected.filter(n => n !== name) : [...selected, name]);
+  const toggleGroup = (names: string[]) => {
+    const allIn = names.every(n => selected.includes(n));
+    onChange(allIn ? selected.filter(n => !names.includes(n)) : [...new Set([...selected, ...names])]);
+  };
+
+  const label = selected.length === 0 ? 'Everyone'
+    : selected.length <= 2 ? selected.map(n => n === 'BD' ? 'Bad Debt' : n).join(' & ')
+    : `${selected.length} selected`;
+
+  return (
+    <div ref={boxRef} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(v => !v)} type="button"
+        style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 12.5, fontWeight: selected.length ? 700 : 400, background: '#fff', color: selected.length ? '#1e3a5f' : '#334155', cursor: 'pointer' }}>
+        {label}<ChevronDown size={12} style={{ opacity: 0.6 }} />
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 50, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', width: 260, maxHeight: 360, overflowY: 'auto' }}>
+          {groups.length === 0 && !hasBadDebt && (
+            <div style={{ padding: '10px 12px', fontSize: 11.5, color: '#94a3b8' }}>No PIC data yet</div>
+          )}
+          {groups.map(g => {
+            const allIn = g.names.every(n => selected.includes(n));
+            return (
+              <div key={g.team} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <div onClick={() => toggleGroup(g.names)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: '#f8fafc', cursor: 'pointer', fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.03em' }}>
+                  <input type="checkbox" checked={allIn} onChange={() => toggleGroup(g.names)} onClick={e => e.stopPropagation()} style={{ cursor: 'pointer' }} />
+                  {g.team}
+                </div>
+                {g.names.map(name => (
+                  <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px 6px 26px', fontSize: 12.5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={selected.includes(name)} onChange={() => toggleName(name)} />
+                    {name}
+                  </label>
+                ))}
+              </div>
+            );
+          })}
+          {hasBadDebt && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', color: 'var(--status-danger)', fontWeight: 600 }}>
+              <input type="checkbox" checked={selected.includes('BD')} onChange={() => toggleName('BD')} />
+              Bad Debt
+            </label>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // Deep link from the chat assistant (soaDeepLink(), lib/deep-links.ts) —
   // same openCompany convention and auto-open pattern already used by
@@ -446,7 +524,12 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   const [companies, setCompanies] = useState<Row[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [picFilter, setPicFilter] = useState(''); // '' = everyone
+  // Vincent, 2026-10-04, on the single-select "My book" picker: "这个默认是
+  // All, 但是我要变成可以多选的, 方便Leader查看部门的人员欠款多少, 所以这边
+  // 的显示可以按部门区分, 然后分别Leader按照部门选择最近的员工" — multi-
+  // select, grouped by department, so a team leader can pick her whole
+  // department at once rather than one person at a time. [] = everyone.
+  const [picFilters, setPicFilters] = useState<string[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null); // keyed by rowKey()
   const [detailCompany, setDetailCompany] = useState<Row | null>(null);
   const [detailScope, setDetailScope] = useState<SoaCompanySelector | null>(null);
@@ -580,11 +663,11 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qbCompany]);
-  // Also reset picFilter/search/expanded/page-affecting state when switching
-  // companies — a PIC selected on TAB's book shouldn't silently carry over
+  // Also reset picFilters/search/expanded/page-affecting state when switching
+  // companies — PICs selected on TAB's book shouldn't silently carry over
   // and mis-scope TAC's list before the user notices.
   useEffect(() => {
-    setSearch(''); setPicFilter(''); setExpanded(null); setDetailCompany(null); setDetailScope(null); setCollapsedGroups(new Set());
+    setSearch(''); setPicFilters([]); setExpanded(null); setDetailCompany(null); setDetailScope(null); setCollapsedGroups(new Set());
   }, [qbCompany]);
 
   // Vincent, 2026-09-07: "不用再靠人工从 Google Sheet 回填" — Chelsea's real
@@ -619,10 +702,39 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     const sorted = [...names].sort();
     return hasBadDebt ? [...sorted, 'BD'] : sorted;
   }, [companies]);
-  // Same "BD" -> "Bad Debt" expansion as the dropdown's own option label,
-  // reused everywhere picFilter's raw value would otherwise leak through
-  // as the bare "BD" (the KPI cards' "{name}'s book" subtitles below).
-  const picFilterLabel = picFilter === 'BD' ? 'Bad Debt' : picFilter;
+  // Groups picFilterOptions by department (lib/staff-directory.ts's `team`,
+  // the same field "各部门人员有谁" already reads) so a leader can select her
+  // whole department in one click instead of hunting for each name
+  // individually. staffByTeam() gives the org's own team order; only names
+  // that actually appear in picFilterOptions (i.e. currently show up
+  // somewhere in this book's live PIC data) are listed — unchanged from the
+  // flat list's own scoping, just regrouped. 'BD' (Bad Debt) is never a real
+  // department member, so it's excluded here and rendered as its own pinned
+  // row at the bottom of the picker instead.
+  const picFilterGroups = useMemo(() => {
+    const optionSet = new Set(picFilterOptions);
+    const used = new Set<string>();
+    const groups: { team: string; names: string[] }[] = [];
+    for (const { team, members } of staffByTeam()) {
+      const names = members.map(m => m.name).filter(n => optionSet.has(n));
+      if (!names.length) continue;
+      groups.push({ team, names });
+      names.forEach(n => used.add(n));
+    }
+    const other = picFilterOptions.filter(n => n !== 'BD' && !used.has(n));
+    if (other.length) groups.push({ team: 'Other', names: other });
+    return groups;
+  }, [picFilterOptions]);
+  // Same "BD" -> "Bad Debt" expansion as the picker's own option label,
+  // reused everywhere picFilters' raw value would otherwise leak through as
+  // the bare "BD" (the KPI cards' "{label}'s book" subtitles below).
+  // Multiple selections show the names when there are few, else a count —
+  // "3 people's book" reads better in a KPI subtitle than a long name list.
+  const picFilterLabel = (() => {
+    if (picFilters.length === 0) return '';
+    const display = picFilters.map(f => f === 'BD' ? 'Bad Debt' : f);
+    return display.length <= 2 ? display.join(' & ') : `${display.length} people`;
+  })();
 
   const picScoped = useMemo(() => {
     // Vincent, 2026-09-16: "这些Total =0的就不需要显示在List了，因为证明了
@@ -667,8 +779,12 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     // list; those may need a Main PIC assigned rather than staying hidden.
     const hasAnyPic = (c: Row) => c.picOptions.length > 0 || !!effectiveOwner(c);
     const list = (companies ?? []).filter(c => c.totalOutstanding > 0 && hasAnyPic(c));
-    if (!picFilter) return list;
-    const ownsRow = (c: Row) => effectiveOwner(c) === picFilter || (!effectiveOwner(c) && c.picOptions.includes(picFilter));
+    if (!picFilters.length) return list;
+    const selectedSet = new Set(picFilters);
+    const ownsRow = (c: Row) => {
+      const owner = effectiveOwner(c);
+      return owner ? selectedSet.has(owner) : c.picOptions.some(p => selectedSet.has(p));
+    };
     // Vincent, 2026-09-23, on the "All" view specifically: "当一家公司有好
     // 几个Source, 大家都有责任一起去追这个公司其他Source的欠款" — filtering
     // "My book" to one person must keep that company's WHOLE combined card
@@ -683,7 +799,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     if (qbCompany !== 'ALL') return list.filter(ownsRow);
     const matchingKeys = new Set(list.filter(ownsRow).map(c => allCompanyGroupKey(c.companyName)));
     return list.filter(c => matchingKeys.has(allCompanyGroupKey(c.companyName)));
-  }, [companies, picFilter, qbCompany]);
+  }, [companies, picFilters, qbCompany]);
 
   // KPI cards follow the PIC scope (this IS "her own dashboard" once she's
   // picked herself) but not the free-text search box, which stays a
@@ -735,7 +851,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
     });
   })();
 
-  const resetKey = `${qbCompany}::${search}::${picFilter}`;
+  const resetKey = `${qbCompany}::${search}::${picFilters.join(',')}`;
   const rowPages = usePagination(filtered, resetKey);
   const groupPages = usePagination(allGroups, resetKey);
   const activePages = qbCompany === 'ALL' ? groupPages : rowPages;
@@ -983,11 +1099,11 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
 
       {companies !== null && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
-          <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilter ? `${picFilterLabel}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `any ${qbCompany} invoice still unpaid`}
+          <MetricCard value={counts.total} label="Clients With a Balance" sub={picFilters.length ? `${picFilterLabel}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `any ${qbCompany} invoice still unpaid`}
             icon={<Receipt size={16} />} color="#1d3a5c" />
-          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub={picFilter ? `${picFilterLabel}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `${qbCompany} invoices only`}
+          <MetricCard value={<MoneyValue amount={counts.totalOutstanding} />} label="Total Outstanding" sub={picFilters.length ? `${picFilterLabel}'s book` : qbCompany === 'ALL' ? 'across TAB + TAC + TAO' : `${qbCompany} invoices only`}
             icon={<Receipt size={16} />} color="#0f766e" />
-          <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub={picFilter ? `${picFilterLabel}'s book` : 'needs a statement sent soon'}
+          <MetricCard value={counts.seriouslyOverdue} label="61+ Days Overdue" sub={picFilters.length ? `${picFilterLabel}'s book` : 'needs a statement sent soon'}
             icon={<AlertTriangle size={16} />} color="var(--status-danger)" />
         </div>
       )}
@@ -1002,17 +1118,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
           <div style={{ width: 1, height: 20, background: '#e2e8f0' }} />
           <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>My book:</span>
-          <select value={picFilter} onChange={e => setPicFilter(e.target.value)}
-            style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12.5, fontWeight: picFilter ? 700 : 400, background: '#fff', color: picFilter ? '#1e3a5f' : '#334155', cursor: 'pointer', outline: 'none' }}>
-            <option value="">Everyone</option>
-            {picFilterOptions.map(name => (
-              <option key={name} value={name} style={name === 'BD' ? { color: 'var(--status-danger)' } : undefined}>
-                {name === 'BD' ? 'Bad Debt' : name}
-              </option>
-            ))}
-          </select>
-          {picFilter && (
-            <button onClick={() => setPicFilter('')} title="Clear filter"
+          <PicMultiSelect options={picFilterOptions} groups={picFilterGroups} selected={picFilters} onChange={setPicFilters} />
+          {picFilters.length > 0 && (
+            <button onClick={() => setPicFilters([])} title="Clear filter"
               style={{ display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'none', color: '#94a3b8', fontSize: 11, cursor: 'pointer', padding: '4px 2px' }}>
               <X size={12} />Clear
             </button>
