@@ -41,7 +41,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const supabase = createAdminClient();
-  const { data, error } = await supabase.from('turnover_line_items').update(patch).eq('id', lineItemId).select('*').single();
+  // Same join as the GET route (app/api/turnover-ai/projects/[id]/route.ts)
+  // — `file_name` isn't a column on this table, it's joined in from the
+  // parent document. A bare `select('*')` here silently dropped it from
+  // the response, and the frontend replaces its whole local copy of the
+  // row with whatever this returns — so every inline edit/ignore/restore
+  // was blanking the source-file line under the vendor the moment it
+  // saved. Caught live (2026-10-04): clicking into the date field to edit
+  // it made the file name vanish underneath.
+  const { data, error } = await supabase.from('turnover_line_items').update(patch).eq('id', lineItemId)
+    .select('*, turnover_documents(file_name)').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ lineItem: data });
+  const { turnover_documents, ...row } = data as typeof data & { turnover_documents: { file_name?: string } | null };
+  return NextResponse.json({ lineItem: { ...row, file_name: turnover_documents?.file_name ?? '' } });
 }

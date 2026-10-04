@@ -3654,6 +3654,32 @@ again.
   Active Client's Move placeholder "YES" (rewritten to "Active" by the next
   sync for rows TeamWork knows — the same overnight-change shape, and by the
   same logic an intended confirmation signal, so left alone).
+- **INV-DATA-068** — A write route that returns `.select('*').single()` and
+  hands the result straight to the frontend to REPLACE its local copy of
+  the row must select every joined/synthesized field the row's type
+  actually carries, not just the base table's own columns — `select('*')`
+  silently drops anything joined in from another table, and the frontend
+  has no way to know a field went missing; it just renders undefined as
+  blank. Found 2026-10-04 (Vincent, after the Turnover AI review-table
+  redesign went fully inline-editable with save-on-blur, so every keypress
+  round-trips through this): `app/api/turnover-ai/line-items/[id]/route.ts`
+  PATCH returned `select('*')` on `turnover_line_items`, whose `file_name`
+  is joined in from `turnover_documents` (same join the GET route already
+  used) — not a real column on this table. The frontend's `patchItem`
+  replaces the whole line item with the PATCH response
+  (`app/turnover-ai/project/[id]/page.tsx`), so every single inline edit —
+  not just editing the date, just whichever field a staff member happened
+  to touch first — blanked the source-filename line under the vendor the
+  instant it saved. Fix: PATCH now runs the identical
+  `select('*, turnover_documents(file_name)')` join as GET and flattens it
+  the same way before responding. Verified read-only against a real row
+  (not a write): the join returns `turnover_documents: {file_name: "..."}`
+  and the flattened shape carries every column the frontend's
+  `TurnoverProjectLineItem` type expects. General rule: when a PATCH/POST
+  response is used to replace (not merge into) frontend state, its
+  `select()` must mirror the GET route's shape exactly — diff the two
+  `select()` strings, don't assume `'*'` is enough just because it passed
+  typecheck.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
