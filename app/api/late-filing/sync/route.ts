@@ -206,6 +206,26 @@ async function syncLateFiling(run: AutomationRun) {
     let successfullyEvaluated = 0;
     const insertedNames: string[] = [];
     const fetchErrors: Array<{ company: string; error: string }> = [];
+    // Vincent, 2026-10-04, pointing at the Automation Health dashboard's
+    // "Late Filing never" badge: every run since 2026-09-23 has completed
+    // real work (hundreds of companies checked/refreshed/reconciled) but
+    // logged a handful of silent `errors++` from one of ~16 write sites
+    // below, with no detail ever captured — withAutomationRun marks the
+    // WHOLE run 'failed' the moment errors > 0 (see lib/automation-sync.ts),
+    // so it has never once recorded a success despite being almost entirely
+    // working. Investigated directly against production data (ruled out:
+    // TeamWork fetch errors — fetchErrors is empty; EOT errors — eot_errors
+    // is 0; a UEN-casing mismatch blocking the late_filing_companies insert
+    // — none found; no Vercel log access in this environment to read the
+    // real error text another way). This captures the actual Postgres/
+    // Supabase error message at every write site — same shape as
+    // `fetchErrors` above — so the NEXT run's summary finally shows exactly
+    // which write is failing and why, instead of staying a bare count.
+    const writeErrors: Array<{ step: string; error: string }> = [];
+    const noteWriteError = (step: string, message: string | undefined) => {
+      errors++;
+      if (writeErrors.length < 20) writeErrors.push({ step, error: message ?? 'unknown error' });
+    };
     const evaluatedIds = new Set<number>();
     const stillFlaggedIds = new Set<number>();
 
@@ -410,12 +430,12 @@ async function syncLateFiling(run: AutomationRun) {
           const { error: flagError } = await supabase.from('late_filing_companies')
             .update({ resolved_but_still_overdue_since: todaySGT() })
             .eq('id', existing.id);
-          if (flagError) errors++;
+          if (flagError) noteWriteError(`resolved_but_still_overdue_since set (${c.company_name})`, flagError.message);
         } else if (!isLate && alreadyFlagged) {
           const { error: clearError } = await supabase.from('late_filing_companies')
             .update({ resolved_but_still_overdue_since: null })
             .eq('id', existing.id);
-          if (clearError) errors++;
+          if (clearError) noteWriteError(`resolved_but_still_overdue_since clear (${c.company_name})`, clearError.message);
         }
       }
 
@@ -441,7 +461,7 @@ async function syncLateFiling(run: AutomationRun) {
           const { error: dueError } = await supabase.from('late_filing_companies')
             .update({ next_agm_due_date: freshDue })
             .eq('id', existing.id);
-          if (dueError) errors++;
+          if (dueError) noteWriteError(`next_agm_due_date refresh (${c.company_name})`, dueError.message);
         }
       }
 
@@ -512,7 +532,7 @@ async function syncLateFiling(run: AutomationRun) {
               updated_by_email: 'system:late-filing',
               updated_by_name: 'Late Filing Sync',
             }).eq('id', arMatch.id);
-            if (noteError) errors++; else arNoted++;
+            if (noteError) noteWriteError(`ar_reminder marker note (${c.company_name})`, noteError.message); else arNoted++;
           }
         } else {
           const { data: insertedAr, error: insertError } = await supabase.from('ar_reminder').insert({
@@ -527,7 +547,7 @@ async function syncLateFiling(run: AutomationRun) {
             updated_by_email: 'system:late-filing',
             updated_by_name: 'Late Filing Sync',
           }).select('id').single();
-          if (insertError) errors++; else { arInserted++; mirroredArReminderId = insertedAr?.id ?? null; }
+          if (insertError) noteWriteError(`ar_reminder insert (${c.company_name})`, insertError.message); else { arInserted++; mirroredArReminderId = insertedAr?.id ?? null; }
         }
       }
 
@@ -562,14 +582,14 @@ async function syncLateFiling(run: AutomationRun) {
             .from('late_filing_companies')
             .update(patch)
             .eq('id', existing.id);
-          if (error) errors++;
+          if (error) noteWriteError(`late_filing_companies refresh (${c.company_name})`, error.message);
           else refreshed++;
         }
         continue;
       }
 
       const { error } = await supabase.from('late_filing_companies').insert(values);
-      if (error) errors++;
+      if (error) noteWriteError(`late_filing_companies insert (${c.company_name})`, error.message);
       else {
         inserted++;
         insertedNames.push(c.company_name);
@@ -616,7 +636,7 @@ async function syncLateFiling(run: AutomationRun) {
             updated_by_email: 'system:late-filing',
             updated_by_name: 'Late Filing Sync',
           }).eq('id', arMatch.id);
-          if (noteError) errors++; else arNoted++;
+          if (noteError) noteWriteError(`ar_reminder marker note, legacy (${m.company_name})`, noteError.message); else arNoted++;
         }
       } else {
         const { data: insertedAr, error: insertError } = await supabase.from('ar_reminder').insert({
@@ -630,7 +650,7 @@ async function syncLateFiling(run: AutomationRun) {
           updated_by_email: 'system:late-filing',
           updated_by_name: 'Late Filing Sync',
         }).select('id').single();
-        if (insertError) errors++; else { arInserted++; mirroredArReminderId = insertedAr?.id ?? null; }
+        if (insertError) noteWriteError(`ar_reminder insert, legacy (${m.company_name})`, insertError.message); else { arInserted++; mirroredArReminderId = insertedAr?.id ?? null; }
       }
 
       if (mirroredArReminderId !== null) {
@@ -669,7 +689,7 @@ async function syncLateFiling(run: AutomationRun) {
         remarks: `Review: Auto condition cleared on ${reviewDate} — verify before resolving. Previous: ${row.remarks}`,
         updated_at: new Date().toISOString(),
       }).eq('id', row.id);
-      if (error) errors++;
+      if (error) noteWriteError(`moved to review (${row.company_name})`, error.message);
       else movedToReview++;
     }
 
@@ -741,7 +761,7 @@ async function syncLateFiling(run: AutomationRun) {
       .from('ar_reminder')
       .select('id, entity_name, uen, remarks')
       .ilike('remarks', `%${LATE_FILING_MARKER}%`);
-    if (markedError) errors++;
+    if (markedError) noteWriteError('marked ar_reminder rows select', markedError.message);
 
     if (markedRows?.length) {
       // Fresh query, not the byUen/byName maps built at the top of this
@@ -793,7 +813,7 @@ async function syncLateFiling(run: AutomationRun) {
             updated_by_email: 'system:late-filing',
             updated_by_name: 'Late Filing Sync',
           }).eq('id', row.id);
-          if (reconcileError) errors++; else reconciled++;
+          if (reconcileError) noteWriteError(`marker reconcile (${row.entity_name})`, reconcileError.message); else reconciled++;
         }
 
         // Self-heal the link column so it can never again silently stop
@@ -851,7 +871,7 @@ async function syncLateFiling(run: AutomationRun) {
         .select('id, uen, entity_name')
         .in('uen', terminatedUenKeys)
         .or('status.is.null,status.neq.Excluded');
-      if (terminatedArError) errors++;
+      if (terminatedArError) noteWriteError('terminated ar_reminder rows select', terminatedArError.message);
       exclusionCandidates = terminatedArRows ?? [];
     }
     const exclusionPlan = planArAutoExclusions(exclusionCandidates, lifecycle);
@@ -862,7 +882,7 @@ async function syncLateFiling(run: AutomationRun) {
         updated_by_email: AR_SYSTEM_EXCLUDER,
         updated_by_name: 'Late Filing Sync',
       }).eq('id', row.id);
-      if (excludeError) errors++; else excludedTerminated++;
+      if (excludeError) noteWriteError(`terminated exclude (${row.entity_name})`, excludeError.message); else excludedTerminated++;
     }
 
     // Auto-restore: which pass hid each Excluded row is read from
@@ -876,7 +896,7 @@ async function syncLateFiling(run: AutomationRun) {
       .select('id, uen, entity_name')
       .eq('status', 'Excluded')
       .not('uen', 'is', null);
-    if (excludedRowsError) errors++;
+    if (excludedRowsError) noteWriteError('excluded ar_reminder rows select', excludedRowsError.message);
     const excludedIds = (excludedRows ?? []).map(r => r.id as number);
     const lastExclusion = new Map<number, { by: string | null; statusBefore: string | null; at: string }>();
     if (excludedIds.length) {
@@ -901,7 +921,7 @@ async function syncLateFiling(run: AutomationRun) {
         updated_by_email: AR_SYSTEM_RESTORER,
         updated_by_name: 'Late Filing Sync (auto-restore)',
       }).eq('id', r.id).eq('status', 'Excluded');
-      if (restoreError) errors++; else restoredExcluded++;
+      if (restoreError) noteWriteError(`terminated restore (ar_reminder id ${r.id}, restoreTo=${JSON.stringify(r.restoreTo)})`, restoreError.message); else restoredExcluded++;
     }
 
     // Safety net — judge the OUTCOME after every change above.
@@ -943,6 +963,7 @@ async function syncLateFiling(run: AutomationRun) {
       eot_errors: eotErrors,
       errors,
       fetchErrors,
+      writeErrors,
     };
     return NextResponse.json(result, { status: result.ok ? 200 : 500 });
   } finally {
