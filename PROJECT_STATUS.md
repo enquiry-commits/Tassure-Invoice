@@ -2009,6 +2009,34 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Quotation page: new "Created By" column — who issued each quotation,
+  including ones opened directly in QuickBooks (INV-QB-024 item 8).**
+  Vincent: "这边要多一列可以追查是谁开的 Quotation", then "如果员工是从QB那边
+  开的 Quotation 也要记录到底是谁开的" and "在每次开quotation 的时候，应该都
+  需要选择具体是谁开的". Confirmed read-only against live QuickBooks (tokens
+  had 40 min left, nothing refreshed or written): an Estimate carries no
+  user at all (MetaData = CreateTime/LastUpdatedTime, custom fields off),
+  staff share logins, and the "who" staff pick on every form is Location
+  (Track Locations is on in TAB and TAO) — 51 of 52 estimates have one,
+  only `260041` (13 Apr 2026, Yu An Logistics) doesn't, so QuickBooks does
+  not force it. The column shows that Location as the staff member's full
+  name; a quotation created with this page's New Quotation is recorded by
+  the system itself (`create_quotation` event, the only record of that
+  creator) and that wins; neither → amber "Not set" with a hint to set
+  Location in QuickBooks. Also a Created By filter (with counts and "Not
+  set"), search by creator, the detail modal's line ("Created by: X ·
+  QuickBooks Location / created in this system"), and one line in the
+  assistant's Quotation how-to. `npx tsx test-quotation-trace.ts` 40/40 (7
+  new); `npx tsc --noEmit` clean; `npx eslint` clean on the changed files
+  (1 pre-existing `hiddenNote` warning in the assistant route). Visual
+  check: temporary harness under `/downloads/` (no session needed, no
+  `proxy.ts` change) rendering the real page with the REAL captured
+  payload, driven with Playwright — column, filter (Chin Kah Ye 24, Hoo
+  Seng Xin 24, Jenny Lai 1, Lee Jing Fei 2, Not set 1) and the detail line
+  all correct; harness, payload and screenshots removed afterwards. The
+  signed-in page itself and New Quotation's new log write were not
+  exercised live.
+
 - **The assistant's map of the app now covers every real page (INV-AI-009
   completed).** Vincent: "要，一次补全". Added the 21 pages still missing
   after the Quotation fix — SOA All/TAB/TAC/TAO, TAO billing, Reports,

@@ -1,3 +1,4 @@
+import { APPROVED_ACCOUNTS } from './approved-accounts';
 import { normalize } from './company-name';
 import type { QbCompany } from './quickbooks';
 import type { EstimateLine, EstimateRecord } from './quickbooks-estimates';
@@ -109,6 +110,7 @@ export type QuotationRow = {
   txnStatus: string | null;
   statusGroup: QuotationStatusGroup;
   locationName: string | null;
+  createdBy: QuotationCreator | null;
   privateNote: string | null;
   lines: EstimateLine[];
   // SGT date of the estimate's last update — for a Closed one, the closest
@@ -117,6 +119,36 @@ export type QuotationRow = {
   daysOpen: number | null;
   trace: QuotationTrace;
 };
+
+// Who issued a quotation (Vincent, 2026-10-04: "要多一列可以追查是谁开的
+// Quotation", including ones opened directly in QuickBooks). QuickBooks keeps
+// no user on an Estimate — its MetaData is only CreateTime/LastUpdatedTime —
+// and staff share QuickBooks logins anyway (INV-QB-013), so the evidence is,
+// strongest first: (1) this system's own record, written when New Quotation
+// created it; (2) the estimate's Location, the per-OPERATOR tag staff set on
+// whatever they enter in QuickBooks (INV-QB-013). No Location and no record
+// means nobody can know from the data — null, shown as "Not set", never a
+// guess. Real data 2026-10-04: 51 of 52 estimates carry a Location.
+export type QuotationCreator = { name: string; source: 'system' | 'quickbooks_location' };
+
+// A Location is the operator's name as spelled in THAT book (TAC uses short
+// forms, e.g. "Kah Ye"); show the staff member's full name when an account
+// maps that exact Location, otherwise the Location itself.
+export function staffNameForLocation(book: QbCompany, location: string): string {
+  const key = location.trim().toLowerCase();
+  const account = APPROVED_ACCOUNTS.find(a => a.qbLocations?.[book]?.trim().toLowerCase() === key);
+  return account?.name ?? location.trim();
+}
+
+export function quotationCreator(
+  e: Pick<EstimateRecord, 'book' | 'qbEstimateId' | 'locationName'>,
+  systemCreators?: ReadonlyMap<string, string>,
+): QuotationCreator | null {
+  const recorded = systemCreators?.get(`${e.book}|${e.qbEstimateId}`);
+  if (recorded) return { name: recorded, source: 'system' };
+  if (e.locationName?.trim()) return { name: staffNameForLocation(e.book, e.locationName), source: 'quickbooks_location' };
+  return null;
+}
 
 export function statusGroupOf(txnStatus: string | null): QuotationStatusGroup {
   if (txnStatus === 'Closed') return 'closed';
@@ -144,7 +176,9 @@ function dayDiff(from: string, to: string): number {
 export function traceQuotations(
   estimates: EstimateRecord[],
   invoices: TraceInvoiceInput[],
-  opts: { today: string; graceDays?: number },
+  // systemCreators: `${book}|${qbEstimateId}` → staff name, for quotations
+  // created through this system (see quotationCreator).
+  opts: { today: string; graceDays?: number; systemCreators?: ReadonlyMap<string, string> },
 ): QuotationRow[] {
   const graceDays = opts.graceDays ?? TRACE_GRACE_DAYS;
 
@@ -234,6 +268,7 @@ export function traceQuotations(
       txnStatus: e.txnStatus,
       statusGroup: group,
       locationName: e.locationName,
+      createdBy: quotationCreator(e, opts.systemCreators),
       privateNote: e.privateNote,
       lines: e.lines,
       closedOn,

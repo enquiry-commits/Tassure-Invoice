@@ -1958,6 +1958,28 @@ again.
      (only Invoice/Payment/JournalEntry/Deposit/CreditMemo); real-time push
      would need an Intuit-dashboard subscription and is not needed while
      reads are live.
+  8. **Who issued a quotation ("Created By", Vincent 2026-10-04: "要多一列
+     可以追查是谁开的 Quotation", including ones opened directly in QB).**
+     QuickBooks records NO user on an Estimate — confirmed live: `MetaData`
+     is only `CreateTime`/`LastUpdatedTime`, no custom fields are enabled
+     (`SalesFormsPrefs.UseSalesCustom1-3` all false), no sales-rep field —
+     and staff share QuickBooks logins anyway (INV-QB-013), so even
+     QuickBooks' own audit log could not tell people apart. The person is
+     the **Location** staff choose on the form (`TrackDepartments` is on in
+     TAB and TAO, terminology "Location") — 51 of 52 real estimates carry
+     one (TAB: Chin Kah Ye 24, Hoo Seng Xin 24, Jenny Lai 1; TAO: Lee Jing
+     Fei 2). QuickBooks does NOT force it: `260041` (13 Apr 2026, Yu An
+     Logistics) has none. `quotationCreator()` (`lib/quotation-trace.ts`,
+     tested in `test-quotation-trace.ts`) resolves, strongest first: this
+     system's own record for a quotation made with New Quotation (the
+     create route logs a `create_quotation` `user_activity_events` row with
+     book + estimate id — the only place that creator is recorded), then
+     the Location mapped to the staff member's full name via `qbLocations`
+     (TAC uses short forms like "Kah Ye"), else `null` shown as an amber
+     "Not set" — never a guess. The fix for "Not set" is choosing a
+     Location on that quotation in QuickBooks (the page reads live, so it
+     shows up on the next load); making Location mandatory is a QuickBooks
+     process rule, not something this app can enforce.
 - **INV-QB-025** — `displayInvoiceNo()`'s (`components/billing/
   ExpandedBillingRow.tsx`) leading-prefix strip must cover EVERY book
   `BillingInvoiceReference`'s `company` prop accepts, not just whichever

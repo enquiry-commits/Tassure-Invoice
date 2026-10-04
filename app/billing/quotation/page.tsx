@@ -18,9 +18,11 @@ import type { QuotationData, QuotationRow, QuotationTraceInvoice } from '@/app/a
 // app/api/billing/quotation/route.ts enforces the same flag server-side.
 
 type StatusFilter = 'all' | 'open' | 'closed' | 'rejected' | 'split' | 'noinvoice';
+// Created By filter value for quotations nobody can attribute.
+const NOT_SET = '__not_set__';
 
 const BOOKS: QbCompany[] = ['TAB', 'TAC', 'TAO'];
-const listColumns = '28px 104px 96px minmax(210px,1.5fr) 118px 66px 118px minmax(290px,2fr)';
+const listColumns = '28px 104px 96px minmax(210px,1.5fr) 128px 118px 66px 118px minmax(290px,2fr)';
 
 function money(n: number, currency?: string | null) {
   const body = n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -44,6 +46,26 @@ function StatusPill({ row }: { row: QuotationRow }) {
       {label}{row.daysOpen !== null ? ` · ${row.daysOpen}d` : ''}
     </span>
   );
+}
+
+// Who issued the quotation (lib/quotation-trace.ts's quotationCreator):
+// this system's own record for one made with New Quotation, otherwise the
+// Location staff pick on the quotation in QuickBooks. "Not set" is the one
+// real blind spot — QuickBooks itself records no user (staff share logins),
+// so the fix is choosing a Location on that quotation in QuickBooks.
+const NOT_SET_HINT = 'No Location was chosen on this quotation in QuickBooks, and it was not created here. QuickBooks itself does not record who made it — choose a Location on it in QuickBooks to fill this in.';
+function creatorTitle(row: QuotationRow): string {
+  const c = row.createdBy;
+  if (!c) return NOT_SET_HINT;
+  if (c.source === 'system') return 'Created in this system with New Quotation';
+  return row.locationName && row.locationName.trim() !== c.name
+    ? `From the Location chosen in QuickBooks ("${row.locationName}")`
+    : 'From the Location chosen on this quotation in QuickBooks';
+}
+function CreatedBy({ row }: { row: QuotationRow }) {
+  const c = row.createdBy;
+  if (!c) return <span title={NOT_SET_HINT} style={{ fontSize: 11, fontWeight: 700, color: '#b45309' }}>Not set</span>;
+  return <span title={creatorTitle(row)} style={{ fontSize: 11.5, fontWeight: 600, color: '#334155' }}>{c.name}</span>;
 }
 
 // One traced invoice: ● = QuickBooks itself recorded the conversion,
@@ -171,7 +193,11 @@ function Detail({ row, graceDays, onClose }: { row: QuotationRow; graceDays: num
             )}
 
           <div style={{ marginTop: 14, display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 11.5, color: '#64748b' }}>
-            {row.locationName && <span>Location (operator): <strong style={{ color: '#334155' }}>{row.locationName}</strong></span>}
+            <span title={creatorTitle(row)}>Created by: {row.createdBy
+              ? <strong style={{ color: '#334155' }}>{row.createdBy.name}</strong>
+              : <strong style={{ color: '#b45309' }}>Not set</strong>}
+              <span style={{ color: '#94a3b8' }}> · {row.createdBy?.source === 'system' ? 'created in this system' : row.createdBy ? 'QuickBooks Location' : 'no Location in QuickBooks'}</span>
+            </span>
             {row.expirationDate && <span>Expires: <strong style={{ color: '#334155' }}>{fmtDate(row.expirationDate)}</strong></span>}
             {row.privateNote && <span>Note: <strong style={{ color: '#334155' }}>{row.privateNote}</strong></span>}
           </div>
@@ -372,6 +398,7 @@ export default function QuotationPage() {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StatusFilter>('all');
   const [sourceFilter, setSourceFilter] = useState<'all' | QbCompany>('all');
+  const [creatorFilter, setCreatorFilter] = useState<string>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
 
@@ -392,6 +419,11 @@ export default function QuotationPage() {
   useEffect(() => { load(); }, [load]);
 
   const rows = useMemo(() => data?.rows ?? [], [data]);
+  const creators = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of rows) if (r.createdBy) counts.set(r.createdBy.name, (counts.get(r.createdBy.name) ?? 0) + 1);
+    return { names: [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0])), notSet: rows.filter(r => !r.createdBy).length };
+  }, [rows]);
 
   const counts = useMemo(() => {
     const open = rows.filter(r => r.statusGroup === 'open');
@@ -410,12 +442,14 @@ export default function QuotationPage() {
     if (filter === 'split') list = list.filter(r => r.trace.sources.length > 1);
     if (filter === 'noinvoice') list = list.filter(r => r.statusGroup === 'closed' && r.trace.status === 'none');
     if (sourceFilter !== 'all') list = list.filter(r => r.source === sourceFilter);
+    if (creatorFilter === NOT_SET) list = list.filter(r => !r.createdBy);
+    else if (creatorFilter !== 'all') list = list.filter(r => r.createdBy?.name === creatorFilter);
     const q = search.trim().toLowerCase();
-    if (q) list = list.filter(r => r.customerName.toLowerCase().includes(q) || (r.docNumber ?? '').toLowerCase().includes(q));
+    if (q) list = list.filter(r => r.customerName.toLowerCase().includes(q) || (r.docNumber ?? '').toLowerCase().includes(q) || (r.createdBy?.name ?? '').toLowerCase().includes(q));
     return list;
-  }, [rows, filter, sourceFilter, search]);
+  }, [rows, filter, sourceFilter, creatorFilter, search]);
 
-  const { page, setPage, totalPages, pageItems, startIndex, total } = usePagination(filtered, `${filter}|${sourceFilter}|${search}`);
+  const { page, setPage, totalPages, pageItems, startIndex, total } = usePagination(filtered, `${filter}|${sourceFilter}|${creatorFilter}|${search}`);
 
   const detailRow = expanded ? rows.find(r => `${r.source}|${r.qbEstimateId}` === expanded) ?? null : null;
 
@@ -444,7 +478,7 @@ export default function QuotationPage() {
 
       <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <input type="text" placeholder="Search quotation no. or customer…" value={search} onChange={e => setSearch(e.target.value)}
+          <input type="text" placeholder="Search quotation no., customer or creator…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ flex: 1, minWidth: 220, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: '#94a3b8', marginRight: 2 }}>Source</span>
@@ -454,6 +488,15 @@ export default function QuotationPage() {
                 {b === 'all' ? 'All' : b}
               </button>
             ))}
+          </div>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: '#94a3b8', marginRight: 2 }}>Created By</span>
+            <select value={creatorFilter} onChange={e => setCreatorFilter(e.target.value)} aria-label="Filter by who created the quotation"
+              style={{ border: `1px solid ${creatorFilter === 'all' ? '#e2e8f0' : '#1d3a5c'}`, borderRadius: 6, padding: '4px 8px', fontSize: 11.5, fontWeight: 600, color: '#334155', background: '#fff', cursor: 'pointer' }}>
+              <option value="all">All</option>
+              {creators.names.map(([name, n]) => <option key={name} value={name}>{name} ({n})</option>)}
+              {creators.notSet > 0 && <option value={NOT_SET}>Not set ({creators.notSet})</option>}
+            </select>
           </div>
           <span style={{ fontSize: 11, color: '#94a3b8' }}>{total} quotations</span>
         </div>
@@ -495,10 +538,10 @@ export default function QuotationPage() {
           {data && <span>Showing quotations dated from {fmtDate(data.windowStart)} (the synced invoice window)</span>}
         </div>
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 470px)', minHeight: 400 }}>
-          <div style={{ minWidth: 1000 }}>
+          <div style={{ minWidth: 1130 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: listColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
-              {['', 'PI No.', 'Date', 'Customer', 'Amount', 'Source', 'Status', 'Invoice Source (traced)'].map((h, i) => (
-                <div key={i} style={{ padding: '0 6px', textAlign: i === 4 || i === 5 || i === 6 ? 'center' : 'left' }}>{h}</div>
+              {['', 'PI No.', 'Date', 'Customer', 'Created By', 'Amount', 'Source', 'Status', 'Invoice Source (traced)'].map((h, i) => (
+                <div key={i} style={{ padding: '0 6px', textAlign: i === 5 || i === 6 || i === 7 ? 'center' : 'left' }}>{h}</div>
               ))}
             </div>
             {data === null && !loadError && (
@@ -520,6 +563,7 @@ export default function QuotationPage() {
                       <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{r.customerName || '—'}
                     </div>
                   </div>
+                  <div style={{ padding: '0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><CreatedBy row={r} /></div>
                   <div style={{ textAlign: 'center', fontSize: 11.5, color: '#374151', fontWeight: 600 }}>{money(r.totalAmt, r.currency)}</div>
                   <div style={{ display: 'flex', justifyContent: 'center' }}><span style={chipStyle}>{r.source}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'center' }}><StatusPill row={r} /></div>

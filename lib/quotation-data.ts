@@ -5,6 +5,7 @@ import { thisYearSGT, todaySGT } from './date';
 import { fetchAllEstimates } from './quickbooks-estimates';
 import { traceQuotations, TRACE_GRACE_DAYS, type QuotationRow, type TraceInvoiceInput } from './quotation-trace';
 import type { QbCompany } from './quickbooks';
+import { getApprovedAccount } from './approved-accounts';
 
 // I/O half of the Quotation page (the pure join is lib/quotation-trace.ts):
 // estimates read LIVE from QuickBooks (lib/quickbooks-estimates.ts for why),
@@ -85,16 +86,42 @@ async function loadWindowInvoices(supabase: SupabaseClient, windowStart: string)
   return out;
 }
 
+// Quotations created through this system's New Quotation
+// (app/api/quickbooks/create-quotation logs a 'create_quotation' event with
+// the creating account) — QuickBooks itself records no user on an Estimate.
+// Best-effort: if this read fails, those rows fall back to their QuickBooks
+// Location like every other quotation, so the page still loads.
+async function loadSystemCreators(supabase: SupabaseClient): Promise<Map<string, string>> {
+  const { data, error } = await supabase
+    .from('user_activity_events')
+    .select('account_email, detail, created_at')
+    .eq('event_type', 'create_quotation')
+    .order('created_at', { ascending: true });
+  const creators = new Map<string, string>();
+  if (error) {
+    console.error('Quotation creators: could not read create_quotation events:', error.message);
+    return creators;
+  }
+  for (const row of (data ?? []) as Array<{ account_email: string; detail: { book?: unknown; qbEstimateId?: unknown } | null }>) {
+    const book = typeof row.detail?.book === 'string' ? row.detail.book : null;
+    const id = row.detail?.qbEstimateId == null ? null : String(row.detail.qbEstimateId);
+    if (!book || !id) continue;
+    creators.set(`${book}|${id}`, getApprovedAccount(row.account_email)?.name ?? row.account_email);
+  }
+  return creators;
+}
+
 export async function loadQuotationData(): Promise<QuotationData> {
   const windowStart = `${thisYearSGT() - 2}-01-01`;
   const supabase = createAdminClient();
 
-  const [fetched, invoices] = await Promise.all([
+  const [fetched, invoices, systemCreators] = await Promise.all([
     fetchAllEstimates(windowStart),
     loadWindowInvoices(supabase, windowStart),
+    loadSystemCreators(supabase),
   ]);
 
-  const rows = traceQuotations(fetched.flatMap(f => f.estimates), invoices, { today: todaySGT(), graceDays: TRACE_GRACE_DAYS });
+  const rows = traceQuotations(fetched.flatMap(f => f.estimates), invoices, { today: todaySGT(), graceDays: TRACE_GRACE_DAYS, systemCreators });
 
   return {
     rows,

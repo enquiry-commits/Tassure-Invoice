@@ -9,6 +9,7 @@ import {
   type DraftLineItem,
 } from '@/lib/qb-invoice-conventions';
 import { ESTIMATE_BOOKS } from '@/lib/quickbooks-estimates';
+import { logActivityEvent } from '@/lib/activity-data';
 
 // POST /api/quickbooks/create-quotation — Vincent: "那个Quotation页面要可以
 // 实际开Quotation的功能" (the Quotation page needs to actually be able to
@@ -131,6 +132,18 @@ export async function POST(req: NextRequest) {
   const est = created.Estimate ?? {};
   if (!est.Id || typeof est.DocNumber !== 'string') {
     return NextResponse.json({ error: `QB ${qbBook} returned an incomplete quotation result. Check QuickBooks directly before retrying.` }, { status: 502 });
+  }
+  // QuickBooks records no user on an Estimate, so this event IS the record of
+  // who created it — the Quotation page's Created By column reads it back
+  // (lib/quotation-data.ts's loadSystemCreators). Best-effort: the quotation
+  // already exists in QuickBooks, so a failed log must not turn into an error.
+  try {
+    await logActivityEvent(account.email, '/billing/quotation', 'create_quotation', {
+      book: qbBook, qbEstimateId: String(est.Id), docNumber: est.DocNumber,
+      customerName: customer.name, totalAmt: est.TotalAmt ?? 0,
+    });
+  } catch (err) {
+    console.error('create_quotation: could not record the creator', err);
   }
   return NextResponse.json({
     success: true,
