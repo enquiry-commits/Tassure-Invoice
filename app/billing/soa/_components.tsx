@@ -443,18 +443,47 @@ function useSoaDraftPickers() {
 // book's live PIC data); this component only renders and toggles selection.
 function PicMultiSelect({ options, groups, selected, onChange }: {
   options: string[];
-  groups: { team: string; names: string[] }[];
+  groups: { team: string; names: string[]; ungrouped?: boolean }[];
   selected: string[];
   onChange: (next: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number; maxHeight: number } | null>(null);
+
+  // Vincent, 2026-10-04: "这个UI设计, 导致被遮盖了, 无法下滑和看完整" — the
+  // list was `position: absolute` inside the filter card, so an
+  // overflow:hidden ancestor clipped its bottom and the inner scrollbar was
+  // unreachable. Same fix as SoaDraftPopover above: portal to document.body,
+  // `position: fixed` from the trigger's rect, right-aligned to the trigger
+  // (it sits near the page's right edge), and maxHeight capped to the space
+  // actually left in the viewport so the inner scroll always works.
+  const updatePosition = () => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const top = rect.bottom + 4;
+    setPos({ top, right: Math.max(8, window.innerWidth - rect.right), maxHeight: Math.max(160, window.innerHeight - top - 16) });
+  };
 
   useEffect(() => {
     if (!open) return;
-    const onOutside = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    const onOutside = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (boxRef.current?.contains(t) || popoverRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    // Follow the trigger on page scroll; ignore the list's own inner scroll.
+    const onScroll = (e: Event) => { if (!popoverRef.current?.contains(e.target as Node)) updatePosition(); };
     document.addEventListener('mousedown', onOutside);
-    return () => document.removeEventListener('mousedown', onOutside);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', updatePosition);
+    return () => {
+      document.removeEventListener('mousedown', onOutside);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', updatePosition);
+    };
   }, [open]);
 
   const hasBadDebt = options.includes('BD');
@@ -471,16 +500,26 @@ function PicMultiSelect({ options, groups, selected, onChange }: {
 
   return (
     <div ref={boxRef} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(v => !v)} type="button"
+      <button ref={triggerRef} onClick={() => { if (!open) updatePosition(); setOpen(v => !v); }} type="button"
         style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 12.5, fontWeight: selected.length ? 700 : 400, background: '#fff', color: selected.length ? '#1e3a5f' : '#334155', cursor: 'pointer' }}>
         {label}<ChevronDown size={12} style={{ opacity: 0.6 }} />
       </button>
-      {open && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 50, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', width: 260, maxHeight: 360, overflowY: 'auto' }}>
+      {open && pos && createPortal(
+        <div ref={popoverRef} style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', width: 260, maxHeight: Math.min(480, pos.maxHeight), overflowY: 'auto', overscrollBehavior: 'contain' }}>
           {groups.length === 0 && !hasBadDebt && (
             <div style={{ padding: '10px 12px', fontSize: 11.5, color: '#94a3b8' }}>No PIC data yet</div>
           )}
           {groups.map(g => {
+            if (g.ungrouped) return (
+              <div key={g.team} style={{ borderBottom: '1px solid #f1f5f9', padding: '2px 0' }}>
+                {g.names.map(name => (
+                  <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', fontSize: 12.5, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={selected.includes(name)} onChange={() => toggleName(name)} />
+                    {name}
+                  </label>
+                ))}
+              </div>
+            );
             const allIn = g.names.every(n => selected.includes(n));
             return (
               <div key={g.team} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -504,7 +543,8 @@ function PicMultiSelect({ options, groups, selected, onChange }: {
               Bad Debt
             </label>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -711,16 +751,25 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // flat list's own scoping, just regrouped. 'BD' (Bad Debt) is never a real
   // department member, so it's excluded here and rendered as its own pinned
   // row at the bottom of the picker instead.
+  //
+  // Vincent, 2026-10-04, right after: "Chelsea 和Esther不需要归类部门, 然后
+  // corporate 部门不需要分Malaysia的额外显示" — Management members are listed
+  // as standalone names (no department header, `ungrouped`), and every
+  // "<Team> (Malaysia)" sub-team folds into its parent team here. Picker-only
+  // regrouping: staff-directory's own `team` values are left untouched.
   const picFilterGroups = useMemo(() => {
     const optionSet = new Set(picFilterOptions);
     const used = new Set<string>();
-    const groups: { team: string; names: string[] }[] = [];
+    const byTeam = new Map<string, string[]>();
     for (const { team, members } of staffByTeam()) {
       const names = members.map(m => m.name).filter(n => optionSet.has(n));
       if (!names.length) continue;
-      groups.push({ team, names });
+      const key = team.replace(/\s*\(Malaysia\)$/, '');
+      byTeam.set(key, [...(byTeam.get(key) ?? []), ...names]);
       names.forEach(n => used.add(n));
     }
+    const groups: { team: string; names: string[]; ungrouped?: boolean }[] =
+      [...byTeam].map(([team, names]) => ({ team, names, ungrouped: team === 'Management' }));
     const other = picFilterOptions.filter(n => n !== 'BD' && !used.has(n));
     if (other.length) groups.push({ team: 'Other', names: other });
     return groups;
