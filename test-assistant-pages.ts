@@ -73,7 +73,7 @@ const jay = getApprovedAccount('jaytay@tassure.com');
 check('test accounts exist', !!vincent && !!chelsea && !!cindy && !!jay);
 const labels = (a: ApprovedAccount | null) => pagesFor(a).map(p => p.href);
 check('Vincent can open every page', pagesFor(vincent).length === PAGES.length);
-const GATED_FOR_STAFF = ['/billing/quotation', '/reports', '/sg-news', '/turnover-ai/inbox', '/turnover-ai/review', '/turnover-ai/summary', '/admin/appearance', '/ai-learning', '/ai-quality', '/activity-insights'];
+const GATED_FOR_STAFF = ['/billing/quotation', '/reports', '/sg-news', '/turnover-ai', '/admin/appearance', '/ai-learning', '/ai-quality', '/activity-insights'];
 check('Chelsea cannot open any gated page', GATED_FOR_STAFF.every(h => !labels(chelsea).includes(h)), labels(chelsea).filter(h => GATED_FOR_STAFF.includes(h)).join(', '));
 check('Chelsea can open the ordinary pages', ['/companies', '/billing/soa/all', '/billing/tao', '/master-list/eot', '/post-incorporate', '/my-tasks'].every(h => labels(chelsea).includes(h)));
 check('Cindy can open Reports', labels(cindy).includes('/reports'));
@@ -88,7 +88,7 @@ check('Jay: confined line', pageAccessLine(jay).includes('confined to') && pageA
 
 console.log('\n--- keyword navigation picks the most specific page ---');
 const nav = (t: string, a: ApprovedAccount | null, min = 1) => matchPage(t, a, min)?.href ?? null;
-check('"turnover summary" → Summary, not AR Reminder via "ar"', nav('turnover summary', vincent) === '/turnover-ai/summary');
+check('"turnover summary" → Turnover AI, not AR Reminder via "ar"', nav('turnover summary', vincent) === '/turnover-ai');
 check('"soa tab" → the TAB book', nav('soa tab', vincent) === '/billing/soa/tab');
 check('"soa" → All', nav('打开 soa', vincent) === '/billing/soa/all');
 check('"tao billing" → TAO Billing, not Billing Drafts', nav('tao billing', vincent) === '/billing/tao');

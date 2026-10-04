@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-04 (Diagnosed why the Dashboard shows "Late Filing never" — Vincent: "这边的late filling是什么情况", pointing at the Automation Health badge).
+
+**What's actually happening — confirmed against real data, not guessed.** Late Filing is NOT failing to run: every day since 2026-09-23 it has completed real work (906 companies checked, ~14-15 `late_filing_companies` rows refreshed, ~16-17 flagged, ~17-18 AR Reminder markers reconciled, finishes in a consistent ~120s), but EVERY one of those 11 runs also logged 4-5 silent write errors among roughly 16 different `errors++` sites in `app/api/late-filing/sync/route.ts`, none of which ever captured what actually failed or why — just a bare counter. `withAutomationRun` (`lib/automation-sync.ts`) marks the WHOLE run `status: 'failed'` the instant `errors > 0`, so the run has never once recorded a `status: 'success'` row since 09-23 — that's the literal reason the dashboard's `successAgeHours` is `null` and renders "never", even though the sync is doing the overwhelming majority of its job correctly every single day.
+
+**Ruled out before concluding "unknown," not assumed:** TeamWork fetch errors (`fetchErrors` is empty every run — not a connectivity issue), EOT auto-detection (`eot_errors` is 0 every run), a UEN case/whitespace mismatch that would silently miss an existing `late_filing_companies` row and hit a duplicate-key insert (checked directly against live data — none found), and a restore-to-NULL-status write hitting a NOT NULL constraint (checked the real audit trail for every currently-Excluded row's last system-exclusion — none has a null `old_value`). No Vercel function-log access in this environment to read the real Postgres error text another way (`vercel whoami` → not authorized).
+
+**What shipped.** Every one of the 16 silent `errors++` sites now routes through a new `noteWriteError(step, message)` helper that captures the real Supabase/Postgres error text into a `writeErrors: Array<{step, error}>` array (same shape `fetchErrors` already used for TeamWork fetch failures), now returned in the run's `summary` JSON. Purely additive — no decision logic changed, nothing about which rows get touched or how is different, this only makes the next run's failure(s) actually readable from `automation_sync_runs.summary` instead of staying a bare count forever.
+
+Previous entry follows.
+
 Last updated: 2026-10-04 (SOA/Outstanding's "My book" filter is now multi-select, grouped by department — Vincent: "这个默认是All, 但是我要变成可以多选的, 方便Leader查看部门的人员欠款多少, 所以这边的显示可以按部门区分, 然后分别Leader按照部门选择最近的员工").
 
 **What shipped.** `app/billing/soa/_components.tsx`'s `picFilter: string` single-select became `picFilters: string[]` everywhere it's read (the KPI-card subtitles, `picScoped`'s ownership check, the pagination reset key, the qbCompany-switch reset effect). A new `PicMultiSelect` component replaces the plain `<select>`: a button that opens a checkbox panel grouping the same live PIC names `picFilterOptions` already computed, now organized by department via `lib/staff-directory.ts`'s existing `staffByTeam()` (the `team` field already used for "各部门人员有谁"-style lookups — no new data modeled, this just reads it for the first time in this UI). Each department header is itself a checkbox: clicking it selects/clears every member of that department in one click, which is the actual ask — a team leader picking her whole department's book at once rather than one name at a time. "Bad Debt" (`BD`) stays pinned at the bottom, outside any department (it's a write-off marker, not a staff member), same as before. `picScoped`'s filter is now a set-membership check (a row counts if its owner, or any of its unclaimed PIC candidates, is in the selected set) — selecting a whole department correctly sums that department's combined outstanding across every company any of its members touch. KPI subtitles show the real name(s) when 1-2 selected, else "N people's book" — avoids an unreadably long name list in a tight MetricCard subtitle.
@@ -2008,6 +2018,18 @@ one focused Git commit.
   relink before using `vercel --prod`.
 
 ## Latest completed work
+
+- **Assistant map: Turnover AI is one page now — three dead links
+  removed (INV-AI-009).** Found by `test-assistant-pages.ts` while
+  verifying the Quotation Created By work: `328acfd` had merged Turnover
+  AI's three routes into `/turnover-ai` (tabs inside the page) and moved
+  the `proxy.ts` gate, but `lib/assistant-pages.ts` still listed
+  `/turnover-ai/inbox|review|summary`. Replaced them with the one page
+  (same `canViewTurnoverAI` gate, description of the three tabs, the old
+  keywords kept so "上传单据"/"复核队列"/"流水汇总" still navigate there).
+  `npx tsx test-assistant-pages.ts` passes again except the one check a
+  concurrent session's temporary `app/zz-preview-pic/` harness trips
+  (untracked, not on `main`); `npx tsc --noEmit` clean.
 
 - **Quotation page: new "Created By" column — who issued each quotation,
   including ones opened directly in QuickBooks (INV-QB-024 item 8).**

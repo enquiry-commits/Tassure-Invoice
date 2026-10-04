@@ -3705,6 +3705,15 @@ again.
   list order — the bare 'ar' keyword used to claim anything containing
   "ar" ("turnover summary", "share transfer").
 
+  Caught for real within the hour (2026-09-28 → fixed 2026-10-04): commit
+  `328acfd` consolidated Turnover AI's Inbox / Review Queue / Summary
+  routes into one `/turnover-ai` page with tabs and moved the `proxy.ts`
+  gate to that path, without touching the map — so the assistant kept
+  offering three dead links. `test-assistant-pages.ts` flagged it (the
+  new route unmapped, the three old entries pointing at nothing, the
+  gate unmatched). Run it whenever a page is added, moved, merged or
+  re-gated, not only when the assistant itself changes.
+
 - **INV-AI-008** — A knowledge tool added to the My Tasks assistant has
   three traps, all found 2026-09-28 while adding `get_sop_guide` (the
   secretarial team's client-communication SOP, `lib/client-comms-sop.ts`),
