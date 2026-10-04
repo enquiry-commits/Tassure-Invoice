@@ -170,21 +170,46 @@ async function syncLateFiling(run: AutomationRun) {
     // Preload AR Reminder rows once so each company's outstanding cycle can
     // be looked up by UEN (preferred) or normalized name, keyed by its own
     // FYE cycle — same exact-match approach used across the rest of the app.
+    // Vincent, 2026-10-04, pointing at "Late Filing never": the real cause
+    // (found via writeErrors, see this file's own `noteWriteError` comment
+    // above) was this query's own `.or('status.is.null,status.neq.Excluded')`
+    // filter — it excludes Excluded rows from `arByKey` on purpose (an
+    // Excluded/terminated cycle must never be silently un-hidden by being
+    // treated as "the same cycle to update"), but that left NOTHING to stop
+    // the insert fallback below from trying to create a SECOND row for a
+    // cycle that already has one sitting Excluded. `ar_reminder` has a real
+    // UNIQUE(entity_name, fye_month, fye_year) constraint
+    // ("ar_reminder_entity_month_year_uniq"), so every such insert failed —
+    // confirmed live: 5 companies (INVENTA TECHNOLOGIES, HUASHENG GLOBAL
+    // TRADING, Q & E ENERGY EFFICIENT, ZJJ FAMILY OFFICE, ENGAREAT), all
+    // already struck off/terminated (no row left in `companies`, which is
+    // exactly why they reach the "manual/legacy" loop below rather than the
+    // main one), every single day since 2026-09-23. Now fetched unfiltered:
+    // `arByKey` (update-eligibility) keeps the exact same Excluded-row
+    // exclusion as before; `arKeyExists` is a parallel, status-blind set
+    // used ONLY to decide insert-vs-skip, so a cycle that already has a row
+    // in ANY status is never inserted again.
     const { data: arRows, error: arRowsError } = await supabase
       .from('ar_reminder')
-      .select('id, entity_name, uen, fye_month, fye_year, remarks')
-      .or('status.is.null,status.neq.Excluded');
+      .select('id, entity_name, uen, fye_month, fye_year, remarks, status');
     if (arRowsError) throw new Error(`Unable to load AR Reminder rows: ${arRowsError.message}`);
     const arByKey = new Map<string, { id: number; remarks: string | null }>();
+    const arKeyExists = new Set<string>();
     for (const row of arRows ?? []) {
-      const entry = { id: row.id, remarks: row.remarks };
       const cycleKey = `${row.fye_month}|${row.fye_year}`;
       const uenKey = row.uen ? String(row.uen).trim().toUpperCase() : null;
-      if (uenKey) arByKey.set(`uen:${uenKey}|${cycleKey}`, entry);
-      arByKey.set(`name:${normalize(row.entity_name)}|${cycleKey}`, entry);
+      const nameKey = `name:${normalize(row.entity_name)}|${cycleKey}`;
+      const uenMapKey = uenKey ? `uen:${uenKey}|${cycleKey}` : null;
+      if (uenMapKey) arKeyExists.add(uenMapKey);
+      arKeyExists.add(nameKey);
+      if (row.status === 'Excluded') continue;
+      const entry = { id: row.id, remarks: row.remarks };
+      if (uenMapKey) arByKey.set(uenMapKey, entry);
+      arByKey.set(nameKey, entry);
     }
     let arInserted = 0;
     let arNoted = 0;
+    let arInsertsSkippedExcluded = 0;
 
     // EOT (Extension of Time) auto-detection (Pass 3 inside the main loop
     // below) reuses arByKey directly — TeamWork renders a Due Date as
@@ -534,6 +559,14 @@ async function syncLateFiling(run: AutomationRun) {
             }).eq('id', arMatch.id);
             if (noteError) noteWriteError(`ar_reminder marker note (${c.company_name})`, noteError.message); else arNoted++;
           }
+        } else if ((uenKey && arKeyExists.has(`uen:${uenKey}|${cycleKey}`)) || arKeyExists.has(`name:${normalize(c.company_name)}|${cycleKey}`)) {
+          // A row for this exact cycle already exists but wasn't picked up
+          // by arByKey above — the only way that happens is it's sitting
+          // Excluded (terminated). Inserting a second row for the same
+          // (entity_name, fye_month, fye_year) would violate
+          // ar_reminder_entity_month_year_uniq every time; skip it rather
+          // than retry-and-fail forever.
+          arInsertsSkippedExcluded++;
         } else {
           const { data: insertedAr, error: insertError } = await supabase.from('ar_reminder').insert({
             entity_name: c.company_name,
@@ -638,6 +671,14 @@ async function syncLateFiling(run: AutomationRun) {
           }).eq('id', arMatch.id);
           if (noteError) noteWriteError(`ar_reminder marker note, legacy (${m.company_name})`, noteError.message); else arNoted++;
         }
+      } else if ((uenKey && arKeyExists.has(`uen:${uenKey}|${cycleKey}`)) || arKeyExists.has(`name:${normalize(m.company_name)}|${cycleKey}`)) {
+        // Same guard as the main loop above — this is the exact pattern that
+        // was failing every single day (confirmed live, 2026-10-04): 5
+        // already-struck-off companies (hence reaching THIS legacy loop, not
+        // the main one) each had their only ar_reminder row for this cycle
+        // sitting Excluded, so arByKey missed it and the insert below kept
+        // violating ar_reminder_entity_month_year_uniq.
+        arInsertsSkippedExcluded++;
       } else {
         const { data: insertedAr, error: insertError } = await supabase.from('ar_reminder').insert({
           entity_name: m.company_name,
@@ -958,6 +999,7 @@ async function syncLateFiling(run: AutomationRun) {
       insertedNames,
       ar_reminder_rows_inserted: arInserted,
       ar_reminder_rows_noted: arNoted,
+      ar_reminder_inserts_skipped_excluded: arInsertsSkippedExcluded,
       eot_inserted: eotInserted,
       eot_refreshed: eotRefreshed,
       eot_errors: eotErrors,
