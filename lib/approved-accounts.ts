@@ -25,8 +25,19 @@ export type ApprovedAccount = {
   // all 60 latest hand-made TAO invoices carry the operator's Location, and
   // TAO's 17 Locations are staff full names, so every account whose name is
   // one of them got its TAO entry (verified against the live TAO list).
-  // Accounts with no matching TAO Location (Vincent, Cindy, Samuell, Min
-  // Quan) create TAO invoices without one, as before.
+  // TAB, same evening (Vincent: "这个要全部开放啊 为什么只设TAO", once the
+  // department split let TCS ACCOUNT/TAX bill in TAB/TAC): TAB's 17 active
+  // Locations are the same 17 full names, so every account named after one
+  // now carries it — the 8 ACCOUNT/TAX staff and Tan Yee Soon were missing
+  // (those 9 Locations had never been used on a TAB invoice). TAC has only 8
+  // Locations (some short names) and none for ACCOUNT/TAX or Yee Soon:
+  // giving them one means CREATING it in QuickBooks first — a configured
+  // Location QuickBooks doesn't have makes create-invoice refuse the invoice
+  // — and on TAC a Location becomes the SOA owner fallback (no team filter,
+  // ND lines carry no Class), so that is Vincent's call, not a mapping.
+  // Every value here must exist in that book (test-invoice-pic-class.ts pins
+  // the live lists). Accounts with no matching Location (Vincent, Cindy,
+  // Samuell, Min Quan) create invoices without one, as before.
   qbLocations?: Partial<Record<'TAB' | 'TAC' | 'TAO', string>>;
   // Gates the Appearance Settings editor (app/admin/appearance) and its
   // PATCH route. Vincent only, per his own explicit scoping.
@@ -109,7 +120,7 @@ export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   // Tan Yee Soon (yeesoon@tassure.com)") — previously only existed in
   // lib/staff-directory.ts (used for PIC-matching text, not login) with no
   // way to actually sign in at all.
-  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', workspace: 'management', canSwitchWorkspace: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewQuotation: true, qbLocations: { TAO: 'Tan Yee Soon' } },
+  { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', workspace: 'management', canSwitchWorkspace: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewQuotation: true, qbLocations: { TAB: 'Tan Yee Soon', TAO: 'Tan Yee Soon' } },
   // TCS SECRETARIAL
   { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Lim Hoe Chyi', TAC: 'Lim Hoe Chyi', TAO: 'Lim Hoe Chyi' } },
   { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Hoo Seng Xin', TAC: 'Seng Xin', TAO: 'Hoo Seng Xin' } },
@@ -125,19 +136,20 @@ export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   // 2026-08-17 and stays their home; TAO Billing joined 2026-10-04 ("TAO 这边
   // 就是主要给 ACC 和 TAX 去开单的"); the department split the same day opened
   // Dashboard, Companies, all of Billing Drafts, Quotation, Outstanding and
-  // Turnover AI. They only have a TAO QuickBooks Location, so a TAB/TAC
-  // invoice they generate carries none — same as any account without one.
-  { name: 'Jay Tay', email: 'jaytay@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAO: 'Jay Tay' } },
-  { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAO: 'Lee Jing Fei' } },
-  { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAO: 'Tee Yu Heng' } },
-  { name: 'Vernice Chai', email: 'vernice@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAO: 'Vernice Chai' } },
-  { name: 'Chee Wei En', email: 'weien@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAO: 'Chee Wei En' } },
+  // Turnover AI. TAB and TAO Locations exist in their names and are mapped;
+  // TAC has none for them (see `qbLocations` above), so a TAC invoice they
+  // generate carries no Location — same as any account without one.
+  { name: 'Jay Tay', email: 'jaytay@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAB: 'Jay Tay', TAO: 'Jay Tay' } },
+  { name: 'Lee Jing Fei', email: 'jingfei@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAB: 'Lee Jing Fei', TAO: 'Lee Jing Fei' } },
+  { name: 'Tee Yu Heng', email: 'yuheng@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAB: 'Tee Yu Heng', TAO: 'Tee Yu Heng' } },
+  { name: 'Vernice Chai', email: 'vernice@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAB: 'Vernice Chai', TAO: 'Vernice Chai' } },
+  { name: 'Chee Wei En', email: 'weien@tassure.com', workspace: 'account', canViewQuotation: true, canViewTurnoverAI: true, qbLocations: { TAB: 'Chee Wei En', TAO: 'Chee Wei En' } },
   // TCS TAX (Clarence is the head; Quinnie Tan and Victoria Yap added
   // 2026-10-04 with their staff-directory emails) — same pages as TCS
   // ACCOUNT except Turnover AI.
-  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', workspace: 'tax', canViewQuotation: true, qbLocations: { TAO: 'Clarence Saw' } },
-  { name: 'Quinnie Tan', email: 'quinnietan@tassure.com', workspace: 'tax', canViewQuotation: true, qbLocations: { TAO: 'Quinnie Tan' } },
-  { name: 'Victoria Yap', email: 'victoriayap@tassure.com', workspace: 'tax', canViewQuotation: true, qbLocations: { TAO: 'Victoria Yap' } },
+  { name: 'Clarence Saw', email: 'clarencesaw@tassure.com', workspace: 'tax', canViewQuotation: true, qbLocations: { TAB: 'Clarence Saw', TAO: 'Clarence Saw' } },
+  { name: 'Quinnie Tan', email: 'quinnietan@tassure.com', workspace: 'tax', canViewQuotation: true, qbLocations: { TAB: 'Quinnie Tan', TAO: 'Quinnie Tan' } },
+  { name: 'Victoria Yap', email: 'victoriayap@tassure.com', workspace: 'tax', canViewQuotation: true, qbLocations: { TAB: 'Victoria Yap', TAO: 'Victoria Yap' } },
 ] as const;
 
 const ACCOUNT_BY_EMAIL = new Map(

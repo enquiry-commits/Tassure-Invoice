@@ -9,7 +9,7 @@ import {
   getsDefaultPicClass, picLivesInServiceItem, isStaffClassName, matchPicClass, validateLinePicClasses, requiresPicClass, isGovFeeLine,
   taoLineNeedsPic, taoDefaultPicName,
 } from './lib/invoice-pic-class';
-import { APPROVED_ACCOUNTS } from './lib/approved-accounts';
+import { APPROVED_ACCOUNTS, canAccountOpen } from './lib/approved-accounts';
 import { buildInvoiceLineArray, type DraftLineItem } from './lib/qb-invoice-conventions';
 
 const ROOT = process.env.PIC_GUARD_ROOT ?? process.cwd();
@@ -126,8 +126,35 @@ console.log('\n--- TAO: QuickBooks\' own settings restored ("尽量还原QB本�
   const withTao = APPROVED_ACCOUNTS.filter(a => a.qbLocations?.TAO);
   check('every account whose name is a TAO Location has it as its TAO Location (17)', withTao.length === 17 && withTao.every(a => a.qbLocations!.TAO === a.name && TAO_LOCATIONS.has(a.name))
     && APPROVED_ACCOUNTS.filter(a => TAO_LOCATIONS.has(a.name)).every(a => a.qbLocations?.TAO === a.name), withTao.map(a => a.name).join(', '));
-  check('… and adding it changed no TAB / TAC Location and no permission', (APPROVED_ACCOUNTS.find(a => a.name === 'Hoo Seng Xin')?.qbLocations?.TAC === 'Seng Xin')
+  check('… and adding it changed no TAC Location and no permission', (APPROVED_ACCOUNTS.find(a => a.name === 'Hoo Seng Xin')?.qbLocations?.TAC === 'Seng Xin')
     && APPROVED_ACCOUNTS.filter(a => a.workspace === 'account' || a.workspace === 'tax').length === 8 && !!APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.admin && !APPROVED_ACCOUNTS.find(a => a.name === 'Vincent Seow')?.qbLocations?.TAO);
+
+  // Every book's REAL active Locations (read from QuickBooks 2026-10-04 —
+  // re-read and update these lists if one is added, renamed or deactivated).
+  // Vincent, the same evening: "这个要全部开放啊 为什么只设TAO" — the
+  // department split let TCS ACCOUNT/TAX bill in TAB/TAC, but their TAB
+  // Locations (which already existed) were left unmapped.
+  const LIVE_LOCATIONS: Record<'TAB' | 'TAC' | 'TAO', Set<string>> = {
+    TAB: new Set(['Ang Shi Ming', 'Chee Wei En', 'Chelsea Ang', 'Chin Kah Ye', 'Clarence Saw', 'Esther Loo', 'Hoo Seng Xin', 'Jay Tay', 'Jenny Lai', 'Lee Jing Fei', 'Lim Hoe Chyi', 'Quinnie Tan', 'Tan Yee Soon', 'Tee Yu Heng', 'Tey Shemin', 'Vernice Chai', 'Victoria Yap']),
+    TAC: new Set(['Chelsea Ang', 'Esther Loo', 'Jenny Lai', 'Kah Ye', 'Lim Hoe Chyi', 'Seng Xin', 'Shemin', 'Shi Ming']),
+    TAO: TAO_LOCATIONS,
+  };
+  const withTab = APPROVED_ACCOUNTS.filter(a => a.qbLocations?.TAB);
+  check('every account whose name is a TAB Location has it as its TAB Location (17)', withTab.length === 17
+    && APPROVED_ACCOUNTS.filter(a => LIVE_LOCATIONS.TAB.has(a.name)).every(a => a.qbLocations?.TAB === a.name), withTab.map(a => a.name).join(', '));
+  const notInBook = APPROVED_ACCOUNTS.flatMap(a => (['TAB', 'TAC', 'TAO'] as const).filter(book => a.qbLocations?.[book] && !LIVE_LOCATIONS[book].has(a.qbLocations[book]!)).map(book => `${a.name} ${book}="${a.qbLocations![book]}"`));
+  check('every configured Location exists in that book (a missing one makes create-invoice refuse the invoice)', notInBook.length === 0, notInBook.join(', '));
+  // The miss behind Vincent's question, as a rule: anyone who can generate
+  // invoices in a book carries that book's Location whenever QuickBooks has
+  // one in their name. (TAB/TAC are generated from Billing Drafts, TAO from
+  // TAO Billing.)
+  const billingPage: Record<'TAB' | 'TAC' | 'TAO', [string, URLSearchParams]> = {
+    TAB: ['/billing', new URLSearchParams({ tab: 'billing' })], TAC: ['/billing', new URLSearchParams({ tab: 'billing' })], TAO: ['/billing/tao', new URLSearchParams()],
+  };
+  const unmapped = APPROVED_ACCOUNTS.flatMap(a => (['TAB', 'TAC', 'TAO'] as const)
+    .filter(book => canAccountOpen(a, ...billingPage[book]) && LIVE_LOCATIONS[book].has(a.name) && a.qbLocations?.[book] !== a.name)
+    .map(book => `${a.name} ${book}`));
+  check('everyone who can bill in a book carries their Location there when QuickBooks has one in their name', unmapped.length === 0, unmapped.join(', '));
 }
 
 console.log('\n--- source guards: the routes and the popup use the shared rules ---');

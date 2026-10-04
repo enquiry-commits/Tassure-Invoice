@@ -395,7 +395,14 @@ memo field appears anywhere (it is automatic); after generating a new TAB
 invoice, QuickBooks' Statement memo reads like staff's own and matches the
 ticked lines (e.g. "Sec,addrs (Oct 2026 - Sep 2027),AR 31.12.2026");
 editing an existing invoice leaves its memo untouched.
-**Guards:** `docs/INVARIANTS.md` INV-QB-007, INV-QB-013, INV-QB-026, INV-QB-027.
+(7) Location (INV-QB-028): signed in as a TCS ACCOUNT/TAX account (e.g. Jay
+Tay), generate one TAB invoice — QuickBooks shows Location "Jay Tay", the
+Secretary/XBRL lines still carry the company PIC's Class, and that client's
+TAB Owner on Outstanding is unchanged. A TAC invoice he generates carries no
+Location (none exists for him in TAC). If a QuickBooks Location is ever
+added, renamed or deactivated, re-read the book's list into
+`test-invoice-pic-class.ts` first.
+**Guards:** `docs/INVARIANTS.md` INV-QB-007, INV-QB-013, INV-QB-026, INV-QB-027, INV-QB-028.
 
 ---
 

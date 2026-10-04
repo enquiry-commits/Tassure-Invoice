@@ -2089,6 +2089,42 @@ again.
   app-created TAB invoices, which staff leave unset) was deliberately left
   as it is — Vincent chose the memo only, after hearing it changes nothing
   a client sees.
+- **INV-QB-028** — Opening a QuickBooks book to someone (a page they can
+  generate invoices from) must come with that book's Location for them
+  whenever QuickBooks already has one in their name — `qbLocations` in
+  lib/approved-accounts.ts is separate config that nothing else updates,
+  and a Location is invisible in the app, so a miss shows up only as
+  invoices with no "who keyed it" tag (INV-QB-013). Found 2026-10-04, hours
+  after the department split (INV-DATA-069) opened TAB/TAC Billing Drafts
+  to TCS ACCOUNT/TAX: their TAO Locations had been mapped that morning when
+  TAO was their only book, the split changed only page access, and the gap
+  was written up as a "Watch" instead of fixed — Vincent: "这个要全部开放啊
+  为什么只设TAO". Read live (read-only): TAB's 17 active Locations are
+  the same staff full names as TAO's, including all 8 ACCOUNT/TAX staff and
+  Tan Yee Soon — never used on any of 4,499 synced TAB invoices — so all 9
+  were mapped (no QuickBooks write; caught before any of them generated an
+  invoice). TAC has only 8 Locations (Chelsea Ang, Esther Loo, Jenny Lai,
+  Kah Ye, Lim Hoe Chyi, Seng Xin, Shemin, Shi Ming): giving anyone else a
+  TAC Location means CREATING it in QuickBooks, and two traps make that
+  Vincent's decision, not a mapping (4-agent council review, each claim
+  re-checked in code): (1) create-invoice refuses an invoice whose
+  configured Location QuickBooks doesn't have ("Location not found"), so
+  mapping before creating breaks every TAC invoice for that person — and a
+  Billing Drafts Generate that writes both books would land half done;
+  (2) TAC has no team filter in `lib/soa-owner.ts` (INV-PIC-007) and the
+  app's TAC invoices are ND-only lines that carry no Class, so the keyer's
+  Location IS the SOA owner fallback — a new TAC Location would quietly
+  move those clients' collection owner (and My Tasks SOA rows) to whoever
+  keyed the invoice, and the daily soa-owners audit skips TAC. If ever
+  created, use full names: short ones like "Jing Fei" don't resolve to a
+  staff member. On TAB the same fallback is harmless — TAB only accepts
+  Corporate Secretarial owners, so ACCOUNT/TAX/Partners Locations are
+  filtered out. `test-invoice-pic-class.ts` pins each book's live Location
+  list and fails if (a) someone who can bill in a book lacks the Location
+  QuickBooks has in their name, or (b) a configured Location doesn't exist
+  in that book (negative controls: dropping Jay's TAB entry fails (a);
+  mapping a TAC one for him fails (b)). Re-read the lists from QuickBooks
+  when a Location is added, renamed or deactivated.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

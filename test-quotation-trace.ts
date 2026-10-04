@@ -181,7 +181,10 @@ console.log('\n--- Created By (who issued the quotation) ---');
 const byLocation = run([est({ locationName: 'Hoo Seng Xin' })], [])[0].createdBy;
 check('Location chosen in QuickBooks → that person', byLocation?.name === 'Hoo Seng Xin' && byLocation.source === 'quickbooks_location');
 check('a book-specific short Location maps to the full staff name (TAC "Kah Ye")', quotationCreator({ book: 'TAC', qbEstimateId: 'E9', locationName: 'Kah Ye' })?.name === 'Chin Kah Ye');
-check('an unmapped Location is shown as-is, trimmed (TAO "Lee Jing Fei")', quotationCreator({ book: 'TAO', qbEstimateId: 'E8', locationName: ' Lee Jing Fei ' })?.name === 'Lee Jing Fei');
+// A Location no account carries in that book. (This used TAO "Lee Jing Fei"
+// until 2026-10-04, when her TAO Location got mapped and the check silently
+// stopped exercising the unmapped path — same name in, same name out.)
+check('an unmapped Location is shown as-is, trimmed', quotationCreator({ book: 'TAO', qbEstimateId: 'E8', locationName: ' Front Office ' })?.name === 'Front Office');
 check('no Location and no system record → null ("Not set"), never a guess', run([est({ locationName: null })], [])[0].createdBy === null);
 check('a blank Location counts as not set', quotationCreator({ book: 'TAB', qbEstimateId: 'E7', locationName: '   ' }) === null);
 const recorded = traceQuotations([est({ qbEstimateId: 'E5', locationName: 'Chin Kah Ye' })], [], { today: '2026-09-24', systemCreators: new Map([['TAB|E5', 'Vincent Seow']]) })[0].createdBy;
