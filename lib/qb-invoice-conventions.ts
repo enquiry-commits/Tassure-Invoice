@@ -1,6 +1,11 @@
 import type { QbCompany } from './quickbooks';
 import { findUniqueBestMatch } from './company-name';
 import { createAdminClient } from './supabase';
+import { requiresPicClass, isGovFeeLine, matchPicClass, type PicClassOption } from './invoice-pic-class';
+
+// Moved to lib/invoice-pic-class.ts (client-safe, shared with the Billing
+// Drafts popup's PIC column); re-exported so existing imports keep working.
+export { requiresPicClass, isGovFeeLine };
 
 // Invoice conventions learned from Tassure's real QB invoices (verified by
 // inspecting manual invoices 02610732 (TAB) and 02680230 (TAC)):
@@ -19,11 +24,17 @@ import { createAdminClient } from './supabase';
 //    their existing numbering habit (2026-09-05).
 // 2. Terms — always Net 7 (Term id 7 in both companies; resolved dynamically
 //    in case the id ever differs).
-// 3. Class — TAB tags every SERVICE line with the PIC's person class
-//    ("Ang Shi Ming", "Chin Kah Ye", …); government-fee/disbursement lines
-//    carry no class. TAC invoices carry no classes at all. TAO invoices only
-//    ever carry Accounts/Tax lines, which requiresPicClass() below never
-//    flags, so they naturally end up classless too — no extra gating needed.
+// 3. Class — all three books track Class PER LINE, and staff use it as each
+//    service's PIC: a full staff name since 2026-01-01 ("Ang Shi Ming",
+//    "Chin Kah Ye", …; 2025 used initials such as "ASM"/"CKY"). Government-
+//    fee/disbursement lines carry none, and TAC's Nominee Director lines carry
+//    their PIC in the ND item name instead (0 of 257 in 2026) — re-checked
+//    2026-10-04; the old note here that "TAC invoices carry no classes at all"
+//    was wrong for staff-typed TAC Secretary lines (96% carry one). DEFAULT
+//    when this app generates: TAB Secretary/XBRL lines get the company PIC's
+//    class, nothing else does (INV-QB-007). A person can override any line's
+//    PIC in the Billing Drafts popup's PIC column (`picClassId`, INV-QB-026);
+//    lib/invoice-pic-class.ts holds both rules.
 
 // create-invoice/route.ts's own copy of findCustomer/getItemMap/findLocation
 // (now merged in below) respected QB_ENVIRONMENT=sandbox; this file's
@@ -104,34 +115,45 @@ export async function getNet7TermId(token: string, realmId: string): Promise<str
   return hit?.Id ?? null;
 }
 
-// Match the company's PIC ("Shi Ming Ang", possibly "A, B" with several
-// names) to a QB person class ("Ang Shi Ming") — word-order-insensitive:
-// exact token-set match first, then subset ("Shemin" ⊂ "Tey Shemin").
-export async function findPicClass(token: string, realmId: string, pic: string): Promise<{ value: string; name: string } | null> {
-  const all: { Id: string; Name: string; Active?: boolean }[] = [];
-  for (let start = 1; start <= 4001; start += 1000) {
-    const qr = await qbGet(token, realmId, `SELECT * FROM Class STARTPOSITION ${start} MAXRESULTS 1000`);
-    const page = qr?.Class ?? [];
+// Every ACTIVE Class in one book, paged in Id order. TAB holds 3,208 (2026-10-04)
+// — mostly one-off numeric reference classes from 2025 — so its staff classes
+// sit beyond the first 1,000-row page. Cached per realm for 10 minutes: the
+// popup's PIC dropdown and every invoice write with a per-line PIC both need
+// it. THROWS when QuickBooks can't be read — a caller that must not block
+// (findPicClass's default) catches; a caller checking a person's explicit
+// choice must not guess.
+export type QbClassRow = { Id: string; Name: string; Active?: boolean };
+const CLASS_CACHE_MS = 10 * 60_000;
+const classCache = new Map<string, { at: number; classes: QbClassRow[] }>();
+
+export async function listActiveClasses(token: string, realmId: string): Promise<QbClassRow[]> {
+  const cached = classCache.get(realmId);
+  if (cached && Date.now() - cached.at < CLASS_CACHE_MS) return cached.classes;
+  const all: QbClassRow[] = [];
+  for (let start = 1; ; start += 1000) {
+    const qr = await qbGet(token, realmId, `SELECT * FROM Class ORDERBY Id STARTPOSITION ${start} MAXRESULTS 1000`);
+    if (!qr) throw new Error('QuickBooks Class list could not be read.');
+    const page: QbClassRow[] = qr.Class ?? [];
     all.push(...page);
     if (page.length < 1000) break;
+    if (start > 50_000) throw new Error('QuickBooks Class list is unexpectedly large.');
   }
-  const tokens = (s: string) => s.toLowerCase().split(/[^a-z]+/).filter(Boolean).sort();
-  const personClasses = all.filter(c => c.Active !== false && /^[A-Za-z .'-]+$/.test(c.Name));
-
-  for (const cand of pic.split(/[,/&]| and /i).map(s => s.trim()).filter(Boolean)) {
-    const t = tokens(cand);
-    if (!t.length) continue;
-    const exact = personClasses.find(c => tokens(c.Name).join(' ') === t.join(' '));
-    if (exact) return { value: exact.Id, name: exact.Name };
-    const subset = personClasses.find(c => { const ct = new Set(tokens(c.Name)); return t.every(x => ct.has(x)); });
-    if (subset) return { value: subset.Id, name: subset.Name };
-  }
-  return null;
+  const active = all
+    .filter(c => c.Active !== false)
+    .map(c => ({ Id: String(c.Id), Name: String(c.Name ?? ''), Active: c.Active }));
+  classCache.set(realmId, { at: Date.now(), classes: active });
+  return active;
 }
 
-// Government-fee / disbursement lines carry no PIC class on manual invoices.
-export function isGovFeeLine(l: { service: string; productService?: string }): boolean {
-  return l.service === 'AR' || /disbursement|government/i.test(l.productService ?? '');
+// The company PIC's person class — the DEFAULT for TAB Secretary/XBRL lines
+// (INV-QB-007). Matching rule lives in lib/invoice-pic-class.ts's
+// matchPicClass(), shared with the popup. Degrades to "no class" when the
+// list can't be read, exactly as before — a default must never block an
+// invoice.
+export async function findPicClass(token: string, realmId: string, pic: string): Promise<PicClassOption | null> {
+  let classes: QbClassRow[];
+  try { classes = await listActiveClasses(token, realmId); } catch { return null; }
+  return matchPicClass(classes, pic);
 }
 
 // Shared between the create-invoice and update-invoice routes so the two
@@ -143,10 +165,12 @@ export interface DraftLineItem {
   qty?: number;
   productService?: string;  // exact QB Product/Service name, e.g. "Secretary:Corporate Secretarial Services"
   periodConfirmed?: boolean; // required when the latest QB renewal has no readable period
-}
-
-export function requiresPicClass(line: DraftLineItem): boolean {
-  return line.service === 'Secretary' || line.service === 'XBRL';
+  // The line's PIC as a QuickBooks Class Id, picked per line in the Billing
+  // Drafts popup's PIC column (Vincent, 2026-10-04: "要和QB那样，要有一列是
+  // 可以选择每个服务的PIC的"). Absent → the default rule (company PIC on TAB
+  // Secretary/XBRL lines, INV-QB-007); null → deliberately no PIC; a string →
+  // that Class, validated against the book's live classes first.
+  picClassId?: string | null;
 }
 
 // ── Look up QB Customer by display name ───────────────────────────────────────
@@ -328,11 +352,15 @@ export function pickItem(service: string, itemMap: Map<string, { id: string; nam
 export function buildInvoiceLineArray(
   lines: DraftLineItem[],
   itemMap: Map<string, { id: string; name: string }>,
-  picClass: { value: string; name: string } | null,
+  picClass: PicClassOption | null,
+  // Per-line PICs already checked by validateLinePicClasses() against THIS
+  // book's live classes (lib/invoice-pic-class.ts).
+  chosenClasses: ReadonlyMap<string, PicClassOption> = new Map(),
 ) {
   return lines.map((l, i) => {
     const exact = l.productService ? itemMap.get(l.productService.toLowerCase()) : undefined;
     const item = exact ?? pickItem(l.service, itemMap);
+    const classRef = lineClassRef(l, picClass, chosenClasses);
     return {
       LineNum: i + 1,
       DetailType: 'SalesItemLineDetail',
@@ -342,10 +370,24 @@ export function buildInvoiceLineArray(
         ItemRef: { value: item.id, name: item.name },
         Qty:       l.qty ?? 1,
         UnitPrice: l.rate,
-        ...(picClass && requiresPicClass(l) && !isGovFeeLine(l) ? { ClassRef: picClass } : {}),
+        ...(classRef ? { ClassRef: { value: classRef.value, name: classRef.name } } : {}),
       },
     };
   });
+}
+
+// A person's explicit per-line PIC wins (null = deliberately none). With no
+// choice the default rule applies, unchanged (INV-QB-007): the company PIC on
+// Secretary/XBRL lines, never a government fee. An explicit PIC that was not
+// validated is a programming error — throw rather than silently drop it.
+function lineClassRef(l: DraftLineItem, picClass: PicClassOption | null, chosen: ReadonlyMap<string, PicClassOption>): PicClassOption | null {
+  if (l.picClassId !== undefined) {
+    if (l.picClassId === null) return null;
+    const hit = chosen.get(String(l.picClassId));
+    if (!hit) throw new Error(`Invoice line PIC (QuickBooks Class ${l.picClassId}) was not validated against this book's classes.`);
+    return hit;
+  }
+  return picClass && requiresPicClass(l) && !isGovFeeLine(l) ? picClass : null;
 }
 
 // ── Bill-To "c/o" + "Attn" ──────────────────────────────────────────────────

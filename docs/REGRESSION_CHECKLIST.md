@@ -357,6 +357,23 @@ Filing sync and the Companies page select the same companies (904 on
 
 ---
 
+### REG-027 — Per-line PIC (QuickBooks Class) on Billing Drafts invoices (after ANY change to `lib/invoice-pic-class.ts`, `buildInvoiceLineArray()` / `listActiveClasses()` / `findPicClass()` in `lib/qb-invoice-conventions.ts`, the create/update invoice routes, `getLiveInvoice()`, or the popup's PIC column)
+Run `npx tsx test-invoice-pic-class.ts` — it must print `ALL OK` (the
+default rule is still INV-QB-007, explicit choices win, an edit round-trips
+every line's Class, source guards). Then in the real app, signed in:
+(1) open a company that already has a TAB invoice this cycle — the PIC
+column must show exactly the Classes on that invoice in QuickBooks (e.g.
+#02611099: Secretary = Jenny Lai, the other lines "— No PIC"); save without
+changing anything and confirm in QuickBooks that no line's Class changed.
+(2) change one line's PIC, save, and confirm only that line's Class changed.
+(3) for a new invoice, Secretary/XBRL lines pre-fill the company PIC's Class
+and other lines show "— No PIC"; a company whose PIC has no QuickBooks Class
+shows "no matching QuickBooks Class — pick per line". (4) a TAC Nominee
+Director line shows "<initials> · in ND item", never a dropdown.
+**Guards:** `docs/INVARIANTS.md` INV-QB-007, INV-QB-013, INV-QB-026.
+
+---
+
 ## Automation priority
 
 Automate a check here only when it is frequent, historically buggy, cheap

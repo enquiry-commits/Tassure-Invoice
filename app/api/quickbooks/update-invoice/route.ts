@@ -3,7 +3,8 @@ import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount } from '@/lib/approved-accounts';
 import { createAdminClient } from '@/lib/supabase';
 import { getValidToken, qbQuery, type QbCompany } from '@/lib/quickbooks';
-import { getItemMap, findPicClass, buildInvoiceLineArray, resolveParentBillAddr, resolveCareOfBillAddr, loadCareOfSettings, findCustomer, type DraftLineItem } from '@/lib/qb-invoice-conventions';
+import { getItemMap, findPicClass, listActiveClasses, buildInvoiceLineArray, resolveParentBillAddr, resolveCareOfBillAddr, loadCareOfSettings, findCustomer, type DraftLineItem } from '@/lib/qb-invoice-conventions';
+import { validateLinePicClasses, type PicClassOption } from '@/lib/invoice-pic-class';
 import { normalize } from '@/lib/company-name';
 import { syncQuickBooksInvoiceChanges } from '@/lib/quickbooks-invoice-incremental';
 import type { InvoiceRef } from '@/lib/email-merge';
@@ -58,6 +59,10 @@ export async function PATCH(req: NextRequest) {
     || Math.abs(Number(line.rate)) > 10_000_000
   )) {
     return NextResponse.json({ error: 'Every invoice line requires a description, finite rate and positive quantity.' }, { status: 400 });
+  }
+  // Per-line PIC (INV-QB-026): absent, null, or a QuickBooks Class Id.
+  if (lines.some(line => line.picClassId !== undefined && line.picClassId !== null && !/^\d+$/.test(String(line.picClassId)))) {
+    return NextResponse.json({ error: 'A line PIC must be a QuickBooks Class id.' }, { status: 400 });
   }
 
   const supabase = createAdminClient();
@@ -160,7 +165,22 @@ export async function PATCH(req: NextRequest) {
     if (parentBillAddr.kind === 'error') return NextResponse.json({ error: parentBillAddr.error }, { status: 409 });
     if (parentBillAddr.kind === 'ok') billAddrToSend = parentBillAddr.billAddr;
   }
-  const invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass);
+  // Per-line PICs (INV-QB-026). The popup sends every line's PIC exactly as
+  // shown — loaded from the live invoice, or changed by the person — so a
+  // Class set directly in QuickBooks survives the save. Before 2026-10-04
+  // every save rebuilt each line's Class from the company PIC: any other
+  // line's Class was dropped (Line is replaced wholesale), and a Secretary
+  // line re-assigned in QuickBooks was silently reset.
+  let chosenClasses: Map<string, PicClassOption> = new Map();
+  if (lines.some(l => typeof l.picClassId === 'string')) {
+    let classes;
+    try { classes = await listActiveClasses(token, realmId); }
+    catch { return NextResponse.json({ error: `QuickBooks ${qbCompany}'s Class list could not be read, so the chosen PICs can't be checked — nothing was saved. Try again.` }, { status: 503 }); }
+    const checked = validateLinePicClasses(lines, classes);
+    if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 });
+    chosenClasses = checked.classes;
+  }
+  const invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass, chosenClasses);
 
   // Sparse update — CustomerRef/TxnDate/DocNumber are deliberately never
   // included, so QB can't change them regardless of what's sent here;

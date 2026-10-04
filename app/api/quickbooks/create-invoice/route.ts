@@ -2,13 +2,14 @@ import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
 import {
-  nextDocNumber, invoiceDocNumberExists, getNet7TermId, findPicClass,
+  nextDocNumber, invoiceDocNumberExists, getNet7TermId, findPicClass, listActiveClasses,
   findCustomer, getItemMap, findLocation, buildInvoiceLineArray,
   resolveParentBillAddr,
   resolveCareOfBillAddr,
   loadCareOfSettings,
   type DraftLineItem,
 } from '@/lib/qb-invoice-conventions';
+import { validateLinePicClasses, type PicClassOption } from '@/lib/invoice-pic-class';
 import { createAdminClient } from '@/lib/supabase';
 import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
@@ -202,8 +203,9 @@ async function createInvoiceInCompany(
 
   // House conventions (see lib/qb-invoice-conventions.ts): QuickBooks
   // atomically allocates the sequential DocNumber, Net 7 terms, and — TAB only — the
-  // PIC's person class on Secretary and XBRL lines only. Other services do not
-  // carry a PIC in QuickBooks, even when they share the same TAB invoice.
+  // PIC's person class on Secretary and XBRL lines only, BY DEFAULT. Other
+  // services carry no PIC unless a person picked one for that line in the
+  // popup's PIC column (picClassId, INV-QB-026).
   const [itemMap, termId, picClass, location] = await Promise.all([
     getItemMap(token, realmId),
     getNet7TermId(token, realmId),
@@ -215,7 +217,20 @@ async function createInvoiceInCompany(
     return { error: `QuickBooks ${company} Location not found: "${locationName}"` };
   }
 
-  const invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass);
+  // Per-line PICs picked in the popup (INV-QB-026): each must be an active
+  // Class of THIS book, checked before anything is written. A line nobody
+  // picked a PIC for keeps the default rule above.
+  let chosenClasses: Map<string, PicClassOption> = new Map();
+  if (lines.some(l => typeof l.picClassId === 'string')) {
+    let classes;
+    try { classes = await listActiveClasses(token, realmId); }
+    catch { return { error: `QuickBooks ${company}'s Class list could not be read, so the chosen PICs can't be checked — this invoice was not created. Try again.` }; }
+    const checked = validateLinePicClasses(lines, classes);
+    if (!checked.ok) return { error: checked.error };
+    chosenClasses = checked.classes;
+  }
+
+  const invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass, chosenClasses);
 
   const payload: Record<string, unknown> = {
     Line:        invoiceLines,
@@ -345,6 +360,10 @@ export async function POST(req: NextRequest) {
     || Math.abs(Number(line.rate)) > 10_000_000
   )) {
     return NextResponse.json({ error: 'Every invoice line requires a description, finite rate and positive quantity.' }, { status: 400 });
+  }
+  // Per-line PIC (INV-QB-026): absent, null, or a QuickBooks Class Id.
+  if (requestedLines.some(line => line.picClassId !== undefined && line.picClassId !== null && !/^\d+$/.test(String(line.picClassId)))) {
+    return NextResponse.json({ error: 'A line PIC must be a QuickBooks Class id.' }, { status: 400 });
   }
 
   // SGT, not UTC (2026-09-10). An invoice raised between 00:00 and 08:00

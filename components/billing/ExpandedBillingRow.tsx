@@ -29,6 +29,7 @@ import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescriptio
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
 import { manualInvoiceOverrides } from '@/lib/manual-invoice-marker';
 import { SVC_CONFIG } from '@/components/billing/service-config';
+import { getsDefaultPicClass, picLivesInServiceItem, type PicClassOption } from '@/lib/invoice-pic-class';
 
 let parentPickCache: { id: number; company_name: string }[] | null = null;
 let parentPickPromise: Promise<{ id: number; company_name: string }[]> | null = null;
@@ -130,6 +131,14 @@ type EditableLine = {
   previousPeriodEnd?: string | null;
   periodNeedsReview?: boolean;
   periodReviewed?: boolean;
+  // The line's PIC = its QuickBooks Class, picked in the PIC column like
+  // QuickBooks' own per-line Class column (Vincent, 2026-10-04; INV-QB-026).
+  // undefined = nobody chose → the default rule (company PIC on TAB
+  // Secretary/XBRL lines, INV-QB-007); null = no PIC; a string = that Class
+  // Id. picClassName keeps the label of a Class the dropdown doesn't offer
+  // (e.g. a 2025 "JL" on a live line) so it is shown and kept, not lost.
+  picClassId?: string | null;
+  picClassName?: string | null;
 };
 
 type InvoiceNumberState = { TAB: string; TAC: string };
@@ -577,9 +586,12 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       const res = await fetch(`/api/quickbooks/invoice-lines?company=${company}&id=${encodeURIComponent(qbId)}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Unable to load this invoice from QuickBooks.');
-      const liveLines: EditableLine[] = (json.lines ?? []).map((l: { service: string; productService: string; description: string; qty: number; rate: number }) => ({
+      // Each line's PIC comes from its live QuickBooks Class, so the PIC
+      // column shows what QuickBooks really has and saving keeps it.
+      const liveLines: EditableLine[] = (json.lines ?? []).map((l: { service: string; productService: string; description: string; qty: number; rate: number; picClass?: PicClassOption | null }) => ({
         service: l.service, productService: l.productService, description: l.description,
         qty: l.qty, rate: l.rate, include: true, due: false, reason: 'Live from QuickBooks',
+        picClassId: l.picClass?.value ?? null, picClassName: l.picClass?.name ?? null,
       }));
       setLines(prev => company === 'TAB'
         ? [...liveLines, ...prev.filter(l => l.service === 'ND')]
@@ -607,6 +619,36 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
     if (!hasTac) return;
     fetch('/api/quickbooks/status?company=TAC').then(r => r.json()).then(setTacStatus).catch(() => setTacStatus({ connected: false }));
   }, [hasTac]);
+
+  // The PIC column's options: TAB's staff Classes, plus the Class the
+  // company PIC resolves to (the default for Secretary/XBRL lines — same
+  // matcher the server uses). TAC lines here are Nominee Director lines,
+  // whose PIC lives in the ND item, so only TAB's list is needed.
+  const [picOptions, setPicOptions] = useState<{ status: 'loading' | 'ok' | 'error'; classes: PicClassOption[]; picDefault: PicClassOption | null; error?: string }>({ status: 'loading', classes: [], picDefault: null });
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/quickbooks/pic-classes?company=TAB&pic=${encodeURIComponent(c.pic ?? '')}`)
+      .then(async response => {
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.error ?? 'Unable to load QuickBooks classes');
+        return json;
+      })
+      .then(json => { if (!cancelled) setPicOptions({ status: 'ok', classes: json.classes ?? [], picDefault: json.picDefault ?? null }); })
+      .catch(error => { if (!cancelled) setPicOptions({ status: 'error', classes: [], picDefault: null, error: error instanceof Error ? error.message : String(error) }); });
+    return () => { cancelled = true; };
+  }, [c.pic]);
+
+  // What a line's PIC is right now: the person's explicit choice, else the
+  // default rule once the company PIC's Class is known. `undefined` means
+  // "let the server apply the default" — only while the options haven't
+  // loaded, and the server then applies that very same rule itself. A line
+  // whose PIC lives in its service item (TAC ND) never sends one.
+  const effectivePicId = (l: EditableLine, company: 'TAB' | 'TAC'): string | null | undefined => {
+    if (picLivesInServiceItem(l)) return undefined;
+    if (l.picClassId !== undefined) return l.picClassId;
+    if (picOptions.status !== 'ok') return undefined;
+    return getsDefaultPicClass(company, l) ? (picOptions.picDefault?.value ?? null) : null;
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -725,13 +767,16 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
     setDrafting(true); setDraftResult(null);
     try {
       const fyeYear = cycleFye ? +cycleFye.slice(-4) : currentYear;
-      const toApiLine = (l: EditableLine) => ({
+      const toApiLine = (l: EditableLine, company: 'TAB' | 'TAC') => ({
         service: l.service,
         productService: l.productService,
         description: l.description,
         rate: l.rate,
         qty: l.qty,
         periodConfirmed: l.periodReviewed === true,
+        // The PIC shown in the PIC column (INV-QB-026); undefined is dropped
+        // by JSON → the server applies the same default rule.
+        picClassId: effectivePicId(l, company),
       });
       const res = await fetch('/api/quickbooks/create-invoice', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -744,8 +789,8 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           pic: c.pic ?? undefined,
           // A company that already has an invoice this cycle is edited via
           // saveInvoiceEdit/renderSaveButton instead — never re-created here.
-          tabLines: sendTab ? includedTab.map(toApiLine) : [],
-          tacLines: sendTac ? includedTac.map(toApiLine) : [],
+          tabLines: sendTab ? includedTab.map(l => toApiLine(l, 'TAB')) : [],
+          tacLines: sendTac ? includedTac.map(l => toApiLine(l, 'TAC')) : [],
           fyeMonth: c.fyeMonth, fyeYear, fyeCycle: cycleFye ?? null,
           idempotencyKey: invoiceRequestKey,
           docNumbers: invoiceNumbers,
@@ -873,6 +918,9 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
     try {
       const toApiLine = (l: EditableLine) => ({
         service: l.service, productService: l.productService, description: l.description, rate: l.rate, qty: l.qty,
+        // Every line's PIC exactly as shown (loaded from the live invoice or
+        // changed here) — saving no longer resets classes (INV-QB-026).
+        picClassId: effectivePicId(l, company),
       });
       const res = await fetch('/api/quickbooks/update-invoice', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -1011,10 +1059,51 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
   // that section already uses (badge/PIC pill/provenance note/footer bar) —
   // previously this stayed flat grey regardless of company, which is what
   // read as uncoordinated sitting inside an otherwise-amber TAC block.
-  const renderTable = (rows: { l: EditableLine; i: number }[], emptyMsg: string, accent?: 'amber') => (
-    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 110px 44px 90px 100px 26px', gap: 0, background: accent === 'amber' ? 'var(--status-warning-tint)' : '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: accent === 'amber' ? '#9a3412' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+  // The PIC column (Vincent, 2026-10-04: "要和QB那样，要有一列是可以选择每个
+  // 服务的PIC的"): QuickBooks' own per-line Class, which Tassure uses as each
+  // service's PIC. A TAC Nominee Director line keeps its PIC in the ND item
+  // (INV-QB-007), so that cell is read-only.
+  const renderPicCell = (l: EditableLine, i: number, company: 'TAB' | 'TAC') => {
+    if (picLivesInServiceItem(l)) {
+      // "Nominee Director Fees - WYD" and its deferred twin "Deferred - ND Fees - WYD".
+      const nd = l.productService.match(/(?:Nominee Director|ND) Fees\s*-\s*([A-Z]+)/i)?.[1]?.toUpperCase();
+      return (
+        <span title="A Nominee Director's PIC is the ND service item itself, not a QuickBooks Class" style={{ fontSize: 11, fontWeight: 700, color: '#9a3412', padding: '7px 4px' }}>
+          {nd ? `${nd} · in ND item` : '—'}
+        </span>
+      );
+    }
+    const value = effectivePicId(l, company);
+    const selected = value ?? '';
+    const offered = picOptions.classes.some(o => o.value === selected);
+    // A Secretary/XBRL line normally carries the PIC — flag (never block) one without.
+    const missing = value === null && getsDefaultPicClass(company, l);
+    const emptyLabel = value === undefined
+      ? (picOptions.status === 'loading' ? 'Loading…' : 'Default PIC')
+      : '— No PIC';
+    return (
+      <select
+        value={selected}
+        disabled={value === undefined && picOptions.status === 'loading'}
+        onChange={e => setLine(i, { picClassId: e.target.value || null, picClassName: picOptions.classes.find(o => o.value === e.target.value)?.name ?? null })}
+        aria-label="PIC"
+        title={missing ? 'Secretary / XBRL lines normally carry the PIC' : 'PIC — the QuickBooks Class on this line'}
+        style={{ ...inputStyle, width: '94%', fontSize: 11.5, padding: '6px 4px', color: value ? '#334155' : '#94a3b8', borderColor: missing ? '#fbbf24' : '#cbd5e1', background: missing ? '#fffbeb' : '#fff' }}>
+        <option value="">{emptyLabel}</option>
+        {selected && !offered && <option value={selected}>{l.picClassName || `Class ${selected}`} (current)</option>}
+        {picOptions.classes.map(o => <option key={o.value} value={o.value}>{o.name}</option>)}
+      </select>
+    );
+  };
+
+  // Description never shrinks below 260px: on a narrow screen the table
+  // scrolls sideways instead of collapsing the text into a sliver.
+  const LINE_GRID = '34px 120px minmax(260px, 1fr) 150px 110px 44px 90px 100px 26px';
+  const renderTable = (rows: { l: EditableLine; i: number }[], emptyMsg: string, company: 'TAB' | 'TAC', accent?: 'amber') => (
+    <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflowX: 'auto', overflowY: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: LINE_GRID, gap: 0, background: accent === 'amber' ? 'var(--status-warning-tint)' : '#f1f5f9', padding: '12px 10px', fontSize: 10, fontWeight: 700, color: accent === 'amber' ? '#9a3412' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
         <div></div><div>Service</div><div>Description</div>
+        <div>PIC</div>
         <div style={{ textAlign: 'center', padding: '0 8px' }}>Status</div>
         <div style={{ textAlign: 'center', padding: '0 8px' }}>Qty</div>
         <div style={{ textAlign: 'center', padding: '0 8px' }}>Rate (S$)</div>
@@ -1025,13 +1114,14 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
         const ndCode = l.service === 'ND' ? l.productService.match(/Nominee Director Fees\s*-\s*([A-Z]+)/i)?.[1]?.toUpperCase() : null;
         const svcLabel = ndCode ? `ND · ${ndCode}` : cfg?.label ?? (l.productService.includes(':') ? l.productService.split(':').slice(1).join(':') : l.service);
         return (
-          <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: '34px 120px 1fr 110px 44px 90px 100px 26px', gap: 0, alignItems: 'start', padding: '16px 10px', borderTop: '1px solid #f1f5f9', background: l.periodNeedsReview ? '#fffaf0' : l.include ? '#fff' : '#fafbfc', opacity: l.include || l.periodNeedsReview ? 1 : 0.55 }}>
+          <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: LINE_GRID, gap: 0, alignItems: 'start', padding: '16px 10px', borderTop: '1px solid #f1f5f9', background: l.periodNeedsReview ? '#fffaf0' : l.include ? '#fff' : '#fafbfc', opacity: l.include || l.periodNeedsReview ? 1 : 0.55 }}>
             <input type="checkbox" checked={l.include} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }} title={l.productService}>
               {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
               <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svcLabel}</span>
             </div>
             <AutoTextarea value={l.description} onChange={v => setLine(i, { description: v })} style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
+            {renderPicCell(l, i, company)}
             <div style={{ fontSize: 10, fontWeight: 600, color: l.periodNeedsReview ? 'var(--status-warning)' : l.due ? '#c2410c' : '#94a3b8', textAlign: 'center', padding: '0 5px' }}>
               <span>{l.reason}</span>
               {l.periodNeedsReview && (
@@ -1124,7 +1214,18 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           <span style={{ fontSize: 11, color: '#64748b' }}>Invoice date</span>
           <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} style={inputStyle} />
         </div>
-        {c.pic && <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>SEC / XBRL PIC: <strong style={{ color: '#334155' }}>{formatStaffName(c.pic)}</strong></span>}
+        {c.pic && (
+          <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }} title="Pre-filled on Secretary / XBRL lines; change any line's PIC in the PIC column">
+            Default PIC (SEC / XBRL): <strong style={{ color: '#334155' }}>{formatStaffName(c.pic)}</strong>
+            {picOptions.status === 'ok' && !picOptions.picDefault && <span style={{ color: '#b45309', fontWeight: 600 }}> · no matching QuickBooks Class — pick per line</span>}
+          </span>
+        )}
+        {picOptions.status === 'error' && (
+          <span style={{ fontSize: 11, color: '#b45309', fontWeight: 600, marginLeft: c.pic ? 0 : 'auto' }}
+            title={`${picOptions.error ?? ''} — lines keep the PIC they already have; a line without one gets the default (company PIC on Secretary / XBRL).`}>
+            ⚠ PIC list unavailable (QuickBooks)
+          </span>
+        )}
       </div>
 
       {/* TAB — basic services (Secretary/Address/AR/XBRL/Accounts/Tax/Discount).
@@ -1153,7 +1254,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>Loading live invoice lines from QuickBooks…</div>
         ) : editLoadError.TAB ? (
           <div style={{ padding: 12, borderRadius: 8, border: '1px solid #fecaca', background: 'var(--status-danger-tint)', color: 'var(--status-danger)', fontSize: 12, fontWeight: 600 }}>{editLoadError.TAB}</div>
-        ) : renderTable(tabRows, 'No applicable services for this company.')}
+        ) : renderTable(tabRows, 'No applicable services for this company.', 'TAB')}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#f8fafc' }}>
           <Plus size={13} style={{ color: '#0f766e' }} />
           <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add line</span>
@@ -1232,7 +1333,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
               <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>Loading live invoice lines from QuickBooks…</div>
             ) : editLoadError.TAC ? (
               <div style={{ padding: 12, borderRadius: 8, border: '1px solid #fecaca', background: 'var(--status-danger-tint)', color: 'var(--status-danger)', fontSize: 12, fontWeight: 600 }}>{editLoadError.TAC}</div>
-            ) : renderTable(tacRows, 'No Nominee Director line.', 'amber')}
+            ) : renderTable(tacRows, 'No Nominee Director line.', 'TAC', 'amber')}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: 'var(--status-warning-tint)' }}>
               <Plus size={13} style={{ color: '#9a3412' }} />
               <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add ND line</span>

@@ -2226,7 +2226,8 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
         const accent = c.urgency === 'expired' ? 'var(--status-danger)' : c.urgency === 'expiring_soon' ? '#f59e0b' : 'var(--status-success)';
         return (
           <div onClick={() => setExpanded(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
-            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 1040, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
+            {/* 1040 → 1280 (Vincent, 2026-10-04: "弹窗拉宽一点") — room for the per-line PIC column. */}
+            <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 1280, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
               <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: `4px solid ${accent}`, padding: '16px 20px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{c.companyName}</div>

@@ -1432,10 +1432,13 @@ again.
   clean up its `invoice_creation_reservations` row — the stale row blocks
   reuse of that DocNumber forever until manually verified (via QB's live
   API, per-invoice, never assumed) and marked `'failed'`.
-- **INV-QB-007** — QB invoice-line PIC/Class assignment is restricted to
-  Secretary and XBRL lines only — Address/AR/ND/Accounts/Tax/discounts
-  must never inherit the company PIC/Class when co-billed. TAC/ND PIC is
-  carried in the named service-item text, never a QB Class.
+- **INV-QB-007** — QB invoice-line PIC/Class assignment BY DEFAULT is
+  restricted to Secretary and XBRL lines only — Address/AR/ND/Accounts/Tax/
+  discounts must never inherit the company PIC/Class when co-billed. TAC/ND
+  PIC is carried in the named service-item text, never a QB Class. Since
+  2026-10-04 a person may still pick any non-ND line's PIC by hand in the
+  Billing Drafts popup's PIC column, exactly like QuickBooks' own per-line
+  Class column — a choice, not inheritance (INV-QB-026).
 - **INV-QB-008** — The current (latest active) TeamWork-appointed Nominee
   Director is always authoritative for TAC's PIC/service-shorthand — QB
   history is used only for fee totals/periods and must never override
@@ -2007,6 +2010,33 @@ again.
   --noEmit` clean, `npx eslint` clean (pre-existing warnings/errors
   elsewhere in the same 3 files, confirmed unrelated via `git diff`'s own
   line ranges), `npm run build` (cold) clean.
+- **INV-QB-026** — An invoice line's PIC is its QuickBooks Class, chosen
+  PER LINE, and saving an invoice must never change a line's Class nobody
+  touched. All three books track Class per line (`Preferences.
+  AccountingInfoPrefs.ClassTrackingPerTxnLine = true`) and staff use it as
+  each service's PIC; Vincent, 2026-10-04: "要和QB那样，要有一列是可以选择每个
+  服务的PIC的". The Billing Drafts popup has that column: edit mode loads each
+  line's live Class (`getLiveInvoice()` → `picClass`); create mode pre-fills
+  INV-QB-007's default via the shared `getsDefaultPicClass()` and the SAME
+  company-PIC matcher the server uses (`lib/invoice-pic-class.ts`); both
+  send `picClassId` per line — absent = the default rule, null = none, an id
+  = that Class, checked server-side against the book's live active classes
+  (`validateLinePicClasses()`); an unvalidated id throws rather than being
+  dropped. Real bug this closed: `update-invoice` rebuilt every line's Class
+  from the company's CURRENT PIC on every save (QuickBooks replaces Line
+  wholesale) — across 40 real app-created TAB invoices (163 lines) a save
+  would have changed 80 line Classes, e.g. #02611099's Secretary line Jenny
+  Lai → Lim Hoe Chyi and Deferred lines' Classes dropped; since SOA reads its
+  owner from line Classes (INV-QB-013), each such save silently re-attributed
+  the client. The same save now keeps 163/163. Class-list facts: TAB holds
+  3,208 Classes (mostly one-off numeric references from 2025), so read them
+  with `listActiveClasses()` (ORDERBY Id, every page, 10-minute cache) —
+  never one 1,000-row page. Since 2026-01-01 every TAB line Class is a full
+  staff name ("Ang Shi Ming"); the 2025 initials ("JL", "ASM") are not
+  offered (`isStaffClassName()`), but a line that still carries one keeps it
+  ("JL (current)"). Not yet covered: the TAO builder (`app/billing/tao`)
+  still creates classless lines, although staff tag ~100% of TAO
+  Accounts/Tax lines with a Class by hand.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

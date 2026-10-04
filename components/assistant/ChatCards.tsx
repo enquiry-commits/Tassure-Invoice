@@ -1193,7 +1193,7 @@ function BillingDraftsModal({ companyName, cycleFye, onClose }: { companyName: s
       onClick={onClose}
     >
       <div
-        style={{ background: '#fff', borderRadius: 12, width: 1080, maxWidth: '96vw', boxShadow: '0 20px 60px rgba(15,23,42,0.25)', overflow: 'hidden' }}
+        style={{ background: '#fff', borderRadius: 12, width: 1280, maxWidth: '96vw', boxShadow: '0 20px 60px rgba(15,23,42,0.25)', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
       >
         <div style={{ padding: '13px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>

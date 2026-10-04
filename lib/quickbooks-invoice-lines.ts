@@ -9,6 +9,10 @@ export type LiveInvoiceLine = {
   description: string;
   qty: number;
   rate: number;
+  // The line's QuickBooks Class — Tassure's per-service PIC — exactly as it
+  // is on the invoice now (null = none), so the edit popup's PIC column shows
+  // it and saving keeps it (INV-QB-026).
+  picClass: { value: string; name: string } | null;
 };
 
 export type LiveInvoice = {
@@ -41,6 +45,7 @@ export async function getLiveInvoice(company: QbCompany, id: string): Promise<Li
     .map(line => {
       const detail = (line.SalesItemLineDetail as Record<string, unknown>) ?? {};
       const itemRef = (detail.ItemRef as Record<string, unknown>) ?? {};
+      const classRef = (detail.ClassRef as Record<string, unknown>) ?? {};
       const product = String(itemRef.name ?? '');
       const description = String(line.Description ?? '');
       const { type: service } = classify(description, product);
@@ -50,6 +55,7 @@ export async function getLiveInvoice(company: QbCompany, id: string): Promise<Li
         description,
         qty: Number(detail.Qty ?? 1),
         rate: Number(detail.UnitPrice ?? 0),
+        picClass: classRef.value ? { value: String(classRef.value), name: String(classRef.name ?? '') } : null,
       };
     });
 
