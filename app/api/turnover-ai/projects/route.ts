@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
 import { createAdminClient } from '@/lib/supabase';
 import { computeCurrencyTotals, mergeCurrencyTotals, type CurrencyTotal } from '@/lib/turnover-ai';
-import { documentOutcome } from '@/lib/turnover-ai-files';
+import { documentOutcome, isUnread } from '@/lib/turnover-ai-files';
 
 export type TurnoverProject = {
   id: number;
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
   const now = Date.now();
   for (const d of docs ?? []) {
     const outcome = documentOutcome(d.status, d.uploaded_at, now);
-    const counter = outcome === 'done' ? docsByProject : outcome === 'reading' ? null : unreadByProject;
+    const counter = outcome === 'done' ? docsByProject : isUnread(outcome) ? unreadByProject : null;
     if (counter) counter.set(d.project_id, (counter.get(d.project_id) ?? 0) + 1);
   }
 

@@ -3823,7 +3823,12 @@ again.
   stays 'processing' forever; it is SHOWN as interrupted after 6 minutes
   (`documentOutcome()`), never written back. (6) Failed and interrupted files
   are listed on the project page with their reason, and the Projects card
-  counts them separately instead of as files. Verified in a browser harness
+  counts them separately instead of as files — both by the one rule
+  `isUnread()`. (7) Staff can Remove such a file once it's been dropped
+  again (Vincent, same day, AskUserQuestion: "加移除按钮"):
+  `DELETE /api/turnover-ai/documents/:id` re-checks on the server that it is
+  unread (never one still being read, never a done one) and has no line
+  items, then deletes its stored original before the row. Verified in a browser harness
   with a real iPhone HEIC (converted in Chromium to a 1932×2576 JPEG), a 19MB
   photo (→ 2576px, 3.3MB), a 5MB PDF (stopped, nothing sent) and a mocked
   non-JSON 413 (readable message); `test-turnover-files.ts` pins the rules.

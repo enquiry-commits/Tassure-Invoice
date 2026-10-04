@@ -4,7 +4,7 @@
 //
 // Run: npx tsx test-turnover-files.ts
 import { readFileSync } from 'fs';
-import { kindOf, isReadableFile, sniffKind, documentOutcome, UPLOAD_MAX_BYTES, IMAGE_MAX_EDGE, READING_TIMEOUT_MS, ACCEPT } from './lib/turnover-ai-files';
+import { kindOf, isReadableFile, sniffKind, documentOutcome, isUnread, UPLOAD_MAX_BYTES, IMAGE_MAX_EDGE, READING_TIMEOUT_MS, ACCEPT } from './lib/turnover-ai-files';
 import { prepareBatch } from './components/turnover-ai/upload-handoff';
 
 let fail = 0;
@@ -57,6 +57,8 @@ const t0 = Date.parse('2026-10-05T03:00:00Z');
 check('done and failed are what they say', documentOutcome('done', '2026-10-05T03:00:00Z', t0) === 'done' && documentOutcome('failed', '2026-10-05T03:00:00Z', t0) === 'failed');
 check('still processing within the time limit → reading', documentOutcome('processing', '2026-10-05T03:00:00Z', t0 + 60_000) === 'reading');
 check('processing past the route’s 300s limit → interrupted (display only)', documentOutcome('processing', '2026-10-05T03:00:00Z', t0 + READING_TIMEOUT_MS + 1) === 'interrupted' && READING_TIMEOUT_MS > 300_000);
+check('failed and interrupted files are the unread ones (listed, counted apart, removable)', isUnread('failed') && isUnread('interrupted'));
+check('a file still being read, or read fine, is never unread — so never removable', !isUnread('reading') && !isUnread('done'));
 
 console.log('\n--- source guards ---');
 const read = (p: string) => readFileSync(p, 'utf8');
@@ -71,7 +73,13 @@ check('a reply cut off at max_tokens fails the file instead of under-counting', 
 const page = read('app/turnover-ai/project/[id]/page.tsx');
 check('the project page prepares every file before sending it', /prepareForUpload\(file\)/.test(page));
 check('a non-JSON platform error (413/504) never crashes the row', /res\.json\(\)\.catch\(\(\) => null\)/.test(page));
-check('the project page lists files that couldn’t be read', /unreadDocuments/.test(page));
+check('the project page lists files that couldn’t be read, by the shared rule', /unreadDocuments = detail\.documents\.filter\(d => isUnread\(d\.outcome\)\)/.test(page));
+check('the project page can remove one through the documents route', /removeDocument\(d\)/.test(page) && /\/api\/turnover-ai\/documents\/\$\{doc\.id\}`, \{ method: 'DELETE' \}/.test(page));
+const removeRoute = read('app/api/turnover-ai/documents/[id]/route.ts');
+check('the remove route re-checks the file is unread on the server', /isUnread\(documentOutcome\(doc\.status, doc\.uploaded_at, Date\.now\(\)\)\)/.test(removeRoute));
+check('the remove route refuses a file with receipts in the table', /from\('turnover_line_items'\)\.select\('id', \{ count: 'exact', head: true \}\)\.eq\('document_id', documentId\)/.test(removeRoute) && /if \(count\) return/.test(removeRoute));
+check('the remove route can never delete a done file', /\.delete\(\)\.eq\('id', documentId\)\.neq\('status', 'done'\)/.test(removeRoute));
+check('the Projects card counts unread by the same rule', /isUnread\(outcome\)/.test(read('app/api/turnover-ai/projects/route.ts')));
 
 console.log(fail === 0 ? '\nALL OK' : `\n${fail} FAILED`);
 process.exit(fail === 0 ? 0 : 1);

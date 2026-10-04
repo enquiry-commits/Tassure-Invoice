@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { ACCEPT, MAX_FILES_PER_BATCH, INCOMING_PARAM, takeStagedFiles } from '@/components/turnover-ai/upload-handoff';
 import { prepareForUpload } from '@/components/turnover-ai/prepare-upload';
-import { UPLOAD_MAX_BYTES, megabytes } from '@/lib/turnover-ai-files';
+import { UPLOAD_MAX_BYTES, megabytes, isUnread } from '@/lib/turnover-ai-files';
 import { logActivity } from '@/lib/activity-client';
 import type { TurnoverProjectDocument, TurnoverProjectLineItem } from '@/app/api/turnover-ai/projects/[id]/route';
 
@@ -277,6 +277,23 @@ export default function TurnoverProjectPage() {
 
   const toggleIgnore = (item: TurnoverProjectLineItem) => patchItem(item.id, { action: item.review_status === 'rejected' ? 'restore' : 'reject' });
 
+  // Vincent, 2026-10-05: "加移除按钮" — once a file that couldn't be read has
+  // been dropped again, its old line can go now instead of at the 3-day
+  // cleanup. The route only removes that kind of file (no receipts).
+  const removeDocument = async (doc: TurnoverProjectDocument) => {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/turnover-ai/documents/${doc.id}`, { method: 'DELETE' });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error ?? 'Could not remove the file.'); }
+      logActivity('turnover_document_removed', { documentId: doc.id, outcome: doc.outcome });
+      setDetail(prev => prev ? { ...prev, documents: prev.documents.filter(d => d.id !== doc.id) } : prev);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (loadError) return <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>{loadError}</div>;
   if (!detail) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 12.5 }}>Loading…</div>;
 
@@ -292,7 +309,7 @@ export default function TurnoverProjectPage() {
   const rejectedCount = items.length - active.length;
   // Files that never made it into the table: nothing from them is in the
   // total, and staff only knew while that upload's own row was on screen.
-  const unreadDocuments = detail.documents.filter(d => d.outcome === 'failed' || d.outcome === 'interrupted');
+  const unreadDocuments = detail.documents.filter(d => isUnread(d.outcome));
   const columns = detail.project.gst_enabled ? '1.4fr 95px 100px 65px 80px 85px 90px' : '1.5fr 100px 110px 70px 90px 90px';
 
   return (
@@ -400,14 +417,18 @@ export default function TurnoverProjectPage() {
             {unreadDocuments.length === 1 ? '1 file couldn’t be read' : `${unreadDocuments.length} files couldn’t be read`} — nothing from {unreadDocuments.length === 1 ? 'it' : 'them'} is in the total
           </div>
           {unreadDocuments.map(d => (
-            <div key={d.id} style={{ display: 'flex', gap: 8, padding: '3px 0', borderTop: '1px solid #fee2e2' }}>
+            <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', borderTop: '1px solid #fee2e2' }}>
               <span style={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '40%' }}>{d.file_name}</span>
-              <span style={{ color: '#b91c1c' }}>
+              <span style={{ color: '#b91c1c', flex: 1, minWidth: 0 }}>
                 {d.outcome === 'interrupted' ? 'Reading was cut off before it finished — drop it again.' : (d.error_message ?? 'Reading failed.')}
               </span>
+              <button onClick={() => removeDocument(d)} disabled={busy} title="Remove this file from the project (nothing from it is in the total)"
+                style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, padding: '2px 8px', borderRadius: 6, border: '1px solid #fecaca', background: '#fff', color: '#991b1b', fontSize: 11.5, fontWeight: 600, cursor: busy ? 'default' : 'pointer' }}>
+                <X size={12} /> Remove
+              </button>
             </div>
           ))}
-          <div style={{ marginTop: 6, fontSize: 11.5, color: '#b45309' }}>Fix the file if the reason says so, then drop it into the box above again.</div>
+          <div style={{ marginTop: 6, fontSize: 11.5, color: '#b45309' }}>Fix the file if the reason says so, then drop it into the box above again — and Remove the old line here.</div>
         </div>
       )}
 

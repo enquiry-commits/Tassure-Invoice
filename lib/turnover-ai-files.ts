@@ -69,6 +69,13 @@ export function documentOutcome(status: string, uploadedAt: string, nowMs: numbe
   return nowMs - Date.parse(uploadedAt) > READING_TIMEOUT_MS ? 'interrupted' : 'reading';
 }
 
+// A file that couldn't be read — failed, or cut off mid-read: nothing from it
+// is in the total. Listed on the project page, counted apart on the Projects
+// card, and the only kind of file staff can remove from a project (Vincent,
+// 2026-10-05: "加移除按钮" — once it's been dropped again, its old line
+// needn't wait for the 3-day cleanup). Never a file still being read.
+export const isUnread = (outcome: DocumentOutcome) => outcome === 'failed' || outcome === 'interrupted';
+
 export function pdfTooLargeMessage(bytes: number): string {
   return `This PDF is ${megabytes(bytes)} — uploads are limited to ${megabytes(UPLOAD_MAX_BYTES)}. Split it into smaller files, or save a smaller copy (e.g. print it to PDF), then drop those.`;
 }

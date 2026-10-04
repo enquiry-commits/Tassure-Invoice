@@ -415,8 +415,9 @@ converted .jpg).
 (3) drop a phone photo over 4.4MB — it is shrunk and reads. (4) drop a PDF
 over 4.4MB — its row says to split it and nothing is sent. (5) a file whose
 read fails shows on the project page with its reason, and the Projects card
-counts it as "couldn't be read", not as a file. (6) a Chinese-named PDF's
-"View original" opens.
+counts it as "couldn't be read", not as a file; its Remove button takes the
+line away (and the card's count with it after going back). (6) a
+Chinese-named PDF's "View original" opens.
 **Guards:** `docs/INVARIANTS.md` INV-DATA-070, INV-DATA-071, INV-DATA-072.
 
 ---
