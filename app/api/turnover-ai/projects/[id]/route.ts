@@ -64,11 +64,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Vincent, 2026-10-04: "不需要confirm 先，直接计算出Total 如果各别算出的
   // 数字不对，员工也可以自己再随时手动修改某个金额" — every extracted line
-  // counts toward the total immediately, no confirm click required; only an
-  // explicitly-rejected (duplicate/mistake) line is excluded. "Confirm"
-  // still exists (clears the pending-review flag) and "Edit" still exists
-  // (fixes a wrong number, staying counted either way) — neither gates the
-  // total anymore, only Reject does.
+  // counts toward the total immediately; only an explicitly-rejected
+  // (duplicate/mistake) line is excluded. Confirm was removed from the UI
+  // entirely in the same change (see app/turnover-ai/project/[id]/
+  // page.tsx) — editing a value no longer gates or flags anything either,
+  // it just overwrites the edited_* columns in place. `pendingCount` below
+  // is kept only because review_status itself (unconfirmed/confirmed/
+  // rejected) is unchanged in the DB; the UI no longer surfaces it.
   const countable = lineItems.filter(i => i.review_status !== 'rejected');
   const pendingCount = lineItems.filter(i => i.review_status === 'unconfirmed').length;
   const liveTotals = computeCurrencyTotals(countable);

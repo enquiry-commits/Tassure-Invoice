@@ -3,7 +3,7 @@ import ExcelJS from 'exceljs';
 import { getRequestAccount } from '@/lib/request-account';
 import { createAdminClient } from '@/lib/supabase';
 
-// GET /api/turnover-ai/export?projectId=... — confirmed line items only,
+// GET /api/turnover-ai/export?projectId=... — every non-ignored line item,
 // same ExcelJS single-sheet pattern as app/api/master-list/export/route.ts.
 // Only ever shows items from documents the 3-day retention sweep hasn't
 // purged yet (app/api/turnover-ai/cleanup/route.ts) — once purged, a

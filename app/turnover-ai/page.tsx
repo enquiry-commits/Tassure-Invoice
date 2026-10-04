@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Trash2, FolderOpen, X } from 'lucide-react';
+import { Plus, Trash2, FolderOpen, X, Search } from 'lucide-react';
 import { ClientPicker, type ClientSelection } from '@/components/turnover-ai/ClientPicker';
 import type { TurnoverProject } from '@/app/api/turnover-ai/projects/route';
 
@@ -14,6 +14,11 @@ import type { TurnoverProject } from '@/app/api/turnover-ai/projects/route';
 // page.tsx. A project's totals survive its own 3-day data purge (Vincent,
 // via AskUserQuestion: "保留总数，只清原始文件/明细") — the folder itself
 // is only ever removed by a staff member explicitly deleting it.
+//
+// Vincent, 2026-10-04: "文件夹页面要可以好像搜索公司那样，可以输入公司名字
+// （文件夹名）找出对应的文件夹，防止后续过多文件夹找不到" — a client-side
+// name filter, same idea as the company-name search used elsewhere in the
+// app, so a folder stays findable as the project count grows.
 
 function money(n: number, currency: string) {
   return `${currency} ${n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -82,11 +87,10 @@ function ProjectCard({ project, onDelete }: { project: TurnoverProject; onDelete
         </div>
         <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
           {project.documentCount} file{project.documentCount === 1 ? '' : 's'}
-          {project.pendingCount > 0 && <span style={{ color: '#b45309', fontWeight: 700 }}> · {project.pendingCount} pending</span>}
           {project.gst_enabled && <span> · GST</span>}
         </div>
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {project.totals.length === 0 && <div style={{ fontSize: 12, color: '#cbd5e1' }}>No confirmed total yet</div>}
+          {project.totals.length === 0 && <div style={{ fontSize: 12, color: '#cbd5e1' }}>No total yet</div>}
           {project.totals.map(t => (
             <div key={t.currency} style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{money(t.total, t.currency)}</div>
           ))}
@@ -111,6 +115,7 @@ export default function TurnoverAiProjectsPage() {
   const [projects, setProjects] = useState<TurnoverProject[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [search, setSearch] = useState('');
 
   const load = useCallback(() => {
     fetch('/api/turnover-ai/projects')
@@ -119,6 +124,12 @@ export default function TurnoverAiProjectsPage() {
       .catch(err => setLoadError(err instanceof Error ? err.message : String(err)));
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  const visibleProjects = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return projects ?? [];
+    return (projects ?? []).filter(p => p.name.toLowerCase().includes(q));
+  }, [projects, search]);
 
   const deleteProject = async (id: number) => {
     try {
@@ -136,7 +147,7 @@ export default function TurnoverAiProjectsPage() {
         <div>
           <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Turnover AI</h1>
           <p style={{ margin: 0, fontSize: 12.5, color: '#64748b', maxWidth: 560, lineHeight: 1.6 }}>
-            One project per client — upload receipts into it, AI reads them, confirm on the Review Queue. Originals and per-receipt detail are kept for 3 days; the confirmed total stays in the folder after that.
+            One project per client — upload receipts into it and AI reads them straight into a running total; fix any value directly if it looks off. Originals and per-receipt detail are kept for 3 days; the total stays in the folder after that.
           </p>
         </div>
         <button onClick={() => setShowCreate(true)}
@@ -151,8 +162,19 @@ export default function TurnoverAiProjectsPage() {
         <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 12.5, border: '1px dashed #e2e8f0', borderRadius: 14 }}>No projects yet — create one to start uploading receipts.</div>
       )}
 
+      {projects !== null && projects.length > 0 && (
+        <div style={{ position: 'relative', marginBottom: 14, maxWidth: 360 }}>
+          <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+          <input type="text" placeholder="Search project name…" value={search} onChange={e => setSearch(e.target.value)}
+            style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 8, padding: '7px 10px 7px 30px', fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+      )}
+      {projects !== null && projects.length > 0 && visibleProjects.length === 0 && (
+        <div style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 12.5, border: '1px dashed #e2e8f0', borderRadius: 14 }}>No project matches &ldquo;{search}&rdquo;.</div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>
-        {(projects ?? []).map(p => <ProjectCard key={p.id} project={p} onDelete={deleteProject} />)}
+        {visibleProjects.map(p => <ProjectCard key={p.id} project={p} onDelete={deleteProject} />)}
       </div>
 
       {showCreate && (

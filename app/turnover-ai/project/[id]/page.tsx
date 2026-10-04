@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, UploadCloud, Loader2, CheckCircle2, AlertTriangle, Download,
-  ExternalLink, Pencil, X, Check,
+  ExternalLink, Pencil, X, Check, Undo2,
 } from 'lucide-react';
 import type { TurnoverProjectDocument, TurnoverProjectLineItem } from '@/app/api/turnover-ai/projects/[id]/route';
 
@@ -15,6 +15,16 @@ import type { TurnoverProjectDocument, TurnoverProjectLineItem } from '@/app/api
 // old 20-file cap: "我觉得可以提高到100个PDF的上限...如果超过100个PDF，员
 // 工可以在同一个项目内进行导入其他的PDF" — 100 per selection, any number of
 // rounds into the same project.
+//
+// UPDATED 2026-10-04 — Vincent, after seeing the Pending/Confirm review
+// queue in use: "还是不需要 Peding 和 Confirm 就把他当成最简单的计算功能，
+// 就是那些High / Medium 都只是给员工参考，如果高风险的他们自己会去查看原
+// 始的账单，直接修改金额就好，不需要多一步 SAVE，或者confirm". Removed:
+// the Pending/All status tab, the "Needs a glance" KPI card, Bulk-confirm,
+// and the Confirm button. Confidence pills are now purely informational.
+// Every table cell is directly editable and saves on blur — no edit mode,
+// no Save button. The only review action left is Ignore (excludes a line
+// from the total) and its undo, Restore.
 
 const ACCEPT = 'application/pdf,image/jpeg,image/png,image/webp,image/heic';
 const MAX_FILES_PER_BATCH = 100;
@@ -29,6 +39,28 @@ type ProjectDetail = {
 
 type UploadRow = { fileName: string; status: 'uploading' | 'done' | 'error'; message?: string; lineItemCount?: number };
 type ConfidenceFilter = 'all' | 'high' | 'medium' | 'low';
+type CurrencyTotal = { currency: string; total: number; count: number };
+
+// Mirrors lib/turnover-ai.ts's computeCurrencyTotals + mergeCurrencyTotals
+// (can't import that file directly — it's `server-only`). Lets an edit,
+// ignore or restore update the totals card immediately instead of only on
+// the next full page load, which matters now that there's no separate
+// Confirm/Save step to visually mark "this is done" (Vincent: "直接修改金
+// 额就好，不需要多一步 SAVE").
+function recomputeTotals(lineItems: TurnoverProjectLineItem[], snapshot: CurrencyTotal[]): CurrencyTotal[] {
+  const byCurrency = new Map<string, { total: number; count: number }>();
+  for (const s of snapshot) byCurrency.set(s.currency, { total: s.total, count: s.count });
+  for (const i of lineItems) {
+    if (i.review_status === 'rejected') continue;
+    const currency = i.edited_currency ?? i.currency ?? 'Unknown';
+    const amount = Number(i.edited_amount ?? i.amount ?? 0);
+    const entry = byCurrency.get(currency) ?? { total: 0, count: 0 };
+    entry.total += amount;
+    entry.count += 1;
+    byCurrency.set(currency, entry);
+  }
+  return [...byCurrency.entries()].map(([currency, v]) => ({ currency, total: Math.round(v.total * 100) / 100, count: v.count }));
+}
 
 function money(n: number, currency: string | null) {
   return `${currency ?? ''} ${n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim();
@@ -40,27 +72,62 @@ function ConfidencePill({ c }: { c: 'high' | 'medium' | 'low' }) {
   return <span style={{ ...pillStyle, background: tone.bg, color: tone.fg }}>{tone.label}</span>;
 }
 
-function EditRow({ item, gstEnabled, onSave, onCancel }: {
-  item: TurnoverProjectLineItem; gstEnabled: boolean;
-  onSave: (patch: { vendor: string; txnDate: string; amount: number; currency: string; gstAmount: number | null }) => void;
-  onCancel: () => void;
+// Every field saves on blur — no edit mode, no Save button (Vincent:
+// "直接修改金额就好，不需要多一步 SAVE"). Local draft state exists only so
+// typing doesn't fire a request per keystroke; the actual write happens
+// once the field loses focus.
+function cellInputStyle(extra?: object) {
+  return {
+    border: '1px solid transparent', borderRadius: 6, padding: '5px 7px', fontSize: 12.5,
+    boxSizing: 'border-box' as const, width: '100%', background: 'transparent', font: 'inherit', color: 'inherit',
+    ...extra,
+  };
+}
+
+function LineItemRow({ item, gstEnabled, columns, busy, onPatch, onToggle }: {
+  item: TurnoverProjectLineItem; gstEnabled: boolean; columns: string; busy: boolean;
+  onPatch: (id: number, patch: { vendor: string; txnDate: string; amount: number; currency: string; gstAmount: number | null }) => void;
+  onToggle: (item: TurnoverProjectLineItem) => void;
 }) {
+  const ignored = item.review_status === 'rejected';
   const [vendor, setVendor] = useState(item.edited_vendor_name ?? item.vendor_name ?? '');
   const [txnDate, setTxnDate] = useState(item.edited_txn_date ?? item.txn_date ?? '');
   const [amount, setAmount] = useState(String(item.edited_amount ?? item.amount ?? 0));
   const [currency, setCurrency] = useState(item.edited_currency ?? item.currency ?? '');
   const [gst, setGst] = useState(String(item.edited_gst_amount ?? item.gst_amount ?? ''));
-  const inputStyle = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '5px 7px', fontSize: 12, boxSizing: 'border-box' as const };
+
+  const save = () => onPatch(item.id, { vendor, txnDate, amount: Number(amount) || 0, currency, gstAmount: gst.trim() ? Number(gst) : null });
+  const commitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') e.currentTarget.blur(); };
+  const focusBorder = { onFocus: (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = '#0f766e'; }, onBlurCapture: (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = 'transparent'; } };
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', background: '#fffbeb', flexWrap: 'wrap' }}>
-      <input value={vendor} onChange={e => setVendor(e.target.value)} placeholder="Vendor" style={{ ...inputStyle, flex: '1 1 180px' }} />
-      <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} style={{ ...inputStyle, width: 140 }} />
-      <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} style={{ ...inputStyle, width: 100, textAlign: 'right' }} />
-      <input value={currency} onChange={e => setCurrency(e.target.value.toUpperCase())} placeholder="Currency" style={{ ...inputStyle, width: 70 }} />
-      {gstEnabled && <input type="number" step="0.01" value={gst} onChange={e => setGst(e.target.value)} placeholder="GST" style={{ ...inputStyle, width: 80, textAlign: 'right' }} />}
-      <button onClick={() => onSave({ vendor, txnDate, amount: Number(amount) || 0, currency, gstAmount: gst.trim() ? Number(gst) : null })}
-        style={{ padding: '5px 12px', borderRadius: 6, border: 'none', background: '#0f766e', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Save</button>
-      <button onClick={onCancel} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 11.5, cursor: 'pointer' }}>Cancel</button>
+    <div style={{ display: 'grid', gridTemplateColumns: columns, gap: 10, alignItems: 'center', padding: '6px 16px', borderTop: '1px solid #f1f5f9', fontSize: 12.5, background: ignored ? '#f8fafc' : item.is_duplicate_suspect ? '#fffbeb' : undefined, opacity: ignored ? 0.6 : 1 }}>
+      <div style={{ minWidth: 0 }}>
+        <input value={vendor} onChange={e => setVendor(e.target.value)} onBlur={save} onKeyDown={commitOnEnter} disabled={ignored || busy} placeholder="(vendor not identified)"
+          style={cellInputStyle({ fontWeight: 500, color: '#0f172a' })} {...focusBorder} />
+        <div style={{ color: '#94a3b8', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 7px' }}>
+          {item.file_name}
+          {item.is_duplicate_suspect && ' · ⚠ possible duplicate'}
+          {ignored && ' · ignored, not counted'}
+        </div>
+      </div>
+      <input type="date" value={txnDate ?? ''} onChange={e => setTxnDate(e.target.value)} onBlur={save} disabled={ignored || busy} style={cellInputStyle({ color: '#475569' })} {...focusBorder} />
+      <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} onBlur={save} onKeyDown={commitOnEnter} disabled={ignored || busy}
+        style={cellInputStyle({ textAlign: 'right', fontFamily: 'monospace' })} {...focusBorder} />
+      <input value={currency} onChange={e => setCurrency(e.target.value.toUpperCase())} onBlur={save} onKeyDown={commitOnEnter} disabled={ignored || busy}
+        style={cellInputStyle({ textTransform: 'uppercase' })} {...focusBorder} />
+      {gstEnabled && (
+        <input type="number" step="0.01" value={gst} onChange={e => setGst(e.target.value)} onBlur={save} onKeyDown={commitOnEnter} disabled={ignored || busy} placeholder="—"
+          style={cellInputStyle({ textAlign: 'right', fontFamily: 'monospace', color: '#64748b' })} {...focusBorder} />
+      )}
+      <div><ConfidencePill c={item.confidence} /></div>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button onClick={() => onToggle(item)} disabled={busy} title={ignored ? 'Restore (counts it again)' : 'Ignore (excludes it from the total)'}
+          style={{ border: 'none', background: 'none', color: ignored ? '#0f766e' : '#94a3b8', cursor: 'pointer', display: 'flex' }}>
+          {ignored ? <Undo2 size={13} /> : <X size={13} />}
+        </button>
+        <a href={`/api/turnover-ai/file/${item.document_id}`} target="_blank" rel="noreferrer" title="View original" style={{ color: '#94a3b8', display: 'flex' }}><ExternalLink size={13} /></a>
+      </div>
     </div>
   );
 }
@@ -74,8 +141,6 @@ export default function TurnoverProjectPage() {
   const [uploads, setUploads] = useState<UploadRow[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceFilter>('all');
-  const [statusFilter, setStatusFilter] = useState<'unconfirmed' | 'all'>('unconfirmed');
-  const [editingId, setEditingId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [renaming, setRenaming] = useState(false);
@@ -121,7 +186,11 @@ export default function TurnoverProjectPage() {
       const res = await fetch(`/api/turnover-ai/line-items/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Update failed');
-      setDetail(prev => prev ? { ...prev, lineItems: prev.lineItems.map(i => i.id === id ? json.lineItem : i) } : prev);
+      setDetail(prev => {
+        if (!prev) return prev;
+        const lineItems = prev.lineItems.map(i => i.id === id ? json.lineItem : i);
+        return { ...prev, lineItems, totals: recomputeTotals(lineItems, prev.project.confirmed_totals) };
+      });
     } catch (err) {
       alert(err instanceof Error ? err.message : String(err));
     } finally {
@@ -148,38 +217,22 @@ export default function TurnoverProjectPage() {
     }
   };
 
-  const bulkConfirmHigh = async () => {
-    const ids = (detail?.lineItems ?? []).filter(i => i.review_status === 'unconfirmed' && i.confidence === 'high').map(i => i.id);
-    if (!ids.length) return;
-    setBusy(true);
-    try {
-      const res = await fetch('/api/turnover-ai/line-items/bulk-confirm', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Bulk confirm failed');
-      load();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const toggleIgnore = (item: TurnoverProjectLineItem) => patchItem(item.id, { action: item.review_status === 'rejected' ? 'restore' : 'reject' });
 
   if (loadError) return <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>{loadError}</div>;
   if (!detail) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 12.5 }}>Loading…</div>;
 
   const items = detail.lineItems;
-  let visible = items;
-  if (statusFilter === 'unconfirmed') visible = visible.filter(i => i.review_status === 'unconfirmed');
-  if (confidenceFilter !== 'all') visible = visible.filter(i => i.confidence === confidenceFilter);
-  const unconfirmed = items.filter(i => i.review_status === 'unconfirmed');
+  const visible = confidenceFilter === 'all' ? items : items.filter(i => i.confidence === confidenceFilter);
+  const active = items.filter(i => i.review_status !== 'rejected');
   const counts = {
-    all: unconfirmed.length,
-    high: unconfirmed.filter(i => i.confidence === 'high').length,
-    medium: unconfirmed.filter(i => i.confidence === 'medium').length,
-    low: unconfirmed.filter(i => i.confidence === 'low').length,
+    all: active.length,
+    high: active.filter(i => i.confidence === 'high').length,
+    medium: active.filter(i => i.confidence === 'medium').length,
+    low: active.filter(i => i.confidence === 'low').length,
   };
-  const rejectedCount = items.filter(i => i.review_status === 'rejected').length;
-  const columns = detail.project.gst_enabled ? '1.5fr 85px 100px 80px 70px 85px 120px' : '1.6fr 90px 110px 70px 90px 130px';
+  const rejectedCount = items.length - active.length;
+  const columns = detail.project.gst_enabled ? '1.4fr 95px 100px 65px 80px 85px 90px' : '1.5fr 100px 110px 70px 90px 90px';
 
   return (
     <div>
@@ -227,11 +280,11 @@ export default function TurnoverProjectPage() {
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{t.count} receipt{t.count === 1 ? '' : 's'}</div>
           </div>
         ))}
-        {detail.pendingCount > 0 && (
-          <div style={{ flex: 1, minWidth: 200, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 14, padding: '18px 20px' }}>
-            <div style={{ fontSize: 12, color: '#b45309', fontWeight: 600, marginBottom: 4 }}>Needs a glance</div>
-            <div style={{ fontFamily: 'monospace', fontSize: 24, fontWeight: 700, color: '#b45309' }}>{detail.pendingCount}</div>
-            <div style={{ fontSize: 11, color: '#92400e', marginTop: 4 }}>already counted above</div>
+        {rejectedCount > 0 && (
+          <div style={{ flex: 1, minWidth: 200, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px' }}>
+            <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>Ignored</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 24, fontWeight: 700, color: '#94a3b8' }}>{rejectedCount}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>excluded from the total</div>
           </div>
         )}
       </div>
@@ -269,82 +322,29 @@ export default function TurnoverProjectPage() {
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-        {(['unconfirmed', 'all'] as const).map(s => (
-          <button key={s} onClick={() => setStatusFilter(s)}
-            style={{ padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer', border: statusFilter === s ? 'none' : '1px solid #e2e8f0', background: statusFilter === s ? '#0f172a' : '#fff', color: statusFilter === s ? '#fff' : '#475569' }}>
-            {s === 'unconfirmed' ? `Needs a glance ${counts.all}` : 'All records'}
-          </button>
-        ))}
-        <span style={{ width: 1, height: 18, background: '#e2e8f0', margin: '0 4px' }} />
         {(['all', 'high', 'medium', 'low'] as const).map(c => (
           <button key={c} onClick={() => setConfidenceFilter(c)}
             style={{ padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: confidenceFilter === c ? '1px solid #0f172a' : '1px solid #e2e8f0', background: confidenceFilter === c ? '#f8fafc' : '#fff', color: '#475569' }}>
-            {c === 'all' ? 'All confidence' : c === 'high' ? `🟢 High ${counts.high}` : c === 'medium' ? `🟡 Medium ${counts.medium}` : `🔴 Low ${counts.low}`}
+            {c === 'all' ? `All confidence ${counts.all}` : c === 'high' ? `🟢 High ${counts.high}` : c === 'medium' ? `🟡 Medium ${counts.medium}` : `🔴 Low ${counts.low}`}
           </button>
         ))}
-        <div style={{ flexGrow: 1 }} />
-        <button onClick={bulkConfirmHigh} disabled={busy || counts.high === 0}
-          style={{ height: 32, padding: '0 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, border: 'none', cursor: counts.high === 0 ? 'default' : 'pointer', background: counts.high === 0 ? '#cbd5e1' : '#0f766e', color: '#fff' }}>
-          Bulk confirm high confidence ({counts.high})
-        </button>
       </div>
 
       <div style={{ border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff', overflow: 'hidden' }}>
         <div style={{ display: 'grid', gridTemplateColumns: columns, gap: 10, padding: '10px 16px', fontSize: 11, fontWeight: 700, color: '#94a3b8', background: '#f8fafc' }}>
-          <div>Vendor / Source file</div><div>Date</div><div style={{ textAlign: 'right' }}>Amount</div>
+          <div>Vendor / Source file</div><div>Date</div><div style={{ textAlign: 'right' }}>Amount</div><div>Currency</div>
           {detail.project.gst_enabled && <div style={{ textAlign: 'right' }}>GST</div>}
-          <div>Confidence</div><div>Status</div><div style={{ textAlign: 'right' }}>Actions</div>
+          <div>Confidence</div><div style={{ textAlign: 'right' }}>Actions</div>
         </div>
         {visible.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 12.5 }}>No matching records</div>}
         {visible.map(item => (
-          editingId === item.id ? (
-            <EditRow key={item.id} item={item} gstEnabled={detail.project.gst_enabled}
-              onSave={patch => { patchItem(item.id, { action: 'edit', ...patch }); setEditingId(null); }}
-              onCancel={() => setEditingId(null)} />
-          ) : (
-            <div key={item.id} style={{ display: 'grid', gridTemplateColumns: columns, gap: 10, alignItems: 'center', padding: '10px 16px', borderTop: '1px solid #f1f5f9', fontSize: 12.5, background: item.is_duplicate_suspect ? '#fffbeb' : undefined }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ color: '#0f172a', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.edited_vendor_name ?? item.vendor_name ?? '(vendor not identified)'}</div>
-                <div style={{ color: '#94a3b8', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {item.file_name}
-                  {item.is_duplicate_suspect && ' · ⚠ possible duplicate'}
-                  {item.confidence_reason && item.confidence !== 'high' && ` · ${item.confidence_reason}`}
-                </div>
-              </div>
-              <div style={{ color: '#475569' }}>{item.edited_txn_date ?? item.txn_date ?? '—'}</div>
-              <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>{money(item.edited_amount ?? item.amount, item.edited_currency ?? item.currency)}</div>
-              {detail.project.gst_enabled && (
-                <div style={{ textAlign: 'right', fontFamily: 'monospace', color: '#64748b' }}>{(item.edited_gst_amount ?? item.gst_amount) != null ? (item.edited_gst_amount ?? item.gst_amount) : '—'}</div>
-              )}
-              <div><ConfidencePill c={item.confidence} /></div>
-              <div>
-                {item.review_status === 'confirmed' && <span style={{ ...pillStyle, background: '#f1f5f9', color: '#475569' }}>Confirmed</span>}
-                {item.review_status === 'unconfirmed' && <span style={{ ...pillStyle, background: '#fef3c7', color: '#b45309' }}>Pending</span>}
-                {item.review_status === 'rejected' && <span style={{ ...pillStyle, background: '#f1f5f9', color: '#94a3b8' }}>Ignored</span>}
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                {item.review_status === 'unconfirmed' && (
-                  <button onClick={() => patchItem(item.id, { action: 'confirm' })} disabled={busy} title="Confirm" style={{ border: 'none', background: 'none', color: '#15803d', cursor: 'pointer', fontSize: 11, fontWeight: 700 }}>Confirm</button>
-                )}
-                {/* Vincent: "员工也可以自己再随时手动修改某个金额" — Edit stays
-                    available whether or not this line has been confirmed yet;
-                    only a rejected line (already excluded from the total) has
-                    nothing left to fix here. */}
-                {item.review_status !== 'rejected' && (
-                  <button onClick={() => setEditingId(item.id)} title="Edit" style={{ border: 'none', background: 'none', color: '#0f766e', cursor: 'pointer', display: 'flex' }}><Pencil size={13} /></button>
-                )}
-                {item.review_status !== 'rejected' && (
-                  <button onClick={() => patchItem(item.id, { action: 'reject' })} disabled={busy} title="Ignore (excludes it from the total)" style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>
-                )}
-                <a href={`/api/turnover-ai/file/${item.document_id}`} target="_blank" rel="noreferrer" title="View original" style={{ color: '#94a3b8', display: 'flex' }}><ExternalLink size={13} /></a>
-              </div>
-            </div>
-          )
+          <LineItemRow key={item.id} item={item} gstEnabled={detail.project.gst_enabled} columns={columns} busy={busy}
+            onPatch={(id, patch) => patchItem(id, { action: 'edit', ...patch })} onToggle={toggleIgnore} />
         ))}
       </div>
 
       <div style={{ marginTop: 12, fontSize: 11, color: '#94a3b8' }}>
-        {items.length} receipt{items.length === 1 ? '' : 's'} total{rejectedCount > 0 ? ` · ${rejectedCount} ignored (not counted)` : ''} · every other receipt counts toward the total above automatically · originals and per-receipt detail are kept for 3 days, then cleared (the total stays).
+        {items.length} receipt{items.length === 1 ? '' : 's'} total{rejectedCount > 0 ? ` · ${rejectedCount} ignored (not counted)` : ''} · every receipt counts toward the total above the moment it{"'"}s read — edit any field directly, it saves right away · confidence is just a hint on where to double-check · originals and per-receipt detail are kept for 3 days, then cleared (the total stays).
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

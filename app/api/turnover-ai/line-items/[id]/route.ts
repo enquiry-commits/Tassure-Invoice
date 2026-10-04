@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
 import { createAdminClient } from '@/lib/supabase';
 
-// PATCH /api/turnover-ai/line-items/:id — the human-review step. Every
-// line already counts toward the project's turnover total the moment it's
-// extracted (Vincent: "不需要confirm 先，直接计算出Total") — Confirm just
-// clears the pending-review flag, Reject is the only action that excludes
-// a line (see app/api/turnover-ai/projects/[id]/route.ts's own comment).
-// `edit` always also confirms — there is no "corrected but still
-// unconfirmed" state, a staff member typing a real number in is itself
-// the acknowledgement.
+// PATCH /api/turnover-ai/line-items/:id. Vincent, removing the review
+// workflow entirely: "不需要 Peding 和 Confirm 就把他当成最简单的计算功能
+// ...如果高风险的他们自己会去查看原始的账单，直接修改金额就好，不需要多一
+// 步 SAVE，或者confirm" — every line counts toward the total the moment
+// it's extracted, confidence is reference only, and editing a value saves
+// immediately with no separate confirm step. `reject`/`restore` are the
+// only two actions left: Ignore excludes a line from the total (duplicate
+// or mistake), Restore undoes that. `edit` no longer touches
+// review_status at all — it just overwrites the edited_* values in place.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const account = await getRequestAccount(req);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
@@ -20,24 +21,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!Number.isFinite(lineItemId)) return NextResponse.json({ error: 'Invalid line item id.' }, { status: 400 });
 
   const body = await req.json().catch(() => ({})) as {
-    action?: 'confirm' | 'reject' | 'edit';
+    action?: 'reject' | 'restore' | 'edit';
     vendor?: string; txnDate?: string | null; amount?: number; currency?: string; gstAmount?: number | null;
   };
 
   const patch: Record<string, unknown> = { reviewed_by: account.email, reviewed_at: new Date().toISOString() };
-  if (body.action === 'confirm') {
-    patch.review_status = 'confirmed';
-  } else if (body.action === 'reject') {
+  if (body.action === 'reject') {
     patch.review_status = 'rejected';
+  } else if (body.action === 'restore') {
+    patch.review_status = 'unconfirmed';
   } else if (body.action === 'edit') {
-    patch.review_status = 'confirmed';
     if (typeof body.vendor === 'string') patch.edited_vendor_name = body.vendor.trim() || null;
     if (body.txnDate !== undefined) patch.edited_txn_date = body.txnDate || null;
     if (typeof body.amount === 'number' && Number.isFinite(body.amount)) patch.edited_amount = body.amount;
     if (typeof body.currency === 'string') patch.edited_currency = body.currency.trim().toUpperCase() || null;
     if (body.gstAmount !== undefined) patch.edited_gst_amount = typeof body.gstAmount === 'number' && Number.isFinite(body.gstAmount) ? body.gstAmount : null;
   } else {
-    return NextResponse.json({ error: 'action must be confirm, reject or edit.' }, { status: 400 });
+    return NextResponse.json({ error: 'action must be reject, restore or edit.' }, { status: 400 });
   }
 
   const supabase = createAdminClient();
