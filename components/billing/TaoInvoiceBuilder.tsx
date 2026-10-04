@@ -18,69 +18,45 @@
  * QuickBooks, so it must never be forked into a second copy.
  */
 import { useEffect, useRef, useState } from 'react';
-import { Plus, X, AlertCircle, Mail } from 'lucide-react';
+import { Plus, X, AlertCircle, Mail, Loader2 } from 'lucide-react';
 import { isValidEmail } from '@/lib/campaign-recipients';
 import { rollRecurringDescriptionForward } from '@/lib/invoice-period';
 import type { TaoCompanyRow } from '@/app/api/billing/tao/route';
 import type { TaoServiceHistory, TaoServiceHistoryItem } from '@/app/api/billing/tao/service-history/route';
 import { taoDefaultPicName, taoLineNeedsPic, type PicClassOption } from '@/lib/invoice-pic-class';
 import { composeTaoStatementMemo } from '@/lib/statement-memo';
+import type { TaoServiceCatalog } from '@/lib/tao-services';
 
-// Vincent, 2026-10-04, relaying his boss: "现在在系统内TAO开单的服务并不齐
-// 全" — confirmed live against QuickBooks TAO itself: the real Item catalog
-// there has 129 Service items, this list only ever surfaced 17 of them.
-// Every one of those 17 already matched a real QB item exactly (no silent
-// mismatch), so the fix is purely additive — every entry below is a Tax/
-// Disbursement item that ALREADY exists in QuickBooks TAO today (verified
-// by a live `SELECT * FROM Item WHERE Type = 'Service'` query), just never
-// exposed in this dropdown. No QuickBooks changes made or needed for this
-// part. Deliberately NOT adding the Secretary:/Other: categories (60+ more
-// items) — unclear whether TAO legitimately bills those or they're TAB/
-// TAC's own domain; Vincent's call, not assumed here.
-const TAO_PRODUCTS: { label: string; category: string; productService: string; service: string }[] = [
-  { label: 'Compilation Report Services', category: 'Accounts', productService: 'Accounts:Compilation Report Services', service: 'Accounts' },
-  { label: 'Yearly Accounts Services',    category: 'Accounts', productService: 'Accounts:Yearly Accounts Services',    service: 'Accounts' },
-  { label: 'Quarterly Accounts Services', category: 'Accounts', productService: 'Accounts:Quarterly Accounts Services', service: 'Accounts' },
-  { label: 'Monthly Accounts Services',   category: 'Accounts', productService: 'Accounts:Monthly Accounts Services',   service: 'Accounts' },
-  { label: 'Account Review',              category: 'Accounts', productService: 'Accounts:Account Review',              service: 'Accounts' },
-  { label: 'Corporate Tax Services',      category: 'Tax', productService: 'Tax:Corporate Tax Services',            service: 'Tax' },
-  { label: 'Personal Tax Services',       category: 'Tax', productService: 'Tax:Personal Tax Services',             service: 'Tax' },
-  { label: 'GST Submission Services',     category: 'Tax', productService: 'Tax:GST Submission Services',           service: 'Tax' },
-  { label: 'GST Application Services',    category: 'Tax', productService: 'Tax:GST Application Services',          service: 'Tax' },
-  { label: 'GST Audit',                   category: 'Tax', productService: 'Tax:GST Audit',                         service: 'Tax' },
-  { label: 'AIS Submission',              category: 'Tax', productService: 'Tax:AIS submission',                    service: 'Tax' },
-  { label: 'Form IR8A Preparation',       category: 'Tax', productService: 'Tax:Form IR8A preparation',              service: 'Tax' },
-  { label: 'IR21 Submission',             category: 'Tax', productService: 'Tax:IR21 submission',                   service: 'Tax' },
-  { label: 'Certificate of Residence',    category: 'Tax', productService: 'Tax:Certificate of Residence',           service: 'Tax' },
-  { label: 'Withholding Tax',             category: 'Tax', productService: 'Tax:Withholding Tax',                    service: 'Tax' },
-  { label: 'Dormant Tax Return',          category: 'Tax', productService: 'Tax:Dormant Tax Return',                 service: 'Tax' },
-  { label: 'Estimated Chargeable Income (ECI) Services', category: 'Tax', productService: 'Tax:Estimated chargeable income (ECI) Services', service: 'Tax' },
-  { label: 'Income Tax Audit',            category: 'Tax', productService: 'Tax:Income Tax Audit',                  service: 'Tax' },
-  { label: 'Waiver of Income Tax',        category: 'Tax', productService: 'Tax:Application for waiver of income tax', service: 'Tax' },
-  { label: 'ASK Audit and Registration',  category: 'Tax', productService: 'Tax:ASK Audit and Registration',        service: 'Tax' },
-  { label: 'ASK Renewal Audit',           category: 'Tax', productService: 'Tax:ASK Renewal Audit',                 service: 'Tax' },
-  { label: 'CRS/FATCA Registration',      category: 'Tax', productService: 'Tax:CRS and FATCA data registration',  service: 'Tax' },
-  { label: 'CRS/FATCA Submission',        category: 'Tax', productService: 'Tax:CRS and FATCA data submission',    service: 'Tax' },
-  { label: 'MAS Submission',              category: 'Tax', productService: 'Tax:MAS submission',                   service: 'Tax' },
-  { label: 'Tax Advisory',                category: 'Tax', productService: 'Tax:Tax Advisory',                     service: 'Tax' },
-  { label: 'Tax Query',                   category: 'Tax', productService: 'Tax:Tax Query',                        service: 'Tax' },
-  { label: 'Other Tax Services',          category: 'Tax', productService: 'Tax:Other Tax Services',                 service: 'Tax' },
-  { label: 'Reimbursement (OPE)',         category: 'Disbursement', productService: 'Disbursement:Reimbursement - OPE', service: 'Disbursement' },
-  { label: 'Reimbursement Control Account', category: 'Disbursement', productService: 'Disbursement:Reimbursement Control Account', service: 'Disbursement' },
-  { label: 'Bank Charges',                category: 'Disbursement', productService: 'Disbursement:Bank Charges',     service: 'Disbursement' },
-  { label: 'Bizfile',                     category: 'Disbursement', productService: 'Disbursement:Bizfile',         service: 'Disbursement' },
-  { label: 'Government Fee – Annual Return', category: 'Disbursement', productService: 'Disbursement:Government fee for filing Annual Return', service: 'Disbursement' },
-  { label: 'Government Fee – Application', category: 'Disbursement', productService: 'Disbursement:Government fee - Application fee', service: 'Disbursement' },
-  { label: 'Government Fee – Card/Visa',  category: 'Disbursement', productService: 'Disbursement:Government fee - Card issuance and multi-journey VIsa', service: 'Disbursement' },
-  { label: 'Government Fee (Other)',      category: 'Disbursement', productService: 'Disbursement:Government Fee (Other)', service: 'Disbursement' },
-  { label: 'Late Lodgement Penalty',      category: 'Disbursement', productService: 'Disbursement:Late lodgement penalty', service: 'Disbursement' },
-  { label: 'Late Submission of Tax Return', category: 'Disbursement', productService: 'Disbursement:Late Submission of Tax Return', service: 'Disbursement' },
-  { label: 'Extension of Time (AGM & AR)', category: 'Disbursement', productService: "Disbursement:Extension of time for AGM & AR", service: 'Disbursement' },
-  { label: 'Composition Amount',          category: 'Disbursement', productService: 'Disbursement:Composition amount', service: 'Disbursement' },
-  { label: 'Certificate of Incorporation', category: 'Disbursement', productService: 'Disbursement:Purchase of Certificate of Incorporation', service: 'Disbursement' },
-  { label: 'Certificate of Good Standing', category: 'Disbursement', productService: 'Disbursement:Purchase of Certificate of Good Standing', service: 'Disbursement' },
-  { label: 'Custom / Other…',             category: 'Other', productService: '',                                     service: 'Accounts' },
-];
+type CatalogEntry = { label: string; category: string; productService: string; service: string };
+
+// "Custom / Other…" is a UI-only fallback, never a real QuickBooks item —
+// kept exactly as it always behaved (lib/qb-invoice-conventions.ts's
+// pickItem() still applies for it). Everything else now comes LIVE from
+// QuickBooks itself (see fetchTaoCatalog below) instead of a hardcoded
+// list — Vincent, relaying his boss: "现在在系统内TAO开单的服务并不齐
+// 全", then, once "Add New Service" was proposed: "也要可以直接实时读
+// QuickBooks自己的项目清单". A hardcoded list could only ever be as
+// complete as whoever last updated the code; this can't go stale, and a
+// service added via "Add New Service" below shows up immediately.
+const CUSTOM_OTHER: CatalogEntry = { label: 'Custom / Other…', category: 'Other', productService: '', service: 'Accounts' };
+
+let catalogCache: CatalogEntry[] | null = null;
+let catalogPromise: Promise<CatalogEntry[]> | null = null;
+export function invalidateTaoCatalogCache() { catalogCache = null; catalogPromise = null; }
+function fetchTaoCatalog(): Promise<CatalogEntry[]> {
+  if (catalogCache) return Promise.resolve(catalogCache);
+  if (!catalogPromise) {
+    catalogPromise = fetch('/api/billing/tao/services').then(r => r.json())
+      .then((json: { categories?: TaoServiceCatalog }) => {
+        const entries: CatalogEntry[] = (json.categories ?? []).flatMap(group =>
+          group.items.map(item => ({ label: item.name, category: group.category, productService: item.fullyQualifiedName, service: group.category })));
+        catalogCache = [...entries, CUSTOM_OTHER];
+        return catalogCache;
+      })
+      .catch(() => { catalogPromise = null; return [CUSTOM_OTHER]; });
+  }
+  return catalogPromise;
+}
 
 type Line = {
   key: number;
@@ -109,7 +85,7 @@ type Line = {
 };
 
 let lineKeySeq = 0;
-function newLine(opt: typeof TAO_PRODUCTS[number]): Line {
+function newLine(opt: CatalogEntry): Line {
   return { key: ++lineKeySeq, label: opt.label, productService: opt.productService, service: opt.service, description: opt.label, rate: '', qty: '1', include: true, lastBilled: null };
 }
 // A history row's description gets its date/period rolled forward one cycle
@@ -117,7 +93,7 @@ function newLine(opt: typeof TAO_PRODUCTS[number]): Line {
 // use) so e.g. "YA2026" becomes "YA2027" and "Apr 2026 to Jun 2026" becomes
 // "Apr 2027 to Jun 2027" — a starting guess ACC can still edit, not an
 // automatic due-date decision.
-function lineFromHistory(h: TaoServiceHistoryItem, catalog: typeof TAO_PRODUCTS): Line {
+function lineFromHistory(h: TaoServiceHistoryItem, catalog: CatalogEntry[]): Line {
   const opt = catalog.find(x => x.productService === h.productService);
   const custom = catalog.find(x => x.category === 'Other')!;
   const baseDescription = h.description ?? (opt ? opt.label : (h.productService || custom.label));
@@ -172,7 +148,163 @@ function AutoTextarea({ value, onChange, style }: { value: string; onChange: (v:
 // ExpandedBillingRow.tsx) for the one real gap this surfaced (TAO's own
 // "TAO" prefix was never stripped there before).
 
+const SERVICE_CATEGORIES = ['Accounts', 'Tax', 'Disbursement', 'Secretary', 'Other'] as const;
 
+// "Add New Service" — Vincent: "能不能开一个新的收入科目...我觉得最好你先
+// 帮我在QB调研好，尽量还原符合QB的情况", then, approving the design:
+// "可以开放给全部人，不需要指定的人". Writes a REAL QuickBooks Item (and,
+// when asked, a real new Income Account nested under an existing one the
+// same way every other TAO service already is — see lib/tao-services.ts's
+// own header for the real structure this was verified against). Open to
+// any approved account — no extra permission check here beyond being
+// logged in, same as the rest of this builder.
+function AddServiceModal({ onClose, onCreated }: {
+  onClose: () => void;
+  onCreated: (entry: CatalogEntry) => void;
+}) {
+  const [category, setCategory] = useState<typeof SERVICE_CATEGORIES[number]>('Tax');
+  const [name, setName] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
+  const [description, setDescription] = useState('');
+  const [accountMode, setAccountMode] = useState<'existing' | 'new'>('new');
+  const [existingAccountId, setExistingAccountId] = useState('');
+  const [newAccountParentId, setNewAccountParentId] = useState('');
+  const [newAccountName, setNewAccountName] = useState('');
+  const [accounts, setAccounts] = useState<{ id: string; name: string }[] | null>(null);
+  const [suggested, setSuggested] = useState<Partial<Record<string, string>>>({});
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // A category with one dominant existing parent (Tax, Disbursement,
+  // Accounts) defaults to "create a new account under it" — the common,
+  // fast path. Secretary/Other have no single real default (verified live:
+  // Secretary alone splits across 4 different parents) — force an explicit
+  // pick instead of guessing one. Applied from the fetch callback and the
+  // category <select>'s own onChange (both real events), never from an
+  // effect reacting to state — avoids a setState-in-effect render cascade
+  // for something that only ever needs to happen once per real change.
+  const applySuggestionFor = (cat: string, suggestedMap: Partial<Record<string, string>>) => {
+    const s = suggestedMap[cat];
+    if (s) { setAccountMode('new'); setNewAccountParentId(s); } else { setNewAccountParentId(''); }
+  };
+  useEffect(() => {
+    fetch('/api/billing/tao/income-accounts').then(r => r.json())
+      .then(json => {
+        const suggestedMap = json.suggestedByCategory ?? {};
+        setAccounts(json.accounts ?? []);
+        setSuggested(suggestedMap);
+        applySuggestionFor(category, suggestedMap);
+      })
+      .catch(() => setAccounts([]));
+    // Deliberately once on mount only — `category` below is read fresh via
+    // closure for this one initial call; later changes go through the
+    // <select>'s own onChange instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const canSubmit = name.trim()
+    && (accountMode === 'existing' ? !!existingAccountId : !!newAccountParentId);
+
+  const submit = async () => {
+    setCreating(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/billing/tao/services', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category, name: name.trim(),
+          unitPrice: unitPrice.trim() ? Number(unitPrice) : null,
+          description: description.trim() || null,
+          incomeAccount: accountMode === 'existing'
+            ? { mode: 'existing', accountId: existingAccountId }
+            : { mode: 'new', parentAccountId: newAccountParentId, name: newAccountName.trim() || undefined },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? 'Could not create the service in QuickBooks.');
+      const item = json.item as { name: string; fullyQualifiedName: string };
+      onCreated({ label: item.name, category, productService: item.fullyQualifiedName, service: category });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const fieldStyle = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, boxSizing: 'border-box' as const, width: '100%' };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 300, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
+        <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add New Service</div>
+          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: '16px 20px 20px', display: 'grid', gap: 12 }}>
+          <div style={{ fontSize: 11, color: '#64748b', lineHeight: 1.6 }}>
+            {"Creates a real QuickBooks service item (visible on every future invoice, and in QuickBooks' own per-service reports)."}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 10, alignItems: 'center' }}>
+            <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Category</label>
+            <select value={category} onChange={e => { const next = e.target.value as typeof category; setCategory(next); applySuggestionFor(next, suggested); }} style={{ ...fieldStyle, cursor: 'pointer' }}>
+              {SERVICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Service name</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Transfer Pricing Documentation" style={fieldStyle} />
+
+            <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Default rate</label>
+            <input type="number" min={0} value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Optional" style={fieldStyle} />
+
+            <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Description</label>
+            <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional default line description" style={fieldStyle} />
+          </div>
+
+          <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', marginBottom: 6 }}>Income account</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                <input type="radio" checked={accountMode === 'new'} onChange={() => setAccountMode('new')} />
+                Create a new account for this service, under:
+              </label>
+              <select value={newAccountParentId} onChange={e => setNewAccountParentId(e.target.value)} disabled={accountMode !== 'new'}
+                style={{ ...fieldStyle, marginLeft: 20, width: 'calc(100% - 20px)', cursor: accountMode === 'new' ? 'pointer' : 'default', opacity: accountMode === 'new' ? 1 : 0.5 }}>
+                <option value="">{accounts === null ? 'Loading…' : 'Choose a parent account…'}</option>
+                {(accounts ?? []).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              {accountMode === 'new' && (
+                <input value={newAccountName} onChange={e => setNewAccountName(e.target.value)} placeholder="New account name (defaults to the service name)"
+                  style={{ ...fieldStyle, marginLeft: 20, width: 'calc(100% - 20px)' }} />
+              )}
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', marginTop: 4 }}>
+                <input type="radio" checked={accountMode === 'existing'} onChange={() => setAccountMode('existing')} />
+                Use an existing account:
+              </label>
+              <select value={existingAccountId} onChange={e => setExistingAccountId(e.target.value)} disabled={accountMode !== 'existing'}
+                style={{ ...fieldStyle, marginLeft: 20, width: 'calc(100% - 20px)', cursor: accountMode === 'existing' ? 'pointer' : 'default', opacity: accountMode === 'existing' ? 1 : 0.5 }}>
+                <option value="">{accounts === null ? 'Loading…' : 'Choose an account…'}</option>
+                {(accounts ?? []).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {error && (
+            <div style={{ padding: '9px 11px', borderRadius: 8, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 12, fontWeight: 600 }}>{error}</div>
+          )}
+
+          <button onClick={submit} disabled={!canSubmit || creating}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', cursor: (!canSubmit || creating) ? 'not-allowed' : 'pointer', background: (!canSubmit || creating) ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700 }}>
+            {creating ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Plus size={14} />}
+            {creating ? 'Creating in QuickBooks…' : 'Create Service'}
+          </button>
+        </div>
+      </div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
 
 export default function TaoInvoiceBuilder({ company, onGenerated }: { company: TaoCompanyRow; onGenerated: () => void }) {
   const [txnDate, setTxnDate] = useState(todayIso());
@@ -232,14 +364,23 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
   // with its description's period rolled forward one cycle as a starting
   // guess and its last-billed date kept visible so ACC can judge whether it's
   // needed again.
+  // Live QuickBooks catalog (see fetchTaoCatalog's own header) — fetched
+  // once per mount, cached across every other expanded row on the page.
+  const [catalog, setCatalog] = useState<CatalogEntry[]>([CUSTOM_OTHER]);
+  const [showAddService, setShowAddService] = useState(false);
+  useEffect(() => { fetchTaoCatalog().then(setCatalog); }, []);
+
   useEffect(() => {
     const controller = new AbortController();
     setHistoryLoading(true);
-    fetch(`/api/billing/tao/service-history?companyName=${encodeURIComponent(company.companyName)}`, { signal: controller.signal })
-      .then(res => res.json())
-      .then((json: Partial<TaoServiceHistory>) => {
+    Promise.all([
+      fetch(`/api/billing/tao/service-history?companyName=${encodeURIComponent(company.companyName)}`, { signal: controller.signal }).then(res => res.json()) as Promise<Partial<TaoServiceHistory>>,
+      fetchTaoCatalog(),
+    ])
+      .then(([json, liveCatalog]) => {
         const items: TaoServiceHistoryItem[] = json.services ?? [];
-        setLines(items.map(h => lineFromHistory(h, TAO_PRODUCTS)));
+        setCatalog(liveCatalog);
+        setLines(items.map(h => lineFromHistory(h, liveCatalog)));
         setPicHistory({
           lastClassByProduct: new Map(items.map(h => [h.productService, h.picClassName ?? null])),
           lastClassByService: json.picByService ?? {},
@@ -254,8 +395,8 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
     setLines(current => current.map(l => (l.key === key ? { ...l, ...patch } : l)));
   const addLine = (selectValue: string) => {
     const opt = selectValue === '__custom__'
-      ? TAO_PRODUCTS.find(x => x.category === 'Other')
-      : TAO_PRODUCTS.find(x => x.productService === selectValue);
+      ? catalog.find(x => x.category === 'Other')
+      : catalog.find(x => x.productService === selectValue);
     if (!opt) return;
     setLines(current => [...current, newLine(opt)]);
   };
@@ -473,21 +614,33 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#f8fafc' }}>
         <Plus size={13} style={{ color: '#0f766e' }} />
         <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add line</span>
-        <select value="" onChange={e => { if (e.target.value) addLine(e.target.value); }}
+        <select value="" onChange={e => { if (e.target.value === '__add_new__') setShowAddService(true); else if (e.target.value) addLine(e.target.value); }}
           style={{ ...inputStyle, minWidth: 260, cursor: 'pointer' }}>
           <option value="">Choose a QuickBooks item…</option>
-          {[...new Set(TAO_PRODUCTS.filter(x => x.category !== 'Other').map(x => x.category))].map(cat => (
+          {[...new Set(catalog.filter(x => x.category !== 'Other').map(x => x.category))].map(cat => (
             <optgroup key={cat} label={cat}>
-              {TAO_PRODUCTS.filter(x => x.category === cat).map(x => (
+              {catalog.filter(x => x.category === cat).map(x => (
                 <option key={x.productService} value={x.productService}>{x.label}</option>
               ))}
             </optgroup>
           ))}
-          {TAO_PRODUCTS.filter(x => x.category === 'Other').map(x => (
+          {catalog.filter(x => x.category === 'Other').map(x => (
             <option key={x.label} value={x.productService || '__custom__'}>{x.label}</option>
           ))}
+          <option value="__add_new__">+ Add New Service…</option>
         </select>
       </div>
+      {showAddService && (
+        <AddServiceModal
+          onClose={() => setShowAddService(false)}
+          onCreated={entry => {
+            invalidateTaoCatalogCache();
+            setCatalog(prev => [...prev, entry]);
+            setLines(current => [...current, newLine(entry)]);
+            setShowAddService(false);
+          }}
+        />
+      )}
 
       {/* Total + Generate */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
