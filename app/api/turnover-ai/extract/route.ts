@@ -33,13 +33,20 @@ export async function POST(req: NextRequest) {
   if (!ALLOWED_MIME.has(mediaType)) return NextResponse.json({ error: `Unsupported file type: ${mediaType || 'unknown'}. Use PDF, JPG, PNG or HEIC.` }, { status: 400 });
 
   const supabase = createAdminClient();
-  const { data: project, error: projectErr } = await supabase.from('turnover_projects').select('id, gst_enabled').eq('id', projectId).single();
+  const { data: project, error: projectErr } = await supabase.from('turnover_projects').select('id, name, client_company_id, gst_enabled').eq('id', projectId).single();
   if (projectErr || !project) return NextResponse.json({ error: 'Project not found.' }, { status: 404 });
 
   const buffer = Buffer.from(await file.arrayBuffer());
 
+  // client_name is still NOT NULL in production (scripts/add-turnover-ai.sql
+  // — the Projects migration never relaxed it). Leaving it out after the
+  // Projects restructure made every upload fail at this insert
+  // (docs/INVARIANTS.md INV-DATA-071); it records the project's name at
+  // upload time.
   const { data: docRow, error: docErr } = await supabase.from('turnover_documents').insert({
     project_id: projectId,
+    client_name: project.name,
+    client_company_id: project.client_company_id,
     file_name: file.name,
     mime_type: mediaType,
     status: 'processing',

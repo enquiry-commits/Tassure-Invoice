@@ -3778,6 +3778,22 @@ again.
   2026-10-05: 2 files → exactly 2 extract calls in dev StrictMode, 105 →
   exactly 100, the lost-files notice, and two "same.pdf" rows showing done +
   their own error.
+- **INV-DATA-071** — A restructure that stops writing a column must check
+  that column's live constraint, and a write path is only verified against
+  the REAL schema, never a mocked API. The Turnover AI Projects restructure
+  (7b24883, 2026-10-04) stopped writing `turnover_documents.client_name`,
+  but the column stayed NOT NULL with no default (scripts/add-turnover-ai.sql;
+  the projects migration only added `project_id`) — so every upload after it
+  failed at the document insert, and nobody saw: the projects that looked
+  fine ("AAAAAA" etc.) held OLD documents the migration had moved in, and
+  every browser check since (that session's and 2026-10-05's) mocked the
+  extract API entirely, so no real insert ever ran. Found 2026-10-05 by the
+  council reviewing the upload limits; confirmed read-only from the live
+  PostgREST schema (`GET /rest/v1/` → `definitions.turnover_documents.required`
+  lists `client_name`). Fixed by writing `client_name: project.name` (plus
+  `client_company_id`) on insert — harmless whatever the live state. Check:
+  for any insert, every column in that table's live `required` list without
+  a default must be provided.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
