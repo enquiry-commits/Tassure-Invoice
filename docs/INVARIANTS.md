@@ -2117,7 +2117,9 @@ again.
   move those clients' collection owner (and My Tasks SOA rows) to whoever
   keyed the invoice, and the daily soa-owners audit skips TAC. If ever
   created, use full names: short ones like "Jing Fei" don't resolve to a
-  staff member. On TAB the same fallback is harmless — TAB only accepts
+  staff member. Vincent, told both traps, chose not to create TAC Locations
+  for ACCOUNT/TAX for now (nor any Location for Tan Min Quan, who has none
+  in any book). On TAB the same fallback is harmless — TAB only accepts
   Corporate Secretarial owners, so ACCOUNT/TAX/Partners Locations are
   filtered out. `test-invoice-pic-class.ts` pins each book's live Location
   list and fails if (a) someone who can bill in a book lacks the Location
