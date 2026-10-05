@@ -22,6 +22,14 @@ const nextConfig: NextConfig = {
     '/api/post-incorporate/generate': [
       './templates/post-incorporate/**',
     ],
+    // The client invoice PDF's letterhead / banner / PayNow QR images
+    // (lib/client-invoice-pdf.ts reads them from disk at request time).
+    '/api/billing/client-invoice-pdf': [
+      './templates/client-invoice/**',
+    ],
+    '/api/billing/soa/pdf': [
+      './templates/client-invoice/**',
+    ],
     // pdfjs-dist (used by pdf-parse internally, and directly by
     // lib/bizfile-parse.ts for coordinate-based table extraction) resolves
     // its worker script's path at runtime via a dynamic require().resolve()

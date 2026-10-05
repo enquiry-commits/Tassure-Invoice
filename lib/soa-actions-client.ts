@@ -43,6 +43,19 @@ export async function loadSoaActor(): Promise<{ me: SoaActor; sender: SoaSender 
 // as before.
 export type SoaCompanySelector = QbCompany | 'ALL';
 
+// The SOA route keeps going when some invoices can't be merged, or must go
+// in as QuickBooks' own PDF (which prints accounting's split, INV-QB-029) —
+// it says so in headers that nothing used to read. Tell the person.
+function warnAboutSoaPdf(res: Response, label: string): void {
+  const missing = Number(res.headers.get('X-Soa-Merge-Errors') ?? 0);
+  const split = Number(res.headers.get('X-Soa-Split-Fallbacks') ?? 0);
+  if (!missing && !split) return;
+  const lines = [`${label}:`];
+  if (missing) lines.push(`• ${missing} invoice PDF(s) could not be added: ${decodeURIComponent(res.headers.get('X-Soa-Merge-Error-Detail') ?? '')}`);
+  if (split) lines.push(`• ${split} invoice(s) are QuickBooks' own PDF and show accounting's split lines: ${decodeURIComponent(res.headers.get('X-Soa-Split-Fallback-Detail') ?? '')}`);
+  window.alert(lines.join('\n'));
+}
+
 /** Download the merged SOA PDF — one QuickBooks book, or 'ALL' three combined. */
 export async function downloadSoaPdf(companyName: string, qbCompany: SoaCompanySelector): Promise<void> {
   const res = await fetch(`/api/billing/soa/pdf?companyName=${encodeURIComponent(companyName)}&company=${qbCompany}`);
@@ -50,6 +63,7 @@ export async function downloadSoaPdf(companyName: string, qbCompany: SoaCompanyS
     const j = await res.json().catch(() => ({}));
     throw new Error(j.error ?? 'Unable to generate the combined PDF.');
   }
+  warnAboutSoaPdf(res, `SOA (${qbCompany}) for ${companyName}`);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -93,6 +107,7 @@ async function fetchBookSoaPdf(companyName: string, book: QbCompany): Promise<Fi
     const j = await res.json().catch(() => ({}));
     throw new Error(j.error ?? `Unable to generate the ${book} SOA PDF.`);
   }
+  warnAboutSoaPdf(res, `SOA (${book}) for ${companyName}`);
   const blob = await res.blob();
   return new File([blob], `SOA (${book}) - ${companyName}.pdf`, { type: 'application/pdf' });
 }

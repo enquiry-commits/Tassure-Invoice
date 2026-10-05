@@ -2447,6 +2447,26 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **The invoice PDF clients receive can now show each service once at its
+  full amount — built, switched OFF until Vincent approves samples
+  (INV-QB-029).** Phase 2 of "这些还没有合并好吗？" (council-reviewed design).
+  `lib/client-invoice-model.ts` (which invoices are redrawn, BILL TO as
+  QuickBooks prints it), `lib/client-invoice-render.ts` (pdf-lib, QuickBooks'
+  layout measured on real TAB/TAC PDFs; letterhead/banner/PayNow QR as pixel
+  crops from `scripts/extract-client-invoice-assets.py`), `lib/client-invoice-pdf.ts`
+  (+ `/api/billing/client-invoice-pdf`); Email Drafts attachments, Billing
+  Drafts' Save PDF and the SOA PDF use it; fallbacks to QuickBooks' own PDF
+  tell staff why (and the SOA now also reports invoices that failed to merge).
+  `npx tsx test-client-invoice-model.ts` ALL PASSED; render census of the 154
+  open split invoices (read-only): 138 drawn, 2 model fallbacks, 14 refused
+  for Chinese characters; `npx tsc --noEmit`, eslint on every changed file
+  (only pre-existing findings) and `npm run build` clean. Side note: my own
+  phase-1 worktree cleanup deleted part of the SHARED `node_modules`
+  (playwright, @sparticuz/chromium) through a junction — found by tsc,
+  restored from the lockfile (`npm install`; package files unchanged),
+  lesson saved. **Open:** Vincent's sample review, then `CLIENT_INVOICE_PDF_MODE`
+  TAB/TAC → 'live'; a Chinese font for the 14 (needs a font download).
+
 - **Billing Drafts' editor shows each service once at its full amount, and
   saving puts accounting's split back untouched (INV-QB-029 extended,
   INV-QB-031).** Vincent, on 1X EXCHANGE TAB #02611112 (Secretary 175 +

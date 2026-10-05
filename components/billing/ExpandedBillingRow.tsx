@@ -1056,7 +1056,10 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
         }
       }
 
-      const response = await fetch(`/api/quickbooks/invoice-pdf?company=${invoice.company}&id=${encodeURIComponent(invoice.qbId)}`);
+      // The CLIENT's version (staff attach this file by hand): each service
+      // once at its full amount when accounting has split it (INV-QB-029).
+      const response = await fetch(`/api/billing/client-invoice-pdf?company=${invoice.company}&id=${encodeURIComponent(invoice.qbId)}`);
+      const fallback = response.headers.get('X-Client-Invoice-Fallback');
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
         throw new Error(error.error ?? `Unable to download ${invoice.company} invoice ${invoice.invoiceNo}`);
@@ -1077,6 +1080,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           ? `${invoice.company} invoice #${visibleInvoiceNo} saved to the selected location.`
           : `${invoice.company} invoice #${visibleInvoiceNo} sent to Chrome downloads.`,
       });
+      if (fallback) setPdfResult({ ok: true, msg: `${invoice.company} invoice #${visibleInvoiceNo} saved — as QuickBooks' own PDF, which shows accounting's split lines: ${decodeURIComponent(fallback)}.` });
     } catch (error) {
       setPdfResult({ ok: false, msg: error instanceof Error ? error.message : 'Unable to save invoice PDF.' });
     } finally {

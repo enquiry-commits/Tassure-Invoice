@@ -9,23 +9,13 @@ import { findCustomer, addrToLines } from '@/lib/qb-invoice-conventions';
 import { computeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
 import { LEGAL_NAME } from '@/lib/soa-export';
 import { drawStatementCoverPage, combineStatementRows, type StatementRow } from '@/lib/statement-pdf';
+import { getClientInvoicePdf } from '@/lib/client-invoice-pdf';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
   : 'https://quickbooks.api.intuit.com';
 
-async function fetchInvoicePdf(company: QbCompany, invoiceId: string): Promise<ArrayBuffer> {
-  const token = await getValidToken(company);
-  if (!token) throw new Error(`QuickBooks ${company} not connected`);
-  const res = await fetch(`${QB_BASE}/v3/company/${token.realm_id}/invoice/${invoiceId}/pdf?minorversion=65`, {
-    headers: { Authorization: `Bearer ${token.access_token}`, Accept: 'application/pdf' },
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`QuickBooks ${company} PDF request failed for invoice ${invoiceId}`);
-  return res.arrayBuffer();
-}
-
-// Same pattern as fetchInvoicePdf, QuickBooks' own symmetric endpoint for a
+// Same pattern as lib/client-invoice-pdf.ts's fetchQuickBooksInvoicePdf, QuickBooks' own symmetric endpoint for a
 // CreditMemo's official PDF. Added 2026-09-15 so an unapplied Credit Note
 // merges into the same statement as its own real, official QuickBooks
 // document — not a number we computed ourselves — the client sees exactly
@@ -286,11 +276,20 @@ export async function GET(req: NextRequest) {
   }
 
   const errors: string[] = [];
+  // Invoices go in as the CLIENT's version — each service once at its full
+  // amount when accounting has split it (INV-QB-029); splitFallbacks lists
+  // split invoices that still had to go in as QuickBooks' own PDF.
+  const splitFallbacks: string[] = [];
   for (const item of mergeItems) {
     try {
-      const buf = item.kind === 'invoice'
-        ? await fetchInvoicePdf(item.qbCompany as QbCompany, item.id)
-        : await fetchCreditMemoPdf(item.qbCompany as QbCompany, item.id);
+      let buf: ArrayBuffer | Uint8Array;
+      if (item.kind === 'invoice') {
+        const pdf = await getClientInvoicePdf(item.qbCompany as QbCompany, item.id);
+        if (pdf.fallbackReason) splitFallbacks.push(`${item.qbCompany} #${item.docLabel}: ${pdf.fallbackReason}`);
+        buf = pdf.bytes;
+      } else {
+        buf = await fetchCreditMemoPdf(item.qbCompany as QbCompany, item.id);
+      }
       const src = await PDFDocument.load(buf);
       const pages = await merged.copyPages(src, src.getPageIndices());
       for (const page of pages) merged.addPage(page);
@@ -340,6 +339,9 @@ export async function GET(req: NextRequest) {
       // Surfaced so the UI can warn if some (but not all) invoices failed to
       // merge, without failing the whole download.
       'X-Soa-Merge-Errors': String(errors.length),
+      ...(errors.length ? { 'X-Soa-Merge-Error-Detail': encodeURIComponent(errors.join(' | ').slice(0, 1500)) } : {}),
+      'X-Soa-Split-Fallbacks': String(splitFallbacks.length),
+      ...(splitFallbacks.length ? { 'X-Soa-Split-Fallback-Detail': encodeURIComponent(splitFallbacks.join(' | ').slice(0, 1500)) } : {}),
     },
   });
 }

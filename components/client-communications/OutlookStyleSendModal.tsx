@@ -59,7 +59,7 @@ function RecipientField({ value, onChange }: { value: string; onChange: (v: stri
   );
 }
 
-function AttachmentCard({ fileName, byteSize, previewUrl, onRemove }: { fileName: string; byteSize: number | null; previewUrl: string | null; onRemove?: () => void }) {
+function AttachmentCard({ fileName, byteSize, previewUrl, onRemove, notice }: { fileName: string; byteSize: number | null; previewUrl: string | null; onRemove?: () => void; notice?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', minWidth: 210, maxWidth: 260, background: '#fff' }}>
       <button
@@ -73,6 +73,7 @@ function AttachmentCard({ fileName, byteSize, previewUrl, onRemove }: { fileName
       <div style={{ minWidth: 0, flex: 1 }}>
         <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: previewUrl ? 'underline' : 'none', textDecorationColor: '#cbd5e1' }} title={fileName}>{fileName}</div>
         <div style={{ fontSize: 10, color: '#94a3b8' }}>{byteSize == null ? ' ' : formatSize(byteSize)}</div>
+        {notice && <div style={{ fontSize: 10, color: '#b45309', marginTop: 2, maxWidth: 260, whiteSpace: 'normal' }}>{notice}</div>}
       </div>
       </button>
       {onRemove && (
@@ -295,9 +296,9 @@ export default function OutlookStyleSendModal({
     }
   };
 
-  const attachmentEntries: { key: string; fileName: string; byteSize: number | null; previewUrl: string | null; onRemove?: () => void }[] = [
+  const attachmentEntries: { key: string; fileName: string; byteSize: number | null; previewUrl: string | null; onRemove?: () => void; notice?: string }[] = [
     ...(prepared?.systemAttachments ?? [])
-      .map((a: PreparedAttachment, i: number) => ({ key: `sys-${i}`, fileName: a.fileName, byteSize: a.byteSize, previewUrl: systemPreviewUrls[i] ?? null, onRemove: () => setExcludedSystemIndices(prev => new Set(prev).add(i)) }))
+      .map((a: PreparedAttachment, i: number) => ({ key: `sys-${i}`, fileName: a.fileName, byteSize: a.byteSize, previewUrl: systemPreviewUrls[i] ?? null, onRemove: () => setExcludedSystemIndices(prev => new Set(prev).add(i)), notice: a.notice }))
       .filter((_, i) => !excludedSystemIndices.has(i)),
     ...manualFiles.map((f, i) => ({ key: `manual-${i}`, fileName: f.name, byteSize: f.size, previewUrl: manualPreviewUrls[i] ?? null, onRemove: () => setManualFiles(prev => prev.filter((_, idx) => idx !== i)) })),
     ...(includeStanding ? [{ key: 'standing', fileName: STANDING_ATTACHMENT_NAME, byteSize: standingSize, previewUrl: STANDING_ATTACHMENT_SRC, onRemove: () => setIncludeStanding(false) }] : []),
@@ -431,7 +432,7 @@ export default function OutlookStyleSendModal({
           {preparing ? (
             <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Resolving attachments…</span>
           ) : (
-            attachmentEntries.map(a => <AttachmentCard key={a.key} fileName={a.fileName} byteSize={a.byteSize} previewUrl={a.previewUrl} onRemove={a.onRemove} />)
+            attachmentEntries.map(a => <AttachmentCard key={a.key} fileName={a.fileName} byteSize={a.byteSize} previewUrl={a.previewUrl} onRemove={a.onRemove} notice={a.notice} />)
           )}
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#173b63', fontSize: 11.5, fontWeight: 700, border: '1px dashed #cbd5e1', borderRadius: 6, padding: '8px 12px' }}>
             <Paperclip size={14} />

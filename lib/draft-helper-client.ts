@@ -133,6 +133,10 @@ export interface PreparedAttachment {
   fileName: string;
   base64: string;
   byteSize: number;
+  // Set when this invoice is split by accounting (Deferred Revenue) but the
+  // system had to attach QuickBooks' own PDF, which prints the split — shown
+  // to staff next to the attachment (INV-QB-029).
+  notice?: string;
 }
 
 async function fileToAttachment(file: File): Promise<PreparedAttachment> {
@@ -148,7 +152,9 @@ async function fetchSystemAttachments(d: DraftLike): Promise<PreparedAttachment[
   // as TAB/TAC once connected, see app/api/quickbooks/invoice-pdf/route.ts.
   const downloadableRefs = (d.invoice_refs ?? []).filter(r => r.qbInvoiceId);
   return Promise.all(downloadableRefs.map(async r => {
-    const res = await fetch(`/api/quickbooks/invoice-pdf?company=${r.qbCompany}&id=${encodeURIComponent(r.qbInvoiceId!)}`);
+    // The CLIENT's version: each service once at its full amount (INV-QB-029).
+    const res = await fetch(`/api/billing/client-invoice-pdf?company=${r.qbCompany}&id=${encodeURIComponent(r.qbInvoiceId!)}`);
+    const fallback = res.headers.get('X-Client-Invoice-Fallback');
     if (!res.ok) throw new Error(`Unable to download ${r.qbCompany} ${r.invoiceNo}.`);
     const buf = await res.arrayBuffer();
     return {
@@ -160,6 +166,7 @@ async function fetchSystemAttachments(d: DraftLike): Promise<PreparedAttachment[
       ),
       base64: arrayBufferToBase64(buf),
       byteSize: buf.byteLength,
+      ...(fallback ? { notice: `QuickBooks' own PDF — it shows accounting's split lines: ${decodeURIComponent(fallback)}` } : {}),
     };
   }));
 }

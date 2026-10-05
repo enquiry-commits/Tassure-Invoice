@@ -1,0 +1,81 @@
+import 'server-only';
+
+import fs from 'fs/promises';
+import path from 'path';
+import { getValidToken, qbQuery, type QbCompany } from './quickbooks';
+import { buildClientInvoiceModel, type QbInvoiceJson } from './client-invoice-model';
+import { renderClientInvoicePdf, ClientInvoiceRenderError, type ClientInvoiceAssets } from './client-invoice-render';
+
+// The invoice PDF a CLIENT receives (docs/INVARIANTS.md INV-QB-029): the
+// system's own drawing when the invoice carries accounting's Deferred
+// Revenue twins (each service once, full amount), QuickBooks' own PDF
+// otherwise. Used by every client-facing path: Email Drafts attachments and
+// Billing Drafts' Save PDF (via /api/billing/client-invoice-pdf) and the SOA
+// PDF. Staff-only views (invoice chips) keep opening QuickBooks' original.
+
+// Per-book switch — 'off' sends QuickBooks' own PDF exactly as before.
+// Turned on only after Vincent has compared real samples side by side.
+export const CLIENT_INVOICE_PDF_MODE: Record<QbCompany, 'off' | 'live'> = { TAB: 'off', TAC: 'off', TAO: 'off' };
+
+export type ClientInvoicePdf = {
+  bytes: Uint8Array;
+  source: 'system' | 'quickbooks';
+  // Set only when the invoice HAS a deferred split but QuickBooks' own PDF
+  // (which prints it) is being sent anyway — staff are told why.
+  fallbackReason: string | null;
+};
+
+const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
+  ? 'https://sandbox-quickbooks.api.intuit.com'
+  : 'https://quickbooks.api.intuit.com';
+
+export async function fetchQuickBooksInvoicePdf(company: QbCompany, invoiceId: string): Promise<Uint8Array> {
+  const token = await getValidToken(company);
+  if (!token) throw new Error(`QuickBooks ${company} not connected`);
+  const res = await fetch(`${QB_BASE}/v3/company/${token.realm_id}/invoice/${invoiceId}/pdf?minorversion=65`, {
+    headers: { Authorization: `Bearer ${token.access_token}`, Accept: 'application/pdf' },
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`QuickBooks ${company} PDF request failed for invoice ${invoiceId}`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+const assetCache = new Map<string, ClientInvoiceAssets>();
+async function loadAssets(book: 'TAB' | 'TAC'): Promise<ClientInvoiceAssets> {
+  const hit = assetCache.get(book);
+  if (hit) return hit;
+  const dir = path.join(process.cwd(), 'templates', 'client-invoice');
+  const read = (kind: string) => fs.readFile(path.join(dir, `${book.toLowerCase()}-${kind}.png`)).then(b => new Uint8Array(b));
+  const [header, footer, qr] = await Promise.all([read('header'), read('footer'), read('qr')]);
+  const assets = { header, footer, qr };
+  assetCache.set(book, assets);
+  return assets;
+}
+
+async function termName(company: QbCompany, termId: unknown): Promise<string | null> {
+  const id = String(termId ?? '');
+  if (!/^\d+$/.test(id)) return null;
+  const result = await qbQuery(`SELECT * FROM Term WHERE Id = '${id}'`, company);
+  const name = result?.rows?.[0]?.Name;
+  return typeof name === 'string' && name.trim() ? name.trim() : null;
+}
+
+export async function getClientInvoicePdf(company: QbCompany, invoiceId: string): Promise<ClientInvoicePdf> {
+  const original = async (fallbackReason: string | null): Promise<ClientInvoicePdf> => ({
+    bytes: await fetchQuickBooksInvoicePdf(company, invoiceId), source: 'quickbooks', fallbackReason,
+  });
+  if (CLIENT_INVOICE_PDF_MODE[company] !== 'live') return original(null);
+
+  const result = await qbQuery(`SELECT * FROM Invoice WHERE Id = '${invoiceId}'`, company);
+  const invoice = result?.rows?.[0] as (QbInvoiceJson & { SalesTermRef?: { value?: string } }) | undefined;
+  if (!invoice) return original('the invoice could not be read from QuickBooks');
+  const decision = buildClientInvoiceModel(invoice, company, invoice.SalesTermRef?.value ? await termName(company, invoice.SalesTermRef.value) : null);
+  if (decision.kind === 'quickbooks') return original(decision.reason);
+  try {
+    const bytes = await renderClientInvoicePdf(decision.model, await loadAssets(decision.model.book));
+    return { bytes, source: 'system', fallbackReason: null };
+  } catch (err) {
+    const why = err instanceof ClientInvoiceRenderError ? err.message : `the system's PDF could not be drawn (${err instanceof Error ? err.message : String(err)})`;
+    return original(why);
+  }
+}

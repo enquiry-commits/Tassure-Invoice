@@ -2212,9 +2212,34 @@ again.
   edited description/PIC) plus its twin(s) exactly as they were; a changed
   amount moves onto the service line only (700 → 800 = 275 + 525) and
   Chelsea re-splits in QuickBooks ("这个你不需要操心，Chelsea 会自己到QB额外修
-  改"); an amount at or below the deferred part is refused. Next (open): the
-  invoice PDF clients receive (Email Drafts attachments, Billing Drafts'
-  Save PDF, the SOA PDF) drawn by the system with the same rule.
+  改"); an amount at or below the deferred part is refused.
+
+  The invoice PDF CLIENTS receive (built 2026-10-05, same rule): Email
+  Drafts attachments and Billing Drafts' Save PDF go through
+  `/api/billing/client-invoice-pdf`, the SOA PDF through the same
+  `lib/client-invoice-pdf.ts` `getClientInvoicePdf()`; staff-only invoice
+  chips keep QuickBooks' original. An invoice with no deferred line is
+  QuickBooks' own PDF untouched. A split one is DRAWN (pdf-lib,
+  `lib/client-invoice-render.ts`) in QuickBooks' own layout — US Letter,
+  positions/sizes/colours measured on real TAB #02610986 and TAC #02680320
+  — from `lib/client-invoice-model.ts`'s rows; the letterhead (Chinese
+  company name), the service banner and the PayNow QR are PIXEL crops of
+  QuickBooks' PDF (`scripts/extract-client-invoice-assets.py` →
+  `templates/client-invoice/`), never copied PDF content, so no text of the
+  sample invoice can ride along hidden; the QR is identical across invoices
+  of a book (checked: carries no amount). Bank details are real text. The
+  printed total must equal QuickBooks' TotalAmt to the cent. Anything not
+  exactly drawable — an unpaired twin, a discount/group/text line, tax,
+  non-SGD, unreadable terms, totals off by a cent, a character Helvetica has
+  no glyph for (Chinese names, full-width （）【】) — sends QuickBooks' own
+  PDF and TELLS staff why (Email Drafts: a note under the attachment; Save
+  PDF: the result message; SOA: an alert that now also reports invoices that
+  failed to merge, `X-Soa-Merge-Errors`, which no page used to read).
+  Render census over the 154 open split invoices (read-only, synced lines):
+  138 drawn (121 one page, 17 two), 2 model fallbacks, 14 refused for
+  Chinese text. Per-book switch `CLIENT_INVOICE_PDF_MODE` ships 'off' (=
+  QuickBooks' PDF as before) until Vincent approves real samples side by
+  side.
 - **INV-QB-031** — Billing Drafts' invoice editor saves by REPLACING the
   QuickBooks invoice's whole Line list (`app/api/quickbooks/update-invoice`
   sparse update, `Line` sent in full), so any line the editor drops or can't
