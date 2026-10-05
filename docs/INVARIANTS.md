@@ -2152,8 +2152,19 @@ again.
   after confirming with Chelsea (a client asked about TAB #02610986, Novozee:
   address 180 + 180, payroll 300 + 300): "服务是不能分开两个显示的，要按照原装
   的INVOICE 金额显示…同一个服务不需要让客户知道我们把金额分成两份记录，那个是
-  我们公司内部的操作，不然客户会疑惑". His decision (AskUserQuestion): invoices
-  are no longer split; the deferral is booked by journal entry. Facts behind
+  我们公司内部的操作，不然客户会疑惑". **The split itself STAYS — it is
+  accounting's, not the system's.** Vincent, same day, correcting an earlier
+  reading (that invoices would stop being split and the deferral move to a
+  journal entry — wrong; nothing was changed in QuickBooks on that basis):
+  "那个后续拆开两行是必然的，这个是后续Chelsea 会做的东西，而系统不需要管这些拆开
+  两行的情况，系统只需要记得原本的金额就对了…主要是要给客户看到的是完整的金额
+  就好，不能显示两行的金额情况给客户知道，尤其是在Email Drafts, SOA 也是一样" and
+  "分开只是chelsea 为了公司的记账要求做的额外的多余操作，不是要你记录在系统的
+  数据，这个操作本身和系统没有关系的". So: never edit, merge or "fix" the split
+  in QuickBooks, never ask accounting to stop it, never record it as system
+  data; the SYSTEM must present each service once at its full amount
+  (service line + its deferred twin) in everything a client receives —
+  Email Drafts attachments and the SOA above all. Facts behind
   it (read-only, same day): this system never split a line —
   create-invoice refuses any line without a description
   (`app/api/quickbooks/create-invoice/route.ts:363`), while the deferred
@@ -2164,18 +2175,13 @@ again.
   emails attach and what the SOA PDF appends
   (`app/api/billing/soa/pdf/route.ts` fetchInvoicePdf). In 2026, 438 invoices
   carry a blank deferred line (TAB 372, TAC 66; 122 of them generated here,
-  split later); 132 open invoices still do (TAB 114, TAC 18). Rules: never
-  add a deferral split to an invoice (no "auto-deferral" feature), never
-  render one service as two amounts anywhere a client looks, and leave
-  already-issued split invoices as they are — changing them is
-  accounting's call, not a sync or backfill. The renewal-fee logic keeps
-  handling both shapes (`buildAnnualRenewalFeeMap`, lib/invoice-period.ts:
-  350+350 split and an unsplit 700 give the same fee, checked with the real
-  function); its one dependency on the twin: a hand-typed renewal with no
-  readable period and no AR fee counts as annual ONLY through its deferred
-  line (15 of 1,275 TAB/TAC renewal groups in 2026), so without the split it
-  is no longer recognised (INV-QB-004) — invoices typed in QuickBooks should
-  state the service period, as the ones generated here already do.
+  split later); 154 open invoices carry a deferred line. The deferred items
+  post to LIABILITY accounts (Deferred Revenue:…), reversed by accounting's
+  half-yearly reclassification JVs (JV26-105, JV26-177) — one more reason the
+  invoice lines are accounting's and never the system's to change. The
+  renewal-fee logic already reads the original amount back from the split
+  (`buildAnnualRenewalFeeMap`, lib/invoice-period.ts: 350 + deferred 350 =
+  700, the same as an unsplit 700).
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
