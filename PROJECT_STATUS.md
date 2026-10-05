@@ -2467,6 +2467,26 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **SOA PDF cover now prints Chinese client names (INV-DOC-011).** Vincent
+  saw 思店科技(杭州)有限公司 shown correctly on the SOA web page; the PDF
+  cover clients receive printed it as "()" and 江苏日月照明电器有限公司 as
+  "(name unavailable)" (Helvetica can't print Chinese; `safeText()` dropped
+  the characters), and dropped full-width （）【】 from 11 open-invoice
+  descriptions. He chose "现在在这里修". The Chinese-text logic moved out of
+  the invoice renderer into `lib/pdf-chinese-text.ts` (font loader,
+  per-character runs, both pdf-lib workarounds, plus faux bold for the bold
+  TO name) and the SOA cover uses it; Helvetica text keeps its exact old
+  calls and `safeText()` stays the fallback. Verified on read-only data: all
+  472 SOA cover pages old vs new — 458 byte-identical, the other 14 exactly
+  those Chinese names/brackets; all 152 redrawn invoices still
+  byte-identical after the refactor. New `test-statement-cover-chinese.ts`
+  (13 checks; 7 fail on the old code), plus `test-client-invoice-model.ts`,
+  `test-deferred-pairing.ts`, `test-statement-memo.ts` pass; `npx tsc
+  --noEmit`, eslint and `npm run build` clean (font traced into the SOA
+  route). Not yet seen on a downloaded production SOA (REG-036); the
+  CompanyName/address lines come live from QuickBooks and weren't in the
+  local renders.
+
 - **Client invoice PDF now prints Chinese text — 152 of the 154 open split
   invoices are redrawn (was 138) (INV-QB-029).** Vincent approved adding a
   Chinese font ("加，允许下载（推荐）"): Google's Noto Sans SC (OFL licence

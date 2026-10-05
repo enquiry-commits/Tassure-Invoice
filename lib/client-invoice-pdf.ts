@@ -5,6 +5,7 @@ import path from 'path';
 import { getValidToken, qbQuery, type QbCompany } from './quickbooks';
 import { buildClientInvoiceModel, type QbInvoiceJson } from './client-invoice-model';
 import { renderClientInvoicePdf, ClientInvoiceRenderError, type ClientInvoiceAssets } from './client-invoice-render';
+import { loadChineseFont } from './pdf-chinese-text';
 
 // The invoice PDF a CLIENT receives (docs/INVARIANTS.md INV-QB-029): the
 // system's own drawing when the invoice carries accounting's Deferred
@@ -43,21 +44,14 @@ export async function fetchQuickBooksInvoicePdf(company: QbCompany, invoiceId: s
 
 const TEMPLATE_DIR = path.join(process.cwd(), 'templates', 'client-invoice');
 
-// The Chinese font (10.6 MB) is read once, and only when an invoice needs it;
-// a failed read isn't cached, so the next invoice tries again.
-let cjkFontBytes: Promise<Uint8Array> | null = null;
-const cjkFont = () => (cjkFontBytes ??= fs.readFile(path.join(TEMPLATE_DIR, 'NotoSansSC-Regular.ttf')).then(
-  b => new Uint8Array(b),
-  err => { cjkFontBytes = null; throw err; },
-));
-
 const assetCache = new Map<string, ClientInvoiceAssets>();
 async function loadAssets(book: 'TAB' | 'TAC'): Promise<ClientInvoiceAssets> {
   const hit = assetCache.get(book);
   if (hit) return hit;
   const read = (kind: string) => fs.readFile(path.join(TEMPLATE_DIR, `${book.toLowerCase()}-${kind}.png`)).then(b => new Uint8Array(b));
   const [header, footer, qr] = await Promise.all([read('header'), read('footer'), read('qr')]);
-  const assets = { header, footer, qr, cjkFont };
+  // The Chinese font (10.6 MB) is read once, and only when an invoice needs it.
+  const assets = { header, footer, qr, cjkFont: loadChineseFont };
   assetCache.set(book, assets);
   return assets;
 }

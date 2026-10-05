@@ -4,6 +4,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { AGING_BUCKETS, TXN_TYPE_LABELS, emptyAgingTotals } from '@/lib/soa';
 import type { SoaCompanyRow } from '@/lib/soa-data';
+import { prepareChineseText, wrapText, loadChineseFont, type ChineseText } from '@/lib/pdf-chinese-text';
 
 // pdf-lib's StandardFonts (Helvetica) only encode WinAnsi — page.drawText()
 // throws SYNCHRONOUSLY for any character outside it (confirmed against
@@ -17,8 +18,9 @@ import type { SoaCompanyRow } from '@/lib/soa-data';
 // out to a real paying client. Filters to only what the given font can
 // actually encode; a name that's entirely unencodable renders as the
 // fallback rather than a blank line, so it's visibly a gap, not invisible.
-// Full CJK glyph rendering would need a real embedded font (pdf-lib +
-// fontkit + a bundled font file) — deliberately out of scope for this round.
+// Chinese text itself is drawn with an embedded font since 2026-10-05
+// (lib/pdf-chinese-text.ts, see drawStatementCoverPage); this stays the
+// fallback for anything that font can't print, or if it fails to load.
 export function safeText(font: PDFFont, text: string): string {
   try { font.encodeText(text); return text; } catch { /* fall through */ }
   let out = '';
@@ -151,9 +153,25 @@ export async function drawStatementCoverPage(
   qbCompanyName: string | null,
   billAddrLines: string[],
   invoiceDetails: Map<string, { invoiceNo: string; description: string | null }> = new Map(),
+  loadFont: (() => Promise<Uint8Array>) | null = loadChineseFont,
 ) {
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  // A Chinese-registered client's QuickBooks name (e.g. 思店科技(杭州)有限
+  // 公司, which safeText() alone reduced to "()") and full-width （）【】 in
+  // descriptions are drawn with the embedded Chinese font; text Helvetica
+  // prints is drawn exactly as before. If the font can't load, or can't
+  // print a character either, that text falls back to safeText() — the
+  // Statement itself never fails over it.
+  const chinese: ChineseText | null = loadFont
+    ? await prepareChineseText(pdfDoc, font, [customerDisplayName, qbCompanyName ?? '', ...billAddrLines, ...[...invoiceDetails.values()].map(d => d.description?.split('\n').map(l => l.trim()).find(Boolean) ?? '')], loadFont).catch(() => null)
+    : null;
+  const helveticaCan = (f: PDFFont, s: string) => { try { f.encodeText(s); return true; } catch { return false; } };
+  // s wrapped for the Chinese font (whitespace collapsed, as wrapLine does),
+  // or null when it's plain Helvetica text (drawn as before) or not
+  // printable (safeText() as before).
+  const chineseLines = (s: string, f: PDFFont, size: number, maxWidth: number): string[] | null =>
+    chinese && !helveticaCan(f, s) && chinese.canPrint(s) ? wrapText(s.split(/\s+/).filter(Boolean).join(' '), t => chinese.widthOf(t, f, size), maxWidth) : null;
   const left = 50;
 
   let page = pdfDoc.addPage();
@@ -246,7 +264,9 @@ export async function drawStatementCoverPage(
   // maxWidth guards against a long real company name running into the
   // DATE/TOTAL DUE column beside it (metaX) — wraps to a 2nd line instead
   // of overlapping.
-  page.drawText(safeText(boldFont, customerDisplayName), { x: left, y, size: 10, font: boldFont, maxWidth: metaX - left - 20, lineHeight: 12 });
+  const nameLines = chineseLines(customerDisplayName, boldFont, 10, metaX - left - 20);
+  if (nameLines) nameLines.forEach((line, i) => chinese!.draw(page, line, left, y - i * 12, 10, boldFont));
+  else page.drawText(safeText(boldFont, customerDisplayName), { x: left, y, size: 10, font: boldFont, maxWidth: metaX - left - 20, lineHeight: 12 });
   y -= 15;
   // The customer's real QuickBooks Customer.CompanyName field — a distinct
   // field from DisplayName, printed a second time right below it. Vincent,
@@ -261,7 +281,10 @@ export async function drawStatementCoverPage(
   // even when they're equal, so hiding a genuine repeat would itself be a
   // mismatch), regular weight like the address lines below it, not bold.
   if (qbCompanyName) {
-    page.drawText(safeText(font, qbCompanyName), { x: left, y, size: 10, font, maxWidth: metaX - left - 20 });
+    // 24 = pdf-lib's own line height for the wrapped drawText below.
+    const companyLines = chineseLines(qbCompanyName, font, 10, metaX - left - 20);
+    if (companyLines) companyLines.forEach((line, i) => chinese!.draw(page, line, left, y - i * 24, 10, font));
+    else page.drawText(safeText(font, qbCompanyName), { x: left, y, size: 10, font, maxWidth: metaX - left - 20 });
   }
   // ENCLOSED — same fixed label on every real QuickBooks Statement
   // regardless of what's being sent, printed one row below TOTAL DUE (same
@@ -280,8 +303,10 @@ export async function drawStatementCoverPage(
   // Wrapping here first means every visual line this function draws is a
   // single real drawText() call this function itself advances `y` for.
   for (const line of billAddrLines) {
-    for (const subLine of wrapLine(font, safeText(font, line), 10, metaX - left - 20)) {
-      page.drawText(subLine, { x: left, y, size: 10, font });
+    const chineseAddr = chineseLines(line, font, 10, metaX - left - 20);
+    for (const subLine of chineseAddr ?? wrapLine(font, safeText(font, line), 10, metaX - left - 20)) {
+      if (chineseAddr) chinese!.draw(page, subLine, left, y, 10, font);
+      else page.drawText(subLine, { x: left, y, size: 10, font });
       y -= 13;
     }
   }
@@ -342,16 +367,20 @@ export async function drawStatementCoverPage(
     const numKey = /^\d+$/.test(item.docNumber ?? '') ? String(Number(item.docNumber)) : null;
     const details = item.txnType === 'Invoice' && numKey ? invoiceDetails.get(numKey) : undefined;
     const firstDescLine = details?.description?.split('\n').map(l => l.trim()).find(Boolean);
-    const description = firstDescLine
+    const chineseDesc = firstDescLine ? chineseLines(`Invoice No.${details!.invoiceNo}: Due ${dueDateFmt}. ${firstDescLine}`, font, 9, itemColWidths[1] - 8) : null;
+    const description = () => firstDescLine
       ? `Invoice No.${safeText(font, details!.invoiceNo)}: Due ${dueDateFmt}. ${safeText(font, firstDescLine)}`
       : `${safeText(font, item.docNumber)} (${safeText(font, TXN_TYPE_LABELS[item.txnType] ?? item.txnType)})`;
     // Manually wrapped (same reasoning as the TO block's billAddrLines
     // above) so a long real description's extra visual line(s) are
     // reflected in `y` before the NEXT item row is drawn, instead of
     // silently overlapping it.
-    const descLines = wrapLine(font, description, 9, itemColWidths[1] - 8);
+    const descLines = chineseDesc ?? wrapLine(font, description(), 9, itemColWidths[1] - 8);
     page.drawText(itemDate, { x: itemCols[0], y, size: 9, font });
-    descLines.forEach((descLine, i) => page.drawText(descLine, { x: itemCols[1], y: y - i * 11, size: 9, font }));
+    descLines.forEach((descLine, i) => {
+      if (chineseDesc) chinese!.draw(page, descLine, itemCols[1], y - i * 11, 9, font);
+      else page.drawText(descLine, { x: itemCols[1], y: y - i * 11, size: 9, font });
+    });
     page.drawText(amountText, { x: itemCols[2], y, size: 9, font });
     page.drawText(amountText, { x: itemCols[3], y, size: 9, font });
     y -= Math.max(16, descLines.length * 11 + 5);

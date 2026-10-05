@@ -473,7 +473,7 @@ after a TAB save. (4) An invoice whose twin can't be paired shows the
 yellow notice and a read-only deferred row.
 **Guards:** `docs/INVARIANTS.md` INV-QB-029, INV-QB-031.
 
-### REG-032 — The invoice PDF a client receives shows each service once (after ANY change to `lib/client-invoice-*.ts`, `lib/deferred-pairing.ts`, `templates/client-invoice/`, `/api/billing/client-invoice-pdf`, the SOA PDF route, or the attachment code in `lib/draft-helper-client.ts`)
+### REG-032 — The invoice PDF a client receives shows each service once (after ANY change to `lib/client-invoice-*.ts`, `lib/pdf-chinese-text.ts`, `lib/deferred-pairing.ts`, `templates/client-invoice/`, `/api/billing/client-invoice-pdf`, the SOA PDF route, or the attachment code in `lib/draft-helper-client.ts`)
 Run `npx tsx test-client-invoice-model.ts` and `npx tsx test-deferred-pairing.ts`
 (`ALL PASSED`). Then signed in on the deployed site: (1) Billing Drafts →
 a split invoice (e.g. 1X EXCHANGE TAB #02611112) → Save TAB PDF: one
@@ -498,6 +498,10 @@ Run `npx tsx test-item-resolution.ts` (`ALL OK`). Then signed in: (1) Billing Dr
 ### REG-035 — Billing Drafts' Add line lists the book's live QuickBooks items with their description and no price (after ANY change to `lib/qb-item-classify.ts`, `lib/qb-item-catalog.ts`, `/api/billing/item-catalog`, `components/billing/BookItemPicker.tsx` or the Add line wiring)
 Run `npx tsx test-book-catalog.ts` (`ALL OK`). Then signed in, Billing Drafts: (1) TAB "Add line" shows QuickBooks' groups (Accounts, Disbursement, Other, Secretary, Tax, No category) incl. ACRA Fees and Discount Given; (2) picking Change of Director fills QuickBooks' text and an EMPTY highlighted rate, Generate waits for it; (3) on a company with an ND line, the TAC list has "Nominee Director Fees - EL" and TAC-named items (e.g. CPF Submission); (4) a generated invoice shows those items in QuickBooks with the picked text.
 **Guards:** `docs/INVARIANTS.md` INV-QB-034, INV-QB-033.
+
+### REG-036 — The SOA PDF cover prints Chinese client names (after ANY change to `lib/statement-pdf.ts`, `lib/pdf-chinese-text.ts`, `templates/client-invoice/NotoSansSC-Regular.ttf`, or the SOA PDF route)
+Run `npx tsx test-statement-cover-chinese.ts` and `npx tsx test-client-invoice-model.ts` (`ALL PASSED`). Then signed in, SOA → All: Download PDF for 思店科技(杭州)有限公司 (TAB + TAC) — the cover's TO line reads 思店科技(杭州)有限公司 in bold (not "()"), and the 【Lzs Travel Pte. Ltd.】 description keeps its brackets; an English-named client's cover looks exactly as before. Checking the SOA web page is NOT enough — it always showed the name.
+**Guards:** `docs/INVARIANTS.md` INV-DOC-011, INV-QB-029.
 
 ---
 

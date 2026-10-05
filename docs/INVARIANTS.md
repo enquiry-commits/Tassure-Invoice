@@ -862,9 +862,22 @@ again.
   proven to cover every future draw call someone adds later. Proper CJK
   glyph rendering (an embedded Unicode font via `fontkit`) was deliberately
   out of scope — `safeText()` is a crash-safety net, not a real
-  Chinese-text-rendering feature. (The client invoice PDF does embed a
-  Chinese font since 2026-10-05 — INV-QB-029, `lib/client-invoice-render.ts`,
-  with its two pdf-lib traps; the SOA cover page still uses `safeText()`.)
+  Chinese-text-rendering feature — and as the ONLY layer it silently
+  degraded real client PDFs: on 2026-10-05 the SOA cover printed
+  思店科技(杭州)有限公司 as "()" and 江苏日月照明电器有限公司 as "(name
+  unavailable)", and dropped full-width （）【】 from 11 open-invoice
+  descriptions (unbalanced brackets). The SOA WEB page showed both names
+  fine — the browser has Chinese fonts — which is exactly why nobody saw
+  it: a page rendering Chinese says nothing about the PDF. Since then the
+  cover draws Chinese text with the embedded Noto Sans SC
+  (`lib/pdf-chinese-text.ts`, shared with the client invoice PDF,
+  INV-QB-029; inside the bold TO name its characters are faux bold — fill
+  plus a thin outline — the font being Regular only). Text Helvetica prints
+  goes through the exact same calls as before (472 real cover pages
+  compared old vs new: 458 byte-identical, the other 14 exactly those
+  Chinese names/brackets). `safeText()` stays the fallback when the font is
+  off, fails to load, or lacks a character too — the Statement never fails
+  over it. Guarded by `test-statement-cover-chinese.ts`.
 - **INV-DOC-012** — The SOA "All" page's own Draft Email / Download PDF
   actions are the ONE deliberate exception to "TAB/TAC/TAO always stay
   separately scoped" (INV-PIC-007's own domain) — Vincent, 2026-09-17,
@@ -2241,8 +2254,10 @@ again.
   and TELLS staff why (Email Drafts: a note under the attachment; Save PDF:
   the result message; SOA: an alert that now also reports invoices that
   failed to merge, `X-Soa-Merge-Errors`, which no page used to read). Two
-  pdf-lib traps, both caught by looking at real renders before the font
-  shipped and both guarded in `test-client-invoice-model.ts`: (a) its
+  pdf-lib traps — handled once, in `lib/pdf-chinese-text.ts`, which the SOA
+  cover page shares (INV-DOC-011) — both caught by looking at real renders
+  before the font shipped and both guarded in
+  `test-client-invoice-model.ts`: (a) its
   subsetter writes SHORT (halved) glyph offsets, so a TrueType file with
   odd-length glyph data embeds corrupted characters while the page still
   "renders" — fontTools' instancer saved exactly such a file (15,684 of
