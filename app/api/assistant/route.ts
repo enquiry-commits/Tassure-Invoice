@@ -7,6 +7,7 @@ import { buildTaskDigest, generateMyTasksBrief } from '@/lib/my-tasks-brief';
 import { getPersonActivitySummary, getCompanyActivitySummary } from '@/lib/activity-data';
 import { getRecentActivity, summarizeByKind } from '@/lib/recent-activity';
 import { createMemory, listMemories, type MemoryType } from '@/lib/user-memories';
+import { pickPromptMemories, promptMemoryBlock } from '@/lib/prompt-memories';
 import { getConversationOwner, appendMessage, deriveTitle, renameConversation, touchConversation, type StoredPreview } from '@/lib/ai-conversations';
 import { findMentionedAccount, resolveViewAsAccount, canAccountOpen, getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import { previewInvoiceDraft, type InvoicePreview } from '@/lib/billing-lookup';
@@ -1655,10 +1656,12 @@ async function dynamicSystemPrompt(context?: AssistantContext, account?: Approve
   // the pieces every call should carry — a SMALL, targeted slice, never
   // the account's full history dumped in. Capped at 8 for the same reason
   // the Claude tool-result payloads elsewhere in this file stay compact.
-  const memories = account ? await listMemories(account.email, 8) : [];
-  const memoryBlock = memories.length
-    ? `\nThings this user has explicitly asked to be remembered (treat as durable context, not absolute fact if it conflicts with live system data):\n${memories.map(m => `- [${m.memory_type}] ${m.content}`).join('\n')}\n`
-    : '';
+  // Explicit "remember this" requests first, each line labelled asked vs
+  // inferred (lib/prompt-memories.ts, INV-AI-011) — a recency-only top 8 had
+  // dropped Vincent's own explicit memories. 50 is only a fetch margin, so an
+  // older explicit memory is still in hand to rank first.
+  const memories = account ? pickPromptMemories(await listMemories(account.email, 50)) : [];
+  const memoryBlock = promptMemoryBlock(memories);
   // The date MUST be stated here, every call. Confirmed real (2026-09-10):
   // with no current date in the prompt, the assistant answered "今天
   // (2026-09-09)" at noon SGT on the 10th — it had inferred "today" from

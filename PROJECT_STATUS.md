@@ -1,5 +1,42 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (FIXED + Unit 1 of the AI learning loop. Vincent's two explicit "remember this" requests had been missing from every assistant prompt. The quality judge also gains an over-caution check and skips the generic fallback menus. Asked: Vincent wants every Q&A to go through a nightly 8-role council so the assistant learns on its own — the full council designed it, and he chose "行为类自动 + 考试", "存 30 天", "每周一次".)
+
+**What the council decided.** Full council, 14:07 SGT, 4 members, unanimous ranking Architect > Skeptic > Researcher > Pragmatist:
+- **No 8-role council on every reply.** The reviewers see only the reply text, never what the tools returned, so 8 agreeing models share one blind spot. Cost isn't the issue (US$6–20 a month at today's volume).
+- **Instead:**
+  - store each reply's tool evidence;
+  - 2 reviewers, only on problem replies;
+  - a new global, expiring, revocable guidance table (not per-user memories);
+  - only behaviour rules auto-apply, and only after a replay exam;
+  - a weekly full council in Claude Code turns findings into code and tests.
+- **Every code claim was re-checked before use:**
+  - `toolEvidence` with results is built at `route.ts:2032`, then discarded;
+  - `recordAgentRun` returns null on any insert error;
+  - `claude-opus-5` is not priced in `lib/ai/pricing.ts`;
+  - INV-PERF-004's team_roster timeout is the example of a harmful "plausible" rule.
+- The members' full answer text could not be read (the auto-mode classifier blocked it); the synthesis used their stances, key points and peer reviews.
+- Plan and units: `docs/CURRENT_STATE.md`.
+
+**Unit 1 (this commit):**
+- **Memories (INV-AI-011), a real bug found by the council's Skeptic and confirmed on real data.**
+  - What was wrong: the prompt took the 8 most recently seen memories under the header "Things this user has explicitly asked to be remembered". 20 of the 22 memories are inferred. On Vincent's account (2 explicit + 8 newer inferred), both explicit requests from 2026-09-08 were dropped from every prompt.
+  - What changed: new `lib/prompt-memories.ts` puts explicit memories first, labels each line `asked` or `inferred`, and keeps the cap at 8.
+- **Judge (INV-AI-006).**
+  - The rubric gains `over_caution` — a judge that only lists defects pushes the assistant toward hedging.
+  - `intent_fallback` menus are skipped before sampling (`skippedFallback`).
+  - A failed `ai_agent_runs` read now stops the batch.
+- **Docs:** INV-AI-011, INV-AI-006, `docs/CURRENT_STATE.md`.
+
+**Verification.**
+- New `test-prompt-memories.ts` ALL OK (13 checks, first case = Vincent's real account shape). Negative controls: a recency-only picker fails 5 checks (it reproduces the real bug); the old top-8 call in the route fails 2.
+- `test-ai-quality-judge.ts` ALL OK (now 24 checks). Negative controls: no `over_caution`, or fallback menus judged again, each fail.
+- `tsc` 0, eslint clean.
+- `test-assistant-pages`, `test-orchestrator`, `test-ai-usage`, `test-cron-wiring` and `test-account-access` ALL OK. `test-reply-guards` and `test-reports-narrative-guards` ALL PASSED with the usual `server-only` stub.
+- **Not verified:** a real assistant reply with the new memory block (needs a signed-in session), and the judge's new rubric on a real call (tonight's first run).
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (FIXED: invoice numbers and amounts changed in QuickBooks now show and send everywhere — Vincent: "单号问题先处理好", after "inv number qb 改了system 没有同步").
 
 **What was wrong.** `generated_invoices` logs an invoice's number and total at creation; QuickBooks edits never reach it. 1X EXCHANGE: generated as TAB #02611111, renumbered #02611112 in QuickBooks (#02611111 was also given to Nucon in the same seconds) — Billing Drafts kept #02611111 and its chip, opening by number, showed Nucon's invoice. 7 of 128 app-made totals had also changed (Novozee S$1,120 → S$1,720). AR emails quoted the logged values, and Quick Draft / assistant drafts skipped the live check.

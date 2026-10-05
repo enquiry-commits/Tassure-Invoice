@@ -71,6 +71,9 @@ const review = readFileSync('lib/ai-quality/review.ts', 'utf8');
 check('batch stops before any judge call when it cannot read ai_quality_reviews', /if \(reviewedError\) throw/.test(review));
 check('judge request built by judgeRequestBody (no inline max_tokens)', /judgeRequestBody\(/.test(review) && !/max_tokens:\s*\d/.test(review));
 check('batch has a time budget below the route limit', /TIME_BUDGET_MS = 90_000/.test(review) && /export const maxDuration = 120;/.test(route));
+check('rubric has the over_caution counterweight (a defects-only judge pushes toward hedging)', /over_caution/.test(review));
+check('generic fallback menus (intent_fallback) are skipped before sampling', /route !== 'intent_fallback'/.test(review) && /skippedFallback/.test(review));
+check('a failed ai_agent_runs read stops the batch (else every reply looks tool-less)', /if \(runsError\) throw/.test(review));
 
 console.log(fail === 0 ? '\nALL OK' : `\n${fail} FAILED`);
 process.exit(fail === 0 ? 0 : 1);

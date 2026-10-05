@@ -45,18 +45,19 @@ You do NOT have access to the tools' real results, so you cannot verify whether 
 2. unfounded_specificity — the reply states a specific fact (a name, amount, date, status) with real authority, but the tool list is EMPTY for this turn, so nothing could actually have supplied that fact.
 3. language_or_relevance — the reply ignores the actual question, answers in the wrong language, or is a non-sequitur.
 4. incomplete_or_confusing — a proposed action/card is mentioned but the reply leaves the reader with no clear idea what to do next.
-5. other — any other clear, concrete defect visible directly in the text (explain briefly).
+5. over_caution — tools WERE called this turn and nothing in the reply says they failed, yet the reply avoids giving the answer: it buries it under caveats, tells the staff member to go and check it themselves, or asks for details the question already gave. (One short, relevant caveat is fine.)
+6. other — any other clear, concrete defect visible directly in the text (explain briefly).
 
 If you cannot point to a concrete problem in the reply itself, the verdict is "pass". Do not flag on a hunch, on a complex topic, or because you personally cannot confirm a number is right.
 
 Respond with ONLY this JSON, no other text before or after it:
 {"verdict": "pass" | "flag", "issues": [{"category": "...", "description": "..."}]}`;
 
-// One batch of 3 parallel queries instead of one sequential lookup per
-// candidate (INV-PERF-002) — the "preceding user message" for each sampled
-// reply is found in-memory from a single fetch of every message in the
-// involved conversations, not a per-candidate round trip.
-async function findCandidates(limit: number): Promise<ReviewCandidate[]> {
+// A few batch queries instead of one sequential lookup per candidate
+// (INV-PERF-002) — the "preceding user message" for each sampled reply is
+// found in-memory from a single fetch of every message in the involved
+// conversations, not a per-candidate round trip.
+async function findCandidates(limit: number): Promise<{ candidates: ReviewCandidate[]; skippedFallback: number }> {
   const supabase = createAdminClient();
   const { data: reviewed, error: reviewedError } = await supabase.from('ai_quality_reviews').select('message_id');
   // Without this list every candidate is judged — a paid call — and then
@@ -76,21 +77,34 @@ async function findCandidates(limit: number): Promise<ReviewCandidate[]> {
     .not('agent_run_id', 'is', null)
     .order('created_at', { ascending: false })
     .limit(limit * 6);
-  const pool = (recentAssistant ?? []).filter(m => !reviewedIds.has(Number(m.id)) && (m.content ?? '').trim().length > 20);
-  if (!pool.length) return [];
+  const unreviewed = (recentAssistant ?? []).filter(m => !reviewedIds.has(Number(m.id)) && (m.content ?? '').trim().length > 20);
+  if (!unreviewed.length) return { candidates: [], skippedFallback: 0 };
+
+  // The generic menu shown when the Claude call itself failed (route
+  // 'intent_fallback') is not the model's answer — nothing to judge or learn
+  // from it, and its real error is already in ai_agent_runs.error. Skipped
+  // before sampling, so it never costs a judge call. A failed runs read
+  // stops here: without it every reply would look like it called no tools.
+  const { data: runs, error: runsError } = await supabase
+    .from('ai_agent_runs')
+    .select('id, route, tool_names')
+    .in('id', [...new Set(unreviewed.map(m => Number(m.agent_run_id)))]);
+  if (runsError) throw new Error(`Cannot read ai_agent_runs: ${runsError.message}`);
+  const runById = new Map((runs ?? []).map(r => [Number(r.id), r]));
+  const pool = unreviewed.filter(m => runById.get(Number(m.agent_run_id))?.route !== 'intent_fallback');
+  const skippedFallback = unreviewed.length - pool.length;
+  if (!pool.length) return { candidates: [], skippedFallback };
   const sample = [...pool].sort(() => Math.random() - 0.5).slice(0, limit);
 
   const convoIds = [...new Set(sample.map(m => Number(m.conversation_id)))];
-  const runIds = [...new Set(sample.map(m => Number(m.agent_run_id)))];
 
-  const [convosRes, runsRes, convoMessagesRes] = await Promise.all([
+  const [convosRes, convoMessagesRes] = await Promise.all([
     supabase.from('ai_conversations').select('id, account_email').in('id', convoIds),
-    supabase.from('ai_agent_runs').select('id, tool_names').in('id', runIds),
     supabase.from('ai_messages').select('id, conversation_id, role, content, created_at').in('conversation_id', convoIds).order('created_at', { ascending: true }),
   ]);
 
   const emailByConvo = new Map((convosRes.data ?? []).map(c => [Number(c.id), c.account_email as string]));
-  const toolsByRun = new Map((runsRes.data ?? []).map(r => [Number(r.id), ((r.tool_names as string[]) ?? [])]));
+  const toolsByRun = new Map([...runById].map(([id, r]) => [id, ((r.tool_names as string[]) ?? [])]));
   const messagesByConvo = new Map<number, { role: string; content: string; created_at: string }[]>();
   for (const m of convoMessagesRes.data ?? []) {
     const list = messagesByConvo.get(Number(m.conversation_id)) ?? [];
@@ -98,7 +112,7 @@ async function findCandidates(limit: number): Promise<ReviewCandidate[]> {
     messagesByConvo.set(Number(m.conversation_id), list);
   }
 
-  return sample.map(m => {
+  const candidates = sample.map(m => {
     const siblings = messagesByConvo.get(Number(m.conversation_id)) ?? [];
     const precedingUser = siblings
       .filter(s => s.role === 'user' && new Date(s.created_at).getTime() < new Date(m.created_at).getTime())
@@ -112,6 +126,7 @@ async function findCandidates(limit: number): Promise<ReviewCandidate[]> {
       toolsUsed: toolsByRun.get(Number(m.agent_run_id)) ?? [],
     };
   });
+  return { candidates, skippedFallback };
 }
 
 function judge(candidate: ReviewCandidate, usage: AiUsageTag): Promise<QualityVerdict> {
@@ -134,6 +149,7 @@ export type QualityBatchResult = {
   errors: number;
   errorSamples: string[];
   skippedForTime: number;
+  skippedFallback: number;
   skippedNoKey: boolean;
 };
 
@@ -145,10 +161,10 @@ export type QualityBatchResult = {
 // `usage`: the nightly cron (system) or a person's own "立即抽查" click, for
 // the AI usage ledger (INV-AI-010).
 export async function runQualityReviewBatch(limit: number, usage: AiUsageTag): Promise<QualityBatchResult> {
-  if (!process.env.ANTHROPIC_API_KEY) return { reviewed: 0, flagged: 0, errors: 0, errorSamples: [], skippedForTime: 0, skippedNoKey: true };
+  if (!process.env.ANTHROPIC_API_KEY) return { reviewed: 0, flagged: 0, errors: 0, errorSamples: [], skippedForTime: 0, skippedFallback: 0, skippedNoKey: true };
   const startedAt = Date.now();
   const supabase = createAdminClient();
-  const candidates = await findCandidates(limit);
+  const { candidates, skippedFallback } = await findCandidates(limit);
   let reviewed = 0;
   let flagged = 0;
   let skippedForTime = 0;
@@ -188,7 +204,7 @@ export async function runQualityReviewBatch(limit: number, usage: AiUsageTag): P
       noteError(error instanceof Error ? error.message : String(error));
     }
   }
-  return { reviewed, flagged, errors, errorSamples, skippedForTime, skippedNoKey: false };
+  return { reviewed, flagged, errors, errorSamples, skippedForTime, skippedFallback, skippedNoKey: false };
 }
 
 export type QualityReviewRow = {

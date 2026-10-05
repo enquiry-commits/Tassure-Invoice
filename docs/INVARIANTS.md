@@ -4045,6 +4045,25 @@ again.
 
 ## AI Assistant / chatbot (INV-AI)
 
+- **INV-AI-011** — What the user asked the assistant to remember must
+  always reach its prompt, and every memory line must say where it came
+  from. The prompt's memory block (`app/api/assistant/route.ts`
+  `dynamicSystemPrompt()`) took the 8 most recently seen `user_memories`
+  under the header "Things this user has explicitly asked to be
+  remembered". Found 2026-10-05 on real data, during the council review of
+  Vincent's learning-loop idea: 20 of all 22 memories are `inferred` (AI
+  Learning, INV-DATA-019), and the nightly AI Learning keeps refreshing
+  their `last_seen`. So on Vincent's own account (2 explicit + 8 inferred)
+  his only 2 explicit requests (2026-09-08) were dropped from every prompt,
+  and the model was told 8 inferred guesses were his explicit requests.
+  Fixed by `lib/prompt-memories.ts`: explicit memories first, then inferred,
+  each group newest first, at most 8; every line is labelled `asked` or
+  `inferred`, and the header says inferred ones are guesses to hold
+  loosely. Pinned by `test-prompt-memories.ts` (its first case is that real
+  account's shape). A future learning loop must not reuse `user_memories`
+  for global answer guidance — it is per person and its 8 slots are already
+  contested.
+
 - **INV-AI-010** — Every paid AI API call this app makes is recorded, ONE
   ROW PER CALL, in `ai_usage_events` (`scripts/add-ai-usage-events.sql`),
   so the only way to call a model is `lib/ai/anthropic.ts`
@@ -4262,6 +4281,14 @@ again.
   a platform kill skips cleanup — INV-CRON-008); the rest stay unreviewed for
   the next run (`skippedForTime`). A reply whose judge call fails is still
   re-tried, and re-billed, on later runs — there is no attempt cap yet.
+  Same day, after the council review of the learning loop: (5) the rubric
+  gained `over_caution` — a judge that only lists defects pushes the
+  assistant toward hedging, so the flag rate could fall while answers got
+  worse; (6) replies whose run is `intent_fallback` (the generic menu shown
+  when the Claude call itself failed) are skipped before sampling and counted
+  as `skippedFallback` — they are not the model's answer, and their real
+  error is in `ai_agent_runs.error`; (7) a failed `ai_agent_runs` read stops
+  the batch, since without it every reply would look like it called no tools.
 
   Same change closed 2 real, unrelated dashboard-visibility gaps found while
   wiring this in: `ai_learning` and the new `ai_quality_review` are both
