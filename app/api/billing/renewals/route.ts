@@ -9,6 +9,7 @@ import { loadCurrentQbValues, withCurrentQbValues } from '@/lib/current-invoice-
 import {
   buildAnnualRenewalFeeMap,
   compareRenewalPeriodProductLines,
+  fyeCycleFromDescription,
   isPrimaryRenewalProduct,
   nextServicePeriod,
   parseInvoicePeriod,
@@ -417,8 +418,7 @@ export async function computeAllCompanyBilling(withinDays: number): Promise<{ to
   };
   for (const it of annualItems ?? []) {
     addCycle(it.customer_name, fyeFromIso(it.fye_date));
-    const dm = (it.description || '').match(/(\d{2})\.(\d{2})\.(\d{4})/);
-    if (dm) addCycle(it.customer_name, `${dm[1]}.${dm[2]}.${dm[3]}`);
+    addCycle(it.customer_name, fyeCycleFromDescription(it.description));
   }
 
   const periodEntries = [...periodMap.entries()];

@@ -1,5 +1,23 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (FIXED: an invoice keyed by hand in QuickBooks with "FYE 31/08/2026" now counts as this cycle's invoice in Billing Drafts. Asked: Vincent — "这个是什么情况？" → "修" — on Elite Gathering showing "To invoice" with a staff remark "AR ?", although TAB #02611051 billed everything on 2026-09-14.)
+
+**What was wrong.** Billing Drafts decides "already invoiced this cycle" from the FYE marker on the AR/annual line. It recognized only the dotted form the system writes (`31.08.2026`); this invoice was typed by hand as `[FYE 31/08/2026]`. In 2026 only 2 AR lines use slashes; 461 use dots.
+
+**What changed (INV-QB-035).**
+- New `fyeCycleFromDescription()` in `lib/invoice-period.ts` reads both forms. A slashed date counts only right after "FYE" or "AR".
+- `app/api/billing/renewals/route.ts` uses it.
+- Six new assertions in `scripts/test-invoice-period.mjs`.
+
+**Verification.**
+- A read-only run of the real renewals route over all 796 clients, before and after the change: exactly 2 clients gained a billed cycle (Elite Gathering 31.08.2026, Co-operate Associates 31.01.2023), none lost one, and no renewal status changed.
+- The 6 new assertions pass when run on their own. `tsc` 0 and eslint clean.
+- **Pre-existing, not caused here:** `scripts/test-invoice-period.mjs` fails earlier on `servicePeriodOverlapError` now returning an object, and fails the same way on the untouched HEAD copy. `scripts/test-renewal-fee-pairing.mjs` fails on `compareRenewalPeriodProductLines` (see below).
+
+**Found, not fixed yet** (`docs/CURRENT_STATE.md`): the same client's ADDR shows "expired". `compareRenewalPeriodProductLines()` is not a consistent order, so an older invoice can sort first — proven on real data. The fix touches the renewal logic that ND split periods (REG-019) and create-invoice depend on, so it is being done separately, with a full before/after diff.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (FIXED, step 2 of 2: Billing Drafts' "Add line" now lists each book's live QuickBooks items with QuickBooks' own description and no prefilled price — Vincent: "和 QuickBooks 一样，全部列出", "不预填，和 TAO 一样").
 
 **Changed.** New `lib/qb-item-catalog.ts` + `/api/billing/item-catalog?book=` (TAB 169 / TAC 127 items, Deferred twins excluded); `components/billing/BookItemPicker.tsx` replaces the hardcoded QB_CATALOG in both the TAB and TAC "Add line"; one item→service rule `lib/qb-item-classify.ts` (ACRA Fees/disbursements → Other with no PIC, one-off Secretary work → Secretary, renewal items unchanged); a line added from a book stays in that book. INV-QB-034, REG-035, `test-book-catalog.ts`. **Verified:** tsc 0, eslint no new errors, test-book-catalog + test-item-resolution ALL OK; live read-only: both catalogs, classification and 0 unresolved items; browser harness (picker with mocked list, reverted): groups, picked text/service/book, failure warning. **Not verified:** the full Billing Drafts screen with a login and a real Generate (REG-035). **Still open (Vincent to decide):** TAC one-off services (EP, CPF…) are only reachable on companies that already have an ND line (the TAC section appears only then); the Quotation page still uses the old list; renewal drafts don't carry last year's Payroll/CPF lines; who EL is (TeamWork mapping) and LXM vs "LXM.".

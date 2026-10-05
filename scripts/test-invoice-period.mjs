@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  fyeCycleFromDescription,
   nextServicePeriod,
   parseInvoicePeriod,
   rollRecurringDescriptionForward,
@@ -57,4 +58,14 @@ assert.equal(
 );
 assert.match(servicePeriodOverlapError('ND', null, null) ?? '', /complete service period/);
 
-console.log(`Invoice period checks passed (${periodCases.length + 11} assertions).`);
+// FYE cycle markers (renewals route billedCycles): dotted as the system
+// writes them, slashed as typed by hand in QuickBooks (Elite Gathering
+// TAB #02611051), and never an unrelated slashed date.
+assert.equal(fyeCycleFromDescription('Government fee for ACRA filing of Annual Return [FYE 31.07.2026]'), '31.07.2026');
+assert.equal(fyeCycleFromDescription('Sec,addrs services [Sep 2024 - Aug2025],AR31.12.2024'), '31.12.2024');
+assert.equal(fyeCycleFromDescription('Government fee for ACRA filing of Annual Return [FYE 31/08/2026]'), '31.08.2026');
+assert.equal(fyeCycleFromDescription('Sec,addrs services [Jul 2025 - Jun 2026]AR 31/08/2025'), '31.08.2025');
+assert.equal(fyeCycleFromDescription('Annual return filed on 15/03/2026'), null);
+assert.equal(fyeCycleFromDescription(null), null);
+
+console.log(`Invoice period checks passed (${periodCases.length + 17} assertions).`);

@@ -2401,6 +2401,19 @@ again.
   exactly when generating (0 unresolved in both books). Not changed: renewal
   rows' templates and per-client prices, the Quotation page's list.
   `test-book-catalog.ts`.
+- **INV-QB-035** — An AR/annual line's FYE marker can be typed by hand in
+  QuickBooks as "FYE 31/08/2026" (slashes), not only as the "31.08.2026" this
+  system writes. Billing Drafts decides "already invoiced this cycle" from
+  that marker (`billedCycles` in `app/api/billing/renewals/route.ts`; the
+  line's `fye_date` column is often empty). So a slashed marker left a fully
+  invoiced client showing "To invoice": Elite Gathering, TAB #02611051
+  (2026-09-14), found 2026-10-05 from a staff remark "AR ?".
+  `fyeCycleFromDescription()` (`lib/invoice-period.ts`) now reads both forms.
+  A slashed date counts only right after "FYE" or "AR", so an unrelated
+  date (a filing date) can't mark a cycle as billed. A read-only before/after
+  run of the real route over all 796 Billing Drafts clients: exactly 2
+  clients gained a cycle (Elite Gathering 31.08.2026, Co-operate Associates
+  31.01.2023), none lost one, and no renewal status changed.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

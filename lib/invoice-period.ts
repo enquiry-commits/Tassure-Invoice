@@ -286,6 +286,21 @@ function normalizeDescription(raw: string) {
  * The historical data contains inconsistent spaces, apostrophe years,
  * full-width brackets and both bracketed and unbracketed ranges.
  */
+// The FYE cycle an AR/annual line was billed for, as "dd.mm.yyyy": either
+// the dotted form this system writes ("[FYE 31.07.2026]", "AR31.12.2024"),
+// or the slashed form typed by hand in QuickBooks ("[FYE 31/08/2026]",
+// "AR 31/08/2025" — TAB #02611051, Elite Gathering, 2026-10-05: unrecognised,
+// so a fully invoiced client stayed "To invoice"). A slashed date counts
+// only right after "FYE" or "AR", so an unrelated date (a filing date) can
+// never mark a cycle as billed.
+export function fyeCycleFromDescription(description: string | null | undefined): string | null {
+  const text = description ?? '';
+  const dotted = text.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  if (dotted) return `${dotted[1]}.${dotted[2]}.${dotted[3]}`;
+  const slashed = text.match(/\b(?:FYE|AR)\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+  return slashed ? `${slashed[1]}.${slashed[2]}.${slashed[3]}` : null;
+}
+
 export function parseInvoicePeriod(raw: string | null | undefined, service?: string): ParsedInvoicePeriod | null {
   if (!raw) return null;
   const description = normalizeDescription(raw);
