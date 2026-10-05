@@ -1,5 +1,17 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (DIAGNOSED + DECIDED, no code changed: three things from Vincent's morning — Terminated Services statuses, a client confused by split invoice amounts, and an invoice number changed in QuickBooks that the app didn't follow).
+
+**How.** Every claim checked read-only against live data, then one 4-agent council review (full mode, both questions in one run — an earlier run died after three interruptions; see the council memory note), each member claim re-verified in code before quoting.
+
+**1. "Moved rows turn Terminated immediately?" — no bug.** The Move stamps "Terminate"; only the nightly TeamWork sync writes "Terminated", and only when TeamWork itself says so. The only move since the 24/09 fix, INVENTA (02/10 12:29), read "Terminate" until the 21:59 sync. All 65 "Terminated" rows were written by `system:teamwork`. It looks immediate because both words share one badge colour, the list sorts by the staff-typed Update Date, and staff update TeamWork the same day. Offered (not done): a different look for the placeholder.
+
+**2. Split invoice amounts — decided (INV-QB-029).** The client saw QuickBooks' own invoice PDF (attached to AR emails, appended to the SOA), which prints the deferral twins (180 + 180). This system never splits a line (it refuses blank descriptions); the twins were added in QuickBooks afterwards. Vincent, after asking Chelsea: clients see each service once at the invoice price; invoices are no longer split; the deferral goes by journal entry. App unchanged; verified with the real `buildAnnualRenewalFeeMap` that split and unsplit invoices give the same renewal fee, with one caveat (hand-typed renewals with no period text — 15 of 1,275 groups this year). 132 open invoices still carry splits; the list (book, number, client, date, total, balance) was sent to Vincent for accounting. The SOA cover's "first service only" text is a separate open format choice.
+
+**3. Invoice number changed in QuickBooks — root cause found, fix waiting for Vincent.** `generated_invoices` keeps the number/total from generation; QuickBooks edits never reach it. 1X EXCHANGE: ours #02611111, QuickBooks #02611112 (#02611111 is Nucon's — two invoices took it within seconds; the duplicate check fails open on a QuickBooks error). Effects and the unanimous council fix are in CURRENT_STATE. Two sent AR emails (KINPLUS, ADVANCE CF) show amounts that differ from QuickBooks today — needs QuickBooks' Audit Log to know if they were wrong when sent.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (SHIPPED, part 2 of 2: Admin › AI Usage — every person's AI tokens and estimated USD, live, Vincent only. His decisions: "只有我", View As counts for the real operator, automatic calls under the person but shown apart, USD.)
 
 **What shipped.**

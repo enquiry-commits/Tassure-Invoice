@@ -2127,6 +2127,36 @@ again.
   in that book (negative controls: dropping Jay's TAB entry fails (a);
   mapping a TAC one for him fails (b)). Re-read the lists from QuickBooks
   when a Location is added, renamed or deactivated.
+- **INV-QB-029** — What a client sees shows each service ONCE, at the price
+  on the invoice. Splitting a fee into this-year + "Deferred Revenue" lines
+  is internal bookkeeping and must never reach a client. Vincent, 2026-10-05,
+  after confirming with Chelsea (a client asked about TAB #02610986, Novozee:
+  address 180 + 180, payroll 300 + 300): "服务是不能分开两个显示的，要按照原装
+  的INVOICE 金额显示…同一个服务不需要让客户知道我们把金额分成两份记录，那个是
+  我们公司内部的操作，不然客户会疑惑". His decision (AskUserQuestion): invoices
+  are no longer split; the deferral is booked by journal entry. Facts behind
+  it (read-only, same day): this system never split a line —
+  create-invoice refuses any line without a description
+  (`app/api/quickbooks/create-invoice/route.ts:363`), while the deferred
+  twins have none; they were added in QuickBooks afterwards (Novozee was
+  generated at S$1,120 — QuickBooks now S$1,720, split 350+350 / 180+180 /
+  60 / 300+300 with Payroll added there). Clients see them because
+  QuickBooks' own invoice PDF prints every line, and that PDF is what AR
+  emails attach and what the SOA PDF appends
+  (`app/api/billing/soa/pdf/route.ts` fetchInvoicePdf). In 2026, 438 invoices
+  carry a blank deferred line (TAB 372, TAC 66; 122 of them generated here,
+  split later); 132 open invoices still do (TAB 114, TAC 18). Rules: never
+  add a deferral split to an invoice (no "auto-deferral" feature), never
+  render one service as two amounts anywhere a client looks, and leave
+  already-issued split invoices as they are — changing them is
+  accounting's call, not a sync or backfill. The renewal-fee logic keeps
+  handling both shapes (`buildAnnualRenewalFeeMap`, lib/invoice-period.ts:
+  350+350 split and an unsplit 700 give the same fee, checked with the real
+  function); its one dependency on the twin: a hand-typed renewal with no
+  readable period and no AR fee counts as annual ONLY through its deferred
+  line (15 of 1,275 TAB/TAC renewal groups in 2026), so without the split it
+  is no longer recognised (INV-QB-004) — invoices typed in QuickBooks should
+  state the service period, as the ones generated here already do.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
