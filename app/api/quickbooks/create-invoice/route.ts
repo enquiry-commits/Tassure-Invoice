@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
 import {
   nextDocNumber, invoiceDocNumberStatus, invoiceDocNumberCount, getNet7TermId, findPicClass, listActiveClasses,
-  findCustomer, getItemMap, findLocation, buildInvoiceLineArray,
+  findCustomer, getItemMap, findLocation, buildInvoiceLineArray, QbItemLookupError,
   resolveParentBillAddr,
   resolveCareOfBillAddr,
   loadCareOfSettings,
@@ -14,7 +14,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-accounts';
 import { isValidEmail } from '@/lib/campaign-recipients';
-import { isPrimaryRenewalProduct, parseInvoicePeriod, servicePeriodOverlapError, compareRenewalPeriodProductLines } from '@/lib/invoice-period';
+import { isPrimaryRenewalProduct, parseInvoicePeriod, servicePeriodOverlapError, compareRenewalPeriodProductLines, needsRenewalPeriodCheck } from '@/lib/invoice-period';
 import { createHash } from 'node:crypto';
 
 export type { DraftLineItem };
@@ -72,7 +72,7 @@ async function validateRenewalPeriods(
   customerName: string,
   lines: DraftLineItem[],
 ): Promise<PeriodValidationResult> {
-  const renewalLines = lines.filter(line => ['Secretary', 'Address', 'ND'].includes(line.service));
+  const renewalLines = lines.filter(needsRenewalPeriodCheck);
   if (!renewalLines.length) return { blocking: [], overlapWarnings: [] };
 
   const services = [...new Set(renewalLines.map(line => line.service))];
@@ -216,12 +216,20 @@ async function createInvoiceInCompany(
   // PIC's person class on Secretary and XBRL lines only, BY DEFAULT. Other
   // services carry no PIC unless a person picked one for that line in the
   // popup's PIC column (picClassId, INV-QB-026).
-  const [itemMap, termId, picClass, location] = await Promise.all([
-    getItemMap(token, realmId),
-    getNet7TermId(token, realmId),
-    company === 'TAB' && pic ? findPicClass(token, realmId, pic) : Promise.resolve(null),
-    locationName ? findLocation(token, realmId, locationName) : Promise.resolve(null),
-  ]);
+  let lookups;
+  try {
+    lookups = await Promise.all([
+      getItemMap(token, realmId),
+      getNet7TermId(token, realmId),
+      company === 'TAB' && pic ? findPicClass(token, realmId, pic) : Promise.resolve(null),
+      locationName ? findLocation(token, realmId, locationName) : Promise.resolve(null),
+    ]);
+  } catch (error) {
+    // Nothing was written yet — a plain error, not an "uncertain" create.
+    if (error instanceof QbItemLookupError) return { error: `QB ${company}: ${error.message}` };
+    throw error;
+  }
+  const [itemMap, termId, picClass, location] = lookups;
 
   if (locationName && !location) {
     return { error: `QuickBooks ${company} Location not found: "${locationName}"` };
@@ -240,7 +248,13 @@ async function createInvoiceInCompany(
     chosenClasses = checked.classes;
   }
 
-  const invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass, chosenClasses);
+  let invoiceLines;
+  try {
+    invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass, chosenClasses);
+  } catch (error) {
+    if (error instanceof QbItemLookupError) return { error: `QB ${company}: ${error.message}` };
+    throw error;
+  }
 
   const payload: Record<string, unknown> = {
     Line:        invoiceLines,

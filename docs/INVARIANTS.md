@@ -2342,6 +2342,30 @@ again.
   No-category items count as service "Other" (no PIC required). Unit prices
   are NOT prefilled (pricing — needs Vincent). `test-tao-catalog.ts`.
 
+- **INV-QB-033** — A TAB/TAC/quotation line's QuickBooks item is resolved
+  EXACTLY or the write stops; and only real RENEWAL items get the period
+  check. Found 2026-10-05 (Vincent: "我也担心TAB的服务不全面和描述被简化了";
+  4-agent council review, each claim re-checked): (1) `buildInvoiceLineArray`
+  fell back to `pickItem` — a keyword guess, else the book's FIRST item —
+  whenever a named item wasn't found, and `getItemMap` returned an empty map
+  when QuickBooks didn't answer (whole invoice on one item); 9 Billing Drafts
+  catalog names (TAB names, e.g. "Secretary:CPF Submission Services") have
+  no TAC twin, reachable from the Quotation page; editing re-looked every
+  line up by name. Now a named item not found in THIS book, or an unreadable
+  item list, throws `QbItemLookupError` before anything is written (create,
+  update, quotation answer with a plain error); a loaded line keeps its
+  QuickBooks item Id (`itemId`, `getLiveInvoice` → editor → update) and is
+  never re-looked up; only a line naming no item keeps the per-service
+  default. (2) the period check ran on every Secretary/Address/ND line, so
+  ~25 one-off Billing Drafts items (Change of Director, Strike Off, CTC,
+  Shares Transfer…) and ND Deposit were hard-blocked unless the text stated
+  "Mon YYYY - Mon YYYY" — the reason a short catalog label never reached a
+  real invoice (0 of 425 TAB, 0 of 40 TAC lines). Now `needsRenewalPeriodCheck`
+  (lib/invoice-period.ts, used by the screen AND create-invoice) checks only
+  the renewal items — corporate secretarial retainer, registered address,
+  nominee director fees (`classifyRenewalFeeProduct` primary). Vincent:
+  "拦下并说明原因", "只检查真正的续费项目". `test-item-resolution.ts`.
+
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
 - **INV-DATA-001** — Optimistic-concurrency CAS on a boolean field must

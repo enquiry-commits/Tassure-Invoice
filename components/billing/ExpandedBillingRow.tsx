@@ -26,7 +26,7 @@ import { logActivity } from '@/lib/activity-client';
 import { fmtDate } from '@/lib/date';
 import { formatStaffName } from '@/lib/staff-directory';
 import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
-import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError } from '@/lib/invoice-period';
+import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError, needsRenewalPeriodCheck } from '@/lib/invoice-period';
 import { manualInvoiceOverrides } from '@/lib/manual-invoice-marker';
 import { SVC_CONFIG } from '@/components/billing/service-config';
 import { getsDefaultPicClass, picLivesInServiceItem, type PicClassOption } from '@/lib/invoice-pic-class';
@@ -135,6 +135,9 @@ type EditableLine = {
   // service — shown as QuickBooks has it, read-only, so nobody deletes
   // accounting's line by accident.
   lockedDeferred?: boolean;
+  // Edit mode only: the QuickBooks item Id this line already carries — sent
+  // back as-is so saving never re-looks the item up by name (INV-QB-033).
+  itemId?: string;
   service: string;
   productService: string;   // exact QB Product/Service item
   description: string;
@@ -610,8 +613,8 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       if (!res.ok) throw new Error(json.error ?? 'Unable to load this invoice from QuickBooks.');
       // Each line's PIC comes from its live QuickBooks Class, so the PIC
       // column shows what QuickBooks really has and saving keeps it.
-      const loaded: EditableLine[] = (json.lines ?? []).map((l: { service: string; productService: string; description: string; qty: number; rate: number; picClass?: PicClassOption | null }) => ({
-        service: l.service, productService: l.productService, description: l.description,
+      const loaded: EditableLine[] = (json.lines ?? []).map((l: { service: string; productService: string; itemId?: string; description: string; qty: number; rate: number; picClass?: PicClassOption | null }) => ({
+        service: l.service, productService: l.productService, itemId: l.itemId || undefined, description: l.description,
         qty: l.qty, rate: l.rate, include: true, due: false, reason: 'Live from QuickBooks',
         picClassId: l.picClass?.value ?? null, picClassName: l.picClass?.name ?? null, book: company,
       }));
@@ -732,7 +735,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
     const blocking: string[] = [];
     const overlaps: string[] = [];
     for (const line of checkedLines) {
-      if (!['Secretary', 'Address', 'ND'].includes(line.service)) continue;
+      if (!needsRenewalPeriodCheck(line)) continue; // renewal items only — INV-QB-033
       if (line.periodNeedsReview && !line.periodReviewed) {
         blocking.push(`${line.service}: confirm the latest period against QuickBooks.`);
       }
@@ -959,7 +962,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       return;
     }
     const toApiLine = (l: EditableLine) => ({
-      service: l.service, productService: l.productService, description: l.description, rate: l.rate, qty: l.qty,
+      service: l.service, productService: l.productService, itemId: l.itemId, description: l.description, rate: l.rate, qty: l.qty,
       // Every line's PIC exactly as shown (loaded from the live invoice or
       // changed here) — saving no longer resets classes (INV-QB-026).
       picClassId: effectivePicId(l, company),
@@ -974,7 +977,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       const { primary, deferred } = l.parts;
       const expanded = expandMergedAmount(
         { ...toApiLine(l), productService: primary.productService, qty: primary.qty, rate: primary.rate },
-        deferred.map(d => ({ service: d.service, productService: d.productService, description: d.description, rate: d.rate, qty: d.qty, picClassId: d.picClassId ?? null })),
+        deferred.map(d => ({ service: d.service, productService: d.productService, itemId: d.itemId, description: d.description, rate: d.rate, qty: d.qty, picClassId: d.picClassId ?? null })),
         l.qty * l.rate,
       );
       if (!expanded.ok) {

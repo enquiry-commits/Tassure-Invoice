@@ -4,7 +4,7 @@ import { todaySGT } from '@/lib/date';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
 import { getRequestAccount } from '@/lib/request-account';
 import {
-  findCustomer, getItemMap, buildInvoiceLineArray,
+  findCustomer, getItemMap, buildInvoiceLineArray, QbItemLookupError,
   nextEstimateDocNumber, estimateDocNumberExists,
   type DraftLineItem,
 } from '@/lib/qb-invoice-conventions';
@@ -95,10 +95,26 @@ export async function POST(req: NextRequest) {
   const customer = await findCustomer(token, realmId, name);
   if (!customer) return NextResponse.json({ error: `Customer not found in QB ${qbBook}: "${name}"` }, { status: 404 });
 
-  const [itemMap, docNumber] = await Promise.all([
-    getItemMap(token, realmId),
-    nextEstimateDocNumber(token, realmId, date),
-  ]);
+  let lookups;
+  try {
+    lookups = await Promise.all([
+      getItemMap(token, realmId),
+      nextEstimateDocNumber(token, realmId, date),
+    ]);
+  } catch (error) {
+    if (error instanceof QbItemLookupError) return NextResponse.json({ error: error.message }, { status: 503 });
+    throw error;
+  }
+  const [itemMap, docNumber] = lookups;
+  // Every line's item resolved exactly in THIS book before anything is
+  // written (INV-QB-033) — a TAB-only item name on a TAC/TAO quotation stops here.
+  let quoteLines;
+  try {
+    quoteLines = buildInvoiceLineArray(lines, itemMap, null);
+  } catch (error) {
+    if (error instanceof QbItemLookupError) return NextResponse.json({ error: `QB ${qbBook}: ${error.message}` }, { status: 409 });
+    throw error;
+  }
   if (!docNumber) return NextResponse.json({ error: `Could not determine the next QuickBooks ${qbBook} quotation number.` }, { status: 503 });
   // Narrows the window between the number just estimated and this write —
   // same discipline as invoiceDocNumberExists before an invoice create.
@@ -107,7 +123,7 @@ export async function POST(req: NextRequest) {
   }
 
   const payload: Record<string, unknown> = {
-    Line: buildInvoiceLineArray(lines, itemMap, null),
+    Line: quoteLines,
     CustomerRef: { value: customer.id, name: customer.name },
     TxnDate: date,
     DocNumber: docNumber,

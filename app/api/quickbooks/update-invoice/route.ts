@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount } from '@/lib/approved-accounts';
 import { createAdminClient } from '@/lib/supabase';
 import { getValidToken, qbQuery, type QbCompany } from '@/lib/quickbooks';
-import { getItemMap, findPicClass, listActiveClasses, buildInvoiceLineArray, resolveParentBillAddr, resolveCareOfBillAddr, loadCareOfSettings, findCustomer, type DraftLineItem } from '@/lib/qb-invoice-conventions';
+import { getItemMap, findPicClass, listActiveClasses, buildInvoiceLineArray, QbItemLookupError, resolveParentBillAddr, resolveCareOfBillAddr, loadCareOfSettings, findCustomer, type DraftLineItem } from '@/lib/qb-invoice-conventions';
 import { validateLinePicClasses, type PicClassOption } from '@/lib/invoice-pic-class';
 import { normalize } from '@/lib/company-name';
 import { syncQuickBooksInvoiceChanges } from '@/lib/quickbooks-invoice-incremental';
@@ -52,6 +52,10 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'qbInvoiceId must be a valid QuickBooks invoice id.' }, { status: 400 });
   }
   if (!lines?.length) return NextResponse.json({ error: 'At least one line is required.' }, { status: 400 });
+  // A line's existing QuickBooks item Id (INV-QB-033) is used as-is — digits only.
+  if (lines.some(l => l.itemId !== undefined && !/^\d+$/.test(String(l.itemId)))) {
+    return NextResponse.json({ error: 'A line item id must be a QuickBooks item id.' }, { status: 400 });
+  }
   // Accounting's Deferred Revenue twins carry no description in QuickBooks
   // (637 of 736 in 2026) and are written back exactly as they were
   // (INV-QB-029) — refusing them made every split invoice unsavable, and the
@@ -149,10 +153,17 @@ export async function PATCH(req: NextRequest) {
     }, { status: 409 });
   }
 
-  const [itemMap, picClass] = await Promise.all([
-    getItemMap(token, realmId),
-    qbCompany === 'TAB' && pic ? findPicClass(token, realmId, pic) : Promise.resolve(null),
-  ]);
+  let lookups;
+  try {
+    lookups = await Promise.all([
+      getItemMap(token, realmId),
+      qbCompany === 'TAB' && pic ? findPicClass(token, realmId, pic) : Promise.resolve(null),
+    ]);
+  } catch (error) {
+    if (error instanceof QbItemLookupError) return NextResponse.json({ error: error.message }, { status: 503 });
+    throw error;
+  }
+  const [itemMap, picClass] = lookups;
 
   // Same Bill-To precedence as create-invoice (c/o over parent link — see
   // that route's comment). Re-resolved on every save for the reason Vincent
@@ -196,7 +207,13 @@ export async function PATCH(req: NextRequest) {
     if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 });
     chosenClasses = checked.classes;
   }
-  const invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass, chosenClasses);
+  let invoiceLines;
+  try {
+    invoiceLines = buildInvoiceLineArray(lines, itemMap, picClass, chosenClasses);
+  } catch (error) {
+    if (error instanceof QbItemLookupError) return NextResponse.json({ error: error.message }, { status: 409 });
+    throw error;
+  }
 
   // Sparse update — CustomerRef/TxnDate/DocNumber are deliberately never
   // included, so QB can't change them regardless of what's sent here;

@@ -6,6 +6,9 @@ import { classify } from './quickbooks-invoice-incremental';
 export type LiveInvoiceLine = {
   service: string;
   productService: string;
+  // The QuickBooks item Id the line carries now — saving an edit reuses it
+  // instead of looking the item up again by name (INV-QB-033).
+  itemId: string;
   description: string;
   qty: number;
   rate: number;
@@ -52,6 +55,7 @@ export async function getLiveInvoice(company: QbCompany, id: string): Promise<Li
       return {
         service,
         productService: product,
+        itemId: String(itemRef.value ?? ''),
         description,
         qty: Number(detail.Qty ?? 1),
         rate: Number(detail.UnitPrice ?? 0),

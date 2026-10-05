@@ -179,6 +179,10 @@ export interface DraftLineItem {
   rate: number;
   qty?: number;
   productService?: string;  // exact QB Product/Service name, e.g. "Secretary:Corporate Secretarial Services"
+  // The QuickBooks item Id a line ALREADY carries (a line loaded from an
+  // existing invoice) — used as-is, never looked up again by name, so saving
+  // an edit can't move an untouched line to another item (INV-QB-033).
+  itemId?: string;
   periodConfirmed?: boolean; // required when the latest QB renewal has no readable period
   // The line's PIC as a QuickBooks Class Id, picked per line in the Billing
   // Drafts popup's PIC column (Vincent, 2026-10-04: "要和QB那样，要有一列是
@@ -313,7 +317,9 @@ export async function getItemMap(token: string, realmId: string): Promise<Map<st
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
   });
   const map = new Map<string, { id: string; name: string }>();
-  if (!res.ok) return map;
+  // An empty map used to mean every line fell to a keyword guess (pickItem),
+  // the whole invoice landing on the first item. Stop instead (INV-QB-033).
+  if (!res.ok) throw new QbItemLookupError('QuickBooks\' item list could not be read, so nothing was saved. Try again.');
   const json = await res.json();
   for (const item of json.QueryResponse?.Item ?? []) {
     const name = item.Name as string;
@@ -374,9 +380,20 @@ export function buildInvoiceLineArray(
   // book's live classes (lib/invoice-pic-class.ts).
   chosenClasses: ReadonlyMap<string, PicClassOption> = new Map(),
 ) {
-  return lines.map((l, i) => {
-    const exact = l.productService ? itemMap.get(l.productService.toLowerCase()) : undefined;
-    const item = exact ?? pickItem(l.service, itemMap);
+  // A line names its QuickBooks item; if that exact item doesn't exist in
+  // THIS book, stop — never guess a lookalike by keyword (Vincent,
+  // 2026-10-05: "拦下并说明原因"; e.g. TAB-only names like "CPF Submission
+  // Services" have no TAC twin and used to land on whatever item matched
+  // "secretary" first). Only a line with no item name at all keeps the
+  // long-standing per-service default. INV-QB-033.
+  const unknown: string[] = [];
+  const built = lines.map((l, i) => {
+    const item = l.itemId
+      ? { id: l.itemId, name: l.productService ?? '' }
+      : l.productService
+        ? itemMap.get(l.productService.toLowerCase()) ?? null
+        : pickItem(l.service, itemMap);
+    if (!item) unknown.push(l.productService!);
     const classRef = lineClassRef(l, picClass, chosenClasses);
     return {
       LineNum: i + 1,
@@ -384,14 +401,22 @@ export function buildInvoiceLineArray(
       Amount: +(l.rate * (l.qty ?? 1)).toFixed(2),
       Description: l.description,
       SalesItemLineDetail: {
-        ItemRef: { value: item.id, name: item.name },
+        ItemRef: { value: item?.id ?? '', name: item?.name ?? '' },
         Qty:       l.qty ?? 1,
         UnitPrice: l.rate,
         ...(classRef ? { ClassRef: { value: classRef.value, name: classRef.name } } : {}),
       },
     };
   });
+  if (unknown.length) {
+    throw new QbItemLookupError(`QuickBooks has no item named ${[...new Set(unknown)].map(n => `"${n}"`).join(', ')} in this book, so nothing was saved. Pick the item from the list again.`);
+  }
+  return built;
 }
+
+// Thrown before anything is written when a line's QuickBooks item can't be
+// resolved exactly (INV-QB-033) — callers turn it into a plain error.
+export class QbItemLookupError extends Error {}
 
 // A person's explicit per-line PIC wins (null = deliberately none). With no
 // choice the default rule applies, unchanged (INV-QB-007): the company PIC on

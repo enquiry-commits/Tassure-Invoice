@@ -44,6 +44,21 @@ export function classifyRenewalFeeProduct(productService: string | null | undefi
   return null;
 }
 
+/**
+ * Whether a draft line is a yearly RENEWAL whose service period must be
+ * stated and must not overlap the last one billed. Only the renewal items
+ * themselves (corporate secretarial retainer, registered address, nominee
+ * director fees) — not every line filed under "Secretary": one-off work such
+ * as Change of Director, Strike Off or CTC has no period and was blocked by
+ * this check (Vincent, 2026-10-05: "只检查真正的续费项目"; INV-QB-033). A
+ * line naming no item keeps the old service-based rule.
+ */
+export function needsRenewalPeriodCheck(line: { service: string; productService?: string | null }): boolean {
+  if (!['Secretary', 'Address', 'ND'].includes(line.service)) return false;
+  if (!line.productService) return true;
+  return classifyRenewalFeeProduct(line.productService)?.role === 'primary';
+}
+
 export function isPrimaryRenewalProduct(service: string, productService: string | null | undefined) {
   const product = classifyRenewalFeeProduct(productService);
   return product?.role === 'primary' && product.service === service;

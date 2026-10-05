@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (FIXED, step 1 of 2: TAB/TAC/quotation items resolve exactly or stop; one-off services no longer period-checked — Vincent: "我也担心TAB的服务不全面和描述被简化了", decisions "拦下并说明原因", "只检查真正的续费项目").
+
+**Found (read-only + 4-agent council, claims re-checked).** Renewal rows already use the full QuickBooks texts; the simplification is only in "Add line" (hardcoded 61-item list, short label, stale median price). Worse: an unknown item name fell to a keyword guess (or the first item when QuickBooks didn't answer), editing re-looked items up by name, and ~25 one-off Secretary items were hard-blocked by the renewal-period check. **Changed:** `QbItemLookupError` stops create/update/quotation before any write; loaded lines keep their item Id; `needsRenewalPeriodCheck` (screen + server) checks only the retainer, address and ND fees. INV-QB-033, REG-034, `test-item-resolution.ts`. **Verified:** tsc 0, eslint no new errors, test-item-resolution / pic-class / quotation-trace / deferred-pairing / statement-memo / current-invoice-values / tao-catalog all OK. **Not verified:** a real Generate/edit (REG-034). **Step 2 (next):** live per-book list, QuickBooks descriptions, no price prefill.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (FIXED: the TAO builder now lists every QuickBooks TAO item, Discount Given included, with QuickBooks' own description — Vincent: "TAO 为什么不完整的，没有这个Discount 的选项…Description 也不完善", after Jay keyed #02660764 straight into QuickBooks).
 
 **Found (read-only + 4-agent council, each claim re-checked).** The builder kept only SubItems of the 5 categories (113 of 129 items; 16 no-category items hidden — 58 of 786 TAO invoices this year needed one, Discount Given on 29); a new line got the item's NAME although QuickBooks sends its description; "Custom / Other…" had silently become "Other:ACRA Fees" since the live list (10-04; no invoice affected); TAO's 59 Secretary-category services were blocked by the TAB/TAC renewal-period check; a failed QuickBooks read looked like an empty list. **Decided by Vincent:** all items like QuickBooks; descriptions as QuickBooks has them (no year change); TAO skips the period check.

@@ -491,6 +491,10 @@ boxed characters, English on the same line in the same font as the rest.
 Run `npx tsx test-tao-catalog.ts` (`ALL OK`). Then signed in, Billing System › TAO, expand any client: (1) "Add line" lists the 5 categories plus "No category" (Discount Given, Sales, Contra…), 129 items in all today. (2) Choosing Accounts › Yearly Accounts Services fills "Being professional services rendered for the year ended … - Yearly accounting services"; Discount Given fills "Goodwill discount". (3) "Custom / Other…" adds a custom line, not ACRA Fees. (4) Generate a TAO invoice with a Secretary item (e.g. Admin Fee) and a discount at a negative rate — it is created, no period error. (5) TAB/TAC renewals still stop on a missing period.
 **Guards:** `docs/INVARIANTS.md` INV-QB-032.
 
+### REG-034 — TAB/TAC items resolve exactly and one-off services are not period-checked (after ANY change to `buildInvoiceLineArray` / `getItemMap` / `pickItem`, `needsRenewalPeriodCheck`, the create/update invoice or create-quotation routes, or the editor's save)
+Run `npx tsx test-item-resolution.ts` (`ALL OK`). Then signed in: (1) Billing Drafts, add "Change of Director" to a TAB draft with a plain description — Generate is not blocked by a period message. (2) a normal renewal (Corp Sec with no period text) still stops with "enter a complete service period". (3) edit an existing invoice and save without changes — every line keeps its QuickBooks item (compare in QuickBooks). (4) Quotation page, TAC: a TAB-only item gives "QuickBooks has no item named …" and nothing is created.
+**Guards:** `docs/INVARIANTS.md` INV-QB-033.
+
 ---
 
 ## Automation priority
