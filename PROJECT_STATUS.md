@@ -1,5 +1,29 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (SHIPPED, inactive until Vincent runs one SQL: Unit 2 of the AI learning loop — each reply's evidence is saved, the empty global guidance block and its switch are in place, and the judge has a retry cap. The assistant's answers do not change: the guidance table is empty.)
+
+**What changed (INV-AI-012).**
+- New `lib/ai/answer-learning.ts` (pure): which learned rules may reach the prompt — active, unexpired, one of 4 behaviour categories, at most 8 of 280 characters or less, oldest first; the prompt block; how evidence is compacted (at most 12 tool calls, each result cut to 4,000 characters).
+- New `lib/ai/answer-learning-store.ts`:
+  - `loadAnswerGuidance()` fails closed and caches for 60s;
+  - `trackTurnEvidence()` writes after the reply, like the usage ledger;
+  - `purgeOldTurnEvidence()` keeps 30 days.
+- `app/api/assistant/route.ts`:
+  - `claudeAnswer()` adds the guidance as its own cached system block, only when there is one, and returns the rule ids it used;
+  - the main Claude path writes the reply's evidence once the run has an id — never as part of the `ai_agent_runs` insert, where any error would cost the reply its `agent_run_id`.
+- `lib/ai-quality/review.ts`: a reply is left alone after 3 failed judge attempts (`skippedGaveUp`).
+- `app/api/ai-quality/review/route.ts`: purges evidence older than 30 days after the reviews are saved (`evidencePurged`).
+- New `scripts/add-ai-answer-learning.sql` creates 4 tables, all with RLS on. The guidance table's CHECK allows only the 4 behaviour categories, so a business rule cannot be stored. Every part does nothing while its table is missing, so this was pushed before the SQL ran.
+
+**Verification.**
+- New `test-answer-learning.ts`: ALL OK, 19 checks.
+- 6 negative controls each fail their own rule: guidance always sent, evidence written without a run id, switch failing open, a table without RLS, the database allowing `pricing`, the picker ignoring the category.
+- `tsc` 0 and eslint clean (the route's only warning, `hiddenNote`, was there before).
+- ALL OK or ALL PASSED: `test-ai-quality-judge`, `test-prompt-memories`, `test-cron-wiring`, `test-ai-usage`, `test-account-access`, `test-assistant-pages`, `test-orchestrator`; plus `test-reply-guards` and `test-reports-narrative-guards` with the usual `server-only` stub.
+- **Not verified:** a real reply's evidence row and the real tables — that needs the SQL, then one assistant question.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (FIXED + Unit 1 of the AI learning loop. Vincent's two explicit "remember this" requests had been missing from every assistant prompt. The quality judge also gains an over-caution check and skips the generic fallback menus. Asked: Vincent wants every Q&A to go through a nightly 8-role council so the assistant learns on its own — the full council designed it, and he chose "行为类自动 + 考试", "存 30 天", "每周一次".)
 
 **What the council decided.** Full council, 14:07 SGT, 4 members, unanimous ranking Architect > Skeptic > Researcher > Pragmatist:

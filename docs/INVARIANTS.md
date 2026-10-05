@@ -4045,6 +4045,44 @@ again.
 
 ## AI Assistant / chatbot (INV-AI)
 
+- **INV-AI-012** — The AI answer-quality learning loop's foundation (Unit 2,
+  2026-10-05). The design came from the full council of 2026-10-05; Vincent
+  chose "行为类自动 + 考试", "存 30 天" and "每周一次". Every later unit must
+  keep these rules.
+  (1) Reply evidence (`ai_turn_evidence`: each tool's input and result,
+  compacted by `compactEvidence`) is written AFTER the reply, in its own
+  table, and only once the run has an id (`trackTurnEvidence`). It is never
+  a column on the `ai_agent_runs` insert: `recordAgentRun()` returns null on
+  ANY insert error, so the reply would lose its `agent_run_id` and the
+  quality judge would silently never see it. Post Incorporate identity data
+  never enters it (the route already leaves that tool out of
+  `toolEvidence`). It is kept 30 days and purged by the nightly
+  `/api/ai-quality/review` after its reviews are saved.
+  (2) Learned guidance is GLOBAL (`ai_answer_guidance`), never
+  `user_memories` (INV-AI-011). At most 8 rules of 280 characters or less,
+  oldest first, each expiring after 30 days and never edited in place (a
+  change is a new row). It goes in as its own cached system block, between
+  the static and per-user blocks, and is left out entirely when there are
+  no rules. The table's CHECK allows only the four behaviour categories
+  (`tool_routing`, `ask_first`, `caveat`, `format_language`), so a pricing,
+  status, client-matching or reminder rule cannot even be stored (CLAUDE.md
+  non-negotiables). `GUIDANCE_CATEGORIES` in `lib/ai/answer-learning.ts`
+  must stay identical — `test-answer-learning.ts` checks both.
+  (3) The master switch (`ai_guidance_switch`) fails CLOSED: if it is off
+  or can't be read, no prompt gets any guidance. It takes effect within
+  60s (a per-instance cache) and needs no deploy.
+  (4) Every evidence row records which guidance ids were in that answer's
+  prompt, so a rule is judged by its effect, never assumed to work.
+  (5) The judge leaves a reply alone after 3 failed attempts
+  (`ai_quality_judge_attempts`).
+  Every function here does nothing when its table is missing, so the code
+  could be deployed before `scripts/add-ai-answer-learning.sql` ran.
+  Not built yet (Unit 3): the reviewer and checker; the replay exam that a
+  rule must pass before it goes live; `claude-opus-5` in `lib/ai/pricing.ts`
+  before any Opus call; spend caps of US$1 a night and $20 a month; the
+  weekly council. Until then the guidance table stays empty and answers are
+  unchanged.
+
 - **INV-AI-011** — What the user asked the assistant to remember must
   always reach its prompt, and every memory line must say where it came
   from. The prompt's memory block (`app/api/assistant/route.ts`

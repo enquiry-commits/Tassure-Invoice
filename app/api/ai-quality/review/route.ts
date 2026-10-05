@@ -3,6 +3,7 @@ import { withAutomationRun } from '@/lib/automation-sync';
 import { runQualityReviewBatch } from '@/lib/ai-quality/review';
 import { scheduledJobUsage } from '@/lib/ai/job-usage';
 import { getRequestAccount } from '@/lib/request-account';
+import { purgeOldTurnEvidence } from '@/lib/ai/answer-learning-store';
 
 /**
  * Daily unattended AI quality spot-check — item 6 of Vincent's "AI Agent/My
@@ -34,12 +35,16 @@ export async function GET(req: NextRequest) {
   const usage = await scheduledJobUsage(req, 'ai_quality_review');
   return withAutomationRun(req, 'ai_quality_review', async () => {
     const result = await runQualityReviewBatch(20, usage);
+    // Reply evidence is kept 30 days (INV-AI-012, Vincent: "存 30 天"). After
+    // the batch, so reviews are saved first; a purge failure throws and the
+    // run shows as failed — a missed retention deadline must not stay quiet.
+    const evidencePurged = await purgeOldTurnEvidence();
     // "Failed" only means every candidate this run actually tried to judge
     // errored out — zero candidates found (nothing recent to review) or no
     // API key configured are both a normal, successful no-op, not a failure.
     const ok = result.skippedNoKey || result.reviewed > 0 || result.errors === 0;
     // A failed run says why: withAutomationRun records `error` as the run's
     // failure message on Automation Health.
-    return NextResponse.json({ ok, ...result, ...(ok ? {} : { error: result.errorSamples[0] ?? 'Every judge call failed.' }) });
+    return NextResponse.json({ ok, ...result, evidencePurged, ...(ok ? {} : { error: result.errorSamples[0] ?? 'Every judge call failed.' }) });
   });
 }

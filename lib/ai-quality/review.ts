@@ -28,6 +28,7 @@ import { judgeRequestBody, parseJudgeResponse, type QualityIssue, type QualityVe
 export type { QualityIssue, QualityVerdict };
 
 type ReviewCandidate = {
+  priorAttempts: number;
   messageId: number;
   conversationId: number;
   accountEmail: string;
@@ -57,7 +58,12 @@ Respond with ONLY this JSON, no other text before or after it:
 // (INV-PERF-002) — the "preceding user message" for each sampled reply is
 // found in-memory from a single fetch of every message in the involved
 // conversations, not a per-candidate round trip.
-async function findCandidates(limit: number): Promise<{ candidates: ReviewCandidate[]; skippedFallback: number }> {
+// A reply whose judge call keeps failing would otherwise be re-tried — and
+// paid for — on every run. After this many failures it is left alone; its
+// last error stays in ai_quality_judge_attempts.
+const JUDGE_MAX_ATTEMPTS = 3;
+
+async function findCandidates(limit: number): Promise<{ candidates: ReviewCandidate[]; skippedFallback: number; skippedGaveUp: number }> {
   const supabase = createAdminClient();
   const { data: reviewed, error: reviewedError } = await supabase.from('ai_quality_reviews').select('message_id');
   // Without this list every candidate is judged — a paid call — and then
@@ -77,8 +83,19 @@ async function findCandidates(limit: number): Promise<{ candidates: ReviewCandid
     .not('agent_run_id', 'is', null)
     .order('created_at', { ascending: false })
     .limit(limit * 6);
-  const unreviewed = (recentAssistant ?? []).filter(m => !reviewedIds.has(Number(m.id)) && (m.content ?? '').trim().length > 20);
-  if (!unreviewed.length) return { candidates: [], skippedFallback: 0 };
+  const fresh = (recentAssistant ?? []).filter(m => !reviewedIds.has(Number(m.id)) && (m.content ?? '').trim().length > 20);
+  if (!fresh.length) return { candidates: [], skippedFallback: 0, skippedGaveUp: 0 };
+
+  // Retry cap (scripts/add-ai-answer-learning.sql). Before that table
+  // exists the read fails and there is simply no cap — same as before.
+  const { data: attemptRows } = await supabase
+    .from('ai_quality_judge_attempts')
+    .select('message_id, attempts')
+    .in('message_id', fresh.map(m => Number(m.id)));
+  const attemptsById = new Map((attemptRows ?? []).map(a => [Number(a.message_id), Number(a.attempts)]));
+  const unreviewed = fresh.filter(m => (attemptsById.get(Number(m.id)) ?? 0) < JUDGE_MAX_ATTEMPTS);
+  const skippedGaveUp = fresh.length - unreviewed.length;
+  if (!unreviewed.length) return { candidates: [], skippedFallback: 0, skippedGaveUp };
 
   // The generic menu shown when the Claude call itself failed (route
   // 'intent_fallback') is not the model's answer — nothing to judge or learn
@@ -93,7 +110,7 @@ async function findCandidates(limit: number): Promise<{ candidates: ReviewCandid
   const runById = new Map((runs ?? []).map(r => [Number(r.id), r]));
   const pool = unreviewed.filter(m => runById.get(Number(m.agent_run_id))?.route !== 'intent_fallback');
   const skippedFallback = unreviewed.length - pool.length;
-  if (!pool.length) return { candidates: [], skippedFallback };
+  if (!pool.length) return { candidates: [], skippedFallback, skippedGaveUp };
   const sample = [...pool].sort(() => Math.random() - 0.5).slice(0, limit);
 
   const convoIds = [...new Set(sample.map(m => Number(m.conversation_id)))];
@@ -118,6 +135,7 @@ async function findCandidates(limit: number): Promise<{ candidates: ReviewCandid
       .filter(s => s.role === 'user' && new Date(s.created_at).getTime() < new Date(m.created_at).getTime())
       .pop();
     return {
+      priorAttempts: attemptsById.get(Number(m.id)) ?? 0,
       messageId: Number(m.id),
       conversationId: Number(m.conversation_id),
       accountEmail: emailByConvo.get(Number(m.conversation_id)) ?? 'unknown',
@@ -126,7 +144,22 @@ async function findCandidates(limit: number): Promise<{ candidates: ReviewCandid
       toolsUsed: toolsByRun.get(Number(m.agent_run_id)) ?? [],
     };
   });
-  return { candidates, skippedFallback };
+  return { candidates, skippedFallback, skippedGaveUp };
+}
+
+// Counts one more failed judge attempt for this reply (the retry cap above).
+// Never throws — before its table exists this simply does nothing.
+async function noteFailedAttempt(supabase: ReturnType<typeof createAdminClient>, candidate: ReviewCandidate, message: string) {
+  try {
+    await supabase.from('ai_quality_judge_attempts').upsert({
+      message_id: candidate.messageId,
+      attempts: candidate.priorAttempts + 1,
+      last_error: message.slice(0, 500),
+      last_attempt_at: new Date().toISOString(),
+    }, { onConflict: 'message_id' });
+  } catch {
+    // the cap is a cost guard, never a reason to fail the run
+  }
 }
 
 function judge(candidate: ReviewCandidate, usage: AiUsageTag): Promise<QualityVerdict> {
@@ -150,6 +183,7 @@ export type QualityBatchResult = {
   errorSamples: string[];
   skippedForTime: number;
   skippedFallback: number;
+  skippedGaveUp: number;
   skippedNoKey: boolean;
 };
 
@@ -161,10 +195,10 @@ export type QualityBatchResult = {
 // `usage`: the nightly cron (system) or a person's own "立即抽查" click, for
 // the AI usage ledger (INV-AI-010).
 export async function runQualityReviewBatch(limit: number, usage: AiUsageTag): Promise<QualityBatchResult> {
-  if (!process.env.ANTHROPIC_API_KEY) return { reviewed: 0, flagged: 0, errors: 0, errorSamples: [], skippedForTime: 0, skippedFallback: 0, skippedNoKey: true };
+  if (!process.env.ANTHROPIC_API_KEY) return { reviewed: 0, flagged: 0, errors: 0, errorSamples: [], skippedForTime: 0, skippedFallback: 0, skippedGaveUp: 0, skippedNoKey: true };
   const startedAt = Date.now();
   const supabase = createAdminClient();
-  const { candidates, skippedFallback } = await findCandidates(limit);
+  const { candidates, skippedFallback, skippedGaveUp } = await findCandidates(limit);
   let reviewed = 0;
   let flagged = 0;
   let skippedForTime = 0;
@@ -197,14 +231,20 @@ export async function runQualityReviewBatch(limit: number, usage: AiUsageTag): P
       // A save error counts against THIS candidate only — never aborts the
       // rest of the batch. (A missing table is caught before any judge call,
       // in findCandidates.)
-      if (error) { noteError(`save: ${error.message}`); continue; }
+      if (error) {
+        noteError(`save: ${error.message}`);
+        await noteFailedAttempt(supabase, candidate, `save: ${error.message}`);
+        continue;
+      }
       reviewed++;
       if (result.verdict === 'flag') flagged++;
     } catch (error) {
-      noteError(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      noteError(message);
+      await noteFailedAttempt(supabase, candidate, message);
     }
   }
-  return { reviewed, flagged, errors, errorSamples, skippedForTime, skippedFallback, skippedNoKey: false };
+  return { reviewed, flagged, errors, errorSamples, skippedForTime, skippedFallback, skippedGaveUp, skippedNoKey: false };
 }
 
 export type QualityReviewRow = {

@@ -169,7 +169,7 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
 
 Units:
 1. Shipped 2026-10-05: the judge's `over_caution` category and fallback skip, plus the prompt memories fix (INV-AI-011).
-2. Next: evidence capture, the empty guidance table with its switch and injection point, and a judge retry cap. Needs Vincent's SQL before the deploy; answers are unchanged on day one.
+2. Shipped in code 2026-10-05 (INV-AI-012): evidence capture, the empty guidance table with its fail-closed switch and injection point, a judge retry cap, and the 30-day evidence purge. It stays inactive until Vincent runs `scripts/add-ai-answer-learning.sql` — every part does nothing while its table is missing. Answers are unchanged either way: the guidance table is empty.
 3. Later:
    - the reviewer/checker pair;
    - the replay exam (needs `claudeAnswer` pulled out of `route.ts`);

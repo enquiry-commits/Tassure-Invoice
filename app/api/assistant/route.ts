@@ -48,6 +48,8 @@ import { openAIConfigured, openAIModel } from '@/lib/ai/openai';
 import { claudeMessages } from '@/lib/ai/anthropic';
 import type { AiUsageTag } from '@/lib/ai/usage';
 import { recordAgentRun } from '@/lib/ai/agent-runs';
+import { guidanceBlock } from '@/lib/ai/answer-learning';
+import { loadAnswerGuidance, trackTurnEvidence } from '@/lib/ai/answer-learning-store';
 import { lifecycleVerdict } from '@/lib/company-lifecycle';
 import { analyzeUserConversations, shouldAnalyzeConversationNow } from '@/lib/ai-learning/conversations';
 import {
@@ -1898,6 +1900,9 @@ type ClaudeAnswerResult = {
   taoPreview?: TaoPreview;
   toolNames: string[];
   toolEvidence: ToolEvidence[];
+  // Which learned guidance rules were in this answer's prompt (INV-AI-012) —
+  // logged with the turn's evidence so a rule can be judged by its effect.
+  guidanceIds: number[];
 };
 
 async function claudeAnswer(messages: Msg[], usage: AiUsageTag, context?: AssistantContext, account?: ApprovedAccount | null): Promise<ClaudeAnswerResult> {
@@ -1906,10 +1911,18 @@ async function claudeAnswer(messages: Msg[], usage: AiUsageTag, context?: Assist
   // comment. Only the static block (and CLAUDE_TOOLS ahead of it, cached
   // as part of the same prefix) carries cache_control; the dynamic block
   // is small and cheap to send fresh every call.
+  // Learned answering guidance (INV-AI-012) sits between the two as its own
+  // cached block — it changes at most nightly — and is left out entirely
+  // when there is none (an empty text block is an API error). Empty until a
+  // rule passes the learning loop's exam, so answers are unchanged until then.
+  const [dynamicPrompt, guidance] = await Promise.all([dynamicSystemPrompt(context, account), loadAnswerGuidance()]);
+  const learned = guidanceBlock(guidance);
   const system = [
     { type: 'text', text: staticSystemPrompt(), cache_control: { type: 'ephemeral' } },
-    { type: 'text', text: await dynamicSystemPrompt(context, account) },
+    ...(learned ? [{ type: 'text', text: learned, cache_control: { type: 'ephemeral' } }] : []),
+    { type: 'text', text: dynamicPrompt },
   ];
+  const guidanceIds = guidance.map(rule => rule.id);
   // Captures the LAST successful preview_invoice_draft result across the
   // tool-use loop (2026-09-08 — see invoiceDraftPreview's own comment) so
   // it can ride along with the text reply as structured data for the
@@ -1966,7 +1979,7 @@ async function claudeAnswer(messages: Msg[], usage: AiUsageTag, context?: Assist
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
     if (!toolUses.length || data.stop_reason !== 'tool_use') {
       const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text).join('\n') || '(无回复)';
-      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, toolNames, toolEvidence };
+      return { text, invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, toolNames, toolEvidence, guidanceIds };
     }
     convo.push({ role: 'assistant', content: data.content });
     const results = [];
@@ -2037,7 +2050,7 @@ async function claudeAnswer(messages: Msg[], usage: AiUsageTag, context?: Assist
     }
     convo.push({ role: 'user', content: results });
   }
-  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, toolNames, toolEvidence };
+  return { text: '抱歉,这个问题查询步骤太多,请换个更具体的问法。', invoicePreview: lastInvoicePreview, lateFilingPreview: lastLateFilingPreview, invoiceEditPreview: lastInvoiceEditPreview, postIncorporatePreview: lastPostIncorporatePreview, arUpdatePreview: lastArUpdatePreview, exportOffer: lastExportOffer, soaPreview: lastSoaPreview, emailDraftPreview: lastEmailDraftPreview, companyUpdatePreview: lastCompanyUpdatePreview, taoPreview: lastTaoPreview, toolNames, toolEvidence, guidanceIds };
 }
 
 // ── Engine B: built-in intent router (no API key required) ───────────────────
@@ -2556,6 +2569,10 @@ export async function POST(req: NextRequest) {
         secondaryModel: useOpenAISynthesis ? openAIModel('primary') : null,
         toolNames: [...new Set(result.toolNames)], status: 'completed', latencyMs: Date.now() - startedAt,
       }) : null;
+      // What this reply was built from, for the quality judge and the
+      // learning loop (INV-AI-012): written after the reply, in its own table,
+      // only once the run has an id — never part of the run insert above.
+      if (runId && account) trackTurnEvidence({ agentRunId: runId, accountEmail: account.email, toolEvidence: result.toolEvidence, guidanceIds: result.guidanceIds });
       await persistExchange(
         conversationId, account, last.content, reply, isFirstMessage,
         toStoredPreview(result.invoicePreview, result.lateFilingPreview, result.invoiceEditPreview, result.postIncorporatePreview, result.arUpdatePreview),
