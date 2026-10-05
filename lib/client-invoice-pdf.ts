@@ -41,14 +41,23 @@ export async function fetchQuickBooksInvoicePdf(company: QbCompany, invoiceId: s
   return new Uint8Array(await res.arrayBuffer());
 }
 
+const TEMPLATE_DIR = path.join(process.cwd(), 'templates', 'client-invoice');
+
+// The Chinese font (10.6 MB) is read once, and only when an invoice needs it;
+// a failed read isn't cached, so the next invoice tries again.
+let cjkFontBytes: Promise<Uint8Array> | null = null;
+const cjkFont = () => (cjkFontBytes ??= fs.readFile(path.join(TEMPLATE_DIR, 'NotoSansSC-Regular.ttf')).then(
+  b => new Uint8Array(b),
+  err => { cjkFontBytes = null; throw err; },
+));
+
 const assetCache = new Map<string, ClientInvoiceAssets>();
 async function loadAssets(book: 'TAB' | 'TAC'): Promise<ClientInvoiceAssets> {
   const hit = assetCache.get(book);
   if (hit) return hit;
-  const dir = path.join(process.cwd(), 'templates', 'client-invoice');
-  const read = (kind: string) => fs.readFile(path.join(dir, `${book.toLowerCase()}-${kind}.png`)).then(b => new Uint8Array(b));
+  const read = (kind: string) => fs.readFile(path.join(TEMPLATE_DIR, `${book.toLowerCase()}-${kind}.png`)).then(b => new Uint8Array(b));
   const [header, footer, qr] = await Promise.all([read('header'), read('footer'), read('qr')]);
-  const assets = { header, footer, qr };
+  const assets = { header, footer, qr, cjkFont };
   assetCache.set(book, assets);
   return assets;
 }

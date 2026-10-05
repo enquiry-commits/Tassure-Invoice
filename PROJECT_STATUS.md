@@ -2455,6 +2455,25 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Client invoice PDF now prints Chinese text — 152 of the 154 open split
+  invoices are redrawn (was 138) (INV-QB-029).** Vincent approved adding a
+  Chinese font ("加，允许下载（推荐）"): Google's Noto Sans SC (OFL licence
+  alongside; static Regular instance, 10.6 MB in `templates/client-invoice/`)
+  via `@pdf-lib/fontkit` 1.1.1, read once and only when an invoice needs it,
+  subset-embedded (a few KB per PDF). Chinese characters use it, everything
+  else stays Helvetica; a character neither font has is refused (QuickBooks'
+  PDF + staff note), never an empty box. Two pdf-lib traps found by looking
+  at real renders, both now tested: odd-length glyph data → corrupted
+  characters (font re-saved padded), and Helvetica kerning inside pdf-lib's
+  width → text after an English run overlapped it (positions now use summed
+  character widths; 137 of the 138 previously drawn invoices keep
+  byte-identical page content, 1 wraps one word earlier). `npx tsx
+  test-client-invoice-model.ts` (25 checks) and `test-deferred-pairing.ts`
+  ALL PASSED; census 152 drawn / 2 model fallbacks / 0 refused; `npx tsc
+  --noEmit`, eslint (changed files) and `npm run build` clean, font and
+  fontkit traced into both PDF routes. Not yet seen in a real sent email
+  (REG-032, now with a Chinese-name step).
+
 - **Client invoice PDF switched ON for TAB and TAC.** Vincent compared real
   samples side by side (1X EXCHANGE TAB #02611112: QuickBooks 175 + bare
   525 vs the system's one Secretary line S$700; Advance CF TAC #02680320:

@@ -5,7 +5,8 @@
 // Run: npx tsx test-client-invoice-model.ts
 import fs from 'fs';
 import path from 'path';
-import { PDFDocument } from 'pdf-lib';
+import { PDFArray, PDFDocument, PDFDict, PDFName, PDFRawStream, StandardFonts, decodePDFRawStream } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import { buildClientInvoiceModel, billToLines, type QbInvoiceJson } from './lib/client-invoice-model';
 import { renderClientInvoicePdf, ClientInvoiceRenderError } from './lib/client-invoice-render';
 
@@ -74,7 +75,48 @@ console.log('\n--- drawing ---');
     check('a long invoice flows onto more pages instead of overlapping the footer', long.getPageCount() >= 2);
     let refused = false;
     try { await renderClientInvoicePdf({ ...d1.model, billTo: ['吉木锌国际贸易（上海）有限公司'] }, { header: asset('tab', 'header'), footer: asset('tab', 'footer'), qr: asset('tab', 'qr') }); } catch (err) { refused = err instanceof ClientInvoiceRenderError; }
-    check('a character the PDF font has no glyph for is refused (caller sends QuickBooks\' PDF), never dropped', refused);
+    check('without the Chinese font, Chinese text is refused (caller sends QuickBooks\' PDF), never dropped', refused);
+    const ttf = new Uint8Array(fs.readFileSync(path.join(dir, 'NotoSansSC-Regular.ttf')));
+    const chineseModel = { ...d1.model, billTo: ['吉木锌国际贸易（上海）有限公司', '10 Anson Road'], rows: [{ description: '秘书服务【2026年】 Corporate Secretarial Services (01/10/2026 - 30/09/2027)', amount: 700 }, ...d1.model.rows.slice(1)] };
+    const chinese = await renderClientInvoicePdf(chineseModel, { header: asset('tab', 'header'), footer: asset('tab', 'footer'), qr: asset('tab', 'qr'), cjkFont: async () => ttf });
+    const chineseDoc = await PDFDocument.load(chinese);
+    check('with the Chinese font, a Chinese client name and line draw on one page', chineseDoc.getPageCount() === 1);
+    check('only the glyphs used are embedded (the PDF stays small)', chinese.length < 600_000, `${chinese.length} bytes`);
+    // pdf-lib's subsetter writes halved (short) glyph offsets, so a font with
+    // odd-length glyph data embeds corrupted outlines while the page still
+    // "renders" — compare each embedded glyph with the original outline of
+    // the character the PDF's ToUnicode map says it is.
+    const original = fontkit.create(ttf);
+    let subset: ReturnType<typeof fontkit.create> | null = null;
+    let toUnicode = '';
+    for (const [, obj] of chineseDoc.context.enumerateIndirectObjects()) {
+      if (!(obj instanceof PDFDict)) continue;
+      const file = obj.get(PDFName.of('FontFile2'));
+      if (file) subset = fontkit.create(decodePDFRawStream(chineseDoc.context.lookup(file) as PDFRawStream).decode());
+      const map = String(obj.get(PDFName.of('BaseFont')) ?? '').includes('NotoSansSC') ? obj.get(PDFName.of('ToUnicode')) : undefined;
+      if (map) toUnicode = new TextDecoder().decode(decodePDFRawStream(chineseDoc.context.lookup(map) as PDFRawStream).decode());
+    }
+    const glyphChars = [...toUnicode.matchAll(/^<([0-9a-f]{4})> <([0-9a-f]+)>$/gim)].map(m => [parseInt(m[1], 16), String.fromCharCode(...m[2].match(/.{4}/g)!.map(h => parseInt(h, 16)))] as const);
+    const corrupted = glyphChars.filter(([gid, ch]) => { try { return subset!.getGlyph(gid).path.toSVG() !== original.glyphForCodePoint(ch.codePointAt(0)!).path.toSVG(); } catch { return true; } });
+    check('every character embedded from the Chinese font has its own original outline (none corrupted)', !!subset && glyphChars.length > 15 && glyphChars.length === subset.numGlyphs - 1 && corrupted.length === 0, `${glyphChars.length} characters mapped, ${subset ? subset.numGlyphs - 1 : 0} glyphs embedded, corrupted: ${corrupted.map(([, ch]) => ch).join('')}`);
+    const chineseChars = [...new Set([...chineseModel.billTo, ...chineseModel.rows.map(r => r.description)].join('').match(/[　-鿿＀-￯]/g))].sort().join('');
+    const fromCjkFont = glyphChars.map(([, ch]) => ch).sort().join('');
+    check('only the Chinese characters use the Chinese font — English on the same line stays Helvetica', fromCjkFont === chineseChars, `Chinese font drew "${fromCjkFont}"`);
+    let thai = '';
+    try { await renderClientInvoicePdf({ ...chineseModel, billTo: ['ภาษาไทย Co., Ltd.'] }, { header: asset('tab', 'header'), footer: asset('tab', 'footer'), qr: asset('tab', 'qr'), cjkFont: async () => ttf }); } catch (err) { thai = err instanceof ClientInvoiceRenderError ? err.message : `other error: ${String(err)}`; }
+    check('a character neither font has is refused even with the Chinese font (never an empty box)', /U\+0E20/.test(thai), thai);
+    // pdf-lib's Helvetica width subtracts kerning that drawText never applies,
+    // so the 】 after "Lzs Travel Pte. Ltd." once started ~3pt inside the text.
+    const latinText = 'Lzs Travel Pte. Ltd.';
+    const mixed = await PDFDocument.load(await renderClientInvoicePdf({ ...chineseModel, billTo: [`${latinText}】`] }, { header: asset('tab', 'header'), footer: asset('tab', 'footer'), qr: asset('tab', 'qr'), cjkFont: async () => ttf }));
+    const contents = mixed.getPage(0).node.Contents();
+    const content = (contents instanceof PDFArray ? contents.asArray().map(r => mixed.context.lookup(r)) : [contents]).map(s => Buffer.from(decodePDFRawStream(s as PDFRawStream).decode()).toString('latin1')).join('\n');
+    const shows = [...content.matchAll(/\/(\S+?)-\d+ [\d.]+ Tf\s+[\d.]+ TL\s+1 0 0 1 ([\d.]+) ([\d.]+) Tm\s+<([0-9A-F]+)> Tj/g)].map(m => ({ font: m[1], x: Number(m[2]), y: Number(m[3]), hex: m[4] }));
+    const latin = shows.find(s => s.font === 'Helvetica' && s.hex === Buffer.from(latinText, 'latin1').toString('hex').toUpperCase());
+    const bracket = latin && shows.find(s => s.font.startsWith('NotoSansSC') && Math.abs(s.y - latin.y) < 0.01);
+    const helvetica = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
+    const viewerWidth = [...latinText].reduce((w, ch) => w + helvetica.widthOfTextAtSize(ch, 10), 0);
+    check('the Chinese character after English text starts where a viewer ends that text (no overlap)', !!latin && !!bracket && viewerWidth - helvetica.widthOfTextAtSize(latinText, 10) > 1 && Math.abs(bracket.x - latin.x - viewerWidth) < 0.01, latin && bracket ? `gap ${(bracket.x - latin.x).toFixed(2)} vs text ${viewerWidth.toFixed(2)}` : 'runs not found');
   }
   console.log(`\n=== ${fail === 0 ? 'ALL PASSED' : `${fail} FAILURE(S)`} ===`);
   process.exit(fail === 0 ? 0 : 1);

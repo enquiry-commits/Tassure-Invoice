@@ -862,7 +862,9 @@ again.
   proven to cover every future draw call someone adds later. Proper CJK
   glyph rendering (an embedded Unicode font via `fontkit`) was deliberately
   out of scope — `safeText()` is a crash-safety net, not a real
-  Chinese-text-rendering feature.
+  Chinese-text-rendering feature. (The client invoice PDF does embed a
+  Chinese font since 2026-10-05 — INV-QB-029, `lib/client-invoice-render.ts`,
+  with its two pdf-lib traps; the SOA cover page still uses `safeText()`.)
 - **INV-DOC-012** — The SOA "All" page's own Draft Email / Download PDF
   actions are the ONE deliberate exception to "TAB/TAC/TAO always stay
   separately scoped" (INV-PIC-007's own domain) — Vincent, 2026-09-17,
@@ -2228,16 +2230,34 @@ again.
   `templates/client-invoice/`), never copied PDF content, so no text of the
   sample invoice can ride along hidden; the QR is identical across invoices
   of a book (checked: carries no amount). Bank details are real text. The
-  printed total must equal QuickBooks' TotalAmt to the cent. Anything not
-  exactly drawable — an unpaired twin, a discount/group/text line, tax,
-  non-SGD, unreadable terms, totals off by a cent, a character Helvetica has
-  no glyph for (Chinese names, full-width （）【】) — sends QuickBooks' own
-  PDF and TELLS staff why (Email Drafts: a note under the attachment; Save
-  PDF: the result message; SOA: an alert that now also reports invoices that
-  failed to merge, `X-Soa-Merge-Errors`, which no page used to read).
-  Render census over the 154 open split invoices (read-only, synced lines):
-  138 drawn (121 one page, 17 two), 2 model fallbacks, 14 refused for
-  Chinese text. Per-book switch `CLIENT_INVOICE_PDF_MODE`: TAB and TAC
+  printed total must equal QuickBooks' TotalAmt to the cent. Chinese text
+  (client names, full-width （）【】 in descriptions) is drawn character by
+  character in an embedded Noto Sans SC subset
+  (`templates/client-invoice/NotoSansSC-Regular.ttf`, OFL; Vincent approved
+  the download 2026-10-05, "加，允许下载"); every other character stays
+  Helvetica. Anything not exactly drawable — an unpaired twin, a
+  discount/group/text line, tax, non-SGD, unreadable terms, totals off by a
+  cent, a character NEITHER font has (e.g. Thai) — sends QuickBooks' own PDF
+  and TELLS staff why (Email Drafts: a note under the attachment; Save PDF:
+  the result message; SOA: an alert that now also reports invoices that
+  failed to merge, `X-Soa-Merge-Errors`, which no page used to read). Two
+  pdf-lib traps, both caught by looking at real renders before the font
+  shipped and both guarded in `test-client-invoice-model.ts`: (a) its
+  subsetter writes SHORT (halved) glyph offsets, so a TrueType file with
+  odd-length glyph data embeds corrupted characters while the page still
+  "renders" — fontTools' instancer saved exactly such a file (15,684 of
+  31,036 offsets odd) and most letters of a mixed line came out blank or
+  wrong; the shipped font is re-saved with every glyph padded to 4 bytes,
+  and the test compares each embedded glyph with the original outline of the
+  character the PDF's ToUnicode map names (a page count proves nothing);
+  (b) its Helvetica `widthOfTextAtSize` subtracts kerning that `drawText`
+  never applies, so text placed after a Helvetica run overlapped it (】 3pt
+  into "Ltd.") — positions now use the sum of character widths (digits have
+  no kerning pairs, so amounts didn't move; of the 138 invoices drawn
+  before, 137 have byte-identical page content and 1 wraps one word earlier,
+  same line count). Render census over the 154 open split invoices
+  (read-only, synced lines): 152 drawn (132 one page, 20 two), 2 model
+  fallbacks, 0 refused. Per-book switch `CLIENT_INVOICE_PDF_MODE`: TAB and TAC
   'live' since 2026-10-05 (Vincent approved real samples side by side —
   1X EXCHANGE TAB #02611112, Advance CF TAC #02680320); set a book back to
   'off' to send QuickBooks' PDF again.
