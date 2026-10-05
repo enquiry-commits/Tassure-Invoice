@@ -2298,6 +2298,30 @@ again.
   S$1,220, ADVANCE CF S$1,070; the duplicate check answers exists / unused /
   unknown (refused token). `test-current-invoice-values.ts` pins the rules.
 
+- **INV-QB-032** — The TAO builder offers QuickBooks TAO's OWN item list:
+  every active Service item, the 5 categories plus the no-category ones
+  ("No category": Discount Given, Sales, Contra, Company XBRL Fees, Corporate
+  Secretary Services, …), and a new line starts with the item's own
+  QuickBooks description, word for word. Found 2026-10-05: Jay opened the
+  TAO builder for Partical Investment, then keyed #02660764 straight into
+  QuickBooks — the builder only kept SubItems of the 5 categories (113 of
+  129; Discount Given, used on 29 TAO invoices this year, was one of the 16
+  left out, 58 of 786 invoices needed one), and filled a new line with the
+  item NAME although QuickBooks returns its description (95 of 113 have
+  one). Vincent (AskUserQuestion, after a 4-agent council review): "全部，和
+  QuickBooks 一样", "照 QuickBooks 原文" (no year rolled to the client's FYE),
+  and TAO skips the TAB/TAC renewal-period check — "TAO 不做这个检查": its 59
+  Secretary-category services (Admin Fee, EP application, Change of
+  Director…) are one-off work and were blocked whenever the text stated no
+  "Mon YYYY - Mon YYYY" period. Also fixed: "Custom / Other…" shared the
+  category "Other" with QuickBooks' real Other items once the list went live
+  (10-04), so choosing it added "Other:ACRA Fees" (no invoice affected
+  yet); a failed QuickBooks read now shows an error and hides "Add New
+  Service" instead of silently offering only Custom; the shared item map
+  reads 1000 items, not 200 (past 200 a line fell back to a keyword guess).
+  No-category items count as service "Other" (no PIC required). Unit prices
+  are NOT prefilled (pricing — needs Vincent). `test-tao-catalog.ts`.
+
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
 - **INV-DATA-001** — Optimistic-concurrency CAS on a boolean field must

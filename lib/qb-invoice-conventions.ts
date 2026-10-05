@@ -306,7 +306,9 @@ export async function resolveParentBillAddr(
 
 // ── Look up QB Items to get ItemRef for each service ─────────────────────────
 export async function getItemMap(token: string, realmId: string): Promise<Map<string, { id: string; name: string }>> {
-  const q = encodeURIComponent('SELECT * FROM Item WHERE Type = \'Service\' MAXRESULTS 200');
+  // 1000, not 200: past 200 items an invoice line quietly fell back to a
+  // keyword guess (pickItem) — TAO has 129 and "Add New Service" keeps adding.
+  const q = encodeURIComponent('SELECT * FROM Item WHERE Type = \'Service\' MAXRESULTS 1000');
   const res = await fetch(`${QB_BASE}/v3/company/${realmId}/query?query=${q}&minorversion=65`, {
     headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
   });

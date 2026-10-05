@@ -61,8 +61,15 @@ export type TaoServiceItem = {
   description: string | null;
 };
 
+// 'General' = items QuickBooks keeps outside the 5 categories (Discount
+// Given, Sales, Contra, Company XBRL Fees, …) — QuickBooks' own dropdown
+// lists them too, so the builder does as well (Vincent, 2026-10-05: "全部，
+// 和 QuickBooks 一样"; until then they were silently left out, and staff keyed
+// 58 of 786 TAO invoices this year straight into QuickBooks for them).
+export type TaoCatalogGroup = TaoServiceCategory | 'General';
+
 export type TaoServiceCatalog = {
-  category: TaoServiceCategory;
+  category: TaoCatalogGroup;
   items: TaoServiceItem[];
 }[];
 
@@ -73,14 +80,17 @@ const CATEGORY_NAMES = Object.keys(TAO_CATEGORY_ITEM_ID) as TaoServiceCategory[]
 // directly every call so a service added here (or directly in QuickBooks
 // by an accountant) shows up immediately, with no code change needed.
 export async function fetchTaoServiceCatalog(company: QbCompany = 'TAO'): Promise<TaoServiceCatalog> {
-  const result = await qbQuery("SELECT * FROM Item WHERE Type = 'Service' MAXRESULTS 300", company);
-  const rows = (result?.rows ?? []) as Record<string, unknown>[];
-  const byCategory = new Map<TaoServiceCategory, TaoServiceItem[]>();
+  const result = await qbQuery("SELECT * FROM Item WHERE Type = 'Service' MAXRESULTS 1000", company);
+  // A failed read must say so — an empty list here used to look like
+  // "QuickBooks has no services" and the builder offered only Custom.
+  if (!result) throw new Error(`QuickBooks ${company}'s service list could not be read.`);
+  const rows = result.rows as Record<string, unknown>[];
+  const byCategory = new Map<TaoCatalogGroup, TaoServiceItem[]>();
   for (const row of rows) {
-    if (!row.SubItem) continue;
     const parentName = (row.ParentRef as { name?: string } | undefined)?.name;
-    if (!CATEGORY_NAMES.includes(parentName as TaoServiceCategory)) continue;
-    const category = parentName as TaoServiceCategory;
+    const category: TaoCatalogGroup = row.SubItem && CATEGORY_NAMES.includes(parentName as TaoServiceCategory)
+      ? parentName as TaoServiceCategory
+      : 'General';
     const list = byCategory.get(category) ?? [];
     list.push({
       id: String(row.Id),
@@ -91,7 +101,7 @@ export async function fetchTaoServiceCatalog(company: QbCompany = 'TAO'): Promis
     });
     byCategory.set(category, list);
   }
-  return CATEGORY_NAMES
+  return ([...CATEGORY_NAMES, 'General'] as TaoCatalogGroup[])
     .filter(c => byCategory.has(c))
     .map(category => ({ category, items: (byCategory.get(category) ?? []).sort((a, b) => a.name.localeCompare(b.name)) }));
 }

@@ -1,5 +1,13 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (FIXED: the TAO builder now lists every QuickBooks TAO item, Discount Given included, with QuickBooks' own description — Vincent: "TAO 为什么不完整的，没有这个Discount 的选项…Description 也不完善", after Jay keyed #02660764 straight into QuickBooks).
+
+**Found (read-only + 4-agent council, each claim re-checked).** The builder kept only SubItems of the 5 categories (113 of 129 items; 16 no-category items hidden — 58 of 786 TAO invoices this year needed one, Discount Given on 29); a new line got the item's NAME although QuickBooks sends its description; "Custom / Other…" had silently become "Other:ACRA Fees" since the live list (10-04; no invoice affected); TAO's 59 Secretary-category services were blocked by the TAB/TAC renewal-period check; a failed QuickBooks read looked like an empty list. **Decided by Vincent:** all items like QuickBooks; descriptions as QuickBooks has them (no year change); TAO skips the period check.
+
+**Verification.** tsc 0, eslint no new errors, `test-tao-catalog.ts` ALL OK. Live, read-only: the new catalog returns all 129 (General 16, Discount Given → "Goodwill discount", Yearly Accounts → the full QuickBooks text). Browser harness (mocked APIs, reverted): dropdown groups incl. "No category"; Discount Given / Yearly Accounts / Custom fill the right text; a 502 shows the warning and hides Add New Service. **Not verified:** a real TAO Generate with a discount and a Secretary item (REG-033). INV-QB-032.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (SHIPPED, inactive until Vincent runs one SQL: Unit 2 of the AI learning loop — each reply's evidence is saved, the empty global guidance block and its switch are in place, and the judge has a retry cap. The assistant's answers do not change: the guidance table is empty.)
 
 **What changed (INV-AI-012).**

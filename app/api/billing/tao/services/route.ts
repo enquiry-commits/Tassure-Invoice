@@ -22,8 +22,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
   }
 
-  const catalog = await fetchTaoServiceCatalog('TAO');
-  return NextResponse.json({ categories: catalog });
+  try {
+    const catalog = await fetchTaoServiceCatalog('TAO');
+    return NextResponse.json({ categories: catalog });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'QuickBooks TAO service list could not be read.' }, { status: 502 });
+  }
 }
 
 const VALID_CATEGORIES = new Set(Object.keys(TAO_CATEGORY_ITEM_ID));

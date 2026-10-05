@@ -484,6 +484,10 @@ SOA PDF for a client with a split invoice shows it the same way. (4) An
 invoice with no Deferred line is QuickBooks' own PDF, unchanged.
 **Guards:** `docs/INVARIANTS.md` INV-QB-029.
 
+### REG-033 — TAO builder offers every QuickBooks TAO item with its description (after ANY change to `lib/tao-services.ts`, `components/billing/TaoInvoiceBuilder.tsx`, the TAO branch of create-invoice, or `getItemMap`)
+Run `npx tsx test-tao-catalog.ts` (`ALL OK`). Then signed in, Billing System › TAO, expand any client: (1) "Add line" lists the 5 categories plus "No category" (Discount Given, Sales, Contra…), 129 items in all today. (2) Choosing Accounts › Yearly Accounts Services fills "Being professional services rendered for the year ended … - Yearly accounting services"; Discount Given fills "Goodwill discount". (3) "Custom / Other…" adds a custom line, not ACRA Fees. (4) Generate a TAO invoice with a Secretary item (e.g. Admin Fee) and a discount at a negative rate — it is created, no period error. (5) TAB/TAC renewals still stop on a missing period.
+**Guards:** `docs/INVARIANTS.md` INV-QB-032.
+
 ---
 
 ## Automation priority

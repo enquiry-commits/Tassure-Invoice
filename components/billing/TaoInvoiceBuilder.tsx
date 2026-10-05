@@ -27,7 +27,10 @@ import { taoDefaultPicName, taoLineNeedsPic, type PicClassOption } from '@/lib/i
 import { composeTaoStatementMemo } from '@/lib/statement-memo';
 import type { TaoServiceCatalog } from '@/lib/tao-services';
 
-type CatalogEntry = { label: string; category: string; productService: string; service: string };
+// description: the item's own QuickBooks description — a new line starts
+// with it, exactly like picking the item in QuickBooks (Vincent, 2026-10-05:
+// "照 QuickBooks 原文"; lines used to start with just the item's name).
+type CatalogEntry = { label: string; category: string; productService: string; service: string; description: string | null };
 
 // "Custom / Other…" is a UI-only fallback, never a real QuickBooks item —
 // kept exactly as it always behaved (lib/qb-invoice-conventions.ts's
@@ -38,7 +41,13 @@ type CatalogEntry = { label: string; category: string; productService: string; s
 // QuickBooks自己的项目清单". A hardcoded list could only ever be as
 // complete as whoever last updated the code; this can't go stale, and a
 // service added via "Add New Service" below shows up immediately.
-const CUSTOM_OTHER: CatalogEntry = { label: 'Custom / Other…', category: 'Other', productService: '', service: 'Accounts' };
+// Its own category on purpose: it shared 'Other' with QuickBooks' real Other
+// category once the catalog went live (2026-10-04), so choosing it added the
+// first real Other item ("ACRA Fees") instead of a custom line.
+const CUSTOM_OTHER: CatalogEntry = { label: 'Custom / Other…', category: 'Custom', productService: '', service: 'Accounts', description: null };
+
+// Group heading for items QuickBooks keeps outside its 5 categories.
+const GENERAL_LABEL = 'No category';
 
 let catalogCache: CatalogEntry[] | null = null;
 let catalogPromise: Promise<CatalogEntry[]> | null = null;
@@ -46,14 +55,29 @@ export function invalidateTaoCatalogCache() { catalogCache = null; catalogPromis
 function fetchTaoCatalog(): Promise<CatalogEntry[]> {
   if (catalogCache) return Promise.resolve(catalogCache);
   if (!catalogPromise) {
-    catalogPromise = fetch('/api/billing/tao/services').then(r => r.json())
-      .then((json: { categories?: TaoServiceCatalog }) => {
-        const entries: CatalogEntry[] = (json.categories ?? []).flatMap(group =>
-          group.items.map(item => ({ label: item.name, category: group.category, productService: item.fullyQualifiedName, service: group.category })));
+    catalogPromise = fetch('/api/billing/tao/services')
+      .then(async r => {
+        const json = await r.json().catch(() => ({})) as { categories?: TaoServiceCatalog; error?: string };
+        if (!r.ok || !json.categories) throw new Error(json.error ?? 'QuickBooks service list could not be loaded.');
+        return json.categories;
+      })
+      .then(categories => {
+        const entries: CatalogEntry[] = categories.flatMap(group =>
+          group.items.map(item => ({
+            label: item.name,
+            category: group.category === 'General' ? GENERAL_LABEL : group.category,
+            productService: item.fullyQualifiedName,
+            // A no-category item (discount, contra, disbursement-like
+            // recharges) is not an Accounts/Tax/Secretary service: no PIC
+            // required, no renewal logic.
+            service: group.category === 'General' ? 'Other' : group.category,
+            description: item.description,
+          })));
         catalogCache = [...entries, CUSTOM_OTHER];
         return catalogCache;
       })
-      .catch(() => { catalogPromise = null; return [CUSTOM_OTHER]; });
+      // A failure is reported, never cached as "QuickBooks has no services".
+      .catch(error => { catalogPromise = null; throw error; });
   }
   return catalogPromise;
 }
@@ -86,7 +110,7 @@ type Line = {
 
 let lineKeySeq = 0;
 function newLine(opt: CatalogEntry): Line {
-  return { key: ++lineKeySeq, label: opt.label, productService: opt.productService, service: opt.service, description: opt.label, rate: '', qty: '1', include: true, lastBilled: null };
+  return { key: ++lineKeySeq, label: opt.label, productService: opt.productService, service: opt.service, description: opt.description?.trim() || opt.label, rate: '', qty: '1', include: true, lastBilled: null };
 }
 // A history row's description gets its date/period rolled forward one cycle
 // (lib/invoice-period.ts — the same function TAB/TAC's own recurring lines
@@ -94,8 +118,8 @@ function newLine(opt: CatalogEntry): Line {
 // "Apr 2027 to Jun 2027" — a starting guess ACC can still edit, not an
 // automatic due-date decision.
 function lineFromHistory(h: TaoServiceHistoryItem, catalog: CatalogEntry[]): Line {
-  const opt = catalog.find(x => x.productService === h.productService);
-  const custom = catalog.find(x => x.category === 'Other')!;
+  const opt = h.productService ? catalog.find(x => x.productService === h.productService) : undefined;
+  const custom = CUSTOM_OTHER;
   const baseDescription = h.description ?? (opt ? opt.label : (h.productService || custom.label));
   return {
     key: ++lineKeySeq,
@@ -222,8 +246,8 @@ function AddServiceModal({ onClose, onCreated }: {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Could not create the service in QuickBooks.');
-      const item = json.item as { name: string; fullyQualifiedName: string };
-      onCreated({ label: item.name, category, productService: item.fullyQualifiedName, service: category });
+      const item = json.item as { name: string; fullyQualifiedName: string; description?: string | null };
+      onCreated({ label: item.name, category, productService: item.fullyQualifiedName, service: category, description: item.description ?? null });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -367,19 +391,25 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
   // Live QuickBooks catalog (see fetchTaoCatalog's own header) — fetched
   // once per mount, cached across every other expanded row on the page.
   const [catalog, setCatalog] = useState<CatalogEntry[]>([CUSTOM_OTHER]);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [showAddService, setShowAddService] = useState(false);
-  useEffect(() => { fetchTaoCatalog().then(setCatalog); }, []);
+  useEffect(() => {
+    fetchTaoCatalog().then(c => { setCatalog(c); setCatalogError(null); })
+      .catch(e => setCatalogError(e instanceof Error ? e.message : 'QuickBooks service list could not be loaded.'));
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
     setHistoryLoading(true);
     Promise.all([
       fetch(`/api/billing/tao/service-history?companyName=${encodeURIComponent(company.companyName)}`, { signal: controller.signal }).then(res => res.json()) as Promise<Partial<TaoServiceHistory>>,
-      fetchTaoCatalog(),
+      // History rows still load when the catalog can't — the error shows by "Add line".
+      fetchTaoCatalog().catch(() => null),
     ])
-      .then(([json, liveCatalog]) => {
+      .then(([json, loadedCatalog]) => {
         const items: TaoServiceHistoryItem[] = json.services ?? [];
-        setCatalog(liveCatalog);
+        const liveCatalog = loadedCatalog ?? [CUSTOM_OTHER];
+        if (loadedCatalog) setCatalog(loadedCatalog);
         setLines(items.map(h => lineFromHistory(h, liveCatalog)));
         setPicHistory({
           lastClassByProduct: new Map(items.map(h => [h.productService, h.picClassName ?? null])),
@@ -395,8 +425,8 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
     setLines(current => current.map(l => (l.key === key ? { ...l, ...patch } : l)));
   const addLine = (selectValue: string) => {
     const opt = selectValue === '__custom__'
-      ? catalog.find(x => x.category === 'Other')
-      : catalog.find(x => x.productService === selectValue);
+      ? CUSTOM_OTHER
+      : catalog.find(x => x.productService && x.productService === selectValue);
     if (!opt) return;
     setLines(current => [...current, newLine(opt)]);
   };
@@ -617,18 +647,25 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
         <select value="" onChange={e => { if (e.target.value === '__add_new__') setShowAddService(true); else if (e.target.value) addLine(e.target.value); }}
           style={{ ...inputStyle, minWidth: 260, cursor: 'pointer' }}>
           <option value="">Choose a QuickBooks item…</option>
-          {[...new Set(catalog.filter(x => x.category !== 'Other').map(x => x.category))].map(cat => (
+          {/* Every QuickBooks service, grouped like QuickBooks — the 5
+              categories (Other included), then the no-category items. */}
+          {[...new Set(catalog.filter(x => x !== CUSTOM_OTHER).map(x => x.category))].map(cat => (
             <optgroup key={cat} label={cat}>
-              {catalog.filter(x => x.category === cat).map(x => (
-                <option key={x.productService} value={x.productService}>{x.label}</option>
+              {catalog.filter(x => x !== CUSTOM_OTHER && x.category === cat).map(x => (
+                <option key={x.productService} value={x.productService} title={x.description ?? undefined}>{x.label}</option>
               ))}
             </optgroup>
           ))}
-          {catalog.filter(x => x.category === 'Other').map(x => (
-            <option key={x.label} value={x.productService || '__custom__'}>{x.label}</option>
-          ))}
-          <option value="__add_new__">+ Add New Service…</option>
+          <option value="__custom__">{CUSTOM_OTHER.label}</option>
+          {/* Not while the list failed to load — staff would re-create a
+              service QuickBooks already has. */}
+          {!catalogError && <option value="__add_new__">+ Add New Service…</option>}
         </select>
+        {catalogError && (
+          <span style={{ fontSize: 11, color: 'var(--status-danger)', fontWeight: 600 }}>
+            ⚠ {catalogError} Reload the page before adding a service.
+          </span>
+        )}
       </div>
       {showAddService && (
         <AddServiceModal

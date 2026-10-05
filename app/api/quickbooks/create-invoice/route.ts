@@ -193,7 +193,13 @@ async function createInvoiceInCompany(
     if (parentBillAddr.kind === 'ok') billAddrToSend = parentBillAddr.billAddr;
   }
 
-  const { blocking, overlapWarnings } = await validateRenewalPeriods(company, customer.name, lines);
+  // TAB/TAC renewals only. TAO's Secretary-category services (Admin Fee, EP
+  // application, Change of Director, …) are one-off work billed by ACC, not
+  // yearly renewals — the period check blocked every one whose text states
+  // no "Mon YYYY - Mon YYYY" period (Vincent, 2026-10-05: "TAO 不做这个检查").
+  const { blocking, overlapWarnings } = company === 'TAO'
+    ? { blocking: [] as string[], overlapWarnings: [] as string[] }
+    : await validateRenewalPeriods(company, customer.name, lines);
   if (blocking.length) {
     return { error: `Invoice period validation failed. ${blocking.join(' ')}` };
   }
