@@ -2386,6 +2386,18 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **SG Latest News: the date tabs list only the latest 7 days.** Vincent:
+  "这边只保留最新7天的记录就好". `app/api/sg-news/route.ts`'s history
+  query now covers today and the 6 days before it (SGT calendar days,
+  `HISTORY_DAYS = 7`) instead of the last 30 reports. Display only —
+  nothing is deleted: all 13 daily reports on file (2026-09-23 →
+  2026-10-05) stay in `sg_news_daily_reports`, and `sg_news_items` must
+  never be pruned this way anyway (the sync dedups new items against it,
+  so deleting old rows would re-report them as new). Checked against
+  real data (read-only): the bar now shows 10-05, 10-04, 10-03, 10-02,
+  10-01, 09-30, 09-29. `npx tsc --noEmit` and `npx eslint` clean; not
+  viewed on the signed-in page.
+
 - **Assistant map: Turnover AI is one page now — three dead links
   removed (INV-AI-009).** Found by `test-assistant-pages.ts` while
   verifying the Quotation Created By work: `328acfd` had merged Turnover

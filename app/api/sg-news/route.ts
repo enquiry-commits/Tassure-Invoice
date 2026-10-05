@@ -11,6 +11,19 @@ import { todaySGT } from '@/lib/date';
 // ?date=YYYY-MM-DD reads one specific day's report (for the history list);
 // no param reads the most recent report on file, which may not be today's
 // if the cron hasn't run yet today.
+//
+// The history list (the page's row of date tabs) covers only the latest
+// HISTORY_DAYS calendar days, today included — Vincent, 2026-10-05: "这边只
+// 保留最新7天的记录就好". Older reports stay in sg_news_daily_reports (nothing
+// is deleted); they are just no longer listed.
+const HISTORY_DAYS = 7;
+
+function historyStartDate(today: string): string {
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - (HISTORY_DAYS - 1));
+  return d.toISOString().slice(0, 10);
+}
+
 export async function GET(req: NextRequest) {
   const account = await getRequestAccount(req);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
@@ -29,7 +42,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [{ data: history }, { data: syncState }] = await Promise.all([
-    supabase.from('sg_news_daily_reports').select('report_date, new_items_count').order('report_date', { ascending: false }).limit(30),
+    supabase.from('sg_news_daily_reports').select('report_date, new_items_count').gte('report_date', historyStartDate(todaySGT())).order('report_date', { ascending: false }).limit(HISTORY_DAYS),
     supabase.from('sg_news_sync_state').select('*').order('source', { ascending: true }),
   ]);
 
