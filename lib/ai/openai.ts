@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createHash } from 'node:crypto';
+import { trackAiUsage, type AiUsageTag } from './usage';
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
@@ -33,7 +34,12 @@ function outputText(payload: ResponsesPayload): string {
     .trim();
 }
 
-async function callResponses(body: Record<string, unknown>, timeoutMs: number): Promise<ResponsesPayload> {
+// Every OpenAI call goes through here, so this one place records each
+// call's token usage (lib/ai/usage.ts, INV-AI-010) — before the caller
+// parses the reply, so a reply the caller then rejects is still recorded.
+// A request cut off by its timeout returns no usage and cannot be recorded,
+// although OpenAI may still bill it.
+async function callResponses(body: Record<string, unknown>, timeoutMs: number, usage: AiUsageTag): Promise<ResponsesPayload> {
   const apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey) throw new Error('OPENAI_API_KEY is not configured');
   const response = await fetch(OPENAI_RESPONSES_URL, {
@@ -44,6 +50,7 @@ async function callResponses(body: Record<string, unknown>, timeoutMs: number): 
   });
   const payload = await response.json().catch(() => ({})) as ResponsesPayload;
   if (!response.ok) throw new Error(`OpenAI API ${response.status}: ${payload.error?.message ?? 'request failed'}`);
+  trackAiUsage(usage, 'openai', payload);
   return payload;
 }
 
@@ -56,6 +63,8 @@ export async function openAIJson<T>(params: {
   model?: string;
   maxOutputTokens?: number;
   timeoutMs?: number;
+  /** Who and what this call is for — recorded in the AI usage ledger (INV-AI-010). */
+  usage: AiUsageTag;
 }): Promise<T> {
   const payload = await callResponses({
     model: params.model ?? openAIModel('primary'),
@@ -72,7 +81,7 @@ export async function openAIJson<T>(params: {
         schema: params.schema,
       },
     },
-  }, params.timeoutMs ?? 35_000);
+  }, params.timeoutMs ?? 35_000, params.usage);
   const text = outputText(payload);
   if (!text) throw new Error('OpenAI returned no structured output');
   return JSON.parse(text) as T;
@@ -86,6 +95,8 @@ export async function openAIText(params: {
   maxOutputTokens?: number;
   webSearch?: boolean;
   timeoutMs?: number;
+  /** Who and what this call is for — recorded in the AI usage ledger (INV-AI-010). */
+  usage: AiUsageTag;
 }): Promise<string> {
   const payload = await callResponses({
     model: params.model ?? openAIModel('primary'),
@@ -96,7 +107,7 @@ export async function openAIText(params: {
     safety_identifier: safetyIdentifier(params.accountEmail),
     text: { verbosity: 'medium' },
     ...(params.webSearch ? { tools: [{ type: 'web_search' }] } : {}),
-  }, params.timeoutMs ?? 45_000);
+  }, params.timeoutMs ?? 45_000, params.usage);
   const text = outputText(payload);
   if (!text) throw new Error('OpenAI returned no text output');
   return text;

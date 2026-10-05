@@ -4,6 +4,8 @@ import { getRequestAccount } from '@/lib/request-account';
 import { withAutomationRun } from '@/lib/automation-sync';
 import { computeReportsData } from '@/app/api/reports/route';
 import { generateReportsNarrative, ACTIVE_NARRATIVE_MODEL } from '@/lib/reports-narrative';
+import { scheduledJobUsage } from '@/lib/ai/job-usage';
+import type { AiUsageTag } from '@/lib/ai/usage';
 
 // GET /api/reports/narrative-cron — the ONLY thing that ever calls
 // generateReportsNarrative() now. Cron-only for the scheduled run (see
@@ -31,9 +33,9 @@ export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
-async function runReportsNarrativeCron(): Promise<NextResponse> {
+async function runReportsNarrativeCron(usage: AiUsageTag): Promise<NextResponse> {
   const data = await computeReportsData();
-  const narrative = await generateReportsNarrative(data);
+  const narrative = await generateReportsNarrative(data, usage);
   const now = new Date().toISOString();
   const supabase = createAdminClient();
   const { error: insertErr } = await supabase
@@ -58,5 +60,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Only Vincent can manually regenerate this.' }, { status: 403 });
     }
   }
-  return withAutomationRun(req, 'reports_narrative', () => runReportsNarrativeCron());
+  const usage = await scheduledJobUsage(req, 'reports_narrative');
+  return withAutomationRun(req, 'reports_narrative', () => runReportsNarrativeCron(usage));
 }

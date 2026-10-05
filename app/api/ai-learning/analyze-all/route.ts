@@ -3,6 +3,7 @@ import { withAutomationRun } from '@/lib/automation-sync';
 import { APPROVED_ACCOUNTS } from '@/lib/approved-accounts';
 import { analyzeUserActivity } from '@/lib/ai-learning/candidates';
 import { analyzeUserConversations } from '@/lib/ai-learning/conversations';
+import { scheduledJobUsage } from '@/lib/ai/job-usage';
 
 /**
  * Daily unattended AI Learning pass — Vincent, 2026-09-08: "我希望AI可以
@@ -24,6 +25,7 @@ export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const usage = await scheduledJobUsage(req, 'ai_learning');
   return withAutomationRun(req, 'ai_learning', async () => {
     const results: { email: string; detected: number; conversationDetected: number; autoApproved: number; error?: string }[] = [];
     // OpenAI extraction is the slowest part. Process a few accounts at a
@@ -35,7 +37,7 @@ export async function GET(req: NextRequest) {
         try {
           const [activity, conversation] = await Promise.all([
             analyzeUserActivity(account.email, 30),
-            analyzeUserConversations(account.email, 30).catch(() => []),
+            analyzeUserConversations(account.email, 30, usage).catch(() => []),
           ]);
           const candidates = [...activity, ...conversation];
           return {

@@ -2,6 +2,8 @@ import 'server-only';
 import type { ReportsData } from '@/app/api/reports/route';
 import { METRIC_CATALOGUE, getMetric } from '@/lib/metric-catalogue';
 import { openAIJson, openAIModel } from '@/lib/ai/openai';
+import { claudeMessages } from '@/lib/ai/anthropic';
+import type { AiUsageTag } from '@/lib/ai/usage';
 
 /**
  * Turns Reports' own numbers into a written analysis — Vincent, after
@@ -353,29 +355,24 @@ function normalizeInsight(insight: ReportsInsight): ReportsInsight {
 // Kept for a one-line revert back to Anthropic (see file header + attempt()
 // below), not dead code left behind by an incomplete refactor.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function callClaude(system: string, evidence: unknown): Promise<ReportsNarrative> {
-  const apiKey = process.env.ANTHROPIC_API_KEY!;
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: NARRATIVE_MODEL,
-      // 4096, not the original 2600 — matches app/api/assistant/route.ts's
-      // own claudeAnswer() (INV-DATA-047: the exact same "output silently
-      // truncated by too-small max_tokens" failure mode, fixed there by
-      // raising 1024 -> 4096). The Phase 1 schema is ~3x the old one (14
-      // required fields incl. two bilingual arrays per insight, up to 4
-      // insights) — 2600 was sized for the OLD, smaller schema and is a
-      // second plausible contributor (alongside the driverZh/En union-type
-      // schema fix above) to the live "Claude returned an empty analysis"
-      // bug: a response cut off mid-JSON by hitting max_tokens can come
-      // back with no usable tool_use.input at all.
-      max_tokens: 4096,
-      system,
-      tools: [ANALYSIS_TOOL],
-      tool_choice: { type: 'tool', name: 'submit_analysis' },
-      messages: [{ role: 'user', content: `这是本次 Reports 的真实数据：\n\n${JSON.stringify(evidence, null, 2)}\n\n请调用 submit_analysis 提交你的分析。` }],
-    }),
+async function callClaude(system: string, evidence: unknown, usage: AiUsageTag): Promise<ReportsNarrative> {
+  const res = await claudeMessages(usage, {
+    model: NARRATIVE_MODEL,
+    // 4096, not the original 2600 — matches app/api/assistant/route.ts's
+    // own claudeAnswer() (INV-DATA-047: the exact same "output silently
+    // truncated by too-small max_tokens" failure mode, fixed there by
+    // raising 1024 -> 4096). The Phase 1 schema is ~3x the old one (14
+    // required fields incl. two bilingual arrays per insight, up to 4
+    // insights) — 2600 was sized for the OLD, smaller schema and is a
+    // second plausible contributor (alongside the driverZh/En union-type
+    // schema fix above) to the live "Claude returned an empty analysis"
+    // bug: a response cut off mid-JSON by hitting max_tokens can come
+    // back with no usable tool_use.input at all.
+    max_tokens: 4096,
+    system,
+    tools: [ANALYSIS_TOOL],
+    tool_choice: { type: 'tool', name: 'submit_analysis' },
+    messages: [{ role: 'user', content: `这是本次 Reports 的真实数据：\n\n${JSON.stringify(evidence, null, 2)}\n\n请调用 submit_analysis 提交你的分析。` }],
   });
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
@@ -417,9 +414,10 @@ async function callClaude(system: string, evidence: unknown): Promise<ReportsNar
 // field, "" -> null driver convention via the shared normalizeInsight()),
 // via the shared lib/ai/openai.ts helper already proven in production by
 // the My Tasks assistant's own synthesis step.
-async function callOpenAI(system: string, evidence: unknown): Promise<ReportsNarrative> {
+async function callOpenAI(system: string, evidence: unknown, usage: AiUsageTag): Promise<ReportsNarrative> {
   const result = await openAIJson<ReportsNarrative & { planningNotes?: string }>({
     model: ACTIVE_NARRATIVE_MODEL,
+    usage,
     schemaName: 'reports_analysis',
     schema: OPENAI_ANALYSIS_SCHEMA,
     instructions: system,
@@ -450,10 +448,10 @@ async function callOpenAI(system: string, evidence: unknown): Promise<ReportsNar
 // driverZh/En schema bug via the same screenshot ("Claude returned an
 // empty analysis"). To revert to Anthropic, change callOpenAI to callClaude
 // on the next line — everything else in this function is provider-agnostic.
-async function attempt(system: string, evidence: unknown, data: ReportsData): Promise<{ narrative: ReportsNarrative } | { narrative: null; errors: string[] }> {
+async function attempt(system: string, evidence: unknown, data: ReportsData, usage: AiUsageTag): Promise<{ narrative: ReportsNarrative } | { narrative: null; errors: string[] }> {
   let narrative: ReportsNarrative;
   try {
-    narrative = await callOpenAI(system, evidence);
+    narrative = await callOpenAI(system, evidence, usage);
   } catch (err) {
     return { narrative: null, errors: [err instanceof Error ? err.message : String(err)] };
   }
@@ -462,13 +460,16 @@ async function attempt(system: string, evidence: unknown, data: ReportsData): Pr
   return { narrative: null, errors: check.errors };
 }
 
-export async function generateReportsNarrative(data: ReportsData): Promise<ReportsNarrative> {
+// `usage`: the weekly cron (system) or Vincent's own refresh click, for the
+// AI usage ledger (INV-AI-010). A retry is a second billed call and is
+// recorded as one.
+export async function generateReportsNarrative(data: ReportsData, usage: AiUsageTag): Promise<ReportsNarrative> {
   if (!process.env.OPENAI_API_KEY) throw new Error('OPENAI_API_KEY is not configured — the AI analysis cannot run.');
 
   const evidence = summarizeForPrompt(data);
   const system = buildSystemPrompt();
 
-  const first = await attempt(system, evidence, data);
+  const first = await attempt(system, evidence, data, { ...usage, step: 'attempt_1' });
   if (first.narrative) return first.narrative;
 
   // One retry, with the SPECIFIC failure reason fed back as an explicit
@@ -476,7 +477,7 @@ export async function generateReportsNarrative(data: ReportsData): Promise<Repor
   // instruction, not a silent text patch over a wrong claim. Works the same
   // whether the first attempt threw or just failed validation.
   const retrySystem = `${system}\n\n上一次提交的分析未能通过校验，请重新生成，这次务必遵守：\n${first.errors.map(e => `- ${e}`).join('\n')}`;
-  const second = await attempt(retrySystem, evidence, data);
+  const second = await attempt(retrySystem, evidence, data, { ...usage, step: 'attempt_2' });
   if (second.narrative) return second.narrative;
 
   throw new Error(`AI analysis failed after retry: ${second.errors.join('; ')}`);

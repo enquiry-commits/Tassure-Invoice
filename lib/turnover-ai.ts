@@ -1,5 +1,7 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { claudeMessages } from './ai/anthropic';
+import type { AiUsageTag } from './ai/usage';
 
 // Shared by every app/api/turnover-ai/* route — the Claude vision
 // extraction call, the bucket this feature's original files live in, and
@@ -67,29 +69,25 @@ type ClaudeToolUseBlock = { type: 'tool_use'; name: string; input: { receipts?: 
 type ClaudeContentBlock = ClaudeToolUseBlock | { type: string };
 type ClaudeMessagesResponse = { content?: ClaudeContentBlock[]; stop_reason?: string; error?: { message?: string } };
 
-export async function extractReceipts(params: { base64: string; mediaType: string; kind: 'image' | 'document'; gstEnabled: boolean }): Promise<ExtractedReceipt[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured — Turnover AI cannot read documents in this environment yet.');
+// `usage`: who uploaded the file, for the AI usage ledger (INV-AI-010).
+export async function extractReceipts(params: { base64: string; mediaType: string; kind: 'image' | 'document'; gstEnabled: boolean; usage: AiUsageTag }): Promise<ExtractedReceipt[]> {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured — Turnover AI cannot read documents in this environment yet.');
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: ASSISTANT_MODEL,
-      // 2048 held only about two dozen receipts; a fuller file was cut off
-      // and the rest silently never counted (see the stop_reason check below).
-      max_tokens: 8192,
-      tools: [buildExtractTool(params.gstEnabled)],
-      tool_choice: { type: 'tool', name: 'record_receipts' },
-      system: `You read receipts, invoices and transaction slips for a Singapore corporate-services accounting team calculating a client's turnover. A single uploaded file may contain multiple distinct receipts stitched together (e.g. several photographed slips scanned onto one page) — find and record EVERY one separately, never merge them into one total. Chinese 电子发票 (e-invoices) are usually fully legible: high confidence. A photographed or scanned receipt may be cropped, blurry, or sit under a garbled/rotated underlying text layer — always read the VISIBLE IMAGE directly rather than trusting any text layer. Never invent a vendor, date or amount you cannot actually see: mark it low confidence and say why in confidence_reason instead of guessing silently.${params.gstEnabled ? ' This client also needs the GST amount: only record gst_amount when the receipt itself prints one as an explicit line — never calculate, estimate or back out a GST figure yourself.' : ''}`,
-      messages: [{
-        role: 'user',
-        content: [
-          { type: params.kind, source: { type: 'base64', media_type: params.mediaType, data: params.base64 } },
-          { type: 'text', text: 'Record every receipt in this document using the record_receipts tool.' },
-        ],
-      }],
-    }),
+  const res = await claudeMessages(params.usage, {
+    model: ASSISTANT_MODEL,
+    // 2048 held only about two dozen receipts; a fuller file was cut off
+    // and the rest silently never counted (see the stop_reason check below).
+    max_tokens: 8192,
+    tools: [buildExtractTool(params.gstEnabled)],
+    tool_choice: { type: 'tool', name: 'record_receipts' },
+    system: `You read receipts, invoices and transaction slips for a Singapore corporate-services accounting team calculating a client's turnover. A single uploaded file may contain multiple distinct receipts stitched together (e.g. several photographed slips scanned onto one page) — find and record EVERY one separately, never merge them into one total. Chinese 电子发票 (e-invoices) are usually fully legible: high confidence. A photographed or scanned receipt may be cropped, blurry, or sit under a garbled/rotated underlying text layer — always read the VISIBLE IMAGE directly rather than trusting any text layer. Never invent a vendor, date or amount you cannot actually see: mark it low confidence and say why in confidence_reason instead of guessing silently.${params.gstEnabled ? ' This client also needs the GST amount: only record gst_amount when the receipt itself prints one as an explicit line — never calculate, estimate or back out a GST figure yourself.' : ''}`,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: params.kind, source: { type: 'base64', media_type: params.mediaType, data: params.base64 } },
+        { type: 'text', text: 'Record every receipt in this document using the record_receipts tool.' },
+      ],
+    }],
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');

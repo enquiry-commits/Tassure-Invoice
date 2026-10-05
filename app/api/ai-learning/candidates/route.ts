@@ -46,7 +46,8 @@ export async function POST(req: NextRequest) {
   try {
     const [activity, conversation] = await Promise.all([
       analyzeUserActivity(target.email, days),
-      analyzeUserConversations(target.email, days).catch(() => []),
+      // Counts under the admin who pressed Analyse, not the person analysed (INV-AI-010).
+      analyzeUserConversations(target.email, days, { feature: 'ai_learning', trigger: 'manual', actorEmail: account.email }).catch(() => []),
     ]);
     const candidates = await listLearningCandidates(target.email);
     return NextResponse.json({

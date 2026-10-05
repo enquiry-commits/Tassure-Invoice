@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { openAIConfigured, openAIJson, openAIModel, openAIText } from './openai';
+import type { AiUsageTag } from './usage';
 import { SOP_ROUTING_TERMS } from '../client-comms-sop';
 
 export type AgentRoute = 'claude_only' | 'claude_then_openai' | 'openai_only';
@@ -42,6 +43,7 @@ export async function routeAssistantTurn(params: {
   latestText: string;
   hasAttachments: boolean;
   accountEmail?: string | null;
+  usage: AiUsageTag;
 }): Promise<RouteDecision> {
   const fallback = fallbackRoute(params.latestText, params.hasAttachments);
   if (!openAIConfigured() || params.hasAttachments) return fallback;
@@ -59,6 +61,7 @@ export async function routeAssistantTurn(params: {
     const decision = await openAIJson<RouteDecision>({
       model: openAIModel('router'),
       accountEmail: params.accountEmail,
+      usage: { ...params.usage, step: 'router' },
       schemaName: 'assistant_route',
       schema: {
         type: 'object', additionalProperties: false,
@@ -92,9 +95,11 @@ export async function openAIGeneralAnswer(params: {
   transcript: string;
   accountEmail?: string | null;
   currentDate: string;
+  usage: AiUsageTag;
 }): Promise<string> {
   return openAIText({
     accountEmail: params.accountEmail,
+    usage: { ...params.usage, step: 'general_answer' },
     webSearch: true,
     instructions: `You answer general/external questions for a Tassure staff member. Answer in the user's language, usually Chinese. It is ${params.currentDate} in Singapore. You have NO access to Tassure's internal companies, customers, invoices, staff, email, tasks or database. If the request actually needs internal data, say that the internal-system agent must handle it; never invent internal facts. Be concise and cite web sources when web search is used.`,
     input: params.transcript.slice(-18_000),
@@ -108,6 +113,7 @@ export async function synthesizeWithOpenAI(params: {
   accountEmail?: string | null;
   hasActionPreview: boolean;
   timeoutMs?: number;
+  usage: AiUsageTag;
 }): Promise<string> {
   if (!openAIConfigured()) return params.claudeDraft;
   const evidence = params.evidence.map(item => ({
@@ -118,6 +124,7 @@ export async function synthesizeWithOpenAI(params: {
   try {
     return await openAIText({
       accountEmail: params.accountEmail,
+      usage: { ...params.usage, step: 'synthesis' },
       instructions: `You are the final synthesis and quality-control layer for an internal Tassure assistant. The Claude draft was produced after calling live internal tools. Improve clarity and synthesis, but NEVER invent, change or recompute a name, date, amount, count, permission, status or link. Tool evidence is authoritative over prose. Preserve useful Markdown links and all safety warnings. Answer in the user's language. If an action preview exists, state that nothing has changed yet and the user must click Confirm; never claim execution. Return only the final user-facing answer.`,
       input: JSON.stringify({ conversation: params.transcript.slice(-12_000), claude_draft: params.claudeDraft, tool_evidence: evidence, action_preview_present: params.hasActionPreview }),
       maxOutputTokens: 3000,

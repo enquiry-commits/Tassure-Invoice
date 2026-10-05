@@ -1,6 +1,8 @@
 import 'server-only';
 
 import { createAdminClient } from '../supabase';
+import { claudeMessages } from '../ai/anthropic';
+import type { AiUsageTag } from '../ai/usage';
 
 // Automated quality spot-check (2026-09-22) — item 6 of Vincent's own "AI
 // Agent/My Tasks 少一些东西" review. Every real AI-assistant bug documented
@@ -108,14 +110,9 @@ async function findCandidates(limit: number): Promise<ReviewCandidate[]> {
   });
 }
 
-function judge(candidate: ReviewCandidate): Promise<QualityVerdict> {
-  const apiKey = process.env.ANTHROPIC_API_KEY!;
+function judge(candidate: ReviewCandidate, usage: AiUsageTag): Promise<QualityVerdict> {
   const input = `STAFF QUESTION:\n${candidate.userQuestion.slice(0, 2000)}\n\nTOOLS CALLED THIS TURN: ${candidate.toolsUsed.length ? candidate.toolsUsed.join(', ') : '(none)'}\n\nASSISTANT REPLY:\n${candidate.assistantReply.slice(0, 4000)}`;
-  return fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: JUDGE_MODEL, max_tokens: 800, system: RUBRIC, messages: [{ role: 'user', content: input }] }),
-  }).then(async res => {
+  return claudeMessages(usage, { model: JUDGE_MODEL, max_tokens: 800, system: RUBRIC, messages: [{ role: 'user', content: input }] }).then(async res => {
     if (!res.ok) throw new Error(`Judge API ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const data = await res.json();
     const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text ?? '').join('');
@@ -137,7 +134,9 @@ function judge(candidate: ReviewCandidate): Promise<QualityVerdict> {
 // must never stop the rest of the batch — same "one account's failure
 // never starves the others" discipline as ai-learning/analyze-all's own
 // per-account try/catch.
-export async function runQualityReviewBatch(limit = 15): Promise<{ reviewed: number; flagged: number; errors: number; skippedNoKey: boolean }> {
+// `usage`: the nightly cron (system) or a person's own "立即抽查" click, for
+// the AI usage ledger (INV-AI-010).
+export async function runQualityReviewBatch(limit: number, usage: AiUsageTag): Promise<{ reviewed: number; flagged: number; errors: number; skippedNoKey: boolean }> {
   if (!process.env.ANTHROPIC_API_KEY) return { reviewed: 0, flagged: 0, errors: 0, skippedNoKey: true };
   const supabase = createAdminClient();
   const candidates = await findCandidates(limit);
@@ -146,7 +145,7 @@ export async function runQualityReviewBatch(limit = 15): Promise<{ reviewed: num
   let errors = 0;
   for (const candidate of candidates) {
     try {
-      const result = await judge(candidate);
+      const result = await judge(candidate, usage);
       const { error } = await supabase.from('ai_quality_reviews').insert({
         message_id: candidate.messageId,
         conversation_id: candidate.conversationId,

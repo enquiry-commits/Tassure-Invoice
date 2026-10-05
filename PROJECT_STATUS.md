@@ -1,5 +1,37 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (SHIPPED, part 1 of 2: every paid AI call is recorded per person — the AI usage ledger. Vincent: "因为我们有AI AGENT，并且全部员工都能用，因此为了准确的知道每个人使用了多少TOKENS，我要有一个明确的实时记录". After a 4-member council review he decided: only he sees the usage; View As counts for the real operator; automatic calls count under the person, marked automatic; USD. Part 2, the usage page, follows.)
+
+**Why.** Nothing recorded tokens. Every response's `usage` block was thrown away at all 8 call sites (7 direct Claude calls, plus OpenAI's one shared helper). `ai_agent_runs` covers assistant runs only, is written once at the end, holds no tokens, and under View As records the VIEWED account. The providers' consoles can't split usage by person (one shared key). Real data (read-only): 12 assistant runs since 2026-09-21 (Vincent 8, Min Quan 3, Shemin 1).
+
+**What shipped.**
+- **The one way to call a model.** New `lib/ai/anthropic.ts` `claudeMessages()` is the one way to call Claude: same headers and body as before, and it returns the raw Response so each caller's error handling is unchanged. OpenAI calls already all went through `lib/ai/openai.ts` `callResponses()`.
+- **Recording.** Both record each call the moment it returns: `lib/ai/usage.ts` `trackAiUsage()` starts the insert at once, keeps it alive with `after()`, and never throws. Both REQUIRE an `AiUsageTag` (feature / trigger / actor), so an untagged call doesn't compile.
+- **Token buckets.** `lib/ai/usage-ledger.ts` puts both providers' usage into the same four buckets — uncached input, cache write, cache read, output — plus web searches. Anthropic's input excludes the cache; OpenAI's includes it.
+- **Prices.** `lib/ai/pricing.ts` prices each row at the official prices read on 2026-10-05 and stores the snapshot. Per million tokens: Sonnet 5 $2 input / $2.50 5m-cache write / $4 1h-cache write / $0.20 cache read / $10 output; gpt-5.6-luna $0.20 / $0.02 cached / $1.20; gpt-5.6-terra $2 / $0.20 / $12. Web search $10 per 1,000. Unknown models get no cost.
+- **Attribution.**
+  - Assistant: every call of a question is tagged with the real signed-in person and one `turn_key`, with the View-As account noted beside it.
+  - My Tasks brief: the person who opened the page (`auto`).
+  - Learning pass after a chat: the chatter (`auto`).
+  - Turnover AI: the uploader.
+  - Scheduled jobs: `lib/ai/job-usage.ts` — the real CRON_SECRET means the system; a manual click counts under that person.
+- **Migrated call sites.** Assistant (router, up to 4 Claude rounds, synthesis, general answers, fallback brief); AI learning (3 callers); Turnover AI; My Tasks brief; Reports narrative (including its kept Claude path); AI quality review; SG News (per-source extraction + digest).
+- **New table.** `scripts/add-ai-usage-events.sql`, with no CHECK constraints, so a new feature value can never make the insert fail.
+
+**Verification.**
+- `test-ai-usage.ts`: 32 checks ALL OK (normalization, prices, attribution, source guards). Negative control: all 12 source guards fail on the previous code, and the first lists exactly the 7 files that called the API directly.
+- Related suites: test-account-access, test-assistant-pages, test-company-lifecycle, test-sop-guide, test-turnover-files ALL OK. test-reply-guards and test-reports-narrative-guards ALL PASSED with the usual `server-only` stub, which they already needed before this change.
+- tsc and `npm run build` clean; eslint unchanged from HEAD.
+- Pre-existing and unrelated: `scripts/test-ai-learning-patterns.mjs` fails because it expects English text the code now writes in Chinese.
+
+**Not verified:**
+- Real calls landing as rows. This needs Vincent to run the SQL first, then REG-029 on the deployed site; the API keys exist only on Vercel.
+- REG-028's real-upload checks. The Turnover AI extraction call was swapped mechanically and sends the same request.
+
+Docs: `docs/INVARIANTS.md` INV-AI-010 (+ INV-AI-006 wording), `docs/FEATURE_MAP.md`, `docs/REGRESSION_CHECKLIST.md` REG-029, `docs/CURRENT_STATE.md`.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (SHIPPED: a Remove button for Turnover AI files that couldn't be read; big PDFs stay blocked — Vincent's two answers (AskUserQuestion) after the upload fixes below: "加移除按钮", "先维持拦下").
 
 **What changed.** On a project page, each file in the red "couldn't be read" block now has a Remove button, so once staff have dropped a file again its old line goes right away instead of at the 3-day cleanup. New `DELETE /api/turnover-ai/documents/:id` (`app/api/turnover-ai/documents/[id]/route.ts`) re-checks on the server that the file is failed or interrupted — never one still being read or read fine — and has no receipts in the table (else 409, and the page shows the reason), deletes its stored original, then the row (`.neq('status','done')` as a last guard). "Unread" is now ONE rule, `isUnread()` in `lib/turnover-ai-files.ts`, used by the block, the Projects card count and the route. Removals are logged as `turnover_document_removed`. The assistant's description of the page now covers the file limits and Remove. Big PDFs: no change — still stopped with "split it"; the `turnover_upload_rejected` count decides later whether direct-to-Storage upload is built (CURRENT_STATE).

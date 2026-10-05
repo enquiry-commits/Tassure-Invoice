@@ -420,6 +420,22 @@ line away (and the card's count with it after going back). (6) a
 Chinese-named PDF's "View original" opens.
 **Guards:** `docs/INVARIANTS.md` INV-DATA-070, INV-DATA-071, INV-DATA-072.
 
+### REG-029 — AI usage ledger stays complete and correctly attributed (after ANY change to `lib/ai/*`, any code that calls an AI model, an AI feature's route, or `scripts/add-ai-usage-events.sql`)
+Run `npx tsx test-ai-usage.ts` (`ALL OK`). It fails if any file outside
+`lib/ai/anthropic.ts`/`lib/ai/openai.ts` calls an AI API directly, if the
+token buckets or the price table drift, or if a feature stops tagging the
+real person. Then on the DEPLOYED site, once `scripts/add-ai-usage-events.sql`
+has been run, signed in: (1) ask the assistant one question —
+`ai_usage_events` gains one row per model call within seconds (e.g.
+`round_1`, `round_2`…), all with your email as `actor_email`, one shared
+`turn_key`, the model, non-zero tokens and a `cost_usd`. (2) ask one under
+View As — `actor_email` is still you, `subject_email` the viewed person.
+(3) open My Tasks with tasks on it — one `my_tasks_brief` row, trigger
+`auto`, under you. (4) compare one day's total with the Anthropic/OpenAI
+consoles for the same day; a real gap means a call path isn't recorded
+(or requests are timing out).
+**Guards:** `docs/INVARIANTS.md` INV-AI-010.
+
 ---
 
 ## Automation priority

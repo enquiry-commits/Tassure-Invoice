@@ -1,6 +1,8 @@
 import 'server-only';
 
 import type { MyTasksData } from './my-tasks-data';
+import { claudeMessages } from './ai/anthropic';
+import type { AiUsageTag } from './ai/usage';
 
 // Vincent, 2026-09-08: "更智能的分析和判断用户要做什么...每天打开My Tasks
 // 的时候 AI助手会提醒今天可能会需要完成的任务" — a short, prioritized,
@@ -13,8 +15,9 @@ import type { MyTasksData } from './my-tasks-data';
 // otherwise (or on any failure) a rule-based sentence built directly from
 // the counts — the feature keeps working with zero API dependency, it's
 // just plainer prose. Never throws — a briefing failure must never break
-// the rest of My Tasks loading.
-export async function generateMyTasksBrief(tasks: MyTasksData, staffName: string): Promise<string> {
+// the rest of My Tasks loading. `usage` says who the Claude call counts
+// under in the AI usage ledger (INV-AI-010).
+export async function generateMyTasksBrief(tasks: MyTasksData, staffName: string, usage: AiUsageTag): Promise<string> {
   if (tasks.counts.total === 0) {
     // 2026-09-08 — Vincent, on his OWN account's empty Tasks tab: "还是很
     // 像摆设，不知道是不是没有数据支撑" — confirmed against real data
@@ -32,7 +35,7 @@ export async function generateMyTasksBrief(tasks: MyTasksData, staffName: string
   }
   if (process.env.ANTHROPIC_API_KEY) {
     try {
-      return await claudeBrief(tasks, staffName);
+      return await claudeBrief(tasks, staffName, usage);
     } catch {
       // fall through to the rule-based sentence below
     }
@@ -114,18 +117,13 @@ export function buildTaskDigest(tasks: MyTasksData) {
 // with it rather than silently drift back out of sync the way it just did.
 const BRIEF_MODEL = process.env.ASSISTANT_MODEL || 'claude-sonnet-5';
 
-async function claudeBrief(tasks: MyTasksData, staffName: string): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY!;
+async function claudeBrief(tasks: MyTasksData, staffName: string, usage: AiUsageTag): Promise<string> {
   const digest = buildTaskDigest(tasks);
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: BRIEF_MODEL,
-      max_tokens: 260,
-      system: '你为一位公司秘书部/会计部员工打开 My Tasks 页面时撰写一句简短的每日优先级提醒（2-3句话，纯文本，不用 Markdown，不用列表符号）。根据他们的 AR Reminder 逾期/即将到期项目、Late Filing 标记、SOA 欠款催收（biggestSoaBalances）和商标续期（soonestTrademarkRenewals），综合判断今天应该优先处理什么——不要只看 AR，一笔金额很大的 SOA 欠款或即将到期的商标也可能比一项普通的 AR 更值得优先处理，用你自己的判断排序，不要机械地按数据出现顺序念。如果有明显最紧急的一项，点名说出来（公司名+具体原因）。直接、具体，不要泛泛的鼓励话。用中文回答。',
-      messages: [{ role: 'user', content: `员工：${staffName}\n任务摘要：${JSON.stringify(digest)}` }],
-    }),
+  const res = await claudeMessages(usage, {
+    model: BRIEF_MODEL,
+    max_tokens: 260,
+    system: '你为一位公司秘书部/会计部员工打开 My Tasks 页面时撰写一句简短的每日优先级提醒（2-3句话，纯文本，不用 Markdown，不用列表符号）。根据他们的 AR Reminder 逾期/即将到期项目、Late Filing 标记、SOA 欠款催收（biggestSoaBalances）和商标续期（soonestTrademarkRenewals），综合判断今天应该优先处理什么——不要只看 AR，一笔金额很大的 SOA 欠款或即将到期的商标也可能比一项普通的 AR 更值得优先处理，用你自己的判断排序，不要机械地按数据出现顺序念。如果有明显最紧急的一项，点名说出来（公司名+具体原因）。直接、具体，不要泛泛的鼓励话。用中文回答。',
+    messages: [{ role: 'user', content: `员工：${staffName}\n任务摘要：${JSON.stringify(digest)}` }],
   });
   if (!res.ok) throw new Error(`Claude API ${res.status}`);
   const data = await res.json();

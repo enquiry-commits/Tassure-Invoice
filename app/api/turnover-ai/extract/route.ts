@@ -78,7 +78,10 @@ export async function POST(req: NextRequest) {
       // reading over a storage hiccup.
     }
 
-    const receipts = await extractReceipts({ base64: buffer.toString('base64'), mediaType, kind: kind === 'pdf' ? 'document' : 'image', gstEnabled: project.gst_enabled });
+    const receipts = await extractReceipts({
+      base64: buffer.toString('base64'), mediaType, kind: kind === 'pdf' ? 'document' : 'image', gstEnabled: project.gst_enabled,
+      usage: { feature: 'turnover_ai', trigger: 'upload', actorEmail: account.email },
+    });
     if (!receipts.length) {
       await supabase.from('turnover_documents').update({ status: 'failed', error_message: 'No receipts could be identified in this file.' }).eq('id', documentId);
       return NextResponse.json({ error: 'No receipts could be identified in this file.' }, { status: 422 });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAutomationRun } from '@/lib/automation-sync';
 import { runQualityReviewBatch } from '@/lib/ai-quality/review';
+import { scheduledJobUsage } from '@/lib/ai/job-usage';
 
 /**
  * Daily unattended AI quality spot-check — item 6 of Vincent's "AI Agent/My
@@ -17,8 +18,9 @@ export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const usage = await scheduledJobUsage(req, 'ai_quality_review');
   return withAutomationRun(req, 'ai_quality_review', async () => {
-    const result = await runQualityReviewBatch(20);
+    const result = await runQualityReviewBatch(20, usage);
     // "Failed" only means every candidate this run actually tried to judge
     // errored out — zero candidates found (nothing recent to review) or no
     // API key configured are both a normal, successful no-op, not a failure.

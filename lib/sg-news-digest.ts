@@ -1,6 +1,8 @@
 import 'server-only';
 import type { SgNewsSource } from './sg-news-sources';
 import type { ExtractedNewsItem } from './sg-news-fetch';
+import { claudeMessages } from './ai/anthropic';
+import type { AiUsageTag } from './ai/usage';
 
 /**
  * Turns a day's NEW items (already deduped against everything seen before —
@@ -57,9 +59,9 @@ const DIGEST_TOOL = {
   },
 };
 
-export async function generateDailyDigest(sourceItems: SourceItems[]): Promise<SgNewsDailyReport> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured.');
+// `usage`: the daily cron (system) or a manual run, for the AI usage ledger (INV-AI-010).
+export async function generateDailyDigest(sourceItems: SourceItems[], usage: AiUsageTag): Promise<SgNewsDailyReport> {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured.');
 
   const totalItems = sourceItems.reduce((s, si) => s + si.items.length, 0);
   if (totalItems === 0) {
@@ -83,17 +85,13 @@ export async function generateDailyDigest(sourceItems: SourceItems[]): Promise<S
 - summary 是开头的整体概述，2-3句话，让老板一眼看出今天有没有大事。
 - 语言：中文，专业、直接。`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: process.env.ASSISTANT_MODEL || 'claude-sonnet-5',
-      max_tokens: 4000,
-      system,
-      tools: [DIGEST_TOOL],
-      tool_choice: { type: 'tool', name: 'submit_report' },
-      messages: [{ role: 'user', content: `今天新发现的条目：\n\n${JSON.stringify(evidence, null, 2)}\n\n请提交今天的报告。` }],
-    }),
+  const res = await claudeMessages({ ...usage, step: 'digest' }, {
+    model: process.env.ASSISTANT_MODEL || 'claude-sonnet-5',
+    max_tokens: 4000,
+    system,
+    tools: [DIGEST_TOOL],
+    tool_choice: { type: 'tool', name: 'submit_report' },
+    messages: [{ role: 'user', content: `今天新发现的条目：\n\n${JSON.stringify(evidence, null, 2)}\n\n请提交今天的报告。` }],
   });
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();

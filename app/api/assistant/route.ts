@@ -44,6 +44,8 @@ import type { QbCompany } from '@/lib/quickbooks';
 import { billingDeepLink, lateFilingDeepLink, soaDeepLink } from '@/lib/deep-links';
 import { routeAssistantTurn, openAIGeneralAnswer, synthesizeWithOpenAI, type ToolEvidence } from '@/lib/ai/orchestrator';
 import { openAIConfigured, openAIModel } from '@/lib/ai/openai';
+import { claudeMessages } from '@/lib/ai/anthropic';
+import type { AiUsageTag } from '@/lib/ai/usage';
 import { recordAgentRun } from '@/lib/ai/agent-runs';
 import { lifecycleVerdict } from '@/lib/company-lifecycle';
 import { analyzeUserConversations, shouldAnalyzeConversationNow } from '@/lib/ai-learning/conversations';
@@ -1895,8 +1897,7 @@ type ClaudeAnswerResult = {
   toolEvidence: ToolEvidence[];
 };
 
-async function claudeAnswer(messages: Msg[], context?: AssistantContext, account?: ApprovedAccount | null): Promise<ClaudeAnswerResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY!;
+async function claudeAnswer(messages: Msg[], usage: AiUsageTag, context?: AssistantContext, account?: ApprovedAccount | null): Promise<ClaudeAnswerResult> {
   const convo: Record<string, unknown>[] = messages.map(m => ({ role: m.role, content: m.content }));
   // Two blocks, not one interpolated string — see staticSystemPrompt's own
   // comment. Only the static block (and CLAUDE_TOOLS ahead of it, cached
@@ -1943,22 +1944,20 @@ async function claudeAnswer(messages: Msg[], context?: AssistantContext, account
   // it — is actually about to be shown, using the toolNames/toolEvidence
   // this function already tracks either way.
   for (let turn = 0; turn < 4; turn++) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      // Sonnet, not Haiku (2026-09-10). Vincent: "为什么你的回答模式一直很
-      // 奇怪，也不能像 chatgpt 和 claude 那样智能的理解...明明都接了
-      // Anthropic 的 api". He was right, and it was not a prompting problem:
-      // this assistant had been running on Haiku 4.5 the whole time, with a
-      // 32-tool surface and ~40KB of routing guidance on top of it — past
-      // what the small model handles well, which is why answers came out
-      // mechanical and mis-routed (开SOA → invoice drafts). max_tokens 1024
-      // also hard-capped every reply, which is why they read clipped and
-      // table-ish. The static prompt already carries cache_control, so the
-      // large cached prefix keeps the cost difference far smaller than the
-      // per-token rates suggest.
-      body: JSON.stringify({ model: ASSISTANT_MODEL, max_tokens: 4096, system, tools: CLAUDE_TOOLS, messages: convo }),
-    });
+    // Sonnet, not Haiku (2026-09-10). Vincent: "为什么你的回答模式一直很
+    // 奇怪，也不能像 chatgpt 和 claude 那样智能的理解...明明都接了
+    // Anthropic 的 api". He was right, and it was not a prompting problem:
+    // this assistant had been running on Haiku 4.5 the whole time, with a
+    // 32-tool surface and ~40KB of routing guidance on top of it — past
+    // what the small model handles well, which is why answers came out
+    // mechanical and mis-routed (开SOA → invoice drafts). max_tokens 1024
+    // also hard-capped every reply, which is why they read clipped and
+    // table-ish. The static prompt already carries cache_control, so the
+    // large cached prefix keeps the cost difference far smaller than the
+    // per-token rates suggest. Each round is its own row in the AI usage
+    // ledger (INV-AI-010) — a later round failing never loses an earlier,
+    // already-billed one.
+    const res = await claudeMessages({ ...usage, step: `round_${turn + 1}` }, { model: ASSISTANT_MODEL, max_tokens: 4096, system, tools: CLAUDE_TOOLS, messages: convo });
     if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const data = await res.json();
     const toolUses = (data.content as Array<{ type: string; id?: string; name?: string; input?: Record<string, unknown>; text?: string }>).filter(b => b.type === 'tool_use');
@@ -2074,7 +2073,7 @@ function companyCard(c: CompanyCardData): string {
   return lines.join('\n');
 }
 
-async function intentAnswer(text: string, context?: AssistantContext, account?: ApprovedAccount | null): Promise<string> {
+async function intentAnswer(text: string, usage: AiUsageTag, context?: AssistantContext, account?: ApprovedAccount | null): Promise<string> {
   const t = text.toLowerCase().trim();
 
   // Current-page help: the widget sends its location so vague questions do
@@ -2143,7 +2142,9 @@ async function intentAnswer(text: string, context?: AssistantContext, account?: 
     }
 
     const tasks = await computeMyTasks(target);
-    const brief = await generateMyTasksBrief(tasks, target.name);
+    // With a key set this still calls Claude — part of answering this chat
+    // question, so it is recorded with it (INV-AI-010).
+    const brief = await generateMyTasksBrief(tasks, target.name, { ...usage, step: 'fallback_brief' });
     const prefix = target.email !== account.email ? `**${target.name} 的任务：**\n` : '';
     return `${prefix}${brief}\n\n[打开 My Tasks 查看详情](/my-tasks)`;
   }
@@ -2410,10 +2411,13 @@ function hasActionPreview(result: ClaudeAnswerResult): boolean {
   );
 }
 
-function scheduleConversationLearning(conversationId: number | undefined, account: ApprovedAccount | null, latestText: string) {
+function scheduleConversationLearning(conversationId: number | undefined, account: ApprovedAccount | null, latestText: string, chatUsage: AiUsageTag) {
   if (!conversationId || !account || !shouldAnalyzeConversationNow(latestText)) return;
+  // Runs because this person chatted, so it counts under them — shown as
+  // automatic, apart from what they asked (INV-AI-010).
+  const usage: AiUsageTag = { feature: 'ai_learning', trigger: 'auto', actorEmail: chatUsage.actorEmail, subjectEmail: chatUsage.subjectEmail };
   after(async () => {
-    await analyzeUserConversations(account.email, 30).catch(() => {});
+    await analyzeUserConversations(account.email, 30, usage).catch(() => {});
   });
 }
 
@@ -2466,6 +2470,18 @@ export async function POST(req: NextRequest) {
     account = resolution.account;
   }
 
+  // The AI usage ledger (INV-AI-010): every model call this question makes
+  // is recorded under the person who actually asked. Under View As that is
+  // still realAccount, with the viewed account noted beside it — Vincent,
+  // 2026-10-05: "算真正操作的人".
+  const chatUsage: AiUsageTag = {
+    feature: 'assistant',
+    trigger: 'chat',
+    actorEmail: realAccount?.email ?? null,
+    subjectEmail: account && account.email !== realAccount?.email ? account.email : null,
+    turnKey: crypto.randomUUID(),
+  };
+
   const last = messages[messages.length - 1];
   const isFirstMessage = messages.length === 1;
   const startedAt = Date.now();
@@ -2476,10 +2492,11 @@ export async function POST(req: NextRequest) {
     latestText,
     hasAttachments: hasAnyAttachment(messages),
     accountEmail: account?.email,
+    usage: chatUsage,
   });
   try {
     if (route.route === 'openai_only' && openAIConfigured()) {
-      const reply = await openAIGeneralAnswer({ transcript, accountEmail: account?.email, currentDate: nowSgtHuman() });
+      const reply = await openAIGeneralAnswer({ transcript, accountEmail: account?.email, currentDate: nowSgtHuman(), usage: chatUsage });
       const runId = account ? await recordAgentRun({
         accountEmail: account.email, conversationId, route: route.route,
         primaryProvider: 'openai', primaryModel: openAIModel('primary'),
@@ -2488,7 +2505,7 @@ export async function POST(req: NextRequest) {
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage, null, {
         provider: 'openai', model: openAIModel('primary'), agentRoute: route.route, agentRunId: runId,
       });
-      scheduleConversationLearning(conversationId, account, latestText);
+      scheduleConversationLearning(conversationId, account, latestText, chatUsage);
       return NextResponse.json({ reply, engine: 'openai', agentRoute: route.route });
     }
 
@@ -2499,7 +2516,7 @@ export async function POST(req: NextRequest) {
       // than the other, single-shot preview tools ever did; losing an
       // earlier-collected director's details off the back of an 8-message
       // window would make Claude re-ask for them or, worse, guess.
-      const result = await claudeAnswer(messages.slice(-24), context, account);
+      const result = await claudeAnswer(messages.slice(-24), chatUsage, context, account);
       const actionPreview = hasActionPreview(result);
       const synthesisBudgetMs = 55_000 - (Date.now() - startedAt);
       // Identity-bearing Post Incorporate intake stays entirely on Claude;
@@ -2517,6 +2534,7 @@ export async function POST(req: NextRequest) {
             accountEmail: account?.email,
             hasActionPreview: actionPreview,
             timeoutMs: synthesisBudgetMs,
+            usage: chatUsage,
           })
         : result.text;
       // Applied exactly once, here, on whichever text is actually about to
@@ -2540,7 +2558,7 @@ export async function POST(req: NextRequest) {
         toStoredPreview(result.invoicePreview, result.lateFilingPreview, result.invoiceEditPreview, result.postIncorporatePreview, result.arUpdatePreview),
         { provider: finalProvider, model: finalModel, agentRoute: finalRoute, agentRunId: runId },
       );
-      scheduleConversationLearning(conversationId, account, latestText);
+      scheduleConversationLearning(conversationId, account, latestText, chatUsage);
       return NextResponse.json({
         reply, engine: useOpenAISynthesis ? 'multi-model' : 'claude', agentRoute: finalRoute,
         invoicePreview: result.invoicePreview, lateFilingPreview: result.lateFilingPreview,
@@ -2554,7 +2572,7 @@ export async function POST(req: NextRequest) {
     // attached image/PDF is real content only Claude can actually look at,
     // so say so plainly rather than silently ignoring what the user attached.
     const attachNote = attachmentSummary(last.content) ? '\n\n（附带的图片/文件目前只有在 Claude 模式下才能被读取——基础模式暂时看不到内容。）' : '';
-    const reply = await intentAnswer(messageText(last.content), context, account) + attachNote;
+    const reply = await intentAnswer(messageText(last.content), chatUsage, context, account) + attachNote;
     const runId = account ? await recordAgentRun({
       accountEmail: account.email, conversationId, route: 'intent_fallback',
       primaryProvider: 'intent', status: 'fallback', latencyMs: Date.now() - startedAt,
@@ -2562,13 +2580,13 @@ export async function POST(req: NextRequest) {
     await persistExchange(conversationId, account, last.content, reply, isFirstMessage, null, {
       provider: 'intent', agentRoute: 'intent_fallback', agentRunId: runId,
     });
-    scheduleConversationLearning(conversationId, account, latestText);
+    scheduleConversationLearning(conversationId, account, latestText, chatUsage);
     return NextResponse.json({ reply, engine: 'intent', agentRoute: 'intent_fallback' });
   } catch (e) {
     // Claude path failed (bad key / network) — degrade to the intent engine.
     try {
       const attachNote = attachmentSummary(last.content) ? '\n\n（附带的图片/文件目前只有在 Claude 模式下才能被读取——基础模式暂时看不到内容。）' : '';
-      const reply = await intentAnswer(messageText(last.content), context, account) + attachNote;
+      const reply = await intentAnswer(messageText(last.content), chatUsage, context, account) + attachNote;
       const errorMessage = e instanceof Error ? e.message : 'assistant failed';
       const runId = account ? await recordAgentRun({
         accountEmail: account.email, conversationId, route: 'intent_fallback',
@@ -2577,7 +2595,7 @@ export async function POST(req: NextRequest) {
       await persistExchange(conversationId, account, last.content, reply, isFirstMessage, null, {
         provider: 'intent', agentRoute: 'intent_fallback', agentRunId: runId,
       });
-      scheduleConversationLearning(conversationId, account, latestText);
+      scheduleConversationLearning(conversationId, account, latestText, chatUsage);
       return NextResponse.json({ reply, engine: 'intent-fallback', agentRoute: 'intent_fallback', note: errorMessage });
     } catch {
       return NextResponse.json({ error: e instanceof Error ? e.message : 'assistant failed' }, { status: 500 });

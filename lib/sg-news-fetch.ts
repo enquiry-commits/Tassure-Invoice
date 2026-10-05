@@ -2,6 +2,8 @@ import 'server-only';
 import type { Browser } from 'playwright-core';
 import { removeStalePlaywrightTempDirs, withPlaywrightRetry } from './playwright-tmp-cleanup';
 import type { SgNewsSource } from './sg-news-sources';
+import { claudeMessages } from './ai/anthropic';
+import type { AiUsageTag } from './ai/usage';
 
 /**
  * Fetches one SG News source's real, rendered page and asks Claude to pull
@@ -91,9 +93,8 @@ const EXTRACT_TOOL = {
   },
 };
 
-async function extractItems(source: SgNewsSource, rawText: string): Promise<ExtractedNewsItem[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured.');
+async function extractItems(source: SgNewsSource, rawText: string, usage: AiUsageTag): Promise<ExtractedNewsItem[]> {
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured.');
 
   const system = `你在从一个真实网页的纯文本内容里提取新闻/公告条目列表。这是 ${source.name} 的页面，我们关心的范围是：${source.focus}。
 
@@ -103,17 +104,13 @@ async function extractItems(source: SgNewsSource, rawText: string): Promise<Extr
 - 如果页面上完全没有找到任何相关条目（比如页面加载失败，或者这个来源本来内容就很少），提交一个空数组，不要为了凑数硬编。
 - 最多提取20条，标题要和页面上完全一致，不要翻译或改写。`;
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: process.env.ASSISTANT_MODEL || 'claude-sonnet-5',
-      max_tokens: 3000,
-      system,
-      tools: [EXTRACT_TOOL],
-      tool_choice: { type: 'tool', name: 'submit_items' },
-      messages: [{ role: 'user', content: `网页纯文本内容（可能包含导航、广告等无关内容，请自行判断）：\n\n${rawText}` }],
-    }),
+  const res = await claudeMessages({ ...usage, step: `extract_${source.key}` }, {
+    model: process.env.ASSISTANT_MODEL || 'claude-sonnet-5',
+    max_tokens: 3000,
+    system,
+    tools: [EXTRACT_TOOL],
+    tool_choice: { type: 'tool', name: 'submit_items' },
+    messages: [{ role: 'user', content: `网页纯文本内容（可能包含导航、广告等无关内容，请自行判断）：\n\n${rawText}` }],
   });
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
@@ -122,11 +119,12 @@ async function extractItems(source: SgNewsSource, rawText: string): Promise<Extr
   return Array.isArray(items) ? items : [];
 }
 
-export async function fetchAndExtractSource(source: SgNewsSource): Promise<{ items: ExtractedNewsItem[] } | { error: string }> {
+// `usage`: the daily cron (system) or a manual run, for the AI usage ledger (INV-AI-010).
+export async function fetchAndExtractSource(source: SgNewsSource, usage: AiUsageTag): Promise<{ items: ExtractedNewsItem[] } | { error: string }> {
   try {
     const rawText = await fetchRenderedText(source.url);
     if (!rawText.trim()) return { error: 'Page rendered empty content.' };
-    const items = await extractItems(source, rawText);
+    const items = await extractItems(source, rawText, usage);
     return { items };
   } catch (err) {
     return { error: err instanceof Error ? err.message : String(err) };

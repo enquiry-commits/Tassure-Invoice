@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { createAdminClient } from '../supabase';
 import { pageAll } from '../page-all';
 import { openAIConfigured, openAIJson, openAIModel } from '../ai/openai';
+import type { AiUsageTag } from '../ai/usage';
 import { autoApproveLearningCandidates, type LearningCandidate } from './candidates';
 import type { CandidateStatus, LearningPatternKind } from './patterns';
 
@@ -83,7 +84,10 @@ export function shouldAnalyzeConversationNow(text: string): boolean {
   return /(以后|下次|一直|每次|统一|默认|不要再|不需要|我希望|我喜欢|我偏好|我的习惯|应该这样|纠正|错了|from now on|always|every time|default|i prefer|i like|don't|do not|correction)/i.test(text);
 }
 
-export async function analyzeUserConversations(accountEmail: string, windowDays = 30): Promise<LearningCandidate[]> {
+// `usage` says who caused this run for the AI usage ledger (INV-AI-010):
+// the person who just chatted, the admin who pressed analyse, or the
+// nightly job — never simply the account being analysed.
+export async function analyzeUserConversations(accountEmail: string, windowDays: number, usage: AiUsageTag): Promise<LearningCandidate[]> {
   if (!openAIConfigured()) return [];
   const email = accountEmail.trim().toLowerCase();
   const days = Math.min(Math.max(windowDays, 7), 180);
@@ -104,6 +108,7 @@ export async function analyzeUserConversations(accountEmail: string, windowDays 
   const extracted = await openAIJson<{ candidates: ExtractedCandidate[] }>({
     model: openAIModel('learning'),
     accountEmail: email,
+    usage,
     schemaName: 'conversation_learning_candidates',
     schema: {
       type: 'object', additionalProperties: false,

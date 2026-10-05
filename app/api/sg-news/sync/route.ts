@@ -6,6 +6,8 @@ import { SG_NEWS_SOURCES } from '@/lib/sg-news-sources';
 import { fetchAndExtractSource, type ExtractedNewsItem } from '@/lib/sg-news-fetch';
 import { generateDailyDigest } from '@/lib/sg-news-digest';
 import { todaySGT } from '@/lib/date';
+import { scheduledJobUsage } from '@/lib/ai/job-usage';
+import type { AiUsageTag } from '@/lib/ai/usage';
 
 // GET /api/sg-news/sync — the daily "SG Latest News" job (Vincent,
 // 2026-09-23: "每天早上走一轮...每天要写出一份报告出来给我"). Cron-only in
@@ -33,7 +35,7 @@ function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
-async function syncSgNews(run: AutomationRun): Promise<NextResponse> {
+async function syncSgNews(run: AutomationRun, usage: AiUsageTag): Promise<NextResponse> {
   const supabase = createAdminClient();
   const today = todaySGT();
   const sourcesChecked: string[] = [];
@@ -41,7 +43,7 @@ async function syncSgNews(run: AutomationRun): Promise<NextResponse> {
   const newItemsBySource: { source: typeof SG_NEWS_SOURCES[number]; items: ExtractedNewsItem[] }[] = [];
 
   for (const source of SG_NEWS_SOURCES) {
-    const result = await fetchAndExtractSource(source);
+    const result = await fetchAndExtractSource(source, usage);
     await run.heartbeat();
 
     if ('error' in result) {
@@ -84,7 +86,7 @@ async function syncSgNews(run: AutomationRun): Promise<NextResponse> {
   }
 
   const totalNew = newItemsBySource.reduce((s, si) => s + si.items.length, 0);
-  const report = await generateDailyDigest(newItemsBySource);
+  const report = await generateDailyDigest(newItemsBySource, usage);
   await run.heartbeat();
 
   const { error: reportErr } = await supabase.from('sg_news_daily_reports').upsert({
@@ -118,5 +120,6 @@ export async function GET(req: NextRequest) {
     if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
     if (!account.canViewSgNews) return NextResponse.json({ error: 'Your account cannot run SG Latest News.' }, { status: 403 });
   }
-  return withAutomationRun(req, 'sg_news_sync', syncSgNews, 15);
+  const usage = await scheduledJobUsage(req, 'sg_news');
+  return withAutomationRun(req, 'sg_news_sync', run => syncSgNews(run, usage), 15);
 }

@@ -3928,6 +3928,52 @@ again.
 
 ## AI Assistant / chatbot (INV-AI)
 
+- **INV-AI-010** — Every paid AI API call this app makes is recorded, ONE
+  ROW PER CALL, in `ai_usage_events` (`scripts/add-ai-usage-events.sql`),
+  so the only way to call a model is `lib/ai/anthropic.ts`
+  `claudeMessages()` or `lib/ai/openai.ts` (`openAIJson`/`openAIText` →
+  `callResponses()`), and both REQUIRE an `AiUsageTag` (feature, trigger,
+  actor) — a call that doesn't say who it is for does not compile.
+  Vincent, 2026-10-05: "为了准确的知道每个人使用了多少TOKENS，我要有一个明确
+  的实时记录"; his decisions: only he sees the usage; under View As usage
+  counts for the person who pressed the button ("算真正操作的人"), the viewed
+  account noted beside it; automatic calls a person causes (the My Tasks
+  brief on opening the page, the learning pass after their chat) count
+  under them, shown apart ("算本人，单独标「自动」"); USD. What keeps it
+  accurate:
+  (1) Per CALL, written the moment its response arrives
+  (`trackAiUsage()` starts the insert at once and hands it to `after()`) —
+  never per chat question: one question is up to 7 billed calls (OpenAI
+  router, up to 4 Claude rounds, OpenAI synthesis, the learning pass), and
+  one that fails in round 3 was still billed for rounds 1–2.
+  `ai_agent_runs` (assistant only, written once at the end, and under View
+  As it holds the VIEWED account) cannot be the ledger.
+  (2) The same four token buckets for both providers
+  (`lib/ai/usage-ledger.ts` `normalizeUsage()`): Anthropic's
+  `input_tokens` EXCLUDES cache reads/writes, OpenAI's `input_tokens`
+  INCLUDES cached tokens and `output_tokens` includes reasoning. The
+  assistant re-sends a ~19K-token cached prompt every round, so logging
+  `input_tokens` alone would miss most of it, and summing the buckets
+  naively makes cheap cache reads (0.1x) look like the bulk — hence tokens
+  AND estimated cost.
+  (3) Cost is a snapshot: `lib/ai/pricing.ts` (the providers' official
+  pages, 2026-10-05) is applied when the row is written and stored with
+  `price_version`, so a price change never rewrites past rows. A model not
+  in the table gets NO cost, never a guess. Web search: $10 per 1,000 on
+  both providers.
+  (4) Attribution: `actorEmail` is always the real signed-in person
+  (`realAccount`, never the View-As `account`). Scheduled jobs use
+  `lib/ai/job-usage.ts` `scheduledJobUsage()`: the real CRON_SECRET means
+  the system (no actor), a person's own button counts under them.
+  (5) Recording never breaks the call it records: errors are swallowed and
+  logged, and until the SQL is run the missing table is skipped quietly.
+  Limits: a request cut off by its own timeout returns no usage and can't
+  be recorded, though the provider may bill it. The providers' consoles
+  (one shared key) can't split usage by person, so they only check the
+  ledger's totals. Never store prompt or reply text in the ledger.
+  `test-ai-usage.ts` guards all of this, including that no file other than
+  those two calls `api.anthropic.com`/`api.openai.com` directly.
+
 - **INV-AI-009** — `PAGES` (now `lib/assistant-pages.ts`) is the
   assistant's ONLY map of the app (rendered into the static prompt's
   "System map" and used by `intentAnswer()`'s keyword navigation). A page
@@ -4122,10 +4168,11 @@ again.
   invoice too) of touching that specific code path.
 
 - **INV-AI-006** — A NEW AI feature in this app defaults to a direct
-  Anthropic call (`app/api/assistant/route.ts`'s claudeAnswer() pattern:
-  `x-api-key`/`anthropic-version: 2023-06-01` headers,
-  `https://api.anthropic.com/v1/messages`), never `lib/ai/openai.ts`'s
-  multi-model path, UNLESS that OpenAI path's production config has been
+  Anthropic call — since 2026-10-05 made only through `lib/ai/anthropic.ts`
+  `claudeMessages()`, which sends the same request claudeAnswer() always
+  did and records its usage (INV-AI-010; never a raw `fetch`) — never
+  `lib/ai/openai.ts`'s multi-model path, UNLESS that OpenAI path's
+  production config has been
   freshly confirmed live. Added 2026-09-22 for `lib/reports-narrative.ts`
   (Reports' auto-generated analysis card) — as of the multi-model agent's
   own 2026-09-21 rollout, `docs/CURRENT_STATE.md` already noted "Vincent
