@@ -2447,6 +2447,32 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Billing Drafts' editor shows each service once at its full amount, and
+  saving puts accounting's split back untouched (INV-QB-029 extended,
+  INV-QB-031).** Vincent, on 1X EXCHANGE TAB #02611112 (Secretary 175 +
+  Deferred 525): "这些还没有合并好吗？", then "在编辑页面显示 Secretary 服务
+  700 就可以了" and "不需要多一行显示Deferred部分". Design reviewed first by a
+  full council (4 Opus members + anonymous peer review, ~22 min); every
+  claim re-checked in code — one was wrong in its detail (the misfiled
+  deferred ND lines are TAB's "Deferred Revenue - ND - XX", not TAC's).
+  What shipped: `lib/deferred-pairing.ts` (pure, one rule for the editor
+  and, next, the client PDF — pair by item family, never position;
+  `test-deferred-pairing.ts` ALL PASSED); the editor folds each twin into
+  its service (1X: Secretary 700 / AR 60 / XBRL 600 = 1,360), keeps loaded
+  lines with their own invoice, shows an unpairable twin read-only with the
+  reason; save expands back to QuickBooks' real lines (unchanged amount →
+  exactly as they were; 700 → 800 → 275 + 525; ≤ the deferred part →
+  refused, "Ask Chelsea"); `update-invoice` accepts blank deferred items
+  and refuses invoices carrying line types the editor can't write back.
+  Census (read-only, synced lines): 507 of 2026's 526 split invoices fold
+  with unchanged totals; all 142 split invoices still open fold. Verified
+  in a browser harness with real lines (1X EXCHANGE, Yu Long TAB #02611041
+  with ND on TAB, Advance CF TAC #02680320, Anmed TAC #02680138) and the
+  save PATCH captured, not sent: payloads exactly as above. tsc, the
+  editor/route eslint (only pre-existing findings) and `next build` clean on
+  HEAD + this change in a separate worktree. **Not done yet:** the client
+  invoice PDF (phase 2); not exercised on the signed-in page or a real save.
+
 - **SG Latest News: the date tabs list only the latest 7 days.** Vincent:
   "这边只保留最新7天的记录就好". `app/api/sg-news/route.ts`'s history
   query now covers today and the 6 days before it (SGT calendar days,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { isDeferredItem } from '@/lib/deferred-pairing';
 import { createServerClient } from '@supabase/ssr';
 import { getApprovedAccount } from '@/lib/approved-accounts';
 import { createAdminClient } from '@/lib/supabase';
@@ -51,8 +52,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'qbInvoiceId must be a valid QuickBooks invoice id.' }, { status: 400 });
   }
   if (!lines?.length) return NextResponse.json({ error: 'At least one line is required.' }, { status: 400 });
+  // Accounting's Deferred Revenue twins carry no description in QuickBooks
+  // (637 of 736 in 2026) and are written back exactly as they were
+  // (INV-QB-029) — refusing them made every split invoice unsavable, and the
+  // obvious workaround (removing the twin) deleted accounting's line.
   if (lines.some(line =>
-    !line.description?.trim()
+    (!line.description?.trim() && !isDeferredItem(line.productService))
     || !Number.isFinite(Number(line.rate))
     || !Number.isFinite(Number(line.qty ?? 1))
     || Number(line.qty ?? 1) <= 0
@@ -122,6 +127,17 @@ export async function PATCH(req: NextRequest) {
   const invoice = live?.rows?.[0];
   if (!invoice) return NextResponse.json({ error: 'Invoice not found in QuickBooks.' }, { status: 404 });
   const syncToken = String(invoice.SyncToken ?? '');
+  // The editor carries item lines only, and the update below REPLACES the
+  // whole Line list — a QuickBooks discount, group or text-only line on the
+  // live invoice would be deleted without anyone choosing to. Refuse instead.
+  const uncarried = [...new Set(((invoice.Line as Array<{ DetailType?: string }> | undefined) ?? [])
+    .map(line => line.DetailType ?? 'unknown')
+    .filter(type => type !== 'SalesItemLineDetail' && type !== 'SubTotalLineDetail'))];
+  if (uncarried.length) {
+    return NextResponse.json({
+      error: `This invoice has line types the system can't edit (${uncarried.join(', ')}) — saving here would delete them. Edit it in QuickBooks.`,
+    }, { status: 409 });
+  }
   const totalAmt = Number(invoice.TotalAmt ?? 0);
   const balance = Number(invoice.Balance ?? 0);
   if (totalAmt === 0 && balance === 0) {

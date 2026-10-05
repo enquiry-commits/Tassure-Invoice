@@ -461,6 +461,18 @@ number and amount, and the attachment file name carries the current number.
 unreachable must instead give "didn't answer … nothing was created".
 **Guards:** `docs/INVARIANTS.md` INV-QB-030, INV-QB-005, INV-QB-010.
 
+### REG-031 — Editing a split invoice shows each service once and keeps accounting's lines (after ANY change to `lib/deferred-pairing.ts`, the edit/save path of `components/billing/ExpandedBillingRow.tsx`, `lib/quickbooks-invoice-lines.ts`, or `app/api/quickbooks/update-invoice/route.ts`)
+Run `npx tsx test-deferred-pairing.ts` (`ALL PASSED`). Then signed in on
+the deployed site, on an unpaid invoice the system generated that
+Chelsea has since split (e.g. 1X EXCHANGE TAB #02611112): (1) Billing
+Drafts' editor shows Secretary S$700 as ONE line, no Deferred row, same
+total as QuickBooks. (2) Save without changes — in QuickBooks the invoice
+still has Secretary 175 + Deferred Revenue - Corp Sec 525, same Class.
+(3) A TAB invoice carrying ND fees keeps its ND line in the TAB table and
+after a TAB save. (4) An invoice whose twin can't be paired shows the
+yellow notice and a read-only deferred row.
+**Guards:** `docs/INVARIANTS.md` INV-QB-029, INV-QB-031.
+
 ---
 
 ## Automation priority

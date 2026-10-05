@@ -30,6 +30,7 @@ import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverl
 import { manualInvoiceOverrides } from '@/lib/manual-invoice-marker';
 import { SVC_CONFIG } from '@/components/billing/service-config';
 import { getsDefaultPicClass, picLivesInServiceItem, type PicClassOption } from '@/lib/invoice-pic-class';
+import { mergeDeferredForDisplay, expandMergedAmount, isDeferredItem } from '@/lib/deferred-pairing';
 import { composeStatementMemo } from '@/lib/statement-memo';
 
 let parentPickCache: { id: number; company_name: string }[] | null = null;
@@ -121,6 +122,19 @@ function ParentCompanyPicker({ companyId, parentCompanyId, parentCompanyName, on
 type GenerateScope = 'TAB' | 'TAC' | null;
 
 type EditableLine = {
+  // Edit mode only: the QuickBooks invoice this line was loaded from. A
+  // loaded line stays with its own book — routing by service alone put a TAC
+  // "Deferred Revenue - ND - XX" line under TAB, so a TAC save deleted it.
+  book?: 'TAB' | 'TAC';
+  // Edit mode only: this service shown ONCE at its full amount, accounting's
+  // "Deferred Revenue" twin(s) folded in (INV-QB-029, Vincent 2026-10-05:
+  // "系统要显示的是 服务部分+Deferred部分的金额总额，而不需要多一行显示
+  // Deferred部分"). The real QuickBooks lines, written back on save.
+  parts?: { primary: EditableLine; deferred: EditableLine[] };
+  // Edit mode only: a deferred line the system could not pair with its
+  // service — shown as QuickBooks has it, read-only, so nobody deletes
+  // accounting's line by accident.
+  lockedDeferred?: boolean;
   service: string;
   productService: string;   // exact QB Product/Service item
   description: string;
@@ -193,6 +207,10 @@ function existingGeneratedPdfs(company: CompanyBilling, cycleFye?: string): Gene
 
 // Textarea that grows to fit its content — the full line description is always
 // visible, no inner scrollbar.
+// Which invoice a line belongs to: its own book once loaded from QuickBooks,
+// otherwise the long-standing rule (ND lines invoice under TAC).
+const bookOf = (l: EditableLine): 'TAB' | 'TAC' => l.book ?? (l.service === 'ND' ? 'TAC' : 'TAB');
+
 function AutoTextarea({ value, onChange, style }: { value: string; onChange: (v: string) => void; style?: React.CSSProperties }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const resize = () => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; } };
@@ -435,6 +453,9 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
   // invoice's current one itself right before writing.
   const [editLoading, setEditLoading] = useState<Partial<Record<'TAB' | 'TAC', boolean>>>({});
   const [editLoadError, setEditLoadError] = useState<Partial<Record<'TAB' | 'TAC', string>>>({});
+  // Why a loaded invoice's Deferred Revenue line could not be folded into its
+  // service (shown above that invoice's lines).
+  const [deferredNotice, setDeferredNotice] = useState<Partial<Record<'TAB' | 'TAC', string[]>>>({});
   const [savingEdit, setSavingEdit] = useState<Partial<Record<'TAB' | 'TAC', boolean>>>({});
   const [editResult, setEditResult] = useState<Partial<Record<'TAB' | 'TAC', { ok: boolean; msg: string; blocked?: boolean }>>>({});
 
@@ -566,8 +587,8 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
   // default company. Keep original array indices so setLine/remove still
   // target the right row after splitting into two rendered tables.
   const withIndex = lines.map((l, i) => ({ l, i }));
-  const tabRows = withIndex.filter(x => x.l.service !== 'ND');
-  const tacRows = withIndex.filter(x => x.l.service === 'ND');
+  const tabRows = withIndex.filter(x => bookOf(x.l) === 'TAB');
+  const tacRows = withIndex.filter(x => bookOf(x.l) === 'TAC');
 
   // Only offer the TAC section at all when this company actually has an ND
   // line — most companies never will.
@@ -589,14 +610,22 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       if (!res.ok) throw new Error(json.error ?? 'Unable to load this invoice from QuickBooks.');
       // Each line's PIC comes from its live QuickBooks Class, so the PIC
       // column shows what QuickBooks really has and saving keeps it.
-      const liveLines: EditableLine[] = (json.lines ?? []).map((l: { service: string; productService: string; description: string; qty: number; rate: number; picClass?: PicClassOption | null }) => ({
+      const loaded: EditableLine[] = (json.lines ?? []).map((l: { service: string; productService: string; description: string; qty: number; rate: number; picClass?: PicClassOption | null }) => ({
         service: l.service, productService: l.productService, description: l.description,
         qty: l.qty, rate: l.rate, include: true, due: false, reason: 'Live from QuickBooks',
-        picClassId: l.picClass?.value ?? null, picClassName: l.picClass?.name ?? null,
+        picClassId: l.picClass?.value ?? null, picClassName: l.picClass?.name ?? null, book: company,
       }));
+      // Each service once at its full amount (lib/deferred-pairing.ts). When
+      // a twin can't be paired, show QuickBooks' lines as they are, the twin
+      // read-only, and say why (Vincent: fall back, and tell staff).
+      const display = mergeDeferredForDisplay(loaded);
+      const liveLines: EditableLine[] = display.ok
+        ? display.lines.map(d => d.parts ? { ...d.line, qty: 1, rate: d.amount, parts: d.parts } : d.line)
+        : loaded.map(l => isDeferredItem(l.productService) ? { ...l, lockedDeferred: true, reason: 'Deferred — kept as in QuickBooks' } : l);
+      setDeferredNotice(prev => ({ ...prev, [company]: display.ok ? undefined : display.reasons }));
       setLines(prev => company === 'TAB'
-        ? [...liveLines, ...prev.filter(l => l.service === 'ND')]
-        : [...prev.filter(l => l.service !== 'ND'), ...liveLines]);
+        ? [...liveLines, ...prev.filter(l => bookOf(l) === 'TAC')]
+        : [...prev.filter(l => bookOf(l) === 'TAB'), ...liveLines]);
     } catch (error) {
       setEditLoadError(prev => ({ ...prev, [company]: error instanceof Error ? error.message : 'Unable to load this invoice.' }));
     } finally {
@@ -681,8 +710,8 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
   }, [txnDate, hasTac, numberRefreshKey]);
 
   const included = lines.filter(l => l.include);
-  const includedTab = included.filter(l => l.service !== 'ND');
-  const includedTac = included.filter(l => l.service === 'ND');
+  const includedTab = included.filter(l => bookOf(l) === 'TAB');
+  const includedTac = included.filter(l => bookOf(l) === 'TAC');
   const total = included.reduce((s, l) => s + l.qty * l.rate, 0);
   const totalTab = includedTab.reduce((s, l) => s + l.qty * l.rate, 0);
   const totalTac = includedTac.reduce((s, l) => s + l.qty * l.rate, 0);
@@ -929,19 +958,38 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       setEditResult(prev => ({ ...prev, [company]: { ok: false, msg: 'At least one line must be included.' } }));
       return;
     }
+    const toApiLine = (l: EditableLine) => ({
+      service: l.service, productService: l.productService, description: l.description, rate: l.rate, qty: l.qty,
+      // Every line's PIC exactly as shown (loaded from the live invoice or
+      // changed here) — saving no longer resets classes (INV-QB-026).
+      picClassId: effectivePicId(l, company),
+    });
+    // A service shown once at its full amount goes back to QuickBooks as the
+    // service line (with this screen's description/PIC) plus accounting's
+    // Deferred Revenue twin(s) exactly as they were (INV-QB-029); a changed
+    // amount moves onto the service line only (lib/deferred-pairing.ts).
+    const apiLines: ReturnType<typeof toApiLine>[] = [];
+    for (const l of companyLines) {
+      if (!l.parts) { apiLines.push(toApiLine(l)); continue; }
+      const { primary, deferred } = l.parts;
+      const expanded = expandMergedAmount(
+        { ...toApiLine(l), productService: primary.productService, qty: primary.qty, rate: primary.rate },
+        deferred.map(d => ({ service: d.service, productService: d.productService, description: d.description, rate: d.rate, qty: d.qty, picClassId: d.picClassId ?? null })),
+        l.qty * l.rate,
+      );
+      if (!expanded.ok) {
+        setEditResult(prev => ({ ...prev, [company]: { ok: false, msg: expanded.error } }));
+        return;
+      }
+      apiLines.push(expanded.primary, ...expanded.deferred);
+    }
     setSavingEdit(prev => ({ ...prev, [company]: true }));
     setEditResult(prev => ({ ...prev, [company]: undefined }));
     try {
-      const toApiLine = (l: EditableLine) => ({
-        service: l.service, productService: l.productService, description: l.description, rate: l.rate, qty: l.qty,
-        // Every line's PIC exactly as shown (loaded from the live invoice or
-        // changed here) — saving no longer resets classes (INV-QB-026).
-        picClassId: effectivePicId(l, company),
-      });
       const res = await fetch('/api/quickbooks/update-invoice', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          qbCompany: company, qbInvoiceId: invoice.qbId, pic: c.pic ?? undefined, lines: companyLines.map(toApiLine),
+          qbCompany: company, qbInvoiceId: invoice.qbId, pic: c.pic ?? undefined, lines: apiLines,
           // Same rule as generating: only sent when something is filled in,
           // so saving an edit on an ordinary invoice still touches no
           // BillAddr at all.
@@ -1131,13 +1179,15 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
         const svcLabel = ndCode ? `ND · ${ndCode}` : cfg?.label ?? (l.productService.includes(':') ? l.productService.split(':').slice(1).join(':') : l.service);
         return (
           <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: LINE_GRID, gap: 0, alignItems: 'start', padding: '16px 10px', borderTop: '1px solid #f1f5f9', background: l.periodNeedsReview ? '#fffaf0' : l.include ? '#fff' : '#fafbfc', opacity: l.include || l.periodNeedsReview ? 1 : 0.55 }}>
-            <input type="checkbox" checked={l.include} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e' }} />
+            <input type="checkbox" checked={l.include} disabled={l.lockedDeferred} title={l.lockedDeferred ? "Accounting's Deferred Revenue line — kept exactly as in QuickBooks" : undefined} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: l.lockedDeferred ? 'not-allowed' : 'pointer', accentColor: '#0f766e' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 5 }} title={l.productService}>
               {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
               <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svcLabel}</span>
             </div>
-            <AutoTextarea value={l.description} onChange={v => setLine(i, { description: v })} style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
-            {renderPicCell(l, i, company)}
+            {l.lockedDeferred
+              ? <div style={{ fontSize: 12, color: '#94a3b8', padding: '7px 4px' }}>{l.description || '—'}</div>
+              : <AutoTextarea value={l.description} onChange={v => setLine(i, { description: v })} style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />}
+            {l.lockedDeferred ? <span style={{ fontSize: 11, color: '#94a3b8', padding: '7px 4px' }}>{l.picClassName || '—'}</span> : renderPicCell(l, i, company)}
             <div style={{ fontSize: 10, fontWeight: 600, color: l.periodNeedsReview ? 'var(--status-warning)' : l.due ? '#c2410c' : '#94a3b8', textAlign: 'center', padding: '0 5px' }}>
               <span>{l.reason}</span>
               {l.periodNeedsReview && (
@@ -1147,11 +1197,13 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
                 </label>
               )}
             </div>
-            <input type="number" min={1} value={l.qty} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center', justifySelf: 'center' }} />
-            <input type="number" min={0} value={l.rate || ''} placeholder="0" onChange={e => setLine(i, { rate: +e.target.value || 0 })}
+            <input type="number" min={1} value={l.qty} disabled={l.lockedDeferred} onChange={e => setLine(i, { qty: Math.max(1, +e.target.value || 1) })} style={{ ...inputStyle, width: 38, textAlign: 'center', justifySelf: 'center' }} />
+            <input type="number" min={0} value={l.rate || ''} placeholder="0" disabled={l.lockedDeferred} onChange={e => setLine(i, { rate: +e.target.value || 0 })}
               style={{ ...inputStyle, width: 90, textAlign: 'center', justifySelf: 'center', borderColor: l.include && !l.rate ? '#f87171' : '#cbd5e1', background: l.include && !l.rate ? 'var(--status-danger-tint)' : '#fff' }} />
             <span style={{ fontSize: 12, fontWeight: 700, color: l.include ? '#0f766e' : '#94a3b8', textAlign: 'right' }}>{l.include ? `S$${(l.qty * l.rate).toLocaleString()}` : '—'}</span>
-            <button onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))} title="Remove line" style={{ border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'center' }}><X size={13} /></button>
+            {l.lockedDeferred
+              ? <span />
+              : <button onClick={() => setLines(prev => prev.filter((_, idx) => idx !== i))} title="Remove line" style={{ border: 'none', background: 'transparent', color: '#cbd5e1', cursor: 'pointer', padding: 0, display: 'flex', justifyContent: 'center' }}><X size={13} /></button>}
           </div>
         );
       })}
@@ -1266,6 +1318,11 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           : <span style={{ color: 'var(--status-warning)' }}>No prior renewal invoice found — draft built from standard template. Confirm each line.</span>}
       </div>
       <div style={{ marginBottom: 0 }}>
+        {deferredNotice.TAB && (
+          <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#92400e', fontSize: 11.5, lineHeight: 1.5 }}>
+            The Deferred Revenue line(s) on this invoice could not be folded into their service, so the lines are shown as QuickBooks has them and the deferred line is read-only: {deferredNotice.TAB.join('; ')}.
+          </div>
+        )}
         {editLoading.TAB ? (
           <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>Loading live invoice lines from QuickBooks…</div>
         ) : editLoadError.TAB ? (
@@ -1345,6 +1402,11 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
             );
           })()}
           <div style={{ marginBottom: 0 }}>
+            {deferredNotice.TAC && (
+              <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#92400e', fontSize: 11.5, lineHeight: 1.5 }}>
+                The Deferred Revenue line(s) on this invoice could not be folded into their service, so the lines are shown as QuickBooks has them and the deferred line is read-only: {deferredNotice.TAC.join('; ')}.
+              </div>
+            )}
             {editLoading.TAC ? (
               <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 12, border: '1px solid #e2e8f0', borderRadius: 8 }}>Loading live invoice lines from QuickBooks…</div>
             ) : editLoadError.TAC ? (

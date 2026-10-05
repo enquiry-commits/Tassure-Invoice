@@ -2185,6 +2185,60 @@ again.
   renewal-fee logic already reads the original amount back from the split
   (`buildAnnualRenewalFeeMap`, lib/invoice-period.ts: 350 + deferred 350 =
   700, the same as an unsplit 700).
+
+  Extended 2026-10-05 (Vincent, on 1X EXCHANGE TAB #02611112 showing
+  Secretary 175 + Deferred 525 in Billing Drafts' editor: "这些还没有合并好
+  吗？" … "在编辑页面显示 Secretary 服务 700 就可以了" … "Deferred部分 是只需
+  要存在于QB的，而系统要显示的是 服务部分+Deferred部分的金额总额，而不需要多一
+  行显示Deferred部分"; and on first sends: Chelsea splits only AFTER the
+  invoice has gone to the client, so the first copy is never split). The
+  system's own screens show each service ONCE too, not only what clients
+  receive. ONE pairing rule serves every surface — `lib/deferred-pairing.ts`
+  (pure; `test-deferred-pairing.ts`): a twin joins the one service line of
+  its item FAMILY anywhere on the invoice (Corp Sec → Corporate
+  Secretarial, Reg Addr → Registered Address, ND by director initials,
+  Payroll, CPF; the nearest one above if there are several), never by
+  position or equal amounts (2026: 56 twins are the invoice's first line, 23
+  follow another twin, 3 sit under an unrelated line; halves equal in only
+  124 of 657 pairs). A twin whose description is text its service line does
+  not contain (Anmed TAC #02680138: service "Apr 2026 - Dec 2026", twin "Jan
+  2027 - Mar 2027"), a twin with no service line (Helder Trading TAB
+  #02610936), an unknown deferred item or a quantity other than 1 is NOT
+  folded: that invoice is shown as QuickBooks has it, the twin read-only,
+  with the reason (Vincent: fall back to QuickBooks' version and tell staff).
+  Census over all 526 split invoices of 2026 (read-only): 507 fold, totals
+  unchanged on every one; the 19 that don't are all paid. Saving from the
+  editor writes QuickBooks' real lines back: the service line (with the
+  edited description/PIC) plus its twin(s) exactly as they were; a changed
+  amount moves onto the service line only (700 → 800 = 275 + 525) and
+  Chelsea re-splits in QuickBooks ("这个你不需要操心，Chelsea 会自己到QB额外修
+  改"); an amount at or below the deferred part is refused. Next (open): the
+  invoice PDF clients receive (Email Drafts attachments, Billing Drafts'
+  Save PDF, the SOA PDF) drawn by the system with the same rule.
+- **INV-QB-031** — Billing Drafts' invoice editor saves by REPLACING the
+  QuickBooks invoice's whole Line list (`app/api/quickbooks/update-invoice`
+  sparse update, `Line` sent in full), so any line the editor drops or can't
+  carry is deleted from QuickBooks without anyone choosing to. Three real
+  ways it did that, found 2026-10-05 while folding deferred twins (council
+  review, each claim re-checked in code and data): (1) the route refused any
+  line without a description, and 637 of 2026's 736 deferred twins have none
+  — so a split invoice could not be saved at all, and the natural workaround
+  (untick or delete the blank row) deleted accounting's line (Novozee: 1,720
+  → 890). Now a deferred item may be blank, and an unpaired twin is
+  read-only in the editor. (2) Loaded lines were filed by SERVICE (ND → the
+  TAC table), so ND fees billed on a TAB invoice ("Nominee Director Fees -
+  WW" + "Deferred Revenue - ND - WW" — 62 such TAB twins on record; TAC's
+  own twins are "Deferred - ND Fees - XX" and were filed correctly) showed
+  under TAC, and a TAB save deleted the ND line. Now a loaded line stays
+  with the invoice it came from (`bookOf()`); only new draft lines use the
+  service rule. (3) The editor reads item lines only
+  (`lib/quickbooks-invoice-lines.ts` `getLiveInvoice`), so a QuickBooks
+  discount, group or text-only line would have been deleted by any save —
+  the route now refuses to save an invoice that has one ("Edit it in
+  QuickBooks"). Whether (1)–(3) ever actually removed a line from a real
+  invoice was not checked. Rule: anything that writes an invoice's Line
+  list must write back every line it read, untouched unless a person
+  changed it — or refuse.
 - **INV-QB-030** — A QuickBooks invoice is (book, QuickBooks Id); its
   number and total are only its CURRENT values. `generated_invoices` logs
   the number and total at creation and nothing ever updates them, so
