@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (FIXED: invoice numbers and amounts changed in QuickBooks now show and send everywhere — Vincent: "单号问题先处理好", after "inv number qb 改了system 没有同步").
+
+**What was wrong.** `generated_invoices` logs an invoice's number and total at creation; QuickBooks edits never reach it. 1X EXCHANGE: generated as TAB #02611111, renumbered #02611112 in QuickBooks (#02611111 was also given to Nucon in the same seconds) — Billing Drafts kept #02611111 and its chip, opening by number, showed Nucon's invoice. 7 of 128 app-made totals had also changed (Novozee S$1,120 → S$1,720). AR emails quoted the logged values, and Quick Draft / assistant drafts skipped the live check.
+
+**What changed.** New `lib/current-invoice-values.ts` overlays QuickBooks' current number and total (synced mirror, by book + Id) in Billing Drafts, the AR email list, AR Reminder and Company 360 — the log is never rewritten. Billing chips open generated invoices by Id; `invoice-pdf` refuses (409) a number two invoices share. The pre-send check refreshes the number too and runs on every path (the skip flag is gone); attachment names follow it. The final duplicate-number check fails closed (`invoiceDocNumberStatus`), and a same-number invoice found right after create is reported in the Generate result. New INV-QB-030, REG-030, `test-current-invoice-values.ts`.
+
+**Verification.** tsc 0; eslint — no new errors (pre-existing ones in billing/page.tsx and ExpandedBillingRow.tsx, same counts as HEAD); `test-current-invoice-values.ts` ALL OK. Live, read-only, through the changed code: Billing Drafts → 1X TAB #02611112 (Id 25915), Novozee S$1,720, KINPLUS S$1,220, ADVANCE CF S$1,070; AR list → 1X 02611112; duplicate check → exists / unused / unknown. **Not verified:** the deployed UI with a login (REG-030), a real Generate. **Open:** whether the 2 sent AR emails (KINPLUS, ADVANCE CF) were wrong when sent — QuickBooks Audit Log.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (HARDENED before its first real run: the AI quality judge can no longer cut off its own verdict, its failures are readable, and only the cron or an admin can start a paid run. Same morning, Vincent decided that improvements learned from reviewing AI answers apply automatically and that building starts now. This is the groundwork; the design itself goes through a full council after 14:00 SGT.)
 
 **What changed.**

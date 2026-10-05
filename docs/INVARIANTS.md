@@ -2185,6 +2185,38 @@ again.
   renewal-fee logic already reads the original amount back from the split
   (`buildAnnualRenewalFeeMap`, lib/invoice-period.ts: 350 + deferred 350 =
   700, the same as an unsplit 700).
+- **INV-QB-030** — A QuickBooks invoice is (book, QuickBooks Id); its
+  number and total are only its CURRENT values. `generated_invoices` logs
+  the number and total at creation and nothing ever updates them, so
+  anything that SHOWS or SENDS a generated invoice must read QuickBooks'
+  current number and total by Id (`lib/current-invoice-values.ts`
+  `loadCurrentQbValues` + `withCurrentQbValues`, from the synced
+  `quickbooks_invoices` mirror) — and the log itself is never rewritten.
+  Found 2026-10-05 (colleague via Vincent: "inv number qb 改了system 没有同步";
+  4-agent council review, each claim re-checked): 1X EXCHANGE was generated
+  01/10 as TAB #02611111 while Nucon's invoice keyed straight into QuickBooks
+  got #02611111 in the same seconds; staff renumbered 1X's to #02611112 in
+  QuickBooks, but Billing Drafts kept showing #02611111 — and its invoice
+  chip, which opened PDFs by NUMBER, opened Nucon's invoice. Of 128 app-made
+  invoices with an Id, 1 number and 7 totals had changed in QuickBooks (e.g.
+  Novozee logged S$1,120, QuickBooks S$1,720). Rules now: (1) Billing Drafts,
+  the AR email invoice list, AR Reminder and Company 360 overlay current
+  values; (2) a generated invoice's chip opens by QuickBooks Id, and opening
+  by number refuses (409) when two QuickBooks invoices share the number
+  instead of taking the first; (3) the pre-send check refreshes the number
+  as well as the amount, and no send path skips it any more (Quick Draft
+  and the assistant's drafts used to, on the false premise that figures
+  read from `generated_invoices` were "seconds old"); attachment names
+  follow the refreshed number; (4) the last duplicate-number check before a
+  create FAILS CLOSED — a QuickBooks error or no answer stops the create
+  ("unknown" used to read as "unused", INV-QB-005's gap) — and after a
+  create a same-number invoice is reported to the person. QuickBooks itself
+  doesn't stop a duplicate keyed by hand, so a race in the same seconds can
+  still happen; the nightly sync's duplicate-number exception and the
+  post-create warning surface it. Verified on live data (read-only) through
+  the changed code: Billing Drafts → 1X #02611112, Novozee S$1,720, KINPLUS
+  S$1,220, ADVANCE CF S$1,070; the duplicate check answers exists / unused /
+  unknown (refused token). `test-current-invoice-values.ts` pins the rules.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

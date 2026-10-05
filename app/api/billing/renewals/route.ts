@@ -5,6 +5,7 @@ import { pageAll } from '@/lib/page-all';
 import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { isValidEmail } from '@/lib/campaign-recipients';
 import { onlyTeamworkActiveCompanies } from '@/lib/company-lifecycle';
+import { loadCurrentQbValues, withCurrentQbValues } from '@/lib/current-invoice-values';
 import {
   buildAnnualRenewalFeeMap,
   compareRenewalPeriodProductLines,
@@ -164,7 +165,7 @@ export async function computeAllCompanyBilling(withinDays: number): Promise<{ to
     annualItems,
     feeItems,
     carriedItems,
-    { data: generatedRows },
+    { data: generatedLogRows },
   ] = await Promise.all([
     // Billing Drafts' roster: the ONE shared "TeamWork-active" definition
     // (lib/company-lifecycle.ts) — the same one AR Generate uses, so a company
@@ -232,6 +233,10 @@ export async function computeAllCompanyBilling(withinDays: number): Promise<{ to
   // catches this and reproduces the exact same 500 response; unchanged from
   // a caller's real-world perspective.
   if (compErr) throw new Error(compErr.message);
+  // The number and total QuickBooks holds NOW, not the ones logged at
+  // creation (INV-QB-030) — the row's invoice chip, "Editing invoice #", the
+  // PDF file name and the renewal evidence below all read these.
+  const generatedRows = withCurrentQbValues(generatedLogRows ?? [], await loadCurrentQbValues(supabase, generatedLogRows ?? []));
 
   // A parent company (Vincent's Bill-To-override feature) need not itself be
   // an active CSS client, so it can be missing from `companies` above (which

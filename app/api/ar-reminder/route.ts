@@ -6,6 +6,7 @@ import { normalize, findUniqueBestMatch } from '@/lib/company-name';
 import { fyeDateString } from '@/lib/invoice-templates';
 import { resolveTeamworkPic } from '@/lib/teamwork-pic';
 import { getRequestAccount } from '@/lib/request-account';
+import { loadCurrentQbValues, withCurrentQbValues } from '@/lib/current-invoice-values';
 import { syncPicToActiveClient, loadCarriedForwardPics, type PicField } from '@/lib/pic-sync';
 
 // Was missing region pinning while 12 other routes already had it (see
@@ -195,7 +196,7 @@ export async function GET(req: NextRequest) {
     // a stale-overdue row can carry a past fye_year (see staleRows above),
     // and this table only ever holds one row per (company, cycle, qb_company)
     // — not the full QB history — so it's cheap to fetch in full.
-    supabase.from('generated_invoices').select('company_name, qb_company, invoice_no, fye_cycle, created_at'),
+    supabase.from('generated_invoices').select('company_name, qb_company, invoice_no, qb_invoice_id, fye_cycle, created_at'),
     getQbItems(supabase, year),
   ]);
 
@@ -206,8 +207,11 @@ export async function GET(req: NextRequest) {
   // (see app/api/billing/renewals/route.ts) — exact normalized-name match,
   // not the fuzzy wordMatch() below, since we wrote this row ourselves under
   // the company's own canonical name.
+  // Shown as QuickBooks' CURRENT number, not the one logged at creation
+  // (INV-QB-030) — a renumbered invoice must not show another client's number.
+  const currentGenerated = withCurrentQbValues(generatedRows ?? [], await loadCurrentQbValues(supabase, generatedRows ?? []));
   const generatedMap = new Map<string, { qbCompany: string; invoiceNo: string; fyeCycle: string | null; createdAt: string }[]>();
-  for (const g of generatedRows ?? []) {
+  for (const g of currentGenerated) {
     const key = normalize(g.company_name);
     if (!generatedMap.has(key)) generatedMap.set(key, []);
     generatedMap.get(key)!.push({ qbCompany: g.qb_company, invoiceNo: g.invoice_no, fyeCycle: g.fye_cycle, createdAt: g.created_at });

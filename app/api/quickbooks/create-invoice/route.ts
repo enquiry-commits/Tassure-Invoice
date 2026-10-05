@@ -2,7 +2,7 @@ import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { getValidToken, type QbCompany } from '@/lib/quickbooks';
 import {
-  nextDocNumber, invoiceDocNumberExists, getNet7TermId, findPicClass, listActiveClasses,
+  nextDocNumber, invoiceDocNumberStatus, invoiceDocNumberCount, getNet7TermId, findPicClass, listActiveClasses,
   findCustomer, getItemMap, findLocation, buildInvoiceLineArray,
   resolveParentBillAddr,
   resolveCareOfBillAddr,
@@ -32,6 +32,9 @@ interface CompanyResult {
   numberAdjusted?: boolean;
   expectedInvoiceNo?: string;
   numberMode?: InvoiceNumberMode;
+  // Another QuickBooks invoice already carries the same number (keyed there
+  // in the same seconds) — INV-QB-030.
+  duplicateNumber?: boolean;
   // A period overlap was found but not yet confirmed past — distinct from a
   // hard failure: nothing was created, and resubmitting the same request
   // with overlapConfirmed:true (same idempotencyKey, so it reuses this same
@@ -250,8 +253,12 @@ async function createInvoiceInCompany(
   // Always send the exact validated number. A final duplicate lookup here
   // narrows the window between the earlier reservation and this QB write.
   if (!docNumber) return { error: `QuickBooks ${company} invoice number is required.` };
-  if (await invoiceDocNumberExists(token, realmId, docNumber)) {
+  const numberStatus = await invoiceDocNumberStatus(token, realmId, docNumber);
+  if (numberStatus === 'exists') {
     return { error: `${docNumber} already exists in QuickBooks ${company}. Refresh the invoice number before generating.` };
+  }
+  if (numberStatus === 'unknown') {
+    return { error: `QuickBooks ${company} didn't answer when checking that ${docNumber} is still unused, so nothing was created. Try again.` };
   }
   payload.DocNumber = docNumber;
   if (termId)    payload.SalesTermRef = { value: termId };
@@ -285,10 +292,15 @@ async function createInvoiceInCompany(
       uncertain: true,
     };
   }
+  // Someone may have keyed an invoice straight into QuickBooks with the same
+  // number in the seconds between the check above and this create (QuickBooks
+  // itself doesn't stop it) — say so now instead of finding out from a client.
+  const sameNumberCount = await invoiceDocNumberCount(token, realmId, invoiceNo);
   return {
     invoiceNo,
     qbId: inv.Id,
     total: inv.TotalAmt,
+    ...(sameNumberCount !== null && sameNumberCount > 1 ? { duplicateNumber: true } : {}),
     numberAdjusted: numberMode === 'sequential' && invoiceNo !== docNumber,
     expectedInvoiceNo: docNumber,
     numberMode,
@@ -451,9 +463,10 @@ export async function POST(req: NextRequest) {
       && !!requested
       && (!expected || requested !== expected)
       && requested !== live;
-    if (manuallyOverridden && await invoiceDocNumberExists(token.access_token, token.realm_id, requested)) {
-      numberConflicts[company] = `${requested} already exists in QuickBooks ${company}`;
-      return;
+    if (manuallyOverridden) {
+      const status = await invoiceDocNumberStatus(token.access_token, token.realm_id, requested);
+      if (status === 'exists') { numberConflicts[company] = `${requested} already exists in QuickBooks ${company}`; return; }
+      if (status === 'unknown') { numberConflicts[company] = `QuickBooks ${company} didn't answer when checking ${requested} — try again`; return; }
     }
     if (!manuallyOverridden && live && requested && requested !== live) {
       numberConflicts[company] = `${requested} is no longer the next QuickBooks ${company} number. The latest number is ${live}`;

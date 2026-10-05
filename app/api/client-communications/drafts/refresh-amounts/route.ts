@@ -34,22 +34,31 @@ export async function POST(req: NextRequest) {
   if (!template) return NextResponse.json({ error: 'Template for this draft was not found.' }, { status: 404 });
 
   const refs = (draft.invoice_refs ?? []) as InvoiceRef[];
+  // Number AND amount: staff can renumber an invoice in QuickBooks as well as
+  // re-price it, and the email must quote the invoice the client will
+  // actually find (INV-QB-030; amounts were the only check before).
   const refreshedRefs = await Promise.all(refs.map(async (ref) => {
     if (!ref.qbInvoiceId) return ref;
     try {
-      const result = await qbQuery(`SELECT Id, TotalAmt FROM Invoice WHERE Id = '${ref.qbInvoiceId}'`, ref.qbCompany as QbCompany);
-      const live = result?.rows?.[0]?.TotalAmt;
-      if (typeof live === 'number') return { ...ref, amount: live };
-      return ref;
+      const result = await qbQuery(`SELECT Id, DocNumber, TotalAmt FROM Invoice WHERE Id = '${ref.qbInvoiceId}'`, ref.qbCompany as QbCompany);
+      const row = result?.rows?.[0];
+      const liveAmount = row?.TotalAmt;
+      const liveNumber = row?.DocNumber;
+      return {
+        ...ref,
+        ...(typeof liveAmount === 'number' ? { amount: liveAmount } : {}),
+        ...(typeof liveNumber === 'string' && liveNumber.trim() ? { invoiceNo: liveNumber.trim() } : {}),
+      };
     } catch {
-      return ref; // Keep the last-known amount rather than failing the whole request.
+      return ref; // Keep the last-known values rather than failing the whole request.
     }
   }));
 
   const newTotal = refreshedRefs.reduce((sum, r) => sum + (r.amount ?? 0), 0);
   const oldTotal = draft.total_amount ?? 0;
+  const numberChanged = refreshedRefs.some((r, i) => r.invoiceNo !== refs[i].invoiceNo);
 
-  if (newTotal === oldTotal) {
+  if (newTotal === oldTotal && !numberChanged) {
     return NextResponse.json({ ok: true, changed: false, draft });
   }
 

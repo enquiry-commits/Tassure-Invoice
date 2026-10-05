@@ -6,6 +6,7 @@ import { findStaffEmails } from '@/lib/staff-directory';
 import { computeAllSoaRows, loadArAgingSnapshot } from '@/lib/soa-data';
 import type { QbCompany } from '@/lib/quickbooks';
 import { onlyActiveCompanies } from '@/lib/company-lifecycle';
+import { loadCurrentQbValues, withCurrentQbValues } from '@/lib/current-invoice-values';
 
 /**
  * Shared company/invoice resolution for Client Communications, used by both
@@ -131,10 +132,14 @@ export async function loadInvoicesByCompany(
   const invoicesByCompany = new Map<string, InvoiceRef[]>();
   if (type === 'ar' && fyeMonth && fyeYear) {
     const fyeCycle = fyeCycleString(fyeMonth, fyeYear);
-    const { data: rows } = await supabase.from('generated_invoices')
+    const { data: logged } = await supabase.from('generated_invoices')
       .select('company_name, qb_company, invoice_no, total_amt, qb_invoice_id, created_at')
       .eq('fye_cycle', fyeCycle)
       .order('created_at', { ascending: true });
+    // The client email quotes the number and amount QuickBooks holds NOW —
+    // a renumbered or re-priced invoice must never go out under its
+    // creation-time values (INV-QB-030).
+    const rows = withCurrentQbValues(logged ?? [], await loadCurrentQbValues(supabase, logged ?? []));
     // A wrongly-issued invoice that gets deleted and reissued in QuickBooks
     // keeps its DocNumber, but `generated_invoices` is an append-only log —
     // the old row for the deleted invoice never goes away. Dedupe on

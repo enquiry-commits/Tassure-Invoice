@@ -125,9 +125,7 @@ export async function buildCampaignDraft(opts: {
     invoice_refs: attachments?.length ? [] : createdDraft.invoice_refs,
     ...(attachments?.length ? { additional_attachments: attachments } : {}),
     sender_email: sender?.email ?? 'finance@tassure.com',
-    // The amounts came from generated_invoices moments ago (the POST above),
-    // so skip prepareDraftForSend's live QuickBooks re-check — that exists
-    // for a draft that has sat around since being created.
-    skip_amount_refresh: true,
+    // prepareDraftForSend still re-checks number and amount live: these came
+    // from generated_invoices, which QuickBooks edits can outdate (INV-QB-030).
   };
 }

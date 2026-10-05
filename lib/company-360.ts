@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { normalize, matchScore, significantWord } from './company-name';
 import { computeSoaRows, effectiveOwner, type SoaCompanyRow } from './soa-data';
 import type { QbCompany } from './quickbooks';
+import { loadCurrentQbValues, withCurrentQbValues } from './current-invoice-values';
 import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderProgress } from './soa-reminder-progress';
 
 // Company 360 — one aggregation function, imported by both the page
@@ -252,7 +253,12 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
   // (we wrote these rows ourselves under the company's own canonical name,
   // same reasoning as app/api/ar-reminder/route.ts's generatedMap).
   const normName = normalize(companyName);
-  const generated = (generatedInvoiceRows ?? []).filter(r => normalize(r.company_name as string) === normName);
+  const loggedForCompany = (generatedInvoiceRows ?? []).filter(r => normalize(r.company_name as string) === normName);
+  // QuickBooks' current number and total, not the ones logged at creation (INV-QB-030).
+  const generated = withCurrentQbValues(
+    loggedForCompany as (Record<string, unknown> & { qb_company: string | null; qb_invoice_id: string | null; invoice_no?: string | null; total_amt?: number | null })[],
+    await loadCurrentQbValues(supabase, loggedForCompany as { qb_company: string | null; qb_invoice_id: string | null }[]),
+  );
 
   // Outstanding — computeSoaRows() already resolved its OWN companyId per
   // row via the same companies-table fuzzy match used everywhere in this

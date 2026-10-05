@@ -46,6 +46,12 @@ export async function GET(req: NextRequest) {
       return Response.json({ error: `A valid QuickBooks ${qbEntity.toLowerCase()} id or number is required.` }, { status: 400 });
     }
     const lookup = await qbQuery(`SELECT Id FROM ${qbEntity} WHERE DocNumber = '${invoiceNo}'`, company);
+    // Two documents can share a number in QuickBooks (it doesn't stop a
+    // duplicate keyed by hand) — never guess which one: the first match once
+    // opened another client's invoice (INV-QB-030).
+    if ((lookup?.rows.length ?? 0) > 1) {
+      return Response.json({ error: `${company} number ${invoiceNo} is on ${lookup!.rows.length} QuickBooks ${qbEntity.toLowerCase()}s — open it from QuickBooks, or renumber the duplicate there.` }, { status: 409 });
+    }
     const resolvedId = lookup?.rows[0]?.Id as string | undefined;
     if (!resolvedId) {
       return Response.json({ error: `No ${company} ${qbEntity.toLowerCase()} found with number ${invoiceNo}.` }, { status: 404 });

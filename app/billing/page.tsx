@@ -1702,11 +1702,9 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
         company_name: createdDraft.company_name, to_email: createdDraft.to_email, cc_email: createdDraft.cc_email,
         subject: createdDraft.subject, body: createdDraft.body, invoice_refs: createdDraft.invoice_refs,
         sender_email: selectedSender?.email ?? 'finance@tassure.com',
-        // This draft's amount came from generated_invoices moments ago (the
-        // POST above) — skip prepareDraftForSend's live QuickBooks re-check,
-        // which exists for a draft that's sat around since (see
-        // skip_amount_refresh's own comment in draft-helper-client.ts).
-        skip_amount_refresh: true,
+        // No longer skips prepareDraftForSend's live QuickBooks check: the
+        // figures come from generated_invoices, which staff can have changed
+        // in QuickBooks since (INV-QB-030).
       };
       if (helperAvailable) {
         // Amount re-verification, attachment resolution and the actual send
@@ -1852,11 +1850,15 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
   // QuickBooks — Vincent: "同时也要再FYE...的单号那边除了显示02611028，
   // 02611029也要显示出来", i.e. show both, not pick one). Deduped by invoice
   // number in case the same one somehow appears in both sources.
-  type InvoiceRef = { invoiceNo: string; manual: boolean };
+  // qbId: a generated invoice opens by its QuickBooks Id, never by number —
+  // a number can be changed in QuickBooks or shared by two invoices, and
+  // opening by number once showed 1X EXCHANGE's row Nucon's invoice
+  // (INV-QB-030). A Remarks marker only has a number.
+  type InvoiceRef = { invoiceNo: string; manual: boolean; qbId?: string | null };
   const invoiceRefsFor = (c: CompanyBilling, company: 'TAB' | 'TAC'): InvoiceRef[] => {
     const real = generatedThisCycle(c).filter(g => g.qbCompany === company && g.invoiceNo)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .map(g => ({ invoiceNo: g.invoiceNo as string, manual: false }));
+      .map(g => ({ invoiceNo: g.invoiceNo as string, manual: false, qbId: g.qbId }));
     const manual = manualInvoiceOverrides(c.arRemarks).filter(o => o.company === company)
       .map(o => ({ invoiceNo: o.invoiceNo, manual: true }));
     const seen = new Set<string>();
@@ -2033,8 +2035,8 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                   if (!tabRefs.length && !tacRefs.length && !c.pic) return null;
                   return (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', marginTop: 7, alignItems: 'center' }}>
-                      {tabRefs.map(r => <BillingInvoiceReference key={`tab-${r.invoiceNo}`} company="TAB" invoiceNo={r.invoiceNo} muted={r.manual} title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />)}
-                      {tacRefs.map(r => <BillingInvoiceReference key={`tac-${r.invoiceNo}`} company="TAC" invoiceNo={r.invoiceNo} muted={r.manual} title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />)}
+                      {tabRefs.map(r => <BillingInvoiceReference key={`tab-${r.invoiceNo}`} company="TAB" invoiceNo={r.invoiceNo} id={r.qbId ?? undefined} muted={r.manual} title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />)}
+                      {tacRefs.map(r => <BillingInvoiceReference key={`tac-${r.invoiceNo}`} company="TAC" invoiceNo={r.invoiceNo} id={r.qbId ?? undefined} muted={r.manual} title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />)}
                       {c.pic && <span style={{ fontSize: 10.5, color: '#64748b' }}>PIC: {formatStaffName(c.pic)}</span>}
                     </div>
                   );
@@ -2078,7 +2080,7 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                       const refs = invoiceRefsFor(c, 'TAB');
                       if (!refs.length) return <BillingInvoiceReference company="TAB" />;
                       return refs.map(r => (
-                        <BillingInvoiceReference key={r.invoiceNo} company="TAB" invoiceNo={r.invoiceNo} muted={r.manual}
+                        <BillingInvoiceReference key={r.invoiceNo} company="TAB" invoiceNo={r.invoiceNo} id={r.qbId ?? undefined} muted={r.manual}
                           title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />
                       ));
                     })()}
@@ -2093,7 +2095,7 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                       // way the TAB backfill was) — shown muted.
                       const refs = invoiceRefsFor(c, 'TAC');
                       if (refs.length) return refs.map(r => (
-                        <BillingInvoiceReference key={r.invoiceNo} company="TAC" invoiceNo={r.invoiceNo} muted={r.manual}
+                        <BillingInvoiceReference key={r.invoiceNo} company="TAC" invoiceNo={r.invoiceNo} id={r.qbId ?? undefined} muted={r.manual}
                           title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />
                       ));
                       const ndHist = c.renewals.find(r => r.service === 'ND' && r.applicable)?.history?.[0];

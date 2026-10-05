@@ -846,6 +846,11 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
         ...(json.tac?.numberAdjusted ? [`TAC ${json.tac.expectedInvoiceNo} → ${json.tac.invoiceNo}`] : []),
       ];
       const errs: string[] = [];
+      // Created fine, but someone keyed another invoice with the same number
+      // straight into QuickBooks in the same seconds (INV-QB-030).
+      for (const [book, r] of [['TAB', json.tab], ['TAC', json.tac]] as const) {
+        if (r?.duplicateNumber) errs.push(`${book} #${r.invoiceNo} is also on another QuickBooks invoice — renumber one of them in QuickBooks`);
+      }
       if (json.errors?.tab) errs.push(`TAB: ${json.errors.tab}`);
       if (json.errors?.tac) errs.push(`TAC: ${json.errors.tac}`);
       if (json.errors?.persistence) errs.push(json.errors.persistence);

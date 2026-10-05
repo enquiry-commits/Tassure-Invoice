@@ -449,6 +449,18 @@ account `/ai-usage` sends you to your home page and `GET /api/ai-usage`
 returns 403.
 **Guards:** `docs/INVARIANTS.md` INV-AI-010.
 
+### REG-030 — A generated invoice always shows and sends QuickBooks' current number and amount (after ANY change to `lib/current-invoice-values.ts`, the `generated_invoices` reads in `app/api/billing/renewals/route.ts` / `lib/client-comms-resolve.ts` / `app/api/ar-reminder/route.ts` / `lib/company-360.ts`, `app/api/quickbooks/invoice-pdf/route.ts`, the refresh-amounts route, `lib/draft-helper-client.ts`, or the duplicate-number check in create-invoice)
+Run `npx tsx test-current-invoice-values.ts` (`ALL OK`). Then signed in on
+the deployed site: (1) Billing Drafts, 1X EXCHANGE's row (Dec FYE) shows
+TAB #02611112, and its chip opens 1X's own invoice (not Nucon's); its
+"Editing invoice #" header says #02611112. (2) Novozee's row says S$1,720.
+(3) Quick Draft an AR email for a company whose invoice was changed in
+QuickBooks after generation — the review screen shows QuickBooks' current
+number and amount, and the attachment file name carries the current number.
+(4) Generate a test invoice normally — it is created; QuickBooks being
+unreachable must instead give "didn't answer … nothing was created".
+**Guards:** `docs/INVARIANTS.md` INV-QB-030, INV-QB-005, INV-QB-010.
+
 ---
 
 ## Automation priority

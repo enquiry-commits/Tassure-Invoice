@@ -90,7 +90,7 @@ export async function nextEstimateDocNumber(token: string, realmId: string, txnD
   return `${prefix}${String(seq + 1).padStart(latest.length - prefix.length, '0')}`;
 }
 
-// Same duplicate-check shape as invoiceDocNumberExists below, against
+// Same duplicate-check shape as invoiceDocNumberCount below, against
 // Estimate instead of Invoice — the final check immediately before create.
 export async function estimateDocNumberExists(token: string, realmId: string, docNumber: string): Promise<boolean> {
   const escaped = docNumber.replace(/'/g, "\\'");
@@ -98,13 +98,28 @@ export async function estimateDocNumberExists(token: string, realmId: string, do
   return (qr?.Estimate?.length ?? 0) > 0;
 }
 
-// Exact duplicate check used when staff manually override the suggested
-// number. QuickBooks custom transaction numbers are company-specific, so this
-// must run against the matching TAB/TAC realm immediately before creation.
-export async function invoiceDocNumberExists(token: string, realmId: string, docNumber: string): Promise<boolean> {
+// How many QuickBooks invoices carry this exact DocNumber — null when
+// QuickBooks didn't answer. QuickBooks custom transaction numbers are
+// company-specific, so this runs against the matching TAB/TAC realm.
+export async function invoiceDocNumberCount(token: string, realmId: string, docNumber: string): Promise<number | null> {
   const escaped = docNumber.replace(/'/g, "\\'");
-  const qr = await qbGet(token, realmId, `SELECT * FROM Invoice WHERE DocNumber = '${escaped}' MAXRESULTS 1`);
-  return (qr?.Invoice?.length ?? 0) > 0;
+  try {
+    const qr = await qbGet(token, realmId, `SELECT Id FROM Invoice WHERE DocNumber = '${escaped}' MAXRESULTS 10`);
+    return qr ? (qr.Invoice?.length ?? 0) : null;
+  } catch {
+    return null;
+  }
+}
+
+// The duplicate check run immediately before an invoice create (and when
+// staff override the suggested number). It fails CLOSED: 'unknown' — a
+// QuickBooks error or no answer — must stop the create, never count as
+// "unused". The old boolean check read a failed lookup as "no duplicate",
+// one way TAB #02611111 ended up on two clients' invoices on 2026-10-01
+// (docs/INVARIANTS.md INV-QB-030).
+export async function invoiceDocNumberStatus(token: string, realmId: string, docNumber: string): Promise<'unused' | 'exists' | 'unknown'> {
+  const count = await invoiceDocNumberCount(token, realmId, docNumber);
+  return count === null ? 'unknown' : count > 0 ? 'exists' : 'unused';
 }
 
 // Net 7 term id (id 7 in both companies today; resolved defensively).

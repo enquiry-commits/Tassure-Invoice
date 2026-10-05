@@ -83,20 +83,11 @@ export interface DraftLike {
   // opt a single send out of it, for the rare case someone removes it in
   // the review screen. Only meaningful to sendDraftsInOutlook.
   skip_standing_attachments?: boolean;
-  // Only set by quickEmailDraft (app/billing/page.tsx), right after IT just
-  // created this exact draft from a live generated_invoices lookup seconds
-  // earlier — refreshAmount's live QuickBooks re-check exists for the
-  // opposite case, a draft that's sat around and might have drifted since
-  // (Delivery History's reopen flow, which never sets this). Vincent,
-  // 2026-08-27: measured the QB amount-check itself at ~1.7s, real Intuit
-  // API latency this can't optimize away — skipping it for a draft that is
-  // provably seconds old removes one of two ~1.8s round-trips from the
-  // common "Draft, review, Send" path. Low-stakes even in the near-zero
-  // chance someone hand-edits the SAME invoice in QuickBooks in that exact
-  // window: the attached PDF is always fetched live regardless of this flag
-  // and is what actually matters for payment — this only affects whether
-  // the email BODY's dollar figure gets a second, redundant verification.
-  skip_amount_refresh?: boolean;
+  // (skip_amount_refresh was removed 2026-10-05, INV-QB-030: Quick Draft
+  // skipped the live check because its figures were "seconds old", but they
+  // came from generated_invoices — numbers and totals logged at creation,
+  // which staff can change in QuickBooks weeks later; 7 of 128 had. The
+  // check runs alongside the PDF download, so it costs almost no time.)
 }
 
 export interface DraftOpenResult {
@@ -180,7 +171,7 @@ async function fetchSystemAttachments(d: DraftLike): Promise<PreparedAttachment[
 // fetched live) shows the corrected one. Fails open: any error here just
 // keeps the draft as originally passed in, never blocks it.
 async function refreshAmount(draft: DraftLike): Promise<{ draft: DraftLike; corrected: boolean; previousTotal?: number; newTotal?: number }> {
-  if (!draft.id || draft.skip_amount_refresh) return { draft, corrected: false };
+  if (!draft.id) return { draft, corrected: false };
   try {
     const res = await fetch('/api/client-communications/drafts/refresh-amounts', {
       method: 'POST',
@@ -229,8 +220,8 @@ export async function prepareDraftForSend(draft: DraftLike): Promise<PreparedDra
   // PDF render), so waiting for the first before even starting the second
   // roughly doubled the real wait ("文件的自动导入也是很慢"). The PDF fetch
   // only needs qbInvoiceId/qbCompany, which refreshAmount can never change
-  // (refresh-amounts/route.ts only ever updates .amount on an existing ref —
-  // same refs, same ids, same length) — so fetching against the ORIGINAL
+  // (refresh-amounts/route.ts only updates .amount and .invoiceNo on an
+  // existing ref — same refs, same ids, same length) — so fetching against the ORIGINAL
   // draft is exactly as correct as waiting for the refresh first. The one
   // thing this trades away: if the amount really was stale and gets
   // corrected, the attachment's own suggested filename (which embeds the
@@ -238,10 +229,21 @@ export async function prepareDraftForSend(draft: DraftLike): Promise<PreparedDra
   // cosmetic only, since the PDF itself is always QuickBooks' live render
   // regardless of what our filename says, and the email body (from
   // refreshed.draft) always shows the corrected total either way.
-  const [refreshed, systemAttachments] = await Promise.all([
+  const [refreshed, fetchedAttachments] = await Promise.all([
     refreshAmount(draft),
     fetchSystemAttachments(draft),
   ]);
+  // The refresh can also correct an invoice NUMBER (renumbered in
+  // QuickBooks, INV-QB-030) — re-name the attachments from the refreshed
+  // refs so the file name never carries the old number. Same refs, same
+  // order, same ids as the download used.
+  const refreshedRefs = (refreshed.draft.invoice_refs ?? []).filter(r => r.qbInvoiceId);
+  const systemAttachments = refreshed.corrected
+    ? fetchedAttachments.map((a, i) => {
+      const r = refreshedRefs[i];
+      return r ? { ...a, fileName: invoicePdfFileName(r.qbCompany as 'TAB' | 'TAC' | 'TAO', r.invoiceNo, refreshed.draft.company_name, r.amount) } : a;
+    })
+    : fetchedAttachments;
   return {
     draft: refreshed.draft,
     systemAttachments,
