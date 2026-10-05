@@ -3,6 +3,7 @@ import 'server-only';
 import { createAdminClient } from '../supabase';
 import { claudeMessages } from '../ai/anthropic';
 import type { AiUsageTag } from '../ai/usage';
+import { judgeRequestBody, parseJudgeResponse, type QualityIssue, type QualityVerdict } from './judge';
 
 // Automated quality spot-check (2026-09-22) — item 6 of Vincent's own "AI
 // Agent/My Tasks 少一些东西" review. Every real AI-assistant bug documented
@@ -24,8 +25,7 @@ import type { AiUsageTag } from '../ai/usage';
 // itself re-run the same tools — a real, bigger follow-up, deliberately not
 // attempted here (see docs/INVARIANTS.md INV-AI-006's own note).
 
-export type QualityIssue = { category: string; description: string };
-export type QualityVerdict = { verdict: 'pass' | 'flag'; issues: QualityIssue[] };
+export type { QualityIssue, QualityVerdict };
 
 type ReviewCandidate = {
   messageId: number;
@@ -58,7 +58,11 @@ Respond with ONLY this JSON, no other text before or after it:
 // involved conversations, not a per-candidate round trip.
 async function findCandidates(limit: number): Promise<ReviewCandidate[]> {
   const supabase = createAdminClient();
-  const { data: reviewed } = await supabase.from('ai_quality_reviews').select('message_id');
+  const { data: reviewed, error: reviewedError } = await supabase.from('ai_quality_reviews').select('message_id');
+  // Without this list every candidate is judged — a paid call — and then
+  // fails to save, on every run (the state from 2026-09-22 to 10-05, when
+  // the table had never been created). Stop before spending anything.
+  if (reviewedError) throw new Error(`Cannot read ai_quality_reviews: ${reviewedError.message}`);
   const reviewedIds = new Set((reviewed ?? []).map(r => Number(r.message_id)));
 
   // Over-fetch (6x) to leave enough headroom after excluding already-
@@ -112,22 +116,26 @@ async function findCandidates(limit: number): Promise<ReviewCandidate[]> {
 
 function judge(candidate: ReviewCandidate, usage: AiUsageTag): Promise<QualityVerdict> {
   const input = `STAFF QUESTION:\n${candidate.userQuestion.slice(0, 2000)}\n\nTOOLS CALLED THIS TURN: ${candidate.toolsUsed.length ? candidate.toolsUsed.join(', ') : '(none)'}\n\nASSISTANT REPLY:\n${candidate.assistantReply.slice(0, 4000)}`;
-  return claudeMessages(usage, { model: JUDGE_MODEL, max_tokens: 800, system: RUBRIC, messages: [{ role: 'user', content: input }] }).then(async res => {
+  return claudeMessages(usage, judgeRequestBody(JUDGE_MODEL, RUBRIC, input)).then(async res => {
     if (!res.ok) throw new Error(`Judge API ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    const data = await res.json();
-    const text = (data.content as Array<{ type: string; text?: string }>).filter(b => b.type === 'text').map(b => b.text ?? '').join('');
-    const match = /\{[\s\S]*\}/.exec(text);
-    if (!match) throw new Error('Judge returned no parseable JSON');
-    const parsed = JSON.parse(match[0]) as { verdict?: string; issues?: unknown };
-    const verdict = parsed.verdict === 'flag' ? ('flag' as const) : ('pass' as const);
-    const issues = Array.isArray(parsed.issues)
-      ? parsed.issues
-          .filter((i): i is QualityIssue => !!i && typeof i === 'object' && typeof (i as QualityIssue).category === 'string' && typeof (i as QualityIssue).description === 'string')
-          .slice(0, 8)
-      : [];
-    return { verdict, issues };
+    return parseJudgeResponse(await res.json());
   });
 }
+
+// The route's maxDuration is 120s, and a hard platform kill never reaches
+// withAutomationRun's cleanup (INV-CRON-008), so stop starting new judge
+// calls with ~30s to spare. Whatever is left stays unreviewed and is picked
+// up by the next run.
+const TIME_BUDGET_MS = 90_000;
+
+export type QualityBatchResult = {
+  reviewed: number;
+  flagged: number;
+  errors: number;
+  errorSamples: string[];
+  skippedForTime: number;
+  skippedNoKey: boolean;
+};
 
 // Called from the daily cron (app/api/ai-quality/review/route.ts). One
 // candidate's failure (a malformed judge response, a transient API error)
@@ -136,14 +144,27 @@ function judge(candidate: ReviewCandidate, usage: AiUsageTag): Promise<QualityVe
 // per-account try/catch.
 // `usage`: the nightly cron (system) or a person's own "立即抽查" click, for
 // the AI usage ledger (INV-AI-010).
-export async function runQualityReviewBatch(limit: number, usage: AiUsageTag): Promise<{ reviewed: number; flagged: number; errors: number; skippedNoKey: boolean }> {
-  if (!process.env.ANTHROPIC_API_KEY) return { reviewed: 0, flagged: 0, errors: 0, skippedNoKey: true };
+export async function runQualityReviewBatch(limit: number, usage: AiUsageTag): Promise<QualityBatchResult> {
+  if (!process.env.ANTHROPIC_API_KEY) return { reviewed: 0, flagged: 0, errors: 0, errorSamples: [], skippedForTime: 0, skippedNoKey: true };
+  const startedAt = Date.now();
   const supabase = createAdminClient();
   const candidates = await findCandidates(limit);
   let reviewed = 0;
   let flagged = 0;
+  let skippedForTime = 0;
+  // The first few failures' own messages, so a failed run on Automation
+  // Health says why instead of only "ai_quality_review failed."
+  const errorSamples: string[] = [];
   let errors = 0;
-  for (const candidate of candidates) {
+  const noteError = (message: string) => {
+    errors++;
+    if (errorSamples.length < 3) errorSamples.push(message.slice(0, 300));
+  };
+  for (const [index, candidate] of candidates.entries()) {
+    if (Date.now() - startedAt > TIME_BUDGET_MS) {
+      skippedForTime = candidates.length - index;
+      break;
+    }
     try {
       const result = await judge(candidate, usage);
       const { error } = await supabase.from('ai_quality_reviews').insert({
@@ -157,17 +178,17 @@ export async function runQualityReviewBatch(limit: number, usage: AiUsageTag): P
         issues: result.issues,
         judge_model: JUDGE_MODEL,
       });
-      // A DB error here (most likely: scripts/add-ai-quality-reviews.sql
-      // hasn't been run yet) counts as a failure for THIS candidate only —
-      // never lets one missing migration abort the whole batch's loop.
-      if (error) { errors++; continue; }
+      // A save error counts against THIS candidate only — never aborts the
+      // rest of the batch. (A missing table is caught before any judge call,
+      // in findCandidates.)
+      if (error) { noteError(`save: ${error.message}`); continue; }
       reviewed++;
       if (result.verdict === 'flag') flagged++;
-    } catch {
-      errors++;
+    } catch (error) {
+      noteError(error instanceof Error ? error.message : String(error));
     }
   }
-  return { reviewed, flagged, errors, skippedNoKey: false };
+  return { reviewed, flagged, errors, errorSamples, skippedForTime, skippedNoKey: false };
 }
 
 export type QualityReviewRow = {

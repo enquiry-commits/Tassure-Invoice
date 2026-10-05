@@ -1,5 +1,31 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (HARDENED before its first real run: the AI quality judge can no longer cut off its own verdict, its failures are readable, and only the cron or an admin can start a paid run. Same morning, Vincent decided that improvements learned from reviewing AI answers apply automatically and that building starts now. This is the groundwork; the design itself goes through a full council after 14:00 SGT.)
+
+**What changed.**
+- New `lib/ai-quality/judge.ts` (pure, testable) holds the judge's request and its reply parser.
+  - The request now uses adaptive thinking at `effort: "low"` with `max_tokens` 4000. It was 800, and Sonnet 5 thinks by default with the thinking counted toward `max_tokens` (checked in Anthropic's Sonnet 5 migration notes), so the verdict could be cut off.
+  - The parser throws on a `max_tokens` or `refusal` stop instead of guessing a verdict.
+- `lib/ai-quality/review.ts`:
+  - throws before any judge call when it can't read `ai_quality_reviews`;
+  - keeps the first three error messages (`errorSamples`);
+  - stops starting judge calls after 90s (`skippedForTime`; the route limit is 120s, INV-CRON-008).
+- `app/api/ai-quality/review/route.ts`:
+  - now gated to the exact `CRON_SECRET` or an admin account (before, any signed-in account could start a paid run — INV-CRON-018);
+  - a failed run's summary carries `error`.
+- Docs: INV-AI-006 (the hardening), INV-CRON-018 (ai-quality closed, narrative-cron still open), `docs/CURRENT_STATE.md` (including the learning-loop decision).
+
+**Verification.**
+- New `test-ai-quality-judge.ts`: ALL OK, 21 checks against canned API replies (no network, no paid call).
+- Negative controls: `max_tokens` 800, no stop_reason check, no admin check and no table-read guard each fail their own rule.
+- `tsc` 0 and eslint clean; `test-ai-usage.ts`, `test-cron-wiring.ts` and `test-account-access.ts` ALL OK.
+- **Not verified:**
+  - a real judge call — tonight's first run (23:00–23:59 UTC) is the check;
+  - `next build` was not run (no new route and no new route export).
+- The request needs a Claude 4.6+ judge model. The default `claude-sonnet-5` is the model production's assistant already runs successfully.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (FIXED and live, first real run tonight 23:00–23:59 UTC: the nightly AI quality spot-check has never produced a review — `/api/ai-quality/review` was scheduled but missing from `proxy.ts`'s `CRON_PATHS`, and `ai_quality_reviews` was never created. Asked: re-verify both read-only, add the path, hand the SQL to Vincent, confirm the first real run with real data.)
 
 **What was wrong (re-verified read-only on real data; 4-agent council review, each claim re-checked).** (1) `ai_quality_reviews` does not exist in production (PGRST205, absent from the live PostgREST schema), so `scripts/add-ai-quality-reviews.sql` never ran. (2) `vercel.json` schedules `/api/ai-quality/review` at `0 23 * * *`, but it was the only one of 13 scheduled paths missing from `CRON_PATHS`, so Vercel's call (`Bearer $CRON_SECRET`, no session) got a 401: zero `automation_sync_runs` rows ever for `ai_quality_review`, cron or manual, while `sg_news_sync`, `soa_owner_audit` and `ai_learning` succeeded every night. It is the same bug as `/api/teamwork/sync-secretary` on 2026-08-06, which INV-CRON-011 was written about. A session found this one on 2026-09-24 and left it out on purpose to keep a paid job off — an "off switch" that looks exactly like the bug. The health route's `SOURCES` already listed `ai_quality_review`.

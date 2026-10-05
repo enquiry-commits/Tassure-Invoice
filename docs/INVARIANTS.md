@@ -1419,7 +1419,10 @@ again.
   `Bearer ${process.env.CRON_SECRET}` with no truthiness check, which would
   match the literal `Bearer undefined` if the secret were ever unset — left
   to the separate cron-hygiene follow-up along with `ai_quality_review`
-  (see `docs/CURRENT_STATE.md`).
+  (see `docs/CURRENT_STATE.md`). `/api/ai-quality/review` got its gate on
+  2026-10-05 (exact secret, else `account.admin`; `test-ai-quality-judge.ts`
+  checks it comes before `withAutomationRun`); `narrative-cron`'s check is
+  still open.
 
 ## QuickBooks / invoice (INV-QB)
 
@@ -4206,9 +4209,27 @@ again.
   2026-10-05 (INV-CRON-011) — plus a manual "立即抽查" button on
   `/ai-quality` for an on-demand run. The page and the reviews API
   (`/api/ai-quality/reviews`, `/[id]`) are gated on `account.admin`
-  (Vincent-only today), same as `/ai-learning`; the run route itself
-  (`GET /api/ai-quality/review`) is NOT — any signed-in account can start a
-  paid run by opening its URL (INV-CRON-018's open follow-up).
+  (Vincent-only today), same as `/ai-learning`. The run route itself
+  (`GET /api/ai-quality/review`) was NOT until 2026-10-05 — any signed-in
+  account could start a paid run by opening its URL; it now takes the exact
+  `CRON_SECRET` or an admin account (INV-CRON-018).
+
+  **Hardened 2026-10-05, before its first real run** (pure part in
+  `lib/ai-quality/judge.ts`, pinned by `test-ai-quality-judge.ts`): (1) The
+  judge asked `claude-sonnet-5` for `max_tokens: 800` with no `thinking`
+  setting — Sonnet 5 thinks by default and thinking counts toward
+  `max_tokens`, so the JSON verdict could be cut off; it now sends adaptive
+  thinking at `effort: "low"` with `max_tokens` 4000 (billed per token used),
+  and a `max_tokens` or `refusal` stop throws instead of yielding a guessed
+  verdict. (2) Errors used to vanish: the summary only counted them and a
+  failed run read "ai_quality_review failed."; the first three messages now
+  go into `errorSamples`, and a failed run records the first as its error.
+  (3) The batch throws before any judge call when it can't read
+  `ai_quality_reviews`, instead of paying to judge replies it can't save.
+  (4) It stops starting judge calls after 90s (the route's limit is 120s and
+  a platform kill skips cleanup — INV-CRON-008); the rest stay unreviewed for
+  the next run (`skippedForTime`). A reply whose judge call fails is still
+  re-tried, and re-billed, on later runs — there is no attempt cap yet.
 
   Same change closed 2 real, unrelated dashboard-visibility gaps found while
   wiring this in: `ai_learning` and the new `ai_quality_review` are both
