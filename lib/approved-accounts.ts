@@ -127,7 +127,7 @@ export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   // lib/staff-directory.ts (used for PIC-matching text, not login) with no
   // way to actually sign in at all.
   { name: 'Tan Yee Soon', email: 'yeesoon@tassure.com', workspace: 'management', canSwitchWorkspace: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewQuotation: true, qbLocations: { TAB: 'Tan Yee Soon', TAO: 'Tan Yee Soon' } },
-  // TCS SECRETARIAL
+  // TCS CORPSEC (workspace id 'secretarial'; renamed from TCS SECRETARIAL 2026-10-05)
   { name: 'Lim Hoe Chyi', email: 'hoechyi@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Lim Hoe Chyi', TAC: 'Lim Hoe Chyi', TAO: 'Lim Hoe Chyi' } },
   { name: 'Hoo Seng Xin', email: 'sengxin@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Hoo Seng Xin', TAC: 'Seng Xin', TAO: 'Hoo Seng Xin' } },
   { name: 'Jenny Lai', email: 'jennylai@tassure.com', workspace: 'secretarial', canViewQuotation: true, qbLocations: { TAB: 'Jenny Lai', TAC: 'Jenny Lai', TAO: 'Jenny Lai' } },

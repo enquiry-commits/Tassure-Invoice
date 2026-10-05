@@ -83,7 +83,7 @@ export const WORKSPACES: Record<WorkspaceId, Workspace> = {
     pages: ['dashboard', 'my-tasks', 'companies', 'master-list', ...BILLING_SYSTEM],
   },
   secretarial: {
-    id: 'secretarial', title: 'TCS SECRETARIAL', home: '/',
+    id: 'secretarial', title: 'TCS CORPSEC', home: '/',
     pages: ['dashboard', 'my-tasks', 'companies', 'master-list', ...BILLING_SYSTEM, 'post-incorporate', 'proposal-generator'],
   },
   account: {
