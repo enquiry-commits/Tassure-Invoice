@@ -58,6 +58,7 @@ export const PAGES: SystemPage[] = [
   { label: 'Appearance Settings 外观设置', href: '/admin/appearance',  kw: ['appearance settings', '外观设置'], access: isAdmin, desc: 'system appearance settings' },
   { label: 'AI Learning',           href: '/ai-learning',               kw: ['ai learning'], access: isAdmin, desc: "review the assistant's learned-preference candidates before they become memories" },
   { label: 'AI Quality',            href: '/ai-quality',                kw: ['ai quality'], access: isAdmin, desc: "automated spot-check of the assistant's replies (behaviour, not fact-checking)" },
+  { label: 'AI Usage AI 用量',       href: '/ai-usage',                  kw: ['ai usage', 'ai 用量', 'token 用量', 'token usage'], access: account => !!account.canViewAiUsage, desc: "every staff member's AI token usage and estimated cost in USD — today, the last 7 days and this month, per person and per feature, automatic calls shown apart, refreshing live; recorded per AI call since the ledger started" },
   { label: 'Activity Insights',     href: '/activity-insights',         kw: ['activity insights'], access: isAdmin, desc: 'staff usage analytics from recorded page visits and actions' },
 ];
 

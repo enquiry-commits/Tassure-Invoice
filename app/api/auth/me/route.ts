@@ -32,6 +32,7 @@ export async function GET() {
       canViewSgNews: account.canViewSgNews ?? false,
       canViewQuotation: account.canViewQuotation ?? false,
       canViewTurnoverAI: account.canViewTurnoverAI ?? false,
+      canViewAiUsage: account.canViewAiUsage ?? false,
     },
   });
 }

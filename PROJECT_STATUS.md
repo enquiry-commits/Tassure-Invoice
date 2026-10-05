@@ -1,5 +1,38 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (SHIPPED, part 2 of 2: Admin › AI Usage — every person's AI tokens and estimated USD, live, Vincent only. His decisions: "只有我", View As counts for the real operator, automatic calls under the person but shown apart, USD.)
+
+**What shipped.**
+- **The page.** `app/ai-usage/page.tsx` shows four cards: today, the last 7 days, this month (all in Singapore time), and the total calls recorded since the ledger started.
+- **Per person.** For each person: today / 7 days / this month in USD, with tokens and call count, plus a column for "this month's automatic calls" (My Tasks brief, the learning pass after a chat). Calls with no person are shown on their own lines: "未识别" (unidentified) and "系统（定时任务）" (scheduled jobs).
+- **Per feature.** The same three windows for each feature.
+- **Latest 50 calls.** Time, person (with "代 X" under View As), feature with trigger and step, model, the four token buckets, and cost.
+- **Unpriced calls.** A call whose model has no confirmed price shows as "+?" and is counted in a note, never as a guessed figure.
+- **Live.** The page re-reads every 30 seconds while it is open and visible, and at once when you come back to it; the "更新于" time shows the last read. Before the SQL is run, it says exactly what to run instead of showing empty numbers.
+- **The data.** `GET /api/ai-usage` reads `ai_usage_events` on every request: an explicit probe tells "table missing" apart from "no usage yet", and `pageAll` pages the window (the month or the 7 days, whichever reaches further back). `lib/ai/usage-report.ts` holds the window and attribution arithmetic (pure, tested).
+- **Access.**
+  - A new `canViewAiUsage` flag on Vincent only — its own flag, not `admin`, so giving someone admin later never also shows them everyone's usage.
+  - `lib/workspaces.ts` gets an `ai-usage` page rule gated on the flag, so `proxy.ts` blocks the page for everyone else.
+  - The API checks the flag itself (APIs aren't gated by department).
+  - The page sits in the Admin menu (`lib/nav-tree.ts`) and in the assistant's page map (`lib/assistant-pages.ts`, INV-AI-009); `/api/auth/me` and `SessionContext` carry the flag.
+
+**Verification.**
+- `test-ai-usage.ts`: 47 checks ALL OK, including Singapore-midnight windows (a call 1 second before midnight is yesterday; 30 Sep 23:59 SGT is last month), who each call counts under, the "auto" split, unpriced calls, and only Vincent opening `/ai-usage`.
+- `test-account-access.ts` ALL OK (new: AI Usage is Vincent's only; every other account's route table unchanged). `test-assistant-pages.ts`, `test-invoice-pic-class.ts`, `test-turnover-files.ts` ALL OK.
+- tsc and `npm run build` clean; eslint clean.
+- Local preview of the real page with SYNTHETIC rows (the real table doesn't exist yet; every request answered locally):
+  - Cards and both tables match a hand calculation (today $0.17 / 93.2K tokens / 9 calls; 7 days and month $0.26 / 11).
+  - People are ordered by cost, then unidentified, then system. Vincent's View-As call shows under him as "代 Chelsea Ang".
+  - The unpriced call shows "+?".
+  - The Admin menu lists AI Usage between AI Quality and Activity Insights.
+  - At phone width the page doesn't scroll sideways; the tables scroll inside their own boxes.
+  - The "table missing" state shows the SQL instruction.
+  - Coming back to the page re-reads at once; while hidden it doesn't poll.
+
+**Not verified:** the page on real rows (needs the SQL run, then REG-029 step 5), and a real non-Vincent login being refused (REG-016's login checks). Docs: `docs/INVARIANTS.md` INV-AI-010, `docs/FEATURE_MAP.md`, `docs/REGRESSION_CHECKLIST.md` REG-029, `docs/CURRENT_STATE.md`.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (SHIPPED, part 1 of 2: every paid AI call is recorded per person — the AI usage ledger. Vincent: "因为我们有AI AGENT，并且全部员工都能用，因此为了准确的知道每个人使用了多少TOKENS，我要有一个明确的实时记录". After a 4-member council review he decided: only he sees the usage; View As counts for the real operator; automatic calls count under the person, marked automatic; USD. Part 2, the usage page, follows.)
 
 **Why.** Nothing recorded tokens. Every response's `usage` block was thrown away at all 8 call sites (7 direct Claude calls, plus OpenAI's one shared helper). `ai_agent_runs` covers assistant runs only, is written once at the end, holds no tokens, and under View As records the VIEWED account. The providers' consoles can't split usage by person (one shared key). Real data (read-only): 12 assistant runs since 2026-09-21 (Vincent 8, Min Quan 3, Shemin 1).

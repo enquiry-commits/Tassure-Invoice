@@ -65,7 +65,7 @@ const missing = accTax.filter(s => !getApprovedAccount(s.email)).map(s => s.name
 check('no Accounting/Tax staff member is left without a login', missing.length === 0, missing.join(', '));
 
 console.log('\n--- the access table, route by route ---');
-const NOT_FOR_MANAGEMENT = ['/sg-news', '/turnover-ai', '/turnover-ai/project/1', '/admin/appearance', '/ai-learning', '/ai-quality', '/activity-insights'];
+const NOT_FOR_MANAGEMENT = ['/sg-news', '/turnover-ai', '/turnover-ai/project/1', '/admin/appearance', '/ai-learning', '/ai-quality', '/ai-usage', '/activity-insights'];
 const ACCOUNT_ROUTES = [
   '/', '/my-tasks', '/companies', '/companies/1',
   '/billing?tab=ar', '/ar-reminder', '/billing?tab=xyz', // AR Reminder (an odd ?tab= renders AR too)
@@ -108,6 +108,7 @@ for (const a of APPROVED_ACCOUNTS.filter(x => x.workspace !== 'admin')) {
   check(`${a.name}: page list and permission flags agree`, mismatched.length === 0, mismatched.join(', '));
 }
 check('Quotation (creates real QuickBooks Estimates) is open to every account — Vincent chose 所有部门', APPROVED_ACCOUNTS.every(a => a.canViewQuotation && can(a, '/billing/quotation')));
+check('AI Usage (everyone\'s AI tokens and cost): Vincent only — his choice, "只有我"', JSON.stringify(APPROVED_ACCOUNTS.filter(a => a.canViewAiUsage).map(a => a.email)) === JSON.stringify(['vincent@tassure.com']) && APPROVED_ACCOUNTS.every(a => can(a, '/ai-usage') === (a.email === 'vincent@tassure.com')));
 check('Turnover AI: Vincent + the 5 TCS ACCOUNT staff only', JSON.stringify(APPROVED_ACCOUNTS.filter(a => a.canViewTurnoverAI).map(a => a.email).sort()) === JSON.stringify(['vincent@tassure.com', ...EXPECTED_MEMBERS.account].sort()));
 
 console.log('\n--- 切换部门: display only, never a grant ---');

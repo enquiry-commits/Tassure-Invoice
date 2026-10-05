@@ -99,6 +99,7 @@ export const NAV_TREE: NavNode[] = [
       { label: 'Appearance Settings', href: '/admin/appearance' },
       { label: 'AI Learning', href: '/ai-learning' },
       { label: 'AI Quality', href: '/ai-quality' },
+      { label: 'AI Usage', href: '/ai-usage' },
       { label: 'Activity Insights', href: '/activity-insights' },
     ],
   },

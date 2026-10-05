@@ -103,6 +103,12 @@ export type ApprovedAccount = {
   // AI, TAX does not; MANAGEMENT kept as is). Explicit per account for the
   // same reason as `canViewQuotation` above.
   canViewTurnoverAI?: boolean;
+  // Gates Admin › AI Usage (app/ai-usage) and its API (app/api/ai-usage) —
+  // every person's AI token usage and estimated cost (docs/INVARIANTS.md
+  // INV-AI-010). Vincent, 2026-10-05: only he sees it ("只有我"). Its own
+  // flag rather than `admin`, so handing someone admin later never also
+  // hands them everyone's usage.
+  canViewAiUsage?: boolean;
 };
 
 // Grouped by TCS department (Vincent, 2026-10-04 — see lib/workspaces.ts for
@@ -111,7 +117,7 @@ export type ApprovedAccount = {
 // Ang Shi Ming.
 export const APPROVED_ACCOUNTS: readonly ApprovedAccount[] = [
   // TCS ADMIN
-  { name: 'Vincent Seow', email: 'vincent@tassure.com', workspace: 'admin', canSwitchWorkspace: true, admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true, canViewQuotation: true, canViewTurnoverAI: true },
+  { name: 'Vincent Seow', email: 'vincent@tassure.com', workspace: 'admin', canSwitchWorkspace: true, admin: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewSgNews: true, canViewQuotation: true, canViewTurnoverAI: true, canViewAiUsage: true },
   // TCS MANAGEMENT
   { name: 'Cindy Zhang', email: 'cindyzhang@tassure.com', workspace: 'management', canSwitchWorkspace: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewQuotation: true },
   { name: 'Samuell Ng', email: 'samuellng@tassure.com', workspace: 'management', canSwitchWorkspace: true, canViewAsOthers: true, canViewReports: true, canViewActivityInsights: true, canViewQuotation: true },

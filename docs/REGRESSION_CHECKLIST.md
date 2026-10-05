@@ -433,7 +433,11 @@ View As — `actor_email` is still you, `subject_email` the viewed person.
 (3) open My Tasks with tasks on it — one `my_tasks_brief` row, trigger
 `auto`, under you. (4) compare one day's total with the Anthropic/OpenAI
 consoles for the same day; a real gap means a call path isn't recorded
-(or requests are timing out).
+(or requests are timing out). (5) as Vincent, open Admin › AI Usage — the
+calls from (1)–(3) are there under the right person within 30 seconds (the
+View-As one under you, "代 …" beside it; the brief in "自动"); as any other
+account `/ai-usage` sends you to your home page and `GET /api/ai-usage`
+returns 403.
 **Guards:** `docs/INVARIANTS.md` INV-AI-010.
 
 ---

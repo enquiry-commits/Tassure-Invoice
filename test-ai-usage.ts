@@ -9,6 +9,10 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
 import { join, relative } from 'path';
 import { normalizeUsage, usageRow, type AiUsageTag } from './lib/ai/usage-ledger';
 import { estimateCostUsd, priceFor } from './lib/ai/pricing';
+import { summarizeUsage, usageWindowStarts, type UsageEventRow } from './lib/ai/usage-report';
+import { APPROVED_ACCOUNTS, canAccountOpen } from './lib/approved-accounts';
+import { PAGE_RULES } from './lib/workspaces';
+import { NAV_TREE, navLeaves } from './lib/nav-tree';
 
 const ROOT = process.env.AI_USAGE_GUARD_ROOT ?? process.cwd();
 let fail = 0;
@@ -72,6 +76,45 @@ console.log('\n--- the row: who it counts under ---');
   check('the row has exactly the table\'s columns (scripts/add-ai-usage-events.sql)', Object.keys(row).sort().join() === ['actor_email', 'subject_email', 'feature', 'trigger', 'step', 'turn_key', 'provider', 'model', 'request_id', 'input_tokens', 'cache_write_tokens', 'cache_read_tokens', 'output_tokens', 'reasoning_tokens', 'web_search_requests', 'cost_usd', 'price_version', 'raw_usage'].sort().join(), Object.keys(row));
 }
 
+console.log('\n--- the usage page: Singapore-time windows, who each call counts under ---');
+{
+  const now = new Date('2026-10-05T03:00:00Z'); // 11:00 SGT, Monday 5 Oct
+  const s = usageWindowStarts(now);
+  check('today / 7 days / this month start at Singapore midnight', s.today.toISOString() === '2026-10-04T16:00:00.000Z' && s.week.toISOString() === '2026-09-28T16:00:00.000Z' && s.month.toISOString() === '2026-09-30T16:00:00.000Z', s);
+  const row = (id: number, created_at: string, actor: string | null, trigger: string, feature: string, cost: number | null, tokensIn = 1000): UsageEventRow => ({
+    id, created_at, actor_email: actor, subject_email: null, feature, trigger, step: null, turn_key: null, provider: 'anthropic', model: 'claude-sonnet-5',
+    input_tokens: tokensIn, cache_write_tokens: 0, cache_read_tokens: 500, output_tokens: 100, web_search_requests: 0, cost_usd: cost,
+  });
+  const rows = [
+    row(1, '2026-10-05T02:00:00Z', 'vincent@tassure.com', 'chat', 'assistant', 0.05),          // today
+    row(2, '2026-10-04T15:59:59Z', 'vincent@tassure.com', 'auto', 'my_tasks_brief', 0.001),    // 23:59:59 SGT yesterday
+    row(3, '2026-09-30T15:59:59Z', null, 'cron', 'sg_news', 0.03),                             // last day of September (SGT)
+    row(4, '2026-10-05T01:00:00Z', null, 'chat', 'assistant', null),                           // unidentified, unpriced model
+    row(5, '2026-10-05T02:30:00Z', 'minquan@tassure.com', 'chat', 'assistant', 0.02),
+    row(6, '2026-09-01T02:00:00Z', 'vincent@tassure.com', 'chat', 'assistant', 9),             // outside every window
+  ];
+  const sum = summarizeUsage(rows, now);
+  check('today counts only since Singapore midnight (1 second before it is yesterday)', sum.windows.today.calls === 3 && near(sum.windows.today.costUsd, 0.07) && sum.windows.today.unpricedCalls === 1, sum.windows.today);
+  check('this month starts on the 1st in Singapore (30 Sep 23:59 SGT is last month)', sum.windows.month.calls === 4 && near(sum.windows.month.costUsd, 0.071), sum.windows.month);
+  check('the last 7 days reach back over the month boundary', sum.windows.week.calls === 5, sum.windows.week);
+  const vincent = sum.people.find(p => p.email === 'vincent@tassure.com')!;
+  check('a person\'s month includes their automatic calls, also shown on their own', near(vincent.windows.month.costUsd, 0.051) && vincent.autoMonth.calls === 1 && near(vincent.autoMonth.costUsd, 0.001), vincent);
+  check('token total = input + cache writes + cache reads + output', vincent.windows.today.tokens === 1600, vincent.windows.today);
+  check('people first (most cost first), then unidentified calls, then the system', sum.people.map(p => p.key).join() === 'vincent@tassure.com,minquan@tassure.com,(unidentified),(system)', sum.people.map(p => p.key));
+  check('a scheduled job is the system\'s, never a person\'s', sum.people.find(p => p.kind === 'system')?.windows.week.calls === 1 && sum.people.find(p => p.kind === 'system')?.windows.month.calls === 0);
+  check('an unpriced call adds no money but is counted as unpriced', sum.people.find(p => p.kind === 'unidentified')?.windows.today.unpricedCalls === 1 && sum.people.find(p => p.kind === 'unidentified')?.windows.today.costUsd === 0);
+}
+
+console.log('\n--- who can open the usage page (Vincent: "只有我") ---');
+{
+  const viewers = APPROVED_ACCOUNTS.filter(a => a.canViewAiUsage).map(a => a.email);
+  check('only Vincent has the AI usage flag', viewers.join() === 'vincent@tassure.com', viewers);
+  check('/ai-usage is its own gated page rule', PAGE_RULES.some(r => r.key === 'ai-usage' && r.patterns.includes('/ai-usage') && r.gate === 'canViewAiUsage'));
+  const openers = APPROVED_ACCOUNTS.filter(a => canAccountOpen(a, '/ai-usage', new URLSearchParams())).map(a => a.email);
+  check('only Vincent can open /ai-usage (not management, not other admins-to-be)', openers.join() === 'vincent@tassure.com', openers);
+  check('it sits in the Admin menu', navLeaves(NAV_TREE).some(({ node, trail }) => node.href === '/ai-usage' && trail.join() === 'Admin'));
+}
+
 console.log('\n--- source guards ---');
 {
   const read = (p: string) => (existsSync(join(ROOT, p)) ? readFileSync(join(ROOT, p), 'utf8') : '');
@@ -101,6 +144,7 @@ console.log('\n--- source guards ---');
   const missing = jobs.filter(([file, feature]) => !read(file).includes(`scheduledJobUsage(req, '${feature}')`));
   check('scheduled jobs: the cron run is the system\'s, a manual run counts under the person', missing.length === 0, missing);
   check('a cron run is recognised by the real CRON_SECRET, not just any Bearer header', /req\.headers\.get\('authorization'\) === `Bearer \$\{secret\}`/.test(read('lib/ai/job-usage.ts')));
+  check('the usage API checks the flag itself (APIs are not gated by department)', /if \(!account\.canViewAiUsage\) return NextResponse\.json\(\{ error: 'Your account cannot view AI usage\.' \}, \{ status: 403 \}\);/.test(read('app/api/ai-usage/route.ts')));
   const sql = read('scripts/add-ai-usage-events.sql').split('\n').filter(line => !line.trim().startsWith('--')).join('\n');
   check('the table has no CHECK constraint that could make a new feature\'s insert fail', /CREATE TABLE IF NOT EXISTS ai_usage_events/.test(sql) && !/CHECK\s*\(/i.test(sql));
 }

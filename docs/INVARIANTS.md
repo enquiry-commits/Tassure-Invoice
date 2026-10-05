@@ -3973,6 +3973,16 @@ again.
   ledger's totals. Never store prompt or reply text in the ledger.
   `test-ai-usage.ts` guards all of this, including that no file other than
   those two calls `api.anthropic.com`/`api.openai.com` directly.
+  The ledger is read by Admin › AI Usage (`app/ai-usage`,
+  `GET /api/ai-usage`, `lib/ai/usage-report.ts`): per person and per
+  feature for today / 7 days / this month in SINGAPORE time (a window
+  starts at SGT midnight, not UTC), calls with no person shown apart as
+  system (cron) or unidentified, the person's automatic calls in their own
+  column, and an unpriced call shown as "+?", never as $0. Vincent only,
+  through its OWN flag `canViewAiUsage` (not `admin` — giving someone
+  admin must not also show them everyone's usage): the `ai-usage` page
+  rule in `lib/workspaces.ts` gates the page, and the API checks the flag
+  itself because APIs are not gated by department.
 
 - **INV-AI-009** — `PAGES` (now `lib/assistant-pages.ts`) is the
   assistant's ONLY map of the app (rendered into the static prompt's

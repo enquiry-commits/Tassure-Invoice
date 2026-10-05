@@ -19,6 +19,7 @@ export type SessionUser = {
   canViewSgNews: boolean;
   canViewQuotation: boolean;
   canViewTurnoverAI: boolean;
+  canViewAiUsage: boolean;
 };
 
 type Session = { user: SessionUser | null; canOpen: (href: string) => boolean };

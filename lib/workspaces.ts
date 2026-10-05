@@ -29,7 +29,7 @@
 // logic, shared by the browser bundle, proxy.ts and the guard tests.
 
 export type WorkspaceId = 'admin' | 'management' | 'finance' | 'secretarial' | 'account' | 'tax';
-export type AccessGate = 'admin' | 'canViewReports' | 'canViewSgNews' | 'canViewQuotation' | 'canViewTurnoverAI';
+export type AccessGate = 'admin' | 'canViewReports' | 'canViewSgNews' | 'canViewQuotation' | 'canViewTurnoverAI' | 'canViewAiUsage';
 export type AccessSubject = { workspace: WorkspaceId } & Partial<Record<AccessGate, boolean>>;
 
 type PageRule = { key: string; patterns: readonly string[]; gate?: AccessGate };
@@ -59,6 +59,8 @@ export const PAGE_RULES: readonly PageRule[] = [
   { key: 'reports', patterns: ['/reports'], gate: 'canViewReports' },
   { key: 'sg-news', patterns: ['/sg-news'], gate: 'canViewSgNews' },
   { key: 'turnover-ai', patterns: ['/turnover-ai'], gate: 'canViewTurnoverAI' },
+  // Everyone's AI token usage — Vincent only (2026-10-05, INV-AI-010).
+  { key: 'ai-usage', patterns: ['/ai-usage'], gate: 'canViewAiUsage' },
   { key: 'admin', patterns: ['/admin', '/ai-learning', '/ai-quality', '/activity-insights'], gate: 'admin' },
 ];
 
