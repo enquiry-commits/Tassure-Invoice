@@ -4190,8 +4190,8 @@ again.
   the machine's own verdict lives on, never a second row — "does a human
   agree with the machine" must stay attached to the exact verdict it is
   agreeing or disagreeing with. Migration: `scripts/add-ai-quality-
-  reviews.sql` (still not run in production on 2026-10-05 — PGRST205; it
-  now also turns RLS on, INV-DATA-073). Without the table the route does
+  reviews.sql` (found never run on 2026-10-05 — PGRST205 — and run by
+  Vincent the same day, now with RLS on, INV-DATA-073). Without the table the route does
   not crash, but that is worse than it sounds: each candidate is still
   judged — a paid call — and only then fails to insert, so nothing is ever
   marked reviewed and the same replies are paid for again on every run.

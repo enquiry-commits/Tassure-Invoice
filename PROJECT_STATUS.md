@@ -1,6 +1,6 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-10-05 (FIXED in code, push waits for Vincent's SQL: the nightly AI quality spot-check has never produced a review — `/api/ai-quality/review` was scheduled but missing from `proxy.ts`'s `CRON_PATHS`, and `ai_quality_reviews` was never created. Asked: re-verify both read-only, add the path, hand the SQL to Vincent, confirm the first real run with real data.)
+Last updated: 2026-10-05 (FIXED and live, first real run tonight 23:00–23:59 UTC: the nightly AI quality spot-check has never produced a review — `/api/ai-quality/review` was scheduled but missing from `proxy.ts`'s `CRON_PATHS`, and `ai_quality_reviews` was never created. Asked: re-verify both read-only, add the path, hand the SQL to Vincent, confirm the first real run with real data.)
 
 **What was wrong (re-verified read-only on real data; 4-agent council review, each claim re-checked).** (1) `ai_quality_reviews` does not exist in production (PGRST205, absent from the live PostgREST schema), so `scripts/add-ai-quality-reviews.sql` never ran. (2) `vercel.json` schedules `/api/ai-quality/review` at `0 23 * * *`, but it was the only one of 13 scheduled paths missing from `CRON_PATHS`, so Vercel's call (`Bearer $CRON_SECRET`, no session) got a 401: zero `automation_sync_runs` rows ever for `ai_quality_review`, cron or manual, while `sg_news_sync`, `soa_owner_audit` and `ai_learning` succeeded every night. It is the same bug as `/api/teamwork/sync-secretary` on 2026-08-06, which INV-CRON-011 was written about. A session found this one on 2026-09-24 and left it out on purpose to keep a paid job off — an "off switch" that looks exactly like the bug. The health route's `SOURCES` already listed `ai_quality_review`.
 
@@ -22,7 +22,7 @@ Last updated: 2026-10-05 (FIXED in code, push waits for Vincent's SQL: the night
   - `docs/CURRENT_STATE.md` updated.
 - `lib/ai-quality/review.ts` untouched (the AI usage ledger work owns that call).
 
-**Order, on purpose (INV-CRON-012).** Committed on this worktree's branch and NOT pushed. Pushing lets the next nightly cron reach the route, and without the table every run pays to judge every reply (up to 20) and saves nothing. Push after Vincent runs the SQL and a read-only check sees the table.
+**Order, on purpose (INV-CRON-012).** The commit was held back until the table existed: pushing lets the next nightly cron reach the route, and without the table every run pays to judge every reply (up to 20) and saves nothing. Vincent ran the SQL on 2026-10-05 (~10:30 SGT); a read-only check then saw `ai_quality_reviews` with all 15 columns (and the ledger's `ai_usage_events`, which he ran too), and the push followed.
 
 **Verification.**
 - `test-cron-wiring.ts`: ALL OK. Negative controls: without the fix it fails on exactly `/api/ai-quality/review`; a route exporting POST, a source dropped from the health `SOURCES`, a misspelled source and a stale `CRON_PATHS` entry each fail their own rule.
