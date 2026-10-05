@@ -473,6 +473,17 @@ after a TAB save. (4) An invoice whose twin can't be paired shows the
 yellow notice and a read-only deferred row.
 **Guards:** `docs/INVARIANTS.md` INV-QB-029, INV-QB-031.
 
+### REG-032 — The invoice PDF a client receives shows each service once (after ANY change to `lib/client-invoice-*.ts`, `lib/deferred-pairing.ts`, `templates/client-invoice/`, `/api/billing/client-invoice-pdf`, the SOA PDF route, or the attachment code in `lib/draft-helper-client.ts`)
+Run `npx tsx test-client-invoice-model.ts` and `npx tsx test-deferred-pairing.ts`
+(`ALL PASSED`). Then signed in on the deployed site: (1) Billing Drafts →
+a split invoice (e.g. 1X EXCHANGE TAB #02611112) → Save TAB PDF: one
+Secretary line S$700, total = QuickBooks, letterhead/bank/PayNow QR as
+QuickBooks prints them. (2) Quick Draft an AR email for a split invoice —
+the attachment is the same one-line version, with no amber note. (3) An
+SOA PDF for a client with a split invoice shows it the same way. (4) An
+invoice with no Deferred line is QuickBooks' own PDF, unchanged.
+**Guards:** `docs/INVARIANTS.md` INV-QB-029.
+
 ---
 
 ## Automation priority

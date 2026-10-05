@@ -2237,9 +2237,10 @@ again.
   failed to merge, `X-Soa-Merge-Errors`, which no page used to read).
   Render census over the 154 open split invoices (read-only, synced lines):
   138 drawn (121 one page, 17 two), 2 model fallbacks, 14 refused for
-  Chinese text. Per-book switch `CLIENT_INVOICE_PDF_MODE` ships 'off' (=
-  QuickBooks' PDF as before) until Vincent approves real samples side by
-  side.
+  Chinese text. Per-book switch `CLIENT_INVOICE_PDF_MODE`: TAB and TAC
+  'live' since 2026-10-05 (Vincent approved real samples side by side —
+  1X EXCHANGE TAB #02611112, Advance CF TAC #02680320); set a book back to
+  'off' to send QuickBooks' PDF again.
 - **INV-QB-031** — Billing Drafts' invoice editor saves by REPLACING the
   QuickBooks invoice's whole Line list (`app/api/quickbooks/update-invoice`
   sparse update, `Line` sent in full), so any line the editor drops or can't

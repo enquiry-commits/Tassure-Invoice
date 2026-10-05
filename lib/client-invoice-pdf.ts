@@ -14,8 +14,9 @@ import { renderClientInvoicePdf, ClientInvoiceRenderError, type ClientInvoiceAss
 // PDF. Staff-only views (invoice chips) keep opening QuickBooks' original.
 
 // Per-book switch — 'off' sends QuickBooks' own PDF exactly as before.
-// Turned on only after Vincent has compared real samples side by side.
-export const CLIENT_INVOICE_PDF_MODE: Record<QbCompany, 'off' | 'live'> = { TAB: 'off', TAC: 'off', TAO: 'off' };
+// TAB and TAC turned on 2026-10-05 after Vincent compared real samples side
+// by side ("打开"); TAO has no split invoices and isn't redrawn.
+export const CLIENT_INVOICE_PDF_MODE: Record<QbCompany, 'off' | 'live'> = { TAB: 'live', TAC: 'live', TAO: 'off' };
 
 export type ClientInvoicePdf = {
   bytes: Uint8Array;

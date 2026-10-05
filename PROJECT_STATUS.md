@@ -2447,6 +2447,13 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Client invoice PDF switched ON for TAB and TAC.** Vincent compared real
+  samples side by side (1X EXCHANGE TAB #02611112: QuickBooks 175 + bare
+  525 vs the system's one Secretary line S$700; Advance CF TAC #02680320:
+  500 + bare 2,500 vs one ND line S$3,000) and chose "打开".
+  `CLIENT_INVOICE_PDF_MODE` TAB/TAC → 'live' (TAO stays 'off': no split
+  invoices). Not yet seen on a real sent email (REG-032).
+
 - **The invoice PDF clients receive can now show each service once at its
   full amount — built, switched OFF until Vincent approves samples
   (INV-QB-029).** Phase 2 of "这些还没有合并好吗？" (council-reviewed design).
