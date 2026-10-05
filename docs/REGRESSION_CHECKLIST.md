@@ -495,6 +495,10 @@ Run `npx tsx test-tao-catalog.ts` (`ALL OK`). Then signed in, Billing System ›
 Run `npx tsx test-item-resolution.ts` (`ALL OK`). Then signed in: (1) Billing Drafts, add "Change of Director" to a TAB draft with a plain description — Generate is not blocked by a period message. (2) a normal renewal (Corp Sec with no period text) still stops with "enter a complete service period". (3) edit an existing invoice and save without changes — every line keeps its QuickBooks item (compare in QuickBooks). (4) Quotation page, TAC: a TAB-only item gives "QuickBooks has no item named …" and nothing is created.
 **Guards:** `docs/INVARIANTS.md` INV-QB-033.
 
+### REG-035 — Billing Drafts' Add line lists the book's live QuickBooks items with their description and no price (after ANY change to `lib/qb-item-classify.ts`, `lib/qb-item-catalog.ts`, `/api/billing/item-catalog`, `components/billing/BookItemPicker.tsx` or the Add line wiring)
+Run `npx tsx test-book-catalog.ts` (`ALL OK`). Then signed in, Billing Drafts: (1) TAB "Add line" shows QuickBooks' groups (Accounts, Disbursement, Other, Secretary, Tax, No category) incl. ACRA Fees and Discount Given; (2) picking Change of Director fills QuickBooks' text and an EMPTY highlighted rate, Generate waits for it; (3) on a company with an ND line, the TAC list has "Nominee Director Fees - EL" and TAC-named items (e.g. CPF Submission); (4) a generated invoice shows those items in QuickBooks with the picked text.
+**Guards:** `docs/INVARIANTS.md` INV-QB-034, INV-QB-033.
+
 ---
 
 ## Automation priority

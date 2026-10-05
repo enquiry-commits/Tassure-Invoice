@@ -25,13 +25,14 @@ import type { CompanyBilling } from '@/app/api/billing/renewals/route';
 import { logActivity } from '@/lib/activity-client';
 import { fmtDate } from '@/lib/date';
 import { formatStaffName } from '@/lib/staff-directory';
-import { QB_ITEM, MEDIAN_RATE, QB_CATALOG, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
+import { QB_ITEM, MEDIAN_RATE, NAME_TO_INITIALS, secretaryDescription, addressDescription, arGovtFeeDescription, xbrlDescription, periodLabel, fyeDateString } from '@/lib/invoice-templates';
 import { parseInvoicePeriod, rollRecurringDescriptionForward, servicePeriodOverlapError, needsRenewalPeriodCheck } from '@/lib/invoice-period';
 import { manualInvoiceOverrides } from '@/lib/manual-invoice-marker';
 import { SVC_CONFIG } from '@/components/billing/service-config';
 import { getsDefaultPicClass, picLivesInServiceItem, type PicClassOption } from '@/lib/invoice-pic-class';
 import { mergeDeferredForDisplay, expandMergedAmount, isDeferredItem } from '@/lib/deferred-pairing';
 import { composeStatementMemo } from '@/lib/statement-memo';
+import { BookItemPicker } from '@/components/billing/BookItemPicker';
 
 let parentPickCache: { id: number; company_name: string }[] | null = null;
 let parentPickPromise: Promise<{ id: number; company_name: string }[]> | null = null;
@@ -1338,21 +1339,10 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: '#f8fafc' }}>
           <Plus size={13} style={{ color: '#0f766e' }} />
           <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add line</span>
-          <select value="" onChange={e => {
-              const item = QB_CATALOG.find(x => x.item === e.target.value);
-              if (!item) return;
-              setLines(prev => [...prev, { service: item.service, productService: item.item, description: item.label, qty: 1, rate: item.rate, include: true, due: false, reason: 'Added manually' }]);
-            }}
-            style={{ ...inputStyle, minWidth: 260, cursor: 'pointer' }}>
-            <option value="">Choose a QuickBooks item…</option>
-            {[...new Set(QB_CATALOG.filter(x => x.category !== 'Nominee').map(x => x.category))].map(cat => (
-              <optgroup key={cat} label={cat}>
-                {QB_CATALOG.filter(x => x.category === cat).map(x => (
-                  <option key={x.item} value={x.item}>{x.label}{x.rate ? `  ·  S$${x.rate.toLocaleString()}` : ''}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
+          {/* TAB's live QuickBooks items with their own description, no
+              prefilled price (INV-QB-034). */}
+          <BookItemPicker book="TAB" style={inputStyle}
+            onPick={item => setLines(prev => [...prev, { ...item, qty: 1, rate: 0, include: true, due: false, reason: 'Added manually', book: 'TAB' }])} />
         </div>
         {tabInvoice && renderSaveButton('TAB', tabInvoice)}
       </div>
@@ -1421,18 +1411,11 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
             ) : renderTable(tacRows, 'No Nominee Director line.', 'TAC', 'amber')}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 10px', border: '1px solid #e2e8f0', borderTop: 'none', borderRadius: '0 0 8px 8px', background: 'var(--status-warning-tint)' }}>
               <Plus size={13} style={{ color: '#9a3412' }} />
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add ND line</span>
-              <select value="" onChange={e => {
-                  const item = QB_CATALOG.find(x => x.item === e.target.value);
-                  if (!item) return;
-                  setLines(prev => [...prev, { service: item.service, productService: item.item, description: item.label, qty: 1, rate: item.rate, include: true, due: false, reason: 'Added manually' }]);
-                }}
-                style={{ ...inputStyle, minWidth: 260, cursor: 'pointer' }}>
-                <option value="">Choose a Nominee item…</option>
-                {QB_CATALOG.filter(x => x.category === 'Nominee').map(x => (
-                  <option key={x.item} value={x.item}>{x.label}{x.rate ? `  ·  S$${x.rate.toLocaleString()}` : ''}</option>
-                ))}
-              </select>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Add line</span>
+              {/* TAC's own live items — TAC names differ from TAB's, and ND
+                  items like "- EL" / "- LXM." were missing from the old list. */}
+              <BookItemPicker book="TAC" style={inputStyle}
+                onPick={item => setLines(prev => [...prev, { ...item, qty: 1, rate: 0, include: true, due: false, reason: 'Added manually', book: 'TAC' }])} />
             </div>
             {tacInvoice && renderSaveButton('TAC', tacInvoice)}
           </div>

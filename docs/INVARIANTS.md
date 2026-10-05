@@ -2366,6 +2366,27 @@ again.
   nominee director fees (`classifyRenewalFeeProduct` primary). Vincent:
   "拦下并说明原因", "只检查真正的续费项目". `test-item-resolution.ts`.
 
+- **INV-QB-034** — Billing Drafts' "Add line" offers the book's LIVE
+  QuickBooks item list (TAB 169, TAC 127 today — every active Service item
+  except accounting's Deferred twins, INV-QB-029), grouped like QuickBooks;
+  a picked item brings its QuickBooks description and NO price (staff type
+  it; Generate/Save wait for it). Replaced the hardcoded 61-item QB_CATALOG
+  (TAB names, shared with TAC, short labels, stale median prices such as
+  466.67 vs 525 for the same retainer) that left out items on 401 of 1,284
+  TAB and 164 of 329 TAC invoices this year and lacked ND "- EL" / "- LXM.".
+  Vincent, 2026-10-05: "和 QuickBooks 一样，全部列出", "不预填，和 TAO 一样".
+  The item → draft service mapping is ONE pure rule, `classifyCatalogItem`
+  (lib/qb-item-classify.ts) — never the QuickBooks category, because service
+  drives the default PIC, the renewal-period check, AR/XBRL memo wording and
+  ND handling: renewal items keep Secretary/Address/ND, XBRL, the AR
+  government fee → AR, Secretary:ACRA Fees and all disbursements → Other
+  (no PIC), Discount → Discount, Accounts/Tax by prefix, other Secretary:*
+  one-off work → Secretary. A line added from a book's list stays in that
+  book (`book`). Verified live (read-only): every offered item resolves
+  exactly when generating (0 unresolved in both books). Not changed: renewal
+  rows' templates and per-client prices, the Quotation page's list.
+  `test-book-catalog.ts`.
+
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
 - **INV-DATA-001** — Optimistic-concurrency CAS on a boolean field must
