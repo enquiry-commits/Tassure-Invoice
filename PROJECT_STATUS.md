@@ -1,5 +1,45 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-05 (FIXED in code, push waits for Vincent's SQL: the nightly AI quality spot-check has never produced a review — `/api/ai-quality/review` was scheduled but missing from `proxy.ts`'s `CRON_PATHS`, and `ai_quality_reviews` was never created. Asked: re-verify both read-only, add the path, hand the SQL to Vincent, confirm the first real run with real data.)
+
+**What was wrong (re-verified read-only on real data; 4-agent council review, each claim re-checked).** (1) `ai_quality_reviews` does not exist in production (PGRST205, absent from the live PostgREST schema), so `scripts/add-ai-quality-reviews.sql` never ran. (2) `vercel.json` schedules `/api/ai-quality/review` at `0 23 * * *`, but it was the only one of 13 scheduled paths missing from `CRON_PATHS`, so Vercel's call (`Bearer $CRON_SECRET`, no session) got a 401: zero `automation_sync_runs` rows ever for `ai_quality_review`, cron or manual, while `sg_news_sync`, `soa_owner_audit` and `ai_learning` succeeded every night. It is the same bug as `/api/teamwork/sync-secretary` on 2026-08-06, which INV-CRON-011 was written about. A session found this one on 2026-09-24 and left it out on purpose to keep a paid job off — an "off switch" that looks exactly like the bug. The health route's `SOURCES` already listed `ai_quality_review`.
+
+**What changed.**
+- `proxy.ts`: the path added to `CRON_PATHS`.
+- `scripts/add-ai-quality-reviews.sql`:
+  - turns RLS on (no policy; all access is service-role);
+  - reloads PostgREST's schema;
+  - ends with a `relrowsecurity` self-check row.
+- New `test-cron-wiring.ts` checks that:
+  - every `vercel.json` path is in `CRON_PATHS`, and every entry there is scheduled;
+  - each scheduled route exports GET;
+  - every `AutomationSource` except `teamwork_nd` is on the health panel.
+- Docs:
+  - INV-CRON-011 extended: the repeat; leaving a path out is not an off switch (pause a job by removing its `vercel.json` entry or gating the route); adding a path is that route's first real deploy, so INV-CRON-012 applies.
+  - INV-AI-006 corrected: its migration status; only the page and the reviews API are admin-gated, not the run route.
+  - New INV-DATA-073: every new table turns RLS on.
+  - REG-008 now runs the test and checks run summaries, not just status.
+  - `docs/CURRENT_STATE.md` updated.
+- `lib/ai-quality/review.ts` untouched (the AI usage ledger work owns that call).
+
+**Order, on purpose (INV-CRON-012).** Committed on this worktree's branch and NOT pushed. Pushing lets the next nightly cron reach the route, and without the table every run pays to judge every reply (up to 20) and saves nothing. Push after Vincent runs the SQL and a read-only check sees the table.
+
+**Verification.**
+- `test-cron-wiring.ts`: ALL OK. Negative controls: without the fix it fails on exactly `/api/ai-quality/review`; a route exporting POST, a source dropped from the health `SOURCES`, a misspelled source and a stale `CRON_PATHS` entry each fail their own rule.
+- `tsc` 0, eslint clean; `test-account-access.ts` and `test-ai-usage.ts` ALL OK.
+- Live, read-only: `claude-sonnet-5` (the judge's model) has 9 completed assistant runs on this key; the foreign-key columns are all bigint.
+- 9 assistant replies have an `agent_run_id` (every reply since 2026-09-21), so the first run judges at most 9.
+- **Not verified:** a real run. That is the first nightly cron after the push (checking recipe in `docs/CURRENT_STATE.md`). No manual run was triggered: it is paid, and Vincent's call.
+
+**Found on the way, not fixed here.**
+1. Security: 8 tables (`companies`, `master_list`, `audit_log` and 5 more) are fully readable with the public anon key (count-only check). Recorded in INV-DATA-073 and `docs/CURRENT_STATE.md`, and raised as its own task.
+2. The judge's `max_tokens: 800` plus Sonnet 5's default thinking can cut its JSON off. The error is swallowed, and that reply is re-judged, and paid for, every night. This belongs with the ledger work's call.
+3. Automation Health reads only the newest 120 runs (about 3 days), so the weekly `reports_narrative` drops out mid-week (Known risks).
+4. `/api/stats`'s `lastSynced` is always null through the anon client; no page calls it.
+5. `docs/INVARIANTS.md` has two rules numbered INV-AI-006. Left alone: the second is being edited by the ledger work.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (DIAGNOSED + DECIDED, no code changed: three things from Vincent's morning — Terminated Services statuses, a client confused by split invoice amounts, and an invoice number changed in QuickBooks that the app didn't follow).
 
 **How.** Every claim checked read-only against live data, then one 4-agent council review (full mode, both questions in one run — an earlier run died after three interruptions; see the council memory note), each member claim re-verified in code before quoting.

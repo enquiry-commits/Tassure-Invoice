@@ -40,3 +40,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_quality_reviews_message
   ON ai_quality_reviews (message_id);
 CREATE INDEX IF NOT EXISTS idx_ai_quality_reviews_verdict
   ON ai_quality_reviews (verdict, created_at DESC);
+
+-- Added 2026-10-05, before this script was ever run in production: RLS on,
+-- no policy. Every read and write of this table goes through
+-- createAdminClient() (lib/ai-quality/review.ts), which bypasses RLS, so this
+-- changes nothing for the app. What it stops is the PUBLIC anon key (shipped
+-- to every browser) reading staff questions and replies about clients
+-- through PostgREST. "Only createAdminClient reads it" is not a reason to
+-- leave RLS off — see docs/INVARIANTS.md INV-DATA-073.
+ALTER TABLE ai_quality_reviews ENABLE ROW LEVEL SECURITY;
+
+-- Let PostgREST see the new table straight away (Supabase normally reloads
+-- on DDL by itself; harmless if it already has).
+NOTIFY pgrst, 'reload schema';
+
+-- Self-check for whoever runs this in the SQL editor: one row,
+-- relrowsecurity = true.
+SELECT relname, relrowsecurity FROM pg_class WHERE oid = 'public.ai_quality_reviews'::regclass;

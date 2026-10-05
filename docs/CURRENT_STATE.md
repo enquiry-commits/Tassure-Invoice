@@ -134,6 +134,8 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
 
 ## Active issues
 
+**8 tables are readable with the public anon key (found 2026-10-05, not fixed — security).** A count-only check (HEAD requests, no rows read, writes not tested) shows `companies` (956 rows), `master_list` (1,608), `audit_log` (4,958), `annual_returns` (1,655), `late_filing_companies` (40), `nd_appointments` (222), `nominee_directors` (14) and `sync_log` (4) fully readable by anyone holding `NEXT_PUBLIC_SUPABASE_ANON_KEY`, which ships to every browser; the other 37 tables with rows hide them from that key. `master_list`, `audit_log` and `late_filing_companies` carry a policy named `service_role_all` that is really `USING (true) WITH CHECK (true)` for every role (INV-DATA-073). Fixing it needs an order: `/api/companies`, `/api/stats`, `/api/nominee-directors` and `app/address-service/page.tsx` read these tables through the anon client, and Master List's Realtime subscription watches `master_list` through the browser client — those move first, then Vincent runs the lockdown SQL. Raised as its own task. Side effect seen while checking: `/api/stats` reads `automation_sync_runs` through the anon client, which sees none of its rows, so its `lastSynced` is always `null` — harmless today, since no page calls `/api/stats`.
+
 **Invoice number / amount the app remembers can go stale — diagnosed, NOT fixed, waiting for Vincent (2026-10-05).** `generated_invoices` keeps the DocNumber and total from the moment Billing Drafts generated the invoice; an edit made directly in QuickBooks never reaches it (the sync only refreshes `quickbooks_invoices`). Live, of 128 app-made invoices: 1 number differs (1X EXCHANGE — ours #02611111, QuickBooks #02611112; #02611111 is now Nucon's) and 7 totals differ. Effects: the invoice-number chip on Billing Drafts / AR Reminder opens the PDF by number, so 1X's chip opens Nucon's invoice; AR emails print the stale number and amount (Billing's Quick Draft and the assistant's drafts skip the live re-check, and the re-check compares amounts only) — 2 already-sent AR emails differ from QuickBooks today (KINPLUS 24/09: S$1,120 vs S$1,220; ADVANCE CF 29/09: S$1,120 vs S$1,070); only QuickBooks' Audit Log can tell whether the change came before the email. The collision itself: create-invoice's last duplicate check treats a QuickBooks query error as "no duplicate" (`lib/qb-invoice-conventions.ts` qbGet → null) and leaves a seconds-long window. Proposed fix (4-agent council, unanimous): read QuickBooks' current number and total by `qb_invoice_id` wherever they are shown or emailed, chips open by id, the pre-send check covers number AND amount, the duplicate check fails closed and re-checks after create — `generated_invoices` itself is never rewritten.
 
 **Invoices shown to clients: one amount per service (decided 2026-10-05).** A client asked why Novozee's invoice showed address 180 + 180 and payroll 300 + 300. Those lines are the deferral split, added in QuickBooks after generation (this system never splits); Vincent (with Chelsea): clients see each service once at the invoice price, invoices are no longer split, the deferral goes by journal entry (INV-QB-029). Nothing in the app changes for new invoices. Still open: 132 open invoices already carry split lines (TAB 114, TAC 18) — whether to re-issue them is accounting's call; and renewals typed by hand in QuickBooks should state the service period (15 of 1,275 renewal groups this year were recognised only through their deferred line). Separately, the SOA cover lists each invoice with only its FIRST service's text against the whole amount (325 of the 547 invoices open that morning have several services) — a format choice for Vincent, not yet made.
@@ -154,17 +156,9 @@ change (see `docs/FEATURE_MAP.md` for the full breakdown):
 
 **Supabase paging / 1,000-row-cap safeguards are new and not yet seen in production (2026-09-24).** `pageAll()` now orders every page by a unique key and throws on a failed page; `createAdminClient()` completes any plain read that hits PostgREST's 1,000-row cap (`lib/supabase-auto-page.ts`); 5 hand-written `.range()` loops got an ordering; SOA/TAO same-day ties use explicit rules (INV-DATA-066, REG-023). Verified against the real database and fake backends from a dev machine only — nothing has run on Vercel yet. After the first deploy check: (1) the AR Reminder rows that used to lose 2026 invoices (LOYANG BESTCONN, ASIA BLUE, ECAPTIAL) now list them; (2) the Vercel logs — a `[supabase] unpaginated read of "<table>" hit the 1000-row cap` warning is expected and harmless (it names a call site worth converting to `pageAll()`), whereas `[supabase] read of "<table>" hit the 1000-row cap and could NOT be completed` or `[supabase] auto-pagination failed` are real problems (kill switch: `SUPABASE_AUTO_PAGINATE=0`); (3) `soa_owner_audit` stays free of HAN KUN LLP (TAO) — if it reappears, the same-day tie rule in `lib/soa-owner.ts` has changed. Not covered: an explicit `.limit(N)` above 1,000 (none exists today) and offset drift when a table changes between two page requests of one read.
 
-**`ai_quality_review` nightly cron has NEVER run (found 2026-09-24).** The
-daily cron for `/api/ai-quality/review` (`0 23 * * *`) is in `vercel.json`,
-but its path is missing from `proxy.ts`'s `CRON_PATHS` allowlist, so every
-nightly call is treated as unauthenticated and rejected — confirmed with real
-data: `automation_sync_runs` has zero rows for source `ai_quality_review`,
-while `ai_learning`/`soa_owner_audit`/`sg_news_sync` show a successful cron
-run every night. This is the exact failure INV-CRON-011 warns about. A
-separate follow-up task was raised to add the path (deliberately not folded
-into the Quotation change: enabling it starts a nightly Anthropic-spending
-job Vincent is not expecting from an unrelated change). Until it lands, the
-"立即抽查" button on `/ai-quality` is the only way reviews get produced.
+**AI quality spot-check — fix ready, waiting for its table (2026-10-05).** It has never produced a single review, for two reasons confirmed on real data: `/api/ai-quality/review` was scheduled (`0 23 * * *`) but missing from `proxy.ts`'s `CRON_PATHS`, so Vercel's nightly call was answered 401 every night (zero `automation_sync_runs` rows ever, while `sg_news_sync`/`soa_owner_audit`/`ai_learning` run nightly — INV-CRON-011); and `ai_quality_reviews` was never created (PGRST205), so not even the "立即抽查" button could have saved a review. The path is now in `CRON_PATHS` (guarded by `test-cron-wiring.ts`), but that commit is pushed only after Vincent runs `scripts/add-ai-quality-reviews.sql` (now with RLS on — INV-DATA-073), because a run without the table pays to judge every reply and saves nothing (INV-CRON-012). Don't click 立即抽查 before the first nightly run: it would use up the replies that run is checked against, and it goes through the signed-in path, not the cron path. **How to check the first run** (23:00–23:59 UTC the night after both are live): one `automation_sync_runs` row, source `ai_quality_review`, `trigger_type` `cron`, status `success`, summary `reviewed` = the number of eligible replies (assistant replies with an `agent_run_id` and over 20 characters, capped at 20 — 9 have an `agent_run_id` as of 2026-10-05, the last from 2026-10-02), `errors` 0, `skippedNoKey` false; that many new `ai_quality_reviews` rows with distinct `message_id`s; and the anon key counting 0 rows there while the service role counts them all. Status `success` alone proves nothing — the route counts a run as successful if even one review was written. The judge may flag the 3 `intent_fallback` replies of 2026-09-23/28 (the generic menu shown when the Claude call failed). Later nights should review only new replies (usually 0) and never repeat a `message_id`.
+
+**AI quality judge — known risks, not fixed here (2026-10-05).** (1) The judge asks `claude-sonnet-5` for `max_tokens: 800` with no `thinking` setting; Sonnet 5 thinks by default and thinking counts toward `max_tokens` (Anthropic's Sonnet 5 migration notes), so a long think can cut the JSON reply off. That error is swallowed — the summary only counts `errors` — and the reply never gets a review row, so it is judged and paid for again every night. If the first run shows `errors` > 0, this is the first suspect; the AI usage ledger (once `ai_usage_events` exists) shows each judge call's output tokens. The call lives in `lib/ai-quality/review.ts`, now routed through `lib/ai/anthropic.ts` by the ledger work (INV-AI-010), so the fix belongs with that work, not with the cron fix. (2) The run route has no gate of its own: any signed-in account can start a paid run by opening `/api/ai-quality/review` (INV-CRON-018's open follow-up). Cost is small either way — Sonnet 5 is $2 / $10 per million tokens, so a judge call costs at most about 1–2 US cents.
 
 None other currently known-broken as of this writing, but the TeamWork
 automation collision (see Automation health above) is a real, recent
@@ -424,6 +418,17 @@ navigation uses the full map.
 
 ## Known risks (not bugs — things worth remembering before relying on data)
 
+- **Automation Health reads only the newest 120 `automation_sync_runs`
+  rows across ALL sources** (`app/api/automation/health/route.ts`).
+  `quickbooks` alone writes about 30 a day (webhook and manual syncs — 240
+  in the 8 days to 2026-10-05), so the window reaches back only about 3
+  days (on 2026-10-05 its oldest row was from 2026-10-02 03:46). The weekly
+  `reports_narrative` (Sundays) drops out of it by mid-week and then shows
+  `attention` with no run, although it ran — its `STALE_HOURS` override
+  can't help a run the query never fetched; on a heavy day (77 rows on
+  2026-10-02) a daily source could do the same. Found 2026-10-05 while
+  checking the AI quality cron, not fixed: reading each source's own
+  latest run instead of one shared 120-row slice would fix it.
 - **Billing draft auto-fill accuracy varies by field** — Secretary ~85%
   and Address ~95% reliably auto-fillable; XBRL and ND status change too
   often to trust without a human check before invoicing. Re-run
@@ -500,7 +505,8 @@ navigation uses the full map.
   5. **`search_documents`/NAS document search is a dead entry point** —
      already covered under Active issues above (migration not run, secret
      not set, indexing script not written, machine not designated).
-  6. **Done, 2026-09-22 — see INV-AI-006.** Vincent chose "自动LLM抽查判分".
+  6. **Built 2026-09-22 — see INV-AI-006; has never actually run (see
+     Active issues, 2026-10-05).** Vincent chose "自动LLM抽查判分".
      Daily cron (`0 23 * * *`) + a manual "立即抽查" button on the new
      `/ai-quality` page sample real recent replies and have Claude judge
      each against a fixed rubric, writing every verdict to

@@ -67,9 +67,18 @@ present with the inactive one struck through, never deleted outright.
 **Guards:** INV-DOC-001, INV-DOC-003.
 
 ### REG-008 — Daily automation landed clean
-Check `automation_sync_runs` for the prior 24h. Confirm every expected
-source in `docs/FEATURE_MAP.md`'s cron table shows `status: success` with
-no stale/missing entries, and cross-check `docs/CURRENT_STATE.md`'s
+After ANY change to `vercel.json`'s crons, `proxy.ts`'s `CRON_PATHS`, the
+`AutomationSource` union or the health route's `SOURCES`, run
+`npx tsx test-cron-wiring.ts` — it must print `ALL OK` (a scheduled path
+missing from `CRON_PATHS` is answered 401 every night and never runs —
+INV-CRON-011). Then check `automation_sync_runs` for the prior 24h: every
+daily source in `SOURCES` (`app/api/automation/health/route.ts` — 18 as of
+2026-10-05, of which `nas_index` is started by the NAS device, not a cron,
+and `reports_narrative` runs weekly on Sundays; `docs/FEATURE_MAP.md`'s
+cron map shows only the 7 with ordering dependencies) shows a `cron` run
+with `status: success`, and the run's `summary` says it did its work (e.g.
+`ai_quality_review`: `errors` 0, not just `success`). A scheduled source
+with no row at all is the INV-CRON-011 signature. Cross-check `docs/CURRENT_STATE.md`'s
 automation table is still accurate.
 **Guards:** INV-CRON-001 through INV-CRON-012 (all of them, in effect).
 

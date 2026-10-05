@@ -1262,7 +1262,26 @@ again.
   explicitly added to `proxy.ts`'s `CRON_PATHS` allow-list — having its own
   `vercel.json` cron entry and doc comment is not sufficient; a missed
   entry gets silently 401'd by middleware every night forever with zero
-  `automation_sync_runs` rows ever recorded.
+  `automation_sync_runs` rows ever recorded. (First seen 2026-08-06:
+  `/api/teamwork/sync-secretary`.)
+  **Shipped again despite this rule (fixed 2026-10-05).**
+  `/api/ai-quality/review` was scheduled `0 23 * * *` on 2026-09-22 and
+  never listed, so the nightly AI quality spot-check (INV-AI-006) never ran
+  once — and since 2026-09-22 the Automation Health data has shown that
+  source as `attention`, with no run ever, without anyone acting on it. A
+  session found it on 2026-09-24 and deliberately left it out, to keep a
+  paid Anthropic job off until Vincent agreed. **Leaving a path out of
+  `CRON_PATHS` is not an off switch**: it looks exactly like this bug, and
+  the decision is invisible. Pause a scheduled job by removing its
+  `vercel.json` entry or by gating the route itself. Adding a path to
+  `CRON_PATHS` is effectively that route's first real deploy, so
+  INV-CRON-012 applies: run the migration the route needs before the push
+  that lets the cron reach it (without `ai_quality_reviews`, every run would
+  have paid to judge every reply, saved nothing, and repeated nightly).
+  Enforced by `test-cron-wiring.ts`: every `vercel.json` path is in
+  `CRON_PATHS` and every `CRON_PATHS` entry is scheduled, each has a GET
+  route, and every `AutomationSource` is on the health panel — a written
+  rule alone did not stop the second occurrence.
 - **INV-CRON-012** — Code that depends on a new DB column must never be
   deployed before the corresponding SQL migration is confirmed run in
   Supabase — deploying first 500s the **entire route** on its next cron
@@ -3862,6 +3881,33 @@ again.
   with a real iPhone HEIC (converted in Chromium to a 1932×2576 JPEG), a 19MB
   photo (→ 2576px, 3.3MB), a 5MB PDF (stopped, nothing sent) and a mocked
   non-JSON 413 (readable message); `test-turnover-files.ts` pins the rules.
+- **INV-DATA-073** — Every new table's own migration must turn row level
+  security on (`ALTER TABLE … ENABLE ROW LEVEL SECURITY;` — no policy when
+  only the server reads it). "Only `createAdminClient()` reads it" is NOT a
+  reason to leave it off: that says what THIS app does, while PostgREST
+  serves any table without RLS to whoever holds the anon key, and
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` ships to every browser
+  (`lib/supabase-browser.ts`). The service-role client bypasses RLS, so
+  turning it on costs the app nothing. Found 2026-10-05, before the script
+  was ever run: `scripts/add-ai-quality-reviews.sql` (staff questions and
+  assistant replies about clients) had no RLS line, following the "No RLS"
+  notes in `scripts/add-ai-conversations.sql` / `scripts/add-turnover-ai.sql`
+  — fixed in the script. The same day, a count-only check (HEAD requests,
+  no rows read) compared what the service role and the anon key see for all
+  51 tables PostgREST exposes: 37 tables with rows hide every row from anon
+  (including `ai_messages` and `ai_conversations`, whose scripts never turn
+  RLS on — production does not match those scripts), but 8 are fully
+  readable with the anon key: `companies`, `master_list`, `audit_log`,
+  `annual_returns`, `late_filing_companies`, `nd_appointments`,
+  `nominee_directors`, `sync_log`. Three of those have a policy NAMED
+  `service_role_all` that is really `FOR ALL USING (true) WITH CHECK (true)`
+  with no `TO service_role`, so it applies to every role (reads confirmed;
+  writes deliberately not tested). Not fixed here — several server routes
+  (`/api/companies`, `/api/stats`, `/api/nominee-directors`,
+  `app/address-service/page.tsx`) read those tables through the anon client,
+  and Master List's Realtime subscription watches `master_list` through the
+  browser client (see `docs/CURRENT_STATE.md`). Never write a policy like that again,
+  and once a new table has rows, run the same anon-vs-service count on it.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
@@ -4144,12 +4190,19 @@ again.
   the machine's own verdict lives on, never a second row — "does a human
   agree with the machine" must stay attached to the exact verdict it is
   agreeing or disagreeing with. Migration: `scripts/add-ai-quality-
-  reviews.sql` (not yet run in production as of this writing — the route
-  degrades to a per-candidate error, not a crash, exactly like every other
-  optional-migration column in this codebase, see `ai_conversations`' own
-  header). Daily cron `0 23 * * *` (`vercel.json`), plus a manual "立即抽查"
-  button on `/ai-quality` for an on-demand run. Gated on `account.admin`
-  (Vincent-only today), same as `/ai-learning`.
+  reviews.sql` (still not run in production on 2026-10-05 — PGRST205; it
+  now also turns RLS on, INV-DATA-073). Without the table the route does
+  not crash, but that is worse than it sounds: each candidate is still
+  judged — a paid call — and only then fails to insert, so nothing is ever
+  marked reviewed and the same replies are paid for again on every run.
+  Daily cron `0 23 * * *` (`vercel.json`) — it could not run at all until
+  `/api/ai-quality/review` was added to `proxy.ts`'s `CRON_PATHS` on
+  2026-10-05 (INV-CRON-011) — plus a manual "立即抽查" button on
+  `/ai-quality` for an on-demand run. The page and the reviews API
+  (`/api/ai-quality/reviews`, `/[id]`) are gated on `account.admin`
+  (Vincent-only today), same as `/ai-learning`; the run route itself
+  (`GET /api/ai-quality/review`) is NOT — any signed-in account can start a
+  paid run by opening its URL (INV-CRON-018's open follow-up).
 
   Same change closed 2 real, unrelated dashboard-visibility gaps found while
   wiring this in: `ai_learning` and the new `ai_quality_review` are both

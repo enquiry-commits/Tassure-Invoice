@@ -23,6 +23,7 @@ const CRON_PATHS = new Set([
   '/api/late-filing/sync',
   '/api/ai-learning/analyze-all',
   '/api/soa-owners/audit',
+  '/api/ai-quality/review',
   '/api/sg-news/sync',
   '/api/reports/narrative-cron',
   '/api/turnover-ai/cleanup',
