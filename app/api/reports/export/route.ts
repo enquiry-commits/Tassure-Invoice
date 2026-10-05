@@ -1,3 +1,4 @@
+import { attachmentDisposition } from '@/lib/content-disposition';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
@@ -63,7 +64,7 @@ export async function GET(req: NextRequest) {
     return new Response(new Uint8Array(file), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="Tassure-Reports-${date}.xlsx"`,
+        'Content-Disposition': attachmentDisposition(`Tassure-Reports-${date}.xlsx`),
         'Cache-Control': 'no-store',
       },
     });

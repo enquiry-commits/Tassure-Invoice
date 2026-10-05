@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { filenameFromDisposition } from '@/lib/content-disposition';
 import Link from 'next/link';
 import MetricCard from '@/components/MetricCard';
 import {
@@ -471,8 +472,7 @@ export default function DashboardPage() {
       const response = await fetch('/api/export/company-data');
       if (!response.ok) throw new Error('Export failed');
       const blob = await response.blob();
-      const disposition = response.headers.get('content-disposition') ?? '';
-      const fileName = disposition.match(/filename="([^"]+)"/)?.[1] ?? 'Tassure-Company-Data.xlsx';
+      const fileName = filenameFromDisposition(response.headers.get('content-disposition')) ?? 'Tassure-Company-Data.xlsx';
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

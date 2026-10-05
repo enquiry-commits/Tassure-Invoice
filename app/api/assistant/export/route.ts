@@ -1,3 +1,4 @@
+import { attachmentDisposition } from '@/lib/content-disposition';
 import { NextRequest, NextResponse } from 'next/server';
 import { getRequestAccount } from '@/lib/request-account';
 import { canAccountOpen } from '@/lib/approved-accounts';
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${built.filename}"`,
+        'Content-Disposition': attachmentDisposition(built.filename),
         'Cache-Control': 'no-store',
       },
     });

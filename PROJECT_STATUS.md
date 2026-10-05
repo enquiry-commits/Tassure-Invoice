@@ -2485,6 +2485,23 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **SOA PDF downloads work for Chinese-named clients (INV-DOC-022).** Vincent
+  clicked 思店科技(杭州)有限公司's "TAB TAC" badge and it turned red: the
+  route put the client's name into the `Content-Disposition` filename and
+  HTTP headers can't carry Chinese, so `new Response()` threw after all the
+  work (500) — Download and Draft Email both failed for the 2 Chinese-named
+  clients, since the route shipped. Reproduced with Node 24 (exact
+  ByteString TypeError). He chose to fix first and have the council review
+  after the plan window resets. New `lib/content-disposition.ts`
+  (`attachmentDisposition`: ASCII fallback + UTF-8 `filename*`;
+  `filenameFromDisposition`), used by all 10 download routes and 4
+  downloaders (Turnover AI export and the post-incorporation pack had the
+  same exposure). `npx tsx test-content-disposition.ts` ALL PASSED (round
+  trips, ASCII fallback, guards against hand-built headers/old parsers);
+  `npx tsc --noEmit`, eslint (only pre-existing findings in
+  app/post-incorporate/page.tsx) and `npm run build` clean. Not yet clicked
+  on production (REG-036); council review pending.
+
 - **SOA PDF cover now prints Chinese client names (INV-DOC-011).** Vincent
   saw 思店科技(杭州)有限公司 shown correctly on the SOA web page; the PDF
   cover clients receive printed it as "()" and 江苏日月照明电器有限公司 as

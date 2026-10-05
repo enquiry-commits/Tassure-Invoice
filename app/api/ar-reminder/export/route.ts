@@ -1,3 +1,4 @@
+import { attachmentDisposition } from '@/lib/content-disposition';
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
@@ -55,7 +56,7 @@ export async function GET(req: NextRequest) {
     return new Response(new Uint8Array(file), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="AR-Reminder-${monthsForName}-${year}.xlsx"`,
+        'Content-Disposition': attachmentDisposition(`AR-Reminder-${monthsForName}-${year}.xlsx`),
         'Cache-Control': 'no-store',
       },
     });

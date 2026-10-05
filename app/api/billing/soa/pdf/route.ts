@@ -1,3 +1,4 @@
+import { attachmentDisposition } from '@/lib/content-disposition';
 import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument } from 'pdf-lib';
@@ -333,7 +334,7 @@ export async function GET(req: NextRequest) {
   return new Response(bytes, {
     headers: {
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${fileName.replace(/"/g, "'")}"`,
+      'Content-Disposition': attachmentDisposition(fileName),
       'Content-Length': String(bytes.byteLength),
       'Cache-Control': 'private, no-store',
       // Surfaced so the UI can warn if some (but not all) invoices failed to

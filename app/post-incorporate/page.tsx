@@ -1,5 +1,6 @@
 'use client';
 
+import { filenameFromDisposition } from '@/lib/content-disposition';
 import { useState, useRef } from 'react';
 import { Plus, Trash2, Loader2, FileSignature, Download } from 'lucide-react';
 import type { PostIncorporateCompany, PostIncorporateDirector, PostIncorporateShareholder } from '@/lib/docx-post-incorporate';
@@ -579,9 +580,7 @@ export default function PostIncorporatePage() {
         return;
       }
       const blob = await res.blob();
-      const disposition = res.headers.get('Content-Disposition') || '';
-      const match = /filename="([^"]+)"/.exec(disposition);
-      const filename = match ? match[1] : `${company.name || 'Post-Incorporate'}.zip`;
+      const filename = filenameFromDisposition(res.headers.get('Content-Disposition')) ?? `${company.name || 'Post-Incorporate'}.zip`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

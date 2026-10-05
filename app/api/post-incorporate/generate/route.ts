@@ -1,3 +1,4 @@
+import { attachmentDisposition } from '@/lib/content-disposition';
 import { NextRequest, NextResponse } from 'next/server';
 import JSZip from 'jszip';
 import { createAdminClient } from '@/lib/supabase';
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
   return new Response(new Uint8Array(zipBuffer), {
     headers: {
       'Content-Type': 'application/zip',
-      'Content-Disposition': `attachment; filename="${safeCompanyName}-Post-Incorporate-${date}.zip"`,
+      'Content-Disposition': attachmentDisposition(`${safeCompanyName}-Post-Incorporate-${date}.zip`),
       'Cache-Control': 'no-store',
     },
   });

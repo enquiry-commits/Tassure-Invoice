@@ -500,7 +500,7 @@ Run `npx tsx test-book-catalog.ts` (`ALL OK`). Then signed in, Billing Drafts: (
 **Guards:** `docs/INVARIANTS.md` INV-QB-034, INV-QB-033.
 
 ### REG-036 — The SOA PDF cover prints Chinese client names (after ANY change to `lib/statement-pdf.ts`, `lib/pdf-chinese-text.ts`, `templates/client-invoice/NotoSansSC-Regular.ttf`, or the SOA PDF route)
-Run `npx tsx test-statement-cover-chinese.ts` and `npx tsx test-client-invoice-model.ts` (`ALL PASSED`). Then signed in, SOA → All: Download PDF for 思店科技(杭州)有限公司 (TAB + TAC) — the cover's TO line reads 思店科技(杭州)有限公司 in bold (not "()"), and the 【Lzs Travel Pte. Ltd.】 description keeps its brackets; an English-named client's cover looks exactly as before. Checking the SOA web page is NOT enough — it always showed the name.
+Run `npx tsx test-statement-cover-chinese.ts`, `npx tsx test-content-disposition.ts` and `npx tsx test-client-invoice-model.ts` (`ALL PASSED`). Then signed in, SOA → All: click the "TAB TAC" badge of 思店科技(杭州)有限公司 — both PDFs download (the badge must NOT turn red; it did until 2026-10-05, INV-DOC-022), and Draft Email attaches them; the cover's TO line reads 思店科技(杭州)有限公司 in bold (not "()"), and the 【Lzs Travel Pte. Ltd.】 description keeps its brackets; an English-named client's cover looks exactly as before. Checking the SOA web page is NOT enough — it always showed the name.
 **Guards:** `docs/INVARIANTS.md` INV-DOC-011, INV-QB-029.
 
 ---

@@ -4823,6 +4823,26 @@ again.
   draft to the earliest `nextStage` among its sources, preventing an
   unrecorded source from being silently skipped; staff may still explicitly
   select 2nd/3rd when earlier reminders pre-date the system.
+- **INV-DOC-022** — HTTP header values must be Latin-1: `new Response()`
+  throws `TypeError: Cannot convert argument to a ByteString` for any
+  character above U+00FF. The SOA PDF route named its download "SOA -
+  ${companyName} - date.pdf" in `Content-Disposition`, so for a
+  Chinese-named client (思店科技(杭州)有限公司, 江苏日月照明电器有限公司) it
+  did all the work and then crashed on its last line — a 500, the SOA
+  page's download badge turned red, and Draft Email (which attaches the same
+  PDF) failed too. That had been true since the route shipped; found
+  2026-10-05 when Vincent clicked the badge to check the Chinese cover-page
+  fix. Every `Content-Disposition` is built ONLY with
+  `lib/content-disposition.ts` `attachmentDisposition()` (an ASCII
+  `filename` fallback plus the RFC 6266/5987 `filename*` with the real
+  UTF-8 name), and every downloader reads it with `filenameFromDisposition()`
+  (prefers `filename*`). All 10 download routes and 4 downloaders were
+  switched; at risk besides SOA were the Turnover AI export (project name)
+  and the post-incorporation pack (company name). Any other header carrying
+  data must be `encodeURIComponent`-ed, as the `X-Soa-*` and
+  `X-Client-Invoice-Fallback` headers are. Guarded by
+  `test-content-disposition.ts` (fails on any hand-built header or old
+  `filename="…"`-only parser).
 
 ## SOA Outstanding shared remarks
 

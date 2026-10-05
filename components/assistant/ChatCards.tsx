@@ -8,6 +8,7 @@
 // Every line below is a mechanical move (not retyped) — verify with
 // `git diff` that app/my-tasks/page.tsx's own rendered behavior is
 // unchanged after it switches to importing from here.
+import { filenameFromDisposition } from '@/lib/content-disposition';
 import { useState, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { FileCheck2, X, ExternalLink, FileText, AlertTriangle, Download, Send, Pencil } from 'lucide-react';
@@ -556,9 +557,7 @@ export function PostIncorporateCard({ preview, onGenerated, conversationId }: { 
         return;
       }
       const blob = await res.blob();
-      const disposition = res.headers.get('Content-Disposition') || '';
-      const match = /filename="([^"]+)"/.exec(disposition);
-      const filename = match ? match[1] : `${preview.company || 'Post-Incorporate'}.zip`;
+      const filename = filenameFromDisposition(res.headers.get('Content-Disposition')) ?? `${preview.company || 'Post-Incorporate'}.zip`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -927,8 +926,7 @@ export function ListExportCard({ offer, conversationId }: { offer: ChatExportOff
       }
       // Filename comes from the server's Content-Disposition — the same
       // name the equivalent page export would produce, not one guessed here.
-      const disposition = res.headers.get('Content-Disposition') || '';
-      const named = /filename="([^"]+)"/.exec(disposition)?.[1];
+      const named = filenameFromDisposition(res.headers.get('Content-Disposition'));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

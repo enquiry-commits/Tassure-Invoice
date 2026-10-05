@@ -1,3 +1,4 @@
+import { attachmentDisposition } from '@/lib/content-disposition';
 import { createAdminClient } from '@/lib/supabase';
 import { pageAll } from '@/lib/page-all';
 import { type DataRow, ACTIVE_CLIENT_COLUMNS, AR_REMINDER_COLUMNS, buildWorkbook } from '@/lib/export-columns';
@@ -35,7 +36,7 @@ export async function GET() {
     return new Response(new Uint8Array(file), {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="Tassure-Company-Data-${date}.xlsx"`,
+        'Content-Disposition': attachmentDisposition(`Tassure-Company-Data-${date}.xlsx`),
         'Cache-Control': 'no-store',
       },
     });

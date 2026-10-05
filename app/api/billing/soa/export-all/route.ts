@@ -1,3 +1,4 @@
+import { attachmentDisposition } from '@/lib/content-disposition';
 import { todaySGT } from '@/lib/date';
 import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
@@ -54,7 +55,7 @@ export async function GET() {
   return new Response(bytes, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="${fileName.replace(/"/g, "'")}"`,
+      'Content-Disposition': attachmentDisposition(fileName),
       'Content-Length': String(bytes.byteLength),
       'Cache-Control': 'private, no-store',
     },
