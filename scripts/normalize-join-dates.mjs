@@ -6,7 +6,8 @@
 //     -> read as DAY-first and rewritten as "08 Jul 2024".
 //   - "Sep-16"        -> "September 16"   (literal, as instructed)
 //   - "2020.02.18"    -> "18 Feb 2020"
-//   - "YES", "2020"   -> kept, listed in needs-accurate-date.csv
+//   - "11-12-2018"    -> "11 Dec 2018" (day-first); "31/04/2025" -> "31 Apr 2025" (re-spelled only)
+//   - "YES", "2020", "24/0/2023" -> kept, listed in needs-accurate-date.csv
 // Everything else (invalid dates, "11-12-2018", conflicting duplicates...) is
 // left untouched and listed in not-touched.csv.
 //   node --env-file=.env.local scripts/normalize-join-dates.mjs [--apply] [--out <dir>]
@@ -42,11 +43,21 @@ const fmt = (y, m, d) => `${String(d).padStart(2, '0')} ${MON[m - 1]} ${y}`;
 function rewrite(raw) {
   const s = String(raw ?? '').trim();
   let m;
+  if (/^\d{1,2}\/0\/\d{4}$/.test(s)) return { keep: 'month is 0 — needs an accurate date' };
   if ((m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))) {
     const a = +m[1], b = +m[2];
-    if (a > 12 || b > 12 || a === b) return null; // unambiguous: already parsed fine, out of scope
     const y = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+    // A calendar-impossible day/month ("31/04/2025", "30/2/2025") is only
+    // re-spelled ("31 Apr 2025"), never corrected — the date itself is still
+    // wrong and stays unusable for client_since until someone fixes it.
+    if (b >= 1 && b <= 12 && a >= 1 && a <= 31 && !valid(y, b, a)) return { to: fmt(y, b, a) };
+    if (a > 12 || b > 12 || a === b) return null; // unambiguous and valid: already parsed fine, out of scope
     return valid(y, b, a) ? { to: fmt(y, b, a) } : null;
+  }
+  // "11-12-2018" -> day-first, like the slash dates above.
+  if ((m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/))) {
+    const a = +m[1], b = +m[2], y = +m[3];
+    if (valid(y, b, a)) return { to: fmt(y, b, a) };
   }
   if (/^Sep-16$/i.test(s)) return { to: 'September 16' };
   if ((m = s.match(/^(\d{4})\.(\d{2})\.(\d{2})$/))) return valid(+m[1], +m[2], +m[3]) ? { to: fmt(+m[1], +m[2], +m[3]) } : null;
