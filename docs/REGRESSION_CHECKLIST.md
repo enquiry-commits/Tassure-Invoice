@@ -234,7 +234,14 @@ billed in either line. Cross-check: query `quickbooks_invoice_items` for
 `service_type IN ('Secretary','Address','ND')` grouped by
 `(customer_name, invoice_no)`, and for any group with both a primary and a
 deferred row whose `period_end` differ, confirm the app treats the later
-one as authoritative.
+one as authoritative. Also run `npm run test:billing-fees` and `npm run
+test:period` — each must print its "checks passed" line (both had been
+failing unnoticed, since 764dab8 and 1fd45b3, until 2026-10-06). Second real
+example: ELITE GATHERING PTE. LTD. — TAB #02611051 carries a director's
+residential-address disbursement tagged Address; its ADDR tile must read
+active to 2027-06-30. After ANY change to `compareRenewalPeriodProductLines()`,
+diff every client's renewal tiles before/after (the real
+`GET /api/billing/renewals` can be run read-only) and explain each change.
 **Guards:** `docs/INVARIANTS.md` INV-QB-019.
 
 ### REG-020 — SOA Excel export shows real bucket activity and a correct TOTAL row even when a bucket nets to zero or negative

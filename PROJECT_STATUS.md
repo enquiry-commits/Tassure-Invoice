@@ -1,5 +1,37 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-06 (FIXED in code, push waits for Vincent's yes on 3 pre-filled rates: Elite Gathering's ADDR tile no longer reads "expired" for a client paid to Jun 2027. Asked: Vincent — "修" — the second half of the Elite Gathering row; he chose "按新规则修" via AskUserQuestion after the council.)
+
+**Why it was wrong.** `compareRenewalPeriodProductLines()` was not a consistent order: within one invoice it ranked by latest period, across invoices primary-first. Elite's TAB #02611051 holds the real address line (to Jun 2027) and a director's residential-address disbursement tagged Address (to Aug 2027), so the comparisons looped and `sort()` put the OLDER invoice first (proven on real data). The same comparator drives create-invoice's overlap check, whose query has no ORDER BY.
+
+**The council (4 independent members + 4 peer reviews, ranking Skeptic > Architect > Researcher > Pragmatist) agreed:**
+- replace the comparator with one per-line key — the service's own item, then latest period, then primary before deferred, then newest date, then invoice number;
+- rank other lines last, never drop them;
+- change create-invoice in the same commit;
+- fix the two failing test scripts honestly (restore the tie rule; update the stale `{kind, message}` assertion);
+- judge the 796-client diff by cause.
+Vincent confirmed the new rule because it replaces INV-QB-019 (his 09-16 Siehi rule).
+
+**What changed.**
+- `lib/invoice-period.ts`: the new comparator. `app/api/quickbooks/create-invoice/route.ts` passes `txn_date`.
+- `scripts/test-renewal-fee-pairing.mjs` (30 assertions): every-input-order cases for Elite, a Siehi-shaped split and a CPF line, plus a guard that both call sites use the shared function. It fails on the old comparator.
+- `scripts/test-invoice-period.mjs` (23 assertions): updated to `{kind, message}`. Both scripts had been failing unnoticed; yesterday's FYE assertions had never run.
+- Docs: INV-QB-019 rewritten, REG-019, `docs/CURRENT_STATE.md`.
+
+**Verification.**
+- The real `GET /api/billing/renewals` was run read-only over all 796 clients, before and after: exactly 8 tiles changed, each checked against the real QuickBooks lines.
+  - Elite Address: expired → active to 2027-06-30.
+  - 4 split-ND clients (Canvas Logistic, Fuhai International, Asia Connet, Silver Zenith) now read their latest invoice — paid through Oct/Nov 2026; before, shown not_found/expired from 2024–2025, which would have proposed re-billing a paid year.
+  - **3 pre-filled rates**, all clients expired since spring 2025: Ark Partners Address 585 → 270 and ND 5000 → 3750; Hai Rui Address 585 → 240. 585 was the incorporation fee and 5000 an ND deposit, picked because they came first on the invoice.
+- `tsc` 0, eslint clean.
+- **Not verified:** a real invoice generation through the new overlap check (the harness never writes to QuickBooks).
+
+**Why the push is held.** The rate changes touch pricing-adjacent output, and Vincent was told any price change is shown to him first.
+
+**Also verified this morning (docs only).** The first nightly AI quality run succeeded: 6 judged (1 flagged), 0 errors, RLS holds, about US$0.002 per call. No assistant question has been asked since the learning-loop deploy, so the first evidence row is still to come.
+
+Previous entry follows.
+
 Last updated: 2026-10-05 (FIXED: an invoice keyed by hand in QuickBooks with "FYE 31/08/2026" now counts as this cycle's invoice in Billing Drafts. Asked: Vincent — "这个是什么情况？" → "修" — on Elite Gathering showing "To invoice" with a staff remark "AR ?", although TAB #02611051 billed everything on 2026-09-14.)
 
 **What was wrong.** Billing Drafts decides "already invoiced this cycle" from the FYE marker on the AR/annual line. It recognized only the dotted form the system writes (`31.08.2026`); this invoice was typed by hand as `[FYE 31/08/2026]`. In 2026 only 2 AR lines use slashes; 461 use dots.

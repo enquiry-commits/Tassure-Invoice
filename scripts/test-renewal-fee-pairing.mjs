@@ -176,4 +176,53 @@ const addressDisplay = [
 ].sort((a, b) => compareRenewalPeriodProductLines('Address', a, b));
 assert.equal(addressDisplay[0].product_service, 'Secretary:Registered Address Services');
 
-console.log('Renewal fee pairing checks passed (24 assertions).');
+// INV-QB-019 (rewritten 2026-10-06): the result must not depend on the order
+// the rows arrive in. Each case is sorted from EVERY input order and must
+// always produce the same first line.
+const permutations = items => items.length <= 1 ? [items]
+  : items.flatMap((x, i) => permutations([...items.slice(0, i), ...items.slice(i + 1)]).map(rest => [x, ...rest]));
+const winners = (service, lines) => new Set(permutations(lines).map(order => {
+  const first = [...order].sort((a, b) => compareRenewalPeriodProductLines(service, a, b))[0];
+  return `${first.invoice_no}|${first.period_end}|${first.product_service}`;
+}));
+
+// Elite Gathering (real lines): #02611051 also carries a director's
+// residential-address disbursement tagged Address with a LATER period.
+const eliteWinners = winners('Address', [
+  { invoice_no: '02611051', txn_date: '2026-09-14', period_end: '2027-06-30', product_service: 'Secretary:Registered Address Services' },
+  { invoice_no: '02611051', txn_date: '2026-09-14', period_end: '2027-08-31', product_service: 'Disbursement:Reimbursement - OPE' },
+  { invoice_no: '02511129', txn_date: '2025-09-26', period_end: '2026-06-30', product_service: 'Secretary:Registered Address Services' },
+  { invoice_no: '2580205', txn_date: '2025-09-26', period_end: '2026-02-28', product_service: 'Secretary:Registered Address Services' },
+  { invoice_no: '02410779', txn_date: '2024-07-29', period_end: '2025-06-30', product_service: 'Secretary:Company Incorporate Services' },
+]);
+assert.deepEqual([...eliteWinners], ['02611051|2027-06-30|Secretary:Registered Address Services']);
+
+// Siehi-shaped ND split (REG-019): one invoice bills Aug-Dec as the primary
+// and Jan-Jul as the deferred line; older plain years must not win.
+const splitWinners = winners('ND', [
+  { invoice_no: 'S2', txn_date: '2025-08-05', period_end: '2025-12-31', product_service: 'Secretary:Nominee Director Fees - WKX' },
+  { invoice_no: 'S2', txn_date: '2025-08-05', period_end: '2026-07-31', product_service: 'Deferred - ND Fees - WKX' },
+  { invoice_no: 'S1', txn_date: '2024-08-05', period_end: '2025-07-31', product_service: 'Secretary:Nominee Director Fees - WKX' },
+  { invoice_no: 'S0', txn_date: '2023-08-05', period_end: '2024-07-31', product_service: 'Secretary:Nominee Director Fees - WKX' },
+]);
+assert.deepEqual([...splitWinners], ['S2|2026-07-31|Deferred - ND Fees - WKX']);
+
+// An ad-hoc line sharing the service bucket (CPF submission) never decides
+// how far the secretary renewal is paid, even with a later period and date.
+const cpfWinners = winners('Secretary', [
+  { invoice_no: 'C1', txn_date: '2026-01-10', period_end: '2026-12-31', product_service: 'Secretary:Corporate Secretarial Services' },
+  { invoice_no: 'C2', txn_date: '2026-03-02', period_end: '2027-03-31', product_service: 'Secretary:CPF Submission Services' },
+  { invoice_no: 'C0', txn_date: '2025-01-10', period_end: '2025-12-31', product_service: 'Secretary:Corporate Secretarial Services' },
+]);
+assert.deepEqual([...cpfWinners], ['C1|2026-12-31|Secretary:Corporate Secretarial Services']);
+
+// Both the Billing Drafts status and create-invoice's overlap check must use
+// this one function (with txn_date), or the screen and the server disagree.
+import { readFileSync } from 'node:fs';
+const routeSrc = readFileSync(new URL('../app/api/billing/renewals/route.ts', import.meta.url), 'utf8');
+const createSrc = readFileSync(new URL('../app/api/quickbooks/create-invoice/route.ts', import.meta.url), 'utf8');
+assert.match(routeSrc, /compareRenewalPeriodProductLines\(svc, a, b\)/);
+assert.match(createSrc, /compareRenewalPeriodProductLines\(/);
+assert.match(createSrc, /txn_date: a\.txn_date/);
+
+console.log('Renewal fee pairing checks passed (30 assertions).');

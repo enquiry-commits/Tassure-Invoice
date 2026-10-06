@@ -1745,7 +1745,10 @@ again.
   detail/route.ts` and `app/api/billing/soa/pdf/route.ts` both passed the
   raw `?companyName=` query param straight through) — "为什么有一些还是看
   不到单？" (why do some [companies] still show no invoices?).)*
-- **INV-QB-019** — `lib/invoice-period.ts`'s `compareRenewalPeriodProductLines()`
+- **INV-QB-019** — **Rewritten 2026-10-06: the CURRENT order is the last
+  paragraph of this rule; the text before it is the 2026-09-16 rule it
+  replaced (its "same invoice vs different invoice" split is not a
+  consistent order).** `lib/invoice-period.ts`'s `compareRenewalPeriodProductLines()`
   must only rank a "primary" renewal line above its "deferred" counterpart
   (INV-QB-013's Class-before-Location precedent is a different rule; this
   one governs which QB line's `period_end` is trusted as "how far this
@@ -1777,6 +1780,37 @@ again.
   25 real companies, all ND, all previously mis-sorted the same way —
   verified the fix corrects Siehi Shipping's own next period from "Jan
   2026-Dec 2026" to the true "Aug 2026-Jul 2027".)*
+
+  **Current rule (2026-10-06, Vincent: "按新规则修").** The comparator ranks
+  each line on its OWN key — never by comparing two lines' invoices: (1) this
+  service's own item (its primary or its deferred product) before any other
+  line that merely shares the `service_type`; (2) latest `period_end`;
+  (3) primary before deferred on the same `period_end`; (4) newest
+  `txn_date`, then `invoice_no`. It is a consistent order, so the result no
+  longer depends on the order the rows arrive in. Why the 09-16 rule had to
+  go: Elite Gathering's TAB #02611051 held the real address line (to Jun 2027)
+  AND a director's residential-address disbursement tagged Address
+  ("Reimbursement - OPE", to Aug 2027). "Primary first across invoices" plus
+  "latest end within an invoice" formed a cycle, `sort()` put an OLDER
+  invoice first, and ADDR read "expired" while paid to Jun 2027 — the draft
+  would have re-billed it. The council also showed the 09-16 rule could pick
+  an older invoice for the very split-ND case it was written for. Other lines
+  are ranked last, never dropped: a client billed only under an unrecognised
+  item still gets a period. The overlap check in
+  `app/api/quickbooks/create-invoice/route.ts` uses the same function (and
+  now passes `txn_date`); its query has no ORDER BY, so before this its answer
+  could vary between runs. A read-only before/after of the real `GET
+  /api/billing/renewals` over all 796 clients changed 8 tiles: Elite Address
+  (expired → active to 2027-06-30); 4 split-ND clients that now read their
+  latest invoice (Canvas Logistic, Fuhai International, Asia Connet, Silver
+  Zenith — paid through Oct/Nov 2026, previously shown not_found/expired from
+  2024–2025, which would have proposed re-billing a paid year); and 3
+  pre-filled rates that had taken the wrong line of an old invoice (Ark
+  Partners Address 585 → 270 and ND 5000 → 3750; Hai Rui Address 585 → 240 —
+  585 was the incorporation fee, 5000 an ND deposit). Pinned by
+  `scripts/test-renewal-fee-pairing.mjs` (every input order of Elite, a
+  Siehi-shaped split and a CPF case gives one winner; it fails on the old
+  comparator) and `scripts/test-invoice-period.mjs`.
 - **INV-QB-020** — `lib/soa-export.ts`'s `renderAgingTable()` (the Excel
   exports behind `GET /api/billing/soa/export` and `.../export-all`) must
   never gate an aging-bucket cell's value — or that column's TOTAL-row

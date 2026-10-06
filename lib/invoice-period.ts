@@ -96,18 +96,39 @@ export function isPrimaryRenewalProduct(service: string, productService: string 
 // renewal event as its paired primary line, so the later period_end wins
 // regardless of which line carries it. See docs/INVARIANTS.md INV-BILL-*
 // for the concrete numbers.
+//
+// Rewritten 2026-10-06 (INV-QB-019, Vincent: "按新规则修"). The old version
+// asked "same invoice?" and then switched rules, so it was not a consistent
+// order: Elite Gathering's TAB #02611051 held the real address line AND a
+// director's residential-address disbursement tagged Address, the three-way
+// comparison looped, and sort() put an OLDER invoice first ("expired" while
+// paid to Jun 2027). Now every line is judged on its own key:
+//   1. this service's own item (its primary or deferred product) before any
+//      other line that merely shares the service_type — a CPF submission or
+//      a residential-address disbursement never decides how far a renewal
+//      is paid up to;
+//   2. latest period_end — so a split invoice's later sub-period still wins
+//      (Siehi Shipping, REG-019);
+//   3. primary before deferred on the same period_end;
+//   4. newest txn_date, then invoice_no — fixed tie-breaks.
+// Other lines are ranked last, never dropped: a client billed only under an
+// unrecognised item still gets a period.
 export function compareRenewalPeriodProductLines(
   service: string,
-  a: { invoice_no: string; period_end: string | null; product_service: string | null },
-  b: { invoice_no: string; period_end: string | null; product_service: string | null },
+  a: { invoice_no: string; period_end: string | null; product_service: string | null; txn_date?: string | null },
+  b: { invoice_no: string; period_end: string | null; product_service: string | null; txn_date?: string | null },
 ) {
-  if (a.invoice_no === b.invoice_no) {
-    return (b.period_end ?? '').localeCompare(a.period_end ?? '');
-  }
-  const primaryOrder = Number(isPrimaryRenewalProduct(service, b.product_service))
-    - Number(isPrimaryRenewalProduct(service, a.product_service));
-  if (primaryOrder) return primaryOrder;
-  return (b.period_end ?? '').localeCompare(a.period_end ?? '');
+  const isPrimary = (line: typeof a) => isPrimaryRenewalProduct(service, line.product_service);
+  const isOwnItem = (line: typeof a) => {
+    if (isPrimary(line)) return true;
+    const part = classifyRenewalFeeProduct(line.product_service);
+    return part?.service === service && part.role === 'deferred';
+  };
+  return Number(isOwnItem(b)) - Number(isOwnItem(a))
+    || (b.period_end ?? '').localeCompare(a.period_end ?? '')
+    || Number(isPrimary(b)) - Number(isPrimary(a))
+    || (b.txn_date ?? '').localeCompare(a.txn_date ?? '')
+    || String(b.invoice_no ?? '').localeCompare(String(a.invoice_no ?? ''));
 }
 
 export type RenewalFeeLine = {

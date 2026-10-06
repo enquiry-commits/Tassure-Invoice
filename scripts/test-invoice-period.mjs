@@ -48,15 +48,19 @@ assert.equal(
   "Sec serv Aug'26-Jul'27, AR FYE 31.12.2026",
 );
 
+// servicePeriodOverlapError returns { kind, message } since 1fd45b3 (an
+// overlap is a confirmable warning, not a hard block) — these assertions
+// still expected a string, so this script failed before reaching anything
+// below until 2026-10-06.
 assert.match(
-  servicePeriodOverlapError('Secretary', parseInvoicePeriod('May 2026 - Apr 2027', 'Secretary'), '2027-04-30') ?? '',
+  servicePeriodOverlapError('Secretary', parseInvoicePeriod('May 2026 - Apr 2027', 'Secretary'), '2027-04-30')?.message ?? '',
   /overlaps/,
 );
 assert.equal(
   servicePeriodOverlapError('Secretary', parseInvoicePeriod('May 2027 - Apr 2028', 'Secretary'), '2027-04-30'),
   null,
 );
-assert.match(servicePeriodOverlapError('ND', null, null) ?? '', /complete service period/);
+assert.match(servicePeriodOverlapError('ND', null, null)?.message ?? '', /complete service period/);
 
 // FYE cycle markers (renewals route billedCycles): dotted as the system
 // writes them, slashed as typed by hand in QuickBooks (Elite Gathering
