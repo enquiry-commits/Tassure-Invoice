@@ -2,16 +2,17 @@ import 'server-only';
 
 import { getValidToken, type QbCompany } from './quickbooks';
 import { createHttpAttachmentReader } from './quickbooks-attachments-http';
-import { MAX_ORIGINAL_BYTES, selectVerifiedOriginal, type OriginalCopyResult } from './original-copy';
-import { extractPdfText } from './pdf-text';
-import type { ClientInvoiceModel } from './client-invoice-model';
+import { MAX_ORIGINAL_BYTES, selectVerifiedOriginal, type InvoiceFacts, type OriginalCopyResult } from './original-copy';
+import { readPdf } from './pdf-text';
 
 // Finds, among the files attached to an invoice in QuickBooks, the ORIGINAL
 // (unsplit) invoice the client was sent — INV-QB-037. Used by
-// lib/client-invoice-pdf.ts only for an invoice accounting has split
-// (INV-QB-029): the system's own redraw is the fallback, so every doubt here
-// (no attachment, not provably the original, QuickBooks slow or unreachable)
-// is simply "none" and never an error the caller has to handle.
+// lib/client-invoice-pdf.ts for an invoice accounting has split (INV-QB-029):
+// Vincent's order is the original attached in QuickBooks first, then (staff
+// fetch it from the file server and attach it) and only then the redraw, so
+// every doubt here (no attachment, not provably the original, QuickBooks slow
+// or unreachable) is simply "none" and never an error the caller has to
+// handle — the caller redraws.
 //
 // Read-only: it lists attachments and downloads files; it never uploads,
 // changes or deletes anything in QuickBooks, and it never touches any other
@@ -27,33 +28,44 @@ const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
 
 // The whole look-up (list, download, read) for one invoice. The SOA walks its
 // invoices one by one, so a slow answer must cost seconds, not the request.
-const TIME_LIMIT_MS = 25_000;
+const TIME_LIMIT_MS = 15_000;
+// After QuickBooks itself fails or times out, stop asking for a while: the
+// next invoices of the same request would only wait the same time again
+// (a customer with 15 split invoices x 15 s would pass the route's limit).
+const PAUSE_MS = 120_000;
+const pausedUntil: Partial<Record<QbCompany, number>> = {};
 
-export async function findOriginalInvoiceCopy(company: QbCompany, invoiceId: string, model: ClientInvoiceModel): Promise<OriginalCopyResult> {
+export async function findOriginalInvoiceCopy(company: QbCompany, invoiceId: string, facts: InvoiceFacts): Promise<OriginalCopyResult> {
   if (ORIGINAL_COPY_LOOKUP_MODE[company] !== 'live') return { none: `${company} originals are not looked up` };
   if (!/^\d+$/.test(invoiceId)) return { none: `"${invoiceId}" is not a QuickBooks invoice id` };
+  if (Date.now() < (pausedUntil[company] ?? 0)) return { none: `not asking QuickBooks ${company} again for a minute or two after a problem`, trouble: true };
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let result: OriginalCopyResult;
   try {
     const token = await getValidToken(company);
     if (!token) return { none: `QuickBooks ${company} is not connected` };
-    const reader = createHttpAttachmentReader({ base: QB_BASE, realmId: token.realm_id, accessToken: token.access_token });
-    const result = await Promise.race([
+    const reader = createHttpAttachmentReader({ base: QB_BASE, realmId: token.realm_id, accessToken: token.access_token, signal: controller.signal });
+    result = await Promise.race([
       selectVerifiedOriginal(
-        { list: () => reader.list(invoiceId), download: file => reader.download(file, MAX_ORIGINAL_BYTES), text: extractPdfText },
-        { docNumber: model.docNumber, amounts: model.rows.map(r => r.amount), total: model.total },
+        { list: () => reader.list(invoiceId), download: file => reader.download(file, MAX_ORIGINAL_BYTES), read: readPdf },
+        facts,
       ),
-      new Promise<OriginalCopyResult>(resolve => { timer = setTimeout(() => resolve({ none: `QuickBooks did not answer within ${TIME_LIMIT_MS / 1000} seconds` }), TIME_LIMIT_MS); }),
+      new Promise<OriginalCopyResult>(resolve => {
+        timer = setTimeout(() => { controller.abort(); resolve({ none: `QuickBooks did not answer within ${TIME_LIMIT_MS / 1000} seconds`, trouble: true }); }, TIME_LIMIT_MS);
+      }),
     ]);
-    // "No PDF attached" is the normal state of most split invoices today —
-    // not worth a log line. Anything else is a file somebody attached that
-    // the system could not accept, which is worth finding in the logs.
-    if ('none' in result && result.none !== 'no PDF attached') console.warn(`Attached original not used (${company} #${model.docNumber}): ${result.none}`);
-    return result;
   } catch (err) {
-    const why = err instanceof Error ? err.message : String(err);
-    console.warn(`Attached original not used (${company} #${model.docNumber}): ${why}`);
-    return { none: why };
+    result = { none: err instanceof Error ? err.message : String(err), trouble: true };
   } finally {
     clearTimeout(timer);
   }
+  if ('none' in result) {
+    if (result.trouble) pausedUntil[company] = Date.now() + PAUSE_MS;
+    // "No PDF attached" is the normal state of most split invoices today —
+    // not worth a log line. Anything else is a file somebody attached that the
+    // system could not accept, or a QuickBooks problem: worth finding in the logs.
+    if (result.none !== 'no PDF attached') console.warn(`Attached original not used (${facts.invoiceNo}): ${result.none}`);
+  }
+  return result;
 }

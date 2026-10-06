@@ -2559,6 +2559,44 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **The original-invoice lookup, hardened after a council review and widened
+  to every split invoice (INV-QB-037).** Vincent, twice that day: attached
+  originals are risk-free ("附错了文件，系统也只是不采用"), then the order of
+  preference — "先找 QB, QB不能去 Server, Server 找不到了 才重新画" (the server
+  step is staff's, by hand; Claude never touches the server). The first
+  version, pushed that morning and inert, compared the invoice number as a
+  substring and the printed amounts. A four-member council + peer review (8
+  agents, read-only, 1.3M tokens) got 7 wrong files past it with the
+  production code, so the "risk-free" claim was too strong: the system's own
+  redraw (what Save PDF gives and staff habitually attach) passed; pages past
+  the 6th were never read but are merged into the SOA; a picture page has no
+  text to check; a credit note quoting the number passed; and an
+  owner-password file passed and then pdf-lib could not merge it, dropping the
+  invoice OUT of the SOA instead of redrawing it. I re-ran each claim before
+  fixing (pdf-lib really overwrites the Producer on load unless
+  `updateMetadata: false`; the owner-password file is read by pdf.js and
+  refused by pdf-lib). Fixed: a file must not be the system's own drawing,
+  every page must be read and have text, pdf-lib must load it, and the page
+  must say INVOICE NO. : <book> <number>, DATE (not the due date), the
+  customer, and TOTAL; size cap 1 MB; at most 15 s per invoice with the
+  requests cancelled and a 2-minute pause after a QuickBooks failure;
+  redirects must stay https; logs name the attachment Id, not the file. And
+  the lookup now runs for EVERY invoice carrying a Deferred line, before QuickBooks'
+  split PDF too (2 of 154 are not drawable today), per Vincent's order.
+  **Found, for Vincent to decide:** on two open invoices accounting gave a
+  twin the wrong service's label — TAB #02611114 (Hong Ming) and #02611078
+  (Fuyuan) — so the redraw's per-service lines (650/150 and 910/150) are not
+  what the client first saw (600/200 and probably 700/360; totals right). The
+  proof therefore accepts ANY way of folding each twin into one other line, so
+  the true originals of these two will be accepted once attached. Verification:
+  `test-original-copy.ts` 94 checks ALL PASSED; with each safeguard removed on
+  a copy the test fails (16 negative controls); the production code on the 20
+  real saved files: 8 of 8 attached invoices accepted, 12 of 12 split
+  QuickBooks PDFs refused for their amounts, the redraw refused by its
+  Producer; `npx tsc --noEmit`, eslint, `next build` clean. **Not verified:** a
+  real run on the deployed site (REG-039). Not built, recommended by all four:
+  a read-only "originals status" list so a refused file is visible.
+
 - **Split invoices go out as their ORIGINAL when it is attached in QuickBooks
   (INV-QB-037).** Vincent's purpose for the attachments (INV-QB-036) was that
   the system can find the original, unsplit invoice in QuickBooks instead of

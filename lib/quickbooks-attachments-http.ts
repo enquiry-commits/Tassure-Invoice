@@ -24,7 +24,15 @@ const assertId = (id: string) => {
 
 // ── reading attached files back ──────────────────────────────────────────
 
-type ReaderConfig = { base: string; realmId: string; accessToken: string; fetchImpl?: typeof fetch; timeoutMs?: number };
+type ReaderConfig = {
+  base: string;
+  realmId: string;
+  accessToken: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  // Cancels every request still in flight (the caller's own deadline).
+  signal?: AbortSignal;
+};
 
 export interface AttachmentReader {
   // Every file attached to this invoice, with what is needed to download it.
@@ -62,7 +70,7 @@ async function readCapped(res: Response, maxBytes: number): Promise<Uint8Array> 
 
 export function createHttpAttachmentReader(cfg: ReaderConfig): AttachmentReader {
   const doFetch = cfg.fetchImpl ?? fetch;
-  const signal = () => AbortSignal.timeout(cfg.timeoutMs ?? 15_000);
+  const signal = () => (cfg.signal ? AbortSignal.any([AbortSignal.timeout(cfg.timeoutMs ?? 15_000), cfg.signal]) : AbortSignal.timeout(cfg.timeoutMs ?? 15_000));
   const company = `${cfg.base}/v3/company/${cfg.realmId}`;
 
   return {
@@ -101,6 +109,8 @@ export function createHttpAttachmentReader(cfg: ReaderConfig): AttachmentReader 
       if (new URL(uri).protocol !== 'https:') throw new Error('the download link is not https');
       const res = await doFetch(uri, { cache: 'no-store', signal: signal() });
       if (!res.ok) throw new Error(`downloading the file: HTTP ${res.status}`);
+      // A redirect must not have led off https either.
+      if (res.url && !res.url.startsWith('https://')) { await res.body?.cancel(); throw new Error('the download was redirected away from https'); }
       return readCapped(res, maxBytes);
     },
   };

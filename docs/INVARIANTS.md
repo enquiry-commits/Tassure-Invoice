@@ -2511,51 +2511,90 @@ again.
 - **INV-QB-037** — For an invoice accounting has split (INV-QB-029), the PDF a
   client receives (the SOA PDF, an Email Drafts attachment, Billing Drafts'
   Save PDF — all through `getClientInvoicePdf`) is the ORIGINAL invoice
-  attached to it in QuickBooks when that file PROVES it is the original, else
-  the system's own redraw exactly as before. Why: 154 open invoices (~27%) are
-  split and were all redrawn; Vincent's stated purpose for the attachments
-  (INV-QB-036) was to avoid redrawing — "以后系统就能在QB 找到原本还没有拆开的
-  INVOICE". The proof is what the PDF prints (`lib/original-copy.ts`, text read
-  by `lib/pdf-text.ts`): the invoice number is on it, and the money printed on
-  it, counted as a multiset, equals the merged service amounts plus the invoice
-  total — no more, no less. The original prints a service once at its full
-  amount (700.00); QuickBooks' split version prints the parts (175.00, 525.00),
-  so the two cannot be confused; a file for another invoice, an older figure or
-  an extra amount fails too. Run with the production code on 20 real files
-  saved from QuickBooks on 2026-10-06: 8 of 8 attached copies of unsplit
-  invoices accepted, 12 of 12 current QuickBooks PDFs of split invoices
-  refused. Rules: (1) READ-ONLY — it lists an invoice's attachments and
-  downloads them; it never uploads, changes or deletes anything in QuickBooks,
-  and nothing here ever touches the company file server; (2) any doubt is the
-  redraw — no attachment, a file that fails the proof, an oversized or
-  unreadable file, a QuickBooks error or a 25 s timeout all give "none" and the
+  attached to it in QuickBooks when that file PROVES it is the original; the
+  system's redraw is the LAST choice. Vincent's order, 2026-10-06: "先找 QB,
+  QB不能去 Server, Server 找不到了 才重新画，这样准确度和失误率才是最优的" —
+  (1) the original attached in QuickBooks; (2) STAFF fetch it from the company
+  file server and attach it in QuickBooks by hand ("第一步还是要按照附件走，
+  没有附件的就从server 填进去，……以后大家都从系统开单就不会有这些问题了"); (3)
+  only then the system's redraw (INV-QB-029), or QuickBooks' own PDF with a
+  notice for an invoice the system cannot draw. Why: 154 open invoices (~27%)
+  are split and were all redrawn; the attachments (INV-QB-036) exist for this.
+  The file server is sensitive ("一个不小心删除错东西 都是很大的影响"; it is
+  not forbidden to staff, who also use it to replace a wrongly attached file):
+  nothing in the system and no Claude session reads or writes it. The proof
+  (`lib/original-copy.ts`; text, page count and Producer read by
+  `lib/pdf-text.ts`) has three parts, ALL required. WHAT THE FILE IS: its
+  Producer is not "Tassure" (the system's own drawing — what Save PDF gives and
+  what staff are used to attaching; read with pdf-lib's `updateMetadata: false`,
+  because by default pdf-lib overwrites the Producer with its own name), every
+  page was read and has text (the SOA merges ALL pages; a page that was never
+  read, or a picture, is not checked), and pdf-lib can load it (a file with an
+  owner password is read by pdf.js but refused by pdf-lib, and the invoice
+  would drop out of the SOA). WHOSE IT IS: the page says "INVOICE NO. :
+  <book> <number>" (not merely contains it: DN26-18 is not DN26-182, and a
+  credit note quoting the number is not the invoice), "DATE : <the invoice
+  date>" (not the due date), is billed to the customer (an invoice moved to
+  another customer, INV-QB-030), and has "TOTAL <amount>". WHAT IT PRINTS: the
+  money on the page, counted as a multiset, equals the invoice's line amounts
+  plus the total, with every Deferred twin folded into exactly ONE other line.
+  Any folding is accepted, not only the system's label pairing, because
+  accounting sometimes gives a twin the wrong service's label: TAB #02611114's
+  second "Deferred Revenue - Corp Sec" (50) sits under Registered Address (150)
+  and both services were split 3:1, so the original was Corp Sec 600 + Reg
+  Addr 200 where the label pairing gives 650 + 150; #02611078 (Fuyuan) the same
+  at 5:7 — the redraw shows 910 + 150 where the original was most likely 700 +
+  360 (the totals are right, the lines are not; see CURRENT_STATE). The split
+  version keeps its twins separate, so it is never on the list. Run with the
+  production code on 20 real files saved from QuickBooks on 2026-10-06 (dates
+  and customers taken from the synced rows, not from the PDF): 8 of 8 attached
+  invoices accepted, 12 of 12 current QuickBooks PDFs of split invoices refused
+  for their amounts (so every anchor was found on a real page), and the
+  system's own redraw refused by its Producer. History: the first version
+  (invoice number as a substring + the amounts) was reviewed by a council the
+  same day, which got 7 wrong files past it with the production code — the
+  system's own redraw, a file whose pages past the 6th were never read but
+  were merged into the SOA, a picture page, another client's invoice with the
+  same number, a credit note quoting it — and an owner-password file that
+  passed and then dropped its invoice out of the SOA; all are tests now.
+  Rules: (1) READ-ONLY — it lists an invoice's attachments and downloads them,
+  and never uploads, changes or deletes anything in QuickBooks; (2) any doubt
+  is the next choice down — no attachment, a file that fails the proof, an
+  unreadable one, a QuickBooks error or a timeout all give "none" and the
   invoice goes out as before, never as an error; (3) candidates are PDFs of at
-  most 5 MB with a download link: the system's own copy (its note, INV-QB-036)
-  first, then the newest hand-attached file, at most 4 per invoice; (4) only for
-  an invoice `buildClientInvoiceModel` says the system would draw (TAB/TAC,
-  exactly pairable) — an invoice with nothing to fold still goes out as
-  QuickBooks' own PDF; (5) the QuickBooks token is never sent to the download
-  link's host (the signed `TempDownloadUri` is the credential); (6) per-book
-  switch `ORIGINAL_COPY_LOOKUP_MODE` (TAB and TAC live, TAO off), and staff-only
-  views (invoice chips) still open QuickBooks' own PDF; (7) the two routes that
-  call it trace `pdf-parse` and `pdfjs-dist` (`next.config.ts`), because the
-  PDF reader's worker file is found at run time — the same reason as
-  `parse-bizfile`; the build's `.nft.json` for both routes lists it. How the
-  originals get into QuickBooks (Vincent, 2026-10-06: "第一步还是要按照附件走，
-  没有附件的就从server 填进去，……以后大家都从系统开单就不会有这些问题了"):
-  invoices the system creates attach theirs automatically (INV-QB-036); for the
-  ones that predate that, STAFF attach the original by hand, fetching it from
-  the company file server only where it cannot be found otherwise — the server
-  is sensitive ("一个不小心删除错东西 都是很大的影响"), so neither the system nor
-  any Claude session reads or writes it. State on 2026-10-06: none of the 154
-  open split invoices has an attachment yet, so every one is still redrawn
-  until staff attach originals. A wrong file attached by hand (the split
-  version saved from QuickBooks, another invoice's PDF) is never used — the
-  invoice is redrawn, so a mistaken attachment cannot reach a client, but it
-  does not help either; the Vercel log line "Attached original not used
-  (TAB #…): …" says why. Guarded by `test-original-copy.ts` (the proof on
-  synthetic and real PDFs, which file is chosen, the QuickBooks reader against
-  a fake fetch, and that `getClientInvoicePdf` looks BEFORE it redraws).
+  most 1 MB with a download link (real invoices are 80-260 KB; the SOA response
+  limit is 4.5 MB): the system's own copy (its note, INV-QB-036) first, then
+  the newest hand-attached file, at most 4; (4) it runs for EVERY invoice that
+  carries a Deferred line (TAB, TAC), ahead of both the redraw and QuickBooks'
+  split PDF for an invoice the system cannot draw; an invoice with nothing to
+  fold is not looked up and goes out as QuickBooks' own PDF; (5) the
+  QuickBooks token is never sent to the download link's host (the signed
+  `TempDownloadUri` is the credential), the link must be https and stay https
+  after redirects; (6) at most 15 s per invoice, the requests are cancelled at
+  the deadline, and after a QuickBooks failure or timeout no invoice is looked
+  up for 2 minutes (per server instance) so a customer's SOA cannot pile up 15
+  s per invoice; (7) logs name the attachment Id and the invoice number, never
+  a file name (file names carry client names); (8) per-book switch
+  `ORIGINAL_COPY_LOOKUP_MODE` (TAB and TAC live, TAO off); staff-only views
+  (invoice chips) still open QuickBooks' own PDF; (9) the two routes trace
+  `pdf-parse` and `pdfjs-dist` (`next.config.ts`; the build's `.nft.json` lists
+  `pdf.worker.mjs` for both) and have `maxDuration` (SOA 300, Save PDF 60).
+  Accepted, not covered: a file for the right invoice with the right number,
+  date, customer, amounts and total but different descriptions, terms or
+  address (edited in QuickBooks after the copy was attached — INV-QB-036
+  deliberately never refreshes a split invoice's copy) is used; descriptions
+  are not compared because accounting rewrites them when it splits. State on
+  2026-10-06: none of the 154 open split invoices has an attachment yet, so
+  every one is still redrawn until staff attach originals; the system's own
+  copies on three new invoices (#02611136, #02611140, TAC #02680325) show
+  INV-QB-036 works in production. Source tip from the council: the 60 split
+  invoices first emailed through the system went out from staff's Outlook
+  before the redraw existed, so Sent Items holds the PDF the client got — but
+  only the proof says whether a file is the original. Guarded by
+  `test-original-copy.ts` (94 checks: the proof on synthetic and generated PDFs,
+  which file is chosen, the QuickBooks reader against a fake fetch, that
+  `getClientInvoicePdf` looks BEFORE it redraws) and, with the safeguards
+  removed one at a time on a copy, every one of them fails the test.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
