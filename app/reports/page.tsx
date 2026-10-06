@@ -926,6 +926,7 @@ export default function ReportsPage() {
         />
       </div>
 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 16 }}>
       <Card title="Service Mix" eyebrow="Active Clients" icon={<BarChart3 size={16} />}>
         <HBars data={data.serviceMix} accent={COLORS.teal} labelWidth={110} />
       </Card>
@@ -942,6 +943,7 @@ export default function ReportsPage() {
             { label: 'Churned', color: COLORS.rose, data: data.flow.churnedTrend.map(p => p.value) },
           ]} />
       </Card>
+      </div>
 
       {/* Revenue and Invoice Count used to be overlaid on one chart on two
           DIFFERENT implicit scales — a real dual-axis chart, which good
@@ -953,6 +955,7 @@ export default function ReportsPage() {
           served by computing that ratio directly as its own single-axis
           series (average invoice value), not by cramming two raw numbers
           onto one plot. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 16 }}>
       <RevenuePerformanceCard yoy={data.revenue.comparableYoy} />
 
       <Card title="Revenue by Year" eyebrow="Billing" icon={<Wallet size={16} />} note={data.notes.revenue}>
@@ -962,6 +965,9 @@ export default function ReportsPage() {
         <VBars data={data.revenue.revenueTrendThousands} color={COLORS.gold} height={260}
           valueFormatter={v => formatCompactCurrency(v, { unitScale: 1000 })} />
       </Card>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: 16 }}>
       <Card title="Average Invoice Value by Year" eyebrow="Billing" icon={<Wallet size={16} />}
         note="Revenue ÷ invoice count for that year — rising even while invoice volume is flat means Tassure is billing more per invoice, not just billing more often.">
         <LineChart labels={data.revenue.years} height={260} valueFormatter={formatCompactCurrency}
@@ -980,6 +986,7 @@ export default function ReportsPage() {
           ? <HBars data={data.picWorkload} accent={COLORS.plum} labelWidth={140} />
           : <div style={{ padding: 20, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No open cycles.</div>}
       </Card>
+      </div>
 
       <ExploreSection companyRows={data.companyRows} exportHref="/api/reports/export" />
 
