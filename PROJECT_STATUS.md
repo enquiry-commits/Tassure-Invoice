@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-06 (FIXED: `test-company-lifecycle.ts` is green again. The Client Since work (adfcb1c) reads `relationship_contacts.is_active` — a different table — and the guard took it for a company-status read. Asked: Vincent — "都要修好", after the report that this test was failing.)
+
+**What changed.** The guard's "query filter on is_active/tw_status" rule now exempts `lib/relationship-contacts.ts` — that rule only, so destructuring, literals and every other rule still apply to the file. A new check keeps the exemption honest: it holds only while the file's `.from()` calls read nothing but `relationship_contacts`. **Verification.** `test-company-lifecycle.ts` ALL OK. Three negative controls, each restored afterwards: the file also reading `companies` fails the new check; a destructured `is_active` in that file still fails the scan; a real `companies` query filtering `is_active` in another file still fails the scan.
+
+Previous entry follows.
+
 Last updated: 2026-10-06 (FIXED: Company 360's yellow "QuickBooks invoice candidates were found by name search but none scored high enough" warning now appears only for a plausible near miss, and names the customer. Asked: Vincent — "上面的黄色字什么情况" on 1 MIDAS VENTURES PTE. LTD.; he chose "只在很像时才亮，并写出名字" via AskUserQuestion.)
 
 **What it was.** A false alarm for 1 Midas, a client added 2026-09-30 with no invoices yet: no synced QuickBooks customer name contains "midas". Company 360 searches QuickBooks customer names for the company's longest word — "ventures", not "midas" — found 5 unrelated companies (Higo, Lakefill, Agentic, Exclave, YHS Ventures; similarity 33–50, threshold 85), attached none (correct), and then warned because candidates existed. Replaying the rule over all 957 companies: 103 would warn, but only 2 are real near misses (75 each); 101 merely share a common word; and 60 companies with no invoices at all showed nothing — so the warning said nothing about whether invoices were missing.

@@ -335,8 +335,17 @@ const sourceFiles = ['app', 'lib', 'components'].flatMap(d => walk(join(ROOT, d)
   const MODULE = 'lib/company-lifecycle.ts';
   // Master List STATUS TEXT vocabulary (INV-DATA-067) — itself one shared module.
   const VOCAB = ['lib/master-list-status.ts'];
+  // Files whose own `is_active` is NOT the company-status column: a different
+  // table with a column of the same name. Exempt ONLY from the query-filter
+  // rule below, and only while the file provably reads nothing but that table
+  // (asserted after the scan) — the moment it touches a company table the
+  // exemption is void. Added 2026-10-06: the Client Since / Referred By work
+  // (adfcb1c) read relationship_contacts.is_active and the guard flagged it.
+  const OTHER_TABLE_IS_ACTIVE: Record<string, { table: string; why: string }> = {
+    'lib/relationship-contacts.ts': { table: 'relationship_contacts', why: 'a retired referrer/RM is is_active=false on its own contacts table' },
+  };
   const FORBIDDEN: Array<{ re: RegExp; why: string; except?: string[] }> = [
-    { re: /\.(eq|neq|is|not|in|ilike|like|filter|match|contains|gt|gte|lt|lte)\(\s*(['"`])(is_active|tw_status)\2/, why: 'query filter on is_active/tw_status — use onlyActiveCompanies() / onlyTeamworkActiveCompanies()' },
+    { re: /\.(eq|neq|is|not|in|ilike|like|filter|match|contains|gt|gte|lt|lte)\(\s*(['"`])(is_active|tw_status)\2/, why: 'query filter on is_active/tw_status — use onlyActiveCompanies() / onlyTeamworkActiveCompanies()', except: Object.keys(OTHER_TABLE_IS_ACTIVE) },
     { re: /\b(is_active|tw_status)\.(eq|neq|is|in|ilike|like|not|gt|gte|lt|lte)\./, why: 'PostgREST string filter on is_active/tw_status' },
     { re: /\.match\(\s*\{[^}]*\b(is_active|tw_status)\b/, why: '.match({…}) on is_active/tw_status' },
     { re: /\[\s*(['"`])(is_active|tw_status)\1\s*\]/, why: 'bracket access to is_active/tw_status' },
@@ -377,6 +386,11 @@ const sourceFiles = ['app', 'lib', 'components'].flatMap(d => walk(join(ROOT, d)
     });
   }
   check('no file outside lib/company-lifecycle.ts keeps its own lifecycle rule', violations.length === 0, `${violations.length} found:\n       ${violations.join('\n       ')}`);
+  for (const [rel, { table, why }] of Object.entries(OTHER_TABLE_IS_ACTIVE)) {
+    const tables = [...read(rel).matchAll(/\.from\(\s*(['"`])([a-z_]+)\1/g)].map(m => m[2]);
+    check(`${rel} is exempt from the is_active filter rule only because it reads nothing but ${table} (${why})`,
+      tables.length > 0 && tables.every(t => t === table), `reads: ${[...new Set(tables)].join(', ') || '(no .from() found)'}`);
+  }
   const drift = [...new Set([...Object.keys(readCounts), ...Object.keys(REVIEWED_READS)])].sort()
     .filter(f => (readCounts[f] ?? 0) !== (REVIEWED_READS[f]?.[0] ?? 0))
     .map(f => `${f}: ${readCounts[f] ?? 0} raw read(s), ${REVIEWED_READS[f]?.[0] ?? 0} reviewed${REVIEWED_READS[f] ? ` (${REVIEWED_READS[f][1]})` : ''}\n         ${(readLines[f] ?? []).join('\n         ')}`);
