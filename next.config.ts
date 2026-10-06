@@ -37,8 +37,13 @@ const nextConfig: NextConfig = {
       './node_modules/pdf-parse/**',
       './node_modules/pdfjs-dist/**',
     ],
-    // The Invoice Originals page opens attached PDFs the same way (INV-QB-037).
-    '/api/billing/originals/check': [
+    // The Invoice Originals queue opens attached PDFs, and its upload route reads
+    // the uploaded one, the same way (INV-QB-037).
+    '/api/billing/originals': [
+      './node_modules/pdf-parse/**',
+      './node_modules/pdfjs-dist/**',
+    ],
+    '/api/billing/originals/upload': [
       './node_modules/pdf-parse/**',
       './node_modules/pdfjs-dist/**',
     ],

@@ -2559,6 +2559,41 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Invoice Originals page redesigned into a to-do list with upload (INV-QB-037).**
+  Vincent, 2026-10-06 night: "Original in use ……有一点多此一举", then "我要的只是要确保有拿到原装的发票，
+  那些还没有拿到原装发票的，我是希望员工可以在这边更新就好，已经拿到原装发票的其实就已经不需要在
+  Invoice Originals 页面内了 ……真正要的是把那些找不到100%原装发票的，让员工可以在 Invoice Originals
+  页面内可以通过自己找到的原装发票再上传进去，达到确保确保的原装发票都能找出来，并且应用在整个系统内".
+  Billing System > Invoice Originals now lists ONLY the open invoices carrying a Deferred line that
+  have no original the system accepts (24 on 2026-10-07, all "nothing attached"; the 131 with an
+  original in use are only counted in the header — "Original in use", "Not opened yet" and "Open the
+  files" are gone, and so are the two read routes behind them). Each row has "Upload original": `POST
+  /api/billing/originals/upload` reads the LIVE invoice, answers "already" if it has an accepted
+  original, proves the file with the SAME `checkOriginalCopy` the SOA relies on, and only then attaches
+  it in QuickBooks (IncludeOnSend false, a server-built name, a Note with who / when / sha256, never
+  the system's copy note), confirming by running the real look-up — so the original is applied
+  everywhere (SOA, Email Drafts, Save PDF) the moment it passes, and the row leaves the list. A file
+  that fails the proof is refused with the reason and what to do and attaches NOTHING. The queue is
+  computed live per visit: batched invoice reads (`Id IN (…)`, 50 a time), one Term read and one
+  paged attachment read per book, facts from the new `prepareInvoiceForClient` shared with
+  `getClientInvoicePdf`, `selectVerifiedOriginal` on each invoice's files with 6 in flight, answers
+  remembered per server instance (key = invoice facts + files; a failed read is never remembered),
+  one invoice that cannot be judged is "not checked" and never hides the others. Real books, read
+  only: 21.7 s cold / 4.9 s remembered, 24 waiting / 131 done / 0 unknown; the real upload wiring
+  exercised on cases that cannot write (own original offered again → "already"; another invoice's
+  original, a picture-only file, a garbage PDF, a text file → refused with the right reason).
+  Both routes now check the "outstanding" page rule themselves (the earlier read routes only had the
+  sign-in check). Verification: `test-original-upload.ts` 34 (new), `test-original-status.ts` 64,
+  `test-original-copy.ts` 122, `test-account-access.ts`, `test-assistant-pages.ts`, `test-qb-attachments.ts`;
+  36 negative controls on a copy (each safeguard removed fails a test); tsc, eslint, `next build`;
+  the page driven in the Browser pane through a temporary harness (real payload, simulated upload
+  answers: refused / unconfirmed / failed / attached / already, a file over 1 MB, two uploads at
+  once, the empty state, a failed book) and removed again. **Open, for Vincent:** the 13 pictures and
+  5 restructured invoices cannot be uploaded past the proof and stay listed — a narrow confirm or OCR
+  path is not built (the 6 changed after sending must never be confirmable); the page cannot be
+  emptied for those until he decides. **Not verified:** a real upload (writes to QuickBooks — needs
+  an invoice he names), and Vercel running the PDF reader.
+
 - **End-to-end check: what the SOA really gets now (INV-QB-037).** Vincent, after the
   server round: "我们花了那么多时间，优化了一整天，最终的目的就是为了在SOA那边能合并到
   原装的发票" — so, instead of trusting the per-invoice confirmations, the REAL code was

@@ -2516,7 +2516,9 @@ again.
   QB不能去 Server, Server 找不到了 才重新画，这样准确度和失误率才是最优的" —
   (1) the original attached in QuickBooks; (2) STAFF fetch it from the company
   file server and attach it in QuickBooks by hand ("第一步还是要按照附件走，
-  没有附件的就从server 填进去，……以后大家都从系统开单就不会有这些问题了"); (3)
+  没有附件的就从server 填进去，……以后大家都从系统开单就不会有这些问题了" — since
+  2026-10-07 by uploading it on Billing System > Invoice Originals, which checks it
+  first, below); (3)
   only then the system's redraw (INV-QB-029), or QuickBooks' own PDF with a
   notice for an invoice the system cannot draw. Why: 154 open invoices (~27%)
   are split and were all redrawn; the attachments (INV-QB-036) exist for this.
@@ -2575,8 +2577,10 @@ again.
   were merged into the SOA, a picture page, another client's invoice with the
   same number, a credit note quoting it — and an owner-password file that
   passed and then dropped its invoice out of the SOA; all are tests now.
-  Rules: (1) READ-ONLY — it lists an invoice's attachments and downloads them,
-  and never uploads, changes or deletes anything in QuickBooks; (2) any doubt
+  Rules: (1) the LOOK-UP is read-only — it lists an invoice's attachments and
+  downloads them, and never uploads, changes or deletes anything in QuickBooks
+  (the only code that adds a file for it is the Invoice Originals upload, below:
+  it adds one attachment to one invoice and removes nothing); (2) any doubt
   is the next choice down — no attachment, a file that fails the proof, an
   unreadable one, a QuickBooks error or a timeout all give "none" and the
   invoice goes out as before, never as an error; (3) candidates are PDFs of at
@@ -2606,37 +2610,74 @@ again.
   的发票置入到QB的附件上"): the file server's invoice backup folders were READ (a directory
   listing and reading files, copied to a local folder — nothing on the server was
   written, moved or deleted) for the 155 open invoices that carry a Deferred line;
-  every one has a file named after its number; the proof accepted 127 and 127
-  (TAB 110, TAC 17) were attached to the invoice in QuickBooks — each against the LIVE
+  every one has a file named after its number; the proof accepted 127, and 4 more once it
+  ignored an invoice's exchange-rate footer (131 in all), and all 131 (TAB 113,
+  TAC 18) were attached to the invoice in QuickBooks — each against the LIVE
   invoice, with the server's file name, IncludeOnSend false and the Note "Original
   invoice PDF from the company file server, attached on 2026-10-06 after the system
   checked it …", then confirmed by the real look-up; the first alone (TAB #02611114,
-  byte-identical to the server file). The other 28 stay for a person: 13 are pictures
-  (no text), 9 were restructured by accounting after sending or print an exchange
-  rate, 3 totals and 3 dates were changed after sending — with their server paths in
+  byte-identical to the server file). The other 24 stay for a person: 13 are pictures
+  (no text), 5 were restructured by accounting after sending, 3 totals and 3
+  dates were changed after sending — with their server paths in
   `Server-round-originals-2026-10-06.xlsx`. The system's own copies on three new invoices
   (#02611136, #02611140, TAC #02680325) show INV-QB-036 works in production. Source tip from the council: the 60 split
   invoices first emailed through the system went out from staff's Outlook
   before the redraw existed, so Sent Items holds the PDF the client got — but
-  only the proof says whether a file is the original. Where staff see what the
-  system does with each invoice: Billing System > Invoice Originals
-  (`/billing/soa/originals`, built at Vincent's request after the council
-  recommended it) lists every open invoice carrying a Deferred line — "Original
-  in use", "Not used — redrawn" (each file with its reason and what to do),
-  "Nothing attached", "Not opened yet" — from the synced rows plus ONE paged
-  QuickBooks read per book; "Open files" opens the PDFs one invoice at a time,
-  on request, through the SAME `loadInvoiceForClient` and
-  `findOriginalInvoiceCopy` the real PDF path uses, so the page cannot say
-  something the PDF path would not do; a book QuickBooks cannot read is
-  "QuickBooks unavailable", never "Nothing attached"; it writes nothing (GET
-  routes only). It sits under `/billing/soa`, so the existing "outstanding"
-  page rule decides who sees it. Guarded by `test-original-copy.ts` (115
-  checks: the proof on synthetic and generated PDFs, which file is chosen and
+  only the proof says whether a file is the original. Where staff work on it: Billing System > Invoice Originals
+  (`/billing/soa/originals`) is the TO-DO LIST of the open invoices accounting
+  has split (they carry a Deferred line) that have NO original the system
+  accepts — and only those. An invoice whose original is in use is finished
+  work and is not listed (Vincent, 2026-10-06: "已经拿到原装发票的其实就已经不需要在
+  Invoice Originals 页面内了，因为没有意义"; the header only counts them). 24 on the
+  night of 2026-10-06, all "nothing attached". The queue is computed LIVE on
+  each visit by the SOA's own proof: the synced rows only name the candidates;
+  per book it reads the open invoices in batches (`Id IN (…)`, 50 at a time,
+  `lib/original-status-core.ts` invoicesByIdQuery), the payment terms once and
+  every attachment in one paged read, rebuilds each invoice's facts with the SAME
+  `prepareInvoiceForClient` that `getClientInvoicePdf` uses, and runs
+  `selectVerifiedOriginal` on its files — so the page can never list an invoice
+  the PDF path would serve its original nor hide one it would redraw. An invoice
+  paid, voided or no longer split since the last sync is not listed; a book (or
+  one invoice) QuickBooks cannot judge is reported as "not checked", never as
+  done and never as "nothing to do". Measured on the real books: 21.7 s cold
+  (155 invoices, 131 files opened and proven), 4.9 s when the answers are
+  remembered (in memory, per server instance, keyed by the invoice's facts AND its
+  files, so an edited invoice or a new or replaced file is asked again; a failed
+  download or read is never remembered). STAFF UPLOAD the original they found
+  (Outlook Sent Items, the file server) on its row: `POST
+  /api/billing/originals/upload` (the account must be able to open the page —
+  the proxy only checks sign-in on /api; TAB or TAC; one PDF of at most 1 MB)
+  reads the LIVE invoice and answers "already" when the invoice has an accepted
+  original (nothing is attached twice: a double click, or two people on the same
+  invoice) or "not-split" when it carries no Deferred line any more; otherwise it
+  proves the file against the live invoice with `checkOriginalCopy` — the same
+  proof, nothing waived — and only then attaches it (IncludeOnSend false, a name
+  built from the invoice and not from the person's file, and a Note that names who
+  uploaded it, when, and the file's sha256 — never the system's own copy note, which
+  the system replaces when an invoice is edited), then confirms it the way the SOA
+  reads: "attached" only when the real look-up now picks exactly that file
+  ("unconfirmed" otherwise, never rolled back). A file the proof does not accept
+  is refused with the reason and what to do and attaches NOTHING, so no wrong file
+  can be pushed through the page: the 13 pictures and the restructured invoices
+  cannot be uploaded past the proof, and stay listed until a file the proof
+  accepts is found (a confirm-anyway or OCR path for them is an OPEN QUESTION for
+  Vincent, not built; the 6 invoices changed after sending must never be
+  confirmable — the redraw is right for them). Nothing is ever removed or changed
+  in QuickBooks by the page; the upload is the ONLY write and adds one attachment
+  to one invoice. It sits under `/billing/soa`, so the existing "outstanding"
+  page rule decides who sees it, and both routes check that rule themselves.
+  Verified with the real code on the real books, read only: the queue (24 waiting,
+  131 done, 0 unknown), and the real upload wiring on cases that cannot write —
+  an invoice that already has its original ("already"), another invoice's real
+  original, a picture-only file, a garbage PDF and a text file offered for waiting
+  invoices (all refused with the right reason). Guarded by `test-original-copy.ts`
+  (122 checks: the proof on synthetic and generated PDFs, which file is chosen and
   what is said about each, the QuickBooks reader against a fake fetch, that
-  `getClientInvoicePdf` looks BEFORE it redraws) and `test-original-status.ts`
-  (38 checks: the list, the statuses, the staff hints, and that the page only
-  reads and shares the real path's code); with each safeguard removed one at a
-  time on a copy (16 + 12 of them), the test fails.
+  `getClientInvoicePdf` looks BEFORE it redraws), `test-original-upload.ts` (34:
+  every branch of the upload against fakes) and `test-original-status.ts` (64: the
+  queue, the batched read, the remembered answers, who may call, the page); with
+  each safeguard removed one at a time on a copy (36 of them for the queue,
+  the upload, the routes and the page, on top of the proof's own), the tests fail.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

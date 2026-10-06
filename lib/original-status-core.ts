@@ -1,15 +1,17 @@
-// The "Invoice originals" status page (app/billing/soa/originals/page.tsx):
-// which open invoices accounting has split already have their ORIGINAL attached
-// in QuickBooks and in use, which have a file the system refused (and why), and
-// which have nothing yet. Vincent's order is the original in QuickBooks first,
-// then staff fetch it from the file server and attach it, and the redraw last
-// (INV-QB-037) — this page is the work queue for that. Pure (no I/O); the
-// reading is lib/original-status.ts. The page only READS: it never attaches,
-// moves or deletes anything in QuickBooks.
+// The "Invoice Originals" page (app/billing/soa/originals/page.tsx): the work
+// queue of the open invoices accounting has split that still have NO original
+// the system accepts. Vincent's order is the original attached in QuickBooks,
+// then staff find it (Outlook Sent Items, the file server) and attach it, and
+// the redraw last (INV-QB-037) — an invoice whose original is already in use
+// is finished work and is not listed (Vincent, 2026-10-06: "已经拿到原装发票的
+// 其实就已经不需要在 Invoice Originals 页面内了"). Staff upload the original
+// they found on the page itself (lib/original-upload.ts).
+//
+// Pure (no I/O); the reading is lib/original-status.ts.
 
 import { isDeferredItem } from './deferred-pairing';
 import { INVOICE_COPY_NOTE } from './quickbooks-attachments';
-import { isPdfFile, type AttachmentFile, type OriginalCopyResult, type TriedAttachment } from './original-copy';
+import { isPdfFile, type AttachmentFile, type InvoiceFacts, type OriginalCopyResult, type TriedAttachment } from './original-copy';
 
 export type OriginalStatusRow = {
   company: 'TAB' | 'TAC' | 'TAO';
@@ -62,68 +64,85 @@ export function summarizeFile(f: AttachmentFile): FileSummary {
   };
 }
 
-// From the overview (no file opened yet): nothing attached / attached but no PDF
-// / at least one PDF, which has to be opened to know whether it is the original.
-export type ScanState = 'nothing' | 'no-pdf' | 'has-pdf';
-export function scanState(files: readonly FileSummary[]): ScanState {
-  if (!files.length) return 'nothing';
-  return files.some(f => f.pdf) ? 'has-pdf' : 'no-pdf';
+// ── the queue ────────────────────────────────────────────────────────────
+
+// Why an invoice is still waiting: nothing is attached, only files that are not
+// PDFs are, or PDFs are attached and the proof did not accept any of them.
+export type QueueState = 'nothing' | 'no-pdf' | 'refused';
+
+export type QueueRow = OriginalStatusRow & {
+  state: QueueState;
+  // Every file attached to the invoice and what the look-up did with it, with the
+  // reason (lib/original-copy.ts) — a file that is not a PDF included.
+  tried: TriedAttachment[];
+};
+
+// The queue entry for one invoice, or null when its original is in use (done).
+// `result` is the answer of the SAME look-up the SOA uses (selectVerifiedOriginal).
+export function queueRowFor(row: OriginalStatusRow, files: readonly AttachmentFile[], result: OriginalCopyResult): QueueRow | null {
+  if ('found' in result) return null;
+  const state: QueueState = !files.length ? 'nothing' : files.some(isPdfFile) ? 'refused' : 'no-pdf';
+  return { ...row, state, tried: result.tried };
 }
 
-// What the page shows for one row, from what is known so far: the overview
-// (no file opened), the answer of opening the files, or neither yet.
-export type RowStatus = 'scanning' | 'nothing' | 'no-pdf' | 'to-check' | 'checking' | 'using' | 'refused' | 'unavailable' | 'not-split' | 'failed';
+export type QueueResult = {
+  rows: QueueRow[];
+  // Open split invoices whose original is in use (not listed).
+  done: number;
+  // Invoices of a book QuickBooks could not be read for — not known either way, so not listed.
+  unknown: number;
+  errors: Partial<Record<'TAB' | 'TAC' | 'TAO', string>>;
+  generatedAt: string;
+};
 
-export function rowStatus(known: { scanLoaded: boolean; scanError?: string; scan?: ScanState; verdict?: OriginalVerdict | 'checking' | { failed: string } }): RowStatus {
-  const v = known.verdict;
-  if (v === 'checking') return 'checking';
-  if (v && 'failed' in v) return 'failed';
-  if (v) return v.verdict;
-  if (!known.scanLoaded) return 'scanning';
-  if (known.scanError || !known.scan) return 'unavailable';
-  return known.scan === 'has-pdf' ? 'to-check' : known.scan;
+// Ids for one batched QuickBooks read (SELECT … WHERE Id IN (…)): numeric only,
+// so nothing but digits ever reaches the query text.
+export function invoicesByIdQuery(ids: readonly string[]): string {
+  if (!ids.length) throw new Error('no invoice ids to read');
+  for (const id of ids) if (!/^\d+$/.test(id)) throw new Error(`"${id}" is not a QuickBooks id`);
+  return `SELECT * FROM Invoice WHERE Id IN (${ids.map(id => `'${id}'`).join(',')}) MAXRESULTS 1000`;
+}
+
+export function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+// Runs fn over items with at most `limit` in flight; the results keep the order of the items.
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
+// What a look-up's answer depends on: the invoice as it is NOW and the files
+// attached to it. The same key means the same answer, so an answer is reused
+// until either changes (an edited invoice or a new file gets a new key).
+export function verdictKey(company: string, invoiceId: string, facts: InvoiceFacts, files: readonly AttachmentFile[]): string {
+  const filesPart = [...files].map(f => `${f.Id}:${f.Size ?? ''}:${f.CreateTime ?? ''}:${f.FileName ?? ''}`).sort().join(',');
+  return `${company}|${invoiceId}|${JSON.stringify(facts)}|${filesPart}`;
 }
 
 // What to do about a refused file, in words staff can act on — the reasons come
 // from lib/original-copy.ts (exact, but written for the logs and the tests).
 export function hintForReason(reason: string): string | null {
-  if (/company letterhead/.test(reason)) return 'This file was not printed by QuickBooks (it may be the Save PDF file saved again). Attach the PDF QuickBooks printed when the invoice was sent.';
-  if (/system's own drawing/.test(reason)) return 'Do not use the Save PDF file. Attach the PDF the way QuickBooks printed it when the invoice was sent.';
-  if (/amounts are not/.test(reason)) return 'This looks like the split version, or another version of the invoice. Attach the PDF the client first received.';
-  if (/pages and only|has no text/.test(reason)) return 'Attach one normal PDF of this invoice only — not a scan, a picture or several invoices in one file.';
-  if (/encrypted|password|could not be read|is not a PDF|not a PDF/i.test(reason)) return 'Attach a normal PDF without a password.';
-  if (/is not dated|does not say "TOTAL/.test(reason)) return 'The invoice was changed after this PDF was made (its date or total no longer matches). Find out which version the client received before attaching anything.';
+  if (/company letterhead/.test(reason)) return 'This file was not printed by QuickBooks (it may be the Save PDF file saved again). Find the PDF QuickBooks printed when the invoice was sent.';
+  if (/system's own drawing/.test(reason)) return 'This is the Save PDF file, not the original. Find the PDF QuickBooks printed when the invoice was sent.';
+  if (/amounts are not/.test(reason)) return 'This looks like the split version, or another version of the invoice. Find the PDF the client first received.';
+  if (/pages and only|has no text/.test(reason)) return 'Use one normal PDF of this invoice only — not a scan, a picture or several invoices in one file. A scanned or photographed copy cannot be checked.';
+  if (/not a PDF/.test(reason)) return 'Only a PDF file is used — upload the invoice as a PDF, not a picture or another kind of file.';
+  if (/encrypted|password|could not be read/i.test(reason)) return 'Use a normal PDF without a password.';
+  if (/is not dated|does not say "TOTAL/.test(reason)) return 'The invoice was changed after this PDF was made (its date or total no longer matches). Find out which version the client received before using any file.';
   if (/INVOICE NO|is not billed to/.test(reason)) return 'This is not the PDF of this invoice — check its invoice number and customer.';
-  if (/larger than/.test(reason)) return 'An invoice PDF is well under 1 MB — attach the PDF QuickBooks printed, not a scan.';
+  if (/larger than/.test(reason)) return 'An invoice PDF is well under 1 MB — use the PDF QuickBooks printed, not a scan.';
   return null;
-}
-
-// The answer of opening the files (what getClientInvoicePdf would do).
-export type OriginalVerdict = {
-  verdict: 'using' | 'refused' | 'nothing' | 'unavailable' | 'not-split';
-  summary: string;
-  files: TriedAttachment[];
-};
-
-export function verdictFromResult(result: OriginalCopyResult): OriginalVerdict {
-  if ('found' in result) {
-    const used = result.tried.find(t => t.outcome === 'used');
-    return {
-      verdict: 'using',
-      summary: `Using the attached original${used ? ` (${used.bySystem ? 'attached by the system' : 'attached by hand'})` : ''}.`,
-      files: result.tried,
-    };
-  }
-  if (result.trouble) return { verdict: 'unavailable', summary: `QuickBooks could not be asked: ${result.none}`, files: result.tried };
-  if (!result.tried.length) {
-    // The look-up is switched off for the book, or the invoice could not be asked about.
-    return /not looked up|not connected|not a QuickBooks invoice id/.test(result.none)
-      ? { verdict: 'unavailable', summary: result.none, files: [] }
-      : { verdict: 'nothing', summary: 'Nothing is attached to this invoice in QuickBooks.', files: [] };
-  }
-  return {
-    verdict: 'refused',
-    summary: 'Files are attached, but none is accepted as the original — the system redraws this invoice.',
-    files: result.tried,
-  };
 }

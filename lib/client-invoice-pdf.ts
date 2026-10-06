@@ -66,14 +66,24 @@ async function termName(company: QbCompany, termId: unknown): Promise<string | n
 // original of it must match (lib/original-copy.ts). ONE copy of this, used by
 // getClientInvoicePdf and by the status page (lib/original-status.ts), so the
 // page can never say something the real PDF path would not do.
-export async function loadInvoiceForClient(company: QbCompany, invoiceId: string) {
-  const result = await qbQuery(`SELECT * FROM Invoice WHERE Id = '${invoiceId}'`, company);
-  const invoice = result?.rows?.[0] as (QbInvoiceJson & { SalesTermRef?: { value?: string } }) | undefined;
-  if (!invoice) return null;
-  const decision = buildClientInvoiceModel(invoice, company, invoice.SalesTermRef?.value ? await termName(company, invoice.SalesTermRef.value) : null);
+export type LiveInvoice = QbInvoiceJson & { SalesTermRef?: { value?: string } };
+
+// The decision and the facts for an invoice ALREADY read from QuickBooks
+// (terms: the name of its payment terms). The one place they are derived, so
+// reading invoices one at a time (here) or many at once (the Invoice Originals
+// queue, lib/original-status.ts) can never disagree.
+export function prepareInvoiceForClient(company: QbCompany, invoice: LiveInvoice, terms: string | null) {
+  const decision = buildClientInvoiceModel(invoice, company, terms);
   // facts is null when nothing is split (QuickBooks' own PDF is then right).
   const facts = invoiceFacts(invoice, company, decision.kind === 'system' ? decision.model.rows.map(r => r.amount) : undefined);
   return { invoice, decision, facts };
+}
+
+export async function loadInvoiceForClient(company: QbCompany, invoiceId: string) {
+  const result = await qbQuery(`SELECT * FROM Invoice WHERE Id = '${invoiceId}'`, company);
+  const invoice = result?.rows?.[0] as LiveInvoice | undefined;
+  if (!invoice) return null;
+  return prepareInvoiceForClient(company, invoice, invoice.SalesTermRef?.value ? await termName(company, invoice.SalesTermRef.value) : null);
 }
 
 export async function getClientInvoicePdf(company: QbCompany, invoiceId: string): Promise<ClientInvoicePdf> {
