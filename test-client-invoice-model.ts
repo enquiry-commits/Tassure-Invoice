@@ -117,6 +117,35 @@ console.log('\n--- drawing ---');
     const helvetica = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
     const viewerWidth = [...latinText].reduce((w, ch) => w + helvetica.widthOfTextAtSize(ch, 10), 0);
     check('the Chinese character after English text starts where a viewer ends that text (no overlap)', !!latin && !!bracket && viewerWidth - helvetica.widthOfTextAtSize(latinText, 10) > 1 && Math.abs(bracket.x - latin.x - viewerWidth) < 0.01, latin && bracket ? `gap ${(bracket.x - latin.x).toFixed(2)} vs text ${viewerWidth.toFixed(2)}` : 'runs not found');
+
+    // BILL TO wraps like QuickBooks' own template. TAC #02680202's real
+    // BillAddr is ONE long line, which the first live version drew straight
+    // through the DATE / DUE DATE column (facts start at x=407.8).
+    const ownAssets = { header: asset('tab', 'header'), footer: asset('tab', 'footer'), qr: asset('tab', 'qr'), cjkFont: async () => ttf };
+    const billToShows = async (billTo: string[]) => {
+      const doc = await PDFDocument.load(await renderClientInvoicePdf({ ...d1.model, billTo }, ownAssets));
+      const node = doc.getPage(0).node.Contents();
+      const stream = (node instanceof PDFArray ? node.asArray().map(r => doc.context.lookup(r)) : [node]).map(s => Buffer.from(decodePDFRawStream(s as PDFRawStream).decode()).toString('latin1')).join('\n');
+      return [...stream.matchAll(/\/(\S+?)-\d+ [\d.]+ Tf\s+[\d.]+ TL\s+1 0 0 1 ([\d.]+) ([\d.]+) Tm\s+<([0-9A-F]+)> Tj/g)]
+        .map(m => ({ font: m[1], x: Number(m[2]), top: 792 - Number(m[3]) - 8, text: Buffer.from(m[4], 'hex').toString('latin1') }));
+    };
+    const widthOfLatin = (s: string) => [...s].reduce((w, ch) => w + helvetica.widthOfTextAtSize(ch, 10), 0);
+    const realAddress = 'No.999,Guangming Road ,Economic Development Zone ,Jianhu ,Yancheng city ,Jiangsu Province ,China  zip code:224700';
+    // BILL TO lines sit exactly at x=39.3 (service rows are at 46.5, notes at 46.4).
+    const leftColumn = (all: Awaited<ReturnType<typeof billToShows>>) => all.filter(s => s.font === 'Helvetica' && Math.abs(s.x - 39.3) < 0.05 && s.top > 190);
+    const wrappedAddr = leftColumn(await billToShows(['Jiangsu Sunmoon Lighting Co., Ltd.', realAddress]));
+    check('a one-line address wraps instead of running into the invoice facts', wrappedAddr.length === 3 && wrappedAddr.every(s => s.x + widthOfLatin(s.text) <= 395), wrappedAddr.map(s => `${s.text.length} chars → x1 ${(s.x + widthOfLatin(s.text)).toFixed(0)}`).join('; '));
+    check('wrapping loses no text (the address reads back whole)', wrappedAddr.slice(1).map(s => s.text).join(' ').replace(/\s+/g, ' ') === realAddress.replace(/\s+/g, ' '));
+    const longName = 'NEXORA NEXUS PTE. LTD. (F.K.A. ASIA BLOCKCHAIN INDUSTRY INSTITUTE PTE. LTD.)';
+    const wrappedName = leftColumn(await billToShows([longName]));
+    check('a very long customer name wraps too', wrappedName.length >= 2 && wrappedName.every(s => s.x + widthOfLatin(s.text) <= 395) && wrappedName.map(s => s.text).join(' ') === longName, wrappedName.map(s => s.text).join(' | '));
+    const shortLines = leftColumn(await billToShows(['1X EXCHANGE PTE. LTD.', '10 Anson Road #12-08 International Plaza Singapore 079903']));
+    check('a normal name and address stay on one line each (nothing changes for them)', shortLines.length === 2 && shortLines[1].text.endsWith('079903'));
+    const fiveLong = ['A'.repeat(3), ...Array.from({ length: 4 }, () => realAddress)];
+    const tall = await billToShows(fiveLong);
+    const barText = tall.find(s => s.text === 'DESCRIPTION');
+    const lastBillTo = Math.max(...leftColumn(tall).map(s => s.top));
+    check('the DESCRIPTION bar moves down below a tall BILL TO block', !!barText && barText.top >= lastBillTo + 8 && barText.top > 250, `bar text at ${barText?.top.toFixed(1)}, last BILL TO line at ${lastBillTo.toFixed(1)}`);
   }
   console.log(`\n=== ${fail === 0 ? 'ALL PASSED' : `${fail} FAILURE(S)`} ===`);
   process.exit(fail === 0 ? 0 : 1);

@@ -2517,6 +2517,22 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Client invoice PDF: long BILL TO addresses no longer run through the
+  invoice facts (INV-QB-029).** While checking whether TAC #02680202
+  (江苏日月照明电器有限公司) really prints its Chinese name in production —
+  council item, read-only QuickBooks query with TAC's still-valid token —
+  its real BillAddr turned out to be one 113-character line, which the live
+  renderer drew unwrapped across the DATE / DUE DATE column and off the
+  margin (QuickBooks' own PDF wraps it). In production since the PDF went
+  live on 2026-10-05; the synced-data census couldn't see it (no BillAddr).
+  BILL TO lines now wrap at 355pt and the DESCRIPTION bar moves down with
+  them. Output unchanged for all 152 synced-data invoices; new checks in
+  `test-client-invoice-model.ts` (address, long name, normal lines
+  untouched, bar position) fail on the old renderer. Measured live: TAC 1 of
+  24 open split invoices affected; TAB's 130 can't be measured until TAB's
+  QuickBooks token (expired 5 hours ago) is refreshed by the app. Staff
+  should check any #02680202 email already sent.
+
 - **SOA PDF downloads work for Chinese-named clients (INV-DOC-022).** Vincent
   clicked 思店科技(杭州)有限公司's "TAB TAC" badge and it turned red: the
   route put the client's name into the `Content-Disposition` filename and

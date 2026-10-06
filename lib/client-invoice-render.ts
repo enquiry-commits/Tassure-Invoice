@@ -61,6 +61,11 @@ const RIGHT = 578;
 const AMOUNT_RIGHT = 568;
 const DESC_X = 46.5;
 const DESC_MAX_W = 405;
+// BILL TO lines wrap here, like QuickBooks' own template does (its TAC
+// #02680202 wraps a one-line address at x≈386): the invoice facts start at
+// x=407.8, so a long customer name or an address jammed into one line
+// (BillAddr.Line1) must not run on into them.
+const BILL_TO_MAX_W = 355;
 const FOOTER_TOP = 742;
 const CONTENT_BOTTOM = 735;
 const HEADER = { top: 15, height: 115 };
@@ -110,7 +115,8 @@ async function drawClientInvoicePdf(model: ClientInvoiceModel, assets: ClientInv
   page.drawImage(header, { x: 0, y: PAGE_H - HEADER.top - HEADER.height, width: PAGE_W, height: HEADER.height });
   text('INVOICE', LEFT, 142, { font: bold, size: 22, color: C.purple });
   text('BILL TO:', LEFT, 179.2, { color: C.dark });
-  model.billTo.forEach((line, i) => text(line, LEFT, 191.4 + i * LINE, { color: C.black }));
+  const billToLines = model.billTo.flatMap(line => wrapText(line, s => chinese.widthOf(s, regular, SIZE), BILL_TO_MAX_W));
+  billToLines.forEach((line, i) => text(line, LEFT, 191.4 + i * LINE, { color: C.black }));
   const facts: [string, string][] = [['INVOICE NO.', model.invoiceNo], ['TERMS', model.terms], ['DATE', model.date], ['DUE DATE', model.dueDate]];
   facts.forEach(([label, value], i) => {
     text(label, 407.8, 179.2 + i * LINE, { color: C.body });
@@ -118,7 +124,7 @@ async function drawClientInvoicePdf(model: ClientInvoiceModel, assets: ClientInv
   });
 
   // DESCRIPTION / AMOUNT bar, then one row per service.
-  const barTop = Math.max(248.8, 191.4 + model.billTo.length * LINE + 8);
+  const barTop = Math.max(248.8, 191.4 + billToLines.length * LINE + 8);
   page.drawRectangle({ x: LEFT, y: PAGE_H - barTop - 16.6, width: RIGHT - LEFT, height: 16.6, color: C.bar });
   text('DESCRIPTION', DESC_X, barTop + 2.2, { font: bold, color: C.white });
   text('AMOUNT (S$)', AMOUNT_RIGHT, barTop + 2.2, { font: bold, color: C.white, alignRight: true });

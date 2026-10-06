@@ -2306,7 +2306,18 @@ again.
   before, 137 have byte-identical page content and 1 wraps one word earlier,
   same line count). Render census over the 154 open split invoices
   (read-only, synced lines): 152 drawn (132 one page, 20 two), 2 model
-  fallbacks, 0 refused. Per-book switch `CLIENT_INVOICE_PDF_MODE`: TAB and TAC
+  fallbacks, 0 refused. BILL TO lines WRAP at 355pt (the invoice facts start
+  at x=407.8), like QuickBooks' own template: the first live version drew
+  every line unwrapped, and TAC #02680202's real BillAddr — the whole
+  address in ONE `Line1`, which QuickBooks data commonly has — ran straight
+  through the DATE / DUE DATE column and off the page margin. Found
+  2026-10-06 by rendering a LIVE invoice (read-only QuickBooks query, token
+  not refreshed): the census above could not see it because synced rows
+  carry no BillAddr, and the three real PDFs compared by eye had short
+  addresses. A census of a drawing rule needs the live field that drives
+  it. Open split invoices affected: TAC 1 of 24 (#02680202); TAB's 130 can
+  only be measured live once TAB's token is fresh. Per-book switch
+  `CLIENT_INVOICE_PDF_MODE`: TAB and TAC
   'live' since 2026-10-05 (Vincent approved real samples side by side —
   1X EXCHANGE TAB #02611112, Advance CF TAC #02680320); set a book back to
   'off' to send QuickBooks' PDF again.

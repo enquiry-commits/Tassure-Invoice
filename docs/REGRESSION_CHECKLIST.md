@@ -492,6 +492,9 @@ invoice with no Deferred line is QuickBooks' own PDF, unchanged. (5) A
 Chinese-named client's split invoice (e.g. 江苏日月照明电器有限公司, TAC
 #02680202) prints the Chinese name in BILL TO — no amber note, no blank or
 boxed characters, English on the same line in the same font as the rest.
+(6) That same invoice's long one-line address wraps onto a second line and
+stays clear of the DATE / DUE DATE column on the right (it ran through it
+until 2026-10-06).
 **Guards:** `docs/INVARIANTS.md` INV-QB-029.
 
 ### REG-033 — TAO builder offers every QuickBooks TAO item with its description (after ANY change to `lib/tao-services.ts`, `components/billing/TaoInvoiceBuilder.tsx`, the TAO branch of create-invoice, or `getItemMap`)
