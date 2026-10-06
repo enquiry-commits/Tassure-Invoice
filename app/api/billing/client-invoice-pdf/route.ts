@@ -13,6 +13,9 @@ import type { QbCompany } from '@/lib/quickbooks';
 // Signed-in only (proxy.ts guards every /api route).
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
+// A split invoice first looks for its original among the files attached in
+// QuickBooks (INV-QB-037), which adds a few QuickBooks calls.
+export const maxDuration = 60;
 
 const BOOKS = new Set<QbCompany>(['TAB', 'TAC', 'TAO']);
 

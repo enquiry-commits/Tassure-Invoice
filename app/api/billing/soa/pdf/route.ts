@@ -142,6 +142,11 @@ const COMPANY_SELECTORS: CompanySelector[] = ['TAB', 'TAC', 'TAO', 'ALL'];
 // Any throw while the PDF is built answers as JSON so the page can show what
 // went wrong — a bare 500 only ever read "Unable to generate the combined
 // PDF" and gave staff nothing to report (the red badge of 2026-10-05).
+// A split invoice now also looks for its original among the files attached in
+// QuickBooks (list + download + read, INV-QB-037) before it is redrawn, one
+// invoice after another — room for a customer with many of them.
+export const maxDuration = 300;
+
 export async function GET(req: NextRequest) {
   try {
     return await buildSoaPdf(req);

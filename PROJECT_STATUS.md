@@ -2559,6 +2559,33 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Split invoices go out as their ORIGINAL when it is attached in QuickBooks
+  (INV-QB-037).** Vincent's purpose for the attachments (INV-QB-036) was that
+  the system can find the original, unsplit invoice in QuickBooks instead of
+  redrawing the ~27%. Built the reading side: for an invoice accounting has
+  split, `getClientInvoicePdf` (SOA PDF, Email Drafts, Save PDF) lists its
+  QuickBooks attachments, downloads the candidate PDFs (the system's copy
+  first, then the newest hand-attached; at most 4, at most 5 MB) and reads
+  their text; a file is used only if it PROVES it is the original — the
+  invoice number is on it and the money printed on it is exactly the merged
+  service amounts plus the total (the original prints 700.00, the split version
+  175.00 + 525.00, so they cannot be confused). Otherwise the redraw, exactly
+  as before; any failure (no file, wrong file, unreadable, QuickBooks slow or
+  down, 25 s) is "none", never an error. Run with the production code on the 20
+  real files saved earlier: 8 of 8 attached copies of unsplit invoices
+  accepted, 12 of 12 QuickBooks PDFs of split invoices refused. Read-only —
+  nothing is written to QuickBooks, and the company file server is never
+  touched: Vincent's plan is that STAFF attach the original in QuickBooks, from
+  the server only where it cannot be found otherwise ("第一步还是要按照附件走，
+  没有附件的就从server 填进去"), and invoices made in the system attach
+  themselves from now on. `test-original-copy.ts` (61 checks), the related
+  suites, `npx tsc --noEmit`, eslint and `next build` all clean; the build's
+  trace for both routes lists `pdf.worker.mjs`. Both routes got `maxDuration`
+  (SOA 300, Save PDF 60) for the extra QuickBooks calls. **Not verified:** a
+  real run on the deployed site (the PDF reader's worker file — REG-039). No
+  split invoice has an attachment yet, so nothing changes for a client until
+  staff attach originals.
+
 - **Invoice copies: never touch an invoice accounting has already split
   (INV-QB-036 rule 7), plus what was found about using them for the SOA.**
   Vincent: the point of attaching copies is that the system can later find

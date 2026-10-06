@@ -529,6 +529,10 @@ Run `npx tsx test-postgrest-or.ts` (`ALL PASSED`). Then signed in, type `500 DUR
 Run `npx tsx test-qb-attachments.ts` (`ALL PASSED`). Then signed in, Billing Drafts: generate an invoice (and one in the TAO builder) — the result line ends "invoice copy attached in QuickBooks". Open that invoice in QuickBooks: Attachments holds ONE file named like Save PDF's (`INV<no>-<customer>-S$<amount>.pdf`). Edit its lines in the editor and save — the message says its copy in QuickBooks was refreshed, and Attachments still holds one file (the new one); a file attached by hand next to it is untouched. If QuickBooks refuses the file, the result line shows a ⚠ naming the book and the reason, and the invoice itself is fine.
 **Guards:** `docs/INVARIANTS.md` INV-QB-036, INV-QB-029, INV-QB-009.
 
+### REG-039 — A split invoice goes out as its original when one is attached in QuickBooks (after ANY change to `lib/original-copy.ts`, `lib/pdf-text.ts`, `lib/quickbooks-original-copy.ts`, `lib/quickbooks-attachments-http.ts`, `lib/client-invoice-pdf.ts`, or the `pdf-parse` tracing in `next.config.ts`)
+Run `npx tsx test-original-copy.ts` (`ALL PASSED`). Then on the DEPLOYED site (the PDF reader's worker file only exists there): take ONE open split invoice (two lines in QuickBooks: the service and "Deferred Revenue …"), have staff attach its original PDF to it in QuickBooks, and download that customer's SOA PDF — the invoice inside shows the service ONCE at its full amount, and it is the attached file (QuickBooks' own letterhead and layout, not the system's drawing); Draft Email and Save PDF give the same file. On a second split invoice attach the SPLIT version (or another invoice's PDF): the SOA still shows the system's redraw, and the Vercel log has "Attached original not used (…)" naming the reason. An invoice with nothing attached is unchanged. If a good attachment still comes out redrawn, read that log line first — "Setting up fake worker failed" means `pdf.worker.mjs` is missing from the function (the `next.config.ts` tracing).
+**Guards:** `docs/INVARIANTS.md` INV-QB-037, INV-QB-029, INV-QB-036.
+
 ---
 
 ## Automation priority

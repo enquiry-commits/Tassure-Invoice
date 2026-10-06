@@ -23,12 +23,19 @@ const nextConfig: NextConfig = {
       './templates/post-incorporate/**',
     ],
     // The client invoice PDF's letterhead / banner / PayNow QR images
-    // (lib/client-invoice-pdf.ts reads them from disk at request time).
+    // (lib/client-invoice-pdf.ts reads them from disk at request time), and
+    // pdf-parse + pdfjs-dist for reading the original invoice attached in
+    // QuickBooks (lib/pdf-text.ts, INV-QB-037) — same worker-path reason as
+    // parse-bizfile below.
     '/api/billing/client-invoice-pdf': [
       './templates/client-invoice/**',
+      './node_modules/pdf-parse/**',
+      './node_modules/pdfjs-dist/**',
     ],
     '/api/billing/soa/pdf': [
       './templates/client-invoice/**',
+      './node_modules/pdf-parse/**',
+      './node_modules/pdfjs-dist/**',
     ],
     // pdfjs-dist (used by pdf-parse internally, and directly by
     // lib/bizfile-parse.ts for coordinate-based table extraction) resolves
