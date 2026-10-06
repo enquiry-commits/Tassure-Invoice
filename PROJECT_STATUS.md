@@ -7132,3 +7132,14 @@ a reviewer can check it before anything is created.
   "please enter the accurate Client Since" reminder while client_since is empty
   but Master List has an unusable join date (YES / 2020 / 24/0/2023 / impossible
   dates).
+- 2026-10-06 Reports "Explore" redesign (Vincent: first-time users couldn't tell
+  how to use it; council of 3 reviewers): numbered flow — ① Quick views (New
+  clients this year [default, company list], By referrer / RM / industry /
+  company type / customer source / Secretary PIC), ② Adjust (Group by, Count,
+  Client Since month range, "Only include" filters, removable active-filter
+  chips + Clear all), ③ Results (Summary tab + Company list tab, Reset).
+  Export now follows the screen: `POST /api/reports/export` with the shown
+  company ids (GET still exports the whole active roster). Open drill-down
+  resets whenever filters/grouping change. KNOWN, not changed: Explore counts
+  every `companies` row (~957, incl. inactive) while the KPI cards count active
+  clients only (~911) — the old note said "active"; flagged to Vincent.

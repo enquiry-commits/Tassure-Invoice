@@ -25,7 +25,24 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
+// GET exports the whole active roster. POST (from the Explore panel's
+// "Export these N" button, 2026-10-06) exports exactly the company ids the
+// user is looking at — the screen's own selection, not re-derived here — so the
+// file's rows always equal the on-screen count.
 export async function GET(req: NextRequest) {
+  return handle(req, null);
+}
+
+export async function POST(req: NextRequest) {
+  let body: { ids?: unknown };
+  try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 }); }
+  if (!Array.isArray(body.ids) || body.ids.length > 5000 || !body.ids.every(v => Number.isInteger(v))) {
+    return NextResponse.json({ error: 'ids must be an array of company ids' }, { status: 400 });
+  }
+  return handle(req, new Set(body.ids as number[]));
+}
+
+async function handle(req: NextRequest, ids: Set<number> | null) {
   const account = await getRequestAccount(req);
   if (!account) return NextResponse.json({ error: 'Approved login account required' }, { status: 401 });
   if (!account.canViewReports) return NextResponse.json({ error: 'Your account cannot export Reports.' }, { status: 403 });
@@ -39,7 +56,7 @@ export async function GET(req: NextRequest) {
     ]);
 
     const rows = buildReportsCompanyRows(companies, masterList, contactNames)
-      .filter(r => r.isActive)
+      .filter(r => (ids ? ids.has(r.id) : r.isActive))
       .map(r => ({
         companyName: r.companyName,
         uen: r.uen,
@@ -62,7 +79,7 @@ export async function GET(req: NextRequest) {
       }));
 
     const file = await buildWorkbook(
-      [{ name: 'Active Clients', rows, columns: REPORTS_EXPORT_COLUMNS }],
+      [{ name: ids ? 'Selected Companies' : 'Active Clients', rows, columns: REPORTS_EXPORT_COLUMNS }],
       { title: 'Tassure Reports Export', subject: 'Active client dataset for Reports' },
     );
     const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date());

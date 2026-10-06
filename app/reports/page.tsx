@@ -224,15 +224,79 @@ function matchesFilters(row: CompanyRow, filters: FilterState, exceptDim: Dimens
 
 type DrillDown = { label: string; rows: CompanyRow[] };
 
+// Plain-language names for the "count" choices (the old dropdown said
+// "Has XBRL", which read like a filter, not a number).
+const METRIC_LABELS: Record<MetricKey, string> = {
+  count: 'Number of companies',
+  usesAddress: 'Companies using Address service',
+  hasNd: 'Companies with Nominee Director',
+  hasAgm: 'Companies with AGM',
+  hasXbrl: 'Companies with XBRL',
+  hasAccounts: 'Companies with Accounts',
+  hasTax: 'Companies with Tax',
+};
+
+// Quick views (2026-10-06) — one click sets group-by, filters and the
+// result tab together, so nobody has to know the controls to get an answer.
+type ExploreView = 'summary' | 'list';
+type Preset = { id: string; label: string; hint: string; dimension: DimensionKey; view: ExploreView; sinceFrom?: () => string };
+const thisYearStart = () => `${new Date().getFullYear()}-01`;
+const PRESETS: Preset[] = [
+  { id: 'new', label: 'New clients this year', hint: 'Every company that became a client this year, with who referred it and its RM', dimension: 'referrer', view: 'list', sinceFrom: thisYearStart },
+  { id: 'referrer', label: 'By referrer', hint: 'How many clients each referrer brought in', dimension: 'referrer', view: 'summary' },
+  { id: 'rm', label: 'By RM', hint: 'How many clients each Relationship Manager looks after', dimension: 'rm', view: 'summary' },
+  { id: 'industry', label: 'By industry', hint: 'Clients by SSIC industry', dimension: 'ssic', view: 'summary' },
+  { id: 'type', label: 'By company type', hint: 'Clients by legal entity type', dimension: 'companyType', view: 'summary' },
+  { id: 'source', label: 'By customer source', hint: 'Where clients came from', dimension: 'customerSource', view: 'summary' },
+  { id: 'pic', label: 'By Secretary PIC', hint: 'Workload per secretary', dimension: 'pic', view: 'summary' },
+];
+const DEFAULT_PRESET = PRESETS[0];
+
+const TH: React.CSSProperties = { textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' };
+const STEP_LABEL: React.CSSProperties = { fontSize: 11, color: '#64748b', fontWeight: 700 };
+const SELECT_STYLE: React.CSSProperties = { fontSize: 13, padding: '6px 8px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff' };
+
 function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]; exportHref: string }) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
-  const [dimension, setDimension] = useState<DimensionKey>('companyType');
+  const [sinceFrom, setSinceFrom] = useState(DEFAULT_PRESET.sinceFrom?.() ?? '');
+  const [sinceTo, setSinceTo] = useState('');
+  const [dimension, setDimension] = useState<DimensionKey>(DEFAULT_PRESET.dimension);
   const [metric, setMetric] = useState<MetricKey>('count');
+  const [view, setView] = useState<ExploreView>(DEFAULT_PRESET.view);
+  const [presetId, setPresetId] = useState<string | null>(DEFAULT_PRESET.id);
   const [drilldown, setDrilldown] = useState<DrillDown | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  function applyPreset(p: Preset) {
+    setFilters(EMPTY_FILTERS);
+    setSinceFrom(p.sinceFrom?.() ?? '');
+    setSinceTo('');
+    setDimension(p.dimension);
+    setMetric('count');
+    setView(p.view);
+    setPresetId(p.id);
+  }
+  // Any manual change means the highlighted quick view no longer describes the screen.
+  const edited = () => setPresetId(null);
+
+  // Whatever the user changes, a drill-down opened for the OLD result is stale.
+  useEffect(() => { setDrilldown(null); }, [filters, sinceFrom, sinceTo, dimension, metric]);
 
   const activeDim = DIMENSIONS.find(d => d.key === dimension)!;
-  const filteredRows = useMemo(() => companyRows.filter(r => matchesFilters(r, filters, null)), [companyRows, filters]);
+  const matchesAll = (row: CompanyRow, exceptDim: DimensionKey | null) => {
+    if (!matchesFilters(row, filters, exceptDim)) return false;
+    if (sinceFrom || sinceTo) {
+      const m = row.clientSince?.slice(0, 7);
+      if (!m) return false;
+      if (sinceFrom && m < sinceFrom) return false;
+      if (sinceTo && m > sinceTo) return false;
+    }
+    return true;
+  };
+  const filteredRows = useMemo(() => companyRows.filter(r => matchesAll(r, null)), [companyRows, filters, sinceFrom, sinceTo]); // eslint-disable-line react-hooks/exhaustive-deps
   const metricRows = useMemo(() => metric === 'count' ? filteredRows : filteredRows.filter(r => r[metric]), [filteredRows, metric]);
+  const listRows = useMemo(() => [...metricRows].sort((a, b) => (b.clientSince ?? '').localeCompare(a.clientSince ?? '') || a.companyName.localeCompare(b.companyName)), [metricRows]);
 
   const pivot = useMemo(() => {
     const rowsByValue = new Map<string, CompanyRow[]>();
@@ -262,7 +326,7 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
     const counts = new Map<string, number>();
     const def = DIMENSIONS.find(d => d.key === dim)!;
     for (const r of companyRows) {
-      if (!matchesFilters(r, filters, dim)) continue;
+      if (!matchesAll(r, dim)) continue;
       const v = def.value(r);
       counts.set(v, (counts.get(v) ?? 0) + 1);
     }
@@ -270,104 +334,222 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
   };
 
   const drillPagination = usePagination(drilldown?.rows ?? [], drilldown?.label ?? null);
+  const listPagination = usePagination(listRows, `${dimension}|${metric}|${sinceFrom}|${sinceTo}|${listRows.length}`);
+
+  // Active-filter chips: what is currently narrowing the result, each removable.
+  const chips: { key: string; text: string; clear: () => void }[] = [];
+  if (sinceFrom || sinceTo) {
+    chips.push({ key: 'since', text: `Client Since: ${sinceFrom || 'any'} → ${sinceTo || 'now'}`, clear: () => { setSinceFrom(''); setSinceTo(''); edited(); } });
+  }
+  for (const d of DIMENSIONS) {
+    const sel = filters[d.key];
+    if (sel !== null) chips.push({ key: d.key, text: `${d.label}: ${sel.size} selected`, clear: () => { setFilters(f => ({ ...f, [d.key]: null })); edited(); } });
+  }
+  const clearAll = () => { setFilters(EMPTY_FILTERS); setSinceFrom(''); setSinceTo(''); edited(); };
+
+  // Export follows the screen: posts the ids currently shown, so the file has
+  // exactly the companies on screen (the old link always exported everyone).
+  async function exportShown() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const res = await fetch(exportHref, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: metricRows.map(r => r.id) }) });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Tassure-Reports-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const sentence = `${pivotTotal} ${pivotTotal === 1 ? 'company' : 'companies'}`
+    + (metric !== 'count' ? ` (${METRIC_LABELS[metric].toLowerCase()})` : '')
+    + (view === 'summary' ? ` · grouped by ${activeDim.label}` : '');
+  const tabStyle = (on: boolean): React.CSSProperties => ({
+    fontSize: 12.5, fontWeight: 700, padding: '7px 14px', cursor: 'pointer', background: 'none', border: 'none',
+    borderBottom: `2px solid ${on ? COLORS.teal : 'transparent'}`, color: on ? COLORS.ink : '#94a3b8',
+  });
 
   return (
     <Card
       title="Explore"
       eyebrow="Custom Analysis"
       icon={<Compass size={16} />}
-      note="Group-by counts here are computed live from every active client — change a filter or dimension and everything below updates instantly, no page reload."
+      note="Start with a Quick view. Want something different? Change ‘Group by’ or add filters in step 2 — the results update instantly."
     >
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, alignItems: 'center' }}>
-        {DIMENSIONS.map(d => (
-          <DimensionFilterMenu key={d.key} label={d.label} options={filterOptions(d.key)} selected={filters[d.key]}
-            onApply={next => setFilters(f => ({ ...f, [d.key]: next }))} />
-        ))}
-        <a href={exportHref} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: '#fff', background: COLORS.teal, borderRadius: 7, padding: '6px 12px', textDecoration: 'none' }}>
-          <Download size={12} />Export .xlsx
-        </a>
+      {/* Step 1 */}
+      <div style={{ ...STEP_LABEL, marginBottom: 6 }}>① QUICK VIEWS — click one to start</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+        {PRESETS.map(p => {
+          const on = presetId === p.id;
+          return (
+            <button key={p.id} title={p.hint} onClick={() => applyPreset(p)}
+              style={{ fontSize: 12.5, fontWeight: 700, padding: '7px 14px', borderRadius: 999, cursor: 'pointer', border: `1px solid ${on ? COLORS.teal : '#e2e8f0'}`, background: on ? COLORS.teal : '#fff', color: on ? '#fff' : '#334155' }}>
+              {p.label}
+            </button>
+          );
+        })}
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 18 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#64748b', fontWeight: 700 }}>
-          GROUP BY
-          <select value={dimension} onChange={e => setDimension(e.target.value as DimensionKey)}
-            style={{ fontSize: 13, padding: '6px 8px', borderRadius: 7, border: '1px solid #e2e8f0', minWidth: 180 }}>
+      {/* Step 2 */}
+      <div style={{ ...STEP_LABEL, marginBottom: 6 }}>② ADJUST (optional)</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end', marginBottom: 12 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
+          Group by
+          <select value={dimension} onChange={e => { setDimension(e.target.value as DimensionKey); setView('summary'); edited(); }} style={{ ...SELECT_STYLE, minWidth: 190 }}>
             {DIMENSIONS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
           </select>
         </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: '#64748b', fontWeight: 700 }}>
-          METRIC
-          <select value={metric} onChange={e => setMetric(e.target.value as MetricKey)}
-            style={{ fontSize: 13, padding: '6px 8px', borderRadius: 7, border: '1px solid #e2e8f0', minWidth: 200 }}>
-            {METRICS.map(m => <option key={m.key} value={m.key}>{m.label}</option>)}
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
+          Count
+          <select value={metric} onChange={e => { setMetric(e.target.value as MetricKey); edited(); }} style={{ ...SELECT_STYLE, minWidth: 230 }}>
+            {METRICS.map(m => <option key={m.key} value={m.key}>{METRIC_LABELS[m.key]}</option>)}
           </select>
         </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
+          Client Since — from
+          <input type="month" value={sinceFrom} onChange={e => { setSinceFrom(e.target.value); edited(); }} style={SELECT_STYLE} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
+          to
+          <input type="month" value={sinceTo} onChange={e => { setSinceTo(e.target.value); edited(); }} style={SELECT_STYLE} />
+        </label>
       </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1fr) minmax(260px,1.3fr)', gap: 24, alignItems: 'start' }}>
-        <div>{pivot.length <= 8 ? <Donut segments={chartData} size={160} thickness={24} /> : <HBars data={chartData} accent={COLORS.teal} labelWidth={140} />}</div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>{activeDim.label}</th>
-                <th style={{ textAlign: 'right', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>Count</th>
-                <th style={{ textAlign: 'right', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pivot.map(p => (
-                <tr key={p.value} onClick={() => setDrilldown({ label: p.value, rows: p.rows })}
-                  style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
-                  <td style={{ padding: '6px 8px', color: '#334155' }}>{p.value}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{p.count}</td>
-                  <td style={{ padding: '6px 8px', textAlign: 'right', color: '#94a3b8' }}>{pivotTotal ? Math.round((p.count / pivotTotal) * 100) : 0}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+        <span style={STEP_LABEL}>Only include:</span>
+        {DIMENSIONS.filter(d => d.key !== 'clientSince').map(d => (
+          <DimensionFilterMenu key={d.key} label={d.label} options={filterOptions(d.key)} selected={filters[d.key]}
+            onApply={next => { setFilters(f => ({ ...f, [d.key]: next })); edited(); }} />
+        ))}
+      </div>
+      {chips.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+          <span style={STEP_LABEL}>Active filters:</span>
+          {chips.map(c => (
+            <span key={c.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', borderRadius: 999, padding: '3px 6px 3px 10px' }}>
+              {c.text}
+              <button onClick={c.clear} aria-label={`Remove ${c.text}`} style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0 }}><X size={12} /></button>
+            </span>
+          ))}
+          <button onClick={clearAll} style={{ fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Clear all</button>
         </div>
-      </div>
+      )}
 
-      {drilldown && (
-        <div style={{ marginTop: 20, borderTop: '1px solid #f1f5f9', paddingTop: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.ink }}>{drilldown.label} — {drilldown.rows.length} companies</span>
-            <button onClick={() => setDrilldown(null)} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}>
-              <X size={12} />Close
-            </button>
-          </div>
+      {/* Step 3 */}
+      <div style={{ ...STEP_LABEL, margin: '18px 0 6px' }}>③ RESULTS</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderBottom: '1px solid #e2e8f0', marginBottom: 14 }}>
+        <button style={tabStyle(view === 'summary')} onClick={() => setView('summary')}>Summary by {activeDim.label}</button>
+        <button style={tabStyle(view === 'list')} onClick={() => setView('list')}>Company list ({pivotTotal})</button>
+        <span style={{ fontSize: 12, color: '#64748b' }}>{sentence}</span>
+        <button onClick={() => applyPreset(DEFAULT_PRESET)} style={{ marginLeft: 'auto', fontSize: 11.5, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Reset</button>
+        <button onClick={exportShown} disabled={exporting || pivotTotal === 0} title="Downloads exactly the companies counted here"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: '#fff', background: COLORS.teal, borderRadius: 7, padding: '6px 12px', border: 'none', cursor: pivotTotal === 0 ? 'not-allowed' : 'pointer', opacity: pivotTotal === 0 ? 0.5 : 1, marginBottom: 6 }}>
+          <Download size={12} />{exporting ? 'Preparing…' : `Export these ${pivotTotal} (.xlsx)`}
+        </button>
+      </div>
+      {exportError && <div style={{ fontSize: 12, color: '#b45f6b', marginBottom: 8 }}>{exportError}</div>}
+
+      {pivotTotal === 0 ? (
+        <div style={{ padding: '28px 0', textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+          No companies match these filters.{' '}
+          {chips.length > 0 && <button onClick={clearAll} style={{ color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Clear all filters</button>}
+        </div>
+      ) : view === 'list' ? (
+        <>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>Company</th>
-                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>UEN</th>
-                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>Client Since</th>
-                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>Referred By</th>
-                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>RM (Relationship Manager)</th>
+                  {['Company', 'Client Since', 'Referred By', 'RM (Relationship Manager)', 'Customer Source'].map(h => <th key={h} style={TH}>{h}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {drillPagination.pageItems.map(r => (
+                {listPagination.pageItems.map(r => (
                   <tr key={r.id} style={{ borderBottom: '1px solid #f8fafc' }}>
-                    <td style={{ padding: '6px 8px' }}>
-                      <Link href={`/companies/${r.id}`} style={{ color: COLORS.blue, textDecoration: 'none' }}>{r.companyName}</Link>
-                    </td>
-                    <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.uen || '—'}</td>
+                    <td style={{ padding: '6px 8px' }}><Link href={`/companies/${r.id}`} style={{ color: COLORS.blue, textDecoration: 'none' }}>{r.companyName}</Link></td>
                     <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.clientSince || '—'}</td>
                     <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.referrerName || '—'}</td>
                     <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.rmName || '—'}</td>
+                    <td style={{ padding: '6px 8px', color: '#64748b' }}>{customerSourceLabel(r.customerSource)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <PaginationBar page={drillPagination.page} totalPages={drillPagination.totalPages} total={drillPagination.total} startIndex={drillPagination.startIndex} pageCount={drillPagination.pageItems.length} onPage={drillPagination.setPage} />
-        </div>
+          <PaginationBar page={listPagination.page} totalPages={listPagination.totalPages} total={listPagination.total} startIndex={listPagination.startIndex} pageCount={listPagination.pageItems.length} onPage={listPagination.setPage} />
+        </>
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1fr) minmax(260px,1.3fr)', gap: 24, alignItems: 'start' }}>
+            <div>{pivot.length <= 8 ? <Donut segments={chartData} size={160} thickness={24} /> : <HBars data={chartData} accent={COLORS.teal} labelWidth={140} />}</div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={TH}>{activeDim.label}</th>
+                    <th style={{ ...TH, textAlign: 'right' }}>{metric === 'count' ? 'Companies' : METRIC_LABELS[metric]}</th>
+                    <th style={{ ...TH, textAlign: 'right' }}>% of results</th>
+                    <th style={{ ...TH, textAlign: 'right' }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {pivot.map(p => (
+                    <tr key={p.value} onClick={() => setDrilldown({ label: p.value, rows: p.rows })}
+                      style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', background: drilldown?.label === p.value ? '#f1f5f9' : 'transparent' }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+                      onMouseLeave={e => (e.currentTarget.style.background = drilldown?.label === p.value ? '#f1f5f9' : 'transparent')}>
+                      <td style={{ padding: '6px 8px', color: '#334155' }}>{p.value}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{p.count}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', color: '#94a3b8' }}>{pivotTotal ? Math.round((p.count / pivotTotal) * 100) : 0}%</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', color: COLORS.blue, fontSize: 11.5, whiteSpace: 'nowrap' }}>View companies →</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {drilldown && (
+            <div style={{ marginTop: 20, borderTop: '1px solid #f1f5f9', paddingTop: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.ink }}>{drilldown.label} — {drilldown.rows.length} companies</span>
+                <button onClick={() => setDrilldown(null)} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}>
+                  <X size={12} />Close
+                </button>
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                      {['Company', 'UEN', 'Client Since', 'Referred By', 'RM (Relationship Manager)'].map(h => <th key={h} style={TH}>{h}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drillPagination.pageItems.map(r => (
+                      <tr key={r.id} style={{ borderBottom: '1px solid #f8fafc' }}>
+                        <td style={{ padding: '6px 8px' }}>
+                          <Link href={`/companies/${r.id}`} style={{ color: COLORS.blue, textDecoration: 'none' }}>{r.companyName}</Link>
+                        </td>
+                        <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.uen || '—'}</td>
+                        <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.clientSince || '—'}</td>
+                        <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.referrerName || '—'}</td>
+                        <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.rmName || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <PaginationBar page={drillPagination.page} totalPages={drillPagination.totalPages} total={drillPagination.total} startIndex={drillPagination.startIndex} pageCount={drillPagination.pageItems.length} onPage={drillPagination.setPage} />
+            </div>
+          )}
+        </>
       )}
     </Card>
   );
