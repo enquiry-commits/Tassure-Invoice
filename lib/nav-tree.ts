@@ -60,8 +60,6 @@ export const NAV_TREE: NavNode[] = [
   {
     id: 'billing', label: 'Billing System', img: '/nav/billing.png',
     children: [
-      { label: 'Nominee Directors', href: '/nominee-directors' },
-      { label: 'Address Service', href: '/address-service' },
       { label: 'AR Reminder', href: '/billing?tab=ar' },
       { label: 'Late Filing', href: '/late-filing' },
       { label: 'Quotation', href: '/billing/quotation' },
@@ -84,6 +82,8 @@ export const NAV_TREE: NavNode[] = [
       // Which split invoices have their original attached in QuickBooks (INV-QB-037).
       // Under /billing/soa so the existing "outstanding" page rule covers it.
       { label: 'Invoice Originals', href: '/billing/soa/originals' },
+      { label: 'Nominee Directors', href: '/nominee-directors' },
+      { label: 'Address Service', href: '/address-service' },
       {
         id: 'client-communications', label: 'Email Status',
         children: [
