@@ -34,6 +34,7 @@ export type ReportsCompanyRow = {
   clientSince: string | null;
   referrerName: string | null;
   rmName: string | null;
+  clientSinceNote: string | null;
   usesAddress: boolean | null;
   hasNd: boolean | null;
   hasAgm: boolean | null;
@@ -69,6 +70,7 @@ export function buildReportsCompanyRows(companies: CompanyRaw[], masterList: Mas
       joinDate: uen ? (joinDateByUen.get(uen) ?? null) : null,
       clientSince: typeof c.client_since === 'string' ? c.client_since.slice(0, 10) : null,
       referrerName: contactNameById && typeof c.referrer_contact_id === 'number' ? (contactNameById.get(c.referrer_contact_id) ?? null) : null,
+      clientSinceNote: (c.client_since_note as string | null) ?? null,
       rmName: contactNameById && typeof c.rm_contact_id === 'number' ? (contactNameById.get(c.rm_contact_id) ?? null) : null,
       usesAddress: (c.uses_address as boolean | null) ?? null,
       hasNd: (c.has_nd as boolean | null) ?? null,
@@ -83,7 +85,7 @@ export function buildReportsCompanyRows(companies: CompanyRaw[], masterList: Mas
 // The companies.* columns buildReportsCompanyRows needs — both callers
 // (route.ts, export/route.ts) select exactly this so the shape always
 // matches what this function reads.
-export const REPORTS_COMPANY_SELECT = 'id, company_name, registration_no, company_type, ssic_description_1, customer_source, tw_status, pic, is_active, uses_address, has_nd, has_agm, has_xbrl, has_accounts, has_tax, client_since, referrer_contact_id, rm_contact_id';
+export const REPORTS_COMPANY_SELECT = 'id, company_name, registration_no, company_type, ssic_description_1, customer_source, tw_status, pic, is_active, uses_address, has_nd, has_agm, has_xbrl, has_accounts, has_tax, client_since, referrer_contact_id, rm_contact_id, client_since_note';
 export const REPORTS_MASTER_LIST_SELECT = 'roc_no, join_date';
 
 // Extracted 2026-09-09 from app/api/reports/route.ts's own inline

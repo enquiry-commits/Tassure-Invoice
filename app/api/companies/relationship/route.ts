@@ -9,6 +9,7 @@ const COLUMN_BY_FIELD = {
   clientSince: 'client_since',
   referrerContactId: 'referrer_contact_id',
   rmContactId: 'rm_contact_id',
+  clientSinceNote: 'client_since_note',
 } as const;
 type Field = keyof typeof COLUMN_BY_FIELD;
 
@@ -22,7 +23,12 @@ export async function PATCH(req: NextRequest) {
 
   let stored: string | number | null = null;
   if (value !== null && value !== '') {
-    if (field === 'clientSince') {
+    if (field === 'clientSinceNote') {
+      if (typeof value !== 'string') return NextResponse.json({ error: 'clientSinceNote must be text or null' }, { status: 400 });
+      const note = value.trim();
+      if (note.length > 300) return NextResponse.json({ error: 'note too long (max 300 characters)' }, { status: 400 });
+      stored = note || null;
+    } else if (field === 'clientSince') {
       const ok = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00Z`).getTime());
       if (!ok) return NextResponse.json({ error: 'clientSince must be a valid YYYY-MM-DD date' }, { status: 400 });
       stored = value;

@@ -7,24 +7,27 @@ import { useEffect, useState } from 'react';
 // share one people list (/api/relationship-contacts) so a partner added once
 // is selectable in both. Names come back title-cased from the server.
 type Contact = { id: number; name: string; kind: 'internal' | 'external' };
-type Field = 'clientSince' | 'referrerContactId' | 'rmContactId';
+type Field = 'clientSince' | 'clientSinceNote' | 'referrerContactId' | 'rmContactId';
 
 const LABEL_STYLE = { fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 } as const;
 const INPUT_STYLE = { fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f' } as const;
 const ADD_NEW = '__add_new__';
 
-export default function RelationshipFields({ companyId, masterListJoinDates, initialClientSince, initialReferrerId, initialRmId }: {
+export default function RelationshipFields({ companyId, masterListJoinDates, initialClientSince, initialClientSinceNote, initialReferrerId, initialRmId }: {
   companyId: number;
   // Raw master_list.join_date text for this company — only used to remind
   // staff when Client Since is still empty because that text couldn't be
   // turned into a date ("YES", "2020", "31 Apr 2025", two conflicting dates...).
   masterListJoinDates: string[];
   initialClientSince: string | null;
+  initialClientSinceNote: string | null;
   initialReferrerId: number | null;
   initialRmId: number | null;
 }) {
   const [contacts, setContacts] = useState<Contact[] | null>(null);
   const [clientSince, setClientSince] = useState(initialClientSince ?? '');
+  const [note, setNote] = useState(initialClientSinceNote ?? '');
+  const [savedNote, setSavedNote] = useState(initialClientSinceNote ?? '');
   const [referrerId, setReferrerId] = useState<number | null>(initialReferrerId);
   const [rmId, setRmId] = useState<number | null>(initialRmId);
   const [saving, setSaving] = useState<Field | null>(null);
@@ -66,6 +69,11 @@ export default function RelationshipFields({ companyId, masterListJoinDates, ini
     const prev = clientSince;
     setClientSince(next);
     if (!(await save('clientSince', next || null))) setClientSince(prev);
+  }
+
+  async function saveNote() {
+    if (note.trim() === savedNote) return;
+    if (await save('clientSinceNote', note.trim() || null)) setSavedNote(note.trim());
   }
 
   async function changeContact(field: 'referrerContactId' | 'rmContactId', raw: string) {
@@ -162,6 +170,19 @@ export default function RelationshipFields({ companyId, masterListJoinDates, ini
         </div>
         {picker('referrerContactId', 'Referred By', referrerId)}
         {picker('rmContactId', 'RM', rmId)}
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <div style={LABEL_STYLE}>Client Since Note</div>
+        <input
+          value={note}
+          disabled={saving === 'clientSinceNote'}
+          onChange={e => setNote(e.target.value)}
+          onBlur={saveNote}
+          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          placeholder="e.g. Re-joined — earlier engagement terminated"
+          maxLength={300}
+          style={{ ...INPUT_STYLE, width: '100%', maxWidth: 560 }}
+        />
       </div>
       {!clientSince && masterListJoinDates.length > 0 && (
         <div style={{ marginTop: 8, fontSize: 11.5, color: '#92600a', background: '#fff8e6', border: '1px solid #f3e0b0', borderRadius: 6, padding: '6px 10px' }}>

@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
         clientSince: r.clientSince,
         referrerName: r.referrerName,
         rmName: r.rmName,
+        clientSinceNote: r.clientSinceNote,
       }));
 
     const file = await buildWorkbook(

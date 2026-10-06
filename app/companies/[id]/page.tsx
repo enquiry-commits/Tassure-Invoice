@@ -147,6 +147,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             masterListJoinDates={[...new Set(masterList.map(r => String((r as Record<string, unknown>).join_date ?? '').trim()).filter(Boolean))]}
             companyId={company.id}
             initialClientSince={company.clientSince}
+            initialClientSinceNote={company.clientSinceNote}
             initialReferrerId={company.referrerContactId}
             initialRmId={company.rmContactId}
           />

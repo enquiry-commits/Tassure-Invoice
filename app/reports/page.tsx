@@ -30,7 +30,7 @@ type CompanyRow = {
   id: number; companyName: string; uen: string | null; companyType: string | null;
   ssicDescription1: string | null; customerSource: string | null; twStatus: string | null;
   pic: string | null; isActive: boolean | null; joinDate: string | null;
-  clientSince: string | null; referrerName: string | null; rmName: string | null;
+  clientSince: string | null; referrerName: string | null; rmName: string | null; clientSinceNote: string | null;
   usesAddress: boolean | null; hasNd: boolean | null; hasAgm: boolean | null;
   hasXbrl: boolean | null; hasAccounts: boolean | null; hasTax: boolean | null;
 };

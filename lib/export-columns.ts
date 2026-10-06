@@ -117,6 +117,7 @@ export const REPORTS_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'clientSince', label: 'Client Since', width: 14, format: 'date' },
   { key: 'referrerName', label: 'Referred By', width: 22 },
   { key: 'rmName', label: 'RM', width: 22 },
+  { key: 'clientSinceNote', label: 'Client Since Note', width: 42 },
 ];
 
 function formatCell(raw: unknown, format: ExportColumn['format']): string {

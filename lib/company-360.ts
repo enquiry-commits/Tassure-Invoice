@@ -79,6 +79,7 @@ export type Company360 = {
     clientSince: string | null;
     referrerContactId: number | null;
     rmContactId: number | null;
+    clientSinceNote: string | null;
     // SSIC (added 2026-09-03) — synced by teamwork/sync-secretary from
     // TeamWork's own "Principal Activities" table (lib/teamwork-company-
     // profile.ts). Activity 2 fields are null for a company with only one
@@ -346,6 +347,7 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
       clientSince: (companyRow.client_since as string | null) ?? null,
       referrerContactId: (companyRow.referrer_contact_id as number | null) ?? null,
       rmContactId: (companyRow.rm_contact_id as number | null) ?? null,
+      clientSinceNote: (companyRow.client_since_note as string | null) ?? null,
       ssicCode1: (companyRow.ssic_code_1 as string | null) ?? null,
       ssicDescription1: (companyRow.ssic_description_1 as string | null) ?? null,
       ssicCode2: (companyRow.ssic_code_2 as string | null) ?? null,
