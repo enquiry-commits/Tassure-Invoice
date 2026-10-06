@@ -13,8 +13,12 @@ const LABEL_STYLE = { fontSize: 10, fontWeight: 700, color: '#94a3b8', textTrans
 const INPUT_STYLE = { fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f' } as const;
 const ADD_NEW = '__add_new__';
 
-export default function RelationshipFields({ companyId, initialClientSince, initialReferrerId, initialRmId }: {
+export default function RelationshipFields({ companyId, masterListJoinDates, initialClientSince, initialReferrerId, initialRmId }: {
   companyId: number;
+  // Raw master_list.join_date text for this company — only used to remind
+  // staff when Client Since is still empty because that text couldn't be
+  // turned into a date ("YES", "2020", "31 Apr 2025", two conflicting dates...).
+  masterListJoinDates: string[];
   initialClientSince: string | null;
   initialReferrerId: number | null;
   initialRmId: number | null;
@@ -159,6 +163,11 @@ export default function RelationshipFields({ companyId, initialClientSince, init
         {picker('referrerContactId', 'Referred By', referrerId)}
         {picker('rmContactId', 'RM', rmId)}
       </div>
+      {!clientSince && masterListJoinDates.length > 0 && (
+        <div style={{ marginTop: 8, fontSize: 11.5, color: '#92600a', background: '#fff8e6', border: '1px solid #f3e0b0', borderRadius: 6, padding: '6px 10px' }}>
+          Please enter the accurate Client Since date — Master List join date is &ldquo;{masterListJoinDates.join('” / “')}&rdquo;, which can&apos;t be used as a date{masterListJoinDates.length > 1 ? ' (conflicting dates)' : ''}.
+        </div>
+      )}
       {error && <div style={{ marginTop: 6, fontSize: 11, color: '#b45f6b' }}>{error}</div>}
     </div>
   );
