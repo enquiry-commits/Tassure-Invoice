@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useCustomerSource } from './CustomerSourceContext';
 
 // Company 360's client-relationship row: Client Since / Referred By / RM.
 // Saves each field on change via /api/companies/relationship; the two pickers
@@ -13,7 +14,10 @@ const LABEL_STYLE = { fontSize: 10, fontWeight: 700, color: '#94a3b8', textTrans
 const INPUT_STYLE = { fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f' } as const;
 const ADD_NEW = '__add_new__';
 
-export default function RelationshipFields({ companyId, masterListJoinDates, initialClientSince, initialClientSinceNote, initialReferrerId, initialRmId }: {
+export default function RelationshipFields({ invoiceAddress, companyId, masterListJoinDates, initialClientSince, initialClientSinceNote, initialReferrerId, initialRmId }: {
+  // Invoice address text from Master List (server-rendered value), shown as the
+  // first cell so row 3 reads Invoice Address - Client Since - Referred By - RM.
+  invoiceAddress: string | null;
   companyId: number;
   // Raw master_list.join_date text for this company — only used to remind
   // staff when Client Since is still empty because that text couldn't be
@@ -24,6 +28,10 @@ export default function RelationshipFields({ companyId, masterListJoinDates, ini
   initialReferrerId: number | null;
   initialRmId: number | null;
 }) {
+  const { source } = useCustomerSource();
+  // Referred By only unlocks when Customer Source is "Referral"; an existing
+  // value is kept (just locked) if the source is later changed away.
+  const referralUnlocked = source === 'referral';
   const [contacts, setContacts] = useState<Contact[] | null>(null);
   const [clientSince, setClientSince] = useState(initialClientSince ?? '');
   const [note, setNote] = useState(initialClientSinceNote ?? '');
@@ -112,7 +120,7 @@ export default function RelationshipFields({ companyId, masterListJoinDates, ini
     }
   }
 
-  function picker(field: 'referrerContactId' | 'rmContactId', label: string, value: number | null) {
+  function picker(field: 'referrerContactId' | 'rmContactId', label: string, value: number | null, locked = false) {
     const internal = (contacts ?? []).filter(c => c.kind === 'internal');
     const external = (contacts ?? []).filter(c => c.kind === 'external');
     return (
@@ -135,9 +143,10 @@ export default function RelationshipFields({ companyId, masterListJoinDates, ini
         ) : (
           <select
             value={value ?? ''}
-            disabled={saving === field || contacts === null}
+            disabled={locked || saving === field || contacts === null}
+            title={locked ? 'Set Customer Source to Referral to edit' : undefined}
             onChange={e => changeContact(field, e.target.value)}
-            style={INPUT_STYLE}
+            style={locked ? { ...INPUT_STYLE, background: '#f1f5f9', color: '#94a3b8', cursor: 'not-allowed' } : INPUT_STYLE}
           >
             <option value="">—</option>
             <optgroup label="Tassure team">
@@ -157,7 +166,13 @@ export default function RelationshipFields({ companyId, masterListJoinDates, ini
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0,1fr))', gap: 16 }}>
+        <div>
+          {invoiceAddress != null && (<>
+            <div style={LABEL_STYLE}>Invoice Address</div>
+            <div style={{ fontSize: 12 }}>{invoiceAddress}</div>
+          </>)}
+        </div>
         <div>
           <div style={LABEL_STYLE}>Client Since</div>
           <input
@@ -168,7 +183,7 @@ export default function RelationshipFields({ companyId, masterListJoinDates, ini
             style={INPUT_STYLE}
           />
         </div>
-        {picker('referrerContactId', 'Referred By', referrerId)}
+        {picker('referrerContactId', 'Referred By', referrerId, !referralUnlocked)}
         {picker('rmContactId', 'RM', rmId)}
       </div>
       <div style={{ marginTop: 10 }}>

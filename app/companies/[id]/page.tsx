@@ -7,6 +7,7 @@ import { formatStaffName } from '@/lib/staff-directory';
 import CopyUenButton from './CopyUenButton';
 import CustomerSourceField from './CustomerSourceField';
 import RelationshipFields from './RelationshipFields';
+import { CustomerSourceProvider } from './CustomerSourceContext';
 import {
   StatusBadge, MatchQualityNote,
   ArAgmSection, InvoicesSection, NdSection, CommsSection, OutstandingSection, TrademarkSection,
@@ -56,6 +57,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
       {/* Vincent, 2026-09-08: "每个板块之间的间距拉大35%" — 20px × 1.35 = 27px
           (was 20, matching _components.tsx's own DataCard gap, similarly
           scaled to 21.6 — see that file's own comment). */}
+      <CustomerSourceProvider initialValue={company.customerSource}>
       <div className="system-list-shell" style={{ marginBottom: 27 }}>
         <div className="system-list-title-bar px-4 py-3" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Building2 size={15} color="#fff" />
@@ -136,14 +138,10 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
             )}
           </div>
 
-          {ml?.invoice_address != null && (
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', marginBottom: 3 }}>Invoice Address</div>
-              <div style={{ fontSize: 12 }}>{(ml.invoice_address as string) || '—'}</div>
-            </div>
-          )}
-
+          {/* Row 3 (Vincent, 2026-10-06): Invoice Address - Client Since -
+              Referred By - RM, on the same 5-column grid as the rows above. */}
           <RelationshipFields
+            invoiceAddress={ml?.invoice_address != null ? ((ml.invoice_address as string) || '—') : null}
             masterListJoinDates={[...new Set(masterList.map(r => String((r as Record<string, unknown>).join_date ?? '').trim()).filter(Boolean))]}
             companyId={company.id}
             initialClientSince={company.clientSince}
@@ -153,6 +151,7 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
           />
         </div>
       </div>
+      </CustomerSourceProvider>
 
       {/* Order per Vincent, 2026-09-04: originally "AR/AGM CYCLES 放在第2模块，
           Communications放在第3模块" (counting the header card as module 1),

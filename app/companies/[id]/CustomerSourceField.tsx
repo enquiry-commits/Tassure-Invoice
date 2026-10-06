@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { CUSTOMER_SOURCE_OPTIONS } from '@/lib/customer-source';
+import { useCustomerSource } from './CustomerSourceContext';
 
 // Company 360's first (and so far only) editable field — see
 // app/api/companies/customer-source/route.ts, lib/customer-source.ts.
@@ -10,6 +11,7 @@ import { CUSTOMER_SOURCE_OPTIONS } from '@/lib/customer-source';
 export default function CustomerSourceField({ companyId, initialValue }: { companyId: number; initialValue: string | null }) {
   const [value, setValue] = useState(initialValue ?? '');
   const [saving, setSaving] = useState(false);
+  const { setSource } = useCustomerSource();
 
   async function save(next: string) {
     const prev = value;
@@ -21,7 +23,8 @@ export default function CustomerSourceField({ companyId, initialValue }: { compa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId, value: next || null }),
       });
-      if (!res.ok) setValue(prev);
+      if (res.ok) setSource(next || null);
+      else setValue(prev);
     } catch {
       setValue(prev);
     } finally {
