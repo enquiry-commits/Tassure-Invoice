@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
 import { pageAll } from '@/lib/page-all';
 import { customerSourceLabel } from '@/lib/customer-source';
+import { allContactNames } from '@/lib/relationship-contacts';
 import { buildReportsCompanyRows, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT } from '@/lib/reports-data';
 import { type DataRow, REPORTS_EXPORT_COLUMNS, buildWorkbook } from '@/lib/export-columns';
 
@@ -31,12 +32,13 @@ export async function GET(req: NextRequest) {
 
   try {
     const supabase = createAdminClient();
-    const [companies, masterList] = await Promise.all([
+    const [companies, masterList, contactNames] = await Promise.all([
       pageAll<DataRow>(() => supabase.from('companies').select(REPORTS_COMPANY_SELECT)),
       pageAll<DataRow>(() => supabase.from('master_list').select(`company_name, ${REPORTS_MASTER_LIST_SELECT}`)),
+      allContactNames(supabase),
     ]);
 
-    const rows = buildReportsCompanyRows(companies, masterList)
+    const rows = buildReportsCompanyRows(companies, masterList, contactNames)
       .filter(r => r.isActive)
       .map(r => ({
         companyName: r.companyName,
@@ -53,6 +55,9 @@ export async function GET(req: NextRequest) {
         hasAccounts: r.hasAccounts ? 'Yes' : '',
         hasTax: r.hasTax ? 'Yes' : '',
         joinDate: r.joinDate,
+        clientSince: r.clientSince,
+        referrerName: r.referrerName,
+        rmName: r.rmName,
       }));
 
     const file = await buildWorkbook(

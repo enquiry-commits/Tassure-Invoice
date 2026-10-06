@@ -6,6 +6,7 @@ import { getCompany360 } from '@/lib/company-360';
 import { formatStaffName } from '@/lib/staff-directory';
 import CopyUenButton from './CopyUenButton';
 import CustomerSourceField from './CustomerSourceField';
+import RelationshipFields from './RelationshipFields';
 import {
   StatusBadge, MatchQualityNote,
   ArAgmSection, InvoicesSection, NdSection, CommsSection, OutstandingSection, TrademarkSection,
@@ -141,6 +142,13 @@ export default async function CompanyPage({ params }: { params: Promise<{ id: st
               <div style={{ fontSize: 12 }}>{(ml.invoice_address as string) || '—'}</div>
             </div>
           )}
+
+          <RelationshipFields
+            companyId={company.id}
+            initialClientSince={company.clientSince}
+            initialReferrerId={company.referrerContactId}
+            initialRmId={company.rmContactId}
+          />
         </div>
       </div>
 

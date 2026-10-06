@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { getRequestAccount } from '@/lib/request-account';
 import { customerSourceLabel } from '@/lib/customer-source';
+import { allContactNames } from '@/lib/relationship-contacts';
 import { buildReportsCompanyRows, computeRevenueTrend, computeComparableRevenue, computeClientFlow, computePicWorkload, REPORTS_COMPANY_SELECT, REPORTS_MASTER_LIST_SELECT, type ComparableRevenue, type DataQuality, type FlowRow } from '@/lib/reports-data';
 import { pageAll } from '@/lib/page-all';
 import { normalize } from '@/lib/company-name';
@@ -118,7 +119,7 @@ export async function computeReportsData(): Promise<ReportsData> {
   const accountsNames = new Set(taoServiceItems.filter(i => i.service_type === 'Accounts').map(i => normalize(i.customer_name as string)));
   const taxNames = new Set(taoServiceItems.filter(i => i.service_type === 'Tax').map(i => normalize(i.customer_name as string)));
 
-  const companyRows = buildReportsCompanyRows(companies, masterList);
+  const companyRows = buildReportsCompanyRows(companies, masterList, await allContactNames(sb));
 
   const active = companies.filter(c => isActiveCompany(c as { is_active?: boolean | null }));
 

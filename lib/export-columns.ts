@@ -114,6 +114,9 @@ export const REPORTS_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'hasAccounts', label: 'Accounts', width: 10 },
   { key: 'hasTax', label: 'Tax', width: 10 },
   { key: 'joinDate', label: 'Join Date', width: 14, format: 'date' },
+  { key: 'clientSince', label: 'Client Since', width: 14, format: 'date' },
+  { key: 'referrerName', label: 'Referred By', width: 22 },
+  { key: 'rmName', label: 'RM', width: 22 },
 ];
 
 function formatCell(raw: unknown, format: ExportColumn['format']): string {

@@ -30,6 +30,7 @@ type CompanyRow = {
   id: number; companyName: string; uen: string | null; companyType: string | null;
   ssicDescription1: string | null; customerSource: string | null; twStatus: string | null;
   pic: string | null; isActive: boolean | null; joinDate: string | null;
+  clientSince: string | null; referrerName: string | null; rmName: string | null;
   usesAddress: boolean | null; hasNd: boolean | null; hasAgm: boolean | null;
   hasXbrl: boolean | null; hasAccounts: boolean | null; hasTax: boolean | null;
 };
@@ -173,7 +174,7 @@ function CustomerSourceQualityCard({ total, unknown }: { total: number; unknown:
 // `companyRows` array /api/reports already ships — no extra network
 // round-trip per filter/dimension change (the whole point of "manual
 // operation" feeling instant, not another static chart).
-type DimensionKey = 'companyType' | 'ssic' | 'customerSource' | 'twStatus' | 'pic';
+type DimensionKey = 'companyType' | 'ssic' | 'customerSource' | 'twStatus' | 'pic' | 'clientSince' | 'referrer' | 'rm';
 type MetricKey = 'count' | 'usesAddress' | 'hasNd' | 'hasAgm' | 'hasXbrl' | 'hasAccounts' | 'hasTax';
 
 const DIMENSIONS: { key: DimensionKey; label: string; value: (r: CompanyRow) => string }[] = [
@@ -190,6 +191,12 @@ const DIMENSIONS: { key: DimensionKey; label: string; value: (r: CompanyRow) => 
   { key: 'customerSource', label: 'Customer Source', value: r => customerSourceLabel(r.customerSource) },
   { key: 'twStatus', label: 'Roster Status', value: r => r.twStatus || 'Untracked' },
   { key: 'pic', label: 'Secretary PIC', value: r => formatStaffName(r.pic) || 'Unassigned' },
+  // Client relationship fields (2026-10-06) — recorded on Company 360.
+  // Client Since groups by YYYY-MM so "everything new since Jan 2026" is a
+  // plain filter selection; blank until staff fill it in.
+  { key: 'clientSince', label: 'Client Since (Month)', value: r => r.clientSince ? r.clientSince.slice(0, 7) : 'Not recorded' },
+  { key: 'referrer', label: 'Referred By', value: r => r.referrerName || 'Not recorded' },
+  { key: 'rm', label: 'RM', value: r => r.rmName || 'Not assigned' },
 ];
 
 const METRICS: { key: MetricKey; label: string }[] = [
@@ -203,7 +210,7 @@ const METRICS: { key: MetricKey; label: string }[] = [
 ];
 
 type FilterState = Record<DimensionKey, Set<string> | null>;
-const EMPTY_FILTERS: FilterState = { companyType: null, ssic: null, customerSource: null, twStatus: null, pic: null };
+const EMPTY_FILTERS: FilterState = { companyType: null, ssic: null, customerSource: null, twStatus: null, pic: null, clientSince: null, referrer: null, rm: null };
 
 function matchesFilters(row: CompanyRow, filters: FilterState, exceptDim: DimensionKey | null): boolean {
   for (const dim of DIMENSIONS) {
@@ -236,8 +243,12 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
     }
     return [...rowsByValue.entries()]
       .map(([value, rows]) => ({ value, rows, count: rows.length }))
-      .sort((a, b) => b.count - a.count);
-  }, [metricRows, activeDim]);
+      // Months read newest-first (a count sort would scramble the timeline);
+      // "Not recorded" always last.
+      .sort((a, b) => dimension === 'clientSince'
+        ? (a.value === 'Not recorded' ? 1 : b.value === 'Not recorded' ? -1 : b.value.localeCompare(a.value))
+        : b.count - a.count);
+  }, [metricRows, activeDim, dimension]);
 
   const pivotTotal = metricRows.length;
   const chartData: Pt[] = useMemo(() => {
@@ -335,6 +346,9 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
                 <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
                   <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>Company</th>
                   <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>UEN</th>
+                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>Client Since</th>
+                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>Referred By</th>
+                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>RM</th>
                 </tr>
               </thead>
               <tbody>
@@ -344,6 +358,9 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
                       <Link href={`/companies/${r.id}`} style={{ color: COLORS.blue, textDecoration: 'none' }}>{r.companyName}</Link>
                     </td>
                     <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.uen || '—'}</td>
+                    <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.clientSince || '—'}</td>
+                    <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.referrerName || '—'}</td>
+                    <td style={{ padding: '6px 8px', color: '#64748b' }}>{r.rmName || '—'}</td>
                   </tr>
                 ))}
               </tbody>
