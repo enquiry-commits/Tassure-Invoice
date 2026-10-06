@@ -2594,10 +2594,20 @@ again.
   address (edited in QuickBooks after the copy was attached — INV-QB-036
   deliberately never refreshes a split invoice's copy) is used; descriptions
   are not compared because accounting rewrites them when it splits. State on
-  2026-10-06: none of the 154 open split invoices has an attachment yet, so
-  every one is still redrawn until staff attach originals; the system's own
-  copies on three new invoices (#02611136, #02611140, TAC #02680325) show
-  INV-QB-036 works in production. Source tip from the council: the 60 split
+  2026-10-06 evening, after the SERVER ROUND (Vincent: "我要你去 server 走一轮，把那些找不到原发票
+  的发票置入到QB的附件上"): the file server's invoice backup folders were READ (a directory
+  listing and reading files, copied to a local folder — nothing on the server was
+  written, moved or deleted) for the 155 open invoices that carry a Deferred line;
+  every one has a file named after its number; the proof accepted 127 and 127
+  (TAB 110, TAC 17) were attached to the invoice in QuickBooks — each against the LIVE
+  invoice, with the server's file name, IncludeOnSend false and the Note "Original
+  invoice PDF from the company file server, attached on 2026-10-06 after the system
+  checked it …", then confirmed by the real look-up; the first alone (TAB #02611114,
+  byte-identical to the server file). The other 28 stay for a person: 13 are pictures
+  (no text), 9 were restructured by accounting after sending or print an exchange
+  rate, 3 totals and 3 dates were changed after sending — with their server paths in
+  `Server-round-originals-2026-10-06.xlsx`. The system's own copies on three new invoices
+  (#02611136, #02611140, TAC #02680325) show INV-QB-036 works in production. Source tip from the council: the 60 split
   invoices first emailed through the system went out from staff's Outlook
   before the redraw existed, so Sent Items holds the PDF the client got — but
   only the proof says whether a file is the original. Where staff see what the

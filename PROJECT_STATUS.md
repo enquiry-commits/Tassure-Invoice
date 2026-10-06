@@ -2559,6 +2559,37 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Server round: the originals found on the company file server and attached to
+  QuickBooks (INV-QB-037).** Vincent, 2026-10-06: "你这个做完之后，我要你去 server
+  走一轮，把那些找不到原发票的发票置入到QB的附件上", then "去 server 读，然后拉文件" —
+  lifting, for this task and by his explicit instruction, the rule that no
+  session touches the server; it stays read only. The script lists the TAB and
+  TAC invoice backup folders (2023-2026: about 6,000 PDFs), copies the files
+  named after each of the 155 open split invoices (TAB 130, TAC 25) into a local
+  folder, and refuses to write anywhere outside that folder. Every one of the
+  155 has a file on the server. Each was run through the system's own proof (the code
+  the SOA uses): 104 passed as the proof stood, and 23 more after it was widened,
+  in this session, to the two real layouts of an original the server showed
+  (QuickBooks' newer "TOTAL S$760.00"; the older print from the QuickBooks screen:
+  "Invoice No. : 02610188" without the book, "Date : 4/3/2026", the total last under
+  "Net Total") — tested (`test-original-copy.ts` 115 checks, 8 more negative controls)
+  and re-run on the 20 real QuickBooks files (8 of 8 accepted, 12 of 12 split PDFs
+  and the redraw refused). **Attached: 127 (TAB 110, TAC 17)** — the first one alone
+  (TAB #02611114 Hong Ming; read back from QuickBooks, byte-identical to the
+  server file), then the rest, each re-checked against the LIVE invoice (still open,
+  no accepted original yet, the file still passes), uploaded with the server's file
+  name, IncludeOnSend false and its own Note, and confirmed by running the real
+  look-up again; the run stops at the first error (none). Both invoices with the
+  wrong-label twin are among them: their files print 600/200 and 700/360, as the
+  council predicted. **28 left for a person** — 13 files are pictures (printed to
+  PDF as an image, no text), 9 where accounting restructured the lines after sending
+  or the file prints an exchange rate, 3 totals and 3 dates changed after the file was saved
+  — listed with their server paths and what to do in `Server-round-originals-2026-10-06.xlsx`.
+  QuickBooks tokens: TAB and TAC had expired and a script must not refresh them; Vincent
+  opening Billing System › Invoice Originals refreshed them, and the run used them.
+  **Not verified:** the deployed SOA / email / Save PDF actually picking one of these
+  originals (the first "Open the files" on the Invoice Originals page is that check).
+
 - **"Invoice Originals" page — which split invoices still go out redrawn
   (INV-QB-037).** Vincent chose it (all four council members recommended it)
   as the staff work queue for attaching originals, and said the two invoices
