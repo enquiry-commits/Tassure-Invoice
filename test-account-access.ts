@@ -72,6 +72,7 @@ const ACCOUNT_ROUTES = [
   '/billing', '/billing?tab=billing', '/billing/tao', // Billing Drafts: TAB/TAC and TAO
   '/billing/quotation',
   '/billing/soa', '/billing/soa/all', '/billing/soa/tab', '/billing/soa/tac', '/billing/soa/tao', // Outstanding, all 4 books
+  '/billing/soa/originals', // Invoice Originals (INV-QB-037): the same departments as Outstanding
   '/turnover-ai', '/turnover-ai/project/1',
 ];
 const EXPECTED_ROUTES: Record<WorkspaceId, string[]> = {

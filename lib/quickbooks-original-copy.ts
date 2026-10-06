@@ -36,15 +36,15 @@ const PAUSE_MS = 120_000;
 const pausedUntil: Partial<Record<QbCompany, number>> = {};
 
 export async function findOriginalInvoiceCopy(company: QbCompany, invoiceId: string, facts: InvoiceFacts): Promise<OriginalCopyResult> {
-  if (ORIGINAL_COPY_LOOKUP_MODE[company] !== 'live') return { none: `${company} originals are not looked up` };
-  if (!/^\d+$/.test(invoiceId)) return { none: `"${invoiceId}" is not a QuickBooks invoice id` };
-  if (Date.now() < (pausedUntil[company] ?? 0)) return { none: `not asking QuickBooks ${company} again for a minute or two after a problem`, trouble: true };
+  if (ORIGINAL_COPY_LOOKUP_MODE[company] !== 'live') return { none: `${company} originals are not looked up`, tried: [] };
+  if (!/^\d+$/.test(invoiceId)) return { none: `"${invoiceId}" is not a QuickBooks invoice id`, tried: [] };
+  if (Date.now() < (pausedUntil[company] ?? 0)) return { none: `not asking QuickBooks ${company} again for a minute or two after a problem`, trouble: true, tried: [] };
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let result: OriginalCopyResult;
   try {
     const token = await getValidToken(company);
-    if (!token) return { none: `QuickBooks ${company} is not connected` };
+    if (!token) return { none: `QuickBooks ${company} is not connected`, tried: [] };
     const reader = createHttpAttachmentReader({ base: QB_BASE, realmId: token.realm_id, accessToken: token.access_token, signal: controller.signal });
     result = await Promise.race([
       selectVerifiedOriginal(
@@ -52,11 +52,11 @@ export async function findOriginalInvoiceCopy(company: QbCompany, invoiceId: str
         facts,
       ),
       new Promise<OriginalCopyResult>(resolve => {
-        timer = setTimeout(() => { controller.abort(); resolve({ none: `QuickBooks did not answer within ${TIME_LIMIT_MS / 1000} seconds`, trouble: true }); }, TIME_LIMIT_MS);
+        timer = setTimeout(() => { controller.abort(); resolve({ none: `QuickBooks did not answer within ${TIME_LIMIT_MS / 1000} seconds`, trouble: true, tried: [] }); }, TIME_LIMIT_MS);
       }),
     ]);
   } catch (err) {
-    result = { none: err instanceof Error ? err.message : String(err), trouble: true };
+    result = { none: err instanceof Error ? err.message : String(err), trouble: true, tried: [] };
   } finally {
     clearTimeout(timer);
   }

@@ -37,6 +37,11 @@ const nextConfig: NextConfig = {
       './node_modules/pdf-parse/**',
       './node_modules/pdfjs-dist/**',
     ],
+    // The Invoice Originals page opens attached PDFs the same way (INV-QB-037).
+    '/api/billing/originals/check': [
+      './node_modules/pdf-parse/**',
+      './node_modules/pdfjs-dist/**',
+    ],
     // pdfjs-dist (used by pdf-parse internally, and directly by
     // lib/bizfile-parse.ts for coordinate-based table extraction) resolves
     // its worker script's path at runtime via a dynamic require().resolve()

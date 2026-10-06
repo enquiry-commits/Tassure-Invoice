@@ -2559,6 +2559,41 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **"Invoice Originals" page — which split invoices still go out redrawn
+  (INV-QB-037).** Vincent chose it (all four council members recommended it)
+  as the staff work queue for attaching originals, and said the two invoices
+  with the wrong-label twin (Hong Ming #02611114, Fuyuan #02611078) are to be
+  fixed by staff finding their originals on the server and attaching them —
+  no code change; the system never touches the server. Billing System >
+  Invoice Originals lists every open invoice carrying a Deferred Revenue line
+  (155 on 2026-10-06: TAB 130, TAC 25) with what the system does with it:
+  "Original in use", "Not used — redrawn" (each file with the reason and a hint
+  on what to do: not the Save PDF file, not the split version, no scan or
+  password), "Nothing attached", or "Not opened yet" (it has a PDF; "Open
+  files" opens it, one invoice at a time, on request). Built so it cannot
+  disagree with the real PDF path: it shares `loadInvoiceForClient` (the same
+  invoice read, now one function) and `findOriginalInvoiceCopy` with
+  `getClientInvoicePdf`; the overview is the synced rows plus ONE paged
+  QuickBooks read per book, not one query per invoice (the bulk reader is new);
+  a book QuickBooks cannot read shows "QuickBooks unavailable" rather than
+  "nothing attached"; and it writes nothing (GET routes only). It sits under
+  /billing/soa, so the existing "Outstanding" page rule decides who sees it;
+  `test-account-access.ts` and the assistant's page map were updated for it.
+  `selectVerifiedOriginal` now reports what happened to each attached file
+  (`tried`). Verification: `test-original-status.ts` 38 checks and
+  `test-original-copy.ts` 103, with 12 + 16 negative controls (each behaviour
+  removed on a copy fails the test); tsc, eslint, `next build` clean (the new
+  routes are in the build and the check route ships the PDF reader files);
+  the page driven in the Browser pane through a temporary harness — the real
+  open-invoice rows, sample files and verdicts on five of them (the reasons are
+  what the real proof says about real saved PDFs): counts, pills, reasons and
+  hints, filters, search, a failed book, "Open the files"; the harness is
+  removed. **Not verified:** the signed-in path (the menu entry, a department
+  without Outstanding) and a read of REAL attachments through the new bulk
+  reader (QuickBooks's saved tokens had expired and a script must not refresh
+  them; it is the query the earlier survey used, and the reader is tested
+  against a fake fetch) — REG-040.
+
 - **The original-invoice lookup, hardened after a council review and widened
   to every split invoice (INV-QB-037).** Vincent, twice that day: attached
   originals are risk-free ("附错了文件，系统也只是不采用"), then the order of

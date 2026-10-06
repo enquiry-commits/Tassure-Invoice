@@ -2590,11 +2590,25 @@ again.
   INV-QB-036 works in production. Source tip from the council: the 60 split
   invoices first emailed through the system went out from staff's Outlook
   before the redraw existed, so Sent Items holds the PDF the client got — but
-  only the proof says whether a file is the original. Guarded by
-  `test-original-copy.ts` (94 checks: the proof on synthetic and generated PDFs,
-  which file is chosen, the QuickBooks reader against a fake fetch, that
-  `getClientInvoicePdf` looks BEFORE it redraws) and, with the safeguards
-  removed one at a time on a copy, every one of them fails the test.
+  only the proof says whether a file is the original. Where staff see what the
+  system does with each invoice: Billing System > Invoice Originals
+  (`/billing/soa/originals`, built at Vincent's request after the council
+  recommended it) lists every open invoice carrying a Deferred line — "Original
+  in use", "Not used — redrawn" (each file with its reason and what to do),
+  "Nothing attached", "Not opened yet" — from the synced rows plus ONE paged
+  QuickBooks read per book; "Open files" opens the PDFs one invoice at a time,
+  on request, through the SAME `loadInvoiceForClient` and
+  `findOriginalInvoiceCopy` the real PDF path uses, so the page cannot say
+  something the PDF path would not do; a book QuickBooks cannot read is
+  "QuickBooks unavailable", never "Nothing attached"; it writes nothing (GET
+  routes only). It sits under `/billing/soa`, so the existing "outstanding"
+  page rule decides who sees it. Guarded by `test-original-copy.ts` (103
+  checks: the proof on synthetic and generated PDFs, which file is chosen and
+  what is said about each, the QuickBooks reader against a fake fetch, that
+  `getClientInvoicePdf` looks BEFORE it redraws) and `test-original-status.ts`
+  (38 checks: the list, the statuses, the staff hints, and that the page only
+  reads and shares the real path's code); with each safeguard removed one at a
+  time on a copy (16 + 12 of them), the test fails.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

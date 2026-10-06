@@ -176,15 +176,29 @@ export type OriginalCopyDeps = {
   read(bytes: Uint8Array): Promise<PdfFacts>;
 };
 
+// What happened to each file attached to the invoice — the status page shows
+// it (lib/original-status.ts); the logs only ever get the Ids.
+export type TriedAttachment = {
+  id: string;
+  fileName: string;
+  bySystem: boolean;
+  createdAt: string | null;
+  outcome: 'used' | 'refused' | 'skipped';
+  reason: string;
+};
+
 // trouble: QuickBooks itself failed (not "nothing attached") — the caller
 // stops asking for a while instead of waiting on it for every invoice.
 export type OriginalCopyResult =
-  | { found: { bytes: Uint8Array; fileName: string; attachableId: string; bySystem: boolean } }
-  | { none: string; trouble?: boolean };
+  | { found: { bytes: Uint8Array; fileName: string; attachableId: string; bySystem: boolean }; tried: TriedAttachment[] }
+  | { none: string; trouble?: boolean; tried: TriedAttachment[] };
 
 // A real invoice PDF is 80-260 KB; the SOA response is limited to 4.5 MB.
 export const MAX_ORIGINAL_BYTES = 1024 * 1024;
 const MAX_CANDIDATES = 4;
+
+export const isPdfFile = (f: Pick<AttachmentFile, 'ContentType' | 'FileName'>): boolean => f.ContentType === 'application/pdf' || /\.pdf$/i.test(f.FileName ?? '');
+export const isSystemCopy = (f: Pick<AttachmentFile, 'Note'>): boolean => f.Note === INVOICE_COPY_NOTE;
 
 // The first attached PDF that is provably the original — the system's own
 // copy first (made before any split, INV-QB-036), then files staff attached,
@@ -196,26 +210,43 @@ export async function selectVerifiedOriginal(deps: OriginalCopyDeps, facts: Invo
   try {
     files = await deps.list();
   } catch (err) {
-    return { none: `could not list the invoice's attachments (${err instanceof Error ? err.message : String(err)})`, trouble: true };
+    return { none: `could not list the invoice's attachments (${err instanceof Error ? err.message : String(err)})`, trouble: true, tried: [] };
   }
-  const pdfs = files
-    .filter(f => (f.ContentType === 'application/pdf' || /\.pdf$/i.test(f.FileName ?? '')) && !!f.TempDownloadUri && (f.Size === undefined || f.Size <= MAX_ORIGINAL_BYTES))
-    .sort((a, b) => Number(b.Note === INVOICE_COPY_NOTE) - Number(a.Note === INVOICE_COPY_NOTE) || String(b.CreateTime ?? '').localeCompare(String(a.CreateTime ?? '')))
-    .slice(0, MAX_CANDIDATES);
-  if (!pdfs.length) return { none: 'no PDF attached' };
+  const entry = (f: AttachmentFile, outcome: TriedAttachment['outcome'], reason: string): TriedAttachment => ({
+    id: f.Id, fileName: f.FileName ?? `#${f.Id}`, bySystem: isSystemCopy(f), createdAt: f.CreateTime ?? null, outcome, reason,
+  });
+  const tried: TriedAttachment[] = [];
+  const usable: AttachmentFile[] = [];
+  for (const f of files) {
+    if (!isPdfFile(f)) tried.push(entry(f, 'skipped', 'not a PDF (a picture or another kind of file)'));
+    else if (!f.TempDownloadUri) tried.push(entry(f, 'skipped', 'QuickBooks gave no download link for it'));
+    else if (f.Size !== undefined && f.Size > MAX_ORIGINAL_BYTES) tried.push(entry(f, 'skipped', `larger than ${MAX_ORIGINAL_BYTES / 1024 / 1024} MB — an invoice PDF is 80-260 KB`));
+    else usable.push(f);
+  }
+  usable.sort((a, b) => Number(isSystemCopy(b)) - Number(isSystemCopy(a)) || String(b.CreateTime ?? '').localeCompare(String(a.CreateTime ?? '')));
+  const candidates = usable.slice(0, MAX_CANDIDATES);
+  for (const f of usable.slice(MAX_CANDIDATES)) tried.push(entry(f, 'skipped', `only the ${MAX_CANDIDATES} newest PDFs are checked`));
+  if (!candidates.length) return { none: 'no PDF attached', tried };
 
   const why: string[] = [];
-  for (const file of pdfs) {
+  for (const [i, file] of candidates.entries()) {
     const label = `attachment #${file.Id}`;
     try {
       const bytes = await deps.download(file);
-      if (!looksLikePdf(bytes)) { why.push(`${label}: not a PDF`); continue; }
+      if (!looksLikePdf(bytes)) { why.push(`${label}: not a PDF`); tried.push(entry(file, 'refused', 'the file is not a PDF')); continue; }
       const check = checkOriginalCopy(await deps.read(bytes), facts);
-      if (check.ok) return { found: { bytes, fileName: file.FileName ?? `${file.Id}.pdf`, attachableId: file.Id, bySystem: file.Note === INVOICE_COPY_NOTE } };
+      if (check.ok) {
+        tried.push(entry(file, 'used', 'proved to be the original'));
+        for (const rest of candidates.slice(i + 1)) tried.push(entry(rest, 'skipped', 'not needed — an earlier file was accepted'));
+        return { found: { bytes, fileName: file.FileName ?? `${file.Id}.pdf`, attachableId: file.Id, bySystem: isSystemCopy(file) }, tried };
+      }
       why.push(`${label}: ${check.reason}`);
+      tried.push(entry(file, 'refused', check.reason));
     } catch (err) {
-      why.push(`${label}: could not be read (${err instanceof Error ? err.message : String(err)})`);
+      const reason = `could not be read (${err instanceof Error ? err.message : String(err)})`;
+      why.push(`${label}: ${reason}`);
+      tried.push(entry(file, 'refused', reason));
     }
   }
-  return { none: why.join(' | ') };
+  return { none: why.join(' | '), tried };
 }

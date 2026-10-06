@@ -62,23 +62,35 @@ async function termName(company: QbCompany, termId: unknown): Promise<string | n
   return typeof name === 'string' && name.trim() ? name.trim() : null;
 }
 
+// The live invoice, what the system would send for it, and what an attached
+// original of it must match (lib/original-copy.ts). ONE copy of this, used by
+// getClientInvoicePdf and by the status page (lib/original-status.ts), so the
+// page can never say something the real PDF path would not do.
+export async function loadInvoiceForClient(company: QbCompany, invoiceId: string) {
+  const result = await qbQuery(`SELECT * FROM Invoice WHERE Id = '${invoiceId}'`, company);
+  const invoice = result?.rows?.[0] as (QbInvoiceJson & { SalesTermRef?: { value?: string } }) | undefined;
+  if (!invoice) return null;
+  const decision = buildClientInvoiceModel(invoice, company, invoice.SalesTermRef?.value ? await termName(company, invoice.SalesTermRef.value) : null);
+  // facts is null when nothing is split (QuickBooks' own PDF is then right).
+  const facts = invoiceFacts(invoice, company, decision.kind === 'system' ? decision.model.rows.map(r => r.amount) : undefined);
+  return { invoice, decision, facts };
+}
+
 export async function getClientInvoicePdf(company: QbCompany, invoiceId: string): Promise<ClientInvoicePdf> {
   const original = async (fallbackReason: string | null): Promise<ClientInvoicePdf> => ({
     bytes: await fetchQuickBooksInvoicePdf(company, invoiceId), source: 'quickbooks', fallbackReason,
   });
   if (CLIENT_INVOICE_PDF_MODE[company] !== 'live') return original(null);
 
-  const result = await qbQuery(`SELECT * FROM Invoice WHERE Id = '${invoiceId}'`, company);
-  const invoice = result?.rows?.[0] as (QbInvoiceJson & { SalesTermRef?: { value?: string } }) | undefined;
-  if (!invoice) return original('the invoice could not be read from QuickBooks');
-  const decision = buildClientInvoiceModel(invoice, company, invoice.SalesTermRef?.value ? await termName(company, invoice.SalesTermRef.value) : null);
+  const loaded = await loadInvoiceForClient(company, invoiceId);
+  if (!loaded) return original('the invoice could not be read from QuickBooks');
+  const { decision, facts } = loaded;
   // Accounting has split this invoice, so QuickBooks prints the split version.
   // The copy attached to it in QuickBooks (made by the system, INV-QB-036, or
   // by hand from the file server) is what the client first received — used
   // when the PDF itself proves it is that, before anything else: before the
   // redraw below AND before QuickBooks' split PDF for an invoice the system
-  // cannot draw. facts is null when nothing is split (QuickBooks' PDF is right).
-  const facts = invoiceFacts(invoice, company, decision.kind === 'system' ? decision.model.rows.map(r => r.amount) : undefined);
+  // cannot draw.
   if (facts) {
     const attached = await findOriginalInvoiceCopy(company, invoiceId, facts);
     if ('found' in attached) return { bytes: attached.found.bytes, source: 'attachment', fallbackReason: null };

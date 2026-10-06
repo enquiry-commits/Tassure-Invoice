@@ -188,6 +188,16 @@ const reasonOf = (r: { ok: boolean }) => ('reason' in r ? String((r as { reason:
   r = await run(many, { 1: MARK.split, 2: MARK.split, 3: MARK.split, 4: MARK.split, 5: MARK.original });
   check('at most four files are tried per invoice', 'none' in r.result && r.log.join(' ') === 'list dl:1 dl:2 dl:3 dl:4', r.log.join(' '));
 
+  console.log('\n--- what is said about each attached file (the Invoice Originals page) ---');
+  r = await run([file('1', { Note: INVOICE_COPY_NOTE }), file('2'), file('3')], { 1: MARK.original, 2: MARK.original, 3: MARK.original });
+  check('an accepted file is "used"; the files after it were not needed', r.result.tried.map(t => `${t.id}:${t.outcome}`).join(' ') === '1:used 2:skipped 3:skipped' && r.result.tried[0].bySystem && !r.result.tried[1].bySystem && /not needed/.test(r.result.tried[1].reason), JSON.stringify(r.result.tried));
+  r = await run([file('1'), file('2', { ContentType: 'image/png', FileName: 'scan.png' }), file('3', { TempDownloadUri: undefined }), file('4', { Size: MAX_ORIGINAL_BYTES + 1 })], { 1: MARK.split });
+  check('a refused file says why; a picture, a file without a link and an oversized file are skipped with their reason', r.result.tried.find(t => t.id === '1')?.outcome === 'refused' && /unsplit invoice's/.test(r.result.tried.find(t => t.id === '1')?.reason ?? '') && /not a PDF/.test(r.result.tried.find(t => t.id === '2')?.reason ?? '') && /no download link/.test(r.result.tried.find(t => t.id === '3')?.reason ?? '') && /larger than 1 MB/.test(r.result.tried.find(t => t.id === '4')?.reason ?? ''), JSON.stringify(r.result.tried));
+  r = await run(many, { 1: MARK.split, 2: MARK.split, 3: MARK.split, 4: MARK.split, 5: MARK.original });
+  check('a fifth PDF is listed as not checked (only the 4 newest are)', r.result.tried.find(t => t.id === '5')?.outcome === 'skipped' && /only the 4 newest/.test(r.result.tried.find(t => t.id === '5')?.reason ?? ''));
+  r = await run(new Error('HTTP 401'), {});
+  check('no list, no files to report', r.result.tried.length === 0);
+
   console.log('\n--- reading a real PDF ---');
   const draw = async (pages: (string[] | 'picture')[], producer: string | null) => {
     const doc = await PDFDocument.create();
@@ -262,6 +272,21 @@ const reasonOf = (r: { ok: boolean }) => ('reason' in r ? String((r as { reason:
   const sentSignal = seen[0].init?.signal as AbortSignal;
   abort.abort();
   check('the caller\'s deadline cancels the request still in flight', !!sentSignal && sentSignal.aborted === true);
+
+  seen.length = 0;
+  const raw = (id: number, refs: { type: string; value: string }[], extra: object = {}) => ({ Id: String(id), FileName: `f${id}.pdf`, ContentType: 'application/pdf', Size: 1000, TempDownloadUri: `https://files.test/${id}`, AttachableRef: refs.map(r => ({ EntityRef: r })), ...extra });
+  const page1 = Array.from({ length: 500 }, (_, i) => raw(i + 1, [{ type: 'Invoice', value: String(100 + (i % 2)) }]));
+  const page2 = [raw(501, [{ type: 'Invoice', value: '100' }, { type: 'Invoice', value: '102' }]), raw(502, [{ type: 'Customer', value: '100' }]), raw(503, [])];
+  api = reader(url => json({ QueryResponse: { Attachable: decodeURIComponent(url).includes('STARTPOSITION 1 ') ? page1 : page2 } }));
+  const all = await api.listAllForInvoices();
+  check('bulk: reads the pages of 500 until a short one, one query each', seen.length === 2 && decodeURIComponent(seen[0].url).includes('STARTPOSITION 1 MAXRESULTS 500') && decodeURIComponent(seen[1].url).includes('STARTPOSITION 501 MAXRESULTS 500'), seen.map(s2 => decodeURIComponent(s2.url).slice(-60)).join(' | '));
+  check('bulk: groups the files by the invoice they are attached to', all.get('100')!.length === 251 && all.get('101')!.length === 250 && all.get('102')!.length === 1, [...all].map(([k, v]) => `${k}:${v.length}`).join(' '));
+  check('bulk: a file linked to two invoices is under both; a file of a customer or an unlinked one is under none', all.get('102')![0].Id === '501' && ![...all.values()].flat().some(f => f.Id === '502' || f.Id === '503'));
+  check('bulk: keeps what the page needs', all.get('102')![0].TempDownloadUri === 'https://files.test/501' && all.get('102')![0].Size === 1000);
+  api = reader(() => json({ Fault: { Error: [{ Message: 'Throttled' }] } }, 429));
+  threw = '';
+  try { await api.listAllForInvoices(); } catch (e) { threw = (e as Error).message; }
+  check('bulk: an HTTP error is an error', /HTTP 429/.test(threw));
 
   seen.length = 0;
   const content = bytesFor(MARK.original);

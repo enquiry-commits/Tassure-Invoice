@@ -37,6 +37,9 @@ type ReaderConfig = {
 export interface AttachmentReader {
   // Every file attached to this invoice, with what is needed to download it.
   list(invoiceId: string): Promise<AttachmentFile[]>;
+  // Every file attached to ANY invoice of the book, grouped by invoice Id — one
+  // paged read instead of one query per invoice (the status page's overview).
+  listAllForInvoices(): Promise<Map<string, AttachmentFile[]>>;
   // The file's bytes; refuses anything bigger than maxBytes (never buffers it).
   download(file: AttachmentFile, maxBytes: number): Promise<Uint8Array>;
 }
@@ -68,36 +71,68 @@ async function readCapped(res: Response, maxBytes: number): Promise<Uint8Array> 
   return out;
 }
 
+type RawAttachable = QbAttachable & {
+  ContentType?: string;
+  Size?: number | string;
+  TempDownloadUri?: string;
+  MetaData?: { CreateTime?: string };
+  AttachableRef?: { EntityRef?: { type?: string; value?: string | number } }[];
+};
+
+const toFile = (a: RawAttachable): AttachmentFile => {
+  const size = Number(a.Size);
+  return {
+    Id: String(a.Id),
+    FileName: a.FileName,
+    ContentType: a.ContentType,
+    Size: a.Size === undefined || !Number.isFinite(size) ? undefined : size,
+    Note: a.Note ?? null,
+    TempDownloadUri: a.TempDownloadUri,
+    CreateTime: a.MetaData?.CreateTime,
+  };
+};
+
+const PAGE_SIZE = 500;
+const MAX_PAGES = 40; // 20,000 attachments in one book; far beyond today's ~200
+
 export function createHttpAttachmentReader(cfg: ReaderConfig): AttachmentReader {
   const doFetch = cfg.fetchImpl ?? fetch;
   const signal = () => (cfg.signal ? AbortSignal.any([AbortSignal.timeout(cfg.timeoutMs ?? 15_000), cfg.signal]) : AbortSignal.timeout(cfg.timeoutMs ?? 15_000));
   const company = `${cfg.base}/v3/company/${cfg.realmId}`;
 
+  const query = async (sql: string): Promise<RawAttachable[]> => {
+    const res = await doFetch(`${company}/query?query=${encodeURIComponent(sql)}&minorversion=75`, {
+      headers: { Authorization: `Bearer ${cfg.accessToken}`, Accept: 'application/json' },
+      cache: 'no-store',
+      signal: signal(),
+    });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`listing attachments: HTTP ${res.status} ${text.slice(0, 200)}`);
+    let json: { QueryResponse?: { Attachable?: RawAttachable[] } };
+    try { json = JSON.parse(text); } catch { throw new Error('listing attachments: QuickBooks answered with something that is not JSON'); }
+    return json.QueryResponse?.Attachable ?? [];
+  };
+
   return {
     async list(invoiceId) {
       assertId(invoiceId);
-      const query = `SELECT * FROM Attachable WHERE AttachableRef.EntityRef.Type = 'Invoice' AND AttachableRef.EntityRef.value = '${invoiceId}'`;
-      const res = await doFetch(`${company}/query?query=${encodeURIComponent(query)}&minorversion=75`, {
-        headers: { Authorization: `Bearer ${cfg.accessToken}`, Accept: 'application/json' },
-        cache: 'no-store',
-        signal: signal(),
-      });
-      const text = await res.text();
-      if (!res.ok) throw new Error(`listing attachments: HTTP ${res.status} ${text.slice(0, 200)}`);
-      let json: { QueryResponse?: { Attachable?: (QbAttachable & { ContentType?: string; Size?: number | string; TempDownloadUri?: string; MetaData?: { CreateTime?: string } })[] } };
-      try { json = JSON.parse(text); } catch { throw new Error('listing attachments: QuickBooks answered with something that is not JSON'); }
-      return (json.QueryResponse?.Attachable ?? []).map(a => {
-        const size = Number(a.Size);
-        return {
-          Id: String(a.Id),
-          FileName: a.FileName,
-          ContentType: a.ContentType,
-          Size: a.Size === undefined || !Number.isFinite(size) ? undefined : size,
-          Note: a.Note ?? null,
-          TempDownloadUri: a.TempDownloadUri,
-          CreateTime: a.MetaData?.CreateTime,
-        };
-      });
+      return (await query(`SELECT * FROM Attachable WHERE AttachableRef.EntityRef.Type = 'Invoice' AND AttachableRef.EntityRef.value = '${invoiceId}'`)).map(toFile);
+    },
+
+    async listAllForInvoices() {
+      const byInvoice = new Map<string, AttachmentFile[]>();
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const batch = await query(`SELECT * FROM Attachable STARTPOSITION ${page * PAGE_SIZE + 1} MAXRESULTS ${PAGE_SIZE}`);
+        for (const a of batch) {
+          const file = toFile(a);
+          // A file can be linked to several records; it belongs to each invoice it names.
+          for (const ref of new Set((a.AttachableRef ?? []).filter(r => r.EntityRef?.type === 'Invoice' && r.EntityRef.value !== undefined).map(r => String(r.EntityRef!.value)))) {
+            byInvoice.set(ref, [...(byInvoice.get(ref) ?? []), file]);
+          }
+        }
+        if (batch.length < PAGE_SIZE) return byInvoice;
+      }
+      throw new Error(`listing attachments: more than ${MAX_PAGES * PAGE_SIZE} attachments in the book`);
     },
 
     // TempDownloadUri is a signed, short-lived link on QuickBooks' file

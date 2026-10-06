@@ -81,6 +81,9 @@ export const NAV_TREE: NavNode[] = [
           { label: 'TAO', href: '/billing/soa/tao' },
         ],
       },
+      // Which split invoices have their original attached in QuickBooks (INV-QB-037).
+      // Under /billing/soa so the existing "outstanding" page rule covers it.
+      { label: 'Invoice Originals', href: '/billing/soa/originals' },
       {
         id: 'client-communications', label: 'Email Status',
         children: [
