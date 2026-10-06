@@ -2559,6 +2559,27 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **End-to-end check: what the SOA really gets now (INV-QB-037).** Vincent, after the
+  server round: "我们花了那么多时间，优化了一整天，最终的目的就是为了在SOA那边能合并到
+  原装的发票" — so, instead of trusting the per-invoice confirmations, the REAL code was
+  run (this PC, the real database and QuickBooks; read only): (1) `getClientInvoicePdf`
+  — the function behind the SOA PDF, Email Drafts and Save PDF — for all 155 open split
+  invoices: 127 return the attached original (bytes identical to the file taken from
+  the server), 26 the system's redraw, 2 QuickBooks' own PDF (their payment terms could
+  not be read — the same fallback as before); 0 errors, 0 wrong — exactly the 127
+  attached plus the 28 left for staff. (2) The real SOA route handler (`GET
+  /api/billing/soa/pdf`) for four real customers, and the PDF it returned inspected
+  page by page: Hong Ming (TAB) — cover + the ORIGINAL of #02611114, which prints the
+  true 600 / 200 / 60 = 860 (the redraw would have shown 650 / 150); Siehi Shipping
+  (ALL) — both its split invoices are originals; Advance CF Technology and Kinplus
+  Trading (ALL) — the attached original for the TAC invoice and the redraw only for the
+  TAB invoice whose total was changed after its file was saved. HTTP 200 in 6-11 s, no
+  merge errors, no fallbacks. **Not seen:** Vercel itself (the PDF reader's worker
+  file in the deployed function) — the first "Open the files" on Billing System ›
+  Invoice Originals is that check; if it ever shows a file as unreadable there, the SOA
+  would silently redraw it too. Scratch scripts only (`soa-distribution.ts`,
+  `soa-e2e.ts`); nothing in the repo changed.
+
 - **Server round: the originals found on the company file server and attached to
   QuickBooks (INV-QB-037).** Vincent, 2026-10-06: "你这个做完之后，我要你去 server
   走一轮，把那些找不到原发票的发票置入到QB的附件上", then "去 server 读，然后拉文件" —
