@@ -185,19 +185,19 @@ export default function RelationshipFields({ invoiceAddress, companyId, masterLi
         </div>
         {picker('referrerContactId', 'Referred By', referrerId, !referralUnlocked)}
         {picker('rmContactId', 'RM', rmId)}
-      </div>
-      <div style={{ marginTop: 10 }}>
-        <div style={LABEL_STYLE}>Client Since Note</div>
-        <input
-          value={note}
-          disabled={saving === 'clientSinceNote'}
-          onChange={e => setNote(e.target.value)}
-          onBlur={saveNote}
-          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-          placeholder="e.g. Re-joined — earlier engagement terminated"
-          maxLength={300}
-          style={{ ...INPUT_STYLE, width: '100%', maxWidth: 560 }}
-        />
+        <div>
+          <div style={LABEL_STYLE}>Client Since Note</div>
+          <input
+            value={note}
+            disabled={saving === 'clientSinceNote'}
+            onChange={e => setNote(e.target.value)}
+            onBlur={saveNote}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            placeholder="e.g. Re-joined — earlier engagement terminated"
+            maxLength={300}
+            style={{ ...INPUT_STYLE, width: '100%', minWidth: 0 }}
+          />
+        </div>
       </div>
       {!clientSince && masterListJoinDates.length > 0 && (
         <div style={{ marginTop: 8, fontSize: 11.5, color: '#92600a', background: '#fff8e6', border: '1px solid #f3e0b0', borderRadius: 6, padding: '6px 10px' }}>
