@@ -7,6 +7,7 @@ import { logFieldChange } from '@/lib/audit-log';
 import { syncPicToArReminder, type PicField } from '@/lib/pic-sync';
 import { toIsoDateValue } from '@/lib/date';
 import { isActiveCssClient, isEndedMasterListType } from '@/lib/company-lifecycle';
+import { ilikeAny } from '@/lib/postgrest-or';
 
 // See app/api/ar-reminder/route.ts's identical comment (2026-09-14) — this
 // route was also missing region pinning next to Supabase's Tokyo project,
@@ -114,7 +115,7 @@ export async function GET(req: NextRequest) {
   let q = supabase.from('master_list').select('*').eq('list_type', type);
 
   if (search) {
-    q = q.or(`company_name.ilike.%${search}%,roc_no.ilike.%${search}%`);
+    q = q.or(ilikeAny(['company_name', 'roc_no'], search));
   }
 
   // Sorted by the staff-assigned Code (e.g. CA001, CA003, ... CB003, CB010),

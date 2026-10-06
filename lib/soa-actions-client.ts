@@ -4,6 +4,7 @@ import type { DraftLike } from '@/lib/draft-helper-client';
 import type { QbCompany } from '@/lib/quickbooks';
 import { todaySGT } from '@/lib/date';
 import { safeFileLabel } from '@/lib/invoice-filename';
+import { SoaPdfError, settleBookPdfs, type BookPdfAttempt } from '@/lib/soa-book-pdfs';
 import { buildCampaignDraft, loadCampaignActor } from '@/lib/campaign-draft-client';
 
 /**
@@ -112,7 +113,7 @@ async function fetchBookSoaPdf(companyName: string, book: QbCompany): Promise<Fi
   const res = await fetch(`/api/billing/soa/pdf?companyName=${encodeURIComponent(companyName)}&company=${book}`);
   if (!res.ok) {
     const j = await res.json().catch(() => ({}));
-    throw new Error(j.error ?? `Unable to generate the ${book} SOA PDF.`);
+    throw new SoaPdfError(j.error ?? `Unable to generate the ${book} SOA PDF.`, res.status);
   }
   warnAboutSoaPdf(res, `SOA (${book}) for ${companyName}`);
   const blob = await res.blob();
@@ -143,18 +144,21 @@ export async function buildSoaDraft(
   // the ones that succeed — a book 404ing is not a failure here, it is
   // exactly how that book's own download button already reports "nothing
   // outstanding here", so it's correctly excluded rather than surfaced as
-  // an error. downloadSoaPdf() above is UNCHANGED and deliberately so — "当
+  // an error — but ONLY a 404: any other failure (500, timeout, network)
+  // stops the draft with a message naming the book (lib/soa-book-pdfs.ts;
+  // Vincent 2026-10-06, "改成明确报错"), because skipping it silently left
+  // that book's statement out of a collections email. downloadSoaPdf() above
+  // is UNCHANGED and deliberately so — "当
   // 然在外面Download PDF的时候可以单独下载选择 TAB还是TAO的 SOA PDF" (the
   // standalone Download PDF button should still let you pick one book, or
   // the existing single merged PDF for 'ALL') — this only changes what the
   // DRAFT attaches.
   let files: File[];
   if (qbCompany === 'ALL') {
-    const attempts = await Promise.all((['TAB', 'TAC', 'TAO'] as QbCompany[]).map(async book => {
-      try { return await fetchBookSoaPdf(companyName, book); } catch { return null; }
+    const attempts = await Promise.all((['TAB', 'TAC', 'TAO'] as QbCompany[]).map(async (book): Promise<BookPdfAttempt<File>> => {
+      try { return { book, file: await fetchBookSoaPdf(companyName, book) }; } catch (error) { return { book, error }; }
     }));
-    files = attempts.filter((f): f is File => f !== null);
-    if (!files.length) throw new Error('Unable to generate any SOA PDF for this company.');
+    files = settleBookPdfs(attempts);
   } else {
     files = [await fetchBookSoaPdf(companyName, qbCompany)];
   }

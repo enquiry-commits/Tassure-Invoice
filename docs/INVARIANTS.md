@@ -4212,6 +4212,21 @@ again.
   treat "&" as "and" — teaching it would change every caller (SOA, billing,
   Outstanding), so it needs its own change and a before/after diff. Pinned by
   `test-company-near-miss.ts`.
+- **INV-DATA-075** — Typed search text goes into a PostgREST `.or()` filter
+  ONLY through `lib/postgrest-or.ts` `ilikeAny()`. A raw
+  `` .or(`company_name.ilike.%${text}%,…`) `` reads a comma in the text as the
+  start of the next condition, so searching "Han Kun, LLP" — or the real
+  client "500 DURIANS II, L.P" — failed with `failed to parse logic tree`: a
+  500 from the Companies, Master List and AR Reminder search boxes. Found by
+  the council review of 2026-10-06 and reproduced against the live database;
+  a bracket or a quote alone never broke it (the review's claim that ")" did
+  was wrong, tested). `ilikeAny()` double-quotes the value and escapes `\`
+  and `"`; `%` and `_` stay LIKE wildcards. Verified read-only against
+  production: 30 ordinary-term comparisons (10 terms x 3 tables) returned the
+  same rows as the old string, 10 hard terms x 3 tables were all accepted,
+  and the real comma name is found. Guarded by `test-postgrest-or.ts` (fails
+  on any `.or(` with `ilike.…${…}`). `.ilike(column, pattern)` takes the
+  pattern as its own parameter and was never affected.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 
@@ -4919,6 +4934,20 @@ again.
   by `test-content-disposition.ts` (fails on a hand-built header in any
   letter case, on an X-* header that encodes free text by hand, and on a
   lone surrogate) and `test-pdf-chinese-text.ts`.
+- **INV-DOC-023** — An ALL-mode SOA Draft (the All page's Draft Email and the
+  assistant's SOA card — `buildSoaDraft`) asks TAB, TAC and TAO for their own
+  SOA PDF and attaches each that answers. Only a **404** — the route's "No
+  outstanding invoices found" — may be left out: that book owes nothing for
+  this client. Any other failure (a 500, a timeout, a network error) used to
+  be skipped the same way (`catch { return null }`), so a statement the
+  client owes could silently be missing from a collections email; Vincent
+  chose "改成明确报错" on 2026-10-06 (council review of the red SOA download
+  chip). The draft now stops and names the book (`lib/soa-book-pdfs.ts`
+  `settleBookPdfs`; the client raises `SoaPdfError` with the HTTP status; a
+  plain Error that merely says "404" is not trusted). Honest scope: this was
+  NOT what hid the Chinese-name outage — both books failed for those
+  clients, so the draft already errored visibly — it closes the
+  partial-failure path. Guarded by `test-soa-book-pdfs.ts`.
 
 ## SOA Outstanding shared remarks
 

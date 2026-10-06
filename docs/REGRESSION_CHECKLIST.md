@@ -512,8 +512,12 @@ Run `npx tsx test-book-catalog.ts` (`ALL OK`). Then signed in, Billing Drafts: (
 **Guards:** `docs/INVARIANTS.md` INV-QB-034, INV-QB-033.
 
 ### REG-036 — The SOA PDF cover prints Chinese client names (after ANY change to `lib/statement-pdf.ts`, `lib/pdf-chinese-text.ts`, `templates/client-invoice/NotoSansSC-Regular.ttf`, or the SOA PDF route)
-Run `npx tsx test-statement-cover-chinese.ts`, `npx tsx test-content-disposition.ts` and `npx tsx test-client-invoice-model.ts` (`ALL PASSED`). Then signed in, SOA → All: click the "TAB TAC" badge of 思店科技(杭州)有限公司 — both PDFs download (the badge must NOT turn red; it did until 2026-10-05, INV-DOC-022 — if a book ever fails, hover the chip: it names the book and the reason), and Draft Email attaches them; the cover's TO line reads 思店科技(杭州)有限公司 in bold (not "()"), and the 【Lzs Travel Pte. Ltd.】 description keeps its brackets; an English-named client's cover looks exactly as before. Checking the SOA web page is NOT enough — it always showed the name.
-**Guards:** `docs/INVARIANTS.md` INV-DOC-011, INV-QB-029.
+Run `npx tsx test-statement-cover-chinese.ts`, `npx tsx test-content-disposition.ts` and `npx tsx test-client-invoice-model.ts` (`ALL PASSED`). Then signed in, SOA → All: click the "TAB TAC" badge of 思店科技(杭州)有限公司 — both PDFs download (the badge must NOT turn red; it did until 2026-10-05, INV-DOC-022 — if a book ever fails, hover the chip: it names the book and the reason), and Draft Email attaches them (in All mode a failing book now stops the draft and names the book instead of being left out — INV-DOC-023); the cover's TO line reads 思店科技(杭州)有限公司 in bold (not "()"), and the 【Lzs Travel Pte. Ltd.】 description keeps its brackets; an English-named client's cover looks exactly as before. Checking the SOA web page is NOT enough — it always showed the name.
+**Guards:** `docs/INVARIANTS.md` INV-DOC-011, INV-DOC-022, INV-DOC-023, INV-QB-029.
+
+### REG-037 — Company searches accept commas (after ANY change to `lib/postgrest-or.ts`, `app/api/companies/route.ts`, `app/api/master-list/route.ts` or `app/api/ar-reminder/search/route.ts`)
+Run `npx tsx test-postgrest-or.ts` (`ALL PASSED`). Then signed in, type `500 DURIANS II, L.P` into the Companies search, the Master List search and AR Reminder's search: each finds that company (it used to answer with an error), and an ordinary search (a few letters of a name) returns the same rows as before.
+**Guards:** `docs/INVARIANTS.md` INV-DATA-075.
 
 ---
 

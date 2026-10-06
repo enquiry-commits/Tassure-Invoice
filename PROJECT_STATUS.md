@@ -2536,7 +2536,7 @@ one focused Git commit.
 ## Latest completed work
 
 - **Two council follow-ups Vincent approved: the ALL-mode Draft fails loudly,
-  the search boxes accept commas (INV-DOC-023, INV-DATA-074).** After the
+  the search boxes accept commas (INV-DOC-023, INV-DATA-075).** After the
   council review (entry below) Vincent answered "改成明确报错" and "现在修".
   (1) `buildSoaDraft`'s ALL mode used to drop any book whose SOA PDF failed
   (`catch { return null }`) and only errored when ALL failed; now only a 404

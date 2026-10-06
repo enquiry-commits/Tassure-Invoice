@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { todaySGT } from '@/lib/date';
 import { loadRenameMap } from '@/lib/company-rename';
 import { onlyTeamworkActiveCompanies } from '@/lib/company-lifecycle';
+import { ilikeAny } from '@/lib/postgrest-or';
 
 const today = todaySGT;
 
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
   let q = onlyTeamworkActiveCompanies(supabase.from('companies').select('*'));
 
   if (search) {
-    q = q.or(`company_name.ilike.%${search}%,registration_no.ilike.%${search}%`);
+    q = q.or(ilikeAny(['company_name', 'registration_no'], search));
   }
 
   if (filter === 'address') {

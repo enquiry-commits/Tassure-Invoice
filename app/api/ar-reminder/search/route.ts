@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
+import { ilikeAny } from '@/lib/postgrest-or';
 
 /**
  * Cross-cycle lookup for AR Reminder's search box (see useCrossCycleSearch
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await supabase
     .from('ar_reminder')
     .select('entity_name, uen, fye_month, fye_year')
-    .or(`entity_name.ilike.%${term}%,uen.ilike.%${term}%`)
+    .or(ilikeAny(['entity_name', 'uen'], term))
     .or('status.is.null,status.neq.Excluded')
     .order('fye_year', { ascending: false })
     .limit(5);
