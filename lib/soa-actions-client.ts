@@ -3,6 +3,7 @@
 import type { DraftLike } from '@/lib/draft-helper-client';
 import type { QbCompany } from '@/lib/quickbooks';
 import { todaySGT } from '@/lib/date';
+import { safeFileLabel } from '@/lib/invoice-filename';
 import { buildCampaignDraft, loadCampaignActor } from '@/lib/campaign-draft-client';
 
 /**
@@ -115,7 +116,7 @@ async function fetchBookSoaPdf(companyName: string, book: QbCompany): Promise<Fi
   }
   warnAboutSoaPdf(res, `SOA (${book}) for ${companyName}`);
   const blob = await res.blob();
-  return new File([blob], `SOA (${book}) - ${companyName}.pdf`, { type: 'application/pdf' });
+  return new File([blob], `SOA (${book}) - ${safeFileLabel(companyName)}.pdf`, { type: 'application/pdf' });
 }
 
 export async function buildSoaDraft(

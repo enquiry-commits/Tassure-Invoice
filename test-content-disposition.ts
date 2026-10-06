@@ -8,6 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import { attachmentDisposition, filenameFromDisposition, headerDetail, wellFormed } from './lib/content-disposition';
+import { safeFileLabel } from './lib/invoice-filename';
 
 let fail = 0;
 const check = (name: string, cond: boolean, detail = '') => {
@@ -54,6 +55,12 @@ const chineseDetail = headerDetail('思店科技(杭州)有限公司 — '.repea
 check('headerDetail bounds the encoded size (a Chinese character encodes to 9) and reads back as a prefix', chineseDetail.length <= 6000 && '思店科技(杭州)有限公司 — '.repeat(300).startsWith(decodeURIComponent(chineseDetail)), String(chineseDetail.length));
 check('headerDetail leaves ordinary short messages exactly as before', headerDetail('TAB #02610965: x y') === encodeURIComponent('TAB #02610965: x y'));
 check('a header built from it is a valid Latin-1 value', (() => { try { new Response('x', { headers: { 'X-Soa-Merge-Error-Detail': headerDetail('思店科技 ' + emoji) } }); return true; } catch { return false; } })());
+
+console.log('\n--- SOA email attachment names (Draft Helper cuts a name at "/") ---');
+check('"S/B" in a company name no longer looks like a folder', safeFileLabel('ABC S/B Sdn Bhd') === 'ABC S B Sdn Bhd');
+check('every Windows-forbidden character becomes a space, once', safeFileLabel('A<B>:"C"|D?*  E\\F') === 'A B C D E F', safeFileLabel('A<B>:"C"|D?*  E\\F'));
+check('Chinese names and brackets are left alone', safeFileLabel('思店科技(杭州)有限公司') === '思店科技(杭州)有限公司');
+check('the SOA attachment File is named through it', /new File\(\[blob\], `SOA \(\$\{book\}\) - \$\{safeFileLabel\(companyName\)\}\.pdf`/.test(fs.readFileSync(path.join(process.cwd(), 'lib', 'soa-actions-client.ts'), 'utf8')));
 
 console.log('\n--- every route and downloader uses the helpers ---');
 const walk = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e => {

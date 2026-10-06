@@ -2541,7 +2541,10 @@ one focused Git commit.
   font failure at `save()` cannot 500 the whole SOA (theoretical; the JSON
   error and the signal now make it visible) and full-width bracket matching
   in `normalize()` (a client-matching rule — Vincent's call). Not yet
-  clicked in production (REG-036).
+  clicked in production (REG-036). Afterwards, also from that review:
+  SOA email attachment names go through `safeFileLabel()` (Windows-forbidden
+  characters → spaces) because the Draft Helper's `os.path.basename` cuts a
+  name at "/".
 
 - **Client invoice PDF: long BILL TO addresses no longer run through the
   invoice facts (INV-QB-029).** While checking whether TAC #02680202

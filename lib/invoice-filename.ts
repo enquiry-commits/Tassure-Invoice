@@ -17,6 +17,15 @@ export function displayInvoiceNo(invoiceNo: string | null | undefined): string {
   return value.replace(/^(?:TAB|TAC|TAO)(?=\d|[\s#:_-])[\s#:_-]*/i, '');
 }
 
+// A company name as part of a file name that goes on disk (SOA email
+// attachments): characters Windows forbids in file names become spaces. The
+// Draft Helper writes each attachment to a temp folder and its
+// os.path.basename cuts a name at "/" — "SOA (TAB) - ABC S/B Sdn Bhd.pdf"
+// would arrive as "B Sdn Bhd.pdf", and a ":" or "?" makes open() fail.
+export function safeFileLabel(name: string): string {
+  return name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 export function invoicePdfFileName(company: 'TAB' | 'TAC' | 'TAO', invoiceNo: string, companyName: string, total: number): string {
   const prefix = company === 'TAB' ? 'INV' : company;
   const safeCompany = companyName.replace(/[<>:"/\\|?*]/g, ' ').replace(/\s+/g, ' ').trim();
