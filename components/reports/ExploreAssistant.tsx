@@ -71,11 +71,11 @@ export default function ExploreAssistant({ options, dimensionLabels, metricLabel
           <span style={CHIP}>Show: <b>{plan.view === 'list' ? 'Company list' : 'Summary'}</b></span>
         </div>
         {r.assumed.length > 0 && (
-          <div style={{ fontSize: 12, background: '#fffbeb', border: '1px solid #fde68a', color: '#92600a', borderRadius: 7, padding: '6px 10px', marginBottom: 8 }}>
+          <div style={{ fontSize: 12, background: '#f1f5f9', border: '1px solid #cbd5e1', color: '#334155', borderRadius: 7, padding: '6px 10px', marginBottom: 8 }}>
             I assumed: {r.assumed.join(' · ')}
           </div>
         )}
-        {r.ignored.length > 0 && <div style={{ fontSize: 11.5, color: '#b45f6b', marginBottom: 8 }}>Ignored: {r.ignored.join(', ')}</div>}
+        {r.ignored.length > 0 && <div style={{ fontSize: 11.5, color: '#0f172a', marginBottom: 8 }}>Ignored: {r.ignored.join(', ')}</div>}
         <div style={{ fontSize: 12.5, color: '#475569', marginBottom: 10 }}>
           This will show <b>{p.count}</b> {p.count === 1 ? 'company' : 'companies'}.
           {p.notRecorded > 0 && <> {p.notRecorded} with no Client Since recorded {p.notRecorded === 1 ? 'is' : 'are'} left out.</>}
@@ -111,13 +111,13 @@ export default function ExploreAssistant({ options, dimensionLabels, metricLabel
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
         {EXAMPLES.map(ex => (
           <button key={ex} onClick={() => { setText(ex); ask(ex); }} disabled={loading}
-            style={{ ...CHIP, cursor: 'pointer', color: '#2563eb' }}>{ex}</button>
+            style={{ ...CHIP, cursor: 'pointer', color: '#1d3a5c', fontWeight: 600 }}>{ex}</button>
         ))}
       </div>
 
       {loading && <div style={{ fontSize: 12.5, color: '#64748b' }}>Thinking…</div>}
-      {error && <div style={{ fontSize: 12.5, color: '#b45f6b' }}>{error} You can still use the Quick views on the left.</div>}
-      {applied && !loading && !result && <div style={{ fontSize: 12.5, color: '#047857' }}>Applied — see the results below. You can adjust anything on the left.</div>}
+      {error && <div style={{ fontSize: 12.5, color: '#0f172a' }}>{error} You can still use the Quick views on the left.</div>}
+      {applied && !loading && !result && <div style={{ fontSize: 12.5, color: '#1d3a5c' }}>Applied — see the results below. You can adjust anything on the left.</div>}
 
       {result?.type === 'plan' && renderPlan(result)}
       {result?.type === 'clarify' && (
@@ -126,7 +126,7 @@ export default function ExploreAssistant({ options, dimensionLabels, metricLabel
           {result.choices.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {result.choices.map(c => (
-                <button key={c} onClick={() => ask(`${baseText} — ${c}`)} style={{ ...CHIP, cursor: 'pointer', color: '#2563eb' }}>{c}</button>
+                <button key={c} onClick={() => ask(`${baseText} — ${c}`)} style={{ ...CHIP, cursor: 'pointer', color: '#1d3a5c', fontWeight: 600 }}>{c}</button>
               ))}
             </div>
           )}
