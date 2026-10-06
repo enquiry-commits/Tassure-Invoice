@@ -57,6 +57,16 @@ const run = (existing: QbAttachable[], mode: 'create' | 'refresh', opts?: Parame
   r = await run([], 'refresh');
   check('edited invoice with no copy at all (create had failed): a copy is attached', r.result.status === 'attached');
 
+  console.log('\n--- an invoice accounting has split keeps the copy made before the split ---');
+  for (const mode of ['refresh', 'create'] as const) {
+    const f = fakeApi([ours('1')]);
+    const out = await placeInvoiceCopy(f.api, { invoiceId: '25898', fileName: 'x.pdf', mode, splitByAccounting: true });
+    check(`${mode} on a split invoice: nothing is read, uploaded or removed`, out.status === 'skipped' && /already split/.test((out as { reason: string }).reason) && f.calls.length === 0, f.calls.join(' '));
+  }
+  const unsplit = fakeApi([ours('1')]);
+  const replaced = await placeInvoiceCopy(unsplit.api, { invoiceId: '25898', fileName: 'x.pdf', mode: 'refresh', splitByAccounting: false });
+  check('an invoice that is NOT split is still refreshed as before', replaced.status === 'attached' && replaced.replaced === 1);
+
   console.log('\n--- failures are reported, never thrown, and never lose the old copy ---');
   r = await run([ours('1')], 'refresh', { failUpload: true });
   check('a failed upload keeps the old copy (nothing removed)', r.result.status === 'failed' && !r.calls.some(c => c.startsWith('remove')) && /upload/.test((r.result as { error: string }).error));
@@ -166,6 +176,7 @@ const run = (existing: QbAttachable[], mode: 'create' | 'refresh', opts?: Parame
   check('the file is named the way "Save PDF" names it', /invoicePdfFileName\(company, docNumber, customerName,/.test(wiring));
   check('create-invoice attaches in create mode', /attachInvoiceCopyToQuickBooks\(\{[\s\S]*?mode: 'create'/.test(read('app/api/quickbooks/create-invoice/route.ts')));
   check('update-invoice attaches in refresh mode', /attachInvoiceCopyToQuickBooks\(\{[\s\S]*?mode: 'refresh'/.test(read('app/api/quickbooks/update-invoice/route.ts')));
+  check('update-invoice tells the copy step when the invoice is already split', /splitByAccounting: \(\(invoice\.Line[\s\S]*?isDeferredItem/.test(read('app/api/quickbooks/update-invoice/route.ts')));
   check('QuickBooks\' own PDF is the copy (not the redrawn client version)', /fetchQuickBooksInvoicePdf\(company, invoiceId\)/.test(wiring) && !/getClientInvoicePdf/.test(wiring));
 
   console.log(`\n=== ${fail === 0 ? 'ALL PASSED' : `${fail} FAILURE(S)`} ===`);

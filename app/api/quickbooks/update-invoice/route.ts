@@ -278,6 +278,10 @@ export async function PATCH(req: NextRequest) {
     customerName: String((invoice.CustomerRef as { name?: string } | undefined)?.name ?? ''),
     total: inv.TotalAmt,
     mode: 'refresh',
+    // Editing an invoice accounting has split keeps its Deferred lines, so
+    // QuickBooks' PDF is still the split version: leave the earlier copy be.
+    splitByAccounting: ((invoice.Line as Array<{ SalesItemLineDetail?: { ItemRef?: { name?: string } } }> | undefined) ?? [])
+      .some(line => isDeferredItem(line.SalesItemLineDetail?.ItemRef?.name)),
   });
 
   return NextResponse.json({

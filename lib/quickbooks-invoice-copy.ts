@@ -30,8 +30,10 @@ export async function attachInvoiceCopyToQuickBooks(args: {
   customerName: string;
   total: number | null | undefined;
   mode: 'create' | 'refresh';
+  // The invoice already has accounting's Deferred Revenue lines.
+  splitByAccounting?: boolean;
 }): Promise<InvoiceCopyResult> {
-  const { company, invoiceId, docNumber, customerName, total, mode } = args;
+  const { company, invoiceId, docNumber, customerName, total, mode, splitByAccounting } = args;
   if (INVOICE_COPY_ATTACHMENT_MODE[company] !== 'live') return { status: 'skipped', reason: `${company} invoice copies are switched off` };
   if (!/^\d+$/.test(invoiceId)) return { status: 'failed', error: `"${invoiceId}" is not a QuickBooks invoice id` };
   try {
@@ -48,7 +50,7 @@ export async function attachInvoiceCopyToQuickBooks(args: {
     const fileName = invoicePdfFileName(company, docNumber, customerName, Number(total ?? 0));
     let timer: ReturnType<typeof setTimeout> | undefined;
     const result = await Promise.race([
-      placeInvoiceCopy(api, { invoiceId, fileName, mode }),
+      placeInvoiceCopy(api, { invoiceId, fileName, mode, splitByAccounting }),
       new Promise<InvoiceCopyResult>(resolve => { timer = setTimeout(() => resolve({ status: 'failed', error: `QuickBooks did not finish within ${TIME_LIMIT_MS / 1000} seconds` }), TIME_LIMIT_MS); }),
     ]).finally(() => clearTimeout(timer));
     if (result.status === 'failed') console.error(`Invoice copy not attached (${company} #${docNumber}, id ${invoiceId}, ${mode}): ${result.error}`);

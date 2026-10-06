@@ -2488,7 +2488,14 @@ again.
   mail it; (6) all three books are live (`INVOICE_COPY_ATTACHMENT_MODE`), no
   backfill ("from now onwards"): an invoice accounting has already split
   (e.g. #02611099) would get the SPLIT version, which is not what the client
-  received. Verified on a real invoice, TAB #02611136, 2026-10-06, with
+  received; (7) an invoice accounting has already split is NEVER attached to
+  and its earlier copy is NEVER replaced (`splitByAccounting`; update-invoice
+  reads it from the live lines before the edit): QuickBooks would print the
+  split version, and the refresh would overwrite the original made before the
+  split — the very thing the copy is for. Found the day it shipped, when
+  Vincent said the point is that the system can later find the original,
+  unsplit invoice in QuickBooks (for the SOA and email attachments, instead of
+  redrawing it, INV-QB-029). Verified on a real invoice, TAB #02611136, 2026-10-06, with
   Vincent's approval: ONE multipart request (`file_metadata_01` JSON linking
   to the invoice Id + `file_content_01`) is enough; QuickBooks answers HTTP
   200 even when it refuses a file (the refusal is a `Fault` inside

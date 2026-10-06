@@ -2559,6 +2559,23 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Invoice copies: never touch an invoice accounting has already split
+  (INV-QB-036 rule 7), plus what was found about using them for the SOA.**
+  Vincent: the point of attaching copies is that the system can later find
+  the ORIGINAL, unsplit invoice in QuickBooks — for the SOA PDF and email
+  attachments — instead of redrawing the 27%. Reading the data first: none
+  of the 154 open split invoices (TAB 130, TAC 24) carries any attachment
+  (they predate the rule; the oldest is dated 2024-09), 88 of the 154 were
+  keyed straight into QuickBooks rather than made by the system (so only
+  staff's hand-attached copies can ever cover them), and the 8 hand-attached
+  files that exist today are genuine QuickBooks PDFs of the right invoice.
+  A defect in what shipped hours earlier surfaced: 'refresh' would have
+  replaced a pre-split original with the split version when an already-split
+  invoice was edited in the system. Fixed (`splitByAccounting`, tested): such
+  an invoice is neither attached to nor refreshed. Open: using the attached
+  original in `getClientInvoicePdf` for the SOA / email / Save PDF, with a
+  check that a file really is the unsplit original — Vincent to decide scope.
+
 - **Invoice copies attached in QuickBooks automatically (INV-QB-036).**
   Accounting wrote on the invoice edit screen: "From now onwards, kindly
   attached the invoice copy as attachment here." Vincent asked whether the

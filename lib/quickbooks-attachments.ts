@@ -44,10 +44,17 @@ export function looksLikePdf(bytes: Uint8Array): boolean {
 // mode 'refresh': the invoice was edited — replace the system's own copy.
 // In both modes a file somebody attached by hand is left alone, and the
 // system adds none next to it (two "copies" would only confuse accounting).
+// splitByAccounting: the invoice already carries accounting's Deferred
+// Revenue split — QuickBooks now prints the SPLIT version, which is exactly
+// what the copy exists to avoid (INV-QB-029), so nothing is attached or
+// replaced: the copy made before the split stays the original.
 export async function placeInvoiceCopy(
   api: QbAttachmentApi,
-  opts: { invoiceId: string; fileName: string; mode: 'create' | 'refresh' },
+  opts: { invoiceId: string; fileName: string; mode: 'create' | 'refresh'; splitByAccounting?: boolean },
 ): Promise<InvoiceCopyResult> {
+  if (opts.splitByAccounting) {
+    return { status: 'skipped', reason: 'accounting has already split this invoice — QuickBooks would print the split version, so the copy made before the split is kept' };
+  }
   let existing: QbAttachable[];
   try {
     existing = await api.listForInvoice(opts.invoiceId);
