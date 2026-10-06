@@ -11,7 +11,9 @@
 // the server and attached, and ONLY THEN the redraw — "准确度和失误率才是最优".
 // So the question is one safe answer: is THIS file that original — not the
 // split version, the system's own drawing, an older figure, another invoice or
-// another client's? Whatever is not provably the original is never used.
+// another client's? Whatever is not provably the original is never used — with ONE
+// narrow exception, a person's decision about a named file (ConfirmedOriginal below,
+// lib/original-decisions.ts; Vincent, 2026-10-07).
 //
 // The proof (council review of the first version, 2026-10-06, found that the
 // amounts alone were not enough — 7 wrong files got through):
@@ -261,8 +263,11 @@ export async function sha256Hex(bytes: Uint8Array): Promise<string> {
 }
 
 // The register entry that covers this refused file, or null.
-async function confirmedApproval(bytes: Uint8Array, pdf: PdfFacts, facts: InvoiceFacts, check: { stage: RefusalStage }, confirmed: readonly ConfirmedOriginal[]): Promise<ConfirmedOriginal | null> {
+export async function confirmedApproval(bytes: Uint8Array, pdf: PdfFacts, facts: InvoiceFacts, check: { stage: RefusalStage }, confirmed: readonly ConfirmedOriginal[]): Promise<ConfirmedOriginal | null> {
   if (check.stage !== 'amounts' && check.stage !== 'no-text') return null;
+  // 'no-text' fires on the first page without text — before the pages that have text are checked for whose invoice they
+  // are. A file is only a picture when EVERY page is.
+  if (check.stage === 'no-text' && !pdf.pages.every(p => p.replace(/\s/g, '').length < MIN_PAGE_CHARS)) return null;
   const ofThisVersion = confirmed.filter(c => sameInvoiceVersion(c, facts));
   if (!ofThisVersion.length) return null;
   if (check.stage === 'amounts' && printsADeferredTwin(pdf, facts)) return null;

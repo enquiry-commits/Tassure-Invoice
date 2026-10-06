@@ -7,8 +7,8 @@
 //
 // Run: npx tsx test-original-upload.ts
 import { INVOICE_COPY_NOTE } from './lib/quickbooks-attachments';
-import { MAX_ORIGINAL_BYTES, formatMoney, type AttachmentFile, type InvoiceFacts, type PdfFacts } from './lib/original-copy';
-import { httpStatusFor, originalFileName, originalUploadNote, placeUploadedOriginal, sha256Hex, type OriginalUploadDeps, type UploadResult } from './lib/original-upload';
+import { MAX_ORIGINAL_BYTES, formatMoney, sha256Hex, type AttachmentFile, type ConfirmedOriginal, type InvoiceFacts, type PdfFacts } from './lib/original-copy';
+import { httpStatusFor, originalFileName, originalUploadNote, placeUploadedOriginal, type OriginalUploadDeps, type UploadResult } from './lib/original-upload';
 
 let fail = 0;
 const check = (name: string, cond: boolean, detail = '') => {
@@ -187,9 +187,9 @@ const refusedWith = (r: UploadResult, re: RegExp) => r.status === 'refused' && r
     check('attached, and the look-up now picks exactly this file', r.status === 'attached' && r.attachableId === '900' && w.calls.upload === 1, JSON.stringify(r));
     check('…even with other, wrong files already on the invoice (they were opened and refused first)', r.status === 'attached' && w.calls.download >= 3, `downloads ${w.calls.download}`);
     const up = w.uploads[0];
-    check('the file in QuickBooks is the very bytes uploaded', up.pdf === bytes && sha256Hex(up.pdf) === sha256Hex(bytes));
+    check('the file in QuickBooks is the very bytes uploaded', up.pdf === bytes && await sha256Hex(up.pdf) === await sha256Hex(bytes));
     check('its name is built here, from the invoice, never from the person\'s file', up.fileName === 'TAB 02611112 - 1X Exchange Pte. Ltd. - original.pdf' && r.status === 'attached' && r.fileName === up.fileName);
-    check('its note says who, when and the sha256 — and is never the system\'s own copy note', up.note === originalUploadNote(BY, new Date('2026-10-07T01:02:03Z'), sha256Hex(bytes)) && up.note.includes('Chelsea Tan') && up.note.includes('chelsea@tassure.example') && up.note.includes('2026-10-07') && up.note.includes(sha256Hex(bytes)) && up.note !== INVOICE_COPY_NOTE);
+    check('its note says who, when and the sha256 — and is never the system\'s own copy note', up.note === originalUploadNote(BY, new Date('2026-10-07T01:02:03Z'), await sha256Hex(bytes)) && up.note.includes('Chelsea Tan') && up.note.includes('chelsea@tassure.example') && up.note.includes('2026-10-07') && up.note.includes(await sha256Hex(bytes)) && up.note !== INVOICE_COPY_NOTE);
     check('a second upload of the same file is "already" (a double click attaches nothing twice)', (await run(w, fakePdf('GOOD02', facts(ORIGINAL)))).status === 'already' && w.calls.upload === 1);
     check('…and "attached" answers 200', httpStatusFor(r) === 200);
   }
@@ -201,6 +201,42 @@ const refusedWith = (r: UploadResult, re: RegExp) => r.status === 'refused' && r
     w2.attach('720', fakePdf('PNG001', null), { ContentType: 'image/png', FileName: 'scan.png' });
     const r2 = await run(w2, fakePdf('GOOD03', facts(ORIGINAL)));
     check('a picture attached before does not stand in the way', r2.status === 'attached');
+  }
+
+  console.log('\n--- the exact file a decision of Vincent\'s names (lib/original-decisions.ts) ---');
+  {
+    // The client got one 760 line; QuickBooks now holds 700 + 60: the proof refuses it (stage "amounts"), a decision can cover it.
+    const REGROUPED = page({ lines: [['Corporate Secretarial Services and the government fee', 760], ['XBRL for the year (FYE 31.12.2026)', 600]], total: 1360 });
+    const regrouped = fakePdf('REGRP1', facts(REGROUPED));
+    const entry: ConfirmedOriginal = { invoiceNo: FACTS.invoiceNo, date: FACTS.date, total: FACTS.total, customer: FACTS.customer, sha256: await sha256Hex(regrouped), fileName: 'x.pdf', decidedBy: 'Vincent', decidedOn: '2026-10-07', why: 'only the appearance differs' };
+    const w0 = world();
+    const r0 = await run(w0, regrouped);
+    check('without a decision the upload refuses the regrouped original (the proof stands)', refusedWith(r0, /amounts are not/) && w0.calls.upload === 0);
+    const w1 = world();
+    w1.deps.confirmed = [entry];
+    const r1 = await run(w1, regrouped);
+    check('the EXACT file a decision names can be put back: attached, and the look-up that honours the decision picks it', r1.status === 'attached' && w1.calls.upload === 1, JSON.stringify(r1));
+    check('…and its note says it is the decided file, not that the proof checked it', w1.uploads[0].note.includes('Vincent decided on 2026-10-07') && !w1.uploads[0].note.includes('the system checked it') && w1.uploads[0].note.includes(await sha256Hex(regrouped)));
+    const w2 = world();
+    w2.deps.confirmed = [entry];
+    const r2 = await run(w2, fakePdf('REGRP2', facts(REGROUPED + '\n(a different copy)')));
+    check('any other file with the same defect is still refused', refusedWith(r2, /amounts are not/) && w2.calls.upload === 0);
+    const w3 = world();
+    w3.deps.confirmed = [entry];
+    w3.attach('700', regrouped);
+    const r3 = await run(w3, fakePdf('GOOD07', facts(ORIGINAL)));
+    check('an invoice whose decided original is already attached is "already" — the decision counts there too', r3.status === 'already' && w3.calls.upload === 0, JSON.stringify(r3));
+    const w3b = world();
+    w3b.attach('700', regrouped);
+    const r3b = await run(w3b, fakePdf('GOOD07', facts(ORIGINAL)));
+    check('…and without the decision that attached file is no original: the upload goes ahead', r3b.status === 'attached' && w3b.calls.upload === 1);
+    const split = fakePdf('SPLT09', facts(SPLIT));
+    const w5 = world();
+    w5.deps.confirmed = [{ ...entry, sha256: await sha256Hex(split) }];
+    check('the split version is never covered, even if a decision named it', refusedWith(await run(w5, split), /amounts are not/) && w5.calls.upload === 0);
+    const w6 = world({ invoice: { facts: { ...FACTS, customer: '1X Exchange' } } });
+    w6.deps.confirmed = [entry];
+    check('once the invoice changed (customer renamed) the decision no longer covers the file', (await run(w6, regrouped)).status === 'refused' && w6.calls.upload === 0);
   }
 
   console.log('\n--- when QuickBooks does not cooperate ---');

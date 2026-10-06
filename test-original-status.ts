@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { INVOICE_COPY_NOTE } from './lib/quickbooks-attachments';
 import type { AttachmentFile, InvoiceFacts, OriginalCopyResult, TriedAttachment } from './lib/original-copy';
-import { chunk, fallbackWording, hintForReason, invoicesByIdQuery, mapLimit, queueRowFor, rowKey, splitInvoiceRows, summarizeFile, verdictKey } from './lib/original-status-core';
+import { chunk, fallbackWording, hintForReason, invoicesByIdQuery, mapLimit, queueOutcome, queueRowFor, rowKey, splitInvoiceRows, summarizeFile, verdictKey } from './lib/original-status-core';
 import { NAV_TREE, navLeaves } from './lib/nav-tree';
 import { pageRuleFor } from './lib/workspaces';
 
@@ -86,6 +86,18 @@ check('every queue row says what the client gets meanwhile: the redraw, or Quick
   && /QuickBooks' own PDF is sent, with accounting's Deferred Revenue lines showing/.test(noTerms) && /payment terms could not be read/.test(noTerms));
 check('the queue row never carries a file\'s bytes or download link', !JSON.stringify(rejected).includes('files.test') && !('bytes' in (rejected ?? {})));
 
+console.log('\n--- one invoice: closed, done, decided or waiting ---');
+const waitingAnswer: OriginalCopyResult = { none: 'no PDF attached', tried: [] };
+const one = { row, live: { balance: 1360, totalAmt: 1360, txnDate: '2026-10-01' } as { balance: number; totalAmt?: number; txnDate?: string } | null, split: true, files: [] as AttachmentFile[], answer: waitingAnswer as OriginalCopyResult | { found: true } | null, decided: false, fallback: 'F' };
+const live = (() => { const o = queueOutcome({ ...one, live: { balance: 900, totalAmt: 1000, txnDate: '2026-10-02' } }); return typeof o === 'object' && o.balance === 900 && o.totalAmt === 1000 && o.txnDate === '2026-10-02' && o.fallback === 'F' && o.state === 'nothing'; })();
+check('an invoice nothing is known to be wrong with is waiting, with the LIVE figures and what the client gets meanwhile', live);
+check('not found in QuickBooks, paid or voided (balance 0), no longer split, or nothing to judge: closed — whatever else is known',
+  [queueOutcome({ ...one, live: null }), queueOutcome({ ...one, live: { balance: 0 } }), queueOutcome({ ...one, split: false }), queueOutcome({ ...one, answer: null }), queueOutcome({ ...one, live: { balance: 0 }, decided: true, answer: found }), queueOutcome({ ...one, live: null, decided: true })].every(o => o === 'closed'));
+check('its original in use: done — and that wins over a decision', queueOutcome({ ...one, answer: found }) === 'done' && queueOutcome({ ...one, answer: found, decided: true }) === 'done' && queueOutcome({ ...one, answer: { found: true } }) === 'done');
+check('left as it is by Vincent and still the invoice he decided about: decided, not listed', queueOutcome({ ...one, decided: true }) === 'decided');
+check('a decision never turns a paid invoice into a counted one', queueOutcome({ ...one, live: { balance: 0 }, decided: true }) === 'closed');
+check('an invoice with a refused file is waiting as "refused" and keeps the reasons', (() => { const o = queueOutcome({ ...one, files: [pdfFile('3')], answer: { none: 'x', tried: tried({ reason: 'r3' }) } }); return typeof o === 'object' && o.state === 'refused' && o.tried[0].reason === 'r3'; })());
+
 console.log('\n--- reading many invoices at once ---');
 check('the batched read names the ids it is given, quoted, nothing else', invoicesByIdQuery(['12', '345']) === "SELECT * FROM Invoice WHERE Id IN ('12','345') MAXRESULTS 1000");
 check('an id that is not digits never reaches the query', ["1' OR '1'='1", '12 ', 'abc', ''].every(id => { try { invoicesByIdQuery(['5', id]); return false; } catch { return true; } }));
@@ -115,11 +127,11 @@ check('chunks keep every item once and in order', JSON.stringify(chunk([1, 2, 3,
   check('the proof is the SOA\'s own look-up (selectVerifiedOriginal) with the SOA\'s own reader (readPdf) and size cap', /selectVerifiedOriginal\(/.test(status) && /read: readPdf/.test(status) && /MAX_ORIGINAL_BYTES/.test(status));
   const pdfLib = read('lib/client-invoice-pdf.ts');
   check('the invoice facts come from ONE function for the queue, the upload and the SOA (prepareInvoiceForClient)', /prepareInvoiceForClient\(book, live,/.test(status) && /export function prepareInvoiceForClient/.test(pdfLib) && (pdfLib.match(/prepareInvoiceForClient\(/g) ?? []).length >= 2 && !/buildClientInvoiceModel\(|invoiceFacts\(/.test(status));
-  check('Vincent\'s decisions count in the queue as in the SOA: a confirmed original is looked up with the file, a decided invoice is not listed but counted',
-    /confirmedOriginalsFor\(book, invoiceId\)/.test(status) && /redrawDecisionFor\(book, row\.qbInvoiceId, prepared\.facts\)\) return 'decided'/.test(status) && /out\.decided \+= rows\.filter\(r => r === 'decided'\)\.length/.test(status));
+  check('Vincent\'s decisions count in the queue as in the SOA: a confirmed original is looked up with the file, a decided invoice is not listed but counted, and the classification is the tested pure function',
+    /confirmedOriginalsFor\(book, invoiceId\)/.test(status) && /decided: !!facts && !!redrawDecisionFor\(book, row\.qbInvoiceId, facts\)/.test(status) && /return queueOutcome\(\{/.test(status) && /out\.decided \+= rows\.filter\(r => r === 'decided'\)\.length/.test(status));
   check('only the books the system looks up are listed (TAO has none to redraw)', /ORIGINAL_COPY_LOOKUP_MODE\[b\] === 'live'/.test(status));
   check('invoices are read in batches, not one request per invoice; the files in one paged read per book', /invoicesByIdQuery\(part\)/.test(status) && /chunk\(ids, INVOICES_PER_QUERY\)/.test(status) && /listAllForInvoices\(\)/.test(status) && !/loadInvoiceForClient\(/.test(status));
-  check('an invoice paid, voided or no longer split since the last sync is not listed (the live invoice decides)', /Number\(live\.Balance\) > 0/.test(status) && /if \(!prepared\.facts\) return 'closed'/.test(status));
+  check('an invoice paid, voided or no longer split since the last sync is not listed (the live invoice decides): only an invoice still open is prepared, and queueOutcome closes the rest', /live && Number\(live\.Balance\) > 0 \? prepareInvoiceForClient\(/.test(status) && /split: !!facts/.test(status) && /!\(live\.balance > 0\) \|\| !input\.split/.test(read('lib/original-status-core.ts')));
   check('a book that cannot be read is reported, never shown as "nothing to do" for its invoices', /out\.errors\[book\]/.test(status) && /out\.unknown \+= mine\.length/.test(status));
   check('a failed download or read is asked again next time (only the proof\'s own answers are remembered)', /could not be read \\\(/.test(status) && /worthKeeping\(result\)/.test(status));
   check('two people opening the page share one reading', /inFlight \?\?=/.test(status));

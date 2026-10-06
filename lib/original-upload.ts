@@ -12,9 +12,8 @@
 // tested with fakes (test-original-upload.ts), like lib/quickbooks-attachments.ts.
 // The wiring is lib/original-upload-live.ts, the route app/api/billing/originals/upload.
 
-import { createHash } from 'node:crypto';
 import { looksLikePdf } from './quickbooks-attachments';
-import { checkOriginalCopy, MAX_ORIGINAL_BYTES, selectVerifiedOriginal, type AttachmentFile, type ConfirmedOriginal, type InvoiceFacts, type PdfFacts } from './original-copy';
+import { checkOriginalCopy, confirmedApproval, MAX_ORIGINAL_BYTES, selectVerifiedOriginal, sha256Hex, type AttachmentFile, type ConfirmedOriginal, type InvoiceFacts, type PdfFacts } from './original-copy';
 import { hintForReason } from './original-status-core';
 
 export type UploadedBy = { name: string; email: string };
@@ -53,8 +52,6 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 
 const refused = (reason: string): UploadResult => ({ status: 'refused', reason, hint: hintForReason(reason) });
 
-export const sha256Hex = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
-
 // What the invoice's attachment list shows for a file staff uploaded: a clean
 // name built here, never the name of the file on someone's computer (it can be
 // anything, and "Save PDF"-style names are exactly what staff must not mix up).
@@ -66,8 +63,11 @@ export function originalFileName(invoiceNo: string, customer: string): string {
 // Never INVOICE_COPY_NOTE: that marks the system's own copy, which the system
 // replaces when the invoice is edited (lib/quickbooks-attachments.ts) — a file
 // staff found must never be mistaken for it.
-export function originalUploadNote(by: UploadedBy, at: Date, sha256: string): string {
-  return `Original invoice PDF uploaded on the Invoice Originals page by ${by.name} (${by.email}) on ${at.toISOString().slice(0, 10)}; the system checked it against this invoice (number, date, customer, amounts) before attaching it. sha256 ${sha256}`;
+export function originalUploadNote(by: UploadedBy, at: Date, sha256: string, decision?: Pick<ConfirmedOriginal, 'decidedBy' | 'decidedOn'> | null): string {
+  const checked = decision
+    ? `this exact file is the one ${decision.decidedBy} decided on ${decision.decidedOn} to use as this invoice's original (lib/original-decisions.ts)`
+    : 'the system checked it against this invoice (number, date, customer, amounts) before attaching it';
+  return `Original invoice PDF uploaded on the Invoice Originals page by ${by.name} (${by.email}) on ${at.toISOString().slice(0, 10)}; ${checked}. sha256 ${sha256}`;
 }
 
 export async function placeUploadedOriginal(deps: OriginalUploadDeps, input: { bytes: Uint8Array; by: UploadedBy }): Promise<UploadResult> {
@@ -106,12 +106,15 @@ export async function placeUploadedOriginal(deps: OriginalUploadDeps, input: { b
     return refused(`the file could not be read (${message(err)})`);
   }
   const check = checkOriginalCopy(pdf, facts);
-  if (!check.ok) return refused(check.reason);
+  // Only the EXACT file a decision names, for the invoice as it was decided about, may pass without the proof — e.g. to put
+  // back the original of one of Vincent's four if its attachment is ever removed. Any other file must pass the proof.
+  const decided = check.ok ? null : await confirmedApproval(bytes, pdf, facts, check, deps.confirmed ?? []);
+  if (!check.ok && !decided) return refused(check.reason);
 
   const fileName = originalFileName(facts.invoiceNo, facts.customer);
   let uploaded: { id: string };
   try {
-    uploaded = await deps.upload({ fileName, note: originalUploadNote(by, deps.now(), sha256Hex(bytes)), pdf: bytes });
+    uploaded = await deps.upload({ fileName, note: originalUploadNote(by, deps.now(), await sha256Hex(bytes), decided), pdf: bytes });
   } catch (err) {
     return { status: 'failed', error: `the upload to QuickBooks failed (${message(err)})` };
   }

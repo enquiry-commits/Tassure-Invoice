@@ -14,8 +14,12 @@
 //
 // Rules: (1) an entry is added only on Vincent's explicit word, never inferred; (2) every entry is tied to the
 // version of the invoice he decided about (number, date, customer, total) — when accounting changes any of them
-// the entry lapses and the invoice is judged again (the list shows it, the proof decides); (3) a confirmed file
-// is tied to its sha256, so a different file never rides on it; (4) nothing here ever touches QuickBooks.
+// the entry lapses and the invoice is judged again (the list shows it, the proof decides); a "leave it as it is"
+// entry is also tied to the redraw's own rows, so it lapses when the redraw changes or the system can no longer
+// draw the invoice; (3) a confirmed file is tied to its sha256, so a different file never rides on it;
+// (4) nothing here ever touches QuickBooks. NOT tracked: the one "not-sent" entry (Sanli) rests on its customer's
+// net balance being 0, which this file cannot see — if it ever turns positive the SOA would carry QuickBooks' own PDF
+// (staff get the split-fallback warning when they download it).
 //
 // The only invoice left on the list is Co-Operate Associates TAB #02610167 (Vincent: "只留下唯一要处理的").
 
@@ -59,37 +63,48 @@ export type RedrawReason = keyof typeof REDRAW_REASONS;
 
 export type RedrawDecision = {
   book: Book; invoiceId: string; invoiceNo: string; date: string; total: number; customer: string;
+  // What Vincent looked at: the amounts of the rows the system's redraw prints for this invoice (null = the system
+  // cannot draw it, QuickBooks' own PDF goes out). The decision is about THAT redraw: when accounting changes the lines so
+  // that the redraw changes, or the system can no longer draw the invoice, the decision lapses.
+  redraw: readonly number[] | null;
   why: RedrawReason; decidedBy: string; decidedOn: string;
 };
 const decide = (e: Omit<RedrawDecision, 'decidedBy' | 'decidedOn'>): RedrawDecision => ({ ...e, decidedBy: DECIDED_BY, decidedOn: DECIDED_ON });
 
 export const REDRAW_DECISIONS: readonly RedrawDecision[] = [
   // changed after sending (totals: 1,120 -> 1,070 / 1,120 -> 1,220 / 660 -> 435; dates by 1-2 days)
-  decide({ book: 'TAB', invoiceId: '25898', invoiceNo: 'TAB 02611099', date: '29/09/2026', total: 1070, customer: 'Advance CF Technology Pte. Ltd.', why: 'changed-after-sending' }),
-  decide({ book: 'TAB', invoiceId: '25844', invoiceNo: 'TAB 02611080', date: '24/09/2026', total: 1220, customer: 'Kinplus Trading Pte. Ltd.', why: 'changed-after-sending' }),
-  decide({ book: 'TAB', invoiceId: '21256', invoiceNo: 'TAB 02610888', date: '23/07/2026', total: 435, customer: 'Ling Long E-Commerce Pte. Ltd.', why: 'changed-after-sending' }),
-  decide({ book: 'TAB', invoiceId: '16391', invoiceNo: 'TAB 02610747', date: '18/06/2026', total: 760, customer: 'Hai Rui Pte. Ltd.', why: 'changed-after-sending' }),
-  decide({ book: 'TAB', invoiceId: '13105', invoiceNo: 'TAB 02610580', date: '07/05/2026', total: 1120, customer: 'Singapore Hua Jin Investment Pte Ltd', why: 'changed-after-sending' }),
-  decide({ book: 'TAB', invoiceId: '11661', invoiceNo: 'TAB 02610402', date: '01/04/2026', total: 660, customer: 'Neostra Investment Pte. Ltd.', why: 'changed-after-sending' }),
+  decide({ book: 'TAB', invoiceId: '25898', invoiceNo: 'TAB 02611099', date: '29/09/2026', total: 1070, customer: 'Advance CF Technology Pte. Ltd.', redraw: [650, 360, 60], why: 'changed-after-sending' }),
+  decide({ book: 'TAB', invoiceId: '25844', invoiceNo: 'TAB 02611080', date: '24/09/2026', total: 1220, customer: 'Kinplus Trading Pte. Ltd.', redraw: [700, 460, 60], why: 'changed-after-sending' }),
+  decide({ book: 'TAB', invoiceId: '21256', invoiceNo: 'TAB 02610888', date: '23/07/2026', total: 435, customer: 'Ling Long E-Commerce Pte. Ltd.', redraw: [375, 60], why: 'changed-after-sending' }),
+  decide({ book: 'TAB', invoiceId: '16391', invoiceNo: 'TAB 02610747', date: '18/06/2026', total: 760, customer: 'Hai Rui Pte. Ltd.', redraw: [700, 60], why: 'changed-after-sending' }),
+  decide({ book: 'TAB', invoiceId: '13105', invoiceNo: 'TAB 02610580', date: '07/05/2026', total: 1120, customer: 'Singapore Hua Jin Investment Pte Ltd', redraw: [700, 360, 60], why: 'changed-after-sending' }),
+  decide({ book: 'TAB', invoiceId: '11661', invoiceNo: 'TAB 02610402', date: '01/04/2026', total: 660, customer: 'Neostra Investment Pte. Ltd.', redraw: [600, 60], why: 'changed-after-sending' }),
   // the original is a picture that matches the redraw line for line (rendered and compared 2026-10-07)
-  decide({ book: 'TAB', invoiceId: '18268', invoiceNo: 'TAB 02610789', date: '30/06/2026', total: 560, customer: 'Minyotech Pte. Ltd.', why: 'identical-to-original' }),
-  decide({ book: 'TAB', invoiceId: '16259', invoiceNo: 'TAB 02610691', date: '11/06/2026', total: 560, customer: 'Kindle Beacon Pte. Ltd.', why: 'identical-to-original' }),
-  decide({ book: 'TAB', invoiceId: '16254', invoiceNo: 'TAB 02610687', date: '11/06/2026', total: 1260, customer: 'International LCM Pte Ltd', why: 'identical-to-original' }),
-  decide({ book: 'TAB', invoiceId: '16249', invoiceNo: 'TAB 02610682', date: '11/06/2026', total: 660, customer: 'Goldhill Memorial Centre Pte. Ltd.', why: 'identical-to-original' }),
-  decide({ book: 'TAB', invoiceId: '16247', invoiceNo: 'TAB 02610680', date: '11/06/2026', total: 860, customer: 'British Sports Pte. Ltd.', why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '3359', invoiceNo: 'TAC 02680210', date: '19/06/2026', total: 4000, customer: 'Najiwan Pte. Ltd.', why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '3339', invoiceNo: 'TAC 02680200', date: '16/06/2026', total: 3000, customer: 'Warm Sea Wind Pte. Ltd.', why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '3337', invoiceNo: 'TAC 02680198', date: '16/06/2026', total: 3000, customer: 'Sunterra Trading Pte. Ltd.', why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '2682', invoiceNo: 'TAC 02680153', date: '07/05/2026', total: 3000, customer: 'Singapore Hua Jin Investment Pte Ltd', why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '2597', invoiceNo: 'TAC 02680133', date: '28/04/2026', total: 4000, customer: 'Yu An Bulk Holding Pte Ltd', why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '2473', invoiceNo: 'TAC 02680124', date: '24/04/2026', total: 6000, customer: 'DEMIRER KABEL PTE. LTD.', why: 'identical-to-original' }),
-  decide({ book: 'TAC', invoiceId: '1714', invoiceNo: 'TAC 02680044', date: '27/02/2026', total: 4000, customer: 'Aries Honor Shipping Pte Ltd', why: 'identical-to-original' }),
+  decide({ book: 'TAB', invoiceId: '18268', invoiceNo: 'TAB 02610789', date: '30/06/2026', total: 560, customer: 'Minyotech Pte. Ltd.', redraw: [500, 60], why: 'identical-to-original' }),
+  decide({ book: 'TAB', invoiceId: '16259', invoiceNo: 'TAB 02610691', date: '11/06/2026', total: 560, customer: 'Kindle Beacon Pte. Ltd.', redraw: [500, 60], why: 'identical-to-original' }),
+  decide({ book: 'TAB', invoiceId: '16254', invoiceNo: 'TAB 02610687', date: '11/06/2026', total: 1260, customer: 'International LCM Pte Ltd', redraw: [400, 800, 60], why: 'identical-to-original' }),
+  decide({ book: 'TAB', invoiceId: '16249', invoiceNo: 'TAB 02610682', date: '11/06/2026', total: 660, customer: 'Goldhill Memorial Centre Pte. Ltd.', redraw: [600, 60], why: 'identical-to-original' }),
+  decide({ book: 'TAB', invoiceId: '16247', invoiceNo: 'TAB 02610680', date: '11/06/2026', total: 860, customer: 'British Sports Pte. Ltd.', redraw: [600, 300, 60, -100], why: 'identical-to-original' }),
+  decide({ book: 'TAC', invoiceId: '3359', invoiceNo: 'TAC 02680210', date: '19/06/2026', total: 4000, customer: 'Najiwan Pte. Ltd.', redraw: [4000], why: 'identical-to-original' }),
+  decide({ book: 'TAC', invoiceId: '3339', invoiceNo: 'TAC 02680200', date: '16/06/2026', total: 3000, customer: 'Warm Sea Wind Pte. Ltd.', redraw: [3000], why: 'identical-to-original' }),
+  decide({ book: 'TAC', invoiceId: '3337', invoiceNo: 'TAC 02680198', date: '16/06/2026', total: 3000, customer: 'Sunterra Trading Pte. Ltd.', redraw: [3000], why: 'identical-to-original' }),
+  decide({ book: 'TAC', invoiceId: '2682', invoiceNo: 'TAC 02680153', date: '07/05/2026', total: 3000, customer: 'Singapore Hua Jin Investment Pte Ltd', redraw: [3000], why: 'identical-to-original' }),
+  decide({ book: 'TAC', invoiceId: '2597', invoiceNo: 'TAC 02680133', date: '28/04/2026', total: 4000, customer: 'Yu An Bulk Holding Pte Ltd', redraw: [4000], why: 'identical-to-original' }),
+  decide({ book: 'TAC', invoiceId: '2473', invoiceNo: 'TAC 02680124', date: '24/04/2026', total: 6000, customer: 'DEMIRER KABEL PTE. LTD.', redraw: [3000, 3000], why: 'identical-to-original' }),
+  decide({ book: 'TAC', invoiceId: '1714', invoiceNo: 'TAC 02680044', date: '27/02/2026', total: 4000, customer: 'Aries Honor Shipping Pte Ltd', redraw: [4000], why: 'identical-to-original' }),
   // the customer nets to 0, no SOA is sent; and its deferred Reg Addr line has no service line to fold into
-  decide({ book: 'TAB', invoiceId: '6358', invoiceNo: 'TAB 02511395', date: '19/12/2025', total: 1420, customer: 'Sanli Group Pte Ltd', why: 'not-sent' }),
+  decide({ book: 'TAB', invoiceId: '6358', invoiceNo: 'TAB 02511395', date: '19/12/2025', total: 1420, customer: 'Sanli Group Pte Ltd', redraw: null, why: 'not-sent' }),
 ];
 
-// The decision that covers this invoice AS IT IS NOW, or null (never decided, or accounting changed the invoice since).
-export function redrawDecisionFor(book: string, invoiceId: string, facts: Pick<InvoiceFacts, 'invoiceNo' | 'date' | 'total' | 'customer'>): RedrawDecision | null {
+const sortedCents = (amounts: readonly number[]) => amounts.map(a => Math.round(a * 100)).sort((a, b) => a - b);
+const sameRows = (a: readonly number[], b: readonly number[]) => a.length === b.length && sortedCents(a).every((c, i) => c === sortedCents(b)[i]);
+
+// The decision that covers this invoice AS IT IS NOW, or null: never decided, or accounting changed the invoice (number,
+// date, customer, total) or its lines since — so that the redraw prints other rows, or the system cannot draw it any more
+// (`facts.preferred` is the redraw's row amounts, undefined when it cannot draw the invoice).
+export function redrawDecisionFor(book: string, invoiceId: string, facts: Pick<InvoiceFacts, 'invoiceNo' | 'date' | 'total' | 'customer' | 'preferred'>): RedrawDecision | null {
   const d = REDRAW_DECISIONS.find(x => x.book === book && x.invoiceId === invoiceId);
-  return d && sameInvoiceVersion(d, facts) ? d : null;
+  if (!d || !sameInvoiceVersion(d, facts)) return null;
+  if (d.redraw === null) return facts.preferred === undefined ? d : null;
+  return facts.preferred !== undefined && sameRows(d.redraw, facts.preferred) ? d : null;
 }

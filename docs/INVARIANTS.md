@@ -2689,8 +2689,11 @@ again.
   redraw equals or correctly replaces the original, and Sanli, are LEFT AS THEY ARE —
   the SOA keeps merging the redraw, and the invoice leaves the Invoice Originals list
   (REDRAW_DECISIONS, 19 entries, each tied to the invoice's number, date, customer and
-  total: when accounting changes any of them the entry lapses and the invoice is listed
-  and judged again). "外观差别，只要是外观差别的，可以用原装的发票，就用原装的，不需要
+  total AND to the rows the redraw prints — or, for Sanli, to the system still not being
+  able to draw it: when accounting changes any of them, or re-splits the lines so that
+  the redraw changes, or an edit makes the system unable to draw the invoice (no terms,
+  a note line, a twin it cannot pair), the entry lapses and the invoice is listed and
+  judged again). "外观差别，只要是外观差别的，可以用原装的发票，就用原装的，不需要
   重新画，并且也把这类的当成处理掉": the 4 appearance-only differences (EVOP #02610547,
   Nova Golden #02610907, Soon & Guan #02611000, Minyotech #02610788 — the same number,
   date, customer and total, only the line breakdown differs: 900 -> 585 + 315, one
@@ -2701,12 +2704,23 @@ again.
   file by its sha256. A decision covers ONLY the two refusals that are not about WHOSE
   the file is — the printed lines are a regrouping of the invoice's lines (`stage`
   'amounts': the file and identity checks had all passed) or the file is a picture
-  with no text ('no-text'); `checkOriginalCopy` now types every refusal with its stage
+  with no text ('no-text', and EVERY page blank — the first blank page fires it, before
+  the text pages are checked for whose invoice they are); `checkOriginalCopy` now types
+  every refusal with its stage
   — and never the system's own drawing, an unread page, another number, date, customer
   or total, and never a file that prints one of accounting's Deferred twins as an
   amount of its own (the split version). An entry is added only on Vincent's explicit
   word, is tied to the file (sha256) and to the invoice version, and lives in the repo
-  as data. "只留下唯一要处理的…Co-Operate Associates Pte. Ltd.": TAB #02610167 is in
+  as data. The upload page lets a file past the proof ONLY when a decision names that
+  exact file for the invoice as it was decided about (to put it back if its attachment
+  is ever removed); every other file must pass the proof. NOT tracked, by design: the
+  one "not sent" entry (Sanli) rests on its customer's net balance staying 0, which the
+  register cannot see — if it turns positive the SOA would carry QuickBooks' own PDF
+  (staff get the split-fallback warning when they download it). An independent read-only
+  review (2026-10-07) found no way to get a wrong file accepted or a decision applied to
+  another invoice; its findings are fixed and tested (the redraw binding, the all-pages
+  rule, the exact-file upload, one sha256 helper, `queueOutcome` as a tested pure
+  function). "只留下唯一要处理的…Co-Operate Associates Pte. Ltd.": TAB #02610167 is in
   neither register and is the only invoice left on the list (it has no payment terms
   in QuickBooks, so the SOA sends QuickBooks' own PDF with the Deferred line visible).
   Verified on the real books: the queue lists exactly that one (135 with the original
@@ -2724,12 +2738,13 @@ again.
   invoices (all refused with the right reason). Guarded by `test-original-copy.ts`
   (122 checks: the proof on synthetic and generated PDFs, which file is chosen and
   what is said about each, the QuickBooks reader against a fake fetch, that
-  `getClientInvoicePdf` looks BEFORE it redraws), `test-original-upload.ts` (34:
-  every branch of the upload against fakes), `test-original-status.ts` (66: the
-  queue, the batched read, the remembered answers, who may call, the page) and
-  `test-original-decisions.ts` (57: the typed refusals, what a decision can and cannot
+  `getClientInvoicePdf` looks BEFORE it redraws), `test-original-upload.ts` (42:
+  every branch of the upload against fakes, the decided file included),
+  `test-original-status.ts` (72: the queue and its pure classification, the batched
+  read, the remembered answers, who may call, the page) and
+  `test-original-decisions.ts` (73: the typed refusals, what a decision can and cannot
   cover, the register's data); with each safeguard removed one at a time on a copy
-  (51 of them for the queue, the upload, the decisions, the routes and the page, on
+  (59 of them for the queue, the upload, the decisions, the routes and the page, on
   top of the proof's own), the tests fail.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)

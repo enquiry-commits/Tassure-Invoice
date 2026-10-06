@@ -2585,11 +2585,23 @@ one focused Git commit.
   for EVOP, Nova Golden, Soon & Guan and Minyotech (the picture page of #02610788 looked at: one 600 incorporation
   line, 500, -100 = 1,000), the redraw for British Sports and Minyotech #02610789, and for Co-Operate QuickBooks'
   PDF with the split-fallback warning. Verification: `test-original-decisions.ts` (new), `test-original-status.ts`,
-  `test-original-upload.ts`, `test-original-copy.ts`, `test-account-access.ts`, `test-assistant-pages.ts`; 51
+  `test-original-upload.ts`, `test-original-copy.ts`, `test-account-access.ts`, `test-assistant-pages.ts`; 59
   negative controls on a copy; tsc, eslint, `next build`. **Not live:** the push is still pending (the
   permission layer refused it), so Vercel runs the old code — the 4 attachments sit in QuickBooks and the SOA on
   Vercel keeps redrawing until the push. **Still open (his call):** whether an invoice with no payment terms may
-  take them from its due date so Co-Operate is redrawn.
+  take them from its due date so Co-Operate is redrawn. **Independent review (a
+  read-only reviewer, same day):** no way found to get a wrong file accepted or a decision
+  applied to another invoice. Fixed what it found: a "leave as it is" decision was bound
+  to number/date/customer/total only, so it kept hiding an invoice after accounting
+  re-split its lines or an edit made the system unable to draw it — it is now also bound to
+  the rows the redraw prints (and Sanli's to the system still being unable to draw it); a
+  picture must have EVERY page blank; the upload page lets through the exact decided file
+  only (to put it back), one sha256 helper, `queueOutcome` is a tested pure function; tests
+  added for the picture's version pin (date, customer, number), a customer renamed to part
+  of the old name, and the upload with a decision. Not tracked by design: Sanli's decision
+  rests on its customer's net balance staying 0 (the SOA download warns if QuickBooks' own
+  PDF goes out). Now: test-original-decisions 73, -status 72, -upload 42, -copy 122;
+  59 negative controls.
 
 - **Are the 24 invoices still without an original really in the SOA? (INV-QB-037, 2026-10-07).**
   Vincent, after the redesign: "这个24张的单，目前都有出现在SOA 需要合并的需求中吗？如果没有的话

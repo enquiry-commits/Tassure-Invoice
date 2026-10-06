@@ -88,6 +88,27 @@ export function queueRowFor(row: OriginalStatusRow, files: readonly AttachmentFi
   return { ...row, state, tried: result.tried, fallback };
 }
 
+// What one open split invoice is, from everything known about it NOW (no I/O): paid, voided, deleted or no longer
+// split since the last sync -> 'closed'; its original is in use -> 'done' (this wins over a decision); Vincent decided
+// to leave it as it is, and it is still the invoice he decided about -> 'decided'; otherwise it is waiting for an
+// original (a QueueRow, with the LIVE figures and not the synced ones).
+export type QueueOutcome = QueueRow | 'closed' | 'done' | 'decided';
+export function queueOutcome(input: {
+  row: OriginalStatusRow;
+  live: { balance: number; totalAmt?: number; txnDate?: string } | null;
+  split: boolean;
+  files: readonly AttachmentFile[];
+  answer: OriginalCopyResult | { found: true } | null;
+  decided: boolean;
+  fallback: string;
+}): QueueOutcome {
+  const { row, live, answer } = input;
+  if (!live || !(live.balance > 0) || !input.split || !answer) return 'closed';
+  if ('found' in answer) return 'done';
+  if (input.decided) return 'decided';
+  return queueRowFor({ ...row, balance: live.balance, totalAmt: live.totalAmt ?? row.totalAmt, txnDate: live.txnDate ?? row.txnDate }, input.files, answer, input.fallback) ?? 'done';
+}
+
 // What goes out for an invoice with no original: from the system's own decision for it (lib/client-invoice-model.ts).
 export function fallbackWording(decision: { kind: 'system' } | { kind: 'quickbooks'; reason: string | null }): string {
   return decision.kind === 'system'

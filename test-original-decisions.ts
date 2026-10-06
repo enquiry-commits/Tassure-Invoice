@@ -145,6 +145,18 @@ const entryFor = async (bytes: Uint8Array, over: Partial<ConfirmedOriginal> = {}
   const drawnPicture = bytesOf('PICT03', pdf('', { pages: [''], totalPages: 1, producer: 'Tassure' }));
   check('the system\'s own drawing as a picture is never covered', 'none' in await lookup([{ id: '22', bytes: drawnPicture }], FACTS, [await entryFor(drawnPicture)]));
 
+  console.log('\n--- the version pin is the only thing tying a picture to its invoice, and must hold on its own ---');
+  for (const [label, over] of [['date', { date: '01/05/2026' }], ['customer', { customer: 'EVOP Pte. Ltd.' }], ['number', { invoiceNo: 'TAB 02610548' }], ['total', { total: 1801 }]] as const) {
+    check(`a picture's decision lapses when accounting changes the ${label}`, 'none' in await lookup([{ id: '20', bytes: picture }], { ...FACTS, ...over }, [await entryFor(picture)]));
+  }
+  const substring: InvoiceFacts = { ...FACTS, customer: 'EVOP (Singapore)' };
+  check('(the scenario is real: with the customer renamed to part of the old name the file still passes the identity checks and only the amounts refuse it)', (() => { const r = checkOriginalCopy(pdf(REGROUPED), substring); return !r.ok && stage(r) === 'amounts'; })());
+  check('…and then only the version check refuses a regrouped original whose decision named the full name', 'none' in await lookup([{ id: '10', bytes: regrouped }], substring, [entry]));
+  const blankPlusText = bytesOf('MIXED1', { text: FOLDED, pages: ['', FOLDED], totalPages: 2, producer: 'Aspose.Words for Java 20.11.0' });
+  check('a file with a blank page and a text page is not a picture: a decision never covers it (its text page is another invoice\'s)', 'none' in await lookup([{ id: '23', bytes: blankPlusText }], FACTS, [await entryFor(blankPlusText)]));
+  const twoBlank = bytesOf('PICT04', { text: '', pages: ['', ''], totalPages: 2, producer: 'Microsoft: Print To PDF' });
+  check('…while a picture of two blank pages (Minyotech\'s shape) is covered by a decision naming it', 'found' in await lookup([{ id: '24', bytes: twoBlank }], FACTS, [await entryFor(twoBlank)]));
+
   console.log('\n--- order and company ---');
   const proven = bytesOf('PROVEN', pdf(FOLDED));
   const both = await lookup([{ id: '30', bytes: regrouped }, { id: '31', bytes: proven }], FACTS, [entry]);
@@ -165,16 +177,28 @@ const entryFor = async (bytes: Uint8Array, over: Partial<ConfirmedOriginal> = {}
   const evop = CONFIRMED_ORIGINALS.find(c => c.invoiceNo === 'TAB 02610547')!;
   check('looked up by book and invoice id: the four, nothing else', confirmedOriginalsFor('TAB', evop.invoiceId).length === 1 && confirmedOriginalsFor('TAC', evop.invoiceId).length === 0 && confirmedOriginalsFor('TAB', '1').length === 0);
   const decided = REDRAW_DECISIONS.find(d => d.invoiceNo === 'TAB 02610680')!;
-  const f2 = (o: Partial<InvoiceFacts>): InvoiceFacts => ({ invoiceNo: decided.invoiceNo, date: decided.date, customer: decided.customer, total: decided.total, lines: [], ...o });
+  const f2 = (o: Partial<InvoiceFacts>): InvoiceFacts => ({ invoiceNo: decided.invoiceNo, date: decided.date, customer: decided.customer, total: decided.total, lines: [], preferred: [...(decided.redraw ?? [])], ...o });
   check('a decision to leave an invoice applies while it is the invoice decided about', redrawDecisionFor('TAB', decided.invoiceId, f2({}))?.why === 'identical-to-original');
   check('…and lapses when accounting changes its total, date, customer or number — it is listed again', [{ total: decided.total + 1 }, { date: '01/01/2026' }, { customer: 'Other Pte. Ltd.' }, { invoiceNo: 'TAB 02610681' }].every(o => redrawDecisionFor('TAB', decided.invoiceId, f2(o)) === null));
   check('…and never applies to another book\'s or another invoice\'s id', redrawDecisionFor('TAC', decided.invoiceId, f2({})) === null && redrawDecisionFor('TAB', '999999', f2({})) === null);
+  console.log('\n--- a decision to leave the redraw is about THAT redraw ---');
+  check('British Sports TAB #02610680: the redraw Vincent looked at is 600 / 300 / 60 / -100', JSON.stringify(decided.redraw) === '[600,300,60,-100]');
+  check('it still applies when the same rows come in another order', redrawDecisionFor('TAB', decided.invoiceId, f2({ preferred: [-100, 60, 300, 600] }))?.why === 'identical-to-original');
+  check('it lapses when accounting re-splits the lines so that the redraw prints other rows (the invoice is listed again)', redrawDecisionFor('TAB', decided.invoiceId, f2({ preferred: [600, 200, 100, 60, -100] })) === null && redrawDecisionFor('TAB', decided.invoiceId, f2({ preferred: [600, 300, 60] })) === null);
+  check('…or by a cent', redrawDecisionFor('TAB', decided.invoiceId, f2({ preferred: [600, 300, 60, -100.01] })) === null);
+  check('it lapses when the system cannot draw the invoice any more (no terms, a note line, a twin it cannot pair: QuickBooks\' own PDF would go out)', redrawDecisionFor('TAB', decided.invoiceId, f2({ preferred: undefined })) === null);
+  const sanli = REDRAW_DECISIONS.find(d => d.why === 'not-sent')!;
+  const sf = (o: Partial<InvoiceFacts>): InvoiceFacts => ({ invoiceNo: sanli.invoiceNo, date: sanli.date, customer: sanli.customer, total: sanli.total, lines: [], ...o });
+  check('the one "not sent" decision applies while the system still cannot draw that invoice, and lapses if it ever can', sanli.redraw === null && redrawDecisionFor('TAB', sanli.invoiceId, sf({}))?.why === 'not-sent' && redrawDecisionFor('TAB', sanli.invoiceId, sf({ preferred: [1420] })) === null);
+  check('every other decision names redraw rows that add up to the invoice total, to the cent', REDRAW_DECISIONS.filter(d => d.why !== 'not-sent').every(d => d.redraw !== null && Math.round(d.redraw.reduce((a, b) => a + b, 0) * 100) === Math.round(d.total * 100)));
 
   console.log('\n--- who uses it ---');
   const reg = read('lib/original-decisions.ts');
   check('the register is data: it imports nothing that reaches QuickBooks, the database or a server-only module', !/from '\.\/(quickbooks|supabase|client-invoice-pdf|original-status|pdf-text)/.test(reg) && !/server-only/.test(reg));
   check('every look-up honours it — the SOA / Email Drafts / Save PDF path, the queue and the upload', /confirmedOriginalsFor\(company, invoiceId\)/.test(read('lib/quickbooks-original-copy.ts')) && /confirmedOriginalsFor\(book, invoiceId\)/.test(read('lib/original-status.ts')) && /confirmed: confirmedOriginalsFor\(company, invoiceId\)/.test(read('lib/original-upload-live.ts')) && (read('lib/original-upload.ts').match(/, facts, deps\.confirmed\)/g) ?? []).length === 2);
-  check('the upload page itself stays proof-only: a file staff upload must pass the proof, a decision is not a way around it', /const check = checkOriginalCopy\(pdf, facts\);\s*\n?\s*if \(!check\.ok\) return refused\(check\.reason\);/.test(read('lib/original-upload.ts')));
+  const uploadSrc = read('lib/original-upload.ts');
+  check('the upload page lets a file past the proof ONLY when a decision names that exact file (to put it back); every other file must pass the proof', /const decided = check\.ok \? null : await confirmedApproval\(bytes, pdf, facts, check, deps\.confirmed \?\? \[\]\);\s*\n?\s*if \(!check\.ok && !decided\) return refused\(check\.reason\);/.test(uploadSrc));
+  check('there is one sha256 helper (Web Crypto), not two', /export async function sha256Hex/.test(read('lib/original-copy.ts')) && !/createHash|node:crypto/.test(uploadSrc));
   check('the proof module never writes anywhere and has no node-only import (it is bundled in the page)', !/from 'node:|from 'fs'|from 'crypto'/.test(read('lib/original-copy.ts')));
 
   console.log(`\n=== ${fail === 0 ? 'ALL PASSED' : `${fail} FAILURE(S)`} ===`);

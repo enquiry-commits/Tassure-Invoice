@@ -8,7 +8,7 @@ import { prepareInvoiceForClient, type LiveInvoice } from './client-invoice-pdf'
 import { ORIGINAL_COPY_LOOKUP_MODE } from './quickbooks-original-copy';
 import { MAX_ORIGINAL_BYTES, selectVerifiedOriginal, type AttachmentFile, type InvoiceFacts, type OriginalCopyResult } from './original-copy';
 import { readPdf } from './pdf-text';
-import { chunk, fallbackWording, invoicesByIdQuery, mapLimit, queueRowFor, splitInvoiceRows, verdictKey, type OriginalStatusRow, type QueueResult, type QueueRow } from './original-status-core';
+import { chunk, fallbackWording, invoicesByIdQuery, mapLimit, queueOutcome, splitInvoiceRows, verdictKey, type OriginalStatusRow, type QueueOutcome, type QueueResult, type QueueRow } from './original-status-core';
 import { confirmedOriginalsFor, redrawDecisionFor } from './original-decisions';
 
 // What the "Invoice Originals" page reads (INV-QB-037): the open invoices
@@ -109,21 +109,25 @@ async function buildQueue(): Promise<QueueResult> {
       const reader = createHttpAttachmentReader({ base: QB_BASE, realmId: token.realm_id, accessToken: token.access_token, timeoutMs: 30_000 });
       const [attachments, invoices, terms] = await Promise.all([reader.listAllForInvoices(), readLiveInvoices(book, mine.map(r => r.qbInvoiceId)), readTermNames(book)]);
       const failures: string[] = [];
-      const rows = await mapLimit(mine, CONCURRENT_FILES, async (row): Promise<QueueRow | 'done' | 'decided' | 'closed' | 'unknown'> => {
+      const rows = await mapLimit(mine, CONCURRENT_FILES, async (row): Promise<QueueOutcome | 'unknown'> => {
         try {
           const live = invoices.get(row.qbInvoiceId);
-          // Paid, voided or deleted since the last sync: not waiting for anything.
-          if (!live || !(Number(live.Balance) > 0)) return 'closed';
-          const prepared = prepareInvoiceForClient(book, live, live.SalesTermRef?.value ? terms.get(String(live.SalesTermRef.value)) ?? null : null);
-          // No longer carries a Deferred Revenue line: QuickBooks' own PDF is right.
-          if (!prepared.facts) return 'closed';
+          // Only an invoice still open is looked at: paid, voided or deleted since the last sync is not waiting for anything.
+          const prepared = live && Number(live.Balance) > 0 ? prepareInvoiceForClient(book, live, live.SalesTermRef?.value ? terms.get(String(live.SalesTermRef.value)) ?? null : null) : null;
+          const facts = prepared?.facts ?? null;
           const files = attachments.get(row.qbInvoiceId) ?? [];
-          const answer = await lookUp(book, row.qbInvoiceId, prepared.facts, files, reader);
-          if ('found' in answer) return 'done';
-          // Vincent decided to leave it as it is (and it is still the invoice he decided about): not waiting for anything.
-          if (redrawDecisionFor(book, row.qbInvoiceId, prepared.facts)) return 'decided';
-          // The live figures, not the synced ones.
-          return queueRowFor({ ...row, balance: Number(live.Balance), totalAmt: Number(live.TotalAmt ?? row.totalAmt), txnDate: live.TxnDate ?? row.txnDate }, files, answer, fallbackWording(prepared.decision)) ?? 'done';
+          // The look-up first: an original in use wins over any decision (queueOutcome).
+          const answer = facts ? await lookUp(book, row.qbInvoiceId, facts, files, reader) : null;
+          return queueOutcome({
+            row,
+            live: live ? { balance: Number(live.Balance), totalAmt: live.TotalAmt === undefined ? undefined : Number(live.TotalAmt), txnDate: live.TxnDate } : null,
+            split: !!facts,
+            files,
+            answer,
+            // Vincent decided to leave it as it is, and it is still the invoice (and the redraw) he decided about.
+            decided: !!facts && !!redrawDecisionFor(book, row.qbInvoiceId, facts),
+            fallback: prepared ? fallbackWording(prepared.decision) : '',
+          });
         } catch (err) {
           // One invoice that cannot be judged must not hide the others: it is not
           // listed (it is not known to be waiting) and is counted as not checked.
