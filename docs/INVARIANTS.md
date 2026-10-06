@@ -2616,7 +2616,8 @@ again.
   invoice, with the server's file name, IncludeOnSend false and the Note "Original
   invoice PDF from the company file server, attached on 2026-10-06 after the system
   checked it …", then confirmed by the real look-up; the first alone (TAB #02611114,
-  byte-identical to the server file). The other 24 stay for a person: 13 are pictures
+  byte-identical to the server file). The other 24 stay for a person (settled on 2026-10-07 — see
+  Vincent's decisions below): 13 are pictures
   (no text), 5 were restructured by accounting after sending, 3 totals and 3
   dates were changed after sending — with their server paths in
   `Server-round-originals-2026-10-06.xlsx`. The system's own copies on three new invoices
@@ -2659,10 +2660,8 @@ again.
   ("unconfirmed" otherwise, never rolled back). A file the proof does not accept
   is refused with the reason and what to do and attaches NOTHING, so no wrong file
   can be pushed through the page: the 13 pictures and the restructured invoices
-  cannot be uploaded past the proof, and stay listed until a file the proof
-  accepts is found (a confirm-anyway or OCR path for them is an OPEN QUESTION for
-  Vincent, not built; the 6 invoices changed after sending must never be
-  confirmable — the redraw is right for them). Checked 2026-10-07 (Vincent:
+  cannot be uploaded past the proof — the upload page stays proof-only, and
+  a decision (below) is never a way around it. Checked 2026-10-07 (Vincent:
   "这个24张的单，目前都有出现在SOA 需要合并的需求中吗？"): the SOA PDF merges EVERY
   unpaid invoice of the customer, and the Outstanding list staff press PDF / Draft
   from shows customers whose net balance is above 0 and who have a PIC. All 24 are
@@ -2683,7 +2682,38 @@ again.
   lines read "Sale; <customer>"; Co-Operate Associates TAB #02610167 and Sanli TAB
   #02511395) is never redrawn — `buildClientInvoiceModel` needs the terms — and goes
   out as QuickBooks' own PDF with accounting's Deferred lines visible (Sanli's
-  deferred Reg Addr line has no service line to fold into either). Nothing is ever removed or changed
+  deferred Reg Addr line has no service line to fold into either).
+  VINCENT'S DECISIONS ON THOSE 24 (2026-10-07; `lib/original-decisions.ts`,
+  `test-original-decisions.ts`). "OK 不用管是说可以沿用的意思吗？如果可以沿用就沿用，
+  并且把不用管的记录处理掉，并且合并去SOA" and "不会发SOA的当成先不管": the 18 where the
+  redraw equals or correctly replaces the original, and Sanli, are LEFT AS THEY ARE —
+  the SOA keeps merging the redraw, and the invoice leaves the Invoice Originals list
+  (REDRAW_DECISIONS, 19 entries, each tied to the invoice's number, date, customer and
+  total: when accounting changes any of them the entry lapses and the invoice is listed
+  and judged again). "外观差别，只要是外观差别的，可以用原装的发票，就用原装的，不需要
+  重新画，并且也把这类的当成处理掉": the 4 appearance-only differences (EVOP #02610547,
+  Nova Golden #02610907, Soon & Guan #02611000, Minyotech #02610788 — the same number,
+  date, customer and total, only the line breakdown differs: 900 -> 585 + 315, one
+  1,000 line -> 500 + 500) use the ORIGINAL from the file server: attached to the
+  invoice in QuickBooks on 2026-10-07 (attachment ids 1000001781, 1000001791,
+  1000001801, 1000001772; IncludeOnSend false; a Note recording the decision; each
+  confirmed by the real look-up) and accepted because CONFIRMED_ORIGINALS names each
+  file by its sha256. A decision covers ONLY the two refusals that are not about WHOSE
+  the file is — the printed lines are a regrouping of the invoice's lines (`stage`
+  'amounts': the file and identity checks had all passed) or the file is a picture
+  with no text ('no-text'); `checkOriginalCopy` now types every refusal with its stage
+  — and never the system's own drawing, an unread page, another number, date, customer
+  or total, and never a file that prints one of accounting's Deferred twins as an
+  amount of its own (the split version). An entry is added only on Vincent's explicit
+  word, is tied to the file (sha256) and to the invoice version, and lives in the repo
+  as data. "只留下唯一要处理的…Co-Operate Associates Pte. Ltd.": TAB #02610167 is in
+  neither register and is the only invoice left on the list (it has no payment terms
+  in QuickBooks, so the SOA sends QuickBooks' own PDF with the Deferred line visible).
+  Verified on the real books: the queue lists exactly that one (135 with the original
+  in use, 19 decided, 0 unknown), and the real SOA route merges the originals for EVOP,
+  Nova Golden, Soon & Guan and Minyotech #02610788 (the picture, read by eye), the
+  redraw for British Sports and Minyotech #02610789, and for Co-Operate QuickBooks'
+  PDF with the split-fallback warning. Nothing is ever removed or changed
   in QuickBooks by the page; the upload is the ONLY write and adds one attachment
   to one invoice. It sits under `/billing/soa`, so the existing "outstanding"
   page rule decides who sees it, and both routes check that rule themselves.
@@ -2695,10 +2725,12 @@ again.
   (122 checks: the proof on synthetic and generated PDFs, which file is chosen and
   what is said about each, the QuickBooks reader against a fake fetch, that
   `getClientInvoicePdf` looks BEFORE it redraws), `test-original-upload.ts` (34:
-  every branch of the upload against fakes) and `test-original-status.ts` (64: the
-  queue, the batched read, the remembered answers, who may call, the page); with
-  each safeguard removed one at a time on a copy (36 of them for the queue,
-  the upload, the routes and the page, on top of the proof's own), the tests fail.
+  every branch of the upload against fakes), `test-original-status.ts` (66: the
+  queue, the batched read, the remembered answers, who may call, the page) and
+  `test-original-decisions.ts` (57: the typed refusals, what a decision can and cannot
+  cover, the register's data); with each safeguard removed one at a time on a copy
+  (51 of them for the queue, the upload, the decisions, the routes and the page, on
+  top of the proof's own), the tests fail.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

@@ -54,7 +54,19 @@ const who = (bySystem: boolean) => (bySystem ? 'attached by the system' : 'attac
 // What is attached now and why none of it is used, in words staff can act on.
 function Detail({ row }: { row: QueueRow }) {
   const small = { fontSize: 11.5, lineHeight: 1.5, color: '#475569' } as const;
-  if (row.state === 'nothing') return <span style={small}>Nothing is attached to this invoice in QuickBooks. Find the PDF the client first received and upload it here.</span>;
+  const goesOut = (
+    <div style={{ ...small, color: '#64748b' }}>
+      <strong style={{ fontWeight: 700, color: '#475569' }}>The client gets now:</strong> {row.fallback}
+    </div>
+  );
+  if (row.state === 'nothing') {
+    return (
+      <div style={{ display: 'grid', gap: 4 }}>
+        <span style={small}>Nothing is attached to this invoice in QuickBooks. Find the PDF the client first received and upload it here.</span>
+        {goesOut}
+      </div>
+    );
+  }
   return (
     <div style={{ display: 'grid', gap: 4 }}>
       {row.tried.map(f => (
@@ -66,6 +78,7 @@ function Detail({ row }: { row: QueueRow }) {
           {hintForReason(f.reason) && <div style={{ color: '#64748b', fontStyle: 'italic', paddingLeft: 14 }}>→ {hintForReason(f.reason)}</div>}
         </div>
       ))}
+      {goesOut}
     </div>
   );
 }
@@ -160,7 +173,7 @@ export default function InvoiceOriginalsPage() {
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 16 }}>
         <MetricCard onClick={() => setFilter('all')} active={filter === 'all'}
-          value={ready ? counts.waiting : '…'} label="Waiting for an original" sub="the system redraws these for now"
+          value={ready ? counts.waiting : '…'} label="Waiting for an original" sub="no original the system accepts yet"
           icon={<Layers size={16} />} color="#1d3a5c" ariaLabel="Show every invoice waiting for an original" />
         <MetricCard onClick={() => setFilter(filter === 'nothing' ? 'all' : 'nothing')} active={filter === 'nothing'}
           value={ready ? counts.nothing : '…'} label="Nothing attached" sub="find the PDF the client received"
@@ -187,7 +200,7 @@ export default function InvoiceOriginalsPage() {
         <strong style={{ color: '#1e3a5f' }}>What to do here.</strong>{' '}
         Accounting splits an invoice&apos;s lines after it has gone to the client, so QuickBooks can only print the split version. The system sends the client the{' '}
         <strong>original</strong> — the PDF the client first received — when it is attached to the invoice in QuickBooks and the system can prove it is that. The invoices below still have no such file.{' '}
-        Find it (Outlook Sent Items, the file server) and <strong>upload it on its row</strong>: the system checks it against the invoice (number, customer, date, amounts) and attaches it to the invoice in QuickBooks; from then on the SOA, Email Drafts and Save PDF use it, and the row leaves this list. Until then the system redraws the invoice — the last choice.{' '}
+        Find it (Outlook Sent Items, the file server) and <strong>upload it on its row</strong>: the system checks it against the invoice (number, customer, date, amounts) and attaches it to the invoice in QuickBooks; from then on the SOA, Email Drafts and Save PDF use it, and the row leaves this list. Until then the client gets the redraw — or, where the system cannot draw the invoice, QuickBooks&apos; own PDF. Invoices whose original is in use, and the few that were decided to stay as they are, are not listed.{' '}
         <strong>Do not upload</strong> the file from Save PDF, a scan or photo, a PDF with a password, or several invoices in one file — the system refuses those.
       </div>
 
@@ -213,7 +226,7 @@ export default function InvoiceOriginalsPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span className="system-list-title" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><FileText size={14} />Invoices waiting for their original</span>
             <span className="system-list-title-hint">
-              Read live from QuickBooks{queue && queue.done > 0 ? ` · ${queue.done} other open split invoice${queue.done === 1 ? '' : 's'} already ${queue.done === 1 ? 'has' : 'have'} the original and ${queue.done === 1 ? 'is' : 'are'} not listed` : ''}
+              Read live from QuickBooks{queue && queue.done + queue.decided > 0 ? ` · ${queue.done + queue.decided} other open split invoice${queue.done + queue.decided === 1 ? '' : 's'} need${queue.done + queue.decided === 1 ? 's' : ''} nothing and ${queue.done + queue.decided === 1 ? 'is' : 'are'} not listed (${queue.done} with the original in use, ${queue.decided} decided to stay as they are)` : ''}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

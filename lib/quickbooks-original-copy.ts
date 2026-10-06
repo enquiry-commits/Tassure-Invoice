@@ -4,6 +4,7 @@ import { getValidToken, type QbCompany } from './quickbooks';
 import { createHttpAttachmentReader } from './quickbooks-attachments-http';
 import { MAX_ORIGINAL_BYTES, selectVerifiedOriginal, type InvoiceFacts, type OriginalCopyResult } from './original-copy';
 import { readPdf } from './pdf-text';
+import { confirmedOriginalsFor } from './original-decisions';
 
 // Finds, among the files attached to an invoice in QuickBooks, the ORIGINAL
 // (unsplit) invoice the client was sent — INV-QB-037. Used by
@@ -50,6 +51,8 @@ export async function findOriginalInvoiceCopy(company: QbCompany, invoiceId: str
       selectVerifiedOriginal(
         { list: () => reader.list(invoiceId), download: file => reader.download(file, MAX_ORIGINAL_BYTES), read: readPdf },
         facts,
+        // Vincent's decisions (lib/original-decisions.ts): a handful of files the proof alone would refuse.
+        confirmedOriginalsFor(company, invoiceId),
       ),
       new Promise<OriginalCopyResult>(resolve => {
         timer = setTimeout(() => { controller.abort(); resolve({ none: `QuickBooks did not answer within ${TIME_LIMIT_MS / 1000} seconds`, trouble: true, tried: [] }); }, TIME_LIMIT_MS);

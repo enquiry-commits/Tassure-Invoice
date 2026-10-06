@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { INVOICE_COPY_NOTE } from './lib/quickbooks-attachments';
 import type { AttachmentFile, InvoiceFacts, OriginalCopyResult, TriedAttachment } from './lib/original-copy';
-import { chunk, hintForReason, invoicesByIdQuery, mapLimit, queueRowFor, rowKey, splitInvoiceRows, summarizeFile, verdictKey } from './lib/original-status-core';
+import { chunk, fallbackWording, hintForReason, invoicesByIdQuery, mapLimit, queueRowFor, rowKey, splitInvoiceRows, summarizeFile, verdictKey } from './lib/original-status-core';
 import { NAV_TREE, navLeaves } from './lib/nav-tree';
 import { pageRuleFor } from './lib/workspaces';
 
@@ -73,13 +73,17 @@ const row = { company: 'TAB' as const, qbInvoiceId: '1', invoiceNo: 'TAB 0261111
 const tried = (...t: Partial<TriedAttachment>[]): TriedAttachment[] => t.map((x, i) => ({ id: String(i + 1), fileName: `f${i + 1}.pdf`, bySystem: false, createdAt: null, outcome: 'refused', reason: 'r', ...x }));
 const pdfFile = (id: string): AttachmentFile => ({ Id: id, FileName: `f${id}.pdf`, ContentType: 'application/pdf', Size: 100000, CreateTime: '2026-10-01T00:00:00Z', TempDownloadUri: 'https://files.test/x' });
 const found: OriginalCopyResult = { found: { bytes: new Uint8Array(1), fileName: 'f1.pdf', attachableId: '1', bySystem: false }, tried: tried({ outcome: 'used' }) };
-check('an invoice whose original is in use is NOT listed (Vincent: it is finished work)', queueRowFor(row, [pdfFile('1')], found) === null);
-const none = queueRowFor(row, [], { none: 'no PDF attached', tried: [] });
+check('an invoice whose original is in use is NOT listed (Vincent: it is finished work)', queueRowFor(row, [pdfFile('1')], found, 'x') === null);
+const none = queueRowFor(row, [], { none: 'no PDF attached', tried: [] }, 'The system redraws this invoice.');
 check('nothing attached: listed as "nothing"', none?.state === 'nothing' && none.tried.length === 0 && none.invoiceNo === 'TAB 02611112' && none.balance === 1360);
-const pictures = queueRowFor(row, [{ Id: '2', FileName: 'scan.png', ContentType: 'image/png' }], { none: 'no PDF attached', tried: tried({ outcome: 'skipped', reason: 'not a PDF (a picture or another kind of file)' }) });
+const pictures = queueRowFor(row, [{ Id: '2', FileName: 'scan.png', ContentType: 'image/png' }], { none: 'no PDF attached', tried: tried({ outcome: 'skipped', reason: 'not a PDF (a picture or another kind of file)' }) }, 'x');
 check('only a picture attached: "no-pdf", the file and why it is not used', pictures?.state === 'no-pdf' && pictures.tried.length === 1 && /not a PDF/.test(pictures.tried[0].reason));
-const rejected = queueRowFor(row, [pdfFile('3')], { none: 'attachment #3: it is the system\'s own drawing', tried: tried({ reason: "it is the system's own drawing" }) });
+const rejected = queueRowFor(row, [pdfFile('3')], { none: 'attachment #3: it is the system\'s own drawing', tried: tried({ reason: "it is the system's own drawing" }) }, 'x');
 check('a PDF the proof refused: "refused", with the reason per file', rejected?.state === 'refused' && rejected.tried[0].reason === "it is the system's own drawing");
+const noTerms = fallbackWording({ kind: 'quickbooks', reason: 'its payment terms could not be read from QuickBooks' });
+check('every queue row says what the client gets meanwhile: the redraw, or QuickBooks\' own PDF with its Deferred lines when the system cannot draw it',
+  none?.fallback === 'The system redraws this invoice.' && /redraws this invoice/.test(fallbackWording({ kind: 'system' }))
+  && /QuickBooks' own PDF is sent, with accounting's Deferred Revenue lines showing/.test(noTerms) && /payment terms could not be read/.test(noTerms));
 check('the queue row never carries a file\'s bytes or download link', !JSON.stringify(rejected).includes('files.test') && !('bytes' in (rejected ?? {})));
 
 console.log('\n--- reading many invoices at once ---');
@@ -111,6 +115,8 @@ check('chunks keep every item once and in order', JSON.stringify(chunk([1, 2, 3,
   check('the proof is the SOA\'s own look-up (selectVerifiedOriginal) with the SOA\'s own reader (readPdf) and size cap', /selectVerifiedOriginal\(/.test(status) && /read: readPdf/.test(status) && /MAX_ORIGINAL_BYTES/.test(status));
   const pdfLib = read('lib/client-invoice-pdf.ts');
   check('the invoice facts come from ONE function for the queue, the upload and the SOA (prepareInvoiceForClient)', /prepareInvoiceForClient\(book, live,/.test(status) && /export function prepareInvoiceForClient/.test(pdfLib) && (pdfLib.match(/prepareInvoiceForClient\(/g) ?? []).length >= 2 && !/buildClientInvoiceModel\(|invoiceFacts\(/.test(status));
+  check('Vincent\'s decisions count in the queue as in the SOA: a confirmed original is looked up with the file, a decided invoice is not listed but counted',
+    /confirmedOriginalsFor\(book, invoiceId\)/.test(status) && /redrawDecisionFor\(book, row\.qbInvoiceId, prepared\.facts\)\) return 'decided'/.test(status) && /out\.decided \+= rows\.filter\(r => r === 'decided'\)\.length/.test(status));
   check('only the books the system looks up are listed (TAO has none to redraw)', /ORIGINAL_COPY_LOOKUP_MODE\[b\] === 'live'/.test(status));
   check('invoices are read in batches, not one request per invoice; the files in one paged read per book', /invoicesByIdQuery\(part\)/.test(status) && /chunk\(ids, INVOICES_PER_QUERY\)/.test(status) && /listAllForInvoices\(\)/.test(status) && !/loadInvoiceForClient\(/.test(status));
   check('an invoice paid, voided or no longer split since the last sync is not listed (the live invoice decides)', /Number\(live\.Balance\) > 0/.test(status) && /if \(!prepared\.facts\) return 'closed'/.test(status));

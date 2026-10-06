@@ -8,7 +8,8 @@ import { prepareInvoiceForClient, type LiveInvoice } from './client-invoice-pdf'
 import { ORIGINAL_COPY_LOOKUP_MODE } from './quickbooks-original-copy';
 import { MAX_ORIGINAL_BYTES, selectVerifiedOriginal, type AttachmentFile, type InvoiceFacts, type OriginalCopyResult } from './original-copy';
 import { readPdf } from './pdf-text';
-import { chunk, invoicesByIdQuery, mapLimit, queueRowFor, splitInvoiceRows, verdictKey, type OriginalStatusRow, type QueueResult, type QueueRow } from './original-status-core';
+import { chunk, fallbackWording, invoicesByIdQuery, mapLimit, queueRowFor, splitInvoiceRows, verdictKey, type OriginalStatusRow, type QueueResult, type QueueRow } from './original-status-core';
+import { confirmedOriginalsFor, redrawDecisionFor } from './original-decisions';
 
 // What the "Invoice Originals" page reads (INV-QB-037): the open invoices
 // accounting has split (from the synced rows — no QuickBooks call), and for
@@ -74,7 +75,8 @@ async function lookUp(book: QbCompany, invoiceId: string, facts: InvoiceFacts, f
   const key = verdictKey(book, invoiceId, facts, files);
   const hit = remembered.get(key);
   if (hit) return hit.found ? { found: true } : hit.result;
-  const result = await selectVerifiedOriginal({ list: async () => files, download: f => reader.download(f, MAX_ORIGINAL_BYTES), read: readPdf }, facts);
+  // Vincent's decisions count here exactly as they do in the SOA's look-up (lib/original-decisions.ts).
+  const result = await selectVerifiedOriginal({ list: async () => files, download: f => reader.download(f, MAX_ORIGINAL_BYTES), read: readPdf }, facts, confirmedOriginalsFor(book, invoiceId));
   if (worthKeeping(result)) {
     // The bytes of a found file are not kept — only that it was found.
     remembered.set(key, 'found' in result ? { found: true } : { found: false, result });
@@ -97,7 +99,7 @@ export function loadOriginalsQueue(): Promise<QueueResult> {
 
 async function buildQueue(): Promise<QueueResult> {
   const open = await loadOpenSplitInvoices();
-  const out: QueueResult = { rows: [], done: 0, unknown: 0, errors: {}, generatedAt: new Date().toISOString() };
+  const out: QueueResult = { rows: [], done: 0, decided: 0, unknown: 0, errors: {}, generatedAt: new Date().toISOString() };
   const books = (['TAB', 'TAC'] as const).filter(b => ORIGINAL_COPY_LOOKUP_MODE[b] === 'live' && open.some(r => r.company === b));
   const perBook = await Promise.all(books.map(async (book): Promise<QueueRow[]> => {
     const mine = open.filter(r => r.company === book);
@@ -107,7 +109,7 @@ async function buildQueue(): Promise<QueueResult> {
       const reader = createHttpAttachmentReader({ base: QB_BASE, realmId: token.realm_id, accessToken: token.access_token, timeoutMs: 30_000 });
       const [attachments, invoices, terms] = await Promise.all([reader.listAllForInvoices(), readLiveInvoices(book, mine.map(r => r.qbInvoiceId)), readTermNames(book)]);
       const failures: string[] = [];
-      const rows = await mapLimit(mine, CONCURRENT_FILES, async (row): Promise<QueueRow | 'done' | 'closed' | 'unknown'> => {
+      const rows = await mapLimit(mine, CONCURRENT_FILES, async (row): Promise<QueueRow | 'done' | 'decided' | 'closed' | 'unknown'> => {
         try {
           const live = invoices.get(row.qbInvoiceId);
           // Paid, voided or deleted since the last sync: not waiting for anything.
@@ -118,8 +120,10 @@ async function buildQueue(): Promise<QueueResult> {
           const files = attachments.get(row.qbInvoiceId) ?? [];
           const answer = await lookUp(book, row.qbInvoiceId, prepared.facts, files, reader);
           if ('found' in answer) return 'done';
+          // Vincent decided to leave it as it is (and it is still the invoice he decided about): not waiting for anything.
+          if (redrawDecisionFor(book, row.qbInvoiceId, prepared.facts)) return 'decided';
           // The live figures, not the synced ones.
-          return queueRowFor({ ...row, balance: Number(live.Balance), totalAmt: Number(live.TotalAmt ?? row.totalAmt), txnDate: live.TxnDate ?? row.txnDate }, files, answer) ?? 'done';
+          return queueRowFor({ ...row, balance: Number(live.Balance), totalAmt: Number(live.TotalAmt ?? row.totalAmt), txnDate: live.TxnDate ?? row.txnDate }, files, answer, fallbackWording(prepared.decision)) ?? 'done';
         } catch (err) {
           // One invoice that cannot be judged must not hide the others: it is not
           // listed (it is not known to be waiting) and is counted as not checked.
@@ -128,6 +132,7 @@ async function buildQueue(): Promise<QueueResult> {
         }
       });
       out.done += rows.filter(r => r === 'done').length;
+      out.decided += rows.filter(r => r === 'decided').length;
       if (failures.length) {
         out.unknown += failures.length;
         out.errors[book] = `${failures.length} invoice${failures.length === 1 ? '' : 's'} could not be checked (${failures[0]})`;

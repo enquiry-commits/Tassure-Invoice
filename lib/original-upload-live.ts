@@ -7,6 +7,7 @@ import { ORIGINAL_COPY_LOOKUP_MODE } from './quickbooks-original-copy';
 import { MAX_ORIGINAL_BYTES } from './original-copy';
 import { readPdf } from './pdf-text';
 import { placeUploadedOriginal, type UploadedBy, type UploadResult } from './original-upload';
+import { confirmedOriginalsFor } from './original-decisions';
 
 // The wiring of lib/original-upload.ts to the real QuickBooks book (INV-QB-037):
 // the SAME invoice read (loadInvoiceForClient) and the SAME proof reader
@@ -44,5 +45,6 @@ export async function uploadOriginalToQuickBooks(company: QbCompany, invoiceId: 
     read: readPdf,
     upload: ({ fileName, note, pdf }) => api.upload({ invoiceId, fileName, note, pdf }),
     now: () => new Date(),
+    confirmed: confirmedOriginalsFor(company, invoiceId),
   }, { bytes, by });
 }

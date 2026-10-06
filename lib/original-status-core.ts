@@ -75,20 +75,32 @@ export type QueueRow = OriginalStatusRow & {
   // Every file attached to the invoice and what the look-up did with it, with the
   // reason (lib/original-copy.ts) — a file that is not a PDF included.
   tried: TriedAttachment[];
+  // What the client gets while there is no original: the system's redraw, or — when the
+  // system cannot draw the invoice — QuickBooks' own PDF with accounting's lines showing.
+  fallback: string;
 };
 
 // The queue entry for one invoice, or null when its original is in use (done).
 // `result` is the answer of the SAME look-up the SOA uses (selectVerifiedOriginal).
-export function queueRowFor(row: OriginalStatusRow, files: readonly AttachmentFile[], result: OriginalCopyResult): QueueRow | null {
+export function queueRowFor(row: OriginalStatusRow, files: readonly AttachmentFile[], result: OriginalCopyResult, fallback: string): QueueRow | null {
   if ('found' in result) return null;
   const state: QueueState = !files.length ? 'nothing' : files.some(isPdfFile) ? 'refused' : 'no-pdf';
-  return { ...row, state, tried: result.tried };
+  return { ...row, state, tried: result.tried, fallback };
+}
+
+// What goes out for an invoice with no original: from the system's own decision for it (lib/client-invoice-model.ts).
+export function fallbackWording(decision: { kind: 'system' } | { kind: 'quickbooks'; reason: string | null }): string {
+  return decision.kind === 'system'
+    ? 'The system redraws this invoice (each service once, at its full amount).'
+    : `QuickBooks' own PDF is sent, with accounting's Deferred Revenue lines showing — the system cannot draw this invoice: ${decision.reason ?? 'nothing to fold'}.`;
 }
 
 export type QueueResult = {
   rows: QueueRow[];
   // Open split invoices whose original is in use (not listed).
   done: number;
+  // Open split invoices Vincent decided to leave as they are (lib/original-decisions.ts) — not listed either.
+  decided: number;
   // Invoices of a book QuickBooks could not be read for — not known either way, so not listed.
   unknown: number;
   errors: Partial<Record<'TAB' | 'TAC' | 'TAO', string>>;

@@ -75,6 +75,7 @@ export type PdfFacts = {
 
 const cents = (n: number) => Math.round(n * 100);
 const squash = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+const withoutExchangeFooter = (text: string) => text.replace(/^[ \t]*(?:Exchange\s+rate|Equivalent\s+to)\b[^\n]*$/gim, '');
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
 const MIN_PAGE_CHARS = 20;       // the real second page (letterhead + "Paynow (QR)") has ~146
 const MAX_REGROUPINGS = 20_000;
@@ -118,20 +119,25 @@ export function acceptableLineSets(facts: Pick<InvoiceFacts, 'lines' | 'preferre
   return [...sets.values()];
 }
 
-export type OriginalCheck = { ok: true } | { ok: false; reason: string };
-const refuse = (reason: string): OriginalCheck => ({ ok: false, reason });
+// Where a refusal happened — only two stages can ever be confirmed by a person (see ConfirmedOriginal): the
+// amounts (identity and file checks had all passed: the printed lines are only a regrouping of the invoice's)
+// and a file that is a picture (no text to check at all). Anything else — the system's own drawing, an unread
+// page, another number, date, customer or total — is never confirmable.
+export type RefusalStage = 'file' | 'no-text' | 'identity' | 'amounts';
+export type OriginalCheck = { ok: true } | { ok: false; reason: string; stage: RefusalStage };
+const refuse = (stage: RefusalStage, reason: string): OriginalCheck => ({ ok: false, reason, stage });
 
 export function checkOriginalCopy(pdf: PdfFacts, facts: InvoiceFacts): OriginalCheck {
   // 1. What the file is.
-  if (/tassure/i.test(pdf.producer ?? '')) return refuse("it is the system's own drawing (what Save PDF gives), not QuickBooks' invoice");
-  if (pdf.totalPages > pdf.pages.length) return refuse(`it has ${pdf.totalPages} pages and only ${pdf.pages.length} could be read`);
+  if (/tassure/i.test(pdf.producer ?? '')) return refuse('file', "it is the system's own drawing (what Save PDF gives), not QuickBooks' invoice");
+  if (pdf.totalPages > pdf.pages.length) return refuse('file', `it has ${pdf.totalPages} pages and only ${pdf.pages.length} could be read`);
   const blank = pdf.pages.findIndex(p => p.replace(/\s/g, '').length < MIN_PAGE_CHARS);
-  if (blank >= 0) return refuse(`page ${blank + 1} has no text (a scan or a picture?)`);
+  if (blank >= 0) return refuse('no-text', `page ${blank + 1} has no text (a scan or a picture?)`);
   // QuickBooks prints the company letterhead ("Registration No.: 201325157G") as TEXT, in both layouts; the
   // system's own drawing carries it as a picture. This is what still tells them apart once the drawing has
   // been re-saved or printed to PDF by another program, which rewrites the Producer (the council's Researcher,
   // 2026-10-06: a re-saved Save PDF file passed everything else).
-  if (!/Registration\s+No\.?\s*:/i.test(pdf.text)) return refuse("it does not carry the company letterhead as text — QuickBooks' own invoice does; the system's own drawing re-saved by another program does not");
+  if (!/Registration\s+No\.?\s*:/i.test(pdf.text)) return refuse('file', "it does not carry the company letterhead as text — QuickBooks' own invoice does; the system's own drawing re-saved by another program does not");
 
   // 2. Whose it is. Two printed layouts of the same invoice are real: QuickBooks'
   // current one ("INVOICE NO. : TAB 02611112", "DATE : 01/10/2026", "TOTAL S$760.00")
@@ -142,18 +148,18 @@ export function checkOriginalCopy(pdf: PdfFacts, facts: InvoiceFacts): OriginalC
   const text = pdf.text;
   // An invoice to a foreign payer ends with "Exchange rate 5.24" and "Equivalent to RMB5,986.20" (found on 4 originals
   // on the file server): information, not invoice amounts — and the redraw does not print it.
-  const amountText = text.replace(/^[ \t]*(?:Exchange\s+rate|Equivalent\s+to)\b[^\n]*$/gim, '');
+  const amountText = withoutExchangeFooter(text);
   const [, book = '', bareNo = facts.invoiceNo.trim()] = /^(TAB|TAC|TAO)\s+(.+)$/i.exec(facts.invoiceNo.trim()) ?? [];
   const invoiceNo = new RegExp(`INVOICE\\s+NO\\.?\\s*:\\s*${book ? `(?:${book}\\s*){0,2}` : ''}${escapeRe(bareNo)}(?![\\w-])`, 'i');
-  if (!invoiceNo.test(text)) return refuse(`it does not say "INVOICE NO. : ${facts.invoiceNo}"`);
+  if (!invoiceNo.test(text)) return refuse('identity', `it does not say "INVOICE NO. : ${facts.invoiceNo}"`);
   const [, dd = '', mm = '', yyyy = ''] = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(facts.date) ?? [];
   const date = dd ? `0?${Number(dd)}\\/0?${Number(mm)}\\/${yyyy}` : escapeRe(facts.date);
-  if (!facts.date || !new RegExp(`(?<!DUE\\s)DATE\\s*:\\s*${date}(?!\\d)`, 'i').test(text)) return refuse(`it is not dated ${facts.date}`);
-  if (!facts.customer.trim() || !squash(text).includes(squash(facts.customer))) return refuse(`it is not billed to ${facts.customer}`);
+  if (!facts.date || !new RegExp(`(?<!DUE\\s)DATE\\s*:\\s*${date}(?!\\d)`, 'i').test(text)) return refuse('identity', `it is not dated ${facts.date}`);
+  if (!facts.customer.trim() || !squash(text).includes(squash(facts.customer))) return refuse('identity', `it is not billed to ${facts.customer}`);
   const total = formatMoney(Math.abs(facts.total));
   const labelled = new RegExp(`TOTAL\\s*(?:S\\$|SGD|\\$)?\\s*${escapeRe(total)}(?![\\d])`, 'i').test(text);
   const lastAmount = [...amountText.matchAll(MONEY_TOKEN)].pop()?.[0];
-  if (!labelled && !(/\bnet\s+total\b/i.test(text) && lastAmount === total)) return refuse(`it does not say "TOTAL ${total}"`);
+  if (!labelled && !(/\bnet\s+total\b/i.test(text) && lastAmount === total)) return refuse('identity', `it does not say "TOTAL ${total}"`);
 
   // 3. What it prints.
   const printed = printedAmounts(amountText);
@@ -176,7 +182,7 @@ export function checkOriginalCopy(pdf: PdfFacts, facts: InvoiceFacts): OriginalC
     if (!closest || missing.length + unexpected.length < closest.missing.length + closest.unexpected.length) closest = { missing, unexpected };
   }
   const c = closest ?? { missing: [], unexpected: [] };
-  return refuse(`its amounts are not the unsplit invoice's (${c.missing.length ? `missing ${c.missing.join(', ')}` : ''}${c.missing.length && c.unexpected.length ? '; ' : ''}${c.unexpected.length ? `unexpected ${c.unexpected.join(', ')}` : ''})`);
+  return refuse('amounts', `its amounts are not the unsplit invoice's (${c.missing.length ? `missing ${c.missing.join(', ')}` : ''}${c.missing.length && c.unexpected.length ? '; ' : ''}${c.unexpected.length ? `unexpected ${c.unexpected.join(', ')}` : ''})`);
 }
 
 export type AttachmentFile = {
@@ -220,12 +226,56 @@ const MAX_CANDIDATES = 4;
 export const isPdfFile = (f: Pick<AttachmentFile, 'ContentType' | 'FileName'>): boolean => f.ContentType === 'application/pdf' || /\.pdf$/i.test(f.FileName ?? '');
 export const isSystemCopy = (f: Pick<AttachmentFile, 'Note'>): boolean => f.Note === INVOICE_COPY_NOTE;
 
+// A person's decision that ONE specific file is the original of ONE specific invoice although the proof cannot
+// show it by itself (Vincent, 2026-10-07: "外观差别，只要是外观差别的，可以用原装的发票，就用原装的，不需要重新画").
+// Narrow on purpose — the register is lib/original-decisions.ts, and nobody adds to it without Vincent's word:
+//  - the entry names the file by its sha256, so no other file ever matches;
+//  - it names the version of the invoice the person looked at (number, date, customer, total): when accounting
+//    changes any of them the entry lapses and the proof decides again;
+//  - it only covers the two refusals that are not about WHOSE the file is — the printed lines are a regrouping
+//    of the invoice's lines (stage 'amounts': the file and identity checks had all passed), or the file is a
+//    picture with no text to check (stage 'no-text'); every other refusal stands;
+//  - a file that prints one of accounting's Deferred twins as an amount of its own is the split version and is
+//    never confirmable.
+export type ConfirmedOriginal = {
+  invoiceNo: string; date: string; total: number; customer: string;
+  sha256: string; fileName: string; decidedBy: string; decidedOn: string; why: string;
+};
+
+// The same version of the invoice: what the client holds is identified by its number, date, customer and total.
+export const sameInvoiceVersion = (
+  a: Pick<InvoiceFacts, 'invoiceNo' | 'date' | 'total' | 'customer'>,
+  b: Pick<InvoiceFacts, 'invoiceNo' | 'date' | 'total' | 'customer'>,
+): boolean => a.invoiceNo === b.invoiceNo && a.date === b.date && cents(a.total) === cents(b.total) && squash(a.customer) === squash(b.customer);
+
+// A file that prints an amount equal to one of the invoice's Deferred twins prints accounting's split.
+export function printsADeferredTwin(pdf: Pick<PdfFacts, 'text'>, facts: Pick<InvoiceFacts, 'lines'>): boolean {
+  const printed = printedAmounts(withoutExchangeFooter(pdf.text));
+  return facts.lines.some(l => l.deferred && printed.has(formatMoney(Math.abs(l.amount))));
+}
+
+// Web Crypto, not node:crypto: this module is also bundled into the Invoice Originals page.
+export async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes as unknown as BufferSource);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// The register entry that covers this refused file, or null.
+async function confirmedApproval(bytes: Uint8Array, pdf: PdfFacts, facts: InvoiceFacts, check: { stage: RefusalStage }, confirmed: readonly ConfirmedOriginal[]): Promise<ConfirmedOriginal | null> {
+  if (check.stage !== 'amounts' && check.stage !== 'no-text') return null;
+  const ofThisVersion = confirmed.filter(c => sameInvoiceVersion(c, facts));
+  if (!ofThisVersion.length) return null;
+  if (check.stage === 'amounts' && printsADeferredTwin(pdf, facts)) return null;
+  const sha = await sha256Hex(bytes);
+  return ofThisVersion.find(c => c.sha256 === sha) ?? null;
+}
+
 // The first attached PDF that is provably the original — the system's own
 // copy first (made before any split, INV-QB-036), then files staff attached,
 // newest first. Every failure of one candidate (download, parse, mismatch)
 // just moves on to the next; nothing here throws. Reasons name the attachment
 // by Id, never by file name (file names carry client names and end up in logs).
-export async function selectVerifiedOriginal(deps: OriginalCopyDeps, facts: InvoiceFacts): Promise<OriginalCopyResult> {
+export async function selectVerifiedOriginal(deps: OriginalCopyDeps, facts: InvoiceFacts, confirmed: readonly ConfirmedOriginal[] = []): Promise<OriginalCopyResult> {
   let files: AttachmentFile[];
   try {
     files = await deps.list();
@@ -254,9 +304,11 @@ export async function selectVerifiedOriginal(deps: OriginalCopyDeps, facts: Invo
     try {
       const bytes = await deps.download(file);
       if (!looksLikePdf(bytes)) { why.push(`${label}: not a PDF`); tried.push(entry(file, 'refused', 'the file is not a PDF')); continue; }
-      const check = checkOriginalCopy(await deps.read(bytes), facts);
-      if (check.ok) {
-        tried.push(entry(file, 'used', 'proved to be the original'));
+      const pdf = await deps.read(bytes);
+      const check = checkOriginalCopy(pdf, facts);
+      const approved = check.ok ? null : await confirmedApproval(bytes, pdf, facts, check, confirmed);
+      if (check.ok || approved) {
+        tried.push(entry(file, 'used', approved ? `confirmed by ${approved.decidedBy} on ${approved.decidedOn} (${approved.why})` : 'proved to be the original'));
         for (const rest of candidates.slice(i + 1)) tried.push(entry(rest, 'skipped', 'not needed — an earlier file was accepted'));
         return { found: { bytes, fileName: file.FileName ?? `${file.Id}.pdf`, attachableId: file.Id, bySystem: isSystemCopy(file) }, tried };
       }

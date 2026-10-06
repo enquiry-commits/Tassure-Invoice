@@ -14,7 +14,7 @@
 
 import { createHash } from 'node:crypto';
 import { looksLikePdf } from './quickbooks-attachments';
-import { checkOriginalCopy, MAX_ORIGINAL_BYTES, selectVerifiedOriginal, type AttachmentFile, type InvoiceFacts, type PdfFacts } from './original-copy';
+import { checkOriginalCopy, MAX_ORIGINAL_BYTES, selectVerifiedOriginal, type AttachmentFile, type ConfirmedOriginal, type InvoiceFacts, type PdfFacts } from './original-copy';
 import { hintForReason } from './original-status-core';
 
 export type UploadedBy = { name: string; email: string };
@@ -30,6 +30,8 @@ export type OriginalUploadDeps = {
   read(bytes: Uint8Array): Promise<PdfFacts>;
   upload(args: { fileName: string; note: string; pdf: Uint8Array }): Promise<{ id: string }>;
   now(): Date;
+  // Vincent's decisions for this invoice (lib/original-decisions.ts) — the same ones the SOA's look-up honours.
+  confirmed?: readonly ConfirmedOriginal[];
 };
 
 export type UploadResult =
@@ -92,7 +94,7 @@ export async function placeUploadedOriginal(deps: OriginalUploadDeps, input: { b
   } catch (err) {
     return { status: 'failed', error: `could not read the invoice's attachments (${message(err)})` };
   }
-  const existing = await selectVerifiedOriginal({ list: async () => files, download: deps.download, read: deps.read }, facts);
+  const existing = await selectVerifiedOriginal({ list: async () => files, download: deps.download, read: deps.read }, facts, deps.confirmed);
   if ('found' in existing) return { status: 'already', fileName: existing.found.fileName };
 
   // The proof, against the live invoice. Anything it cannot read or does not
@@ -117,14 +119,14 @@ export async function placeUploadedOriginal(deps: OriginalUploadDeps, input: { b
   // Confirmed the way the SOA will read it: the real look-up, on the files as
   // they are now. Never rolled back when it does not confirm — the proof passed,
   // and removing a file from QuickBooks is not this page's job.
-  const confirmed = await selectVerifiedOriginal({ list: deps.list, download: deps.download, read: deps.read }, facts);
-  if ('found' in confirmed) {
-    return confirmed.found.attachableId === uploaded.id
+  const afterwards = await selectVerifiedOriginal({ list: deps.list, download: deps.download, read: deps.read }, facts, deps.confirmed);
+  if ('found' in afterwards) {
+    return afterwards.found.attachableId === uploaded.id
       ? { status: 'attached', attachableId: uploaded.id, fileName }
       // Someone else's accepted file is in use (two people at once): the invoice has its original either way.
-      : { status: 'already', fileName: confirmed.found.fileName };
+      : { status: 'already', fileName: afterwards.found.fileName };
   }
-  return { status: 'unconfirmed', attachableId: uploaded.id, reason: confirmed.none };
+  return { status: 'unconfirmed', attachableId: uploaded.id, reason: afterwards.none };
 }
 
 // What the route answers with, per outcome.

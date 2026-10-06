@@ -2559,6 +2559,38 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Vincent's decisions on the 24: leave 19 as they are, use the original for 4, keep only Co-Operate
+  (INV-QB-037, 2026-10-07).** After the finding and the list, Vincent: "OK 不用管是说可以沿用的意思吗？如果可以
+  沿用就沿用，并且把不用管的记录处理掉，并且合并去SOA / 外观差别，只要是外观差别的，可以用原装的发票，就用原装的，
+  不需要重新画，并且也把这类的当成处理掉 / 只留下唯一要处理的（…Co-Operate Associates Pte. Ltd.）这个保留就好 /
+  不会发SOA的当成先不管". Built as two small registers in `lib/original-decisions.ts` (data in the repo, an entry
+  only on his explicit word, each tied to the invoice's number, date, customer and total so it lapses when
+  accounting changes the invoice): **REDRAW_DECISIONS (19)** — the 12 invoices whose picture original equals the
+  redraw, the 6 changed after sending, and Sanli (net 0, no SOA) are left as they are: the SOA keeps merging the
+  redraw and they leave the Invoice Originals list; **CONFIRMED_ORIGINALS (4)** — EVOP #02610547, Nova Golden
+  #02610907, Soon & Guan #02611000 and Minyotech #02610788 (same number, date, customer and total, only the line
+  breakdown differs) use the ORIGINAL from the file server, named by sha256. The proof now types every refusal
+  (`stage`: file / no-text / identity / amounts) and `selectVerifiedOriginal(deps, facts, confirmed)` accepts a
+  registered file ONLY for 'amounts' (identity and file checks had passed) or 'no-text' (a picture), only by its
+  sha256, only for the registered invoice version, never when the file prints one of accounting's Deferred twins
+  (the split version), never the system's own drawing / an unread page / another number, date, customer or total.
+  The look-up honours it everywhere — SOA, Email Drafts and Save PDF (`findOriginalInvoiceCopy`), the queue, and the
+  upload's "already has an original" — while the upload itself stays proof-only. The 4 originals were attached to
+  the invoices in QuickBooks (local copies of the server files; the server was not touched): #1000001781, #1000001791,
+  #1000001801, #1000001772, each checked live first (still open, same version, the proof's refusal exactly
+  'amounts' / 'no-text', nothing accepted yet) and confirmed by the real look-up after. The page now also says,
+  per row, what the client gets meanwhile (the redraw, or QuickBooks' own PDF with its Deferred lines) and counts
+  the invoices that need nothing (original in use / decided). **Real books:** the queue lists exactly one invoice,
+  Co-Operate Associates TAB #02610167 (done 135, decided 19, unknown 0); the real SOA route merges the originals
+  for EVOP, Nova Golden, Soon & Guan and Minyotech (the picture page of #02610788 looked at: one 600 incorporation
+  line, 500, -100 = 1,000), the redraw for British Sports and Minyotech #02610789, and for Co-Operate QuickBooks'
+  PDF with the split-fallback warning. Verification: `test-original-decisions.ts` (new), `test-original-status.ts`,
+  `test-original-upload.ts`, `test-original-copy.ts`, `test-account-access.ts`, `test-assistant-pages.ts`; 51
+  negative controls on a copy; tsc, eslint, `next build`. **Not live:** the push is still pending (the
+  permission layer refused it), so Vercel runs the old code — the 4 attachments sit in QuickBooks and the SOA on
+  Vercel keeps redrawing until the push. **Still open (his call):** whether an invoice with no payment terms may
+  take them from its due date so Co-Operate is redrawn.
+
 - **Are the 24 invoices still without an original really in the SOA? (INV-QB-037, 2026-10-07).**
   Vincent, after the redesign: "这个24张的单，目前都有出现在SOA 需要合并的需求中吗？如果没有的话
   就不需要纠结了，因为以后我们都会用系统开单都会有原装发票的记录，这个我要你帮我发现一下". Checked read
