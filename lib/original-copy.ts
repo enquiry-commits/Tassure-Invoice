@@ -90,7 +90,9 @@ export function invoiceFacts(invoice: QbInvoiceJson, book: string, preferred?: n
   const total = Number(invoice.TotalAmt);
   const customer = (invoice.CustomerRef?.name ?? '').trim();
   if (!invoice.DocNumber || !date || !customer || !Number.isFinite(total)) return null;
-  return { invoiceNo: `${book} ${invoice.DocNumber}`, date: `${date[3]}/${date[2]}/${date[1]}`, customer, total, lines, preferred };
+  // A number that already carries its book ("TAC02580261") is the same number.
+  const bare = invoice.DocNumber.replace(new RegExp(`^${book}\\s*`, 'i'), '') || invoice.DocNumber;
+  return { invoiceNo: `${book} ${bare}`, date: `${date[3]}/${date[2]}/${date[1]}`, customer, total, lines, preferred };
 }
 
 // Every set of line amounts the original could have printed: each deferred
@@ -126,14 +128,24 @@ export function checkOriginalCopy(pdf: PdfFacts, facts: InvoiceFacts): OriginalC
   const blank = pdf.pages.findIndex(p => p.replace(/\s/g, '').length < MIN_PAGE_CHARS);
   if (blank >= 0) return refuse(`page ${blank + 1} has no text (a scan or a picture?)`);
 
-  // 2. Whose it is.
+  // 2. Whose it is. Two printed layouts of the same invoice are real: QuickBooks'
+  // current one ("INVOICE NO. : TAB 02611112", "DATE : 01/10/2026", "TOTAL S$760.00")
+  // and the older one staff printed from the QuickBooks screen in 2025 - early 2026
+  // ("Invoice No. : 02610188" with no book, "Date : 4/3/2026" with no zero padding,
+  // and the total as the last amount under a "Net Total" heading). Both are matched
+  // by the LABEL, never by the number alone.
   const text = pdf.text;
-  const invoiceNo = new RegExp(`INVOICE\\s+NO\\.?\\s*:\\s*${facts.invoiceNo.trim().split(/\s+/).map(escapeRe).join('\\s+')}(?![\\w-])`, 'i');
+  const [, book = '', bareNo = facts.invoiceNo.trim()] = /^(TAB|TAC|TAO)\s+(.+)$/i.exec(facts.invoiceNo.trim()) ?? [];
+  const invoiceNo = new RegExp(`INVOICE\\s+NO\\.?\\s*:\\s*${book ? `(?:${book}\\s*){0,2}` : ''}${escapeRe(bareNo)}(?![\\w-])`, 'i');
   if (!invoiceNo.test(text)) return refuse(`it does not say "INVOICE NO. : ${facts.invoiceNo}"`);
-  if (!facts.date || !new RegExp(`(?<!DUE\\s)DATE\\s*:\\s*${escapeRe(facts.date)}(?!\\d)`, 'i').test(text)) return refuse(`it is not dated ${facts.date}`);
+  const [, dd = '', mm = '', yyyy = ''] = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(facts.date) ?? [];
+  const date = dd ? `0?${Number(dd)}\\/0?${Number(mm)}\\/${yyyy}` : escapeRe(facts.date);
+  if (!facts.date || !new RegExp(`(?<!DUE\\s)DATE\\s*:\\s*${date}(?!\\d)`, 'i').test(text)) return refuse(`it is not dated ${facts.date}`);
   if (!facts.customer.trim() || !squash(text).includes(squash(facts.customer))) return refuse(`it is not billed to ${facts.customer}`);
   const total = formatMoney(Math.abs(facts.total));
-  if (!new RegExp(`TOTAL\\s+${escapeRe(total)}(?![\\d])`, 'i').test(text)) return refuse(`it does not say "TOTAL ${total}"`);
+  const labelled = new RegExp(`TOTAL\\s*(?:S\\$|SGD|\\$)?\\s*${escapeRe(total)}(?![\\d])`, 'i').test(text);
+  const lastAmount = [...text.matchAll(MONEY_TOKEN)].pop()?.[0];
+  if (!labelled && !(/\bnet\s+total\b/i.test(text) && lastAmount === total)) return refuse(`it does not say "TOTAL ${total}"`);
 
   // 3. What it prints.
   const printed = printedAmounts(text);

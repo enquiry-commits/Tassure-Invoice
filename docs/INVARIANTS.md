@@ -2531,11 +2531,21 @@ again.
   page was read and has text (the SOA merges ALL pages; a page that was never
   read, or a picture, is not checked), and pdf-lib can load it (a file with an
   owner password is read by pdf.js but refused by pdf-lib, and the invoice
-  would drop out of the SOA). WHOSE IT IS: the page says "INVOICE NO. :
-  <book> <number>" (not merely contains it: DN26-18 is not DN26-182, and a
-  credit note quoting the number is not the invoice), "DATE : <the invoice
-  date>" (not the due date), is billed to the customer (an invoice moved to
-  another customer, INV-QB-030), and has "TOTAL <amount>". WHAT IT PRINTS: the
+  would drop out of the SOA). WHOSE IT IS: the page says the invoice
+  number after its "Invoice No." label (not merely contains it: DN26-18 is not
+  DN26-182, and a credit note quoting the number is not the invoice), the
+  invoice date after "Date" (not the due date), is billed to the customer (an
+  invoice moved to another customer, INV-QB-030), and says which amount is the
+  total. Two printed layouts of a real original exist and BOTH are accepted
+  (found on the file server, 2026-10-06, where 23 of 155 originals were in the
+  second): QuickBooks' current one ("INVOICE NO. : TAB 02611112", "DATE :
+  01/10/2026", "TOTAL 760.00" or "TOTAL S$760.00"), and the older one staff
+  printed from the QuickBooks screen in 2025 - early 2026 (Microsoft Print To
+  PDF or Acrobat: "Invoice No. : 02610188" with no book, "Date : 4/3/2026" with
+  no zero padding, the total as the LAST amount under a "Net Total" heading);
+  in both, another book's prefix, another day, or an amount after the total
+  is refused, and a number QuickBooks stores with its book ("TAC02580261") is
+  the same number. WHAT IT PRINTS: the
   money on the page, counted as a multiset, equals the invoice's line amounts
   plus the total, with every Deferred twin folded into exactly ONE other line.
   Any folding is accepted, not only the system's label pairing, because
@@ -2602,7 +2612,7 @@ again.
   something the PDF path would not do; a book QuickBooks cannot read is
   "QuickBooks unavailable", never "Nothing attached"; it writes nothing (GET
   routes only). It sits under `/billing/soa`, so the existing "outstanding"
-  page rule decides who sees it. Guarded by `test-original-copy.ts` (103
+  page rule decides who sees it. Guarded by `test-original-copy.ts` (115
   checks: the proof on synthetic and generated PDFs, which file is chosen and
   what is said about each, the QuickBooks reader against a fake fetch, that
   `getClientInvoicePdf` looks BEFORE it redraws) and `test-original-status.ts`

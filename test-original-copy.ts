@@ -133,6 +133,29 @@ const reasonOf = (r: { ok: boolean }) => ('reason' in r ? String((r as { reason:
   check('the customer\'s name may wrap or differ in case', checkOriginalCopy(pdf(ORIGINAL.replace('1X Exchange Pte. Ltd.', '1X EXCHANGE Pte.\nLtd.')), FACTS).ok);
   check('"TOTAL" must be on the page with the invoice total', !checkOriginalCopy(pdf(ORIGINAL.replace('TOTAL 1,360.00', 'BALANCE 1,360.00')), FACTS).ok);
 
+  console.log('\n--- the two layouts of a real original ---');
+  check('the current QuickBooks layout may write the total with the currency: "TOTAL S$1,360.00"', checkOriginalCopy(pdf(ORIGINAL.replace('TOTAL 1,360.00', 'TOTAL S$1,360.00')), FACTS).ok);
+  check('…but the currency does not excuse a wrong total', !checkOriginalCopy(pdf(ORIGINAL.replace('TOTAL 1,360.00', 'TOTAL S$1,300.00')), FACTS).ok);
+  // The older layout staff printed from the QuickBooks screen (Microsoft: Print To PDF / Acrobat Distiller, 2025 - early 2026).
+  const OLD = [
+    'Payment is due seven (7) days from the invoice date.', 'PayNow ID : 201325157G (SGD only)', 'Account Name : TASSURE ASIA BIZSERVICES PTE. LTD.', 'TAB',
+    'TASSURE ASIA BIZSERVICES PTE LTD', 'Attn:', 'Invoice No. : \t02611112', 'Date : \t1/10/2026', 'Bill To:', '1X Exchange Pte. Ltd.', '140 Robinson Road', 'S$', 'Net Total', 'Mr. Yang',
+    'S$700.00\tPerform secretarial services for one-year [from Oct 2026 - Sep 2027]', '- Important dates Notification and updates if applicable during the year',
+    'S$60.00\tDisbursement:', '-Government fee for ACRA filing of Annual Return [FYE 31.12.2026]', 'S$600.00\tXBRL for the year (FYE 31.12.2026)', 'S$1,360.00',
+  ].join('\n');
+  const oldPdf = (text: string) => pdf(text, { producer: 'Microsoft: Print To PDF' });
+  check('the older layout is accepted: number without the book, date without zero padding, the total last under "Net Total"', checkOriginalCopy(oldPdf(OLD), FACTS).ok, reasonOf(checkOriginalCopy(oldPdf(OLD), FACTS)));
+  check('…its split version is still refused', !checkOriginalCopy(oldPdf(OLD.replace('S$700.00\t', 'S$175.00\tDeferred Revenue S$525.00\t')), FACTS).ok);
+  check('…another invoice number is refused', !checkOriginalCopy(oldPdf(OLD.replace('02611112', '02611113')), FACTS).ok);
+  check('…another book\'s prefix is refused (TAC 02611112 is not TAB 02611112)', !checkOriginalCopy(oldPdf(OLD.replace('Invoice No. : \t02611112', 'Invoice No. : TAC 02611112')), FACTS).ok && checkOriginalCopy(oldPdf(OLD.replace('Invoice No. : \t02611112', 'Invoice No. : TAB 02611112')), FACTS).ok);
+  check('…another date is refused, with or without zero padding', !checkOriginalCopy(oldPdf(OLD.replace('Date : \t1/10/2026', 'Date : \t2/10/2026')), FACTS).ok && !checkOriginalCopy(oldPdf(OLD.replace('Date : \t1/10/2026', 'Date : \t11/10/2026')), FACTS).ok && checkOriginalCopy(oldPdf(OLD.replace('Date : \t1/10/2026', 'Date : \t01/10/2026')), FACTS).ok);
+  check('…the total must be the LAST amount under "Net Total": an amount after it is refused', !checkOriginalCopy(oldPdf(OLD + '\nS$25.00'), FACTS).ok);
+  check('…the total printed anywhere but last (the same amounts in another order) is not trusted', !checkOriginalCopy(oldPdf(OLD.replace('\nS$1,360.00', '').replace('Mr. Yang', 'Mr. Yang\nS$1,360.00')), FACTS).ok);
+  check('…and without the "Net Total" heading nothing says which amount is the total', !checkOriginalCopy(oldPdf(OLD.replace('Net Total', 'Amount')), FACTS).ok);
+  check('…the customer must still be on it', !checkOriginalCopy(oldPdf(OLD.replace('1X Exchange Pte. Ltd.', 'Nucon Pte. Ltd.')), FACTS).ok);
+  const prefixed = invoiceFacts({ ...inv, DocNumber: 'TAB02611112' }, 'TAB', [700, 60, 600])!;
+  check('a number QuickBooks stores with its book ("TAB02611112") is the same number', prefixed.invoiceNo === 'TAB 02611112' && checkOriginalCopy(oldPdf(OLD), prefixed).ok && checkOriginalCopy(pdf(ORIGINAL), prefixed).ok);
+
   console.log('\n--- which attached file is used ---');
   const file = (Id: string, extra: Partial<AttachmentFile> = {}): AttachmentFile => ({ Id, FileName: `INV02611112-Client Name Pte Ltd-${Id}.pdf`, ContentType: 'application/pdf', Size: 160_000, Note: null, TempDownloadUri: `https://files.test/${Id}`, CreateTime: '2026-10-01T00:00:00Z', ...extra });
   // A file's content is chosen by byte 10, so each fake file says what it "prints".
