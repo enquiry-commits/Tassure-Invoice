@@ -2535,6 +2535,26 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Two council follow-ups Vincent approved: the ALL-mode Draft fails loudly,
+  the search boxes accept commas (INV-DOC-023, INV-DATA-074).** After the
+  council review (entry below) Vincent answered "改成明确报错" and "现在修".
+  (1) `buildSoaDraft`'s ALL mode used to drop any book whose SOA PDF failed
+  (`catch { return null }`) and only errored when ALL failed; now only a 404
+  (nothing outstanding in that book) is left out, any other failure stops
+  the draft and names the book (`lib/soa-book-pdfs.ts`, `SoaPdfError` with
+  the HTTP status). Honest scope: it was NOT what hid the Chinese-name
+  outage (both books failed there, so the draft errored visibly) — it closes
+  the partial-failure path. (2) `lib/postgrest-or.ts` `ilikeAny()` quotes
+  typed search text for the three `.or()` searches (Companies, Master List,
+  AR Reminder): a comma in the text ("Han Kun, LLP", the real client "500
+  DURIANS II, L.P") made PostgREST fail with "failed to parse logic tree".
+  Verified read-only against production: 30 ordinary-term comparisons
+  return the same rows as the old string, 10 hard terms x 3 tables are
+  accepted, the real comma name is found. `test-soa-book-pdfs.ts` and
+  `test-postgrest-or.ts` ALL PASSED; `npx tsc --noEmit`, eslint on touched
+  files and `npm run build` clean. Not yet clicked in production (REG-036,
+  REG-037).
+
 - **Council review of the red SOA chip — what held, what didn't, what was fixed
   (INV-DOC-022).** Vincent's "先修，重置后 council 复核" ran 2026-10-06 (4
   members + 4 peer reviews, 1.42M subagent tokens, no failures). Root cause
@@ -7103,3 +7123,12 @@ a reviewer can check it before anything is created.
   invalid/unrecognised dates). `join_date` itself is still what the Client
   Flow chart reads — the two fields are otherwise independent.
 - `npx tsc --noEmit` clean; not yet checked in a browser.
+- 2026-10-06 follow-up: `companies.client_since_note` (scripts/add-client-since-note.sql,
+  run by Vincent) — free-text note editable in Company 360 beside Client Since,
+  included in the Reports export. The 7 companies with two Master List dates
+  (earlier engagement terminated, later re-joined) got client_since = the
+  LATEST date + a "Re-joined — earlier engagement terminated (first joined …)"
+  note (`scripts/set-rejoined-client-since.mjs`). Company 360 also shows a
+  "please enter the accurate Client Since" reminder while client_since is empty
+  but Master List has an unusable join date (YES / 2020 / 24/0/2023 / impossible
+  dates).
