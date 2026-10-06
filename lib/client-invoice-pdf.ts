@@ -2,7 +2,8 @@ import 'server-only';
 
 import fs from 'fs/promises';
 import path from 'path';
-import { getValidToken, qbQuery, type QbCompany } from './quickbooks';
+import { qbQuery, type QbCompany } from './quickbooks';
+import { fetchQuickBooksInvoicePdf } from './quickbooks-invoice-pdf';
 import { buildClientInvoiceModel, type QbInvoiceJson } from './client-invoice-model';
 import { renderClientInvoicePdf, ClientInvoiceRenderError, type ClientInvoiceAssets } from './client-invoice-render';
 import { loadChineseFont } from './pdf-chinese-text';
@@ -27,20 +28,9 @@ export type ClientInvoicePdf = {
   fallbackReason: string | null;
 };
 
-const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
-  ? 'https://sandbox-quickbooks.api.intuit.com'
-  : 'https://quickbooks.api.intuit.com';
-
-export async function fetchQuickBooksInvoicePdf(company: QbCompany, invoiceId: string): Promise<Uint8Array> {
-  const token = await getValidToken(company);
-  if (!token) throw new Error(`QuickBooks ${company} not connected`);
-  const res = await fetch(`${QB_BASE}/v3/company/${token.realm_id}/invoice/${invoiceId}/pdf?minorversion=65`, {
-    headers: { Authorization: `Bearer ${token.access_token}`, Accept: 'application/pdf' },
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`QuickBooks ${company} PDF request failed for invoice ${invoiceId}`);
-  return new Uint8Array(await res.arrayBuffer());
-}
+// QuickBooks' own PDF now lives in lib/quickbooks-invoice-pdf.ts (shared with
+// the invoice copy attached in QuickBooks); re-exported so callers keep working.
+export { fetchQuickBooksInvoicePdf };
 
 const TEMPLATE_DIR = path.join(process.cwd(), 'templates', 'client-invoice');
 

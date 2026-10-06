@@ -485,8 +485,11 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
       });
       const json = await res.json();
       if (json.tao) {
-        setResult({ ok: true, msg: `TAO #${json.tao.invoiceNo} generated — ${fmtMoney(json.tao.total ?? total)}` });
-        setTimeout(onGenerated, 900);
+        // INV-QB-036: the invoice copy goes onto the invoice in QuickBooks; if
+        // that failed, say so and stay on this message long enough to read it.
+        const copyWarnings = (json.copyWarnings ?? []) as string[];
+        setResult({ ok: true, msg: `TAO #${json.tao.invoiceNo} generated — ${fmtMoney(json.tao.total ?? total)}${copyWarnings.length ? `  ⚠ ${copyWarnings.join('; ')}` : json.tao.copy?.status === 'attached' ? ' · invoice copy attached in QuickBooks' : ''}` });
+        setTimeout(onGenerated, copyWarnings.length ? 8000 : 900);
       } else {
         const msg: string = json.errors?.tao ?? json.error ?? 'Invoice generation failed.';
         // Vincent, 2026-09-05: "能不能把这个建成客户的功能，也放置在...TAO"

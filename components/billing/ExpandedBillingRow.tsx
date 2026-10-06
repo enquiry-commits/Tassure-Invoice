@@ -887,6 +887,9 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       if (json.errors?.tab) errs.push(`TAB: ${json.errors.tab}`);
       if (json.errors?.tac) errs.push(`TAC: ${json.errors.tac}`);
       if (json.errors?.persistence) errs.push(json.errors.persistence);
+      // The invoice copy could not be attached to the invoice in QuickBooks
+      // (INV-QB-036) — the invoice itself is fine, staff attach it by hand.
+      for (const warning of (json.copyWarnings ?? []) as string[]) errs.push(warning);
       setMissingCustomerCompanies([
         ...(/Customer not found in QB/i.test(json.errors?.tab ?? '') ? (['TAB'] as const) : []),
         ...(/Customer not found in QB/i.test(json.errors?.tac ?? '') ? (['TAC'] as const) : []),
@@ -920,7 +923,9 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
         // entry and silently put the panel back into "TAB not generated yet".
         setGeneratedPdfs(prev => [...prev.filter(p => !pdfs.some(n => n.company === p.company)), ...pdfs]);
         setPdfResult(null);
-        setDraftResult({ ok: true, msg: `Created in QuickBooks — ${parts.join(' · ')}${errs.length ? `  ⚠ ${errs.join('; ')}` : ''} · review & send from QB` });
+        const created = [json.tab, json.tac].filter(Boolean);
+        const copyAttached = created.length > 0 && created.every(r => r.copy?.status === 'attached');
+        setDraftResult({ ok: true, msg: `Created in QuickBooks — ${parts.join(' · ')}${errs.length ? `  ⚠ ${errs.join('; ')}` : ''}${copyAttached ? ' · invoice copy attached in QuickBooks' : ''} · review & send from QB` });
       } else {
         setDraftResult({ ok: false, msg: errs.join('; ') || json.error || 'QB create failed' });
       }
@@ -1012,7 +1017,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       }
       setGeneratedPdfs(prev => prev.map(pdf => pdf.company === company ? { ...pdf, total: json.total ?? pdf.total } : pdf));
       setBillToNotes(json.billToNotes ?? []);
-      setEditResult(prev => ({ ...prev, [company]: { ok: true, msg: `Saved — ${company} invoice #${displayInvoiceNo(json.invoiceNo)} updated in QuickBooks.` } }));
+      setEditResult(prev => ({ ...prev, [company]: { ok: true, msg: `Saved — ${company} invoice #${displayInvoiceNo(json.invoiceNo)} updated in QuickBooks.${json.copy?.status === 'attached' ? ' Its copy in QuickBooks was refreshed.' : ''}${json.copyWarning ? `  ⚠ ${json.copyWarning}` : ''}` } }));
     } catch (error) {
       setEditResult(prev => ({ ...prev, [company]: { ok: false, msg: error instanceof Error ? error.message : 'Request failed.' } }));
     } finally {

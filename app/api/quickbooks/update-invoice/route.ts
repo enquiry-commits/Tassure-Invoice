@@ -9,6 +9,12 @@ import { validateLinePicClasses, type PicClassOption } from '@/lib/invoice-pic-c
 import { normalize } from '@/lib/company-name';
 import { syncQuickBooksInvoiceChanges } from '@/lib/quickbooks-invoice-incremental';
 import type { InvoiceRef } from '@/lib/email-merge';
+import { attachInvoiceCopyToQuickBooks, invoiceCopyWarning } from '@/lib/quickbooks-invoice-copy';
+
+// The invoice copy attached to each invoice in QuickBooks (INV-QB-036) adds a
+// PDF download and an upload — a few seconds, up to 45 in the worst case —
+// after the invoice work itself, so this route states its own time limit.
+export const maxDuration = 90;
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -262,8 +268,22 @@ export async function PATCH(req: NextRequest) {
     // ignore
   }
 
+  // The copy attached to the invoice in QuickBooks follows the edit
+  // (INV-QB-036): the system's own copy is replaced, a file attached by hand
+  // is never touched. Best effort — the edit above is already saved.
+  const copy = await attachInvoiceCopyToQuickBooks({
+    company: qbCompany,
+    invoiceId: String(inv.Id ?? qbInvoiceId),
+    docNumber: String(inv.DocNumber ?? invoice.DocNumber ?? ''),
+    customerName: String((invoice.CustomerRef as { name?: string } | undefined)?.name ?? ''),
+    total: inv.TotalAmt,
+    mode: 'refresh',
+  });
+
   return NextResponse.json({
     success: true,
+    copy,
+    copyWarning: invoiceCopyWarning(qbCompany, copy),
     invoiceNo: inv.DocNumber,
     qbId: inv.Id,
     total: inv.TotalAmt,

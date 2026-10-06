@@ -16,8 +16,15 @@ import { getApprovedAccount, type ApprovedAccount } from '@/lib/approved-account
 import { isValidEmail } from '@/lib/campaign-recipients';
 import { isPrimaryRenewalProduct, parseInvoicePeriod, servicePeriodOverlapError, compareRenewalPeriodProductLines, needsRenewalPeriodCheck } from '@/lib/invoice-period';
 import { createHash } from 'node:crypto';
+import { attachInvoiceCopyToQuickBooks, invoiceCopyWarning } from '@/lib/quickbooks-invoice-copy';
+import type { InvoiceCopyResult } from '@/lib/quickbooks-attachments';
 
 export type { DraftLineItem };
+
+// The invoice copy attached to each invoice in QuickBooks (INV-QB-036) adds a
+// PDF download and an upload — a few seconds, up to 45 in the worst case —
+// after the invoice work itself, so this route states its own time limit.
+export const maxDuration = 90;
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -635,6 +642,22 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // The invoice copy, attached to each new invoice in QuickBooks itself
+  // (INV-QB-036; accounting: "From now onwards, kindly attached the invoice
+  // copy as attachment here."). Best effort: the invoices exist whatever
+  // happens here, so a problem becomes a warning for staff, never an error.
+  // A replayed request goes through the same call — it attaches nothing
+  // twice, and fills in a copy the first attempt never got to.
+  const copies: Partial<Record<QbCompany, InvoiceCopyResult>> = {};
+  await Promise.all((['TAB', 'TAC', 'TAO'] as const).map(async company => {
+    const created = company === 'TAB' ? tab : company === 'TAC' ? tac : tao;
+    if (!created || created.error || !created.qbId || !created.invoiceNo) return;
+    copies[company] = await attachInvoiceCopyToQuickBooks({
+      company, invoiceId: String(created.qbId), docNumber: created.invoiceNo, customerName: companyName, total: created.total, mode: 'create',
+    });
+  }));
+  const copyWarnings = (['TAB', 'TAC', 'TAO'] as const).flatMap(company => invoiceCopyWarning(company, copies[company]) ?? []);
+
   const anySuccess = !!(tab && !tab.error) || !!(tac && !tac.error) || !!(tao && !tao.error);
   const overlapConfirmationRequired = !!(tab?.overlapConfirmationRequired || tac?.overlapConfirmationRequired || tao?.overlapConfirmationRequired);
   return NextResponse.json({
@@ -647,6 +670,7 @@ export async function POST(req: NextRequest) {
       expectedInvoiceNo: tab.expectedInvoiceNo,
       numberMode: tab.numberMode,
       billToNotes: tab.billToNotes ?? [],
+      copy: copies.TAB ?? null,
     } : null,
     tac: tac && !tac.error ? {
       invoiceNo: tac.invoiceNo,
@@ -656,6 +680,7 @@ export async function POST(req: NextRequest) {
       expectedInvoiceNo: tac.expectedInvoiceNo,
       numberMode: tac.numberMode,
       billToNotes: tac.billToNotes ?? [],
+      copy: copies.TAC ?? null,
     } : null,
     tao: tao && !tao.error ? {
       invoiceNo: tao.invoiceNo,
@@ -665,6 +690,7 @@ export async function POST(req: NextRequest) {
       expectedInvoiceNo: tao.expectedInvoiceNo,
       numberMode: tao.numberMode,
       billToNotes: tao.billToNotes ?? [],
+      copy: copies.TAO ?? null,
     } : null,
     // Distinct from `errors` below — a human decision pending, not a
     // failure. The caller re-submits the identical request (same
@@ -672,6 +698,9 @@ export async function POST(req: NextRequest) {
     // Every Bill To note across the books that were created, so a caller
     // showing one confirmation panel does not have to dig per book.
     billToNotes: [...(tab?.billToNotes ?? []), ...(tac?.billToNotes ?? []), ...(tao?.billToNotes ?? [])],
+    // Why an invoice copy could not be attached in QuickBooks (INV-QB-036) —
+    // empty when every copy went in or was deliberately left alone.
+    copyWarnings,
     overlapConfirmationRequired,
     overlapWarnings: {
       ...(tab?.overlapConfirmationRequired ? { tab: tab.overlapWarnings } : {}),

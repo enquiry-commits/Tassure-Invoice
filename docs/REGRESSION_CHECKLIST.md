@@ -525,6 +525,10 @@ Run `npx tsx test-statement-cover-chinese.ts`, `npx tsx test-content-disposition
 Run `npx tsx test-postgrest-or.ts` (`ALL PASSED`). Then signed in, type `500 DURIANS II, L.P` into the Companies search, the Master List search and AR Reminder's search: each finds that company (it used to answer with an error), and an ordinary search (a few letters of a name) returns the same rows as before.
 **Guards:** `docs/INVARIANTS.md` INV-DATA-075.
 
+### REG-038 — A new invoice carries its copy in QuickBooks (after ANY change to `lib/quickbooks-attachments.ts`, `lib/quickbooks-attachments-http.ts`, `lib/quickbooks-invoice-copy.ts`, `lib/quickbooks-invoice-pdf.ts`, or the create-invoice / update-invoice routes)
+Run `npx tsx test-qb-attachments.ts` (`ALL PASSED`). Then signed in, Billing Drafts: generate an invoice (and one in the TAO builder) — the result line ends "invoice copy attached in QuickBooks". Open that invoice in QuickBooks: Attachments holds ONE file named like Save PDF's (`INV<no>-<customer>-S$<amount>.pdf`). Edit its lines in the editor and save — the message says its copy in QuickBooks was refreshed, and Attachments still holds one file (the new one); a file attached by hand next to it is untouched. If QuickBooks refuses the file, the result line shows a ⚠ naming the book and the reason, and the invoice itself is fine.
+**Guards:** `docs/INVARIANTS.md` INV-QB-036, INV-QB-029, INV-QB-009.
+
 ---
 
 ## Automation priority

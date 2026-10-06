@@ -2459,6 +2459,48 @@ again.
   run of the real route over all 796 Billing Drafts clients: exactly 2
   clients gained a cycle (Elite Gathering 31.08.2026, Co-operate Associates
   31.01.2023), none lost one, and no renewal status changed.
+- **INV-QB-036** — Every invoice this app creates carries QuickBooks' own
+  PDF of itself as an ATTACHMENT on the invoice in QuickBooks, attached
+  automatically and kept equal to the invoice while it is edited before
+  sending (`lib/quickbooks-attachments.ts` decisions + wire formats,
+  `-http.ts` the HTTP side, `lib/quickbooks-invoice-copy.ts` token, switch
+  and file name; called by `create-invoice` as 'create' and `update-invoice`
+  as 'refresh'). Why: accounting's rule, written on the invoice edit screen
+  on 2026-10-06 — "From now onwards, kindly attached the invoice copy as
+  attachment here." — because Chelsea splits an invoice's lines AFTER it has
+  gone to the client (INV-QB-029), after which QuickBooks prints only the
+  split version; the copy attached at creation is the one the client first
+  received. Staff had started attaching by hand that day, naming the file the
+  way "Save PDF" does (`INV02611137-Cleanwell Technology Pte. Ltd.-S$1776.50.pdf`);
+  the system uses the same name (`invoicePdfFileName`). Vincent asked for it
+  ("每次在系统开了INVOICE 后，自动添加到 QB对应的 INVOICE (Attachments)") and
+  chose all three books, replacement after an edit, and a real-invoice test
+  first. Rules: (1) QuickBooks' OWN PDF — not the redrawn client version
+  (INV-QB-029); (2) best effort: the invoice exists whatever happens, so a
+  failure is a warning shown beside it (`copyWarnings` / `copyWarning`),
+  never an error and never a rollback; (3) the system recognises its own file
+  by the note "Invoice copy attached automatically by the Tassure system" —
+  ONLY files carrying it are ever replaced or deleted, a file attached by
+  hand is never touched, and the system adds none next to one; (4) 'create'
+  attaches once (a replayed request is harmless), 'refresh' uploads the new
+  copy FIRST and removes the old one after, so a failure never leaves an
+  invoice without a copy; (5) `IncludeOnSend` is false — QuickBooks must not
+  mail it; (6) all three books are live (`INVOICE_COPY_ATTACHMENT_MODE`), no
+  backfill ("from now onwards"): an invoice accounting has already split
+  (e.g. #02611099) would get the SPLIT version, which is not what the client
+  received. Verified on a real invoice, TAB #02611136, 2026-10-06, with
+  Vincent's approval: ONE multipart request (`file_metadata_01` JSON linking
+  to the invoice Id + `file_content_01`) is enough; QuickBooks answers HTTP
+  200 even when it refuses a file (the refusal is a `Fault` inside
+  `AttachableResponse`), so success means "an Attachable with an Id came
+  back"; the file downloaded back is byte-identical (sha256) to the one
+  uploaded; the query `AttachableRef.EntityRef.Type = 'Invoice' AND
+  AttachableRef.EntityRef.value = '<Id>'` works; every attach or delete BUMPS
+  the invoice's SyncToken (0 → 3 over attach, replace) — harmless because the
+  only writer, `update-invoice`, reads the live SyncToken right before
+  writing (INV-QB-009); never hold a SyncToken across an attach. Guarded by
+  `test-qb-attachments.ts` (decisions, wire format, HTTP against a fake
+  fetch, and that both routes call it).
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 

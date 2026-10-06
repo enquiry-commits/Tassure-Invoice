@@ -2559,6 +2559,29 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Invoice copies attached in QuickBooks automatically (INV-QB-036).**
+  Accounting wrote on the invoice edit screen: "From now onwards, kindly
+  attached the invoice copy as attachment here." Vincent asked whether the
+  system can do it ("每次在系统开了INVOICE 后，自动添加到 QB对应的 INVOICE
+  (Attachments)") and chose all three books, replacement after an edit, and a
+  real-invoice test first. Read-only first: the attachment query works, and
+  staff had begun attaching by hand that afternoon, named like Save PDF's
+  file. Then: `lib/quickbooks-attachments.ts` (decisions + wire formats),
+  `lib/quickbooks-attachments-http.ts`, `lib/quickbooks-invoice-copy.ts`
+  (token, switch, file name), wired into `create-invoice` ('create') and
+  `update-invoice` ('refresh'); failures are a ⚠ beside the invoice and a log
+  line, never an error. Corrected a premise along the way: the invoice Vincent
+  proposed for the test, #02611099, was already split by accounting, so its
+  QuickBooks PDF is not what the client received — he approved TAB #02611136
+  instead. Real test on it: attached, the file downloaded back is
+  byte-identical, a second 'create' attached nothing, 'refresh' replaced the
+  copy and left exactly one; the invoice's lines, total and balance did not
+  change. Found: every attach/delete bumps the invoice's SyncToken (harmless —
+  `update-invoice` reads it live). `test-qb-attachments.ts` ALL PASSED;
+  `npx tsc --noEmit`, eslint on touched files, `npm run build`. Staff should
+  stop attaching by hand once this is live. Not yet seen on an invoice
+  created through the deployed app (REG-038).
+
 - **Two council follow-ups Vincent approved: the ALL-mode Draft fails loudly,
   the search boxes accept commas (INV-DOC-023, INV-DATA-075).** After the
   council review (entry below) Vincent answered "改成明确报错" and "现在修".
