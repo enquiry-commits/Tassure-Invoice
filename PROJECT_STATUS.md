@@ -7053,3 +7053,32 @@ a reviewer can check it before anything is created.
   `whiteSpace: nowrap` + `overflow: hidden` + `textOverflow: ellipsis` +
   `minWidth: 0` on the value span, and `minWidth: 0` on all mismatch-badge
   wrapper containers.
+
+## 2026-10-06 — Client relationship fields (Client Since / Referred By / RM)
+
+- Cindy/Esther's request: record when a company became our client, who
+  referred it, and who its RM is; show all three in Company 360 and Reports.
+  Commission is deliberately NOT recorded (Esther computes it herself);
+  external RMs/partners do NOT log in — staff record them.
+- `scripts/add-relationship-contacts.sql` (**must be run in Supabase SQL
+  editor BEFORE deploying** — Reports/Company 360 now read these columns):
+  new `relationship_contacts` table (shared people list: `internal` = staff
+  mirrored from `lib/staff-directory.ts`, `external` = partners added in
+  Company 360; names title-cased, unique on lower(name)) + `companies.
+  client_since` (DATE), `referrer_contact_id`, `rm_contact_id`.
+- Company 360: new row with a date input and two pickers (staff / external
+  partners / "+ Add external partner…"). APIs: `/api/relationship-contacts`
+  (GET list, POST add), `/api/companies/relationship` (PATCH).
+- Reports: Explore gets Client Since (Month) / Referred By / RM dimensions
+  and filters; drill-down table and the .xlsx export gain the three columns.
+- Migration run by Vincent 2026-10-06. `master_list.join_date` was cleaned
+  first (`scripts/normalize-join-dates.mjs`, Vincent's rules): 258 rows with
+  ambiguous `dd/mm/yyyy` rewritten day-first as "08 Jul 2024", "Sep-16" ->
+  "September 16", "2020.02.18" -> "18 Feb 2020"; "YES"/"2020" kept (need an
+  accurate date). Old values are in the run's backup CSV (id, old, new).
+- `client_since` seeded once from the cleaned join_date
+  (`scripts/backfill-client-since.mjs`): 733 of 957 companies set, never
+  overwriting; 16 left blank for a person (conflicting duplicate rows,
+  invalid/unrecognised dates). `join_date` itself is still what the Client
+  Flow chart reads — the two fields are otherwise independent.
+- `npx tsc --noEmit` clean; not yet checked in a browser.
