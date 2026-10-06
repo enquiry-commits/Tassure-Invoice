@@ -2662,7 +2662,28 @@ again.
   cannot be uploaded past the proof, and stay listed until a file the proof
   accepts is found (a confirm-anyway or OCR path for them is an OPEN QUESTION for
   Vincent, not built; the 6 invoices changed after sending must never be
-  confirmable — the redraw is right for them). Nothing is ever removed or changed
+  confirmable — the redraw is right for them). Checked 2026-10-07 (Vincent:
+  "这个24张的单，目前都有出现在SOA 需要合并的需求中吗？"): the SOA PDF merges EVERY
+  unpaid invoice of the customer, and the Outstanding list staff press PDF / Draft
+  from shows customers whose net balance is above 0 and who have a PIC. All 24 are
+  open invoices of customers with an SOA row, 22 on that live list (19 of the 24 are
+  91+ days overdue; DEMIRER KABEL TAC #02680124 and Sanli TAB #02511395 have a net
+  balance of 0 — offset by a credit or payment on the account — and are not listed), so
+  they are real SOA candidates. But for 18 of them the redraw already equals or
+  correctly replaces what the client got: the 13 picture files were rendered with the
+  Windows PDF renderer and read line by line against the redraw — 12 identical
+  (British Sports, Goldhill, International LCM, Kindle Beacon, Minyotech
+  #02610789, the 7 TAC nominee-director invoices); 1 (Minyotech #02610788: one 600
+  incorporation line there, 285 + 315 in QuickBooks now) differs only in line
+  breakdown — and the 6 changed after sending show the CURRENT invoice, which is
+  right. EVOP #02610547, Nova Golden #02610907 (900 there, 585 + 315 now; the second
+  line has no description) and Soon & Guan #02611000 (one 1,000 line there, two 500
+  now) differ the same way: same totals, other line breakdown. The one real flaw on
+  a live SOA: an invoice with NO payment terms in QuickBooks (SalesTermRef empty;
+  lines read "Sale; <customer>"; Co-Operate Associates TAB #02610167 and Sanli TAB
+  #02511395) is never redrawn — `buildClientInvoiceModel` needs the terms — and goes
+  out as QuickBooks' own PDF with accounting's Deferred lines visible (Sanli's
+  deferred Reg Addr line has no service line to fold into either). Nothing is ever removed or changed
   in QuickBooks by the page; the upload is the ONLY write and adds one attachment
   to one invoice. It sits under `/billing/soa`, so the existing "outstanding"
   page rule decides who sees it, and both routes check that rule themselves.

@@ -2559,6 +2559,44 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Are the 24 invoices still without an original really in the SOA? (INV-QB-037, 2026-10-07).**
+  Vincent, after the redesign: "这个24张的单，目前都有出现在SOA 需要合并的需求中吗？如果没有的话
+  就不需要纠结了，因为以后我们都会用系统开单都会有原装发票的记录，这个我要你帮我发现一下". Checked read
+  only with the real code, the real books and the local copies of the server files. The SOA PDF
+  merges EVERY unpaid invoice of the customer; the Outstanding list (where staff press PDF /
+  Draft) shows customers with a net balance above 0 and a PIC. All 24 invoices are open
+  (live QuickBooks balance) and have an SOA row (23 customers); 22 are on the live list with
+  a named owner and 19 are 91+ days overdue (the rest 1, 6, 34, 58, 69 days); 2 are not
+  listed because the customer nets to 0 (DEMIRER KABEL TAC #02680124, S$6,000; Sanli TAB
+  #02511395). No SOA reminder is recorded as sent to any of them — but only 2 customers in
+  the whole system have a verified send yet (the tracking is new), so history cannot say who
+  will be chased; by the list's own rules these are chase targets. **What the SOA would show
+  compared with what the client first got:** the 13 picture-only server files were rendered to
+  images (Windows PDF renderer) and compared line by line with the live redraw — 12 are
+  identical (British Sports #02610680, Goldhill #02610682, International LCM #02610687,
+  Kindle Beacon #02610691, Minyotech #02610789, and the 7 TAC nominee-director invoices
+  incl. DEMIRER's 3,000 + 3,000); 1 differs only in line breakdown (Minyotech #02610788: one
+  600 incorporation line there, 285 + 315 now, the second without a description). The 6
+  changed after sending (totals: Advance CF 1,120 → 1,070, Kinplus 1,120 → 1,220, Ling Long
+  660 → 435; dates by 1-2 days) show the current invoice — correct. Three more differ only in
+  breakdown (EVOP #02610547 and Nova Golden #02610907: 900 there, 585 + 315 now, blank
+  description on the 315; Soon & Guan #02611000: 1,000 there, 500 + 500 now). **Two get
+  QuickBooks' own PDF**, i.e. accounting's "Deferred Revenue" lines are visible to the client:
+  Co-Operate Associates TAB #02610167 (S$1,860, 212 days overdue, ON the list) and Sanli TAB
+  #02511395 (net 0, not listed) — both have NO payment terms in QuickBooks (SalesTermRef
+  empty, lines "Sale; <customer>"), and the model needs terms; with terms Co-Operate would
+  redraw as 600 / 600 / 660, Sanli would still fall back (its deferred Reg Addr line has no
+  service line to fold into). **Conclusion for Vincent:** the 24 ARE in the SOA need, but for
+  18 of them nothing needs finding (the redraw is the same or the right current invoice), 4
+  differ only in line breakdown, and only Co-Operate Associates is a real flaw on a live SOA.
+  New invoices made in the system carry their original copy automatically (INV-QB-036), so the
+  set only shrinks as these are paid. **Open (his call, nothing built):** keep, reshape or
+  hide the Invoice Originals rows for these (a row can only leave by an upload the proof
+  accepts, which the pictures never will); and whether an invoice with no payment terms may
+  take them from its due date (7 days → Net 7) so Co-Operate is redrawn instead of sent as
+  QuickBooks' split PDF — a new display rule, not done. Scratch only (`soa-demand-24.ts`,
+  `redraw-vs-file.ts`, `render-pdfs.ps1`); nothing in the repo changed except these docs.
+
 - **Invoice Originals page redesigned into a to-do list with upload (INV-QB-037).**
   Vincent, 2026-10-06 night: "Original in use ……有一点多此一举", then "我要的只是要确保有拿到原装的发票，
   那些还没有拿到原装发票的，我是希望员工可以在这边更新就好，已经拿到原装发票的其实就已经不需要在
