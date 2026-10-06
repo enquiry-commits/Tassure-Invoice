@@ -2,8 +2,8 @@
 // INV-DATA-074, Vincent 2026-10-06): it appears only when the closest QuickBooks
 // customer is a plausible near miss (70-84% similar), and it names that customer.
 // Real cases: 1 Midas Ventures (a client with no invoices yet, whose search word
-// "ventures" pulled in 5 unrelated companies) must NOT warn; ACG Interior and
-// Soon & Guan (the same company spelled differently in QuickBooks) must.
+// "ventures" pulled in 5 unrelated companies) must NOT warn; Soon & Guan (Training
+// vs Trading — possibly the same company) must, and must name the customer.
 //
 // Run: npx tsx test-company-near-miss.ts
 import { readFileSync } from 'fs';
@@ -21,18 +21,20 @@ check('1 MIDAS VENTURES vs 5 unrelated "Ventures" companies: no warning', closes
 check('no candidates: no warning', closestNearMiss('1 MIDAS VENTURES PTE. LTD.', []) === null);
 
 console.log('\n--- rule 2: a real near miss warns and is named ---');
-// The scores are the matcher's today (both 75). If the matcher is ever taught
-// that "&" = "and", ACG becomes a real match (>= 85), this check fails, and
-// the case should then move to the "matched" side — that is the right signal.
-const acg = closestNearMiss('ACG INTERIOR AND EXHIBITION PTE. LTD.', ['ACG Interior & Exhibition Pte Ltd']);
-check('ACG INTERIOR AND EXHIBITION: names "ACG Interior & Exhibition Pte Ltd"', acg?.name === 'ACG Interior & Exhibition Pte Ltd' && acg.score >= 70 && acg.score < 85, JSON.stringify(acg));
+// SOON & GUAN is the real near miss today (75): "Training" vs "Trading" is a
+// different word, so a person must look. ACG INTERIOR AND EXHIBITION used to be
+// the other one (75, "and" vs "&"); since the "and"-insensitive equality upgrade
+// (INV-DATA-076) it scores 99, is a real match, and no longer warns.
 const soon = closestNearMiss('SOON & GUAN MANPOWER TRAINING PTE. LTD.', ['A Plus Manpower Services Pte Ltd', 'Soon & Guan Manpower Trading Pte Ltd', 'Y&G Manpower Agency Pte Ltd']);
-check('SOON & GUAN: picks the closest of several (Trading, not the other Manpower companies)', soon?.name === 'Soon & Guan Manpower Trading Pte Ltd', JSON.stringify(soon));
+check('SOON & GUAN: names "Soon & Guan Manpower Trading Pte Ltd", the closest of several', soon?.name === 'Soon & Guan Manpower Trading Pte Ltd' && soon.score >= 70 && soon.score < 85, JSON.stringify(soon));
 
 console.log('\n--- rule 3: a real match is not a "near miss" ---');
 check('an identical name (any case) scores 100, so it is a match, not a near miss', closestNearMiss('Exclave Ventures Pte. Ltd.', ['EXCLAVE VENTURES PTE. LTD.']) === null);
-check('the floor and ceiling are honoured', closestNearMiss('ACG INTERIOR AND EXHIBITION PTE. LTD.', ['ACG Interior & Exhibition Pte Ltd'], 80, 85) === null
-  && closestNearMiss('ACG INTERIOR AND EXHIBITION PTE. LTD.', ['ACG Interior & Exhibition Pte Ltd'], 50, 75) === null);
+check('ACG INTERIOR AND EXHIBITION ~ "ACG Interior & Exhibition" is now a real match, so no warning', closestNearMiss('ACG INTERIOR AND EXHIBITION PTE. LTD.', ['ACG Interior & Exhibition Pte Ltd']) === null);
+const soonName = 'Soon & Guan Manpower Trading Pte Ltd';
+check('the floor and ceiling are honoured', closestNearMiss('SOON & GUAN MANPOWER TRAINING PTE. LTD.', [soonName], 80, 85) === null
+  && closestNearMiss('SOON & GUAN MANPOWER TRAINING PTE. LTD.', [soonName], 50, 75) === null
+  && closestNearMiss('SOON & GUAN MANPOWER TRAINING PTE. LTD.', [soonName], 70, 85)?.name === soonName);
 
 console.log('\n--- rule 4: the page uses it (source-level) ---');
 const src = readFileSync('lib/company-360.ts', 'utf8');

@@ -109,9 +109,15 @@ does not prematurely commit/close the cell before the full name lands.
 **Guards:** INV-DATA-010.
 
 ### REG-013 — Company 360 multi-source accuracy
-Run `npx tsx test-company-near-miss.ts` (must print `ALL OK`): the yellow
-"no confident QuickBooks match" warning appears only for a 70–84% near miss
-and names it (INV-DATA-074). Then open Company 360 (`/companies/[id]`) for a company with multiple AR/AGM
+Run `npx tsx test-company-near-miss.ts` and `npx tsx test-company-name-and.ts`
+(each must print `ALL OK`): the yellow "no confident QuickBooks match" warning
+appears only for a 70–84% near miss and names it (INV-DATA-074), and an
+"and" / "&" name pair scores 99 while `normalize()` is unchanged
+(INV-DATA-076). After ANY change to `lib/company-name.ts`, run
+`npx tsx scripts/diff-company-name-matching.ts` (read-only, needs `.env.local`,
+about a minute): `normalize()` must differ for 0 names (its output is stored in
+`soa_owners` / `soa_remarks`) and every changed decision it lists must be
+judged right or wrong by a person. Then open Company 360 (`/companies/[id]`) for a company with multiple AR/AGM
 cycles across years, at least one generated invoice, and ND history
 (active or ceased). Confirm every section shows the correct rows, each
 AR/AGM cycle's `matchedVia` correctly reflects company_id vs uen vs fuzzy,

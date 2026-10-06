@@ -4207,11 +4207,11 @@ again.
   ("只在很像时才亮，并写出名字"). The two real near misses are the same company
   spelled differently in QuickBooks (ACG INTERIOR AND EXHIBITION ↔ "ACG
   Interior & Exhibition Pte Ltd"; SOON & GUAN MANPOWER TRAINING ↔ "…Trading Pte
-  Ltd"); their invoices are not attached on Company 360 (billing pages accept
-  70), and the warning now says so. Open, not changed: `matchScore` does not
-  treat "&" as "and" — teaching it would change every caller (SOA, billing,
-  Outstanding), so it needs its own change and a before/after diff. Pinned by
-  `test-company-near-miss.ts`.
+  Ltd"); their invoices were not attached on Company 360 (billing pages
+  accept 70), and the warning now says so. The "and" vs "&" half of that was
+  fixed the same day (INV-DATA-076): ACG now scores 99 and no longer warns;
+  SOON & GUAN (Training vs Trading — a different word) stays the one real
+  near miss. Pinned by `test-company-near-miss.ts`.
 - **INV-DATA-075** — Typed search text goes into a PostgREST `.or()` filter
   ONLY through `lib/postgrest-or.ts` `ilikeAny()`. A raw
   `` .or(`company_name.ilike.%${text}%,…`) `` reads a comma in the text as the
@@ -4227,6 +4227,68 @@ again.
   and the real comma name is found. Guarded by `test-postgrest-or.ts` (fails
   on any `.or(` with `ilike.…${…}`). `.ilike(column, pattern)` takes the
   pattern as its own parameter and was never affected.
+- **INV-DATA-076** — A company name written with the word "and" on one side
+  and "&" on the other is the same name: `matchScore()`
+  (`lib/company-name.ts`) scores 99 for a pair that is IDENTICAL once an
+  interior word "and" is ignored, and EVERY OTHER pair keeps exactly the score
+  it had (`max(old, 99)` — no score can go down). Why 99 and not 100: QuickBooks
+  can hold both spellings as separate customers, and `findCustomer()`
+  (`lib/qb-invoice-conventions.ts`, used by create-invoice, create-customer,
+  create-quotation, update-invoice and the SOA PDF) needs ONE unique best match
+  — with 100 for both the exact spelling and its twin it would tie and return
+  null, `create-customer`'s duplicate guard would then let a second QuickBooks
+  customer be created, and create-invoice would say "Customer not found"; 99 is
+  above every score the overlap and containment rules give and below an exact
+  match, so the exact spelling still wins. Only an INTERIOR "and" (a word on each
+  side) counts, and only as a whole space-separated word — never a regex, whose
+  `\b` also matches inside "andé" or "and/or" — so a leading or trailing "AND",
+  "grand" and "sands" never become twins.
+  Found 2026-10-06 (Vincent: "都要修好") from ACG INTERIOR AND EXHIBITION
+  PTE. LTD. ↔ QuickBooks "ACG Interior & Exhibition Pte Ltd": `normalize()`
+  turns "&" into a space but keeps the word "and", so they scored 75 and
+  Company 360 (needs 85) never attached that client's invoices. Same cause,
+  same day: GARY AND SEVEN FAMILY MUSIC TOGETHER (83). Two things must stay
+  true. (1) **`normalize()` is never changed for this.** Its output is
+  STORED — `soa_owners.customer_name_norm` and `soa_remarks.customer_name_norm`
+  are written by `normalize(name)` (`app/api/billing/soa/route.ts`) and looked
+  up by equality (`lib/soa-data.ts`, `lib/soa-remarks.ts`,
+  `app/api/soa-owners/audit/route.ts`), and it is the Map key all over billing.
+  Dropping "and" inside it would orphan the stored SOA owner and remarks of
+  every customer whose name contains "and". (2) **"and" is not dropped from the
+  words when scoring, and "&" is not mapped to "and".** Both were tried on real
+  data and rejected: dropping it made a renamed company's "原名 … AND …" match
+  fall 85 → 43 (REZNOS DESIGN ↔ NORTHWEST DESIGN AND BUILD: the renamed
+  company would lose its old-name history) and two probably different sibling
+  companies rise 60 → 75 (HONG YANG CONSTRUCTION AND TRADING ↔ HONG YANG
+  CONTRACTOR f.k.a. … CONSTRUCTION GROUP), because removing a word shrinks the
+  denominator of every pair that contains it; mapping "&" to "and" makes
+  unrelated names look closer ("A & B" ↔ "C & D" 0 → 100 on the shared word
+  "and"); and re-scoring the "and"-free forms through the overlap rules lowered
+  pairs that merely share an "and" (75 → 67, reproduced by the council). Measured with `scripts/diff-company-name-matching.ts` (read-only,
+  the working tree against git, over all 956 companies and all 4,788 distinct
+  names in the 21 name columns the app matches on): `normalize()` differs for
+  0 names; 4,576,372 company × name pairs and 66,349 name × name pairs inside
+  the same search-word group changed exactly 2 decisions (ACG 75 → 99, Gary &
+  Seven 83 → 99); 3 scores rose, all to 99, 0 fell; no best match and no
+  ambiguity changed. Pinned by `test-company-name-and.ts` (real names, the
+  exact-spelling-wins tie, the interior-whole-word edge cases, the two
+  rejected-design regressions, the real `normalize()` outputs, and a guard that
+  `lib/company-name.ts` holds no control characters — a Windows Bash heredoc once
+  turned `\b` into a backspace character there and the first version silently did
+  nothing). Open, not changed: (1) a QuickBooks name that ABBREVIATES a word is a
+  different problem — Q&E SMART HOME SYSTEM AND ELECTRICAL ENGINEERING ↔
+  "…Electrical Engrg Pte Ltd" scores 67, so billing, SOA and Company 360 do not
+  link them. (2) Found by the council reading the code, to be fixed as its own
+  change because it touches stored keys: the SOA Main PIC save writes
+  `soa_owners.customer_name_norm = normalize(<company-table name>)`
+  (`app/billing/soa/_components.tsx` sends `row.companyName`;
+  `app/api/billing/soa/route.ts`) while `computeSoaRows` reads it back by
+  `normalize(<QuickBooks customer name>)` (`lib/soa-data.ts`), so for a row whose
+  two names normalize differently — ACG is one — a saved Main PIC is not shown
+  after reload. No victim yet: all 308 `soa_owners` rows date from the
+  2026-09-07 bulk seeding. (3) Unverified, from code reading only:
+  `lib/client-comms-resolve.ts` looks invoices up by the display name, so an SOA
+  reminder email for such a client may list no invoices and $0.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

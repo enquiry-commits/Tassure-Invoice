@@ -437,6 +437,17 @@ navigation uses the full map.
 
 ## Known risks (not bugs — things worth remembering before relying on data)
 
+- **A QuickBooks customer name that ABBREVIATES a word is not linked to its
+  company** (found 2026-10-06). Q&E SMART HOME SYSTEM AND ELECTRICAL ENGINEERING
+  PTE.LTD. ↔ QuickBooks "Q&E Smart Home System & Electrical Engrg Pte Ltd" scores
+  67, below the 70 line billing and SOA use, so that client's invoices do not
+  attach there (nor on Company 360, which needs 85). The "and" vs "&" cases
+  (ACG, Gary & Seven) were fixed the same day (INV-DATA-076); abbreviations are
+  a different matching problem. Quickest remedy for this one client: make the
+  QuickBooks customer name and the company name agree. SOON & GUAN MANPOWER
+  TRAINING ↔ "…Trading" (75) stays a near miss on purpose — Company 360 names
+  it in its yellow warning, and a person decides whether it is the same company.
+
 - **Automation Health reads only the newest 120 `automation_sync_runs`
   rows across ALL sources** (`app/api/automation/health/route.ts`).
   `quickbooks` alone writes about 30 a day (webhook and manual syncs — 240

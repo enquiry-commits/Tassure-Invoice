@@ -30,6 +30,48 @@ export function normalize(name: string): string {
   return v;
 }
 
+// "and" vs "&" (2026-10-06, Vincent: "都要修好"). normalize() already turns "&"
+// into a space but keeps the WORD "and", so "ACG Interior AND Exhibition" and
+// "ACG Interior & Exhibition" scored 75 and Company 360 (needs 85) never
+// attached that client's invoices. The fix is deliberately the smallest one:
+// a pair that is IDENTICAL once an interior word "and" is ignored scores 99, and
+// every other pair keeps exactly the score it had (never lower). Do NOT instead drop "and"
+// from the words when scoring: that changes every pair that contains "and"
+// (measured on real data: a renamed company's "原名 … AND …" match fell
+// 85 → 43, and two different sibling companies rose 60 → 75). And do NOT touch
+// normalize(): its output is stored (soa_owners / soa_remarks.customer_name_norm)
+// and used as exact Map keys, so changing it would orphan those rows.
+//
+// Details the 2026-10-06 council settled, each for a concrete failure:
+// - the score is 99, not 100. QuickBooks can hold both spellings as separate
+//   customers, and findCustomer() (lib/qb-invoice-conventions.ts, used by
+//   create-invoice and create-customer) needs ONE unique best match: with
+//   100 for both the exact spelling and its twin it would tie, return null,
+//   and create-customer's duplicate guard would let a second QuickBooks
+//   customer be created. 99 is above every score the word-overlap and
+//   containment rules can give and below an exact match, so the exact
+//   spelling still wins.
+// - only an INTERIOR "and" (a word on each side) is ignored, and only as a
+//   whole space-separated word — not by regex, whose \b also matches "and"
+//   inside "andé" or "and/or" — so a leading or trailing "AND", "grand" and
+//   "sands" can never become a twin.
+const TWIN_SCORE = 99;
+const withoutAndCache = new Map<string, string>();
+function withoutAnd(normalized: string): string {
+  const hit = withoutAndCache.get(normalized);
+  if (hit !== undefined) return hit;
+  const tokens = normalized.split(' ');
+  const last = tokens.length - 1;
+  const v = tokens.filter((t, i) => t !== 'and' || i === 0 || i === last).join(' ');
+  withoutAndCache.set(normalized, v);
+  return v;
+}
+function sameIgnoringAnd(na: string, nb: string): boolean {
+  if (!na.includes('and') && !nb.includes('and')) return false; // cheap: nothing to ignore
+  const a = withoutAnd(na);
+  return a !== '' && a === withoutAnd(nb);
+}
+
 // The word used to prefilter a large, company_name-only table via ilike
 // before scoring — normalize() already strips "pte ltd"/"sdn bhd"/etc., so
 // the remaining longest word is usually the one distinguishing word a raw
@@ -116,9 +158,17 @@ export function matchScore(a: string, b: string): number {
   if (best === 100) return best;
   const aliasA = extractFkaAlias(a);
   const aliasB = extractFkaAlias(b);
-  if (aliasA) best = Math.max(best, coreScore(normalize(aliasA), nb));
-  if (aliasB) best = Math.max(best, coreScore(na, normalize(aliasB)));
-  if (aliasA && aliasB) best = Math.max(best, coreScore(normalize(aliasA), normalize(aliasB)));
+  const naA = aliasA ? normalize(aliasA) : null;
+  const nbB = aliasB ? normalize(aliasB) : null;
+  if (naA) best = Math.max(best, coreScore(naA, nb));
+  if (nbB) best = Math.max(best, coreScore(na, nbB));
+  if (naA && nbB) best = Math.max(best, coreScore(naA, nbB));
+  // Identical except for the word "and" (vs "&") on one side: the same name.
+  // max(), so no pair can ever score LOWER than it did before.
+  if (sameIgnoringAnd(na, nb)
+    || (naA !== null && sameIgnoringAnd(naA, nb))
+    || (nbB !== null && sameIgnoringAnd(na, nbB))
+    || (naA !== null && nbB !== null && sameIgnoringAnd(naA, nbB))) return Math.max(best, TWIN_SCORE);
   return best;
 }
 
