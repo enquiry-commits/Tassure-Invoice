@@ -257,6 +257,28 @@ const DEFAULT_PRESET = PRESETS[0];
 const TH: React.CSSProperties = { textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' };
 const STEP_LABEL: React.CSSProperties = { fontSize: 11, color: '#64748b', fontWeight: 700 };
 const SELECT_STYLE: React.CSSProperties = { fontSize: 13, padding: '6px 8px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff' };
+const GUIDE_CARD: React.CSSProperties = {
+  border: '1px solid #dbe7ef',
+  borderRadius: 14,
+  background: 'linear-gradient(180deg, #f8fcfc 0%, #ffffff 100%)',
+  padding: 16,
+  boxShadow: '0 8px 22px rgba(15, 23, 42, 0.04)',
+};
+const STEP_BADGE: React.CSSProperties = {
+  width: 24,
+  height: 24,
+  borderRadius: 999,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: '#d9f0ec',
+  color: COLORS.teal,
+  fontSize: 12,
+  fontWeight: 900,
+  flex: '0 0 auto',
+};
+const GUIDE_TITLE: React.CSSProperties = { fontSize: 14, fontWeight: 900, color: COLORS.ink };
+const GUIDE_COPY: React.CSSProperties = { fontSize: 12.5, color: '#64748b', lineHeight: 1.45 };
 
 function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]; exportHref: string }) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
@@ -431,75 +453,110 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
       icon={<Compass size={16} />}
       note="Start with a Quick view. Want something different? Change ‘Group by’ or add filters in step 2 — the results update instantly."
     >
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start' }}>
-      <div style={{ flex: '1 1 560px', minWidth: 0 }}>
-      {/* Step 1 */}
-      <div style={{ ...STEP_LABEL, marginBottom: 6 }}>① QUICK VIEWS — click one to start</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-        {PRESETS.map(p => {
-          const on = presetId === p.id;
-          return (
-            <button key={p.id} title={p.hint} onClick={() => applyPreset(p)}
-              style={{ fontSize: 12.5, fontWeight: 700, padding: '7px 14px', borderRadius: 999, cursor: 'pointer', border: `1px solid ${on ? COLORS.teal : '#e2e8f0'}`, background: on ? COLORS.teal : '#fff', color: on ? '#fff' : '#334155' }}>
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.45fr) minmax(320px, 0.75fr)', gap: 16, alignItems: 'stretch', marginBottom: 18 }}>
+        <section style={GUIDE_CARD}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14 }}>
+            <span style={STEP_BADGE}>1</span>
+            <div>
+              <div style={GUIDE_TITLE}>Start with one ready-made question</div>
+              <div style={GUIDE_COPY}>Fastest path: click a tile below. It automatically sets the view, date range, filters and result tab.</div>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 9 }}>
+            {PRESETS.map(p => {
+              const on = presetId === p.id;
+              return (
+                <button key={p.id} title={p.hint} onClick={() => applyPreset(p)}
+                  style={{
+                    textAlign: 'left',
+                    minHeight: 70,
+                    padding: '11px 12px',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    border: `1px solid ${on ? COLORS.teal : '#dbe7ef'}`,
+                    background: on ? COLORS.teal : '#fff',
+                    color: on ? '#fff' : COLORS.ink,
+                    boxShadow: on ? '0 8px 18px rgba(49, 138, 131, 0.18)' : 'none',
+                  }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 900, marginBottom: 4 }}>{p.label}</div>
+                  <div style={{ fontSize: 11.5, lineHeight: 1.35, color: on ? 'rgba(255,255,255,0.82)' : '#64748b' }}>{p.hint}</div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
 
-      {/* Step 2 */}
-      <div style={{ ...STEP_LABEL, marginBottom: 6 }}>② ADJUST (optional)</div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end', marginBottom: 12 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
-          Group by
-          <select value={dimension} onChange={e => { setDimension(e.target.value as DimensionKey); setView('summary'); edited(); }} style={{ ...SELECT_STYLE, minWidth: 190 }}>
-            {DIMENSIONS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
-          </select>
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
-          Count
-          <select value={metric} onChange={e => { setMetric(e.target.value as MetricKey); edited(); }} style={{ ...SELECT_STYLE, minWidth: 230 }}>
-            {METRICS.map(m => <option key={m.key} value={m.key}>{METRIC_LABELS[m.key]}</option>)}
-          </select>
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
-          Client Since — from
-          <input type="month" value={sinceFrom} onChange={e => { setSinceFrom(e.target.value); edited(); }} style={SELECT_STYLE} />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
-          to
-          <input type="month" value={sinceTo} onChange={e => { setSinceTo(e.target.value); edited(); }} style={SELECT_STYLE} />
-        </label>
-      </div>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-        <span style={STEP_LABEL}>Only include:</span>
-        {DIMENSIONS.filter(d => d.key !== 'clientSince').map(d => (
-          <DimensionFilterMenu key={d.key} label={d.label} options={filterOptions(d.key)} selected={filters[d.key]}
-            onApply={next => { setFilters(f => ({ ...f, [d.key]: next })); edited(); }} />
-        ))}
-      </div>
-      {chips.length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 10 }}>
-          <span style={STEP_LABEL}>Active filters:</span>
-          {chips.map(c => (
-            <span key={c.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', borderRadius: 999, padding: '3px 6px 3px 10px' }}>
-              {c.text}
-              <button onClick={c.clear} aria-label={`Remove ${c.text}`} style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0 }}><X size={12} /></button>
-            </span>
-          ))}
-          <button onClick={clearAll} style={{ fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Clear all</button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+            <span style={{ ...STEP_BADGE, background: '#e8eef8', color: '#1d3a5c' }}>2</span>
+            <div>
+              <div style={GUIDE_TITLE}>Or ask in your own words</div>
+              <div style={GUIDE_COPY}>Use this when the quick tiles are not exactly what you want.</div>
+            </div>
+          </div>
+          <ExploreAssistant options={assistantOptions} dimensionLabels={assistantDimLabels} metricLabels={METRIC_LABELS}
+            preview={previewPlan} onApply={applyPlan} />
         </div>
-      )}
-
-      </div>
-      <div style={{ flex: '0 1 340px', minWidth: 280 }}>
-        <ExploreAssistant options={assistantOptions} dimensionLabels={assistantDimLabels} metricLabels={METRIC_LABELS}
-          preview={previewPlan} onApply={applyPlan} />
-      </div>
       </div>
 
-      {/* Step 3 */}
-      <div style={{ ...STEP_LABEL, margin: '18px 0 6px' }}>③ RESULTS</div>
+      <section style={{ border: '1px solid #edf2f7', background: '#fbfdff', borderRadius: 12, padding: 14, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+          <span style={{ ...STEP_BADGE, background: '#f1f5f9', color: '#64748b' }}>3</span>
+          <div>
+            <div style={GUIDE_TITLE}>Fine-tune only if needed</div>
+            <div style={GUIDE_COPY}>After choosing a quick view or confirming an AI suggestion, these controls are optional adjustments.</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end', marginBottom: 12 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
+            Group by
+            <select value={dimension} onChange={e => { setDimension(e.target.value as DimensionKey); setView('summary'); edited(); }} style={{ ...SELECT_STYLE, minWidth: 190 }}>
+              {DIMENSIONS.map(d => <option key={d.key} value={d.key}>{d.label}</option>)}
+            </select>
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
+            Count
+            <select value={metric} onChange={e => { setMetric(e.target.value as MetricKey); edited(); }} style={{ ...SELECT_STYLE, minWidth: 230 }}>
+              {METRICS.map(m => <option key={m.key} value={m.key}>{METRIC_LABELS[m.key]}</option>)}
+            </select>
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
+            Client Since — from
+            <input type="month" value={sinceFrom} onChange={e => { setSinceFrom(e.target.value); edited(); }} style={SELECT_STYLE} />
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, ...STEP_LABEL }}>
+            to
+            <input type="month" value={sinceTo} onChange={e => { setSinceTo(e.target.value); edited(); }} style={SELECT_STYLE} />
+          </label>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: chips.length > 0 ? 10 : 0 }}>
+          <span style={STEP_LABEL}>Only include:</span>
+          {DIMENSIONS.filter(d => d.key !== 'clientSince').map(d => (
+            <DimensionFilterMenu key={d.key} label={d.label} options={filterOptions(d.key)} selected={filters[d.key]}
+              onApply={next => { setFilters(f => ({ ...f, [d.key]: next })); edited(); }} />
+          ))}
+        </div>
+        {chips.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <span style={STEP_LABEL}>Active filters:</span>
+            {chips.map(c => (
+              <span key={c.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, background: '#fffbeb', border: '1px solid #fde68a', color: '#b45309', borderRadius: 999, padding: '3px 6px 3px 10px' }}>
+                {c.text}
+                <button onClick={c.clear} aria-label={`Remove ${c.text}`} style={{ display: 'flex', background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: 0 }}><X size={12} /></button>
+              </span>
+            ))}
+            <button onClick={clearAll} style={{ fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Clear all</button>
+          </div>
+        )}
+      </section>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '4px 0 8px' }}>
+        <span style={{ ...STEP_BADGE, background: '#eef6ff', color: '#2563eb' }}>4</span>
+        <div>
+          <div style={GUIDE_TITLE}>Results</div>
+          <div style={GUIDE_COPY}>Use the tabs to switch between the summary and the exact company list.</div>
+        </div>
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', borderBottom: '1px solid #e2e8f0', marginBottom: 14 }}>
         <button style={tabStyle(view === 'summary')} onClick={() => setView('summary')}>Summary by {activeDim.label}</button>
         <button style={tabStyle(view === 'list')} onClick={() => setView('list')}>Company list ({pivotTotal})</button>
