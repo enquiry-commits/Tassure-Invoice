@@ -184,7 +184,7 @@ export default function RelationshipFields({ invoiceAddress, companyId, masterLi
           />
         </div>
         {picker('referrerContactId', 'Referred By', referrerId, !referralUnlocked)}
-        {picker('rmContactId', 'RM', rmId)}
+        {picker('rmContactId', 'RM (Relationship Manager)', rmId)}
         <div>
           <div style={LABEL_STYLE}>Client Since Note</div>
           <input

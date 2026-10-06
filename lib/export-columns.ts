@@ -116,7 +116,7 @@ export const REPORTS_EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'joinDate', label: 'Join Date', width: 14, format: 'date' },
   { key: 'clientSince', label: 'Client Since', width: 14, format: 'date' },
   { key: 'referrerName', label: 'Referred By', width: 22 },
-  { key: 'rmName', label: 'RM', width: 22 },
+  { key: 'rmName', label: 'RM (Relationship Manager)', width: 28 },
   { key: 'clientSinceNote', label: 'Client Since Note', width: 42 },
 ];
 

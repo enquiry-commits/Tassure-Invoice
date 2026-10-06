@@ -196,7 +196,7 @@ const DIMENSIONS: { key: DimensionKey; label: string; value: (r: CompanyRow) => 
   // plain filter selection; blank until staff fill it in.
   { key: 'clientSince', label: 'Client Since (Month)', value: r => r.clientSince ? r.clientSince.slice(0, 7) : 'Not recorded' },
   { key: 'referrer', label: 'Referred By', value: r => r.referrerName || 'Not recorded' },
-  { key: 'rm', label: 'RM', value: r => r.rmName || 'Not assigned' },
+  { key: 'rm', label: 'RM (Relationship Manager)', value: r => r.rmName || 'Not assigned' },
 ];
 
 const METRICS: { key: MetricKey; label: string }[] = [
@@ -348,7 +348,7 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
                   <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>UEN</th>
                   <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>Client Since</th>
                   <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>Referred By</th>
-                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>RM</th>
+                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>RM (Relationship Manager)</th>
                 </tr>
               </thead>
               <tbody>
