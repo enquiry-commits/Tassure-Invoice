@@ -18,7 +18,7 @@ type Props = {
   onApply: (plan: ExplorePlan) => void;
 };
 
-const EXAMPLES = ['今年新客户，谁介绍的，RM是谁', 'Clients per RM', '2026年3月以后的新客户，按行业'];
+const EXAMPLES = ['New clients this year, who referred them and who is the RM', 'How many clients does each RM have?', 'New clients since March 2026, by industry'];
 const BOX: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 10, background: '#f8fafc', padding: 14 };
 const CHIP: React.CSSProperties = { display: 'inline-block', fontSize: 11.5, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 999, padding: '2px 9px', color: '#334155' };
 
@@ -99,7 +99,7 @@ export default function ExploreAssistant({ options, dimensionLabels, metricLabel
         Say what you want to see (中文 or English). I’ll show what I understood — nothing changes until you press Confirm.
       </div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-        <textarea value={text} rows={2} maxLength={MAX_REQUEST_CHARS} placeholder="e.g. 今年1月以后的新客户，谁介绍的？"
+        <textarea value={text} rows={2} maxLength={MAX_REQUEST_CHARS} placeholder="e.g. New clients since January, who referred them?"
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); ask(text); } }}
           style={{ flex: 1, minWidth: 0, fontSize: 13, padding: '7px 9px', borderRadius: 7, border: '1px solid #e2e8f0', resize: 'none', fontFamily: 'inherit' }} />
