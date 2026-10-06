@@ -10,6 +10,8 @@ import MetricCard from '@/components/MetricCard';
 import { Donut, VBars, HBars, LineChart } from '@/components/dashboard/Charts';
 import { DimensionFilterMenu, type FilterOption } from '@/components/dashboard/DimensionFilterMenu';
 import { usePagination, PaginationBar } from '@/components/Pagination';
+import ExploreAssistant from '@/components/reports/ExploreAssistant';
+import type { ExplorePlan } from '@/lib/reports-explore-intent';
 import { customerSourceLabel } from '@/lib/customer-source';
 import { formatStaffName } from '@/lib/staff-directory';
 import { REPORT_COLORS, REPORT_PALETTE } from '@/lib/chart-colors';
@@ -280,6 +282,22 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
   // Any manual change means the highlighted quick view no longer describes the screen.
   const edited = () => setPresetId(null);
 
+  // Settings proposed by the AI helper — applied only after the user presses
+  // Confirm there. Same setters as a Quick view.
+  function applyPlan(plan: ExplorePlan) {
+    const next: FilterState = { ...EMPTY_FILTERS };
+    for (const [dim, vals] of Object.entries(plan.filters)) {
+      if (vals && vals.length) next[dim as DimensionKey] = new Set(vals);
+    }
+    setFilters(next);
+    setSinceFrom(plan.sinceFrom);
+    setSinceTo(plan.sinceTo);
+    setDimension(plan.dimension as DimensionKey);
+    setMetric(plan.metric as MetricKey);
+    setView(plan.view);
+    setPresetId(null);
+  }
+
   // Whatever the user changes, a drill-down opened for the OLD result is stale.
   useEffect(() => { setDrilldown(null); }, [filters, sinceFrom, sinceTo, dimension, metric]);
 
@@ -333,6 +351,35 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
     return [...counts.entries()].map(([value, count]) => ({ value, count }));
   };
 
+  // Real distinct values per dimension — all the AI helper is allowed to pick
+  // from (no company names or amounts are sent).
+  const assistantOptions = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const d of DIMENSIONS) {
+      if (d.key === 'clientSince') continue;
+      out[d.key] = [...new Set(companyRows.map(r => d.value(r)))].sort();
+    }
+    return out;
+  }, [companyRows]);
+  const assistantDimLabels = useMemo(() => Object.fromEntries(DIMENSIONS.map(d => [d.key, d.label])), []);
+  function previewPlan(plan: ExplorePlan) {
+    const f: FilterState = { ...EMPTY_FILTERS };
+    for (const [dim, vals] of Object.entries(plan.filters)) if (vals && vals.length) f[dim as DimensionKey] = new Set(vals);
+    let count = 0, notRecorded = 0;
+    for (const r of companyRows) {
+      if (!matchesFilters(r, f, null)) continue;
+      if (plan.metric !== 'count' && !r[plan.metric as Exclude<MetricKey, 'count'>]) continue;
+      if (plan.sinceFrom || plan.sinceTo) {
+        const m = r.clientSince?.slice(0, 7);
+        if (!m) { notRecorded++; continue; }
+        if (plan.sinceFrom && m < plan.sinceFrom) continue;
+        if (plan.sinceTo && m > plan.sinceTo) continue;
+      }
+      count++;
+    }
+    return { count, notRecorded };
+  }
+
   const drillPagination = usePagination(drilldown?.rows ?? [], drilldown?.label ?? null);
   const listPagination = usePagination(listRows, `${dimension}|${metric}|${sinceFrom}|${sinceTo}|${listRows.length}`);
 
@@ -384,6 +431,8 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
       icon={<Compass size={16} />}
       note="Start with a Quick view. Want something different? Change ‘Group by’ or add filters in step 2 — the results update instantly."
     >
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start' }}>
+      <div style={{ flex: '1 1 560px', minWidth: 0 }}>
       {/* Step 1 */}
       <div style={{ ...STEP_LABEL, marginBottom: 6 }}>① QUICK VIEWS — click one to start</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
@@ -441,6 +490,13 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
           <button onClick={clearAll} style={{ fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Clear all</button>
         </div>
       )}
+
+      </div>
+      <div style={{ flex: '0 1 340px', minWidth: 280 }}>
+        <ExploreAssistant options={assistantOptions} dimensionLabels={assistantDimLabels} metricLabels={METRIC_LABELS}
+          preview={previewPlan} onApply={applyPlan} />
+      </div>
+      </div>
 
       {/* Step 3 */}
       <div style={{ ...STEP_LABEL, margin: '18px 0 6px' }}>③ RESULTS</div>

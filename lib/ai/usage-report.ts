@@ -66,6 +66,7 @@ export const FEATURE_LABEL: Record<string, string> = {
   turnover_ai: 'Turnover AI 读单据',
   my_tasks_brief: 'My Tasks 今日提醒',
   reports_narrative: 'Reports AI 分析',
+  reports_explore: 'Reports Explore 助手',
   ai_quality_review: 'AI 质量抽查',
   sg_news: 'SG Latest News',
 };

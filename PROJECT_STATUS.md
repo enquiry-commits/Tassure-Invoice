@@ -7167,3 +7167,17 @@ a reviewer can check it before anything is created.
   resets whenever filters/grouping change. KNOWN, not changed: Explore counts
   every `companies` row (~957, incl. inactive) while the KPI cards count active
   clients only (~911) — the old note said "active"; flagged to Vincent.
+- 2026-10-06 Explore AI helper ("Ask in your own words", right of the Explore
+  controls): one text box (CN/EN) -> `POST /api/reports/explore-intent` (OpenAI
+  router model, strict JSON schema, feature `reports_explore` in the usage
+  ledger, gated by canViewReports, input capped at 500 chars) -> Confirm card
+  (what I understood, chips, "I assumed", how many companies, how many left out
+  for no Client Since) -> on Confirm the Explore controls are set. The model
+  only proposes settings; `lib/reports-explore-intent.ts` `resolveIntent()`
+  validates them (dimension/metric whitelist, YYYY-MM months, from<=to, every
+  filter value must exist in the real value list — an unknown name becomes a
+  clarifying question with the nearest real names, never applied). No numbers
+  come from the model; only value lists (never company names/amounts) are sent.
+  OpenAI not Claude because Reports' AI has run on OpenAI since 2026-09-23
+  (Anthropic credit). Validation unit-tested; NOT yet tried against the live
+  model (no OPENAI_API_KEY locally) — first real use is after deploy.

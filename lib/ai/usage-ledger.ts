@@ -14,6 +14,7 @@ export type AiFeature =
   | 'turnover_ai'        // reading an uploaded receipt file
   | 'my_tasks_brief'     // the daily sentence at the top of My Tasks
   | 'reports_narrative'  // the Reports page's AI analysis
+  | 'reports_explore'    // the Reports Explore helper that turns a typed request into Explore settings
   | 'ai_quality_review'  // the AI quality spot-check
   | 'sg_news';           // SG Latest News
 
