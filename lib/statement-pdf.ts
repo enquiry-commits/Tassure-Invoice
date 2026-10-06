@@ -154,7 +154,7 @@ export async function drawStatementCoverPage(
   billAddrLines: string[],
   invoiceDetails: Map<string, { invoiceNo: string; description: string | null }> = new Map(),
   loadFont: (() => Promise<Uint8Array>) | null = loadChineseFont,
-) {
+): Promise<{ chineseFontFailed: boolean }> {
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
   // A Chinese-registered client's QuickBooks name (e.g. 思店科技(杭州)有限
@@ -163,8 +163,16 @@ export async function drawStatementCoverPage(
   // prints is drawn exactly as before. If the font can't load, or can't
   // print a character either, that text falls back to safeText() — the
   // Statement itself never fails over it.
+  // Said back to the caller (the route's X-Soa-Cover-Font-Fallback header and
+  // a log line) — a silent fallback would print "()" for every Chinese-named
+  // client if the font file ever went missing from a deployment.
+  let chineseFontFailed = false;
   const chinese: ChineseText | null = loadFont
-    ? await prepareChineseText(pdfDoc, font, [customerDisplayName, qbCompanyName ?? '', ...billAddrLines, ...[...invoiceDetails.values()].map(d => d.description?.split('\n').map(l => l.trim()).find(Boolean) ?? '')], loadFont).catch(() => null)
+    ? await prepareChineseText(pdfDoc, font, [customerDisplayName, qbCompanyName ?? '', ...billAddrLines, ...[...invoiceDetails.values()].map(d => d.description?.split('\n').map(l => l.trim()).find(Boolean) ?? '')], loadFont).catch(err => {
+      chineseFontFailed = true;
+      console.error('SOA cover: the Chinese font is unavailable — Chinese text falls back to safeText()', err);
+      return null;
+    })
     : null;
   const helveticaCan = (f: PDFFont, s: string) => { try { f.encodeText(s); return true; } catch { return false; } };
   // s wrapped for the Chinese font (whitespace collapsed, as wrapLine does),
@@ -404,6 +412,7 @@ export async function drawStatementCoverPage(
   if (y > AGING_TABLE_Y) y = AGING_TABLE_Y;
   else if (y < 60) { newPage(); y = AGING_TABLE_Y; }
   drawAgingTable();
+  return { chineseFontFailed };
 }
 
 // 'ALL' mode's own aggregation — sums each of TAB/TAC/TAO's own computeSoaRows()

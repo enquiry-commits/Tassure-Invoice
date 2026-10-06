@@ -45,6 +45,17 @@ export type ChineseText = {
 // UnprintableTextError when the font is needed but can't be loaded.
 export async function prepareChineseText(pdf: PDFDocument, helvetica: PDFFont, texts: string[], loadFont?: () => Promise<Uint8Array>): Promise<ChineseText> {
   const helveticaCan = (s: string) => { try { helvetica.widthOfTextAtSize(s, 10); return true; } catch { return false; } };
+  // Per character, remembered: asking Helvetica throws for every Chinese
+  // character, and wrapping measures the same characters over and over.
+  const charCan = new Map<string, boolean>();
+  const helveticaCanChar = (ch: string) => {
+    let ok = charCan.get(ch);
+    if (ok === undefined) { ok = helveticaCan(ch); charCan.set(ch, ok); }
+    return ok;
+  };
+  // The start of s for an error message — by whole characters, so a
+  // character outside the BMP is never cut in half.
+  const preview = (s: string) => Array.from(s).slice(0, 40).join('');
   let cjk: PDFFont | null = null;
   let cjkChars = new Set<number>();
   if (loadFont && texts.some(t => !helveticaCan(t.replace(/[\r\n\t]/g, ' ')))) {
@@ -62,8 +73,8 @@ export async function prepareChineseText(pdf: PDFDocument, helvetica: PDFFont, t
     const out: [string, PDFFont][] = [];
     for (const ch of s) {
       let font = preferred;
-      if (!helveticaCan(ch)) {
-        if (!cjkChars.has(ch.codePointAt(0)!)) throw new UnprintableTextError(`"${s.slice(0, 40)}" has a character (U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}) no PDF font can print`);
+      if (!helveticaCanChar(ch)) {
+        if (!cjkChars.has(ch.codePointAt(0)!)) throw new UnprintableTextError(`"${preview(s)}" has a character (U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}) no PDF font can print`);
         font = cjk;
       }
       const last = out[out.length - 1];
@@ -75,7 +86,7 @@ export async function prepareChineseText(pdf: PDFDocument, helvetica: PDFFont, t
   const widthOf = (s: string, preferred: PDFFont, size: number) => {
     try { return runs(s, preferred).reduce((w, [t, font]) => w + advance(t, font, size), 0); } catch (err) {
       if (err instanceof UnprintableTextError) throw err;
-      throw new UnprintableTextError(`"${s.slice(0, 40)}" has characters the PDF font can't print`);
+      throw new UnprintableTextError(`"${preview(s)}" has characters the PDF font can't print`);
     }
   };
   return {
@@ -100,7 +111,10 @@ export async function prepareChineseText(pdf: PDFDocument, helvetica: PDFFont, t
 }
 
 // Word-wraps text to maxWidth as measured by widthOf; a word wider than the
-// column (or Chinese text, which has no spaces) is broken by characters.
+// column (or Chinese text, which has no spaces) is broken by whole characters
+// — never through a surrogate pair — at the largest prefix that fits, found by
+// bisection (widths only grow with the prefix): the earlier one-character-at-
+// a-time search took 4 s for 300 unspaced Chinese characters.
 export function wrapText(text: string, widthOf: (s: string) => number, maxWidth: number): string[] {
   const out: string[] = [];
   for (const paragraph of text.replace(/\r/g, '').replace(/\t/g, ' ').split('\n')) {
@@ -110,14 +124,18 @@ export function wrapText(text: string, widthOf: (s: string) => number, maxWidth:
       const candidate = line ? `${line} ${word}` : word;
       if (widthOf(candidate) <= maxWidth) { line = candidate; continue; }
       if (line) out.push(line);
-      let rest = word;
-      while (widthOf(rest) > maxWidth) {
-        let n = rest.length - 1;
-        while (n > 1 && widthOf(rest.slice(0, n)) > maxWidth) n--;
-        out.push(rest.slice(0, n));
-        rest = rest.slice(n);
+      let rest = Array.from(word);
+      while (widthOf(rest.join('')) > maxWidth) {
+        let lo = 1;
+        let hi = rest.length - 1;
+        while (lo < hi) {
+          const mid = Math.ceil((lo + hi) / 2);
+          if (widthOf(rest.slice(0, mid).join('')) <= maxWidth) lo = mid; else hi = mid - 1;
+        }
+        out.push(rest.slice(0, lo).join(''));
+        rest = rest.slice(lo);
       }
-      line = rest;
+      line = rest.join('');
     }
     out.push(line);
   }

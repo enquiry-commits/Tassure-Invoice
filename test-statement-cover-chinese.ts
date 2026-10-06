@@ -44,7 +44,7 @@ const englishDetails = new Map([
 type Shown = { font: string; text: string; mode2: boolean };
 async function cover(name: string, loadFont: (() => Promise<Uint8Array>) | null, opts: { companyName?: string | null; billAddr?: string[]; details?: typeof details } = {}) {
   const pdf = await PDFDocument.create();
-  await drawStatementCoverPage(pdf, 'Tassure Group', row(name), name, opts.companyName ?? null, opts.billAddr ?? [], opts.details ?? details, loadFont);
+  const { chineseFontFailed } = await drawStatementCoverPage(pdf, 'Tassure Group', row(name), name, opts.companyName ?? null, opts.billAddr ?? [], opts.details ?? details, loadFont);
   const doc = await PDFDocument.load(await pdf.save());
   const contents = doc.getPage(0).node.Contents();
   const content = (contents instanceof PDFArray ? contents.asArray().map(r => doc.context.lookup(r)) : [contents]).map(s => Buffer.from(decodePDFRawStream(s as PDFRawStream).decode()).toString('latin1')).join('\n');
@@ -69,7 +69,7 @@ async function cover(name: string, loadFont: (() => Promise<Uint8Array>) | null,
     const text = m[2].startsWith('NotoSansSC') ? (hex.match(/.{4}/g) ?? []).map(g => cjkByGid.get(g) ?? '?').join('') : Buffer.from(hex, 'hex').toString('latin1');
     shown.push({ font: m[2], text, mode2 });
   }
-  return { shown, glyphChars: [...cjkByGid.values()], subset };
+  return { shown, glyphChars: [...cjkByGid.values()], subset, chineseFontFailed };
 }
 const line = (s: Shown[], from: number) => s.slice(from).map(x => x.text).join('');
 
@@ -101,8 +101,11 @@ const line = (s: Shown[], from: number) => s.slice(from).map(x => x.text).join('
   console.log('\n--- fallbacks never break the Statement (INV-DOC-011) ---');
   const noFont = await cover('思店科技(杭州)有限公司', null);
   check('without the font: safeText() as before ("()")', noFont.shown.some(s => s.text === '()') && !noFont.subset);
+  check('  switching the font off on purpose is not reported as a failure', noFont.chineseFontFailed === false);
   const failing = await cover('思店科技(杭州)有限公司', async () => { throw new Error('ENOENT'); });
   check('a font that fails to load: safeText() as before, no error', failing.shown.some(s => s.text === '()') && !failing.subset);
+  check('  and it SAYS so (the route turns this into X-Soa-Cover-Font-Fallback and a warning for staff)', failing.chineseFontFailed === true);
+  check('a working font reports no failure', sidian.chineseFontFailed === false && english.chineseFontFailed === false);
   const thai = await cover('ภาษาไทย Co., Ltd.', fontFile);
   check('a character neither font has: safeText() as before, no error', thai.shown.some(s => s.font === 'Helvetica-Bold' && s.text === 'Co., Ltd.'));
 

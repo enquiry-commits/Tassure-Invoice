@@ -1,4 +1,4 @@
-import { attachmentDisposition } from '@/lib/content-disposition';
+import { attachmentDisposition, headerDetail } from '@/lib/content-disposition';
 import { todaySGT } from '@/lib/date';
 import { NextRequest, NextResponse } from 'next/server';
 import { PDFDocument } from 'pdf-lib';
@@ -139,7 +139,19 @@ const COMPANY_SELECTORS: CompanySelector[] = ['TAB', 'TAC', 'TAO', 'ALL'];
 // QuickBooks system (same `company` scoping as /api/billing/soa/detail, see
 // its comment) and merges every page into one PDF — or, in 'ALL' mode,
 // every unpaid invoice across ALL THREE systems for that one customer name.
+// Any throw while the PDF is built answers as JSON so the page can show what
+// went wrong — a bare 500 only ever read "Unable to generate the combined
+// PDF" and gave staff nothing to report (the red badge of 2026-10-05).
 export async function GET(req: NextRequest) {
+  try {
+    return await buildSoaPdf(req);
+  } catch (err) {
+    console.error('SOA PDF failed', err);
+    return NextResponse.json({ error: `The SOA PDF could not be generated: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
+  }
+}
+
+async function buildSoaPdf(req: NextRequest): Promise<Response> {
   const companyName = req.nextUrl.searchParams.get('companyName')?.trim();
   if (!companyName) return NextResponse.json({ error: 'companyName is required' }, { status: 400 });
   const company = req.nextUrl.searchParams.get('company') as CompanySelector | null;
@@ -237,6 +249,7 @@ export async function GET(req: NextRequest) {
     return findUniqueBestMatch(resolvedRawName, soaRows, r => r.companyName, 70).value ?? undefined;
   };
   let coverPageAdded = false;
+  let coverFontFailed = false;
   const pageCountBeforeCover = merged.getPageCount();
   try {
     // "Tassure Group" for the combined letterhead — TAB/TAC/TAO are 3
@@ -265,7 +278,8 @@ export async function GET(req: NextRequest) {
         resolveCustomerPrintDetails(addrBook, resolvedRawName),
         resolveInvoiceDetails(matched),
       ]);
-      await drawStatementCoverPage(merged, legalName, statementRow, resolvedRawName, qbCompanyName, billAddrLines, invoiceDetails);
+      const cover = await drawStatementCoverPage(merged, legalName, statementRow, resolvedRawName, qbCompanyName, billAddrLines, invoiceDetails);
+      coverFontFailed = cover.chineseFontFailed;
       coverPageAdded = true;
     }
   } catch {
@@ -340,9 +354,12 @@ export async function GET(req: NextRequest) {
       // Surfaced so the UI can warn if some (but not all) invoices failed to
       // merge, without failing the whole download.
       'X-Soa-Merge-Errors': String(errors.length),
-      ...(errors.length ? { 'X-Soa-Merge-Error-Detail': encodeURIComponent(errors.join(' | ').slice(0, 1500)) } : {}),
+      ...(errors.length ? { 'X-Soa-Merge-Error-Detail': headerDetail(errors.join(' | ')) } : {}),
       'X-Soa-Split-Fallbacks': String(splitFallbacks.length),
-      ...(splitFallbacks.length ? { 'X-Soa-Split-Fallback-Detail': encodeURIComponent(splitFallbacks.join(' | ').slice(0, 1500)) } : {}),
+      ...(splitFallbacks.length ? { 'X-Soa-Split-Fallback-Detail': headerDetail(splitFallbacks.join(' | ')) } : {}),
+      // The cover could not load its Chinese font (INV-DOC-011): a Chinese
+      // client name on it fell back to safeText(). The page warns staff.
+      ...(coverFontFailed ? { 'X-Soa-Cover-Font-Fallback': '1' } : {}),
     },
   });
 }

@@ -4884,10 +4884,20 @@ again.
   (prefers `filename*`). All 10 download routes and 4 downloaders were
   switched; at risk besides SOA were the Turnover AI export (project name)
   and the post-incorporation pack (company name). Any other header carrying
-  data must be `encodeURIComponent`-ed, as the `X-Soa-*` and
-  `X-Client-Invoice-Fallback` headers are. Guarded by
-  `test-content-disposition.ts` (fails on any hand-built header or old
-  `filename="…"`-only parser).
+  data must go through `headerDetail()` (URI-encoded, cut by whole
+  characters, bounded): a bare `encodeURIComponent(x.slice(0, 1500))`, which
+  the `X-Soa-*` and `X-Client-Invoice-Fallback` headers used until
+  2026-10-06, throws URIError when the cut splits an emoji or a rare Chinese
+  character (CJK Extension B) — the same crash on the same last line. The
+  council review (4 of 4 members) found it and it reproduces. Three more
+  guards from that review: the SOA route answers any throw as JSON (the page
+  only ever said "Unable to generate the combined PDF"), the grouped TAB TAC
+  chip shows each book's error on hover (the single-book badge always did),
+  and the cover's Chinese-font fallback is no longer silent (a log line plus
+  `X-Soa-Cover-Font-Fallback`, which the page turns into a warning). Guarded
+  by `test-content-disposition.ts` (fails on a hand-built header in any
+  letter case, on an X-* header that encodes free text by hand, and on a
+  lone surrogate) and `test-pdf-chinese-text.ts`.
 
 ## SOA Outstanding shared remarks
 

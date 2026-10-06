@@ -1240,6 +1240,12 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                 };
                 const owners = [...new Set(group.rows.map(effectiveOwner).filter((owner): owner is string => !!owner))];
                 const draftScope: SoaCompanySelector = group.rows.length > 1 ? 'ALL' : rowCompany(group.rows[0]);
+                // Why a book's pill is red — the single-row badge always showed
+                // it on hover; the grouped one only turned red (2026-10-05).
+                const groupBadgeErrors = sources.flatMap(source => {
+                  const message = badgeDownloadErrors[`${group.key}:${source}`];
+                  return message ? [`${source}: ${message}`] : [];
+                });
                 const groupDraftKey = `group:${group.key}`;
                 const toggleGroup = () => setCollapsedGroups(current => {
                   const next = new Set(current);
@@ -1306,7 +1312,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                             sources reads as one "TAB TAO" chip, not 2
                             differently-colored ones. */}
                         <button
-                          title={sources.length > 1 ? `Download ${sources.join(' + ')} SOA PDFs` : `Download ${sources[0]} SOA PDF`}
+                          title={groupBadgeErrors.length ? `Download failed — ${groupBadgeErrors.join(' | ')}` : sources.length > 1 ? `Download ${sources.join(' + ')} SOA PDFs` : `Download ${sources[0]} SOA PDF`}
                           onClick={event => {
                             event.stopPropagation();
                             for (const source of sources) void downloadSourceBadge(`${group.key}:${source}`, group.companyName, source);

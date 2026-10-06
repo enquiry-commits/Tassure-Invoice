@@ -49,10 +49,16 @@ export type SoaCompanySelector = QbCompany | 'ALL';
 function warnAboutSoaPdf(res: Response, label: string): void {
   const missing = Number(res.headers.get('X-Soa-Merge-Errors') ?? 0);
   const split = Number(res.headers.get('X-Soa-Split-Fallbacks') ?? 0);
-  if (!missing && !split) return;
+  const coverFont = res.headers.get('X-Soa-Cover-Font-Fallback') === '1';
+  if (!missing && !split && !coverFont) return;
+  const detail = (name: string) => {
+    const raw = res.headers.get(name) ?? '';
+    try { return decodeURIComponent(raw); } catch { return raw; }
+  };
   const lines = [`${label}:`];
-  if (missing) lines.push(`• ${missing} invoice PDF(s) could not be added: ${decodeURIComponent(res.headers.get('X-Soa-Merge-Error-Detail') ?? '')}`);
-  if (split) lines.push(`• ${split} invoice(s) are QuickBooks' own PDF and show accounting's split lines: ${decodeURIComponent(res.headers.get('X-Soa-Split-Fallback-Detail') ?? '')}`);
+  if (missing) lines.push(`• ${missing} invoice PDF(s) could not be added: ${detail('X-Soa-Merge-Error-Detail')}`);
+  if (split) lines.push(`• ${split} invoice(s) are QuickBooks' own PDF and show accounting's split lines: ${detail('X-Soa-Split-Fallback-Detail')}`);
+  if (coverFont) lines.push("• The cover page could not load its Chinese font, so a Chinese client name or text on it is missing — check the cover before sending, and tell Vincent.");
   window.alert(lines.join('\n'));
 }
 

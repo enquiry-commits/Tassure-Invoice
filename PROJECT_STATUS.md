@@ -2517,6 +2517,32 @@ one focused Git commit.
 
 ## Latest completed work
 
+- **Council review of the red SOA chip — what held, what didn't, what was fixed
+  (INV-DOC-022).** Vincent's "先修，重置后 council 复核" ran 2026-10-06 (4
+  members + 4 peer reviews, 1.42M subagent tokens, no failures). Root cause
+  and the fix 1a8ed0c confirmed by all four; the 10 routes + 4 downloaders
+  are complete. Re-verified in code or by reproduction, then fixed (the
+  152 redrawn invoices and 472 SOA covers are byte-identical to HEAD): the
+  same last-line crash for X-* headers (`encodeURIComponent(x.slice(0,
+  1500))` throws URIError when the cut splits an emoji / CJK Ext-B
+  character — now `headerDetail()`); the SOA route answers throws as JSON;
+  the grouped TAB TAC chip shows each book's error on hover; the cover's
+  Chinese-font fallback is signalled (log + `X-Soa-Cover-Font-Fallback` +
+  a warning to staff); `wrapText` bisects by whole characters (300
+  unspaced Chinese characters 5 s → milliseconds; U+20087 no longer refused
+  as "U+D840"); the guard test also catches any-case and X-* hand-built
+  headers. Claims that did NOT hold: a ")" in typed search text breaks the
+  `.or()` filters (tested — only a COMMA does), and that Chinese-named
+  clients' statements were silently dropped from collections emails (both
+  books failed for them, so the draft errored visibly; the silent-drop path
+  is a PARTIAL failure). Found by my own live check, not by the council: the
+  BILL TO overflow (a10e16b). Open decisions: CURRENT_STATE "Chinese-name
+  PDFs — follow-ups". Not done on purpose: a probe save of the cover so a
+  font failure at `save()` cannot 500 the whole SOA (theoretical; the JSON
+  error and the signal now make it visible) and full-width bracket matching
+  in `normalize()` (a client-matching rule — Vincent's call). Not yet
+  clicked in production (REG-036).
+
 - **Client invoice PDF: long BILL TO addresses no longer run through the
   invoice facts (INV-QB-029).** While checking whether TAC #02680202
   (江苏日月照明电器有限公司) really prints its Chinese name in production —

@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { getClientInvoicePdf } from '@/lib/client-invoice-pdf';
+import { headerDetail } from '@/lib/content-disposition';
 import type { QbCompany } from '@/lib/quickbooks';
 
 // GET /api/billing/client-invoice-pdf?company=TAB&id=123 — the invoice PDF a
@@ -28,7 +29,7 @@ export async function GET(req: NextRequest) {
         'Content-Length': String(pdf.bytes.byteLength),
         'Cache-Control': 'private, no-store',
         'X-Client-Invoice-Source': pdf.source,
-        ...(pdf.fallbackReason ? { 'X-Client-Invoice-Fallback': encodeURIComponent(pdf.fallbackReason) } : {}),
+        ...(pdf.fallbackReason ? { 'X-Client-Invoice-Fallback': headerDetail(pdf.fallbackReason) } : {}),
       },
     });
   } catch (err) {
