@@ -133,17 +133,31 @@ const reasonOf = (r: { ok: boolean }) => ('reason' in r ? String((r as { reason:
   check('the customer\'s name may wrap or differ in case', checkOriginalCopy(pdf(ORIGINAL.replace('1X Exchange Pte. Ltd.', '1X EXCHANGE Pte.\nLtd.')), FACTS).ok);
   check('"TOTAL" must be on the page with the invoice total', !checkOriginalCopy(pdf(ORIGINAL.replace('TOTAL 1,360.00', 'BALANCE 1,360.00')), FACTS).ok);
 
+  console.log('\n--- the drawing the system makes, re-saved by another program ---');
+  const NO_LETTERHEAD = ORIGINAL.replace('Registration No.: 201325157G\n', '').replace('TASSURE ASIA BIZSERVICES PTE. LTD.\n', '');
+  const resaved = checkOriginalCopy(pdf(NO_LETTERHEAD, { producer: 'Microsoft: Print To PDF' }), FACTS);
+  check('the drawing re-saved under another Producer (every number right, letterhead only a picture) is refused', !resaved.ok && /letterhead/.test(reasonOf(resaved)), reasonOf(resaved));
+  check('…and the same page WITH the letterhead as text (QuickBooks\' own) is accepted', checkOriginalCopy(pdf(ORIGINAL, { producer: 'Microsoft: Print To PDF' }), FACTS).ok);
+
+  console.log('\n--- the exchange-rate footer of an invoice to a foreign payer ---');
+  const FX = ORIGINAL + '\nExchange rate 1.28\nEquivalent to USD 828.50';
+  check('"Exchange rate 1.28 / Equivalent to USD 828.50" is information, not invoice amounts', checkOriginalCopy(pdf(FX), FACTS).ok, reasonOf(checkOriginalCopy(pdf(FX), FACTS)));
+  check('…also with the amount glued to the currency and a thousands separator ("Equivalent to RMB5,986.20")', checkOriginalCopy(pdf(ORIGINAL + '\nExchange rate 5.24\nEquivalent to RMB5,986.20'), FACTS).ok);
+  check('…but an extra amount anywhere else is still refused, even next to the footer', !checkOriginalCopy(pdf(FX + '\nLate fee 25.00'), FACTS).ok);
+  check('…and the footer does not make the split version pass', !checkOriginalCopy(pdf(SPLIT + '\nExchange rate 1.28\nEquivalent to USD 828.50'), FACTS).ok);
+
   console.log('\n--- the two layouts of a real original ---');
   check('the current QuickBooks layout may write the total with the currency: "TOTAL S$1,360.00"', checkOriginalCopy(pdf(ORIGINAL.replace('TOTAL 1,360.00', 'TOTAL S$1,360.00')), FACTS).ok);
   check('…but the currency does not excuse a wrong total', !checkOriginalCopy(pdf(ORIGINAL.replace('TOTAL 1,360.00', 'TOTAL S$1,300.00')), FACTS).ok);
   // The older layout staff printed from the QuickBooks screen (Microsoft: Print To PDF / Acrobat Distiller, 2025 - early 2026).
   const OLD = [
     'Payment is due seven (7) days from the invoice date.', 'PayNow ID : 201325157G (SGD only)', 'Account Name : TASSURE ASIA BIZSERVICES PTE. LTD.', 'TAB',
-    'TASSURE ASIA BIZSERVICES PTE LTD', 'Attn:', 'Invoice No. : \t02611112', 'Date : \t1/10/2026', 'Bill To:', '1X Exchange Pte. Ltd.', '140 Robinson Road', 'S$', 'Net Total', 'Mr. Yang',
+    'TASSURE ASIA BIZSERVICES PTE LTD', 'Registration No.: 201325157G', 'Attn:', 'Invoice No. : \t02611112', 'Date : \t1/10/2026', 'Bill To:', '1X Exchange Pte. Ltd.', '140 Robinson Road', 'S$', 'Net Total', 'Mr. Yang',
     'S$700.00\tPerform secretarial services for one-year [from Oct 2026 - Sep 2027]', '- Important dates Notification and updates if applicable during the year',
     'S$60.00\tDisbursement:', '-Government fee for ACRA filing of Annual Return [FYE 31.12.2026]', 'S$600.00\tXBRL for the year (FYE 31.12.2026)', 'S$1,360.00',
   ].join('\n');
   const oldPdf = (text: string) => pdf(text, { producer: 'Microsoft: Print To PDF' });
+  const OLD_NO_LETTERHEAD = () => OLD.replace('Registration No.: 201325157G\n', '');
   check('the older layout is accepted: number without the book, date without zero padding, the total last under "Net Total"', checkOriginalCopy(oldPdf(OLD), FACTS).ok, reasonOf(checkOriginalCopy(oldPdf(OLD), FACTS)));
   check('…its split version is still refused', !checkOriginalCopy(oldPdf(OLD.replace('S$700.00\t', 'S$175.00\tDeferred Revenue S$525.00\t')), FACTS).ok);
   check('…another invoice number is refused', !checkOriginalCopy(oldPdf(OLD.replace('02611112', '02611113')), FACTS).ok);
@@ -153,6 +167,7 @@ const reasonOf = (r: { ok: boolean }) => ('reason' in r ? String((r as { reason:
   check('…the total printed anywhere but last (the same amounts in another order) is not trusted', !checkOriginalCopy(oldPdf(OLD.replace('\nS$1,360.00', '').replace('Mr. Yang', 'Mr. Yang\nS$1,360.00')), FACTS).ok);
   check('…and without the "Net Total" heading nothing says which amount is the total', !checkOriginalCopy(oldPdf(OLD.replace('Net Total', 'Amount')), FACTS).ok);
   check('…the customer must still be on it', !checkOriginalCopy(oldPdf(OLD.replace('1X Exchange Pte. Ltd.', 'Nucon Pte. Ltd.')), FACTS).ok);
+  check('…and without the letterhead as text it is refused too (the drawing re-saved)', !checkOriginalCopy(oldPdf(OLD_NO_LETTERHEAD()), FACTS).ok);
   const prefixed = invoiceFacts({ ...inv, DocNumber: 'TAB02611112' }, 'TAB', [700, 60, 600])!;
   check('a number QuickBooks stores with its book ("TAB02611112") is the same number', prefixed.invoiceNo === 'TAB 02611112' && checkOriginalCopy(oldPdf(OLD), prefixed).ok && checkOriginalCopy(pdf(ORIGINAL), prefixed).ok);
 
@@ -238,7 +253,7 @@ const reasonOf = (r: { ok: boolean }) => ('reason' in r ? String((r as { reason:
     return new Uint8Array(await doc.save());
   };
   const body = (no = 'TAB 02611112', amounts: [string, string][] = [['Corporate Secretarial Services', '700.00'], ['Government fee for filing Annual Return', '60.00'], ['XBRL for the year', '600.00']], total = '1,360.00') => [
-    'TASSURE ASIA BIZSERVICES PTE. LTD.', 'INVOICE', `INVOICE NO. : ${no}`, 'TERMS : Net 7', 'DATE : 01/10/2026', 'BILL TO:', '1X Exchange Pte. Ltd.', 'DUE DATE : 08/10/2026',
+    'TASSURE ASIA BIZSERVICES PTE. LTD.', 'Registration No.: 201325157G', 'INVOICE', `INVOICE NO. : ${no}`, 'TERMS : Net 7', 'DATE : 01/10/2026', 'BILL TO:', '1X Exchange Pte. Ltd.', 'DUE DATE : 08/10/2026',
     'DESCRIPTION|AMOUNT (S$)', ...amounts.map(([d, a]) => `${d}|${a}`), `TOTAL|${total}`.replace('|', ' '),
   ];
   const second = ['Accounting Auditing Company Setup Licensing Application', 'Paynow (QR) :'];

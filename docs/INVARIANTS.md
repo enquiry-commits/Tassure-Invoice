@@ -2527,7 +2527,12 @@ again.
   `lib/pdf-text.ts`) has three parts, ALL required. WHAT THE FILE IS: its
   Producer is not "Tassure" (the system's own drawing — what Save PDF gives and
   what staff are used to attaching; read with pdf-lib's `updateMetadata: false`,
-  because by default pdf-lib overwrites the Producer with its own name), every
+  because by default pdf-lib overwrites the Producer with its own name) AND
+  the company letterhead ("Registration No.: 201325157G") is on the page as
+  TEXT — QuickBooks prints it as text in both layouts, the system's own drawing
+  as a picture, which is what still refuses the drawing once another program has
+  re-saved or printed it and rewritten the Producer (the second council,
+  2026-10-06, re-saved a Save PDF file and every other check passed), every
   page was read and has text (the SOA merges ALL pages; a page that was never
   read, or a picture, is not checked), and pdf-lib can load it (a file with an
   owner password is read by pdf.js but refused by pdf-lib, and the invoice
@@ -2547,7 +2552,10 @@ again.
   is refused, and a number QuickBooks stores with its book ("TAC02580261") is
   the same number. WHAT IT PRINTS: the
   money on the page, counted as a multiset, equals the invoice's line amounts
-  plus the total, with every Deferred twin folded into exactly ONE other line.
+  plus the total, with every Deferred twin folded into exactly ONE other line
+  (the two footer lines of an invoice to a foreign payer, "Exchange rate 5.24"
+  and "Equivalent to RMB5,986.20", are information and not counted — 4 originals
+  on the file server have them, and the redraw drops them).
   Any folding is accepted, not only the system's label pairing, because
   accounting sometimes gives a twin the wrong service's label: TAB #02611114's
   second "Deferred Revenue - Corp Sec" (50) sits under Registered Address (150)

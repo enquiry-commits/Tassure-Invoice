@@ -87,11 +87,13 @@ export function rowStatus(known: { scanLoaded: boolean; scanError?: string; scan
 // What to do about a refused file, in words staff can act on — the reasons come
 // from lib/original-copy.ts (exact, but written for the logs and the tests).
 export function hintForReason(reason: string): string | null {
+  if (/company letterhead/.test(reason)) return 'This file was not printed by QuickBooks (it may be the Save PDF file saved again). Attach the PDF QuickBooks printed when the invoice was sent.';
   if (/system's own drawing/.test(reason)) return 'Do not use the Save PDF file. Attach the PDF the way QuickBooks printed it when the invoice was sent.';
   if (/amounts are not/.test(reason)) return 'This looks like the split version, or another version of the invoice. Attach the PDF the client first received.';
   if (/pages and only|has no text/.test(reason)) return 'Attach one normal PDF of this invoice only — not a scan, a picture or several invoices in one file.';
   if (/encrypted|password|could not be read|is not a PDF|not a PDF/i.test(reason)) return 'Attach a normal PDF without a password.';
-  if (/INVOICE NO|is not dated|is not billed to|does not say "TOTAL/.test(reason)) return 'This is not the PDF of this invoice — check its invoice number, date, customer and total.';
+  if (/is not dated|does not say "TOTAL/.test(reason)) return 'The invoice was changed after this PDF was made (its date or total no longer matches). Find out which version the client received before attaching anything.';
+  if (/INVOICE NO|is not billed to/.test(reason)) return 'This is not the PDF of this invoice — check its invoice number and customer.';
   if (/larger than/.test(reason)) return 'An invoice PDF is well under 1 MB — attach the PDF QuickBooks printed, not a scan.';
   return null;
 }

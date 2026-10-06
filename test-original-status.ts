@@ -70,7 +70,9 @@ check('Save PDF output: do not use it', /Save PDF/.test(hint("it is the system's
 check('the split version / another version: attach what the client first received', /split version/.test(hint("its amounts are not the unsplit invoice's (missing 700.00; unexpected 175.00, 525.00)")));
 check('a scan, a picture, a bundle: one normal PDF', /not a scan/.test(hint('it has 8 pages and only 6 could be read')) && /not a scan/.test(hint('page 2 has no text (a scan or a picture?)')));
 check('a password-protected or unreadable file: a normal PDF without a password', /without a password/.test(hint('could not be read (Input document to `PDFDocument.load` is encrypted.)')) && /without a password/.test(hint('the file is not a PDF')));
-check('another invoice, date, customer or total: check them', ['it does not say "INVOICE NO. : TAB 02611112"', 'it is not dated 01/10/2026', 'it is not billed to 1X Exchange Pte. Ltd.', 'it does not say "TOTAL 1,360.00"'].every(r => /check its invoice number/.test(hint(r))));
+check('another invoice or customer: it is not the PDF of this invoice', ['it does not say "INVOICE NO. : TAB 02611112"', 'it is not billed to 1X Exchange Pte. Ltd.'].every(r => /not the PDF of this invoice — check its invoice number and customer/.test(hint(r))));
+check('a date or total that no longer matches: the invoice CHANGED after the PDF was made (not "wrong invoice")', ['it is not dated 01/10/2026', 'it does not say "TOTAL 1,360.00"'].every(r => /changed after this PDF was made/.test(hint(r)) && !/not the PDF of this invoice/.test(hint(r))));
+check('a file without the letterhead as text: not printed by QuickBooks (the Save PDF file saved again)', /not printed by QuickBooks/.test(hint("it does not carry the company letterhead as text — QuickBooks' own invoice does; the system's own drawing re-saved by another program does not")));
 check('an oversized file: attach what QuickBooks printed', /well under 1 MB/.test(hint('larger than 1 MB — an invoice PDF is 80-260 KB')));
 check('a reason with nothing to add gets no hint', hintForReason('not needed — an earlier file was accepted') === null && hintForReason('proved to be the original') === null);
 

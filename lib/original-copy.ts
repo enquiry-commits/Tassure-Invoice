@@ -127,6 +127,11 @@ export function checkOriginalCopy(pdf: PdfFacts, facts: InvoiceFacts): OriginalC
   if (pdf.totalPages > pdf.pages.length) return refuse(`it has ${pdf.totalPages} pages and only ${pdf.pages.length} could be read`);
   const blank = pdf.pages.findIndex(p => p.replace(/\s/g, '').length < MIN_PAGE_CHARS);
   if (blank >= 0) return refuse(`page ${blank + 1} has no text (a scan or a picture?)`);
+  // QuickBooks prints the company letterhead ("Registration No.: 201325157G") as TEXT, in both layouts; the
+  // system's own drawing carries it as a picture. This is what still tells them apart once the drawing has
+  // been re-saved or printed to PDF by another program, which rewrites the Producer (the council's Researcher,
+  // 2026-10-06: a re-saved Save PDF file passed everything else).
+  if (!/Registration\s+No\.?\s*:/i.test(pdf.text)) return refuse("it does not carry the company letterhead as text — QuickBooks' own invoice does; the system's own drawing re-saved by another program does not");
 
   // 2. Whose it is. Two printed layouts of the same invoice are real: QuickBooks'
   // current one ("INVOICE NO. : TAB 02611112", "DATE : 01/10/2026", "TOTAL S$760.00")
@@ -135,6 +140,9 @@ export function checkOriginalCopy(pdf: PdfFacts, facts: InvoiceFacts): OriginalC
   // and the total as the last amount under a "Net Total" heading). Both are matched
   // by the LABEL, never by the number alone.
   const text = pdf.text;
+  // An invoice to a foreign payer ends with "Exchange rate 5.24" and "Equivalent to RMB5,986.20" (found on 4 originals
+  // on the file server): information, not invoice amounts — and the redraw does not print it.
+  const amountText = text.replace(/^[ \t]*(?:Exchange\s+rate|Equivalent\s+to)\b[^\n]*$/gim, '');
   const [, book = '', bareNo = facts.invoiceNo.trim()] = /^(TAB|TAC|TAO)\s+(.+)$/i.exec(facts.invoiceNo.trim()) ?? [];
   const invoiceNo = new RegExp(`INVOICE\\s+NO\\.?\\s*:\\s*${book ? `(?:${book}\\s*){0,2}` : ''}${escapeRe(bareNo)}(?![\\w-])`, 'i');
   if (!invoiceNo.test(text)) return refuse(`it does not say "INVOICE NO. : ${facts.invoiceNo}"`);
@@ -144,11 +152,11 @@ export function checkOriginalCopy(pdf: PdfFacts, facts: InvoiceFacts): OriginalC
   if (!facts.customer.trim() || !squash(text).includes(squash(facts.customer))) return refuse(`it is not billed to ${facts.customer}`);
   const total = formatMoney(Math.abs(facts.total));
   const labelled = new RegExp(`TOTAL\\s*(?:S\\$|SGD|\\$)?\\s*${escapeRe(total)}(?![\\d])`, 'i').test(text);
-  const lastAmount = [...text.matchAll(MONEY_TOKEN)].pop()?.[0];
+  const lastAmount = [...amountText.matchAll(MONEY_TOKEN)].pop()?.[0];
   if (!labelled && !(/\bnet\s+total\b/i.test(text) && lastAmount === total)) return refuse(`it does not say "TOTAL ${total}"`);
 
   // 3. What it prints.
-  const printed = printedAmounts(text);
+  const printed = printedAmounts(amountText);
   let closest: { missing: string[]; unexpected: string[] } | null = null;
   for (const lineSet of acceptableLineSets(facts)) {
     const expected = new Map<string, number>();
