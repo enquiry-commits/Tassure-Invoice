@@ -1,6 +1,18 @@
 # TASSURE Invoice - Shared Project Status
 
-Last updated: 2026-10-06 (FIXED in code, push waits for Vincent's yes on 3 pre-filled rates: Elite Gathering's ADDR tile no longer reads "expired" for a client paid to Jun 2027. Asked: Vincent — "修" — the second half of the Elite Gathering row; he chose "按新规则修" via AskUserQuestion after the council.)
+Last updated: 2026-10-06 (FIXED: Company 360's yellow "QuickBooks invoice candidates were found by name search but none scored high enough" warning now appears only for a plausible near miss, and names the customer. Asked: Vincent — "上面的黄色字什么情况" on 1 MIDAS VENTURES PTE. LTD.; he chose "只在很像时才亮，并写出名字" via AskUserQuestion.)
+
+**What it was.** A false alarm for 1 Midas, a client added 2026-09-30 with no invoices yet: no synced QuickBooks customer name contains "midas". Company 360 searches QuickBooks customer names for the company's longest word — "ventures", not "midas" — found 5 unrelated companies (Higo, Lakefill, Agentic, Exclave, YHS Ventures; similarity 33–50, threshold 85), attached none (correct), and then warned because candidates existed. Replaying the rule over all 957 companies: 103 would warn, but only 2 are real near misses (75 each); 101 merely share a common word; and 60 companies with no invoices at all showed nothing — so the warning said nothing about whether invoices were missing.
+
+**What changed (INV-DATA-074).** `closestNearMiss()` in `lib/company-name.ts`; `lib/company-360.ts` warns only when the closest customer is 70–84% similar, and names it with its score. The two real near misses are the same company spelled differently in QuickBooks: ACG INTERIOR AND EXHIBITION ↔ "ACG Interior & Exhibition Pte Ltd", and SOON & GUAN MANPOWER TRAINING ↔ "Soon & Guan Manpower Trading Pte Ltd" (Training/Trading, to be checked by a person). Their invoices are not attached on Company 360 (threshold 85 — the billing pages accept 70), and now the warning says so. The matching threshold itself is unchanged.
+
+**Verification.** New `test-company-near-miss.ts`: ALL OK, 9 checks on the real names; 3 negative controls (floor 0, the old catch-all text back, the ceiling ignored) each fail their own check. `tsc` 0, eslint clean; `test-current-invoice-values` and `test-account-access` ALL OK. **Not verified:** the page in a browser (needs a signed-in session). **Pre-existing, not mine:** `test-company-lifecycle.ts` fails one check — the new `lib/relationship-contacts.ts:41` (`adfcb1c`, another session, today) reads `is_active` on `relationship_contacts`, a different table, and the guard flags it as a company-status read.
+
+**Found, not changed.** `matchScore` does not treat "&" as "and" — that is why ACG scores 75. Teaching it would also change SOA, billing and every other caller, so it needs its own change and before/after diff.
+
+Previous entry follows.
+
+Last updated: 2026-10-06 (FIXED and live as 78f353e, after Vincent approved the 3 pre-filled rates: Elite Gathering's ADDR tile no longer reads "expired" for a client paid to Jun 2027. Asked: Vincent — "修" — the second half of the Elite Gathering row; he chose "按新规则修" via AskUserQuestion after the council.)
 
 **Why it was wrong.** `compareRenewalPeriodProductLines()` was not a consistent order: within one invoice it ranked by latest period, across invoices primary-first. Elite's TAB #02611051 holds the real address line (to Jun 2027) and a director's residential-address disbursement tagged Address (to Aug 2027), so the comparisons looped and `sort()` put the OLDER invoice first (proven on real data). The same comparator drives create-invoice's overlap check, whose query has no ORDER BY.
 
@@ -26,7 +38,7 @@ Vincent confirmed the new rule because it replaces INV-QB-019 (his 09-16 Siehi r
 - `tsc` 0, eslint clean.
 - **Not verified:** a real invoice generation through the new overlap check (the harness never writes to QuickBooks).
 
-**Why the push is held.** The rate changes touch pricing-adjacent output, and Vincent was told any price change is shown to him first.
+**Pushed.** The rate changes touch pricing-adjacent output, so Vincent was shown them first and approved (AskUserQuestion: "可以，上线"); it went out as 78f353e.
 
 **Also verified this morning (docs only).** The first nightly AI quality run succeeded: 6 judged (1 flagged), 0 errors, RLS holds, about US$0.002 per call. No assistant question has been asked since the learning-loop deploy, so the first evidence row is still to come.
 

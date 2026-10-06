@@ -109,7 +109,9 @@ does not prematurely commit/close the cell before the full name lands.
 **Guards:** INV-DATA-010.
 
 ### REG-013 — Company 360 multi-source accuracy
-Open Company 360 (`/companies/[id]`) for a company with multiple AR/AGM
+Run `npx tsx test-company-near-miss.ts` (must print `ALL OK`): the yellow
+"no confident QuickBooks match" warning appears only for a 70–84% near miss
+and names it (INV-DATA-074). Then open Company 360 (`/companies/[id]`) for a company with multiple AR/AGM
 cycles across years, at least one generated invoice, and ND history
 (active or ceased). Confirm every section shows the correct rows, each
 AR/AGM cycle's `matchedVia` correctly reflects company_id vs uen vs fuzzy,

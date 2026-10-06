@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { normalize, matchScore, significantWord } from './company-name';
+import { normalize, matchScore, significantWord, closestNearMiss } from './company-name';
 import { computeSoaRows, effectiveOwner, type SoaCompanyRow } from './soa-data';
 import type { QbCompany } from './quickbooks';
 import { loadCurrentQbValues, withCurrentQbValues } from './current-invoice-values';
@@ -29,6 +29,8 @@ import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderPro
 // trademark history onto this page. Kept every match's own score in the
 // response so a borderline hit is still visible, not silently dropped.
 const FUZZY_MATCH_THRESHOLD = 85;
+// Below this, the closest QuickBooks name is not worth a warning (below).
+const QB_NEAR_MISS_MIN_SCORE = 70;
 
 function fuzzyMatch<T>(companyName: string, rows: T[], getName: (r: T) => string): (T & { matchScore: number })[] {
   return rows
@@ -297,8 +299,17 @@ export async function getCompany360(supabase: SupabaseClient, id: number): Promi
   const trademark = fuzzyMatch(companyName, trademarkCandidateRows ?? [], r => r.company_name as string)
     .sort((a, b) => String(b.application_date ?? '').localeCompare(String(a.application_date ?? '')));
 
-  if (quickbooks.length === 0 && (qbCandidateRows?.length ?? 0) > 0) {
-    warnings.push('QuickBooks invoice candidates were found by name search but none scored high enough to confidently match — check manually if invoice history is expected.');
+  // Only a plausible near miss is worth a warning, and it names the customer
+  // (Vincent, 2026-10-06, via AskUserQuestion). The old text fired whenever
+  // the search word was shared with ANY other customer — 103 of 957 companies,
+  // 101 of them only a common word like "Ventures" (1 Midas Ventures, a client
+  // with no invoices yet) — and stayed silent for 60 more with no invoices at
+  // all, so it said nothing about whether this company's invoices were missing.
+  if (quickbooks.length === 0) {
+    const near = closestNearMiss(companyName, (qbCandidateRows ?? []).map(r => String(r.customer_name)), QB_NEAR_MISS_MIN_SCORE, FUZZY_MATCH_THRESHOLD);
+    if (near) {
+      warnings.push(`No QuickBooks invoice is a confident match for this company (it needs ${FUZZY_MATCH_THRESHOLD}% name similarity). Closest QuickBooks customer: "${near.name}" (${near.score}% similar) — not attached here; check manually if invoice history is expected.`);
+    }
   }
 
   return {

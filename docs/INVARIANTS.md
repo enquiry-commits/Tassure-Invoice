@@ -4191,6 +4191,27 @@ again.
   and Master List's Realtime subscription watches `master_list` through the
   browser client (see `docs/CURRENT_STATE.md`). Never write a policy like that again,
   and once a new table has rows, run the same anon-vs-service count on it.
+- **INV-DATA-074** — Company 360's "no confident QuickBooks invoice match"
+  warning (`lib/company-360.ts`) fires ONLY when the closest QuickBooks
+  customer name is a plausible near miss — 70–84% similar (`closestNearMiss()`
+  in `lib/company-name.ts`; 85 is the match threshold, unchanged) — and it
+  names that customer and its score. It used to fire whenever the company's
+  search word (its longest word) was shared with ANY other customer. Found
+  2026-10-06 on 1 MIDAS VENTURES PTE. LTD., a client added 2026-09-30 with no
+  invoices yet: the search word "ventures" pulled in 5 unrelated companies
+  (similarity 33–50), none attached (correct), and the page still warned.
+  Replayed over all 957 companies: 103 warned, 101 of them only because of a
+  shared common word, while 60 companies with no invoices at all showed
+  nothing — so the old warning said nothing about whether this company's
+  invoices were really missing. Vincent chose the new rule via AskUserQuestion
+  ("只在很像时才亮，并写出名字"). The two real near misses are the same company
+  spelled differently in QuickBooks (ACG INTERIOR AND EXHIBITION ↔ "ACG
+  Interior & Exhibition Pte Ltd"; SOON & GUAN MANPOWER TRAINING ↔ "…Trading Pte
+  Ltd"); their invoices are not attached on Company 360 (billing pages accept
+  70), and the warning now says so. Open, not changed: `matchScore` does not
+  treat "&" as "and" — teaching it would change every caller (SOA, billing,
+  Outstanding), so it needs its own change and a before/after diff. Pinned by
+  `test-company-near-miss.ts`.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

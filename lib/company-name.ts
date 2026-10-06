@@ -123,6 +123,28 @@ export function matchScore(a: string, b: string): number {
 }
 
 /**
+ * The closest name that did NOT reach `ceiling` but came close enough (`floor`)
+ * that a person should look — e.g. "ACG Interior & Exhibition Pte Ltd" for
+ * "ACG INTERIOR AND EXHIBITION PTE. LTD." (75). Company 360's "no confident
+ * invoice match" warning uses it so the warning appears only for a plausible
+ * near miss, and names it (Vincent, 2026-10-06). Null when the best score is
+ * below `floor`, or already at/above `ceiling` (that is a real match).
+ */
+export function closestNearMiss(
+  target: string,
+  names: readonly string[],
+  floor = 70,
+  ceiling = 85,
+): { name: string; score: number } | null {
+  let best: { name: string; score: number } | null = null;
+  for (const name of names) {
+    const score = matchScore(target, name);
+    if (!best || score > best.score) best = { name, score };
+  }
+  return best && best.score >= floor && best.score < ceiling ? best : null;
+}
+
+/**
  * Return one defensible fuzzy match. A tied best score is deliberately treated
  * as ambiguous so billing/workflow code cannot silently pick the first row.
  */
