@@ -1,5 +1,13 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-07 (FIXED: SG Latest News — a section with only 2 cards no longer stretches them to half the row each; they keep the 4-column width and the right-hand slots stay empty. Asked: Vincent — a screenshot of the policy section's 2 cards at half width above 4 news cards: "如果只有2个就空掉右边的2个空位，不是拉长". His other request in the same message — the 「来源页」 link should open the original article, not the site's front page — is being worked on separately.)
+
+**Cause.** The card grid (`CARD_GRID` in `app/sg-news/page.tsx`, added earlier today with the 4-column cards) was `repeat(auto-fit, …)`; `auto-fit` collapses empty tracks, so 2 items shared the whole row. Now `auto-fill`, which keeps the empty tracks.
+
+**Verification.** Measured in a real browser on a static copy of the same CSS at a 1668px container (the width in Vincent's screenshot): the old value gave 2 cards of 827px (exactly his screenshot); the new one gives 407px for 1, 2 or 4 cards, and 5 cards wrap to a second row at the same width. At 800px: 3 columns, 2 cards 247px, the same as a full row. No sideways scroll. New `test-sg-news.ts` (5 checks, comments stripped before matching); its negative control (`auto-fit` back) fails 2. `tsc` 0, eslint clean. **Not verified:** the live page itself (needs a signed-in session as someone with SG News access).
+
+Previous entry follows.
+
 Last updated: 2026-10-07 (CHANGED: the My Tasks daily reminder's AI tokens now count as the SYSTEM's on Admin › AI Usage, not the person's. Asked: Vincent — a screenshot of two "My Tasks 今日提醒 · 自动 · 代 Jay Tay" rows counted under him (View As), and "My Tasks 提醒的 token 全部算系统的".)
 
 **What it was.** The reminder's Claude call was tagged with whoever opened My Tasks (`trigger: 'auto'`, `actorEmail`). So a colleague opening their own page was charged for it, and an admin using View As on someone's page (the "代 Jay Tay" in the screenshot) was charged for that person's reminder. That was Vincent's own 2026-10-05 choice ("算本人，单独标「自动」"); he has now reversed it for this one feature.

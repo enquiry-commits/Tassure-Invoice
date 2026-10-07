@@ -33,7 +33,11 @@ function sourceHost(url: string): string {
 }
 
 // Four equal cards per row on a wide screen; fewer when narrow (never narrower than 240px).
-const CARD_GRID = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(max(240px, calc((100% - 42px) / 4)), 1fr))', gap: 14, alignItems: 'stretch' } as const;
+// auto-FILL, not auto-fit: auto-fit collapses the empty tracks, so a section with only 2 items
+// stretched them to half the row each. auto-fill keeps the empty tracks, so every card is the
+// same 4-column width and the unused slots on the right stay empty (Vincent, 2026-10-07:
+// "如果只有2个就空掉右边的2个空位，不是拉长").
+const CARD_GRID = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(max(240px, calc((100% - 42px) / 4)), 1fr))', gap: 14, alignItems: 'stretch' } as const;
 
 function ItemCard({ item }: { item: SgNewsDigestItem }) {
   return (
