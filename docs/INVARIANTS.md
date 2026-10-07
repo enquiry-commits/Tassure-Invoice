@@ -786,6 +786,13 @@ again.
   TAB 20 / TAC 23 / TAO 4 owing rows; 2 become empty (no Class, no TeamWork
   PIC); every BD kept; My Tasks, exports, Company 360 and the assistant
   follow via `effectiveOwner`. `test-soa-main-pic.ts`.
+  Confirmed later 2026-10-07: Vincent restated the order as pick/BD → the
+  PIC column's only person (= the Class person) → the suggestion → a lone
+  TeamWork PIC → the Class person — identical results (once the PIC column
+  has one person, the later steps can't fire). For "this round" he first
+  put the PIC column's only person ABOVE picks and BD; live, that differed
+  on exactly one owing row, RTG PROJECTS TAB (BD vs Jenny Lai), and he chose
+  "保留 BD" — so BD beats even a single-person PIC column; no code change.
 ## Recipient / CC / email address (INV-MAIL)
 
 - **INV-MAIL-001** — Canonical recipient policy (`lib/campaign-recipients.ts`):

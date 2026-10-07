@@ -21,6 +21,14 @@ Last updated: 2026-10-07 (SG LATEST NEWS — Vincent: "ICA 和 ACRA 我没来得
 
 Previous entry follows.
 
+Last updated: 2026-10-07 (CONFIRMED, no code change: the SOA Main PIC order — Vincent restated it, and for "this round" asked for the PIC column's only person above picks and BD; the one row that differed, RTG PROJECTS TAB, he kept as BD: "保留 BD").
+
+**What was checked.** Read only, live (`computeSoaRows` + `effectiveOwner`). His standing order — pick/BD → the PIC column's only person (= the Class person) → the suggestion → a lone TeamWork PIC → the Class person — gives the same Main PIC as the shipped `lib/soa-main-pic.ts` on every row (once the PIC column has one person the later steps can't fire). His "this round" order (PIC column's only person first, even over picks and BD) differs on exactly 1 of 412 owing rows: RTG PROJECTS PTE. LTD. TAB, BD → Jenny Lai. The other BDs (Quantum Marine TAB, Monster Game TAO: PIC column empty; RTG TAO: two people) and the 6 picks people made in the app (incl. his own FINSIGHTS / SILVER STREAM / HUASHENG of today) all agree or can't be decided by the PIC column. Asked; answer "保留 BD" — so nothing changes. Recorded under INV-PIC-009.
+
+**Open.** Nothing new; REG-044 (the Main PIC dropdown and filters seen with a login) is still unchecked.
+
+Previous entry follows.
+
 Last updated: 2026-10-07 (CHANGED: SOA Main PIC follows the system — Vincent: "Main PIC 也应该是默认是 Jenny", "最新一轮的直接按照系统逻辑走了，以后要手动才手动，现在先全部走一轮系统匹配 Main PIC", "BD就先继续放 MAIN PIC 是 BD").
 
 **What changed.** One Main PIC rule, `lib/soa-main-pic.ts` (server + SOA page): a person's pick in the app or BD → QuickBooks' Class person → the PIC column's only person → the Class/Location suggestion → a lone TeamWork PIC. The 2026-09-07 Google-Sheet import (305 of 308 `soa_owners` rows, `backfill@internal`) no longer names an owner; nothing was deleted. The daily soa-owners audit checks only people's picks. INV-PIC-009, REG-044, `test-soa-main-pic.ts`. **Verified:** tsc 0, eslint clean, tests ALL OK; live read-only through `computeSoaRows` + `effectiveOwner`: FINSIGHTS / ACN / 1X now equal their PIC column; Main PIC changes on TAB 20, TAC 23, TAO 4 owing rows; BD kept on all 4; 2 rows become empty (Ainex Education TAB, STO Global TAC — no Class and no TeamWork PIC). **Not verified:** the page with a login (REG-044).
