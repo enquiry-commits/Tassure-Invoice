@@ -4576,6 +4576,39 @@ again.
   2026-09-07 bulk seeding. (3) Unverified, from code reading only:
   `lib/client-comms-resolve.ts` looks invoices up by the display name, so an SOA
   reminder email for such a client may list no invoices and $0.
+- **INV-DATA-077** — SG Latest News: a card's source link must open the ARTICLE,
+  and a section with few cards keeps the 4-column width. Vincent, 2026-10-07
+  (screenshot of The Business Times card "Retrenched PMETs who return on lower
+  pay see median 25% wage cut"): "我要看到的是原始文章页，而不是平台的首页", and
+  "如果只有2个就空掉右边的2个空位，不是拉长".
+  (1) **Why the links were the front page.** `sg_news_items.url` was NULL for all
+  222 stored items, from all six sources: the extractor reads
+  `document.body.innerText`, which carries no hrefs, so a card could only fall
+  back to the source's listing page (「来源页」). `lib/sg-news-links.ts` now
+  matches each headline to a real anchor from the same page, never asking the
+  model for a URL (the 2026-10-07 change that collects `a[href]`). `GET
+  /api/sg-news` resolves a card's url from `sg_news_items` at read time, so a
+  stored url shows up without regenerating any report; the nightly sync fills the
+  `url` of an already-stored item when the page still lists it.
+  (2) **Matching rules, tested on the live pages the same day in a real browser**
+  (The Business Times 9 of 9 headlines still listed → exact article URLs; The
+  Straits Times 6 of 10; 联合早报's link text is exactly the headline; MOM 5 of 7,
+  one of them WRONG — see next): exact normalised headline; or the headline plus
+  a little extra link text (a date, "5 min read", at most 2x the headline); or
+  the site's own cut-short link text (a prefix carrying at least 70% of the
+  headline). A link text that is merely a PIECE of the headline never counts, and
+  neither does a link to the site's front page, the listing page, or a parent of
+  it; with the same headline linked twice, the deepest URL wins. The first
+  version also matched any link text of 20+ characters that sat inside the
+  headline, and on MOM the menu link "Workplace safety and health" matched
+  "Opening Address at Workplace Safety and Health Awards 2026", so that card
+  would have linked to a section page.
+  (3) **The grid.** `CARD_GRID` is `repeat(auto-fill, …)`, not `auto-fit`:
+  `auto-fit` collapses empty tracks, so 2 cards stretched to half the row each
+  (827px at a 1668px container) — `auto-fill` keeps them at the 4-column width
+  (407px) with the right-hand slots empty. Pinned by `test-sg-news.ts`.
+  Open: items stored before 2026-10-07 whose headline is no longer on the
+  listing page can never be matched and keep the 「来源页」 fallback.
 
 ## Draft Helper / Outlook COM automation (INV-HELPER)
 

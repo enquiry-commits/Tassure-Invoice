@@ -25,5 +25,52 @@ check('it never uses auto-fit (which collapses empty tracks and stretches the ca
 check('four equal columns on a wide screen, never narrower than 240px', /minmax\(max\(240px, calc\(\(100% - 42px\) \/ 4\)\), 1fr\)/.test(grid), grid);
 check('every section of cards uses CARD_GRID (no second hand-written grid)', !/gridTemplateColumns:/.test(page.replace(/const CARD_GRID = \{[^}]*\}/, '')), 'another gridTemplateColumns in the page');
 
+// ── rule 2: the card's source link is the ARTICLE, never a menu / section page ─────────────
+// Real anchors and headlines read from the live pages on 2026-10-07 (hrefs shortened).
+import { attachLinks, findLinkForTitle, normalizeNewsTitle, type PageLink } from './lib/sg-news-links';
+
+console.log('\n--- rule 2: matching a headline to its article link ---');
+const BT = 'https://www.businesstimes.com.sg/singapore';
+const MOM = 'https://www.mom.gov.sg/newsroom';
+const L = (text: string, href: string): PageLink => ({ text, href });
+const btLinks = [
+  L('Singapore', 'https://www.businesstimes.com.sg/singapore'),
+  L('The Business Times', 'https://www.businesstimes.com.sg/'),
+  L('Retrenched PMETs who return on lower pay see median 25% wage cut', 'https://www.businesstimes.com.sg/singapore/economy-policy/retrenched-pmets-who-return-lower-pay-see-median-25-wage-cut'),
+  L('Singapore firms’ payment delays worsen for third straight quarter in Q3: SCCB', 'https://www.businesstimes.com.sg/companies-markets/singapore-firms-payment-delays-worsen-third-straight-quarter-q3-sccb'),
+  L('Daily Debrief: What Happened Today (Oct 6)', 'https://www.businesstimes.com.sg/singapore/daily-debrief-what-happened-today-oct-6'),
+];
+check('BT: the headline in the screenshot gets its ARTICLE page, not the site front page', findLinkForTitle('Retrenched PMETs who return on lower pay see median 25% wage cut', btLinks, BT)?.endsWith('/singapore/economy-policy/retrenched-pmets-who-return-lower-pay-see-median-25-wage-cut') === true);
+check('BT: curly apostrophes and punctuation do not matter (the same normalisation as the de-dup hash)', findLinkForTitle("Singapore firms' payment delays worsen for third straight quarter in Q3: SCCB", btLinks, BT)?.includes('/companies-markets/singapore-firms-payment-delays') === true);
+check('BT: another day\'s "Daily Debrief" never borrows today\'s link (Oct 2 vs Oct 6)', findLinkForTitle('Daily Debrief: What Happened Today (Oct 2)', btLinks, BT) === null);
+check('a headline that is not on the page gets no link (the card then falls back to the source page)', findLinkForTitle('Singapore PMI ticks up to 51.7 on continued AI-related demand', btLinks, BT) === null);
+
+const momLinks = [
+  L('Workplace safety and health', 'https://www.mom.gov.sg/workplace-safety-and-health'),
+  L('Workplace safety and health', 'https://www.mom.gov.sg/workplace-safety-and-health'),
+  L('Updated Scaffold Fire Safety Requirements', 'https://www.mom.gov.sg/newsroom/press-releases/2026/0924-factsheet-on-updated-scaffold-fire-safety-requirements'),
+  L('Maintenance of eServices on 7 - 8 October', 'https://www.mom.gov.sg/newsroom/announcements/2026/maintenance'),
+  L('Recommendations by Tripartite Workgroup to Strengthen Human Capital Development 5 min read', 'https://www.mom.gov.sg/newsroom/press-releases/2026/2409-recommendations-by-twg-hc'),
+  L('Opening Address by Minister of State for Manpower Foo Cexiang at the Safety Awards', 'https://www.mom.gov.sg/newsroom/speeches/2026/opening-address-foo-cexiang'),
+];
+check('MOM: a menu link that is only a PIECE of the headline never becomes its link ("Workplace safety and health" ⊂ "Opening Address at Workplace Safety and Health Awards 2026" linked to a section page)',
+  findLinkForTitle('Opening Address at Workplace Safety and Health Awards 2026', momLinks, MOM) === null);
+check('MOM: an exact headline still matches its article', findLinkForTitle('Updated Scaffold Fire Safety Requirements', momLinks, MOM)?.endsWith('/0924-factsheet-on-updated-scaffold-fire-safety-requirements') === true);
+check('the link text may carry a little extra (a date, "5 min read"): MOM "Recommendations by Tripartite Workgroup to Strengthen Human Cap.." (the site\'s own cut-short title) still finds its article', findLinkForTitle('Recommendations by Tripartite Workgroup to Strengthen Human Cap..', momLinks, MOM)?.endsWith('/2409-recommendations-by-twg-hc') === true);
+check('a title the site cut short matches by prefix: "Opening Address by Minister of State for Manpower Foo Cexiang a.."', findLinkForTitle('Opening Address by Minister of State for Manpower Foo Cexiang a..', momLinks, MOM)?.endsWith('/speeches/2026/opening-address-foo-cexiang') === true);
+check('short link text never matches by containment ("Singapore", "News")', findLinkForTitle('Singapore economy grows 4.1% in the third quarter, MTI says', [L('Singapore', 'https://x.sg/singapore/economy'), L('Singapore economy', 'https://x.sg/economy')], 'https://x.sg/news') === null);
+
+const dupLinks = [
+  L('Seized Sentosa Cove bungalows owned by money launderers hit the market', 'https://www.businesstimes.com.sg/singapore'),
+  L('Seized Sentosa Cove bungalows owned by money launderers hit the market', 'https://www.businesstimes.com.sg/singapore/seized-sentosa-cove-bungalows-owned-money-launderers-hit-market'),
+];
+check('the site front page and the listing page itself are never the answer; with the same headline twice the deeper URL wins', findLinkForTitle('Seized Sentosa Cove bungalows owned by money launderers hit the market', dupLinks, BT)?.endsWith('-hit-market') === true);
+check('a link to the site front page is ignored even when its text is the headline', findLinkForTitle('Seized Sentosa Cove bungalows owned by money launderers hit the market', [L('Seized Sentosa Cove bungalows owned by money launderers hit the market', 'https://www.businesstimes.com.sg/')], BT) === null);
+check('a parent of the listing (a breadcrumb) is ignored', findLinkForTitle('Government gazette notice for the quarter ended June 2026', [L('Government gazette notice for the quarter ended June 2026', 'https://www.mom.gov.sg/newsroom')], 'https://www.mom.gov.sg/newsroom/press-releases') === null);
+const items = [{ title: 'Updated Scaffold Fire Safety Requirements', url: null as string | null }, { title: 'Maintenance of eServices on 7 - 8 October', url: 'https://example.sg/already-set' as string | null }];
+const attached = attachLinks(items, momLinks, MOM);
+check('attachLinks fills a missing url and never overwrites one already stored', attached[0].url?.endsWith('scaffold-fire-safety-requirements') === true && attached[1].url === 'https://example.sg/already-set');
+check('the shared normalisation is unchanged (it is also the de-dup hash)', normalizeNewsTitle("Singapore firms’ payment delays — Q3: SCCB") === 'singapore firms payment delays q3 sccb');
+
 console.log(fail === 0 ? '\nALL OK' : `\n${fail} FAILED`);
 process.exit(fail === 0 ? 0 : 1);
