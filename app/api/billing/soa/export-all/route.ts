@@ -27,8 +27,9 @@ export async function GET() {
   let notesFor: SoaNotesFor;
   try {
     const admin = createAdminClient();
+    const tabRows = computeSoaRows('TAB'); // TAC's ND rows read TAB's Main PIC from it (INV-PIC-010)
     const [rows, history, remarks] = await Promise.all([
-      Promise.all([computeSoaRows('TAB'), computeSoaRows('TAC'), computeSoaRows('TAO')]),
+      Promise.all([tabRows, computeSoaRows('TAC', { tabRows }), computeSoaRows('TAO')]),
       loadSoaReminderHistory(admin),
       loadSoaRemarks(admin),
     ]);

@@ -14,7 +14,7 @@ const check = (name: string, cond: boolean) => { console.log((cond ? 'OK   ' : '
 const read = (p: string) => readFileSync(p, 'utf8');
 const data = read('lib/soa-data.ts');
 check('the rule: invoice Classes when there are any, else the TeamWork PIC', /return fromInvoices\.length \? \[\.\.\.fromInvoices\] : \[\.\.\.fromCompanies\];/.test(data));
-check('both SOA row builders fill picShown with it', (data.match(/picShown: picShownFor\(picFromInvoices, picFromCompanies\),/g) ?? []).length === 2);
+check('both SOA row builders fill picShown with it (blank on a TAC ND row, INV-PIC-010)', (data.match(/picShown: ndFollowsTab \? \[\] : picShownFor\(picFromInvoices, picFromCompanies\),/g) ?? []).length === 2);
 check('the owner list is unchanged (still TeamWork + Classes, for the dropdown and the default owner)', (data.match(/picOptions: \[\.\.\.new Set\(\[\.\.\.picFromCompanies, \.\.\.picFromInvoices\]\)\],/g) ?? []).length === 2);
 
 const page = read('app/billing/soa/_components.tsx');

@@ -7,7 +7,7 @@ import { formatStaffNameList } from './staff-directory';
 import type { QbCompany } from './quickbooks';
 import { agingBucket, dueDate, emptyAgingTotals, type AgingBucket, type AgingTotals } from './soa';
 import { computeSuggestedOwner, collectInvolvedStaff, picAllowedForCompany, type OwnerInvoiceSignal } from './soa-owner';
-import { storedOwnerSource, classOwnerFor } from './soa-main-pic';
+import { storedOwnerSource, classOwnerFor, effectiveOwner } from './soa-main-pic';
 
 // Shared by GET /api/billing/soa (the on-screen list) and
 // GET /api/billing/soa/export (the Excel download) so the two can never
@@ -52,8 +52,14 @@ export interface SoaCompanyRow {
   // invoices; the company's TeamWork PIC only when none of them carries a
   // Class ("退回公司资料里的负责人" — TAC's ND invoices mostly have none).
   // Display and the PIC filter only: picOptions, the owner dropdown and
-  // effectiveOwner are unchanged. See picShownFor.
+  // effectiveOwner are unchanged. See picShownFor. Empty on a TAC
+  // Nominee Director row (ndFollowsTab — "ND服务 我们都不会放PIC是谁的").
   picShown: string[];
+  // TAC only (INV-PIC-010): every unpaid TAC invoice line is a Nominee
+  // Director service, so the Main PIC follows the same company's TAB Main
+  // PIC (tabMainPic) — see lib/soa-main-pic.ts and attachTabMainPic below.
+  ndFollowsTab: boolean;
+  tabMainPic: string | null;
   // Chelsea's manual pick, from soa_owners (keyed by normalized customer
   // name + qb_company, NOT companies.id — see that table's own migration
   // comments: 18% of real customers with a balance have no matching
@@ -277,6 +283,71 @@ export function picShownFor(fromInvoices: readonly string[], fromCompanies: read
 // Main PIC rule: lib/soa-main-pic.ts (one copy, shared with the SOA page — INV-PIC-009).
 export { effectiveOwner } from './soa-main-pic';
 
+export type SoaRowsOptions = {
+  customerNamePrefilter?: string;
+  // TAC only: the TAB rows a caller already computes (computeAllSoaRows,
+  // the full-workbook export, Company 360), so TAB isn't computed twice.
+  tabRows?: SoaCompanyRow[] | Promise<SoaCompanyRow[]>;
+};
+
+// TAC Nominee Director rows (INV-PIC-010). Vincent, 2026-10-07: "TAC一般都是
+// ND 服务…只要确定是TAC的ND服务…TAC的PIC 那边就放 - ， 而TAC 的MAIN PIC 就放
+// 成和TAB 的 MAIN PIC 一样". The unpaid TAC invoices whose EVERY product line
+// is a Nominee Director service (`service_type` 'ND': the fees, the deposit
+// and accounting's "Deferred - ND Fees" twins). A line with no product (a
+// description-only line) counts neither way; anything else — an EP
+// application, CPF, CTC, a disbursement, a discount — makes the invoice not
+// ND-only: "不算，照原来的" (EARLY SUMMER GROUP: ND Fees + EP application).
+async function loadNdOnlyInvoiceIds(invoiceIds: string[]): Promise<Set<string>> {
+  if (!invoiceIds.length) return new Set();
+  const supabase = createAdminClient();
+  const lines = await pageAll(() => supabase
+    .from('quickbooks_invoice_items')
+    .select('qb_invoice_id, product_service, service_type')
+    .eq('qb_company', 'TAC')
+    .in('qb_invoice_id', invoiceIds)) as Array<{ qb_invoice_id: string; product_service: string | null; service_type: string | null }>;
+  const ndByInvoice = new Map<string, boolean>();
+  for (const line of lines) {
+    if (!line.product_service) continue;
+    ndByInvoice.set(line.qb_invoice_id, (ndByInvoice.get(line.qb_invoice_id) ?? true) && line.service_type === 'ND');
+  }
+  return new Set([...ndByInvoice].filter(([, nd]) => nd).map(([id]) => id));
+}
+
+// Each TAC ND row's tabMainPic: the same company's TAB SOA row's Main PIC
+// (matched the way the SOA page's ALL view groups a company — normalized
+// company name). No TAB row (nothing owed on TAB): what TAB's Main PIC is
+// with no invoices — a TAB pick a person made (or BD), else the TeamWork
+// PIC's one TAB-team person; otherwise empty ("用 TAB 那边的负责人").
+async function attachTabMainPic(rows: SoaCompanyRow[], qbKeyByRow: Map<SoaCompanyRow, string>, opts?: SoaRowsOptions): Promise<void> {
+  const ndRows = rows.filter(row => row.ndFollowsTab);
+  if (!ndRows.length) return;
+  const tabRows = await (opts?.tabRows ?? computeSoaRows('TAB', { customerNamePrefilter: opts?.customerNamePrefilter }));
+  const tabByKey = new Map(tabRows.map(row => [normalize(row.companyName), row]));
+
+  const withoutTab = ndRows.filter(row => !tabByKey.has(normalize(row.companyName)));
+  const tabPicks = new Map<string, { pic: string | null; source: 'person' | 'import' }>();
+  const keys = [...new Set(withoutTab.flatMap(row => [normalize(row.companyName), qbKeyByRow.get(row) ?? '']).filter(Boolean))];
+  if (keys.length) {
+    const { data, error } = await createAdminClient().from('soa_owners')
+      .select('customer_name_norm, soa_pic, updated_by_email').eq('qb_company', 'TAB').in('customer_name_norm', keys);
+    if (error) throw new Error(error.message);
+    for (const o of data ?? []) tabPicks.set(o.customer_name_norm, { pic: o.soa_pic, source: storedOwnerSource(o.updated_by_email) });
+  }
+
+  for (const row of ndRows) {
+    const tab = tabByKey.get(normalize(row.companyName));
+    if (tab) { row.tabMainPic = effectiveOwner(tab); continue; }
+    const stored = tabPicks.get(normalize(row.companyName)) ?? tabPicks.get(qbKeyByRow.get(row) ?? '');
+    const teamWork = formatStaffNameList(row.pic).filter(name => picAllowedForCompany(name, 'TAB'));
+    row.tabMainPic = effectiveOwner({
+      soaPic: stored?.pic ?? null, soaPicSource: stored?.pic ? stored.source : null,
+      classOwner: null, suggestedOwner: null, picShown: teamWork, picOptions: teamWork,
+      ndFollowsTab: false, tabMainPic: null,
+    });
+  }
+}
+
 // `customerNamePrefilter`: narrows the initial unpaid-invoices query down
 // to one company's own rows — used by lib/company-360.ts's Outstanding
 // section so it isn't scanning every unpaid invoice across all customers
@@ -301,7 +372,7 @@ export { effectiveOwner } from './soa-main-pic';
 // — today's exact pre-report Invoice+CreditMemo computation, kept
 // verbatim as the concrete degraded-mode behavior for a real failure mode
 // (report sync down), so a bad sync run never shows $0 for an entire book.
-export async function computeSoaRows(company: QbCompany, opts?: { customerNamePrefilter?: string }): Promise<SoaCompanyRow[]> {
+export async function computeSoaRows(company: QbCompany, opts?: SoaRowsOptions): Promise<SoaCompanyRow[]> {
   const snapshot = await loadArAgingSnapshot(company, opts?.customerNamePrefilter);
   if (!snapshot.fresh) return legacyComputeSoaRows(company, opts);
 
@@ -403,18 +474,23 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
     entry.signals.push({ qbInvoiceId: inv.qb_invoice_id, txnDate: inv.txn_date, locationName: inv.location_name });
   }
 
-  return [...byCompany.entries()].map(([key, entry]) => {
+  const ndInvoiceIds = company === 'TAC' ? await loadNdOnlyInvoiceIds(unpaidInvoiceIds) : new Set<string>();
+  const qbKeyByRow = new Map<SoaCompanyRow, string>();
+  const rows = [...byCompany.entries()].map(([key, entry]): SoaCompanyRow => {
     const companyMatch = companyByNormName.get(key) ?? wordMatch(key);
     const picFromCompanies = formatStaffNameList(companyMatch?.pic ?? null).filter(name => picAllowedForCompany(name, company));
     const picFromInvoices = collectInvolvedStaff(entry.signals, classNamesByInvoice, company);
     const suggestedOwner = computeSuggestedOwner(entry.signals, classNamesByInvoice, company);
     const stored = ownerByNormName.get(key);
-    return {
+    const ndFollowsTab = entry.signals.length > 0 && entry.signals.every(s => ndInvoiceIds.has(s.qbInvoiceId));
+    const row: SoaCompanyRow = {
       companyName: companyMatch?.company_name ?? entry.displayName,
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
-      picShown: picShownFor(picFromInvoices, picFromCompanies),
+      picShown: ndFollowsTab ? [] : picShownFor(picFromInvoices, picFromCompanies),
+      ndFollowsTab,
+      tabMainPic: null,
       soaPic: stored?.pic ?? null,
       soaPicSource: stored?.pic ? stored.source : null,
       classOwner: classOwnerFor(suggestedOwner, picFromInvoices),
@@ -425,7 +501,11 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
       unpaidInvoices: entry.unpaidInvoices.sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
       lineItems: entry.lineItems.sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
     };
-  }).sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
+    qbKeyByRow.set(row, key);
+    return row;
+  });
+  if (company === 'TAC') await attachTabMainPic(rows, qbKeyByRow, opts);
+  return rows.sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
 }
 
 // The pre-report (2026-09-15) computation, kept verbatim as
@@ -434,7 +514,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
 // not a vestige, the named, deliberate degraded-mode behavior for a real
 // failure mode (report sync down), so that scenario shows a real
 // (slightly less complete) number rather than $0 for an entire book.
-async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePrefilter?: string }): Promise<SoaCompanyRow[]> {
+async function legacyComputeSoaRows(company: QbCompany, opts?: SoaRowsOptions): Promise<SoaCompanyRow[]> {
   const supabase = createAdminClient();
 
   // Same significantWord() reduction as loadArAgingSnapshot() above, and
@@ -552,18 +632,23 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
     entry.lineItems.push({ docNumber: cm.doc_number ?? 'Credit Note', dueDate: cm.txn_date, txnDate: cm.txn_date, txnType: 'Credit Note', amount: -cm.balance, bucket: cmBucket });
   }
 
-  return [...byCompany.entries()].map(([key, entry]) => {
+  const ndInvoiceIds = company === 'TAC' ? await loadNdOnlyInvoiceIds(unpaidInvoiceIds) : new Set<string>();
+  const qbKeyByRow = new Map<SoaCompanyRow, string>();
+  const rows = [...byCompany.entries()].map(([key, entry]): SoaCompanyRow => {
     const companyMatch = companyByNormName.get(key) ?? wordMatch(key);
     const picFromCompanies = formatStaffNameList(companyMatch?.pic ?? null).filter(name => picAllowedForCompany(name, company));
     const picFromInvoices = collectInvolvedStaff(entry.signals, classNamesByInvoice, company);
     const suggestedOwner = computeSuggestedOwner(entry.signals, classNamesByInvoice, company);
     const stored = ownerByNormName.get(key);
-    return {
+    const ndFollowsTab = entry.signals.length > 0 && entry.signals.every(s => ndInvoiceIds.has(s.qbInvoiceId));
+    const row: SoaCompanyRow = {
       companyName: companyMatch?.company_name ?? entry.displayName,
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
-      picShown: picShownFor(picFromInvoices, picFromCompanies),
+      picShown: ndFollowsTab ? [] : picShownFor(picFromInvoices, picFromCompanies),
+      ndFollowsTab,
+      tabMainPic: null,
       soaPic: stored?.pic ?? null,
       soaPicSource: stored?.pic ? stored.source : null,
       classOwner: classOwnerFor(suggestedOwner, picFromInvoices),
@@ -577,7 +662,11 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
       unpaidInvoices: entry.unpaidInvoices.sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
       lineItems: entry.lineItems.sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '')),
     };
-  }).sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
+    qbKeyByRow.set(row, key);
+    return row;
+  });
+  if (company === 'TAC') await attachTabMainPic(rows, qbKeyByRow, opts);
+  return rows.sort((a, b) => a.companyName.localeCompare(b.companyName)); // Vincent, 2026-09-07: "排序也是要按照ABC 的顺序排序"
 }
 
 // One row per (company, qbCompany) — the "All" view's own shape. Vincent,
@@ -609,6 +698,7 @@ export function tagAndMergeSoaRows(tab: SoaCompanyRow[], tac: SoaCompanyRow[], t
 }
 
 export async function computeAllSoaRows(): Promise<SoaCompanyRowWithSource[]> {
-  const [tab, tac, tao] = await Promise.all([computeSoaRows('TAB'), computeSoaRows('TAC'), computeSoaRows('TAO')]);
+  const tabRows = computeSoaRows('TAB');
+  const [tab, tac, tao] = await Promise.all([tabRows, computeSoaRows('TAC', { tabRows }), computeSoaRows('TAO')]);
   return tagAndMergeSoaRows(tab, tac, tao);
 }

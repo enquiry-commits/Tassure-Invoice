@@ -66,6 +66,8 @@ function mergeSameSourceRows(rows: Row[]): Row {
     ...rows[0],
     picOptions: [...new Set(rows.flatMap(row => row.picOptions))],
     picShown: [...new Set(rows.flatMap(row => row.picShown))],
+    // TAC ND (INV-PIC-010): only when every merged row is ND and they agree on TAB's Main PIC.
+    ndFollowsTab: rows.every(row => row.ndFollowsTab) && new Set(rows.map(row => row.tabMainPic)).size === 1,
     soaPic: confirmedOwners.length === 1 ? confirmedOwners[0] : null,
     soaPicSource: confirmedOwners.length === 1 ? 'person' : null,
     classOwner: classOwners.length === 1 ? classOwners[0] : null,
@@ -944,7 +946,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   const updateSoaPic = (row: Row, value: string) => {
     const company = rowCompany(row);
     setCompanies(current => (current ?? []).map(c =>
-      (c.companyName === row.companyName && rowCompany(c) === company) ? { ...c, soaPic: value || null } : c));
+      // A pick made here is a person's (INV-PIC-009) — without the source the
+      // dropdown snapped back to the system's choice until the next reload.
+      (c.companyName === row.companyName && rowCompany(c) === company) ? { ...c, soaPic: value || null, soaPicSource: value ? 'person' as const : null } : c));
     fetch('/api/billing/soa', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ companyName: row.companyName, soaPic: value || null, company }),

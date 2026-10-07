@@ -19,6 +19,13 @@
 //      when the PIC column can't decide (several people, or none);
 //   5. a lone TeamWork PIC (effectiveOwner only).
 // The import rows stay in soa_owners untouched (nothing is deleted).
+//
+// TAC Nominee Director rows (INV-PIC-010) — Vincent, 2026-10-07: "TAC一般都是
+// ND 服务，而ND服务 我们都不会放PIC是谁的…TAC的PIC 那边就放 - ， 而TAC 的MAIN
+// PIC 就放成和TAB 的 MAIN PIC 一样". When EVERY unpaid TAC invoice line is a
+// Nominee Director service (ndFollowsTab, set in lib/soa-data.ts), the Main
+// PIC is step 1, else the same company's TAB Main PIC (tabMainPic) — and
+// nothing else: no TAB answer means empty, never the person who keyed it.
 
 export type MainPicRow = {
   soaPic: string | null;
@@ -27,6 +34,8 @@ export type MainPicRow = {
   suggestedOwner: string | null;
   picShown: string[];
   picOptions: string[];
+  ndFollowsTab: boolean;
+  tabMainPic: string | null;
 };
 
 // Stored values that are a status, not a person (the SOA page's "Other"
@@ -51,10 +60,12 @@ export function personPick(row: Pick<MainPicRow, 'soaPic' | 'soaPicSource'>): st
 }
 
 // Steps 1-4 (no lone-TeamWork fallback) — what the SOA page's filters use.
-export function derivedOwner(row: Pick<MainPicRow, 'soaPic' | 'soaPicSource' | 'classOwner' | 'suggestedOwner' | 'picShown'>): string | null {
+export function derivedOwner(row: Pick<MainPicRow, 'soaPic' | 'soaPicSource' | 'classOwner' | 'suggestedOwner' | 'picShown' | 'ndFollowsTab' | 'tabMainPic'>): string | null {
+  if (row.ndFollowsTab) return personPick(row) ?? row.tabMainPic;
   return personPick(row) ?? row.classOwner ?? (row.picShown.length === 1 ? row.picShown[0] : null) ?? row.suggestedOwner;
 }
 
 export function effectiveOwner(row: MainPicRow): string | null {
+  if (row.ndFollowsTab) return derivedOwner(row);
   return derivedOwner(row) ?? (row.picOptions.length === 1 ? row.picOptions[0] : null);
 }

@@ -793,6 +793,33 @@ again.
   put the PIC column's only person ABOVE picks and BD; live, that differed
   on exactly one owing row, RTG PROJECTS TAB (BD vs Jenny Lai), and he chose
   "保留 BD" — so BD beats even a single-person PIC column; no code change.
+  **Bug in the first cut (fixed the same day):** the SOA page's optimistic
+  update after a pick set `soaPic` but not `soaPicSource`, so a fresh pick
+  read as "not a person's" and the dropdown snapped back to the system's
+  choice until the next reload (the saved row was right). A client-side
+  edit of a value whose meaning depends on a sibling field must set both.
+- **INV-PIC-010** — A TAC row whose unpaid invoices are ALL Nominee Director
+  services has no PIC and follows TAB's Main PIC. Vincent, 2026-10-07, on
+  ADVANCE CF TECHNOLOGY (TAC PIC column "Lim Hoe Chyi, Hoo Seng Xin", Main
+  PIC Chelsea Ang — who keyed it — while TAB's Main PIC was Jenny Lai):
+  "ND服务 我们都不会放PIC是谁的…TAC的PIC 那边就放 - ， 而TAC 的MAIN PIC 就放成
+  和TAB 的 MAIN PIC 一样". `lib/soa-data.ts`: `ndFollowsTab` = every product
+  line of every unpaid TAC invoice has `service_type` 'ND' (ND fees, the ND
+  deposit, accounting's "Deferred - ND Fees" twins; description-only lines
+  ignored); then `picShown` is empty and `tabMainPic` = the same company's
+  TAB SOA row's `effectiveOwner` (matched by normalized company name, the
+  ALL view's grouping key). No TAB row (nothing owed on TAB): a TAB pick a
+  person made (or BD), else the TeamWork PIC's single TAB-team person, else
+  empty — "用 TAB 那边的负责人" (Cumaster International (HK): empty). Main PIC
+  on an ND row = a person's pick/BD, else `tabMainPic` — NEVER the person who
+  keyed the invoice nor a lone TeamWork PIC. Mixed ND + other services
+  (EARLY SUMMER GROUP: ND Fees + EP application) is NOT ND: "不算，照原来的";
+  so is a discount or disbursement line on an ND invoice (none at the time).
+  Every `computeSoaRows('TAC')` computes this itself (it computes TAB when an
+  ND row exists); `computeAllSoaRows` and the full-workbook export pass their
+  TAB rows in (`tabRows`). Live, 2026-10-07: 27 of 51 owing TAC rows are ND
+  (24 with a TAB row, Main PIC changed on 20); TAB untouched.
+  `test-soa-main-pic.ts`.
 ## Recipient / CC / email address (INV-MAIL)
 
 - **INV-MAIL-001** — Canonical recipient policy (`lib/campaign-recipients.ts`):
