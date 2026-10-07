@@ -1,5 +1,15 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-07 (CHANGED, data not code: the 3 SOA reminder subjects lead with the company name — Vincent, on WANGXIAOZAN SINGAPORE's 2nd reminder: "SOA Email Drafts 的 Subject来讲，需要统一格式，不管是第几次 reminder", then "1st REMINDER 放 GENTLE REMINDER / 2nd 放 2ND / 3rd 放 3RD"; name "照系统存的，全大写"; applied by "我更新脚本，你运行一条命令").
+
+**What changed (INV-MAIL-008).** `scripts/update-soa-reminder-subjects.js` now sets `email_templates` (type soa) 1st/2nd/3rd Reminder to `{{companyName}} - GENTLE | 2ND | 3RD REMINDER FROM TASSURE GROUP ({{sendMonth}})` — e.g. `WANGXIAOZAN SINGAPORE PTE. LTD. - 2ND REMINDER FROM TASSURE GROUP (OCT 2026)`. No code path changes: `{{companyName}}` was already a merge field (lib/email-merge.ts), the campaign route and refresh-amounts already merge the subject from the template, and nothing parses the stage out of the subject (drafts carry `soa_reminder_stage`). The 2026-09-17 "no company name" convention is superseded.
+
+**State.** The script is committed but NOT yet run against production (Vincent runs `node scripts/update-soa-reminder-subjects.js` himself — no ad-hoc production writes from a session). Read only, live before the run: templates #7/#8/#9 still carry the old subjects; 13 pending SOA drafts (12 stage 1 "(SEP 2026)", 1 stage 2 WANGXIAOZAN SINGAPORE "(OCT 2026)") keep their old subject until re-created or re-prepared with changed amounts; 4 sent drafts are history and stay.
+
+**Open.** Until Vincent runs the script, every new SOA draft still gets the old subject. After the run, check by eye (no REG entry — a data change, no code path touched): Client Communications › Templates shows the 3 new subjects, and a NEW SOA campaign's draft subject starts with the company name.
+
+Previous entry follows.
+
 Last updated: 2026-10-07 (CHANGED: there is no Main PIC any more — everyone the SOA PIC column lists is responsible, and picking any one of them shows the company; Vincent: "3个人都是MAIN PIC，不管我选其中一个人，这个公司都要出现").
 
 **What changed (INV-PIC-011, REG-048).** Replaces the single-person rule of INV-PIC-009 (made earlier the same day). Decided by Vincent (AskUserQuestion): drop the Main PIC column and its dropdown; keep Bad Debt as a mark (a small "+ Bad Debt" / "Bad Debt ×" on the PIC cell, asks before marking); every other stored pick is ignored (nothing deleted). `responsiblePeople()` (`lib/soa-main-pic.ts`) is the one rule: Bad Debt, else a TAC ND-only row's TAB people (INV-PIC-010), else the PIC column's people, else the invoice-Location suggestion. Used by the page's people filter, My Tasks' SOA Collections (every responsible person gets it), the assistant's outstanding lookups, Company 360, and the Excel (PIC column lists all people; per-person sheets).

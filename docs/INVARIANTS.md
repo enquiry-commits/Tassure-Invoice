@@ -983,6 +983,23 @@ again.
   letter invoice in a foreign currency (none today) would be created at the foreign
   figure and corrected to S$ only at the refresh. Guarded by `test-draft-refresh.ts`
   (44 checks) and negative controls.
+- **INV-MAIL-008** — The 3 SOA reminder subjects lead with the company name and
+  keep their stage word: `{{companyName}} - GENTLE | 2ND | 3RD REMINDER FROM
+  TASSURE GROUP ({{sendMonth}})` (e.g. `WANGXIAOZAN SINGAPORE PTE. LTD. - 2ND
+  REMINDER FROM TASSURE GROUP (OCT 2026)`). They are DATA — `email_templates`
+  rows #7/#8/#9 (type soa), set by `scripts/update-soa-reminder-subjects.js`,
+  editable on Client Communications › Templates — not code; the campaign route
+  and `drafts/refresh-amounts` merge the subject from the template, and nothing
+  reads the stage back out of the subject (`email_drafts.soa_reminder_stage`
+  does that). Vincent, 2026-10-07, on a real 2nd-reminder draft: "SOA Email
+  Drafts 的 Subject来讲，需要统一格式，不管是第几次 reminder", then "1st
+  REMINDER 放 GENTLE REMINDER / 2nd 放 2ND / 3rd 放 3RD", the name "照系统存的，
+  全大写" (`{{companyName}}` as stored, never title-cased — "ACM", "A.I.R" must
+  stay). This supersedes the 2026-09-17 convention recorded in that script's
+  history (Chelsea's subjects then carried NO company name) — do not "restore"
+  it. A template change never rewrites an existing draft: the 13 pending drafts
+  of 2026-10-07 keep the subject they were created with until re-created, or
+  re-prepared with changed amounts; sent drafts are history.
 
 ## Document / template generation (INV-DOC)
 
