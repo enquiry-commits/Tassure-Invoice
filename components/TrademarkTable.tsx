@@ -208,7 +208,7 @@ export default function TrademarkTable({ category, title }: { category: Trademar
           <div style={{ minWidth: 700 }}>
             <div style={{ display: 'grid', gridTemplateColumns: gridTemplate, background: '#f1f5f9', padding: '10px 14px', gap: 8 }}>
               {columns.map(c => (
-                <div key={c} style={{ fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{COLUMN_DEFS[c].label}</div>
+                <div key={c} style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{COLUMN_DEFS[c].label}</div>
               ))}
               <div />
             </div>
@@ -243,7 +243,7 @@ export default function TrademarkTable({ category, title }: { category: Trademar
                         // lands in the input. isComposing is true for that
                         // one; only blur on a real, final Enter.
                         onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(null); }}
-                        style={{ border: '1px solid #93c5fd', borderRadius: 5, padding: '4px 6px', fontSize: 12.5, outline: 'none', width: '100%' }}
+                        style={{ border: '1px solid #93c5fd', borderRadius: 5, padding: '4px 6px', fontSize: 12, outline: 'none', width: '100%' }}
                       />
                     );
                   }
@@ -253,7 +253,7 @@ export default function TrademarkTable({ category, title }: { category: Trademar
                       onClick={() => startEdit(row, c)}
                       title={c === 'company_name' ? undefined : 'Click to edit'}
                       style={{
-                        fontSize: 12.5, cursor: 'pointer', padding: '4px 6px', borderRadius: 5, minHeight: 20,
+                        fontSize: 12, cursor: 'pointer', padding: '4px 6px', borderRadius: 5, minHeight: 20,
                         color: isExpired ? '#dc2626' : raw ? '#334155' : '#cbd5e1',
                         fontWeight: c === 'company_name' ? 600 : isExpired ? 700 : 400,
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: c === 'company_name' || c === 'status_text' || c === 'updates_note' || c === 'remarks' ? 'normal' : 'nowrap',
@@ -282,7 +282,7 @@ export default function TrademarkTable({ category, title }: { category: Trademar
         <div onClick={closeAdd} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
             <div style={{ background: ACCENT, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Add Record — {title}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Add Record — {title}</div>
               <button onClick={closeAdd} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>

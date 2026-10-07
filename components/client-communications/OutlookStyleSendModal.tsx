@@ -54,7 +54,7 @@ function RecipientField({ value, onChange }: { value: string; onChange: (v: stri
       onChange={e => { onChange(e.target.value); resize(); }}
       onBlur={() => onChange(splitToLines(value))}
       rows={1}
-      style={{ width: '100%', border: 'none', outline: 'none', resize: 'none', overflow: 'hidden', fontFamily: 'inherit', fontSize: 12.5, color: '#1e3a5f', padding: '8px 2px', lineHeight: 1.6, boxSizing: 'border-box' }}
+      style={{ width: '100%', border: 'none', outline: 'none', resize: 'none', overflow: 'hidden', fontFamily: 'inherit', fontSize: 12, color: '#1e3a5f', padding: '8px 2px', lineHeight: 1.6, boxSizing: 'border-box' }}
     />
   );
 }
@@ -71,7 +71,7 @@ function AttachmentCard({ fileName, byteSize, previewUrl, onRemove, notice }: { 
       >
       <FileText size={22} style={{ color: '#dc2626', flexShrink: 0 }} />
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: previewUrl ? 'underline' : 'none', textDecorationColor: '#cbd5e1' }} title={fileName}>{fileName}</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#1e3a5f', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: previewUrl ? 'underline' : 'none', textDecorationColor: '#cbd5e1' }} title={fileName}>{fileName}</div>
         <div style={{ fontSize: 10, color: '#94a3b8' }}>{byteSize == null ? ' ' : formatSize(byteSize)}</div>
         {notice && <div style={{ fontSize: 10, color: '#b45309', marginTop: 2, maxWidth: 260, whiteSpace: 'normal' }}>{notice}</div>}
       </div>
@@ -87,7 +87,7 @@ function AttachmentCard({ fileName, byteSize, previewUrl, onRemove, notice }: { 
 
 const rowStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '90px 1fr', alignItems: 'stretch', borderBottom: '1px solid #f1f5f9' };
 const labelBoxStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', padding: '8px 10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, margin: '3px 8px 3px 0', fontSize: 12, fontWeight: 600, color: '#334155' };
-const valueStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', padding: '8px 2px', fontSize: 12.5, color: '#1e3a5f', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+const valueStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', padding: '8px 2px', fontSize: 12, color: '#1e3a5f', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
 
 export default function OutlookStyleSendModal({
   draft, sender, me, onClose, onSent,
@@ -416,7 +416,7 @@ export default function OutlookStyleSendModal({
                 type="text"
                 value={editedSubject}
                 onChange={e => setEditedSubject(e.target.value)}
-                style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600, color: '#1e3a5f', padding: '8px 2px', boxSizing: 'border-box' }}
+                style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, color: '#1e3a5f', padding: '8px 2px', boxSizing: 'border-box' }}
               />
             </div>
           </div>
@@ -430,11 +430,11 @@ export default function OutlookStyleSendModal({
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '4px 20px 14px' }}>
           {preparing ? (
-            <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Resolving attachments…</span>
+            <span style={{ fontSize: 11, color: '#94a3b8' }}>Resolving attachments…</span>
           ) : (
             attachmentEntries.map(a => <AttachmentCard key={a.key} fileName={a.fileName} byteSize={a.byteSize} previewUrl={a.previewUrl} onRemove={a.onRemove} notice={a.notice} />)
           )}
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#173b63', fontSize: 11.5, fontWeight: 700, border: '1px dashed #cbd5e1', borderRadius: 6, padding: '8px 12px' }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#173b63', fontSize: 11, fontWeight: 700, border: '1px dashed #cbd5e1', borderRadius: 6, padding: '8px 12px' }}>
             <Paperclip size={14} />
             Add attachment
             <input type="file" multiple hidden onChange={e => setManualFiles(prev => [...prev, ...(e.target.files ? Array.from(e.target.files) : [])])} />
@@ -442,7 +442,7 @@ export default function OutlookStyleSendModal({
         </div>
 
         {prepareError && (
-          <div style={{ margin: '0 20px 14px', display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', borderRadius: 8, border: '1px solid #fecaca', background: '#fef2f2', color: '#b91c1c', fontSize: 11.5 }}>
+          <div style={{ margin: '0 20px 14px', display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', borderRadius: 8, border: '1px solid #fecaca', background: '#fef2f2', color: '#b91c1c', fontSize: 11 }}>
             <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
             {prepareError} — Send is disabled until this resolves; close and try again.
           </div>
@@ -467,7 +467,7 @@ export default function OutlookStyleSendModal({
 
         {(sendError || notice) && (
           <div style={{
-            margin: '0 20px 16px', padding: '10px 12px', borderRadius: 8, fontSize: 11.5, fontWeight: 600,
+            margin: '0 20px 16px', padding: '10px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600,
             border: `1px solid ${sendError ? '#fecaca' : '#fed7aa'}`,
             background: sendError ? '#fef2f2' : '#fff7ed',
             color: sendError ? '#b91c1c' : '#9a3412',

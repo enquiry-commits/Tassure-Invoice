@@ -110,8 +110,8 @@ export default function AiQualityPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <ShieldAlert size={21} color="#1e3a5f" />
-            <h1 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#1e293b' }}>AI 回复质量抽查</h1>
-            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 700 }}>自动抽查</span>
+            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>AI 回复质量抽查</h1>
+            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10, fontWeight: 700 }}>自动抽查</span>
           </div>
           <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: 12, maxWidth: 720 }}>
             每天随机抽查最近的真实 My Tasks/助手回复，由 Claude 按固定标准判断是否有虚假否认能力、无据妄断等行为问题。
@@ -144,9 +144,9 @@ export default function AiQualityPage() {
           <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,.7)', fontSize: 11 }}>共 {reviews.length} 条</span>
         </div>
         {loading ? (
-          <div style={{ padding: 42, textAlign: 'center', color: '#94a3b8', fontSize: 12.5 }}>加载中…</div>
+          <div style={{ padding: 42, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>加载中…</div>
         ) : reviews.length === 0 ? (
-          <div style={{ padding: 42, textAlign: 'center', color: '#64748b', fontSize: 12.5 }}>
+          <div style={{ padding: 42, textAlign: 'center', color: '#64748b', fontSize: 12 }}>
             {onlyOpen ? '目前没有待处理的问题——干净。' : '还没有任何抽查记录。'}
             <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 5 }}>每天 23:00 UTC 自动运行一次，也可以点上方"立即抽查"。</div>
           </div>
@@ -155,7 +155,7 @@ export default function AiQualityPage() {
             {reviews.map(row => (
               <div key={row.id} style={{ padding: '14px 16px', borderTop: '1px solid #eef2f7' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{row.account_email} · {new Date(row.created_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}</span>
+                  <span style={{ fontSize: 10, color: '#94a3b8' }}>{row.account_email} · {new Date(row.created_at).toLocaleString('en-SG', { timeZone: 'Asia/Singapore' })}</span>
                   {row.tools_used.length > 0 ? (
                     <span style={{ fontSize: 10, color: '#0f766e', background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: 999, padding: '1px 7px' }}>用了 {row.tools_used.length} 个工具</span>
                   ) : (
@@ -169,7 +169,7 @@ export default function AiQualityPage() {
                 {row.issues.length > 0 && (
                   <div style={{ marginBottom: 8 }}>
                     {row.issues.map((issue, i) => (
-                      <div key={i} style={{ fontSize: 11.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '5px 8px', marginBottom: 4 }}>
+                      <div key={i} style={{ fontSize: 11, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '5px 8px', marginBottom: 4 }}>
                         <strong>{ISSUE_LABEL[issue.category] ?? issue.category}</strong> — {issue.description}
                       </div>
                     ))}
@@ -177,10 +177,10 @@ export default function AiQualityPage() {
                 )}
                 {!row.human_verdict && (
                   <div style={{ display: 'flex', gap: 7 }}>
-                    <button type="button" onClick={() => void humanReview(row, 'confirmed_issue')} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '1px solid #fecaca', background: '#fff7f7', color: '#b91c1c', borderRadius: 7, padding: '6px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
+                    <button type="button" onClick={() => void humanReview(row, 'confirmed_issue')} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '1px solid #fecaca', background: '#fff7f7', color: '#b91c1c', borderRadius: 7, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                       <X size={12} /> 确实有问题
                     </button>
-                    <button type="button" onClick={() => void humanReview(row, 'false_positive')} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', borderRadius: 7, padding: '6px 10px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
+                    <button type="button" onClick={() => void humanReview(row, 'false_positive')} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', borderRadius: 7, padding: '6px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                       <Check size={12} /> AI判断错了/无所谓
                     </button>
                   </div>

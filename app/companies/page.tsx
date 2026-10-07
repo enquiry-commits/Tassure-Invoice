@@ -59,7 +59,7 @@ function StatusBadge({ status }: { status: string | null }) {
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '4px 9px',
       borderRadius: 999, background: '#fff', color: palette.color, border: '1px solid #dbe3ec',
-      fontSize: 10.5, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>
+      fontSize: 10, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>
       <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: palette.color, flexShrink: 0 }} />
       {status || 'Pending Sync'}
     </span>
@@ -72,7 +72,7 @@ function CompanyServicePill({ label, tone = 'off' }: { label: string; tone?: 'nd
     : { color: '#15803d', background: '#f0fdf4', border: '#bbf7d0' };
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', padding: '4px 9px', borderRadius: 999,
-      background: tone === 'off' ? '#f8fafc' : '#fff', color: palette.color, border: '1px solid #dbe3ec', fontSize: 10.5, fontWeight: 700,
+      background: tone === 'off' ? '#f8fafc' : '#fff', color: palette.color, border: '1px solid #dbe3ec', fontSize: 10, fontWeight: 700,
       lineHeight: 1, whiteSpace: 'nowrap' }} title={label}>
       <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: palette.color, flexShrink: 0 }} />
       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
@@ -186,7 +186,7 @@ export default function CompaniesPage() {
                 </div>
                 <StatusBadge status={c.clientStatus} />
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 8, fontSize: 11.5, color: '#64748b' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 8, fontSize: 11, color: '#64748b' }}>
                 {c.hasActiveND && c.activeNDs?.length > 0
                   ? <CompanyServicePill label={`ND · ${c.activeNDs.map(n => n.name).join(', ')}`} tone="nd" />
                   : <CompanyServicePill label="No active ND" />}

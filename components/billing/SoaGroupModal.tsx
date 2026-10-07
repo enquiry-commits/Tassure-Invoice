@@ -76,14 +76,14 @@ export default function SoaGroupModal({ me, sender, onClose, onDrafted }: {
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 680, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,.3)', overflow: 'hidden' }}>
         <div style={{ background: NAVY, color: '#fff', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>Group SOA email</div>
-            <div style={{ fontSize: 11.5, opacity: 0.75, marginTop: 2 }}>Tick the companies of one group — their SOA and invoices go out together in one email.</div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>Group SOA email</div>
+            <div style={{ fontSize: 11, opacity: 0.75, marginTop: 2 }}>Tick the companies of one group — their SOA and invoices go out together in one email.</div>
           </div>
           <button onClick={onClose} disabled={busy} aria-label="Close" style={{ background: 'none', border: 'none', color: '#fff', cursor: busy ? 'default' : 'pointer' }}><X size={18} /></button>
         </div>
 
         <div style={{ padding: 18, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11.5, fontWeight: 700, color: '#475569' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11, fontWeight: 700, color: '#475569' }}>
             Email subject (you write it)
             <input value={subject} onChange={e => setSubject(e.target.value)} disabled={busy} placeholder="e.g. Outstanding payment — Aquila Group"
               style={{ border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 10px', fontSize: 13, fontWeight: 400, color: '#0f172a' }} />
@@ -96,16 +96,16 @@ export default function SoaGroupModal({ me, sender, onClose, onDrafted }: {
                 style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 10px 8px 30px', fontSize: 13 }} />
             </div>
             <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, marginTop: 8, maxHeight: 280, overflowY: 'auto' }}>
-              {rows === null && !loadError && <div style={{ padding: 18, textAlign: 'center', color: '#94a3b8', fontSize: 12.5 }}>Loading…</div>}
-              {loadError && <div style={{ padding: 14, color: '#b91c1c', fontSize: 12.5 }}>{loadError}</div>}
-              {rows !== null && visible.length === 0 && <div style={{ padding: 18, textAlign: 'center', color: '#94a3b8', fontSize: 12.5 }}>No company matches.</div>}
+              {rows === null && !loadError && <div style={{ padding: 18, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>Loading…</div>}
+              {loadError && <div style={{ padding: 14, color: '#b91c1c', fontSize: 12 }}>{loadError}</div>}
+              {rows !== null && visible.length === 0 && <div style={{ padding: 18, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No company matches.</div>}
               {visible.map(e => {
                 const on = picked.includes(e.key);
                 return (
                   <label key={e.key} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px', borderBottom: '1px solid #f1f5f9', cursor: busy ? 'default' : 'pointer', background: on ? '#f1f5f9' : '#fff' }}>
                     <input type="checkbox" checked={on} disabled={busy} onChange={() => toggle(e.key)} style={{ accentColor: NAVY }} />
-                    <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: '#1e293b' }}>{e.name}</span>
-                    <span style={{ fontSize: 10.5, color: '#64748b' }}>{e.books.join(' + ')}</span>
+                    <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: '#1e293b' }}>{e.name}</span>
+                    <span style={{ fontSize: 10, color: '#64748b' }}>{e.books.join(' + ')}</span>
                     <span style={{ fontSize: 12, fontWeight: 700, color: NAVY, minWidth: 84, textAlign: 'right' }}>{formatShortMoney(e.net)}</span>
                   </label>
                 );
@@ -113,13 +113,13 @@ export default function SoaGroupModal({ me, sender, onClose, onDrafted }: {
             </div>
           </div>
 
-          <div style={{ fontSize: 12.5, color: '#334155' }}>
+          <div style={{ fontSize: 12, color: '#334155' }}>
             {chosen.length === 0 ? 'Nothing ticked yet.' : (
               <>
                 <b>{chosen.length}</b> {chosen.length === 1 ? 'company' : 'companies'} · total <b>{formatShortMoney(total)}</b>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
                   {chosen.map(e => (
-                    <span key={e.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 999, padding: '2px 4px 2px 10px' }}>
+                    <span key={e.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 999, padding: '2px 4px 2px 10px' }}>
                       {e.name}
                       <button onClick={() => toggle(e.key)} disabled={busy} aria-label={`Remove ${e.name}`} style={{ display: 'flex', border: 'none', background: 'none', cursor: 'pointer', color: '#64748b', padding: 0 }}><X size={12} /></button>
                     </span>
@@ -130,7 +130,7 @@ export default function SoaGroupModal({ me, sender, onClose, onDrafted }: {
             {chosen.length === 1 && <div style={{ marginTop: 6, color: '#64748b' }}>Tick at least two companies — for one company, use its own Draft Email.</div>}
           </div>
 
-          {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, lineHeight: 1.5 }}>{error}</div>}
+          {error && <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 8, padding: '9px 12px', fontSize: 12, lineHeight: 1.5 }}>{error}</div>}
         </div>
 
         <div style={{ padding: '12px 18px', borderTop: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10, background: '#f8fafc' }}>

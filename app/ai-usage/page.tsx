@@ -71,7 +71,7 @@ function TotalsCell({ t, muted }: { t: UsageTotals; muted?: boolean }) {
   return (
     <div style={{ lineHeight: 1.35 }}>
       <div style={{ fontWeight: 700, color: muted ? '#64748b' : '#173b61', fontSize: 13 }}>{usd(t.costUsd)}{t.unpricedCalls > 0 && <span title="部分调用的模型价格未确认，未计入金额" style={{ color: '#b45309' }}> +?</span>}</div>
-      <div style={{ fontSize: 10.5, color: '#94a3b8' }}>{tokens(t.tokens)} tokens · {t.calls} 次</div>
+      <div style={{ fontSize: 10, color: '#94a3b8' }}>{tokens(t.tokens)} tokens · {t.calls} 次</div>
     </div>
   );
 }
@@ -129,8 +129,8 @@ export default function AiUsagePage() {
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
             <Bot size={21} color="#1e3a5f" />
-            <h1 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#1e293b' }}>AI 用量</h1>
-            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 700 }}>实时 · 每 30 秒刷新</span>
+            <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#1e293b' }}>AI 用量</h1>
+            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10, fontWeight: 700 }}>实时 · 每 30 秒刷新</span>
           </div>
           <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: 12, maxWidth: 760 }}>
             每一次 AI 调用（助手聊天、Turnover AI 读单据、My Tasks 今日提醒、定时任务…）都会记一笔：谁、哪个功能、哪个模型、多少 token、按官网价格估算多少美元。
@@ -143,13 +143,13 @@ export default function AiUsagePage() {
       </div>
 
       {notice && (
-        <div style={{ marginBottom: 14, border: `1px solid ${notice.kind === 'missing' ? '#fde68a' : '#fecaca'}`, background: notice.kind === 'missing' ? '#fffbeb' : '#fff7f7', color: notice.kind === 'missing' ? '#92400e' : '#b91c1c', borderRadius: 8, padding: '10px 12px', fontSize: 12.5 }}>
+        <div style={{ marginBottom: 14, border: `1px solid ${notice.kind === 'missing' ? '#fde68a' : '#fecaca'}`, background: notice.kind === 'missing' ? '#fffbeb' : '#fff7f7', color: notice.kind === 'missing' ? '#92400e' : '#b91c1c', borderRadius: 8, padding: '10px 12px', fontSize: 12 }}>
           {notice.kind === 'missing' ? <>还没有建立用量记录表。请在 Supabase SQL editor 运行 <code>scripts/add-ai-usage-events.sql</code>，之后每一次 AI 调用都会出现在这里。</> : notice.text}
         </div>
       )}
 
       {loading ? (
-        <div style={{ padding: 42, textAlign: 'center', color: '#94a3b8', fontSize: 12.5 }}>加载中…</div>
+        <div style={{ padding: 42, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>加载中…</div>
       ) : summary && data && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 12, marginBottom: 18 }}>
@@ -165,7 +165,7 @@ export default function AiUsagePage() {
               <span style={{ marginLeft: 'auto', color: 'rgba(255,255,255,.7)', fontSize: 11 }}>更新于 {sgt(data.generatedAt, false)}</span>
             </div>
             {summary.people.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 12.5 }}>本月还没有 AI 调用记录。</div>
+              <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 12 }}>本月还没有 AI 调用记录。</div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table className="system-list-table" style={TABLE_STYLE}>
@@ -194,7 +194,7 @@ export default function AiUsagePage() {
           <div className="system-list-shell" style={{ marginBottom: 16 }}>
             <div className="system-list-title-bar px-4 py-3"><span className="system-list-title">按功能</span></div>
             {summary.features.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 12.5 }}>本月还没有 AI 调用记录。</div>
+              <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 12 }}>本月还没有 AI 调用记录。</div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table className="system-list-table" style={TABLE_STYLE}>
@@ -250,7 +250,7 @@ export default function AiUsagePage() {
               )}
             </div>
             {groups.length === 0 ? (
-              <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 12.5 }}>{monthLabel(data.month)} 没有 AI 调用记录。</div>
+              <div style={{ padding: 32, textAlign: 'center', color: '#64748b', fontSize: 12 }}>{monthLabel(data.month)} 没有 AI 调用记录。</div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table className="system-list-table" style={TABLE_STYLE}>
@@ -279,7 +279,7 @@ export default function AiUsagePage() {
                             </td>
                             <td style={{ ...CELL, fontSize: 12, color: '#475569', fontWeight: 700 }}>{monthLabel(data.month)}</td>
                             <td style={{ ...CELL, fontSize: 12, color: '#64748b' }}>{g.totals.calls} 次调用</td>
-                            <td style={{ ...CELL, fontSize: 11.5, color: '#64748b' }} title={g.models.join(', ')}>
+                            <td style={{ ...CELL, fontSize: 11, color: '#64748b' }} title={g.models.join(', ')}>
                               {g.models.length === 0 ? '—' : g.models.length === 1 ? g.models[0] : `${g.models.length} 个模型`}
                             </td>
                             <td style={{ ...CELL, textAlign: 'right', fontWeight: 700, color: '#173b61' }}><Cost value={g.totals.costUsd} unpriced={g.totals.unpricedCalls} /></td>
@@ -287,14 +287,14 @@ export default function AiUsagePage() {
                           {isOpen && g.calls.map(r => (
                             <tr key={r.id} className="system-list-row" style={{ background: '#fbfdff' }}>
                               <td style={{ ...CELL, padding: '6px 10px 6px 30px', color: '#cbd5e1', fontSize: 11 }}>↳</td>
-                              <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', color: '#64748b', fontSize: 11.5 }}>{sgt(r.created_at)}</td>
+                              <td style={{ padding: '6px 10px', whiteSpace: 'nowrap', color: '#64748b', fontSize: 11 }}>{sgt(r.created_at)}</td>
                               <td style={{ padding: '6px 10px', fontSize: 12 }}>
                                 {FEATURE_LABEL[r.feature] ?? r.feature}
                                 <span style={{ marginLeft: 6, fontSize: 10, color: r.trigger === 'auto' ? '#b45309' : '#64748b', background: r.trigger === 'auto' ? '#fffbeb' : '#f1f5f9', borderRadius: 999, padding: '1px 6px' }}>{TRIGGER_LABEL[r.trigger] ?? r.trigger}{r.step ? ` · ${r.step}` : ''}</span>
                                 {g.kind === 'system'
                                   // The system's reminders are counted under it, so say whose page each one was for.
-                                  ? (r.subject_email ?? r.actor_email) && <span style={{ color: '#94a3b8', fontSize: 10.5 }}> · 给 {nameOf(r.subject_email ?? r.actor_email)}</span>
-                                  : r.subject_email && <span style={{ color: '#94a3b8', fontSize: 10.5 }}> · 代 {nameOf(r.subject_email)}</span>}
+                                  ? (r.subject_email ?? r.actor_email) && <span style={{ color: '#94a3b8', fontSize: 10 }}> · 给 {nameOf(r.subject_email ?? r.actor_email)}</span>
+                                  : r.subject_email && <span style={{ color: '#94a3b8', fontSize: 10 }}> · 代 {nameOf(r.subject_email)}</span>}
                               </td>
                               <td style={{ padding: '6px 10px', fontSize: 11, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.model ?? '—'}</td>
                               <td style={{ padding: '6px 10px', textAlign: 'right', fontSize: 12, fontWeight: 700, color: '#173b61' }}><Cost value={r.cost_usd} /></td>

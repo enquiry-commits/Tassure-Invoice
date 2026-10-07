@@ -91,7 +91,7 @@ export function CommsSection({ drafts: initialDrafts }: { drafts: Company360['co
         );
       })}
       {deleteError && (
-        <div style={{ padding: '8px 16px', color: '#b91c1c', fontSize: 11.5 }}>{deleteError}</div>
+        <div style={{ padding: '8px 16px', color: '#b91c1c', fontSize: 11 }}>{deleteError}</div>
       )}
       {pendingDelete && (
         <ConfirmDeleteModal

@@ -324,7 +324,7 @@ function ColumnFilterMenu({ field, label, rows, selected, onApply }: {
               <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 2px', fontSize: 11, cursor: 'pointer' }}>
                 <input type="checkbox" checked={isChecked(v)} onChange={() => toggle(v)} style={{ width: 12, height: 12, cursor: 'pointer', flexShrink: 0 }} />
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v}>{v}</span>
-                <span style={{ color: '#94a3b8', fontSize: 9.5, flexShrink: 0 }}>{valueCount}</span>
+                <span style={{ color: '#94a3b8', fontSize: 9, flexShrink: 0 }}>{valueCount}</span>
               </label>
             ))}
           </div>
@@ -590,7 +590,7 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
         style={{ width: '100%', minHeight: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
           padding: '4px 2px', borderRadius: 7, background: '#fff7f7', border: '1px solid #fecaca', cursor: 'text', boxShadow: '0 1px 2px rgba(220,38,38,.04)' }}>
         <span style={{ fontSize: 9, lineHeight: 1, fontWeight: 700, color: '#7f1d1d', whiteSpace: 'nowrap' }}>FYE {manualMonth ? monthNames[manualMonth - 1] : '—'}</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 8, lineHeight: 1, fontWeight: 700, color: '#dc2626', whiteSpace: 'nowrap' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 9, lineHeight: 1, fontWeight: 700, color: '#dc2626', whiteSpace: 'nowrap' }}>
           <AlertTriangle size={8} />TW {teamworkMonth ? monthNames[teamworkMonth - 1] : String(compactFyeMismatch).slice(0, 3).toUpperCase()}
         </span>
         {statusDot}
@@ -975,7 +975,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{row.company_name}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{row.company_name}</div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
               <button onClick={() => { const next = !showHistory; setShowHistory(next); if (next) void loadHistory(); }} title="Change history"
@@ -991,14 +991,14 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {row.roc_no && <span style={{ fontSize: 11, color: '#fff', background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4 }}>{row.roc_no}</span>}
             {row.status && (
-              <span style={{ background: colors?.bg ?? 'rgba(255,255,255,0.12)', color: colors?.color ?? '#fff', border: `1px solid ${colors?.color ?? '#fff'}40`, borderRadius: 999, padding: '5px 10px', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+              <span style={{ background: colors?.bg ?? 'rgba(255,255,255,0.12)', color: colors?.color ?? '#fff', border: `1px solid ${colors?.color ?? '#fff'}40`, borderRadius: 999, padding: '5px 10px', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: colors?.color ?? '#fff', flexShrink: 0 }} />
                 {row.status}
               </span>
             )}
             {row.renamed_from && (
               <span title={row.renamed_to ? `Renamed from "${row.renamed_from}" to "${row.renamed_to}"` : undefined}
-                style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 999, padding: '5px 10px', fontSize: 10.5, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+                style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 999, padding: '5px 10px', fontSize: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
                 <RotateCcw size={10} />Formerly &quot;{row.renamed_from}&quot;
               </span>
             )}
@@ -1647,7 +1647,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Missing from Active Client</span>
-                <span style={{ borderRadius: 999, background: '#fff', border: '1px solid #fde68a', color: '#92400e', padding: '3px 9px', fontSize: 10.5, fontWeight: 700 }}>
+                <span style={{ borderRadius: 999, background: '#fff', border: '1px solid #fde68a', color: '#92400e', padding: '3px 9px', fontSize: 10, fontWeight: 700 }}>
                   {missingCssClients.length} TeamWork CSS Client{missingCssClients.length === 1 ? '' : 's'}
                 </span>
               </div>
@@ -1655,17 +1655,17 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             </div>
           </div>
           {missingCssClients.length === 0 ? (
-            <div style={{ background: '#fff', borderTop: '1px solid #fde68a', padding: '14px 16px', fontSize: 11.5, color: '#94a3b8' }}>None — every TeamWork CSS Client has a row here.</div>
+            <div style={{ background: '#fff', borderTop: '1px solid #fde68a', padding: '14px 16px', fontSize: 11, color: '#94a3b8' }}>None — every TeamWork CSS Client has a row here.</div>
           ) : (
             <div style={{ background: '#fff', borderTop: '1px solid #fde68a', maxHeight: 220, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
               {missingCssClients.map(c => (
-                <div key={c.registration_no ?? c.company_name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 16px', borderBottom: '1px solid #fef3c7', fontSize: 11.5 }}>
+                <div key={c.registration_no ?? c.company_name} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 16px', borderBottom: '1px solid #fef3c7', fontSize: 11 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <span className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{c.company_name}</span>
                     <span className="company-registration-text">{c.registration_no ?? '—'}</span>
                   </div>
                   <button onClick={() => startAddFrom(c)} title="Add to Master List — pre-fills Company Name, UEN/ROC and Code"
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '5px 10px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#b45309', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, padding: '5px 10px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#b45309', fontSize: 10, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                     <Plus size={11} />Add to Master List
                   </button>
                 </div>
@@ -1684,7 +1684,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Inactive in TeamWork</span>
-                <span style={{ borderRadius: 999, background: '#fff', border: '1px solid #fde68a', color: '#92400e', padding: '3px 9px', fontSize: 10.5, fontWeight: 700 }}>
+                <span style={{ borderRadius: 999, background: '#fff', border: '1px solid #fde68a', color: '#92400e', padding: '3px 9px', fontSize: 10, fontWeight: 700 }}>
                   {inactiveCssClients.length} row{inactiveCssClients.length === 1 ? '' : 's'}
                 </span>
               </div>
@@ -1692,11 +1692,11 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             </div>
           </div>
           {inactiveCssClients.length === 0 ? (
-            <div style={{ background: '#fff', borderTop: '1px solid #fde68a', padding: '14px 16px', fontSize: 11.5, color: '#94a3b8' }}>None — every matched CSS Client here is still active in TeamWork.</div>
+            <div style={{ background: '#fff', borderTop: '1px solid #fde68a', padding: '14px 16px', fontSize: 11, color: '#94a3b8' }}>None — every matched CSS Client here is still active in TeamWork.</div>
           ) : (
             <div style={{ background: '#fff', borderTop: '1px solid #fde68a', maxHeight: 220, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))' }}>
               {inactiveCssClients.map(r => (
-                <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 16px', borderBottom: '1px solid #fef3c7', fontSize: 11.5 }}>
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '9px 16px', borderBottom: '1px solid #fef3c7', fontSize: 11 }}>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <span className="company-name-text" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{r.company_name}</span>
                     <span className="company-registration-text">{r.roc_no ?? '—'}</span>
@@ -1758,12 +1758,12 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         <div onClick={cancelAdd} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
             <div style={{ background: accentColor, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Add Manual Entry</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Add Manual Entry</div>
               <button onClick={cancelAdd} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
               {isNameChange && (
-                <div style={{ fontSize: 11.5, color: '#64748b', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 7, padding: '7px 10px', marginBottom: 10 }}>
+                <div style={{ fontSize: 11, color: '#64748b', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 7, padding: '7px 10px', marginBottom: 10 }}>
                   Enter the UEN first — the company&apos;s current name and Code fill in automatically. Then type the new name it&apos;s changing to.
                 </div>
               )}
@@ -1900,8 +1900,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
                   )}
                   {!isMobile && (
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <span title="Nominee Director" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.nd_active} />ND</span>
-                      <span title="Secretary" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9.5, color: '#64748b' }}><CheckSquare checked={!!r.secretary_active} />SEC</span>
+                      <span title="Nominee Director" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, color: '#64748b' }}><CheckSquare checked={!!r.nd_active} />ND</span>
+                      <span title="Secretary" style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, color: '#64748b' }}><CheckSquare checked={!!r.secretary_active} />SEC</span>
                     </div>
                   )}
                   {!isMobile && <div style={{ fontSize: 11, color: '#64748b' }}>{r.fye ?? '—'}</div>}

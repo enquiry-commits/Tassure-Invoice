@@ -145,13 +145,13 @@ export default function OutlookHelperReadiness({ context, onStatusChange, style 
         .outlook-helper-readiness{display:flex;align-items:center;gap:12px;padding:13px 15px;background:#fff;border:1px solid #dfe7ef;border-radius:12px;box-shadow:0 4px 16px rgba(24,50,79,.025)}
         .outlook-helper-readiness__icon{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex:none;background:#eef3f8;color:#526b85}
         .outlook-helper-readiness__copy{min-width:0;flex:1}
-        .outlook-helper-readiness__title-row{display:flex;align-items:center;gap:8px;color:#18324f;font-size:12.5px}
-        .outlook-helper-readiness__status{padding:2px 7px;border-radius:999px;background:#f1f5f9;color:#60758c;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.02em}
+        .outlook-helper-readiness__title-row{display:flex;align-items:center;gap:8px;color:#18324f;font-size:12px}
+        .outlook-helper-readiness__status{padding:2px 7px;border-radius:999px;background:#f1f5f9;color:#60758c;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.02em}
         .outlook-helper-readiness__description{margin-top:3px;color:#718399;font-size:11px;line-height:1.45}
         .outlook-helper-readiness__steps{display:flex;align-items:center;gap:14px;margin-top:7px;color:#526b85;font-size:10px;font-weight:700}
         .outlook-helper-readiness__steps b{display:inline-flex;width:16px;height:16px;margin-right:3px;align-items:center;justify-content:center;border-radius:50%;background:#eef3f8;color:#173b63;font-size:9px}
         .outlook-helper-readiness__actions{display:flex;align-items:center;gap:7px;flex:none}
-        .outlook-helper-download,.outlook-helper-recheck{height:34px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 11px;font-size:11px;font-weight:800;text-decoration:none;cursor:pointer}
+        .outlook-helper-download,.outlook-helper-recheck{height:34px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 11px;font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
         .outlook-helper-download{border:0;background:#173b63;color:#fff}
         .outlook-helper-recheck{border:1px solid #d9e2ec;background:#fff;color:#526b85}
         .outlook-helper-recheck:disabled{cursor:wait;opacity:.65}
@@ -160,7 +160,7 @@ export default function OutlookHelperReadiness({ context, onStatusChange, style 
         .outlook-helper-modal-overlay{position:fixed;inset:0;background:rgba(15,26,42,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
         .outlook-helper-modal{background:#fff;border-radius:14px;box-shadow:0 20px 50px rgba(15,26,42,.25);padding:22px;max-width:380px;width:100%;text-align:center}
         .outlook-helper-modal__icon{width:42px;height:42px;border-radius:50%;background:#fff8e8;color:#9a6700;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
-        .outlook-helper-modal strong{display:block;color:#18324f;font-size:14.5px;margin-bottom:8px}
+        .outlook-helper-modal strong{display:block;color:#18324f;font-size:14px;margin-bottom:8px}
         .outlook-helper-modal p{color:#5b7089;font-size:12px;line-height:1.55;margin:0 0 16px}
         .outlook-helper-modal__actions{display:flex;align-items:center;justify-content:center;gap:8px}
         @media(max-width:900px){

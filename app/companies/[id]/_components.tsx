@@ -33,7 +33,7 @@ export function StatusBadge({ status }: { status: string | null }) {
         ? { color: '#b45309', background: '#fff7ed', border: '#fed7aa' }
         : { color: '#64748b', background: '#f8fafc', border: '#e2e8f0' };
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, background: '#fff', color: palette.color, border: '1px solid #dbe3ec', fontSize: 10.5, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, background: '#fff', color: palette.color, border: '1px solid #dbe3ec', fontSize: 10, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap' }}>
       <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: palette.color, flexShrink: 0 }} />
       {status || 'Pending Sync'}
     </span>
@@ -50,7 +50,7 @@ export function StatusBadge({ status }: { status: string | null }) {
 // onto the status text with no separation. Only a genuinely uncertain match
 // (score < 100) is worth a staff member's attention.
 function MatchBadge({ via }: { via: 'company_id' | 'uen' | 'fuzzy' | number }) {
-  const pillStyle = { display: 'inline-flex', alignItems: 'center', marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '1px 6px', whiteSpace: 'nowrap' as const };
+  const pillStyle = { display: 'inline-flex', alignItems: 'center', marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '1px 6px', whiteSpace: 'nowrap' as const };
   if (typeof via === 'number') {
     if (via >= 100) return null;
     return <span title={`Matched by company name only, not an exact match — ${via}/100 confidence. Verify this is really the right company before relying on it.`} style={pillStyle}>{via}% match</span>;
@@ -62,7 +62,7 @@ function MatchBadge({ via }: { via: 'company_id' | 'uen' | 'fuzzy' | number }) {
 export function MatchQualityNote({ warnings }: { warnings: string[] }) {
   if (!warnings.length) return null;
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 14px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', marginBottom: 16, fontSize: 11.5, color: '#92400e' }}>
+    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 14px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', marginBottom: 16, fontSize: 11, color: '#92400e' }}>
       <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
       <ul style={{ margin: 0, paddingLeft: 16 }}>
         {warnings.map((w, i) => <li key={i}>{w}</li>)}
@@ -110,7 +110,7 @@ export function ArAgmSection({ cycles }: { cycles: Company360['arReminderCycles'
           <div key={c.id as number} className="system-list-row" style={{ display: 'grid', gridTemplateColumns: GRID_6_COLS, gap: 16, padding: '10px 16px', alignItems: 'center' }}>
             <div>
               {fmtDate(c.due_date as string)}
-              {overdue && <span style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: '#dc2626' }}>{Math.abs(c.daysUntilDue as number)}d overdue</span>}
+              {overdue && <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, color: '#dc2626' }}>{Math.abs(c.daysUntilDue as number)}d overdue</span>}
             </div>
             <div>{filed ? fmtDate(c.filling_date as string) : <span style={{ color: '#cbd5e1' }}>—</span>}</div>
             <div style={{ fontSize: 11 }}>{formatStaffName(c.pic as string) || '—'}</div>
@@ -234,7 +234,7 @@ export function NdSection({ nd }: { nd: Company360['nomineeDirector'] }) {
           <div>{fmtDate(a.appointmentDate)}</div>
           <div>{a.cessationDate ? fmtDate(a.cessationDate) : '—'}</div>
           <div>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: a.isActive ? '#15803d' : '#94a3b8' }}>{a.isActive ? 'Active' : 'Ceased'}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: a.isActive ? '#15803d' : '#94a3b8' }}>{a.isActive ? 'Active' : 'Ceased'}</span>
           </div>
         </div>
       ))}

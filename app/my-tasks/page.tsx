@@ -270,7 +270,7 @@ function RecentActivityPanel({ items, subjectName }: { items: RecentActivityItem
           <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '9px 16px', borderBottom: i < items.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
             <span style={{ fontSize: 11, color: '#94a3b8', width: 108, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{formatActivityAt(item.at)}</span>
             <span style={{ fontSize: 11, fontWeight: 700, color: ACTIVITY_KIND_COLOR[item.kind], width: 168, flexShrink: 0 }}>{item.label}</span>
-            <span style={{ fontSize: 12.5, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.detail}</span>
+            <span style={{ fontSize: 12, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.detail}</span>
           </div>
         ))}
       </div>
@@ -301,7 +301,7 @@ function ConversationRow({ conversation, active, onOpen, onTogglePin, onDelete }
       }}
     >
       <MessageSquare size={13} color={active ? '#1e3a5f' : '#94a3b8'} style={{ flexShrink: 0 }} />
-      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: active ? '#1e3a5f' : '#334155', fontWeight: active ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: active ? '#1e3a5f' : '#334155', fontWeight: active ? 700 : 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {conversation.title}
       </span>
       {(hover || conversation.pinned) && (
@@ -633,7 +633,7 @@ export default function MyTasksPage() {
             value={viewAsEmail}
             onChange={e => setViewAsEmail(e.target.value)}
             title="Management-only: act as another staff member across both Tasks and chat — new chats and messages you send are saved to THEIR account, not yours"
-            style={{ marginLeft: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 12.5, color: '#475569', background: '#fff' }}
+            style={{ marginLeft: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#475569', background: '#fff' }}
           >
             <option value="">View as: Me ({user?.name})</option>
             {data.viewableAccounts.filter(a => a.email !== user?.email).map(a => (
@@ -674,7 +674,7 @@ export default function MyTasksPage() {
           <div style={{ padding: 10, borderBottom: '1px solid #f1f5f9' }}>
             <button
               onClick={startNewChat}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 7, padding: '8px 10px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', color: '#1e3a5f', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
             >
               <Plus size={14} />New Chat
             </button>
@@ -684,7 +684,7 @@ export default function MyTasksPage() {
             style={{
               display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px', border: 'none', borderBottom: '1px solid #f1f5f9',
               background: activeView === 'tasks' ? '#eef2f7' : '#fff', color: activeView === 'tasks' ? '#1e3a5f' : '#334155',
-              fontSize: 12.5, fontWeight: activeView === 'tasks' ? 700 : 600, cursor: 'pointer', textAlign: 'left',
+              fontSize: 12, fontWeight: activeView === 'tasks' ? 700 : 600, cursor: 'pointer', textAlign: 'left',
             }}
           >
             <ListChecks size={14} />
@@ -699,7 +699,7 @@ export default function MyTasksPage() {
             style={{
               display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px', border: 'none', borderBottom: '1px solid #f1f5f9',
               background: activeView === 'activity' ? '#eef2f7' : '#fff', color: activeView === 'activity' ? '#1e3a5f' : '#334155',
-              fontSize: 12.5, fontWeight: activeView === 'activity' ? 700 : 600, cursor: 'pointer', textAlign: 'left',
+              fontSize: 12, fontWeight: activeView === 'activity' ? 700 : 600, cursor: 'pointer', textAlign: 'left',
             }}
           >
             <Activity size={14} />
@@ -785,8 +785,8 @@ export default function MyTasksPage() {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/my-tasks-robot.gif" alt="" width={160} height={96} style={{ display: 'block', objectFit: 'contain' }} />
                   </picture>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
-                  <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20 }}>Ready when you are.</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 20 }}>Ready when you are.</div>
                   <div style={{ width: '100%', maxWidth: 560 }}>
                     <AttachmentChips attachments={pendingAttachments} onRemove={removeAttachment} onView={handleViewAttachment} />
                     {attachError && <div style={{ fontSize: 11, color: '#b91c1c', marginBottom: 6 }}>{attachError}</div>}
@@ -837,7 +837,7 @@ export default function MyTasksPage() {
               ) : (
                 <>
                   <div ref={chatListRef} style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 10, background: '#f8fafc' }}>
-                    {chatLoadingThread && <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12.5, padding: 20 }}>Loading…</div>}
+                    {chatLoadingThread && <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: 12, padding: 20 }}>Loading…</div>}
                     {chatMessages.map((message, index) => (
                       <div
                         key={index}
@@ -971,7 +971,7 @@ export default function MyTasksPage() {
           ) : (
             <div style={{ flex: 1, overflowY: 'auto' }}>
               {data && <DailyBriefBanner brief={data.brief} />}
-              {data && <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 20 }}>{data.scopeNote}</div>}
+              {data && <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 20 }}>{data.scopeNote}</div>}
 
               {loading && !data ? (
                 <div style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>Loading…</div>
@@ -1008,7 +1008,7 @@ export default function MyTasksPage() {
                         <>
                           <div>{data?.viewingAs ? `${data.viewingAs.name} isn't` : "Your account isn't"} assigned as PIC/owner on any AR Reminder, Late Filing, SOA collection or Trademark renewal — that's expected for a management/non-caseworker account, not a sign anything is broken.</div>
                           {!data?.viewingAs && (
-                            <div style={{ marginTop: 8, fontSize: 12.5 }}>
+                            <div style={{ marginTop: 8, fontSize: 12 }}>
                               {!!data?.viewableAccounts?.length && 'Use "View as" above to check a specific team member, or '}
                               see the <button onClick={() => setActiveView('activity')} style={{ border: 'none', background: 'none', color: '#0f766e', fontWeight: 700, cursor: 'pointer', padding: 0, font: 'inherit' }}>Activity</button> tab for what's actually happening across the system.
                             </div>

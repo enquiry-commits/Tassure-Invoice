@@ -41,7 +41,7 @@ function StatusPill({ row }: { row: QuotationRow }) {
       : { border: '#fed7aa', color: '#c2410c' };
   const label = row.txnStatus ?? 'Unknown';
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, background: '#fff', border: `1px solid ${tone.border}`, color: tone.color, fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, background: '#fff', border: `1px solid ${tone.border}`, color: tone.color, fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap' }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: tone.color }} />
       {label}{row.daysOpen !== null ? ` · ${row.daysOpen}d` : ''}
     </span>
@@ -65,7 +65,7 @@ function creatorTitle(row: QuotationRow): string {
 function CreatedBy({ row }: { row: QuotationRow }) {
   const c = row.createdBy;
   if (!c) return <span title={NOT_SET_HINT} style={{ fontSize: 11, fontWeight: 700, color: '#b45309' }}>Not set</span>;
-  return <span title={creatorTitle(row)} style={{ fontSize: 11.5, fontWeight: 600, color: '#334155' }}>{c.name}</span>;
+  return <span title={creatorTitle(row)} style={{ fontSize: 11, fontWeight: 600, color: '#334155' }}>{c.name}</span>;
 }
 
 // One traced invoice: ● = QuickBooks itself recorded the conversion,
@@ -112,14 +112,14 @@ function TraceSummary({ row }: { row: QuotationRow }) {
         {shown.map(inv => <TracedInvoice key={`${inv.source}|${inv.qbInvoiceId}`} inv={inv} currency={row.currency} />)}
       </div>
       {t.invoices.length > shown.length && (
-        <div style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 3, paddingLeft: 16 }}>+{t.invoices.length - shown.length} more</div>
+        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 3, paddingLeft: 16 }}>+{t.invoices.length - shown.length} more</div>
       )}
       {t.unresolvedLinkedInvoiceIds.map(id => (
         <div key={id} title="QuickBooks says this quotation was converted to this invoice, but it is not in the synced invoice data (deleted, older than the sync window, or not synced yet)"
-          style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 3 }}>● {row.source} invoice id {id} (not in synced data)</div>
+          style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>● {row.source} invoice id {id} (not in synced data)</div>
       ))}
       {showReconcile && comparable && t.invoices.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: TRACE_GRID, alignItems: 'center', columnGap: 6, marginTop: 5, paddingTop: 5, borderTop: '1px dashed #e2e8f0', fontSize: 10.5 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: TRACE_GRID, alignItems: 'center', columnGap: 6, marginTop: 5, paddingTop: 5, borderTop: '1px dashed #e2e8f0', fontSize: 10 }}>
           <span />
           <span style={{ color: '#94a3b8', fontWeight: 600 }}>
             {t.sumMatchesTotal
@@ -145,7 +145,7 @@ function Detail({ row, graceDays, onClose }: { row: QuotationRowView; graceDays:
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 820, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: '4px solid #397f78', padding: '16px 20px 14px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{row.customerName || '(no customer)'}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{row.customerName || '(no customer)'}</div>
             <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 11, color: '#fff' }}>
@@ -164,8 +164,8 @@ function Detail({ row, graceDays, onClose }: { row: QuotationRowView; graceDays:
             </div>
           )}
           <div style={sectionTitle}>Invoices issued for this quotation</div>
-          {t.status === 'not_applicable' && <div style={{ fontSize: 12.5, color: '#64748b' }}>Not closed yet — invoices are traced once the quotation is Closed.</div>}
-          {t.status === 'none' && <div style={{ fontSize: 12.5, color: '#64748b' }}>Closed, but no invoice was found in TAB / TAC / TAO for this customer name in the window below. A quotation can be closed without being invoiced, or the customer may be spelled differently on the invoice.</div>}
+          {t.status === 'not_applicable' && <div style={{ fontSize: 12, color: '#64748b' }}>Not closed yet — invoices are traced once the quotation is Closed.</div>}
+          {t.status === 'none' && <div style={{ fontSize: 12, color: '#64748b' }}>Closed, but no invoice was found in TAB / TAC / TAO for this customer name in the window below. A quotation can be closed without being invoiced, or the customer may be spelled differently on the invoice.</div>}
           {t.invoices.length > 0 && (
             <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
               {t.invoices.map(inv => (
@@ -173,7 +173,7 @@ function Detail({ row, graceDays, onClose }: { row: QuotationRowView; graceDays:
                   <span title={inv.via === 'quickbooks_link' ? 'Confirmed by QuickBooks' : 'Matched by customer name'} style={{ color: inv.via === 'quickbooks_link' ? '#15803d' : '#94a3b8', fontSize: 11 }}>{inv.via === 'quickbooks_link' ? '●' : '○'}</span>
                   <span><BillingInvoiceReference company={inv.source} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} muted={inv.status === 'Voided'} /></span>
                   <span style={{ color: '#64748b' }}>{fmtDate(inv.txnDate)}</span>
-                  <span style={{ fontWeight: inv.amountMatches ? 800 : 600, color: inv.amountMatches ? '#15803d' : '#334155' }}>{money(inv.totalAmt, row.currency)}{inv.amountMatches ? ' ✓' : ''}</span>
+                  <span style={{ fontWeight: inv.amountMatches ? 700 : 600, color: inv.amountMatches ? '#15803d' : '#334155' }}>{money(inv.totalAmt, row.currency)}{inv.amountMatches ? ' ✓' : ''}</span>
                   <span style={{ color: inv.status === 'Paid' ? '#15803d' : inv.status === 'Voided' ? '#b91c1c' : '#c2410c', fontWeight: 700 }}>{inv.status === 'Open' ? 'Unpaid' : inv.status}</span>
                   <span style={{ color: '#94a3b8', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${inv.via === 'quickbooks_link' ? 'Confirmed by QuickBooks' : 'Matched by name'} · invoice customer: ${inv.customerName}`}>
                     {inv.via === 'quickbooks_link' ? 'QuickBooks link' : 'Matched by name'} · {inv.customerName}
@@ -183,12 +183,12 @@ function Detail({ row, graceDays, onClose }: { row: QuotationRowView; graceDays:
             </div>
           )}
           {t.unresolvedLinkedInvoiceIds.length > 0 && (
-            <div style={{ marginTop: 8, fontSize: 11.5, color: '#94a3b8' }}>
+            <div style={{ marginTop: 8, fontSize: 11, color: '#94a3b8' }}>
               QuickBooks also links this quotation to {row.source} invoice id {t.unresolvedLinkedInvoiceIds.join(', ')}, which is not in the synced invoice data (deleted, older than the sync window, or not synced yet).
             </div>
           )}
           {t.invoices.length > 0 && (
-            <div style={{ marginTop: 8, fontSize: 11.5, color: t.sumMatchesTotal ? '#15803d' : '#64748b', fontWeight: t.sumMatchesTotal ? 700 : 500 }}>
+            <div style={{ marginTop: 8, fontSize: 11, color: t.sumMatchesTotal ? '#15803d' : '#64748b', fontWeight: t.sumMatchesTotal ? 700 : 500 }}>
               Traced total {money(t.tracedTotal, row.currency)} · quotation {money(row.totalAmt, row.currency)}{t.sumMatchesTotal ? ' — the invoices add up to the quotation exactly ✓' : ''}
             </div>
           )}
@@ -200,7 +200,7 @@ function Detail({ row, graceDays, onClose }: { row: QuotationRowView; graceDays:
 
           <div style={sectionTitle}>Quotation lines</div>
           {row.lines.length === 0
-            ? <div style={{ fontSize: 12.5, color: '#94a3b8' }}>No line detail.</div>
+            ? <div style={{ fontSize: 12, color: '#94a3b8' }}>No line detail.</div>
             : (
               <div style={{ border: '1px solid #e2e8f0', borderRadius: 10, overflow: 'hidden' }}>
                 {row.lines.map((l, i) => (
@@ -218,7 +218,7 @@ function Detail({ row, graceDays, onClose }: { row: QuotationRowView; graceDays:
               </div>
             )}
 
-          <div style={{ marginTop: 14, display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 11.5, color: '#64748b' }}>
+          <div style={{ marginTop: 14, display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 11, color: '#64748b' }}>
             <span title={creatorTitle(row)}>Created by: {row.createdBy
               ? <strong style={{ color: '#334155' }}>{row.createdBy.name}</strong>
               : <strong style={{ color: '#b45309' }}>Not set</strong>}
@@ -307,13 +307,13 @@ function NewQuotationModal({ onClose, onCreated }: { onClose: () => void; onCrea
     }
   };
 
-  const inputStyle = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, boxSizing: 'border-box' as const, width: '100%' };
+  const inputStyle = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, boxSizing: 'border-box' as const, width: '100%' };
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>New Quotation</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>New Quotation</div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
         </div>
 
@@ -322,7 +322,7 @@ function NewQuotationModal({ onClose, onCreated }: { onClose: () => void; onCrea
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#15803d', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>
               <CheckCircle2 size={18} />Quotation {result.docNumber} created in QuickBooks {book}
             </div>
-            <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 18 }}>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 18 }}>
               S${result.totalAmt.toLocaleString()} · created as a draft (Pending) — review and send it from QuickBooks.
             </div>
             <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0f766e', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Done</button>
@@ -330,7 +330,7 @@ function NewQuotationModal({ onClose, onCreated }: { onClose: () => void; onCrea
         ) : (
           <div style={{ padding: '16px 20px 20px', display: 'grid', gap: 12 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 10, alignItems: 'center' }}>
-              <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Book</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Book</label>
               <div style={{ display: 'flex', gap: 6 }}>
                 {(['TAB', 'TAC', 'TAO'] as const).map(b => (
                   <button key={b} onClick={() => setBook(b)}
@@ -340,19 +340,19 @@ function NewQuotationModal({ onClose, onCreated }: { onClose: () => void; onCrea
                 ))}
               </div>
 
-              <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Customer</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Customer</label>
               <input value={customerName} onChange={e => { setCustomerName(e.target.value); setCustomerNotFound(false); }}
                 placeholder="Exact QuickBooks customer name" style={inputStyle} />
 
-              <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Date</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Date</label>
               <input type="date" value={txnDate} onChange={e => setTxnDate(e.target.value)} style={{ ...inputStyle, width: 160 }} />
 
-              <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Expires</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Expires</label>
               <input type="date" value={expirationDate} onChange={e => setExpirationDate(e.target.value)} style={{ ...inputStyle, width: 160 }} />
             </div>
 
             <div>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', marginBottom: 6 }}>Lines</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6 }}>Lines</div>
               {lines.length > 0 && (
                 <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: 8, overflow: 'hidden' }}>
                   {lines.map((l, i) => (
@@ -383,7 +383,7 @@ function NewQuotationModal({ onClose, onCreated }: { onClose: () => void; onCrea
             </div>
 
             <div>
-              <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 4 }}>Note (optional)</label>
+              <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 4 }}>Note (optional)</label>
               <textarea value={privateNote} onChange={e => setPrivateNote(e.target.value)} rows={2} style={{ ...inputStyle, fontFamily: 'inherit', resize: 'vertical' }} />
             </div>
 
@@ -393,7 +393,7 @@ function NewQuotationModal({ onClose, onCreated }: { onClose: () => void; onCrea
                 {customerNotFound && (
                   <div style={{ marginTop: 8 }}>
                     <button onClick={createCustomerAndRetry} disabled={creatingCustomer}
-                      style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: creatingCustomer ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: creatingCustomer ? 'default' : 'pointer' }}>
+                      style={{ padding: '6px 12px', borderRadius: 7, border: 'none', background: creatingCustomer ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 11, fontWeight: 700, cursor: creatingCustomer ? 'default' : 'pointer' }}>
                       {creatingCustomer ? 'Creating…' : `Create "${customerName.trim()}" in QuickBooks ${book}`}
                     </button>
                   </div>
@@ -599,7 +599,7 @@ export default function QuotationPage() {
           <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
             <span style={{ fontSize: 11, color: '#94a3b8', marginRight: 2 }}>Created By</span>
             <select value={creatorFilter} onChange={e => setCreatorFilter(e.target.value)} aria-label="Filter by who created the quotation"
-              style={{ border: `1px solid ${creatorFilter === 'all' ? '#e2e8f0' : '#1d3a5c'}`, borderRadius: 6, padding: '4px 8px', fontSize: 11.5, fontWeight: 600, color: '#334155', background: '#fff', cursor: 'pointer' }}>
+              style={{ border: `1px solid ${creatorFilter === 'all' ? '#e2e8f0' : '#1d3a5c'}`, borderRadius: 6, padding: '4px 8px', fontSize: 11, fontWeight: 600, color: '#334155', background: '#fff', cursor: 'pointer' }}>
               <option value="all">All</option>
               {creators.names.map(([name, n]) => <option key={name} value={name}>{name} ({n})</option>)}
               {creators.notSet > 0 && <option value={NOT_SET}>Not set ({creators.notSet})</option>}
@@ -618,7 +618,7 @@ export default function QuotationPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {data?.books.map(b => (
               <span key={b.book} title={b.error ?? `${b.book}: ${b.count} quotation${b.count === 1 ? '' : 's'} read from QuickBooks`}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 999, border: '1px solid #e2e8f0', background: '#fff', color: b.ok ? '#166534' : '#991b1b' }}>
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, border: '1px solid #e2e8f0', background: '#fff', color: b.ok ? '#166534' : '#991b1b' }}>
                 {b.ok ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}{b.book}{b.ok ? ` ${b.count}` : ' failed'}
               </span>
             ))}
@@ -633,12 +633,12 @@ export default function QuotationPage() {
           </div>
         </div>
         {data && data.books.some(b => !b.ok) && (
-          <div style={{ padding: '8px 16px', fontSize: 11.5, color: 'var(--status-danger)', fontWeight: 600, borderTop: '1px solid #fee2e2', background: '#fef2f2', lineHeight: 1.6 }}>
+          <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--status-danger)', fontWeight: 600, borderTop: '1px solid #fee2e2', background: '#fef2f2', lineHeight: 1.6 }}>
             {data.books.filter(b => !b.ok).map(b => <div key={b.book}>{b.error}</div>)}
             <div style={{ fontWeight: 500, color: '#991b1b' }}>Quotations from the failed book(s) are missing below — this is not the same as having none.</div>
           </div>
         )}
-        <div style={{ padding: '6px 16px', fontSize: 10.5, color: '#94a3b8', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ padding: '6px 16px', fontSize: 10, color: '#94a3b8', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
           <span><span style={{ color: '#15803d' }}>●</span> confirmed by QuickBooks (same book)</span>
           <span>○ matched by customer name — check the amount</span>
           <span><span style={{ color: '#15803d', fontWeight: 700 }}>✓</span> amount equals the quotation</span>
@@ -671,7 +671,7 @@ export default function QuotationPage() {
                     </div>
                   </div>
                   <div style={{ padding: '0 6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}><CreatedBy row={r} /></div>
-                  <div style={{ textAlign: 'center', fontSize: 11.5, color: '#374151', fontWeight: 600 }}>{money(r.totalAmt, r.currency)}</div>
+                  <div style={{ textAlign: 'center', fontSize: 11, color: '#374151', fontWeight: 600 }}>{money(r.totalAmt, r.currency)}</div>
                   <div style={{ display: 'flex', justifyContent: 'center' }}><span style={chipStyle}>{r.source}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'center' }}><StatusPill row={r} /></div>
                   {/* The chips are buttons that open a PDF — clicking one must not also toggle this row. */}
@@ -680,9 +680,9 @@ export default function QuotationPage() {
                   <div style={{ padding: '0 6px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                     {r.review.completed ? (
                       <div style={{ display: 'grid', gap: 4, justifyItems: 'center' }}>
-                        <span style={{ fontSize: 10.5, color: '#475569', lineHeight: 1.4 }}>{r.review.completedAt ? fmtDate(r.review.completedAt.slice(0, 10)) : ''}<br />{r.review.completedBy ? r.review.completedBy.split('@')[0] : ''}</span>
+                        <span style={{ fontSize: 10, color: '#475569', lineHeight: 1.4 }}>{r.review.completedAt ? fmtDate(r.review.completedAt.slice(0, 10)) : ''}<br />{r.review.completedBy ? r.review.completedBy.split('@')[0] : ''}</span>
                         <button onClick={() => void reopen(r)} disabled={busyKey === key || !data?.reviewsReady} title="Put it back in the main list and match invoices again"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}>
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
                           {busyKey === key ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <RotateCcw size={11} />}Reopen
                         </button>
                       </div>

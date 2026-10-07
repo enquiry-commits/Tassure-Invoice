@@ -33,7 +33,7 @@ export default function AddressServiceTable({ companies }: { companies: Row[] })
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--list-border)' }}>
         <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>Location:</span>
         <select value={locationFilter} onChange={e => setLocationFilter(e.target.value)}
-          style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12.5, fontWeight: locationFilter ? 700 : 400, background: '#fff', color: locationFilter ? '#1e3a5f' : '#334155', cursor: 'pointer', outline: 'none' }}>
+          style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 8px', fontSize: 12, fontWeight: locationFilter ? 700 : 400, background: '#fff', color: locationFilter ? '#1e3a5f' : '#334155', cursor: 'pointer', outline: 'none' }}>
           <option value="">All locations</option>
           {ADDRESS_SERVICE_LOCATIONS.map(loc => <option key={loc.key} value={loc.key}>{loc.label}</option>)}
         </select>

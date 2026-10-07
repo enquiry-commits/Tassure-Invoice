@@ -595,3 +595,8 @@ Run `npx tsx test-soa-group-email.ts` (`ALL OK`). Then on the DEPLOYED site, sig
 **Trigger:** any change to `app/globals.css` font rules, `lib/theme-tokens.ts` FONT_OPTIONS, or adding `fontFamily`/`fontWeight` in pages.
 **Run:** `grep -rn "fontFamily" app components --include=*.tsx | grep -v inherit` should list only OutlookStyleSendModal and the Appearance code input; no `fontWeight` 750/800/850/900/650. On the DEPLOYED site: buttons, inputs and dropdowns look the same font as the text beside them; Chinese company names sit in one font; SOA aging numbers and invoice numbers still line up.
 **Guards:** `docs/INVARIANTS.md` INV-UI-001.
+
+## REG-052 — Typography: size scale
+**Trigger:** any change that adds `fontSize`/`font-size`/`fontWeight` in app/ or components/.
+**Run:** `npx tsx test-typography-scale.ts` (`ALL OK`). On the DEPLOYED site, look at the densest screens (Billing list + expanded row, SOA, Master List, Assistant chat, Quotation): no column wraps or overflows that did not before; small badges (9px) still readable.
+**Guards:** `docs/INVARIANTS.md` INV-UI-002.

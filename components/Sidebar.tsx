@@ -95,7 +95,7 @@ function SubRow({ node, depth, active, expanded, onToggle }:
     background: active ? ACTIVE_BG : 'transparent',
     boxShadow: active ? ACTIVE_SHADOW : 'none',
     // Level 2 (depth 2) sits a step larger than level 3 (depth 3).
-    fontSize: depth >= 3 ? 11.5 : 12.5,
+    fontSize: depth >= 3 ? 11 : 12,
     fontWeight: active ? 600 : 500,
     letterSpacing: 'normal',
     lineHeight: 1.2,

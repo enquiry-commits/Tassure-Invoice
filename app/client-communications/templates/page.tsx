@@ -8,7 +8,7 @@ interface Template { id: number; type: string; name: string; subject_template: s
 interface Sender { id: number; email: string; display_name: string | null; is_default: boolean }
 
 const TYPE_LABEL: Record<string, string> = { ar: 'AR Renewal Reminder', soa: 'Statement of Account', letter: 'Document Reminder' };
-const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, outline: 'none', width: '100%' };
+const S: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, outline: 'none', width: '100%' };
 const MERGE_FIELDS = ['companyName', 'contactName', 'toEmail', 'ccEmail', 'totalAmount', 'invoiceList', 'dueDate', 'fyeMonth', 'fyeYear'];
 // Grow the textarea to fit whatever's actually in it, so the full template
 // body is visible without an internal scrollbar — a fixed row count clipped
@@ -99,11 +99,11 @@ export default function TemplatesSendersPage() {
                     <Trash2 size={14} />
                   </button>
                 </div>
-                <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 3 }}>Subject</div>
+                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>Subject</div>
                 <input value={e.subject_template} onChange={ev => setEditing(p => ({ ...p, [t.id]: { ...e, subject_template: ev.target.value } }))}
                   onBlur={() => patchTemplate(t.id, 'subject_template', e.subject_template, t.subject_template)}
                   style={{ ...S, marginBottom: 8 }} />
-                <div style={{ fontSize: 10.5, color: '#64748b', marginBottom: 3 }}>Body</div>
+                <div style={{ fontSize: 10, color: '#64748b', marginBottom: 3 }}>Body</div>
                 <textarea value={e.body_template} onChange={ev => setEditing(p => ({ ...p, [t.id]: { ...e, body_template: ev.target.value } }))}
                   onBlur={() => patchTemplate(t.id, 'body_template', e.body_template, t.body_template)}
                   rows={bodyRows(e.body_template)} style={{ ...S, fontFamily: 'inherit', resize: 'vertical' }} />
@@ -132,8 +132,8 @@ export default function TemplatesSendersPage() {
         </div>
         {senders.map(s => (
           <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 16px', borderBottom: '1px solid #f1f5f9' }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e3a5f' }}>{s.display_name ?? '(no name)'}</span>
-            <span style={{ fontSize: 11.5, color: '#64748b' }}>{s.email}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#1e3a5f' }}>{s.display_name ?? '(no name)'}</span>
+            <span style={{ fontSize: 11, color: '#64748b' }}>{s.email}</span>
             <button onClick={() => patchSender(s.id, 'is_default', true)}
               style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', cursor: 'pointer', color: s.is_default ? 'var(--accent-yellow)' : '#cbd5e1', fontSize: 11 }}>
               <Star size={13} fill={s.is_default ? 'var(--accent-yellow)' : 'none'} />{s.is_default ? 'Default' : 'Set default'}

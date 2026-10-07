@@ -108,7 +108,7 @@ function DateField({ label, value, onChange }: { label: string; value: string | 
 function SemanticStatusPill({ label, background, color, border }: { label: string; background: string; color: string; border: string }) {
   return (
     <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:999,
-      background, color, border:`1px solid ${border}`, fontSize:10.5, fontWeight:700, whiteSpace:'nowrap' }}>
+      background, color, border:`1px solid ${border}`, fontSize:10, fontWeight:700, whiteSpace:'nowrap' }}>
       <span style={{ width:5, height:5, borderRadius:'50%', background:color, flexShrink:0 }} />
       {label}
     </span>
@@ -471,7 +471,7 @@ function LateFilingPageInner() {
         <div onClick={cancelEdit} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
             <div style={{ background: '#1d3a5c', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{editId === 'new' ? 'Add Manual Entry' : 'Edit Company'}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{editId === 'new' ? 'Add Manual Entry' : 'Edit Company'}</div>
               <button onClick={cancelEdit} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px', background: '#f8fafc' }}>

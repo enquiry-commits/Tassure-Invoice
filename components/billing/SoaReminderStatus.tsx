@@ -13,11 +13,11 @@ export function SoaReminderStatus({ progress }: { progress: SoaReminderProgress 
       <span style={{
         display: 'inline-block', padding: '3px 7px', borderRadius: 6,
         background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#15803d',
-        fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap',
+        fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap',
       }}>
         {progress.completedLabel}
       </span>
-      {sentDate && <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9.5 }}>{sentDate}</div>}
+      {sentDate && <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9 }}>{sentDate}</div>}
     </div>
   );
 }
@@ -32,7 +32,7 @@ export function SoaReminderGroupStatus({ items }: {
     return (
       <div style={{ textAlign: 'center' }}>
         <SoaReminderStatus progress={latest?.progress ?? items[0].progress} />
-        <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9.5 }}>
+        <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9 }}>
           {items.map(item => item.source).join(' + ')}
         </div>
       </div>
@@ -44,13 +44,13 @@ export function SoaReminderGroupStatus({ items }: {
       <span style={{
         display: 'inline-block', padding: '3px 7px', borderRadius: 6,
         background: '#fffbeb', border: '1px solid #fde68a', color: '#a16207',
-        fontSize: 10.5, fontWeight: 700,
+        fontSize: 10, fontWeight: 700,
       }}>
         Mixed
       </span>
       <div style={{ marginTop: 4, display: 'grid', gap: 2 }}>
         {items.map(item => (
-          <div key={item.source} style={{ color: '#64748b', fontSize: 9.5, whiteSpace: 'nowrap' }}>
+          <div key={item.source} style={{ color: '#64748b', fontSize: 9, whiteSpace: 'nowrap' }}>
             {item.source} · {item.progress.completedStage ? `${item.progress.completedStage}${item.progress.completedStage === 1 ? 'st' : item.progress.completedStage === 2 ? 'nd' : 'rd'} Done` : 'Not sent'}
           </div>
         ))}

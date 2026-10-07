@@ -43,7 +43,7 @@ const WAITING: Record<QueueRow['state'], { label: string; color: string; border:
 function Pill({ state }: { state: QueueRow['state'] }) {
   const p = WAITING[state];
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, background: '#fff', border: `1px solid ${p.border}`, color: p.color, fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, background: '#fff', border: `1px solid ${p.border}`, color: p.color, fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: p.color }} />{p.label}
     </span>
   );
@@ -53,7 +53,7 @@ const who = (bySystem: boolean) => (bySystem ? 'attached by the system' : 'attac
 
 // What is attached now and why none of it is used, in words staff can act on.
 function Detail({ row }: { row: QueueRow }) {
-  const small = { fontSize: 11.5, lineHeight: 1.5, color: '#475569' } as const;
+  const small = { fontSize: 11, lineHeight: 1.5, color: '#475569' } as const;
   const goesOut = (
     <div style={{ ...small, color: '#64748b' }}>
       <strong style={{ fontWeight: 700, color: '#475569' }}>The client gets now:</strong> {row.fallback}
@@ -231,7 +231,7 @@ export default function InvoiceOriginalsPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {failedBooks.map(([b, message]) => (
-              <span key={b} title={message} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 999, border: '1px solid #fecaca', background: '#fff', color: '#991b1b' }}>
+              <span key={b} title={message} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999, border: '1px solid #fecaca', background: '#fff', color: '#991b1b' }}>
                 <AlertTriangle size={11} />{b} could not be fully checked{queue && queue.unknown ? ` (${queue.unknown} invoice${queue.unknown === 1 ? '' : 's'} not checked)` : ''}
               </span>
             ))}
@@ -272,12 +272,12 @@ export default function InvoiceOriginalsPage() {
                       <span style={{ color: '#cbd5e1', fontSize: 10 }}>{startIndex + i + 1}</span>{r.customerName || '—'}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right', fontSize: 11.5, color: '#374151', fontWeight: 600, padding: '0 6px' }}>{money(r.balance)}</div>
+                  <div style={{ textAlign: 'right', fontSize: 11, color: '#374151', fontWeight: 600, padding: '0 6px' }}>{money(r.balance)}</div>
                   <div style={{ padding: '0 6px', display: 'grid', gap: 6 }}>
                     <div><Pill state={r.state} /></div>
                     <Detail row={r} />
                     {note && (
-                      <div style={{ fontSize: 11.5, lineHeight: 1.5, padding: '6px 9px', borderRadius: 7, border: `1px solid ${note.tone === 'bad' ? '#fecaca' : '#fde68a'}`, background: note.tone === 'bad' ? '#fef2f2' : '#fffbeb', color: note.tone === 'bad' ? '#991b1b' : '#92400e' }}>
+                      <div style={{ fontSize: 11, lineHeight: 1.5, padding: '6px 9px', borderRadius: 7, border: `1px solid ${note.tone === 'bad' ? '#fecaca' : '#fde68a'}`, background: note.tone === 'bad' ? '#fef2f2' : '#fffbeb', color: note.tone === 'bad' ? '#991b1b' : '#92400e' }}>
                         {note.text}
                         {note.hint && <div style={{ fontStyle: 'italic', marginTop: 2 }}>→ {note.hint}</div>}
                       </div>

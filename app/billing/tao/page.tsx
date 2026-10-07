@@ -276,18 +276,18 @@ export default function TaoBillingPage() {
                 </div>
               ) : (
                 <div>
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#64748b', marginBottom: 5 }}>Company name</label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 5 }}>Company name</label>
                   <input type="text" placeholder="Not yet in the system" value={newCompanyName}
                     onChange={e => setNewCompanyName(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && canSubmit) submitNewCompany(); }}
                     autoFocus
-                    style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e2e8f0', borderRadius: 8, padding: '9px 11px', fontSize: 13.5, outline: 'none', marginBottom: 14 }} />
+                    style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e2e8f0', borderRadius: 8, padding: '9px 11px', fontSize: 13, outline: 'none', marginBottom: 14 }} />
 
-                  <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#64748b', marginBottom: 5 }}>UEN</label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 5 }}>UEN</label>
                   <input type="text" placeholder="e.g. 201720273R" value={newCompanyUen}
                     onChange={e => setNewCompanyUen(e.target.value.toUpperCase())}
                     onKeyDown={e => { if (e.key === 'Enter' && canSubmit) submitNewCompany(); }}
-                    style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${newCompanyUen.trim() && !uenLooksValid ? '#fca5a5' : '#e2e8f0'}`, borderRadius: 8, padding: '9px 11px', fontSize: 13.5, outline: 'none' }} />
+                    style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${newCompanyUen.trim() && !uenLooksValid ? '#fca5a5' : '#e2e8f0'}`, borderRadius: 8, padding: '9px 11px', fontSize: 13, outline: 'none' }} />
                   {newCompanyUen.trim() && !uenLooksValid && (
                     <div style={{ marginTop: 5, fontSize: 11, color: 'var(--status-danger)' }}>That doesn&apos;t look like a valid Singapore UEN.</div>
                   )}
@@ -305,7 +305,7 @@ export default function TaoBillingPage() {
                       block, not rebuilding it. */}
                   {SHOW_SERVICE_PICKER && (
                     <>
-                      <label style={{ display: 'block', fontSize: 11.5, fontWeight: 700, color: '#64748b', margin: '14px 0 5px' }}>Service(s)</label>
+                      <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', margin: '14px 0 5px' }}>Service(s)</label>
                       <div style={{ display: 'flex', gap: 16 }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#334155' }}>
                           <input type="checkbox" checked={newCompanyAccounts} onChange={e => setNewCompanyAccounts(e.target.checked)} />Accounts
@@ -349,10 +349,10 @@ export default function TaoBillingPage() {
           </button>
         </div>
         {deleteError && (
-          <div style={{ padding: '8px 16px', fontSize: 11.5, color: 'var(--status-danger)', fontWeight: 600, borderTop: '1px solid #fee2e2', background: '#fef2f2' }}>{deleteError}</div>
+          <div style={{ padding: '8px 16px', fontSize: 11, color: 'var(--status-danger)', fontWeight: 600, borderTop: '1px solid #fee2e2', background: '#fef2f2' }}>{deleteError}</div>
         )}
         {removeFromTaoError && (
-          <div style={{ padding: '8px 16px', fontSize: 11.5, color: '#0369a1', fontWeight: 600, borderTop: '1px solid #bae6fd', background: '#f0f9ff' }}>{removeFromTaoError}</div>
+          <div style={{ padding: '8px 16px', fontSize: 11, color: '#0369a1', fontWeight: 600, borderTop: '1px solid #bae6fd', background: '#f0f9ff' }}>{removeFromTaoError}</div>
         )}
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 420px)', minHeight: 400 }}>
           <div style={{ minWidth: 760 }}>
@@ -402,8 +402,8 @@ export default function TaoBillingPage() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'center' }}>
                     {c.lastInvoice
-                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, background: '#fff', border: '1px solid #bbf7d0', color: '#15803d', fontSize: 9.5, fontWeight: 700 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#15803d' }} />Billed</span>
-                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, background: '#fff', border: '1px solid #fed7aa', color: '#c2410c', fontSize: 9.5, fontWeight: 700 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#c2410c' }} />Never billed</span>}
+                      ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, background: '#fff', border: '1px solid #bbf7d0', color: '#15803d', fontSize: 9, fontWeight: 700 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#15803d' }} />Billed</span>
+                      : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, background: '#fff', border: '1px solid #fed7aa', color: '#c2410c', fontSize: 9, fontWeight: 700 }}><span style={{ width: 5, height: 5, borderRadius: '50%', background: '#c2410c' }} />Never billed</span>}
                   </div>
                   {/* Swapped from the old local TaoInvoiceRef to the shared
                       chip, 2026-09-28 — Vincent: "Last TAO Invoice 的那个UI
@@ -437,7 +437,7 @@ export default function TaoBillingPage() {
             <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 1100, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
               <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: '4px solid #397f78', padding: '16px 20px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{c.companyName}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{c.companyName}</div>
                   <button onClick={() => setExpanded(null)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

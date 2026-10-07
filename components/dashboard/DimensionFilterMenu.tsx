@@ -47,7 +47,7 @@ export function DimensionFilterMenu({ label, options, selected, onApply }: {
         style={{
           display: 'flex', alignItems: 'center', gap: 5, border: `1px solid ${active ? '#fde68a' : '#e2e8f0'}`,
           background: active ? '#fffbeb' : '#fff', color: active ? '#b45309' : '#475569',
-          borderRadius: 7, padding: '5px 9px', cursor: 'pointer', fontSize: 11.5, fontWeight: 600,
+          borderRadius: 7, padding: '5px 9px', cursor: 'pointer', fontSize: 11, fontWeight: 600,
         }}>
         <Filter size={11} fill={active ? 'currentColor' : 'none'} />
         {label}{active && selected ? ` (${selected.size})` : ''}
@@ -70,7 +70,7 @@ export function DimensionFilterMenu({ label, options, selected, onApply }: {
               <label key={o.value} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 2px', fontSize: 11, cursor: 'pointer' }}>
                 <input type="checkbox" checked={isChecked(o.value)} onChange={() => toggle(o.value)} style={{ width: 12, height: 12, cursor: 'pointer', flexShrink: 0 }} />
                 <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={o.value}>{o.value}</span>
-                <span style={{ color: '#94a3b8', fontSize: 9.5, flexShrink: 0 }}>{o.count}</span>
+                <span style={{ color: '#94a3b8', fontSize: 9, flexShrink: 0 }}>{o.count}</span>
               </label>
             ))}
           </div>

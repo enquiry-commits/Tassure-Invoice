@@ -5886,3 +5886,12 @@ again.
   PDFs/documents are a separate system (INV-DOC-011). (5) Weights are only
   400/500/600/700 (the loaded fonts have no 750/800/900). Font SIZES are not
   yet unified (35 values; planned step 2).
+
+- **INV-UI-002** — Font sizes come from ONE scale: 9 / 10 / 11 / 12 / 13 / 14 /
+  16 / 18 / 20 / 24 / 28 px (Vincent, 2026-10-07: "35种太夸张了"). No half
+  sizes. Mapping used: 7.5/8/8.5/9.5→9, x.5→x (rounded DOWN, so dense tables
+  can only get narrower), 15/17→16, 19→18, 22→20, 23→24, 26/27/30/34→28.
+  Weights only 400/500/600/700. `test-typography-scale.ts` scans app/ and
+  components/ and fails on any other value — add a size only by changing the
+  scale there and here. Not covered: PDFs/emails (INV-DOC-011), string sizes
+  such as '0.55em'.

@@ -260,13 +260,13 @@ function AddServiceModal({ onClose, onCreated }: {
     }
   };
 
-  const fieldStyle = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12.5, boxSizing: 'border-box' as const, width: '100%' };
+  const fieldStyle = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, boxSizing: 'border-box' as const, width: '100%' };
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 300, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Add New Service</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Add New Service</div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
         </div>
         <div style={{ padding: '16px 20px 20px', display: 'grid', gap: 12 }}>
@@ -275,23 +275,23 @@ function AddServiceModal({ onClose, onCreated }: {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', gap: 10, alignItems: 'center' }}>
-            <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Category</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Category</label>
             <select value={category} onChange={e => { const next = e.target.value as typeof category; setCategory(next); applySuggestionFor(next, suggested); }} style={{ ...fieldStyle, cursor: 'pointer' }}>
               {SERVICE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
 
-            <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Service name</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Service name</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Transfer Pricing Documentation" style={fieldStyle} />
 
-            <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Default rate</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Default rate</label>
             <input type="number" min={0} value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Optional" style={fieldStyle} />
 
-            <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>Description</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>Description</label>
             <input value={description} onChange={e => setDescription(e.target.value)} placeholder="Optional default line description" style={fieldStyle} />
           </div>
 
           <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', marginBottom: 6 }}>Income account</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6 }}>Income account</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
                 <input type="radio" checked={accountMode === 'new'} onChange={() => setAccountMode('new')} />
@@ -555,7 +555,7 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
         disabled={value === undefined && (picOptions.status === 'loading' || historyLoading)}
         onChange={e => updateLine(l.key, { picClassId: e.target.value || null })}
         aria-label="PIC" title={title}
-        style={{ ...inputStyle, width: '94%', fontSize: 11.5, padding: '6px 4px', color: value ? '#334155' : '#94a3b8', borderColor: missing ? '#fbbf24' : '#cbd5e1', background: missing ? '#fffbeb' : '#fff' }}>
+        style={{ ...inputStyle, width: '94%', fontSize: 11, padding: '6px 4px', color: value ? '#334155' : '#94a3b8', borderColor: missing ? '#fbbf24' : '#cbd5e1', background: missing ? '#fffbeb' : '#fff' }}>
         <option value="">{value === undefined ? (picOptions.status === 'error' ? 'PIC list unavailable' : 'Loading…') : '— No PIC'}</option>
         {picOptions.classes.map(o => <option key={o.value} value={o.value}>{o.name}</option>)}
       </select>
@@ -588,12 +588,12 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
         <span style={{ fontSize: 10, color: '#94a3b8' }}>· built manually, no template</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 9px', borderRadius: 8, background: numberBg, border: `1px solid ${numberBorder}` }}>
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <span style={{ fontSize: 8, fontWeight: 700, color: manuallyChanged ? 'var(--status-warning)' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
-            <span style={{ fontSize: 8.5, color: '#94a3b8' }}>QB confirms when created</span>
+            <span style={{ fontSize: 9, fontWeight: 700, color: manuallyChanged ? 'var(--status-warning)' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
+            <span style={{ fontSize: 9, color: '#94a3b8' }}>QB confirms when created</span>
           </div>
           <input value={docNumber} onChange={e => setDocNumber(e.target.value.trim())}
             placeholder={numberConnected === false ? 'not connected' : '…'} disabled={numberConnected === false}
-            style={{ width: 92, border: 0, borderBottom: `1px solid ${manuallyChanged ? '#f59e0b' : '#94a3b8'}`, outline: 'none', background: 'transparent', color: numberColor, fontVariantNumeric: 'tabular-nums', fontSize: 11.5, fontWeight: 700, padding: '2px 1px', textAlign: 'center' }} />
+            style={{ width: 92, border: 0, borderBottom: `1px solid ${manuallyChanged ? '#f59e0b' : '#94a3b8'}`, outline: 'none', background: 'transparent', color: numberColor, fontVariantNumeric: 'tabular-nums', fontSize: 11, fontWeight: 700, padding: '2px 1px', textAlign: 'center' }} />
         </div>
       </div>
       {numberConnected === false && (
@@ -629,16 +629,16 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
               {/* Last real invoice date this service was billed — reference
                   only ("目的是为了让用户知道上一次开单是什么时候，这次还要
                   不要开单"), never used to gate or auto-check anything. */}
-              <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 2, whiteSpace: 'nowrap' }}>{l.lastBilled ? `Last: ${fmtDate(l.lastBilled)}` : 'New service'}</div>
+              <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, whiteSpace: 'nowrap' }}>{l.lastBilled ? `Last: ${fmtDate(l.lastBilled)}` : 'New service'}</div>
             </div>
             <div>
               <AutoTextarea value={l.description} onChange={v => updateLine(l.key, { description: v })}
                 style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
               {l.catalogDescription && l.catalogDescription !== l.description.trim() && (
-                <div style={{ width: '95%', marginTop: 4, fontSize: 10.5, lineHeight: 1.4, color: '#64748b' }}>
+                <div style={{ width: '95%', marginTop: 4, fontSize: 10, lineHeight: 1.4, color: '#64748b' }}>
                   <button type="button" onClick={() => updateLine(l.key, { description: l.catalogDescription ?? l.description })}
                     title={l.catalogDescription}
-                    style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: '#1d3a5c', fontWeight: 700, fontSize: 10.5, textDecoration: 'underline' }}>
+                    style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: '#1d3a5c', fontWeight: 700, fontSize: 10, textDecoration: 'underline' }}>
                     Use QuickBooks standard text
                   </button>
                   <span> · “{l.catalogDescription.length > 70 ? `${l.catalogDescription.slice(0, 70)}…` : l.catalogDescription}”</span>
@@ -706,7 +706,7 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
         <div style={{ fontSize: 13, color: '#334155' }}>
           <span style={{ color: '#64748b' }}>{included.length} line{included.length !== 1 ? 's' : ''} · Total </span>
-          <strong style={{ fontSize: 17, color: '#0f766e' }}>{fmtMoney(total)}</strong>
+          <strong style={{ fontSize: 16, color: '#0f766e' }}>{fmtMoney(total)}</strong>
         </div>
         {!linesValid && <span style={{ fontSize: 11, color: 'var(--status-danger)', fontWeight: 600 }}>⚠ Fill in every description, rate and quantity before generating</span>}
         <button
@@ -729,7 +729,7 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
             <span>{result.ok ? '✓ ' : '✕ '}{result.msg}</span>
             {result.customerMissing && (
               <button onClick={createCustomerAndRetry} disabled={creatingCustomer}
-                style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 7, border: 'none', background: creatingCustomer ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: creatingCustomer ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 7, border: 'none', background: creatingCustomer ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 11, fontWeight: 700, cursor: creatingCustomer ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
                 {creatingCustomer ? 'Creating…' : `Create "${company.companyName}" in QuickBooks`}
               </button>
             )}

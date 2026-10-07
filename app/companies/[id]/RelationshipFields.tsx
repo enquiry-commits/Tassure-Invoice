@@ -200,7 +200,7 @@ export default function RelationshipFields({ invoiceAddress, companyId, masterLi
         </div>
       </div>
       {!clientSince && masterListJoinDates.length > 0 && (
-        <div style={{ marginTop: 8, fontSize: 11.5, color: '#92600a', background: '#fff8e6', border: '1px solid #f3e0b0', borderRadius: 6, padding: '6px 10px' }}>
+        <div style={{ marginTop: 8, fontSize: 11, color: '#92600a', background: '#fff8e6', border: '1px solid #f3e0b0', borderRadius: 6, padding: '6px 10px' }}>
           Please enter the accurate Client Since date — Master List join date is &ldquo;{masterListJoinDates.join('” / “')}&rdquo;, which can&apos;t be used as a date{masterListJoinDates.length > 1 ? ' (conflicting dates)' : ''}.
         </div>
       )}

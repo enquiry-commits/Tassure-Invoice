@@ -61,7 +61,7 @@ const COLUMNS: { label: string; w: number }[] = [
 ];
 
 function ReadOnlyDate({ value }: { value: string | null }) {
-  return <span style={{ color: value ? '#1e293b' : '#cbd5e1', fontSize: 11.5 }}>{value ? fmtDate(value) : '—'}</span>;
+  return <span style={{ color: value ? '#1e293b' : '#cbd5e1', fontSize: 11 }}>{value ? fmtDate(value) : '—'}</span>;
 }
 
 const TD_BASE: React.CSSProperties = {
@@ -243,7 +243,7 @@ export default function EotTable() {
                   <td style={{ ...TD_BASE, position: 'sticky', left: 0, zIndex: 1, background: '#fff', textAlign: 'center', color: '#94a3b8', fontSize: 10, fontWeight: 600 }}>{i + 1}</td>
                   <td style={{ ...TD_BASE, position: 'sticky', left: NO_W, zIndex: 1, background: '#fff' }}>
                     <span className="company-name-text">{r.entity_name}</span>
-                    <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 1 }}>{r.fye_month} {r.fye_year}</div>
+                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>{r.fye_month} {r.fye_year}</div>
                   </td>
                   <td style={{ ...TD_BASE, position: 'sticky', left: NO_W + NAME_W, zIndex: 1, background: '#fff', boxShadow: '3px 0 8px -2px rgba(0,0,0,0.1)' }}>
                     <span className="company-registration-text">{r.uen || '—'}</span>

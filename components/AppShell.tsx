@@ -104,7 +104,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #dbe2ea', background: '#fff', color: '#1e3a5f', borderRadius: 8, padding: '0 6px 0 10px', height: 35, cursor: 'pointer' }}>
                 <ArrowLeftRight size={14} />
                 <select aria-label="切换部门" value={user.viewWorkspace} onChange={e => switchWorkspace(e.target.value as WorkspaceId)}
-                  style={{ border: 'none', background: 'transparent', color: '#1e3a5f', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', outline: 'none', height: 33 }}>
+                  style={{ border: 'none', background: 'transparent', color: '#1e3a5f', fontSize: 12, fontWeight: 700, cursor: 'pointer', outline: 'none', height: 33 }}>
                   {user.switchableWorkspaces.map(w => <option key={w.id} value={w.id}>{w.title}</option>)}
                 </select>
               </label>

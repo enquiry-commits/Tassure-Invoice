@@ -100,7 +100,7 @@ export function SoaDownloadPopover({
         }}>
           {books.map(book => (
             <button key={book} onClick={() => pick(book)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6, border: 'none', background: 'none', fontSize: 12.5, fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6, border: 'none', background: 'none', fontSize: 12, fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
               {book}
             </button>
           ))}
@@ -108,7 +108,7 @@ export function SoaDownloadPopover({
             <>
               <div style={{ height: 1, background: '#f1f5f9', margin: '4px 0' }} />
               <button onClick={() => pick('ALL')}
-                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6, border: 'none', background: 'none', fontSize: 12.5, fontWeight: 700, color: '#0f766e', cursor: 'pointer' }}>
+                style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 6, border: 'none', background: 'none', fontSize: 12, fontWeight: 700, color: '#0f766e', cursor: 'pointer' }}>
                 All ({books.join('+')})
               </button>
             </>

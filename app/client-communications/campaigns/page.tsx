@@ -541,7 +541,7 @@ export default function EmailDraftWorkbenchPage() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <div>
-          <h1 style={{ margin: 0, color: '#102f50', fontSize: 22, fontWeight: 700 }}>Email Drafts</h1>
+          <h1 style={{ margin: 0, color: '#102f50', fontSize: 20, fontWeight: 700 }}>Email Drafts</h1>
           <div style={{ color: '#718399', fontSize: 12, marginTop: 3 }}>
             Prepare a batch here, then complete the final review and sending in Outlook.
           </div>
@@ -571,12 +571,12 @@ export default function EmailDraftWorkbenchPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1.5fr) repeat(3,minmax(130px,0.8fr)) auto', gap: 10, alignItems: 'end' }}>
           <div>
-            <label style={{ display: 'block', color: '#718399', fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>TEMPLATE</label>
+            <label style={{ display: 'block', color: '#718399', fontSize: 10, fontWeight: 700, marginBottom: 4 }}>TEMPLATE</label>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {typeTemplates.map(template => (
                 <button key={template.id} onClick={() => setTemplateId(template.id)}
                   title={template.name}
-                  style={{ border: `1px solid ${templateId === template.id ? '#173b63' : '#d9e2ec'}`, borderRadius: 6, padding: '7px 10px', background: templateId === template.id ? '#eef4fa' : '#fff', color: templateId === template.id ? '#173b63' : '#526b85', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
+                  style={{ border: `1px solid ${templateId === template.id ? '#173b63' : '#d9e2ec'}`, borderRadius: 6, padding: '7px 10px', background: templateId === template.id ? '#eef4fa' : '#fff', color: templateId === template.id ? '#173b63' : '#526b85', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                   {templateShortName(template)}
                 </button>
               ))}
@@ -586,13 +586,13 @@ export default function EmailDraftWorkbenchPage() {
           {type === 'ar' ? (
             <>
               <div>
-                <label style={{ display: 'block', color: '#718399', fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>FYE MONTH</label>
+                <label style={{ display: 'block', color: '#718399', fontSize: 10, fontWeight: 700, marginBottom: 4 }}>FYE MONTH</label>
                 <select value={fyeMonth} onChange={e => setFyeMonth(e.target.value)} style={fieldStyle}>
                   {FYE_MONTHS.map(month => <option key={month}>{month}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ display: 'block', color: '#718399', fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>FYE YEAR</label>
+                <label style={{ display: 'block', color: '#718399', fontSize: 10, fontWeight: 700, marginBottom: 4 }}>FYE YEAR</label>
                 <select value={fyeYear} onChange={e => setFyeYear(e.target.value)} style={fieldStyle}>
                   {['2024', '2025', '2026', '2027', '2028'].map(year => <option key={year}>{year}</option>)}
                 </select>
@@ -600,7 +600,7 @@ export default function EmailDraftWorkbenchPage() {
             </>
           ) : (
             <div style={{ gridColumn: 'span 2' }}>
-              <label style={{ display: 'block', color: '#718399', fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>
+              <label style={{ display: 'block', color: '#718399', fontSize: 10, fontWeight: 700, marginBottom: 4 }}>
                 {type === 'letter' ? 'COMPANY NAMES — ONE PER LINE' : 'SOURCE'}
               </label>
               {type === 'letter' ? (
@@ -614,7 +614,7 @@ export default function EmailDraftWorkbenchPage() {
           )}
 
           <div>
-            <label style={{ display: 'block', color: '#718399', fontSize: 10.5, fontWeight: 700, marginBottom: 4 }}>OUTLOOK SENDER</label>
+            <label style={{ display: 'block', color: '#718399', fontSize: 10, fontWeight: 700, marginBottom: 4 }}>OUTLOOK SENDER</label>
             <select value={senderId ?? ''} onChange={e => setSenderId(Number(e.target.value))} style={fieldStyle}>
               {senders.map(sender => (
                 <option key={sender.id} value={sender.id}>
@@ -655,11 +655,11 @@ export default function EmailDraftWorkbenchPage() {
                 </div>
               </div>
               <div style={{ fontSize: 12, fontWeight: 700, color: '#18324f' }}>{rows.length} companies</div>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#15803d', flexShrink: 0 }} />{readyCount} ready
               </span>
               {warningCount > 0 && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
                   <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#b45309', flexShrink: 0 }} />{warningCount} need review
                 </span>
               )}
@@ -713,7 +713,7 @@ export default function EmailDraftWorkbenchPage() {
                             ? { label: 'FALLBACK — REVIEW', bg: '#fffaf0', color: '#9a6700', border: '#f2dfaf' }
                             : { label: 'NO RECIPIENT SOURCE', bg: '#f5f7f9', color: '#66788a', border: '#dfe7ef' };
                           return (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 8px', borderRadius: 999, background: src.bg, color: src.color, border: `1px solid ${src.border}`, fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 8px', borderRadius: 999, background: src.bg, color: src.color, border: `1px solid ${src.border}`, fontSize: 9, fontWeight: 700, whiteSpace: 'nowrap' }}>
                               <span style={{ width: 4, height: 4, borderRadius: '50%', background: src.color, flexShrink: 0 }} />{src.label}
                             </span>
                           );
@@ -734,7 +734,7 @@ export default function EmailDraftWorkbenchPage() {
                           {row.invoiceRefs.map((ref, refIndex) => (
                             <span key={`${ref.qbCompany}-${ref.invoiceNo}-${refIndex}`}
                               title={`S$${ref.amount.toLocaleString()}${ref.qbInvoiceId ? ' — PDF available' : ' — add file manually'}`}
-                              style={{ padding: '2px 5px', borderRadius: 4, background: ref.qbInvoiceId ? '#f2f6f8' : '#fffaf0', color: ref.qbInvoiceId ? '#31506f' : '#9a6700', fontSize: 9.5, fontWeight: 700 }}>
+                              style={{ padding: '2px 5px', borderRadius: 4, background: ref.qbInvoiceId ? '#f2f6f8' : '#fffaf0', color: ref.qbInvoiceId ? '#31506f' : '#9a6700', fontSize: 9, fontWeight: 700 }}>
                               {invoiceLabel(ref)}
                             </span>
                           ))}
@@ -745,14 +745,14 @@ export default function EmailDraftWorkbenchPage() {
                           <input type="file" multiple hidden onChange={e => setRowAttachmentFiles(row, e.target.files)} />
                         </label>
                       </div>
-                      <div style={{ textAlign: 'right', paddingTop: 6, color: '#18324f', fontSize: 11.5, fontWeight: 700 }}>
+                      <div style={{ textAlign: 'right', paddingTop: 6, color: '#18324f', fontSize: 11, fontWeight: 700 }}>
                         {row.totalAmount ? `S$${row.totalAmount.toLocaleString()}` : '—'}
                       </div>
                       <div style={{ paddingTop: 3 }}>
                         {warnings.length === 0 ? (
                           <span className="row-status row-status--ready"><Check size={12} /> Ready</span>
                         ) : warnings.map(warning => (
-                          <div key={warning} style={{ display: 'flex', alignItems: 'flex-start', gap: 3, color: '#9a6700', fontSize: 9.5, lineHeight: 1.35, marginBottom: 4 }}>
+                          <div key={warning} style={{ display: 'flex', alignItems: 'flex-start', gap: 3, color: '#9a6700', fontSize: 9, lineHeight: 1.35, marginBottom: 4 }}>
                             <AlertTriangle size={10} style={{ marginTop: 1, flexShrink: 0 }} /> {warning}
                           </div>
                         ))}
@@ -779,7 +779,7 @@ export default function EmailDraftWorkbenchPage() {
               <input type="file" multiple hidden onChange={e => setBatchAttachmentFiles(e.target.files)} />
             </label>
             {commonFiles.map(file => (
-              <span key={`${file.name}-${file.size}`} style={{ padding: '2px 6px', borderRadius: 4, background: '#f1f5f9', color: '#526b85', fontSize: 9.5 }}>{file.name}</span>
+              <span key={`${file.name}-${file.size}`} style={{ padding: '2px 6px', borderRadius: 4, background: '#f1f5f9', color: '#526b85', fontSize: 9 }}>{file.name}</span>
             ))}
 
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -788,7 +788,7 @@ export default function EmailDraftWorkbenchPage() {
                 {helperAvailable ? 'Helper ready' : helperAvailable === null ? 'Checking Helper' : 'Helper required above'}
               </span>
               <button onClick={createAndOpen} disabled={creating || !includedRows.length || !helperAvailable}
-                style={{ display: 'flex', alignItems: 'center', gap: 7, border: 0, borderRadius: 8, padding: '9px 16px', background: '#173b63', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: creating ? 'wait' : 'pointer', opacity: creating || !includedRows.length || !helperAvailable ? 0.55 : 1 }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 7, border: 0, borderRadius: 8, padding: '9px 16px', background: '#173b63', color: '#fff', fontSize: 12, fontWeight: 700, cursor: creating ? 'wait' : 'pointer', opacity: creating || !includedRows.length || !helperAvailable ? 0.55 : 1 }}>
                 {creating ? <Loader2 size={14} className="spin" /> : <Mail size={14} />}
                 {creating
                   ? 'Preparing & Opening…'
@@ -804,11 +804,11 @@ export default function EmailDraftWorkbenchPage() {
       )}
 
       {message && (
-        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, border: `1px solid ${message.tone === 'success' ? '#bbf7d0' : message.tone === 'warning' ? '#fed7aa' : '#fecaca'}`, background: message.tone === 'success' ? '#f0fdf4' : message.tone === 'warning' ? '#fff7ed' : '#fef2f2', color: message.tone === 'success' ? '#15803d' : message.tone === 'warning' ? '#b45309' : '#b91c1c', fontSize: 11.5, fontWeight: 700 }}>
+        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 8, border: `1px solid ${message.tone === 'success' ? '#bbf7d0' : message.tone === 'warning' ? '#fed7aa' : '#fecaca'}`, background: message.tone === 'success' ? '#f0fdf4' : message.tone === 'warning' ? '#fff7ed' : '#fef2f2', color: message.tone === 'success' ? '#15803d' : message.tone === 'warning' ? '#b45309' : '#b91c1c', fontSize: 11, fontWeight: 700 }}>
           {message.text}
           {lastOpenResults.some(result => result && !result.ok) && (
             <button onClick={retryFailed} disabled={creating}
-              style={{ marginLeft: 10, border: '1px solid currentColor', background: '#fff', borderRadius: 5, padding: '3px 8px', color: 'inherit', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}>
+              style={{ marginLeft: 10, border: '1px solid currentColor', background: '#fff', borderRadius: 5, padding: '3px 8px', color: 'inherit', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}>
               Retry failed drafts
             </button>
           )}
@@ -818,7 +818,7 @@ export default function EmailDraftWorkbenchPage() {
       {lastOpenResults.some(result => result && !result.ok) && (
         <div style={{ marginTop: 8, background: '#fff', border: '1px solid #fed7aa', borderRadius: 8, padding: 10 }}>
           {lastOpenResults.map((result, index) => !result?.ok ? (
-            <div key={index} style={{ color: '#b45309', fontSize: 10.5, marginBottom: 3 }}>
+            <div key={index} style={{ color: '#b45309', fontSize: 10, marginBottom: 3 }}>
               {lastCreated[index]?.company_name ?? `Draft ${index + 1}`}: {result?.error ?? 'Unable to open.'}
             </div>
           ) : null)}
@@ -829,7 +829,7 @@ export default function EmailDraftWorkbenchPage() {
         <div style={{ padding: '38px 20px', textAlign: 'center', color: '#718399', background: '#fff', border: '1px dashed #cfdbe7', borderRadius: 11 }}>
           <Plus size={18} style={{ margin: '0 auto 8px' }} />
           <div style={{ fontSize: 12, fontWeight: 700 }}>Choose a template and load a company batch.</div>
-          <div style={{ fontSize: 10.5, marginTop: 4 }}>Y means “create an Outlook draft”; this page never sends email automatically.</div>
+          <div style={{ fontSize: 10, marginTop: 4 }}>Y means “create an Outlook draft”; this page never sends email automatically.</div>
         </div>
       )}
 
@@ -839,24 +839,24 @@ export default function EmailDraftWorkbenchPage() {
         .draft-setup-panel{background:#fff;border:1px solid #dfe7ef;border-radius:12px;padding:16px;margin-bottom:12px}
         .draft-section-heading{display:flex;align-items:center;gap:9px;margin-bottom:14px;color:#18324f}
         .draft-section-heading--compact{margin:0;margin-right:8px}
-        .draft-section-heading strong{display:block;font-size:12px;font-weight:800}
-        .draft-section-heading div>span{display:block;margin-top:2px;color:#8494a6;font-size:10.5px;font-weight:500}
-        .draft-step{width:25px;height:25px;border-radius:8px;background:#eef3f8;color:#173b63;display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:11px;font-weight:800}
+        .draft-section-heading strong{display:block;font-size:12px;font-weight:700}
+        .draft-section-heading div>span{display:block;margin-top:2px;color:#8494a6;font-size:10px;font-weight:500}
+        .draft-step{width:25px;height:25px;border-radius:8px;background:#eef3f8;color:#173b63;display:inline-flex;align-items:center;justify-content:center;flex:none;font-size:11px;font-weight:700}
         .draft-list-toolbar{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid #e6edf3;flex-wrap:wrap}
-        .helper-download,.helper-recheck{height:34px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 11px;font-size:11px;font-weight:800;text-decoration:none;cursor:pointer}
+        .helper-download,.helper-recheck{height:34px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:0 11px;font-size:11px;font-weight:700;text-decoration:none;cursor:pointer}
         .helper-download{border:0;background:#173b63;color:#fff}
         .helper-recheck{border:1px solid #d9e2ec;background:#fff;color:#526b85}
         .helper-recheck:disabled{cursor:wait;opacity:.65}
-        .row-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:800}
+        .row-status{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700}
         .row-status--ready{color:#15803d}
-        .helper-inline-status{display:inline-flex;align-items:center;gap:5px;color:#8494a6;font-size:10.5px;font-weight:700}
+        .helper-inline-status{display:inline-flex;align-items:center;gap:5px;color:#8494a6;font-size:10px;font-weight:700}
         .helper-inline-status>span{width:6px;height:6px;border-radius:50%;background:#cbd5e1}
         .helper-inline-status--ready{color:#15803d}
         .helper-inline-status--ready>span{background:#22c55e}
         .helper-outdated-overlay{position:fixed;inset:0;background:rgba(15,26,42,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
         .helper-outdated-modal{background:#fff;border-radius:14px;box-shadow:0 20px 50px rgba(15,26,42,.25);padding:22px;max-width:380px;width:100%;text-align:center}
         .helper-outdated-modal__icon{width:42px;height:42px;border-radius:50%;background:#fff8e8;color:#9a6700;display:flex;align-items:center;justify-content:center;margin:0 auto 12px}
-        .helper-outdated-modal strong{display:block;color:#18324f;font-size:14.5px;margin-bottom:8px}
+        .helper-outdated-modal strong{display:block;color:#18324f;font-size:14px;margin-bottom:8px}
         .helper-outdated-modal p{color:#5b7089;font-size:12px;line-height:1.55;margin:0 0 16px}
         .helper-outdated-modal__actions{display:flex;align-items:center;justify-content:center;gap:8px}
       `}</style>

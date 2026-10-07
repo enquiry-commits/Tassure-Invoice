@@ -39,7 +39,7 @@ function EmptyState({ rangeDays }: { rangeDays: number }) {
   return (
     <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8', fontSize: 13 }}>
       No activity recorded in the last {rangeDays} days.
-      <div style={{ fontSize: 11.5, marginTop: 6, color: '#b7c1cd' }}>
+      <div style={{ fontSize: 11, marginTop: 6, color: '#b7c1cd' }}>
         This tracking only started recently — there is no historical click data to backfill. Check back once people have used the system for a while.
       </div>
     </div>
@@ -97,13 +97,13 @@ export default function ActivityInsightsPage() {
         <select
           value={selectedEmail}
           onChange={e => setSelectedEmail(e.target.value)}
-          style={{ marginLeft: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 12.5, color: '#475569', background: '#fff' }}
+          style={{ marginLeft: 12, border: '1px solid #e2e8f0', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#475569', background: '#fff' }}
         >
           <option value="">Company-wide</option>
           {staffDirectory.map(s => <option key={s.email} value={s.email}>{s.name}</option>)}
         </select>
       </div>
-      <div style={{ fontSize: 11.5, color: '#94a3b8', marginBottom: 20 }}>
+      <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 20 }}>
         Real page-visit and key-action history — starts from the day this tracking shipped (2026-09-08), never backfilled. Last {summary?.rangeDays ?? 30} days.
       </div>
 
@@ -141,7 +141,7 @@ export default function ActivityInsightsPage() {
                       {summary.topActions.map(a => {
                         const label = sampleLabel(a.sampleDetails);
                         return label ? (
-                          <div key={a.eventType} style={{ fontSize: 10.5, color: '#94a3b8' }}>
+                          <div key={a.eventType} style={{ fontSize: 10, color: '#94a3b8' }}>
                             <strong style={{ color: '#64748b' }}>{a.eventType}</strong> — {label} · last {fmtTs(a.lastAt)}
                           </div>
                         ) : null;

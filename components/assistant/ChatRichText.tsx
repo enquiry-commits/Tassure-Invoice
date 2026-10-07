@@ -60,11 +60,11 @@ function MarkdownTable({ header, rows, onNav }: { header: string[]; rows: string
   return (
     <div style={{ margin: '10px 0', border: '1px solid #d7e1eb', borderRadius: 10, overflow: 'hidden' }}>
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, minWidth: 380 }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 380 }}>
           <thead>
             <tr style={{ background: '#1d3a5c' }}>
               {header.map((h, i) => (
-                <th key={i} style={{ textAlign: 'left', padding: '9px 13px', color: '#fff', fontWeight: 700, fontSize: 11.5, whiteSpace: 'nowrap' }}>
+                <th key={i} style={{ textAlign: 'left', padding: '9px 13px', color: '#fff', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' }}>
                   <Inline text={h} onNav={onNav} />
                 </th>
               ))}
@@ -187,7 +187,7 @@ export function RichText({ text, onNav }: { text: string; onNav: (href: string) 
         <div
           key={i}
           style={{
-            fontSize: 13.5,
+            fontSize: 13,
             fontWeight: 700,
             color: '#12233b',
             margin: elements.length === 0 ? '0 0 6px' : '16px 0 6px',

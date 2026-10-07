@@ -20,7 +20,7 @@ type Props = {
 
 const EXAMPLES = ['New clients this year', 'Clients per RM', 'By industry since March 2026'];
 const BOX: React.CSSProperties = { border: '1px solid #e2e8f0', borderRadius: 10, background: '#f8fafc', padding: 14 };
-const CHIP: React.CSSProperties = { display: 'inline-block', fontSize: 11.5, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 999, padding: '2px 9px', color: '#334155' };
+const CHIP: React.CSSProperties = { display: 'inline-block', fontSize: 11, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 999, padding: '2px 9px', color: '#334155' };
 
 export default function ExploreAssistant({ options, dimensionLabels, metricLabels, preview, onApply }: Props) {
   const [text, setText] = useState('');
@@ -62,7 +62,7 @@ export default function ExploreAssistant({ options, dimensionLabels, metricLabel
     return (
       <div style={{ ...BOX, background: '#fff' }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', marginBottom: 6 }}>I UNDERSTOOD</div>
-        {r.restate && <div style={{ fontSize: 13.5, color: '#0f172a', marginBottom: 10, lineHeight: 1.5 }}>{r.restate}</div>}
+        {r.restate && <div style={{ fontSize: 13, color: '#0f172a', marginBottom: 10, lineHeight: 1.5 }}>{r.restate}</div>}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
           <span style={CHIP}>Group by: <b>{dimensionLabels[plan.dimension] ?? plan.dimension}</b></span>
           <span style={CHIP}>Count: <b>{metricLabels[plan.metric] ?? plan.metric}</b></span>
@@ -75,16 +75,16 @@ export default function ExploreAssistant({ options, dimensionLabels, metricLabel
             I assumed: {r.assumed.join(' · ')}
           </div>
         )}
-        {r.ignored.length > 0 && <div style={{ fontSize: 11.5, color: '#0f172a', marginBottom: 8 }}>Ignored: {r.ignored.join(', ')}</div>}
-        <div style={{ fontSize: 12.5, color: '#475569', marginBottom: 10 }}>
+        {r.ignored.length > 0 && <div style={{ fontSize: 11, color: '#0f172a', marginBottom: 8 }}>Ignored: {r.ignored.join(', ')}</div>}
+        <div style={{ fontSize: 12, color: '#475569', marginBottom: 10 }}>
           This will show <b>{p.count}</b> {p.count === 1 ? 'company' : 'companies'}.
           {p.notRecorded > 0 && <> {p.notRecorded} with no Client Since recorded {p.notRecorded === 1 ? 'is' : 'are'} left out.</>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => { onApply(plan); setApplied(true); setResult(null); }}
-            style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', background: '#1d3a5c', border: 'none', borderRadius: 7, padding: '7px 16px', cursor: 'pointer' }}>Confirm</button>
+            style={{ fontSize: 12, fontWeight: 700, color: '#fff', background: '#1d3a5c', border: 'none', borderRadius: 7, padding: '7px 16px', cursor: 'pointer' }}>Confirm</button>
           <button onClick={() => setResult(null)}
-            style={{ fontSize: 12.5, color: '#64748b', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '7px 14px', cursor: 'pointer' }}>Cancel</button>
+            style={{ fontSize: 12, color: '#64748b', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7, padding: '7px 14px', cursor: 'pointer' }}>Cancel</button>
         </div>
       </div>
     );
@@ -92,7 +92,7 @@ export default function ExploreAssistant({ options, dimensionLabels, metricLabel
 
   return (
     <div style={BOX}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: '#1d3a5c', marginBottom: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#1d3a5c', marginBottom: 4 }}>
         <Sparkles size={14} />Ask in your own words
       </div>
       <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>
@@ -115,9 +115,9 @@ export default function ExploreAssistant({ options, dimensionLabels, metricLabel
         ))}
       </div>
 
-      {loading && <div style={{ fontSize: 12.5, color: '#64748b' }}>Thinking…</div>}
-      {error && <div style={{ fontSize: 12.5, color: '#0f172a' }}>{error} You can still use the Quick views on the left.</div>}
-      {applied && !loading && !result && <div style={{ fontSize: 12.5, color: '#1d3a5c' }}>Applied — see the results below. You can adjust anything on the left.</div>}
+      {loading && <div style={{ fontSize: 12, color: '#64748b' }}>Thinking…</div>}
+      {error && <div style={{ fontSize: 12, color: '#0f172a' }}>{error} You can still use the Quick views on the left.</div>}
+      {applied && !loading && !result && <div style={{ fontSize: 12, color: '#1d3a5c' }}>Applied — see the results below. You can adjust anything on the left.</div>}
 
       {result?.type === 'plan' && renderPlan(result)}
       {result?.type === 'clarify' && (

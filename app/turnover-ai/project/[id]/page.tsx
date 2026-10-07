@@ -80,7 +80,7 @@ function recomputeTotals(lineItems: TurnoverProjectLineItem[], snapshot: Currenc
 function money(n: number, currency: string | null) {
   return `${currency ?? ''} ${n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim();
 }
-const pillStyle = { fontSize: 10.5, fontWeight: 700, padding: '3px 8px', borderRadius: 999 } as const;
+const pillStyle = { fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 999 } as const;
 
 function ConfidencePill({ c }: { c: 'high' | 'medium' | 'low' }) {
   const tone = c === 'high' ? { bg: '#dcfce7', fg: '#15803d', label: 'High' } : c === 'medium' ? { bg: '#fef3c7', fg: '#b45309', label: 'Medium' } : { bg: '#fee2e2', fg: '#b91c1c', label: 'Low' };
@@ -93,7 +93,7 @@ function ConfidencePill({ c }: { c: 'high' | 'medium' | 'low' }) {
 // once the field loses focus.
 function cellInputStyle(extra?: object) {
   return {
-    border: '1px solid transparent', borderRadius: 6, padding: '5px 7px', fontSize: 12.5,
+    border: '1px solid transparent', borderRadius: 6, padding: '5px 7px', fontSize: 12,
     boxSizing: 'border-box' as const, width: '100%', background: 'transparent', font: 'inherit', color: 'inherit',
     ...extra,
   };
@@ -116,7 +116,7 @@ function LineItemRow({ item, gstEnabled, columns, busy, onPatch, onToggle }: {
   const focusBorder = { onFocus: (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = '#0f766e'; }, onBlurCapture: (e: React.FocusEvent<HTMLInputElement>) => { e.currentTarget.style.borderColor = 'transparent'; } };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: columns, gap: 10, alignItems: 'center', padding: '6px 16px', borderTop: '1px solid #f1f5f9', fontSize: 12.5, background: ignored ? '#f8fafc' : item.is_duplicate_suspect ? '#fffbeb' : undefined, opacity: ignored ? 0.6 : 1 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: columns, gap: 10, alignItems: 'center', padding: '6px 16px', borderTop: '1px solid #f1f5f9', fontSize: 12, background: ignored ? '#f8fafc' : item.is_duplicate_suspect ? '#fffbeb' : undefined, opacity: ignored ? 0.6 : 1 }}>
       <div style={{ minWidth: 0 }}>
         <input value={vendor} onChange={e => setVendor(e.target.value)} onBlur={save} onKeyDown={commitOnEnter} disabled={ignored || busy} placeholder="(vendor not identified)"
           style={cellInputStyle({ fontWeight: 500, color: '#0f172a' })} {...focusBorder} />
@@ -295,7 +295,7 @@ export default function TurnoverProjectPage() {
   };
 
   if (loadError) return <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>{loadError}</div>;
-  if (!detail) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 12.5 }}>Loading…</div>;
+  if (!detail) return <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>Loading…</div>;
 
   const items = detail.lineItems;
   const visible = confidenceFilter === 'all' ? items : items.filter(i => i.confidence === confidenceFilter);
@@ -324,24 +324,24 @@ export default function TurnoverProjectPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <input autoFocus value={nameDraft} onChange={e => setNameDraft(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') renameProject(); if (e.key === 'Escape') setRenaming(false); }}
-                style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', border: '1px solid #0f766e', borderRadius: 6, padding: '2px 6px', outline: 'none' }} />
+                style={{ fontSize: 20, fontWeight: 700, color: '#0f172a', border: '1px solid #0f766e', borderRadius: 6, padding: '2px 6px', outline: 'none' }} />
               <button onClick={renameProject} disabled={busy} title="Save" style={{ border: 'none', background: 'none', color: '#15803d', cursor: 'pointer', display: 'flex' }}><Check size={18} /></button>
               <button onClick={() => setRenaming(false)} title="Cancel" style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#0f172a' }}>{detail.project.name}</h1>
+              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0f172a' }}>{detail.project.name}</h1>
               <button onClick={() => { setNameDraft(detail.project.name); setRenaming(true); }} title="Rename project"
                 style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex' }}><Pencil size={14} /></button>
             </div>
           )}
-          <div style={{ fontSize: 11.5, color: '#94a3b8', marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
             Created {new Date(detail.project.created_at).toLocaleDateString('en-SG')}{detail.project.gst_enabled && ' · GST calculated separately'}
           </div>
         </div>
         {detail.totals.length > 0 && (
           <a href={`/api/turnover-ai/export?projectId=${projectId}`}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 16px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, background: '#0f766e', color: '#fff', textDecoration: 'none' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 16px', borderRadius: 8, fontSize: 12, fontWeight: 700, background: '#0f766e', color: '#fff', textDecoration: 'none' }}>
             <Download size={14} />Export Excel
           </a>
         )}
@@ -349,7 +349,7 @@ export default function TurnoverProjectPage() {
 
       <div style={{ display: 'flex', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
         {detail.totals.length === 0 && (
-          <div style={{ flex: 1, minWidth: 200, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px', color: '#94a3b8', fontSize: 12.5 }}>No receipts yet</div>
+          <div style={{ flex: 1, minWidth: 200, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px', color: '#94a3b8', fontSize: 12 }}>No receipts yet</div>
         )}
         {detail.totals.map(t => (
           <div key={t.currency} style={{ flex: 1, minWidth: 200, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px' }}>
@@ -368,7 +368,7 @@ export default function TurnoverProjectPage() {
       </div>
 
       {filesLostOnTheWay && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 12.5, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 10, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 12, marginBottom: 12 }}>
           <AlertTriangle size={15} style={{ flexShrink: 0 }} />
           <span style={{ flex: 1 }}>
             The {incoming === 1 ? 'file you dropped' : `${incoming} files you dropped`} on the Projects page didn&rsquo;t carry over (the page reloaded on the way here) — drop {incoming === 1 ? 'it' : 'them'} into the box below again.
@@ -387,7 +387,7 @@ export default function TurnoverProjectPage() {
       >
         <UploadCloud size={22} color="#94a3b8" />
         <div style={{ fontSize: 13, color: '#334155', fontWeight: 600 }}>Drag files here, or click to select</div>
-        <div style={{ fontSize: 11.5, color: '#94a3b8' }}>PDF (up to {megabytes(UPLOAD_MAX_BYTES)}), JPG, PNG, WEBP, HEIC — up to {MAX_FILES_PER_BATCH} at once; add more rounds into this same project anytime</div>
+        <div style={{ fontSize: 11, color: '#94a3b8' }}>PDF (up to {megabytes(UPLOAD_MAX_BYTES)}), JPG, PNG, WEBP, HEIC — up to {MAX_FILES_PER_BATCH} at once; add more rounds into this same project anytime</div>
         <input ref={fileInputRef} type="file" multiple accept={ACCEPT} style={{ display: 'none' }}
           onChange={e => { if (e.target.files) uploadFiles(e.target.files); e.target.value = ''; }} />
       </div>
@@ -395,7 +395,7 @@ export default function TurnoverProjectPage() {
       {uploads.length > 0 && (
         <div style={{ marginBottom: 18, border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff', overflow: 'hidden', maxHeight: 220, overflowY: 'auto' }}>
           {uploads.map((u, i) => (
-            <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', borderBottom: i < uploads.length - 1 ? '1px solid #f1f5f9' : 'none', fontSize: 12.5 }}>
+            <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 16px', borderBottom: i < uploads.length - 1 ? '1px solid #f1f5f9' : 'none', fontSize: 12 }}>
               {u.status === 'uploading' && <Loader2 size={14} color="#94a3b8" style={{ animation: 'spin 1s linear infinite' }} />}
               {u.status === 'done' && <CheckCircle2 size={14} color="#15803d" />}
               {u.status === 'error' && <AlertTriangle size={14} color="#b91c1c" />}
@@ -411,7 +411,7 @@ export default function TurnoverProjectPage() {
       )}
 
       {unreadDocuments.length > 0 && (
-        <div style={{ marginBottom: 18, padding: '12px 16px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 12.5, color: '#991b1b' }}>
+        <div style={{ marginBottom: 18, padding: '12px 16px', borderRadius: 12, background: '#fef2f2', border: '1px solid #fecaca', fontSize: 12, color: '#991b1b' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 700, marginBottom: 6 }}>
             <AlertTriangle size={15} />
             {unreadDocuments.length === 1 ? '1 file couldn’t be read' : `${unreadDocuments.length} files couldn’t be read`} — nothing from {unreadDocuments.length === 1 ? 'it' : 'them'} is in the total
@@ -423,12 +423,12 @@ export default function TurnoverProjectPage() {
                 {d.outcome === 'interrupted' ? 'Reading was cut off before it finished — drop it again.' : (d.error_message ?? 'Reading failed.')}
               </span>
               <button onClick={() => removeDocument(d)} disabled={busy} title="Remove this file from the project (nothing from it is in the total)"
-                style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, padding: '2px 8px', borderRadius: 6, border: '1px solid #fecaca', background: '#fff', color: '#991b1b', fontSize: 11.5, fontWeight: 600, cursor: busy ? 'default' : 'pointer' }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, padding: '2px 8px', borderRadius: 6, border: '1px solid #fecaca', background: '#fff', color: '#991b1b', fontSize: 11, fontWeight: 600, cursor: busy ? 'default' : 'pointer' }}>
                 <X size={12} /> Remove
               </button>
             </div>
           ))}
-          <div style={{ marginTop: 6, fontSize: 11.5, color: '#b45309' }}>Fix the file if the reason says so, then drop it into the box above again — and Remove the old line here.</div>
+          <div style={{ marginTop: 6, fontSize: 11, color: '#b45309' }}>Fix the file if the reason says so, then drop it into the box above again — and Remove the old line here.</div>
         </div>
       )}
 
@@ -447,7 +447,7 @@ export default function TurnoverProjectPage() {
           {detail.project.gst_enabled && <div style={{ textAlign: 'right' }}>GST</div>}
           <div>Confidence</div><div style={{ textAlign: 'right' }}>Actions</div>
         </div>
-        {visible.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 12.5 }}>No matching records</div>}
+        {visible.length === 0 && <div style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>No matching records</div>}
         {visible.map(item => (
           <LineItemRow key={item.id} item={item} gstEnabled={detail.project.gst_enabled} columns={columns} busy={busy}
             onPatch={(id, patch) => patchItem(id, { action: 'edit', ...patch })} onToggle={toggleIgnore} />

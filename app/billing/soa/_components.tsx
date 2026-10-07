@@ -48,7 +48,7 @@ const isOverpaid = (net: number) => net < 0;
 function WeOweBadge({ amount }: { amount: number }) {
   return (
     <span title={`This client has paid S$${fmtNum(-amount)} more than it was billed — we owe it money`}
-      style={{ display: 'inline-block', padding: '3px 7px', borderRadius: 6, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+      style={{ display: 'inline-block', padding: '3px 7px', borderRadius: 6, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
       We owe client
     </span>
   );
@@ -406,7 +406,7 @@ function SoaDraftPopover({
             {templates.length === 0 && <option value="">No SOA templates found</option>}
             {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
-          {error && <div style={{ fontSize: 10.5, color: '#b91c1c', marginBottom: 8 }}>{error}</div>}
+          {error && <div style={{ fontSize: 10, color: '#b91c1c', marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
             <button onClick={() => onOpenChange(false)} style={{ fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: '5px 8px' }}>Cancel</button>
             <button onClick={draft} disabled={drafting || !selectedTemplateId}
@@ -519,19 +519,19 @@ function PicMultiSelect({ options, groups, selected, onChange }: {
   return (
     <div ref={boxRef} style={{ position: 'relative' }}>
       <button ref={triggerRef} onClick={() => { if (!open) updatePosition(); setOpen(v => !v); }} type="button"
-        style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 12.5, fontWeight: selected.length ? 700 : 400, background: '#fff', color: selected.length ? '#1e3a5f' : '#334155', cursor: 'pointer' }}>
+        style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: selected.length ? 700 : 400, background: '#fff', color: selected.length ? '#1e3a5f' : '#334155', cursor: 'pointer' }}>
         {label}<ChevronDown size={12} style={{ opacity: 0.6 }} />
       </button>
       {open && pos && createPortal(
         <div ref={popoverRef} style={{ position: 'fixed', top: pos.top, right: pos.right, zIndex: 9999, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', width: 260, maxHeight: Math.min(480, pos.maxHeight), overflowY: 'auto', overscrollBehavior: 'contain' }}>
           {groups.length === 0 && !hasBadDebt && (
-            <div style={{ padding: '10px 12px', fontSize: 11.5, color: '#94a3b8' }}>No PIC data yet</div>
+            <div style={{ padding: '10px 12px', fontSize: 11, color: '#94a3b8' }}>No PIC data yet</div>
           )}
           {groups.map(g => {
             if (g.ungrouped) return (
               <div key={g.team} style={{ borderBottom: '1px solid #f1f5f9', padding: '2px 0' }}>
                 {g.names.map(name => (
-                  <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', fontSize: 12.5, cursor: 'pointer' }}>
+                  <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }}>
                     <input type="checkbox" checked={selected.includes(name)} onChange={() => toggleName(name)} />
                     {name}
                   </label>
@@ -542,12 +542,12 @@ function PicMultiSelect({ options, groups, selected, onChange }: {
             return (
               <div key={g.team} style={{ borderBottom: '1px solid #f1f5f9' }}>
                 <div onClick={() => toggleGroup(g.names)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: '#f8fafc', cursor: 'pointer', fontSize: 10.5, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.03em' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: '#f8fafc', cursor: 'pointer', fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.03em' }}>
                   <input type="checkbox" checked={allIn} onChange={() => toggleGroup(g.names)} onClick={e => e.stopPropagation()} style={{ cursor: 'pointer' }} />
                   {g.team}
                 </div>
                 {g.names.map(name => (
-                  <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px 6px 26px', fontSize: 12.5, cursor: 'pointer' }}>
+                  <label key={name} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 10px 6px 26px', fontSize: 12, cursor: 'pointer' }}>
                     <input type="checkbox" checked={selected.includes(name)} onChange={() => toggleName(name)} />
                     {name}
                   </label>
@@ -556,7 +556,7 @@ function PicMultiSelect({ options, groups, selected, onChange }: {
             );
           })}
           {hasBadDebt && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12.5, cursor: 'pointer', color: 'var(--status-danger)', fontWeight: 600 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 10px', fontSize: 12, cursor: 'pointer', color: 'var(--status-danger)', fontWeight: 600 }}>
               <input type="checkbox" checked={selected.includes('BD')} onChange={() => toggleName('BD')} />
               Bad Debt
             </label>
@@ -1050,12 +1050,12 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         onClick={() => isOpen ? closeDetail() : openDetail(c, rowCompany(c))}
         style={{ display: 'grid', gridTemplateColumns: soaListColumns, alignItems: 'start', minHeight: 56, columnGap: 10, padding: '11px 14px', cursor: 'pointer' }}>
         <div style={{ color: opts.child ? '#cbd5e1' : '#94a3b8', display: 'flex', paddingLeft: opts.child ? 5 : 0 }}>
-          {opts.child ? <span style={{ fontSize: 15 }}>↳</span> : isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+          {opts.child ? <span style={{ fontSize: 16 }}>↳</span> : isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </div>
         <div style={{ padding: '0 6px' }}>
           <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {opts.child
-              ? <span style={{ color: '#64748b', fontSize: 10.5, fontWeight: 700 }}>{rowCompany(c)} source balance</span>
+              ? <span style={{ color: '#64748b', fontSize: 10, fontWeight: 700 }}>{rowCompany(c)} source balance</span>
               : <><span style={{ color: '#cbd5e1', fontSize: 10 }}>{opts.listIndex + 1}</span>{c.companyName.toUpperCase()}</>}
           </div>
         </div>
@@ -1087,7 +1087,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         {AGING_BUCKETS.map(bucket => {
           const items = c.lineItems.filter(item => item.bucket === bucket.key);
           return (
-            <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontVariantNumeric: 'tabular-nums' }}>
+            <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11, fontWeight: 400, fontVariantNumeric: 'tabular-nums' }}>
               {items.length ? items.map((item, index) => {
                 const isNegative = item.amount < 0;
                 const tag = isNegative ? (TXN_TYPE_TAGS[item.txnType] ?? item.txnType) : null;
@@ -1324,7 +1324,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                           <div className="company-name-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ color: '#cbd5e1', fontSize: 10 }}>{entry.listIndex + 1}</span>{group.companyName.toUpperCase()}
                           </div>
-                          <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9.5 }}>
+                          <div style={{ marginTop: 3, color: '#94a3b8', fontSize: 9 }}>
                             {group.rows.length > 1 ? `${group.rows.length} sources · combined SOA` : `${sources[0]} · click for SOA`}
                           </div>
                         </button>
@@ -1383,7 +1383,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                             const badgeError = badgeDownloadErrors[key];
                             return (
                               <span key={source} style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 3, flex: '0 0 auto', fontSize: 9.5, fontWeight: 700,
+                                display: 'inline-flex', alignItems: 'center', gap: 3, flex: '0 0 auto', fontSize: 9, fontWeight: 700,
                                 color: badgeError ? 'var(--status-danger)' : '#1e3a5f',
                               }}>
                                 {isDownloading ? <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} /> : source}
@@ -1394,7 +1394,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       </div>
                       {AGING_BUCKETS.map(bucket => {
                         const value = combined.aging[bucket.key];
-                        return <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontVariantNumeric: 'tabular-nums', color: value < 0 ? 'var(--status-danger)' : value ? '#64748b' : '#cbd5e1' }}>{value ? fmtNum(value) : '—'}</div>;
+                        return <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11, fontVariantNumeric: 'tabular-nums', color: value < 0 ? 'var(--status-danger)' : value ? '#64748b' : '#cbd5e1' }}>{value ? fmtNum(value) : '—'}</div>;
                       })}
                       <div style={{ textAlign: 'center', fontSize: 12, fontVariantNumeric: 'tabular-nums', color: isOverpaid(combined.totalOutstanding) ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
                       <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
@@ -1496,7 +1496,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 780, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
               <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: '4px solid #ea580c', padding: '16px 20px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{c.companyName.toUpperCase()}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{c.companyName.toUpperCase()}</div>
                   <button onClick={closeDetail} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -1625,7 +1625,7 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
             </div>
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.txnDate)}</div>
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.dueDate)}</div>
-            <div style={{ textAlign: 'center', fontSize: 10.5, fontWeight: 700, color: BUCKET_COLOR[inv.bucket] }}>{AGING_BUCKETS.find(b => b.key === inv.bucket)?.label}</div>
+            <div style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: BUCKET_COLOR[inv.bucket] }}>{AGING_BUCKETS.find(b => b.key === inv.bucket)?.label}</div>
             {/* Vincent, 2026-09-15: sign-based (not inv.type === 'credit')
                 so any negative row — an unapplied CreditMemo, or (since the
                 AgedReceivableDetail report sync, docs/INVARIANTS.md
@@ -1649,7 +1649,7 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
       )}
 
       {isOverpaid(company.totalOutstanding) && (
-        <div style={{ marginBottom: 10, padding: '9px 12px', borderRadius: 8, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 12.5, fontWeight: 700 }}>
+        <div style={{ marginBottom: 10, padding: '9px 12px', borderRadius: 8, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 12, fontWeight: 700 }}>
           We owe this client S${fmtNum(-company.totalOutstanding)} (it paid more than it was billed) — no collection statement or reminder is offered.
         </div>
       )}

@@ -439,7 +439,7 @@ export default function AssistantWidget() {
         >
           {dragActive && (
             <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,118,110,0.08)', border: '2px dashed #0f766e', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-              <div style={{ background: '#fff', padding: '8px 14px', borderRadius: 8, fontSize: 12.5, fontWeight: 700, color: '#0f766e', boxShadow: '0 4px 16px rgba(15,23,42,0.15)' }}>
+              <div style={{ background: '#fff', padding: '8px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, color: '#0f766e', boxShadow: '0 4px 16px rgba(15,23,42,0.15)' }}>
                 松开以添加图片或 PDF
               </div>
             </div>
@@ -454,8 +454,8 @@ export default function AssistantWidget() {
               <Bot size={17} />
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: '#fff' }}>Tassure 系统助手</div>
-              <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.72)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Tassure 系统助手</div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,.72)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 正在协助：{guide.label}
               </div>
             </div>
@@ -483,7 +483,7 @@ export default function AssistantWidget() {
 
           {chatMessages.length === 0 ? (
             <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12, background: '#f8fafc' }}>
-              <div style={{ fontSize: 12.5, color: '#334155' }}>
+              <div style={{ fontSize: 12, color: '#334155' }}>
                 <strong style={{ color: '#12233b' }}>你好，我是 Tassure 系统助手</strong>
                 <div style={{ marginTop: 4 }}>{guide.summary}</div>
               </div>
@@ -510,7 +510,7 @@ export default function AssistantWidget() {
                     maxWidth: '91%',
                     padding: '10px 13px',
                     borderRadius: 12,
-                    fontSize: 12.5,
+                    fontSize: 12,
                     lineHeight: 1.55,
                     whiteSpace: message.role === 'user' ? 'pre-wrap' : 'normal',
                     background: message.role === 'user' ? '#1d3a5c' : '#fff',
@@ -561,7 +561,7 @@ export default function AssistantWidget() {
                 </div>
               ))}
               {chatBusy && (
-                <div style={{ alignSelf: 'flex-start', padding: '9px 14px', borderRadius: 12, background: '#fff', border: '1px solid #e3e9f0', fontSize: 12.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ alignSelf: 'flex-start', padding: '9px 14px', borderRadius: 12, background: '#fff', border: '1px solid #e3e9f0', fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 7 }}>
                   <Sparkles size={13} /> 正在结合系统资料查询…
                 </div>
               )}

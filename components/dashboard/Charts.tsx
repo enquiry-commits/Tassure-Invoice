@@ -109,13 +109,13 @@ export function Donut({ segments: rawSegments, size = 168, thickness = 26 }: { s
           </PieChart>
         </ResponsiveContainer>
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-          <span style={{ fontSize: 26, fontWeight: 700, color: '#1e3a5f', lineHeight: 1 }}>{formatCompactNumber(total)}</span>
-          <span style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 3 }}>total</span>
+          <span style={{ fontSize: 28, fontWeight: 700, color: '#1e3a5f', lineHeight: 1 }}>{formatCompactNumber(total)}</span>
+          <span style={{ fontSize: 10, color: '#94a3b8', marginTop: 3 }}>total</span>
         </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
         {segments.map((s, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5 }}>
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
             <span style={{ width: 11, height: 11, borderRadius: 3, background: s.color, flexShrink: 0 }} />
             <span style={{ color: '#475569', minWidth: 88 }}>{s.label}</span>
             <span style={{ fontWeight: 700, color: '#1e3a5f' }}>{s.value}</span>
@@ -150,7 +150,7 @@ export function LineChart({ labels, series, height = 260, valueFormatter = forma
     <div>
       <div style={{ display: 'flex', gap: 14, marginBottom: 10 }}>
         {series.map(s => (
-          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: '#475569' }}>
+          <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#475569' }}>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 }} />{s.label}
           </div>
         ))}

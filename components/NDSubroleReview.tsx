@@ -113,10 +113,10 @@ export default function NDSubroleReview({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-[13px] font-extrabold text-slate-800">TeamWork subrole review</h2>
-            <span className="rounded-full border border-amber-200 bg-white px-2.5 py-0.5 text-[10.5px] font-bold text-amber-800">
+            <span className="rounded-full border border-amber-200 bg-white px-2.5 py-0.5 text-[10px] font-bold text-amber-800">
               {items.length} to confirm
             </span>
-            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[10.5px] font-semibold text-slate-500">
+            <span className="rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[10px] font-semibold text-slate-500">
               {people.length} ND people
             </span>
           </div>

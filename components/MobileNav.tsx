@@ -103,7 +103,7 @@ export default function MobileNav({ title, ready, canOpen }: { title: string; re
                         target={l.external ? '_blank' : undefined} rel={l.external ? 'noopener noreferrer' : undefined}
                         style={{
                           display: 'block', padding: '10px 12px', borderRadius: 9, marginBottom: 2,
-                          fontSize: 13.5, fontWeight: active ? 700 : 500, textDecoration: 'none',
+                          fontSize: 13, fontWeight: active ? 700 : 500, textDecoration: 'none',
                           color: active ? '#fff' : 'rgba(255,255,255,0.75)',
                           background: active ? 'rgba(255,255,255,0.1)' : 'transparent',
                         }}>

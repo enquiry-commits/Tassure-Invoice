@@ -53,10 +53,10 @@ export function ClientPicker({ value, onChange, placeholder }: {
         onChange={e => { onChange({ companyId: null, name: e.target.value }); setOpen(true); }}
         onFocus={() => setOpen(true)}
         placeholder={placeholder ?? 'Select an existing client, or type a new one'}
-        style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '6px 10px', fontSize: 12.5, width: '100%', boxSizing: 'border-box' }}
+        style={{ border: '1px solid #e2e8f0', borderRadius: 7, padding: '6px 10px', fontSize: 12, width: '100%', boxSizing: 'border-box' }}
       />
       {value.companyId && (
-        <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 9.5, fontWeight: 700, color: '#15803d' }}>Matched</span>
+        <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 9, fontWeight: 700, color: '#15803d' }}>Matched</span>
       )}
       {open && (
         <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 2, zIndex: 40, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 20px rgba(0,0,0,0.15)', maxHeight: 240, overflowY: 'auto', width: '100%' }}>

@@ -111,13 +111,13 @@ function NewProjectModal({ files, projects, onClose, onCreated, onUseExisting }:
     <div onClick={files ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{files ? 'Which client are these files for?' : 'New Project'}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{files ? 'Which client are these files for?' : 'New Project'}</div>
           <button onClick={onClose} disabled={creating} title={files ? 'Cancel — nothing is created or read' : 'Close'} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
         </div>
         <div style={{ padding: '18px 20px', display: 'grid', gap: 14 }}>
           {files && <FileSummary files={files} />}
           <div>
-            <label style={{ fontSize: 11.5, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 5 }}>Client / project name</label>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', display: 'block', marginBottom: 5 }}>Client / project name</label>
             <ClientPicker value={client} onChange={setClient} placeholder="Select an existing client, or type a new project name" />
           </div>
           {matches.length > 0 && (
@@ -129,7 +129,7 @@ function NewProjectModal({ files, projects, onClose, onCreated, onUseExisting }:
                     {p.name} · {plural(p.documentCount, 'file')}{p.gst_enabled ? ' · GST' : ''}
                   </span>
                   <button onClick={() => onUseExisting(p)} disabled={creating}
-                    style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #f59e0b', background: '#fff', color: '#92400e', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+                    style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #f59e0b', background: '#fff', color: '#92400e', fontSize: 11, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
                     {files ? 'Add the files here' : 'Open it'}
                   </button>
                 </div>
@@ -138,7 +138,7 @@ function NewProjectModal({ files, projects, onClose, onCreated, onUseExisting }:
             </div>
           )}
           <div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#334155', cursor: 'pointer' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#334155', cursor: 'pointer' }}>
               <input type="checkbox" checked={gstEnabled} onChange={e => setGstEnabled(e.target.checked)} />
               This client needs GST calculated out separately
             </label>
@@ -178,8 +178,8 @@ function ProjectCard({ project, onDelete }: { project: TurnoverProject; onDelete
       </Link>
       {confirming ? (
         <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-          <button onClick={() => onDelete(project.id)} style={{ flex: 1, padding: '6px 10px', borderRadius: 7, border: 'none', background: 'var(--status-danger)', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>Delete for good</button>
-          <button onClick={() => setConfirming(false)} style={{ flex: 1, padding: '6px 10px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 11.5, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={() => onDelete(project.id)} style={{ flex: 1, padding: '6px 10px', borderRadius: 7, border: 'none', background: 'var(--status-danger)', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>Delete for good</button>
+          <button onClick={() => setConfirming(false)} style={{ flex: 1, padding: '6px 10px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', fontSize: 11, cursor: 'pointer' }}>Cancel</button>
         </div>
       ) : (
         <button onClick={() => setConfirming(true)} title="Delete project"
@@ -200,15 +200,15 @@ function DropZone({ big, active, onPick }: { big: boolean; active: boolean; onPi
     return (
       <div onClick={onPick} style={{ border, background, borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 14 }}>
         <UploadCloud size={18} color={active ? '#0f766e' : '#94a3b8'} />
-        <span style={{ fontSize: 12.5, color: '#334155', fontWeight: 600 }}>Drop receipts or invoices anywhere on this page to start a project</span>
-        <span style={{ fontSize: 11.5, color: '#94a3b8' }}>— or click to choose files · to add to an existing project, open it below</span>
+        <span style={{ fontSize: 12, color: '#334155', fontWeight: 600 }}>Drop receipts or invoices anywhere on this page to start a project</span>
+        <span style={{ fontSize: 11, color: '#94a3b8' }}>— or click to choose files · to add to an existing project, open it below</span>
       </div>
     );
   }
   return (
     <div onClick={onPick} style={{ border, background, borderRadius: 14, padding: '34px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center', cursor: 'pointer' }}>
       <UploadCloud size={30} color={active ? '#0f766e' : '#94a3b8'} />
-      <div style={{ fontSize: 15, color: '#0f172a', fontWeight: 700 }}>Drop a client&rsquo;s receipts or invoices here</div>
+      <div style={{ fontSize: 16, color: '#0f172a', fontWeight: 700 }}>Drop a client&rsquo;s receipts or invoices here</div>
       <div style={{ fontSize: 12, color: '#94a3b8' }}>or click to choose files · PDF, JPG, PNG, WEBP, HEIC · up to {MAX_FILES_PER_BATCH} at a time</div>
       <div style={{ display: 'flex', gap: 18, marginTop: 10, fontSize: 12, color: '#475569', flexWrap: 'wrap', justifyContent: 'center' }}>
         <span><b>1</b> Drop the files</span>
@@ -306,13 +306,13 @@ export default function TurnoverAiProjectsPage() {
     <div onDragEnter={onPageDragEnter} onDragOver={onPageDragOver} onDragLeave={onPageDragLeave} onDrop={onPageDrop} style={{ minHeight: '70vh' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
         <div>
-          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#0f172a' }}>Turnover AI</h1>
-          <p style={{ margin: 0, fontSize: 12.5, color: '#64748b', maxWidth: 560, lineHeight: 1.6 }}>
+          <h1 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700, color: '#0f172a' }}>Turnover AI</h1>
+          <p style={{ margin: 0, fontSize: 12, color: '#64748b', maxWidth: 560, lineHeight: 1.6 }}>
             One project per client — drop its receipts here, name the client, and AI reads them straight into a running total; fix any value directly if it looks off. Originals and per-receipt detail are kept for 3 days; the total stays in the folder after that.
           </p>
         </div>
         <button onClick={() => { setDropped(null); setShowCreate(true); }}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 16px', borderRadius: 8, border: 'none', background: '#0f766e', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, height: 36, padding: '0 16px', borderRadius: 8, border: 'none', background: '#0f766e', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}>
           <Plus size={14} />New Project
         </button>
       </div>
@@ -321,7 +321,7 @@ export default function TurnoverAiProjectsPage() {
         onChange={e => { takeFiles(e.target.files); e.target.value = ''; }} />
 
       {loadError && <div style={{ padding: '10px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12, marginBottom: 14 }}>{loadError}</div>}
-      {projects === null && <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 12.5 }}>Loading…</div>}
+      {projects === null && <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 12 }}>Loading…</div>}
       {projects !== null && <DropZone big={projects.length === 0} active={dragActive} onPick={() => fileInputRef.current?.click()} />}
       {notice && <div style={{ padding: '9px 12px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 12, margin: '-4px 0 14px' }}>{notice}</div>}
 
@@ -333,7 +333,7 @@ export default function TurnoverAiProjectsPage() {
         </div>
       )}
       {projects !== null && projects.length > 0 && visibleProjects.length === 0 && (
-        <div style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 12.5, border: '1px dashed #e2e8f0', borderRadius: 14 }}>No project matches &ldquo;{search}&rdquo;.</div>
+        <div style={{ padding: 30, textAlign: 'center', color: '#94a3b8', fontSize: 12, border: '1px dashed #e2e8f0', borderRadius: 14 }}>No project matches &ldquo;{search}&rdquo;.</div>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14 }}>

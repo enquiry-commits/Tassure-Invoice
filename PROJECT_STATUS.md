@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-07 (NEW: typography step 2 — font sizes 35 → 11 values; Vincent: "35种太夸张了").
+
+**What changed (INV-UI-002, REG-052).** All font sizes in app/ and components/ moved onto 9/10/11/12/13/14/16/18/20/24/28 (half sizes rounded down, big ones mapped), 49 files, 1,500+ values by script; leftover ternaries and embedded CSS fixed by hand; `test-typography-scale.ts` guards it (also weights 400–700).
+
+**Verification.** `tsc` 0; guard test ALL OK. **Not verified in a browser:** dense tables (billing, SOA, Master List) — rounding is down so they can only get narrower, but 8→9, 15→16 and 23→24 grow slightly; look at them.
+
 Last updated: 2026-10-07 (NEW: typography step 1 — one font look across the system; Vincent: "整个系统都在用着很多种的字体…很杂乱"; council of 4 recommended fonts first, sizes later).
 
 **What changed (INV-UI-001, REG-051).** Buttons/inputs/dropdowns now inherit the app font (they showed Arial); Chinese fallback fonts added to every stack; default font token = Inter (Appearance picker kept; it is one global setting and none was saved); hard-coded Arial/monospace replaced by tabular-nums (Outlook email box and Appearance code input kept); font weights 650/750/760/800/850/900 folded into 600/700. **Not done:** font sizes (35 values) — step 2 awaits Vincent's look at step 1; guard test = step 3.

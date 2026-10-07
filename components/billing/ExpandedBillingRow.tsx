@@ -95,21 +95,21 @@ function ParentCompanyPicker({ companyId, parentCompanyId, parentCompanyName, on
       {parentCompanyId && !open ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#64748b' }}>
           <Building2 size={11} />Bill-To parent: <strong style={{ color: '#334155' }}>{parentCompanyName}</strong>
-          <button onClick={() => setOpen(true)} style={{ border: 'none', background: 'none', color: 'var(--accent-blue)', fontSize: 10.5, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>Change</button>
-          <button onClick={() => save(null, null)} style={{ border: 'none', background: 'none', color: '#94a3b8', fontSize: 10.5, cursor: 'pointer', padding: 0 }}>Clear</button>
+          <button onClick={() => setOpen(true)} style={{ border: 'none', background: 'none', color: 'var(--accent-blue)', fontSize: 10, fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', padding: 0 }}>Change</button>
+          <button onClick={() => save(null, null)} style={{ border: 'none', background: 'none', color: '#94a3b8', fontSize: 10, cursor: 'pointer', padding: 0 }}>Clear</button>
         </span>
       ) : !open ? (
-        <button onClick={() => setOpen(true)} style={{ border: '1px dashed #cbd5e1', background: 'none', color: '#94a3b8', fontSize: 10.5, fontWeight: 600, cursor: 'pointer', borderRadius: 5, padding: '2px 7px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <button onClick={() => setOpen(true)} style={{ border: '1px dashed #cbd5e1', background: 'none', color: '#94a3b8', fontSize: 10, fontWeight: 600, cursor: 'pointer', borderRadius: 5, padding: '2px 7px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <Plus size={10} />Set parent company
         </button>
       ) : (
         <div style={{ position: 'relative' }}>
           <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search company…"
-            style={{ border: '1px solid #cbd5e1', borderRadius: 5, padding: '4px 7px', fontSize: 11.5, width: 200 }} />
+            style={{ border: '1px solid #cbd5e1', borderRadius: 5, padding: '4px 7px', fontSize: 11, width: 200 }} />
           <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 2, zIndex: 40, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, boxShadow: '0 8px 20px rgba(0,0,0,0.15)', maxHeight: 220, overflowY: 'auto', width: 260 }}>
             {filtered.length === 0 && <div style={{ padding: '8px 10px', fontSize: 11, color: '#94a3b8' }}>No match</div>}
             {filtered.map(o => (
-              <div key={o.id} onClick={() => save(o.id, o.company_name)} style={{ padding: '6px 10px', fontSize: 11.5, cursor: 'pointer' }}>{o.company_name}</div>
+              <div key={o.id} onClick={() => save(o.id, o.company_name)} style={{ padding: '6px 10px', fontSize: 11, cursor: 'pointer' }}>{o.company_name}</div>
             ))}
           </div>
         </div>
@@ -309,7 +309,7 @@ function BillToFields({ company, value, onChange, parentName }: {
     value.attn.trim() ? `ATTN ${value.attn.trim()}` : '',
   ].filter(Boolean).join(' · ');
 
-  const label: React.CSSProperties = { fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 3, display: 'block' };
+  const label: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.3px', marginBottom: 3, display: 'block' };
   const input: React.CSSProperties = { width: '100%', fontSize: 12, padding: '6px 8px', borderRadius: 6, border: '1px solid #e2e8f0', color: '#334155', background: '#fff' };
 
   return (
@@ -320,7 +320,7 @@ function BillToFields({ company, value, onChange, parentName }: {
         style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: 'none', background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', marginBottom: open ? 8 : 0 }}
       >
         <ChevronRight size={12} color="#94a3b8" style={{ flexShrink: 0, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 120ms' }} />
-        <span style={{ fontSize: 10.5, fontWeight: 700, color: '#31506f' }}>Bill To (optional)</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#31506f' }}>Bill To (optional)</span>
         {summary
           ? <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: 999, padding: '1px 8px' }}>{summary}</span>
           : <span style={{ fontSize: 10, color: '#94a3b8' }}>{open ? "Leave empty and QuickBooks uses the customer's own address, exactly as today" : "Not set — QuickBooks uses the customer's own address"}</span>}
@@ -383,7 +383,7 @@ function BillToFields({ company, value, onChange, parentName }: {
 
       {(value.careOf.trim() || value.attn.trim()) && (
         <div style={{ marginTop: 9, padding: '7px 9px', background: '#fff', border: '1px dashed #dbe3ec', borderRadius: 6, fontSize: 11, color: '#475569', lineHeight: 1.6 }}>
-          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>What the client will see</div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', marginBottom: 3 }}>What the client will see</div>
           <div>{company.companyName}</div>
           {value.careOf.trim() && <div>c/o {value.careOf.trim()}</div>}
           <div style={{ color: '#94a3b8' }}>
@@ -397,7 +397,7 @@ function BillToFields({ company, value, onChange, parentName }: {
 
       {differsFromStored && (
         <div style={{ marginTop: 9, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 10.5, color: '#b45309' }}>This change applies to this invoice only.</span>
+          <span style={{ fontSize: 10, color: '#b45309' }}>This change applies to this invoice only.</span>
           <button type="button" onClick={() => void saveAsDefault()} disabled={savingDefault}
             style={{ fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#31506f', cursor: savingDefault ? 'wait' : 'pointer' }}>
             {savingDefault ? 'Saving…' : 'Save as company default'}
@@ -408,7 +408,7 @@ function BillToFields({ company, value, onChange, parentName }: {
           </button>
         </div>
       )}
-      {savedNote && <div style={{ marginTop: 6, fontSize: 10.5, color: /failed|cannot/i.test(savedNote) ? '#b91c1c' : '#15803d' }}>{savedNote}</div>}
+      {savedNote && <div style={{ marginTop: 6, fontSize: 10, color: /failed|cannot/i.test(savedNote) ? '#b91c1c' : '#15803d' }}>{savedNote}</div>}
       </>
       )}
     </div>
@@ -1114,15 +1114,15 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
     return (
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 9px', borderRadius: 8, background: bg, border: `1px solid ${border}` }}>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-          <span style={{ fontSize: 8, fontWeight: 700, color: manuallyChanged ? 'var(--status-warning)' : isTac ? '#9a3412' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
-          <span style={{ fontSize: 8.5, color: isTac ? '#c2703d' : '#94a3b8' }}>{numberLoading ? 'Checking live…' : 'QB confirms when created'}</span>
+          <span style={{ fontSize: 9, fontWeight: 700, color: manuallyChanged ? 'var(--status-warning)' : isTac ? '#9a3412' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
+          <span style={{ fontSize: 9, color: isTac ? '#c2703d' : '#94a3b8' }}>{numberLoading ? 'Checking live…' : 'QB confirms when created'}</span>
         </div>
         <input
           value={value}
           onChange={event => { setInvoiceNumbers(current => ({ ...current, [company]: event.target.value.trim() })); setNumberWarning(''); }}
           placeholder={numberLoading ? 'Loading…' : 'Unavailable'}
           aria-label={`${company} invoice number`}
-          style={{ width: 92, border: 0, borderBottom: `1px solid ${manuallyChanged ? '#f59e0b' : isTac ? '#fdba74' : '#94a3b8'}`, outline: 'none', background: 'transparent', color: numberColor, fontVariantNumeric: 'tabular-nums', fontSize: 11.5, fontWeight: 700, padding: '2px 1px', textAlign: 'center' }}
+          style={{ width: 92, border: 0, borderBottom: `1px solid ${manuallyChanged ? '#f59e0b' : isTac ? '#fdba74' : '#94a3b8'}`, outline: 'none', background: 'transparent', color: numberColor, fontVariantNumeric: 'tabular-nums', fontSize: 11, fontWeight: 700, padding: '2px 1px', textAlign: 'center' }}
         />
         <button type="button" onClick={() => setNumberRefreshKey(key => key + 1)} title="Refresh from QuickBooks" style={{ border: 0, background: 'transparent', color: isTac ? '#c2703d' : '#64748b', padding: 2, cursor: 'pointer', display: 'flex' }}>
           <RefreshCw size={12} style={{ animation: numberLoading ? 'spin 1s linear infinite' : 'none' }} />
@@ -1165,7 +1165,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
         onChange={e => setLine(i, { picClassId: e.target.value || null, picClassName: picOptions.classes.find(o => o.value === e.target.value)?.name ?? null })}
         aria-label="PIC"
         title={missing ? 'Secretary / XBRL lines normally carry the PIC' : 'PIC — the QuickBooks Class on this line'}
-        style={{ ...inputStyle, width: '94%', fontSize: 11.5, padding: '6px 4px', color: value ? '#334155' : '#94a3b8', borderColor: missing ? '#fbbf24' : '#cbd5e1', background: missing ? '#fffbeb' : '#fff' }}>
+        style={{ ...inputStyle, width: '94%', fontSize: 11, padding: '6px 4px', color: value ? '#334155' : '#94a3b8', borderColor: missing ? '#fbbf24' : '#cbd5e1', background: missing ? '#fffbeb' : '#fff' }}>
         <option value="">{emptyLabel}</option>
         {selected && !offered && <option value={selected}>{l.picClassName || `Class ${selected}`} (current)</option>}
         {picOptions.classes.map(o => <option key={o.value} value={o.value}>{o.name}</option>)}
@@ -1253,10 +1253,10 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           {saving ? 'Saving…' : `Save ${company} changes to QuickBooks`}
         </button>
         {editResult[company] && (
-          <span style={{ fontSize: 11.5, fontWeight: 600, color: editResult[company]!.ok ? '#15803d' : 'var(--status-danger)' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: editResult[company]!.ok ? '#15803d' : 'var(--status-danger)' }}>
             {editResult[company]!.ok ? '✓ ' : '✕ '}{editResult[company]!.msg}
             {editResult[company]!.blocked && (
-              <button onClick={() => loadLiveLines(company, invoice.qbId)} style={{ marginLeft: 8, border: 'none', background: 'transparent', color: '#4338ca', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontSize: 11.5 }}>
+              <button onClick={() => loadLiveLines(company, invoice.qbId)} style={{ marginLeft: 8, border: 'none', background: 'transparent', color: '#4338ca', fontWeight: 700, cursor: 'pointer', textDecoration: 'underline', fontSize: 11 }}>
                 Reload latest from QuickBooks
               </button>
             )}
@@ -1279,7 +1279,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       </div>
       <BillToFields company={c} value={billTo} onChange={setBillTo} parentName={parentOverride.name} />
       {billToNotes.length > 0 && (
-        <div style={{ marginBottom: 16, padding: '9px 11px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 11.5, color: '#92400e' }}>
+        <div style={{ marginBottom: 16, padding: '9px 11px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 11, color: '#92400e' }}>
           {billToNotes.map((n, i) => <div key={i} style={{ marginBottom: i === billToNotes.length - 1 ? 0 : 4 }}>⚠ {n}</div>)}
         </div>
       )}
@@ -1332,7 +1332,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       </div>
       <div style={{ marginBottom: 0 }}>
         {deferredNotice.TAB && (
-          <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#92400e', fontSize: 11.5, lineHeight: 1.5 }}>
+          <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#92400e', fontSize: 11, lineHeight: 1.5 }}>
             The Deferred Revenue line(s) on this invoice could not be folded into their service, so the lines are shown as QuickBooks has them and the deferred line is read-only: {deferredNotice.TAB.join('; ')}.
           </div>
         )}
@@ -1367,12 +1367,12 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
             <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Nominee Director</span>
             <span style={{ fontSize: 10, color: '#94a3b8' }}>· invoiced separately under the TAC company</span>
             {c.ndPic && (
-              <span style={{ fontSize: 10.5, color: '#9a3412', background: 'var(--status-warning-tint)', border: '1px solid #fed7aa', borderRadius: 999, padding: '2px 8px', marginLeft: 3 }}>
+              <span style={{ fontSize: 10, color: '#9a3412', background: 'var(--status-warning-tint)', border: '1px solid #fed7aa', borderRadius: 999, padding: '2px 8px', marginLeft: 3 }}>
                 TAC PIC: <strong>{c.ndPic}</strong>{ndInitials ? ` · ${ndInitials} in service` : ' · confirm service shorthand'}
               </span>
             )}
             {tacStatus && !tacStatus.connected && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700, color: 'var(--status-danger)', background: 'var(--status-danger-tint)', border: '1px solid #fecaca', borderRadius: 5, padding: '2px 8px', marginLeft: 4 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: 'var(--status-danger)', background: 'var(--status-danger-tint)', border: '1px solid #fecaca', borderRadius: 5, padding: '2px 8px', marginLeft: 4 }}>
                 <AlertTriangle size={11} />
                 QuickBooks TAC not connected
                 <a href="/api/quickbooks/auth?company=TAC" style={{ color: 'var(--accent-blue)', textDecoration: 'underline', fontWeight: 700 }}>Connect TAC</a>
@@ -1405,7 +1405,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           })()}
           <div style={{ marginBottom: 0 }}>
             {deferredNotice.TAC && (
-              <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#92400e', fontSize: 11.5, lineHeight: 1.5 }}>
+              <div style={{ marginBottom: 8, padding: '8px 12px', borderRadius: 8, border: '1px solid #fde68a', background: '#fffbeb', color: '#92400e', fontSize: 11, lineHeight: 1.5 }}>
                 The Deferred Revenue line(s) on this invoice could not be folded into their service, so the lines are shown as QuickBooks has them and the deferred line is read-only: {deferredNotice.TAC.join('; ')}.
               </div>
             )}
@@ -1432,7 +1432,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 24, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 13, color: '#334155' }}>
           <span style={{ color: '#64748b' }}>{included.length} line{included.length !== 1 ? 's' : ''} · Total </span>
-          <strong style={{ fontSize: 17, color: '#0f766e' }}>S${total.toLocaleString()}</strong>
+          <strong style={{ fontSize: 16, color: '#0f766e' }}>S${total.toLocaleString()}</strong>
           {hasTac && includedTac.length > 0 && (
             <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 8 }}>(TAB S${totalTab.toLocaleString()} · TAC S${totalTac.toLocaleString()})</span>
           )}
@@ -1525,7 +1525,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
             <span>{draftResult.ok ? '✓ ' : '✕ '}{draftResult.msg}</span>
             {missingCustomerCompanies.map(company => (
               <button key={company} onClick={() => createCustomerAndRetry(company)} disabled={creatingCustomerFor[company]}
-                style={{ marginLeft: company === missingCustomerCompanies[0] ? 'auto' : 0, padding: '6px 12px', borderRadius: 7, border: 'none', background: creatingCustomerFor[company] ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: creatingCustomerFor[company] ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+                style={{ marginLeft: company === missingCustomerCompanies[0] ? 'auto' : 0, padding: '6px 12px', borderRadius: 7, border: 'none', background: creatingCustomerFor[company] ? '#94a3b8' : '#0f766e', color: '#fff', fontSize: 11, fontWeight: 700, cursor: creatingCustomerFor[company] ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
                 {creatingCustomerFor[company] ? 'Creating…' : `Create "${c.companyName}" in QB ${company}`}
               </button>
             ))}
@@ -1536,13 +1536,13 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       {generatedPdfs.length > 0 && (
         <div style={{ marginTop: 12, padding: '12px 13px', borderRadius: 9, border: '1px solid #bfdbfe', background: '#f8fbff', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1e3a5f' }}>Invoice PDF ready</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#1e3a5f' }}>Invoice PDF ready</div>
             <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
               {generatedPdfs.map(pdf => `#${displayInvoiceNo(pdf.invoiceNo)}`).join(' · ')} · Windows Save As, without granting access to the whole folder
             </div>
           </div>
           {generatedPdfs.map(pdf => (
-            <button key={`${pdf.company}-${pdf.qbId}`} type="button" onClick={() => saveInvoicePdf(pdf)} disabled={savingPdfs} style={{ border: '1px solid #93c5fd', borderRadius: 7, background: savingPdfs ? '#dbeafe' : 'var(--status-info-tint)', color: 'var(--accent-blue)', padding: '8px 12px', fontSize: 11.5, fontWeight: 700, cursor: savingPdfs ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button key={`${pdf.company}-${pdf.qbId}`} type="button" onClick={() => saveInvoicePdf(pdf)} disabled={savingPdfs} style={{ border: '1px solid #93c5fd', borderRadius: 7, background: savingPdfs ? '#dbeafe' : 'var(--status-info-tint)', color: 'var(--accent-blue)', padding: '8px 12px', fontSize: 11, fontWeight: 700, cursor: savingPdfs ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
               <FileText size={13} /> {savingPdfs ? 'Preparing PDF…' : `Save ${pdf.company} PDF`}
             </button>
           ))}

@@ -74,7 +74,7 @@ function RenewalCard({ r }: { r: RenewalStatus }) {
         <span style={{ background: statusBg, color: statusColor, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{statusLabel}</span>
       </div>
       {r.periodNeedsReview && (
-        <div style={{ marginBottom: 8, border: '1px solid #fed7aa', background: 'var(--status-warning-tint)', color: '#9a3412', borderRadius: 6, padding: '6px 7px', fontSize: 9.5, fontWeight: 600 }}>
+        <div style={{ marginBottom: 8, border: '1px solid #fed7aa', background: 'var(--status-warning-tint)', color: '#9a3412', borderRadius: 6, padding: '6px 7px', fontSize: 9, fontWeight: 600 }}>
           {r.periodWarning}
         </div>
       )}
@@ -93,7 +93,7 @@ function RenewalCard({ r }: { r: RenewalStatus }) {
           {r.lastRate != null && (
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', marginBottom: 1 }}>Last Rate</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#1e3a5f' }}>S${r.lastRate.toLocaleString()}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1e3a5f' }}>S${r.lastRate.toLocaleString()}</div>
             </div>
           )}
           {r.history.length > 0 && (
@@ -155,7 +155,7 @@ function AnnualCard({ a }: { a: AnnualStatus }) {
           {a.lastAmount != null && (
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', marginBottom: 1 }}>Last Amount</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#1e3a5f' }}>S${a.lastAmount.toLocaleString()}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#1e3a5f' }}>S${a.lastAmount.toLocaleString()}</div>
             </div>
           )}
           {a.history.length > 0 && (
@@ -190,7 +190,7 @@ function ServiceMini({ label, status, applicable }: { label: string; status: str
   const on = applicable && (status === 'active' || status === 'billed');
   return (
     <span title={`${label}: ${!applicable ? 'not applicable' : status.replace(/_/g, ' ')}`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
       <ServiceSquare on={on} color={color} grey={color === '#94a3b8'} />
       {label}
     </span>
@@ -204,7 +204,7 @@ function BillingStatusPill({ label, color, background, border, title, muted = fa
     <span title={title} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
       width: 'fit-content', maxWidth: '100%', padding: '4px 8px', borderRadius: 999,
       background: background === '#f8fafc' ? '#f8fafc' : '#fff', color,
-      border: `1px solid ${border === '#e2e8f0' ? border : '#dbe3ec'}`, fontSize: 9.5, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap',
+      border: `1px solid ${border === '#e2e8f0' ? border : '#dbe3ec'}`, fontSize: 9, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap',
       opacity: muted ? 0.78 : 1 }}>
       <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0 }} />
       {label}
@@ -447,7 +447,7 @@ function OverrideChip({ svc, effective, manual, disabled, onCycle }:
         display: 'inline-flex', alignItems: 'center', gap: 6,
       }}>
       <ServiceSquare on={on} color={color} grey={!on} />
-      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#475569' }}>{c.label}</span>
+      <span style={{ fontSize: 10, fontWeight: 700, color: '#475569' }}>{c.label}</span>
     </button>
   );
 }
@@ -565,7 +565,7 @@ export const EditField = memo(function EditField({ id, field, value, onSave, pla
       onChange={e => { setVal(e.target.value); resizeTextarea(); }}
       onBlur={save}
       placeholder={placeholder}
-      style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', fontSize: 12.5, color: '#1e293b', outline: 'none', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, background: '#fff' }}
+      style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 12px', fontSize: 12, color: '#1e293b', outline: 'none', fontFamily: 'inherit', resize: 'none', overflow: 'hidden', lineHeight: 1.4, background: '#fff' }}
     />
   );
 
@@ -927,7 +927,7 @@ function WorkflowBar({ stages, compact = false }: { stages: Stages; compact?: bo
             width: compact ? 18 : 22, height: compact ? 18 : 22, borderRadius: '50%',
             background: v ? 'var(--status-success)' : i === done ? '#f59e0b' : '#e2e8f0',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: compact ? 8 : 9, fontWeight: 700,
+            fontSize: compact ? 9 : 9, fontWeight: 700,
             color: v ? '#fff' : i === done ? '#fff' : '#9ca3af', flexShrink: 0,
           }}>{v ? '✓' : i + 1}</div>
           {compact && i < 4 && <div style={{ width: 6, height: 1, background: v ? 'var(--status-success)' : '#e2e8f0', margin: '0 1px' }} />}
@@ -1092,8 +1092,8 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
               <div style={{ display: 'flex', alignItems: 'center', gap: isND ? 8 : 5 }}>
                 {isND && <span style={{ width: 28, height: 28, borderRadius: 8, background: '#dbeafe', color: 'var(--accent-blue)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><UserCheck size={14} /></span>}
                 <div>
-                  <span style={{ fontSize: isND ? 11.5 : 11, fontWeight: isND ? 750 : 600, color: isND ? '#1e3a5f' : '#475569' }}>{label}</span>
-                  {isND && <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, color: '#2563eb', fontSize: 8.5, fontWeight: 700 }}><ChevronDown size={10} style={{ transform: ndRevealed ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />{ndRevealed ? 'Hide director details' : 'View director details'}</div>}
+                  <span style={{ fontSize: 11, fontWeight: isND ? 700 : 600, color: isND ? '#1e3a5f' : '#475569' }}>{label}</span>
+                  {isND && <div style={{ marginTop: 2, display: 'flex', alignItems: 'center', gap: 4, color: '#2563eb', fontSize: 9, fontWeight: 700 }}><ChevronDown size={10} style={{ transform: ndRevealed ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />{ndRevealed ? 'Hide director details' : 'View director details'}</div>}
                 </div>
               </div>
               {end ? (
@@ -1125,7 +1125,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
               <div style={{ background: 'var(--status-success-tint)', border: '1px solid #bbf7d0', borderTop: 'none', borderRadius: ndStrikeOff || ndPending ? '0' : '0 0 8px 8px', padding: '9px 11px', display: 'flex', alignItems: 'center', gap: 9 }}>
                 <UserCheck size={14} color="var(--status-success)" />
                 <div>
-                  <div style={{ fontSize: 8, color: '#65a30d', fontWeight: 700, letterSpacing: '0.45px', marginBottom: 2 }}>ASSIGNED DIRECTOR · FROM TEAMWORK</div>
+                  <div style={{ fontSize: 9, color: '#65a30d', fontWeight: 700, letterSpacing: '0.45px', marginBottom: 2 }}>ASSIGNED DIRECTOR · FROM TEAMWORK</div>
                   {hasNdName
                     ? <span style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>{info!.ndName}</span>
                     : <span style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>No director name found in TeamWork</span>
@@ -1142,7 +1142,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                 border: '1px solid #e2e8f0', borderTop: 'none',
                 borderRadius: '0 0 8px 8px',
               }}>
-                <div style={{ fontSize: 8, fontWeight: 700, color: '#64748b', letterSpacing: '0.45px', marginBottom: 7 }}>ND WORKFLOW FLAGS · CLICK TO UPDATE</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', letterSpacing: '0.45px', marginBottom: 7 }}>ND WORKFLOW FLAGS · CLICK TO UPDATE</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {/* Strike Off toggle */}
                 <button
@@ -1171,7 +1171,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                       </svg>
                     )}
                   </span>
-                  <span style={{ textAlign: 'left' }}><span style={{ display: 'block' }}>Strike-Off Pending</span><span style={{ display: 'block', fontSize: 8, fontWeight: 500, color: ndStrikeOff ? '#ea580c' : '#94a3b8', marginTop: 1 }}>Services remain active until confirmed</span></span>
+                  <span style={{ textAlign: 'left' }}><span style={{ display: 'block' }}>Strike-Off Pending</span><span style={{ display: 'block', fontSize: 9, fontWeight: 500, color: ndStrikeOff ? '#ea580c' : '#94a3b8', marginTop: 1 }}>Services remain active until confirmed</span></span>
                 </button>
 
                 {/* ND Pending toggle */}
@@ -1199,7 +1199,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                       </svg>
                     )}
                   </span>
-                  <span style={{ textAlign: 'left' }}><span style={{ display: 'block' }}>ND Assignment Pending</span><span style={{ display: 'block', fontSize: 8, fontWeight: 500, color: ndPending ? '#ca8a04' : '#94a3b8', marginTop: 1 }}>Service requested, director not assigned</span></span>
+                  <span style={{ textAlign: 'left' }}><span style={{ display: 'block' }}>ND Assignment Pending</span><span style={{ display: 'block', fontSize: 9, fontWeight: 500, color: ndPending ? '#ca8a04' : '#94a3b8', marginTop: 1 }}>Service requested, director not assigned</span></span>
                 </button>
                 </div>
               </div>
@@ -2037,7 +2037,7 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 10px', marginTop: 7, alignItems: 'center' }}>
                       {tabRefs.map(r => <BillingInvoiceReference key={`tab-${r.invoiceNo}`} company="TAB" invoiceNo={r.invoiceNo} id={r.qbId ?? undefined} muted={r.manual} title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />)}
                       {tacRefs.map(r => <BillingInvoiceReference key={`tac-${r.invoiceNo}`} company="TAC" invoiceNo={r.invoiceNo} id={r.qbId ?? undefined} muted={r.manual} title={r.manual ? 'Manually invoiced directly in QuickBooks — see Remarks' : undefined} />)}
-                      {c.pic && <span style={{ fontSize: 10.5, color: '#64748b' }}>PIC: {formatStaffName(c.pic)}</span>}
+                      {c.pic && <span style={{ fontSize: 10, color: '#64748b' }}>PIC: {formatStaffName(c.pic)}</span>}
                     </div>
                   );
                 })()}
@@ -2159,15 +2159,15 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                               {emailTemplates.length === 0 && <option value="">No AR templates found</option>}
                               {emailTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                             </select>
-                            {previewLoading && <div style={{ fontSize: 10.5, color: '#94a3b8', marginBottom: 8 }}>Checking recipient…</div>}
-                            {draftError && <div style={{ fontSize: 10.5, color: '#b91c1c', marginBottom: 8 }}>{draftError}</div>}
+                            {previewLoading && <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 8 }}>Checking recipient…</div>}
+                            {draftError && <div style={{ fontSize: 10, color: '#b91c1c', marginBottom: 8 }}>{draftError}</div>}
                             {needsManualEmail && (
                               <>
-                                <label style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.4px' }}>To</label>
+                                <label style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.4px' }}>To</label>
                                 <input type="email" value={manualToEmail} onChange={e => setManualToEmail(e.target.value)}
                                   placeholder="recipient@email.com" autoFocus
                                   style={{ width: '100%', border: `1px solid ${manualToEmail && !isValidEmail(manualToEmail) ? '#fecaca' : '#e2e8f0'}`, borderRadius: 6, padding: '6px 8px', fontSize: 12, marginTop: 3, marginBottom: 8, boxSizing: 'border-box' }} />
-                                <label style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.4px' }}>Cc <span style={{ fontWeight: 500, textTransform: 'none' }}>(optional)</span></label>
+                                <label style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.4px' }}>Cc <span style={{ fontWeight: 500, textTransform: 'none' }}>(optional)</span></label>
                                 {/* The resolved default Cc list is newline-joined (recipientLines
                                     in lib/campaign-recipients.ts) — a single-line <input> collapsed
                                     those onto one unreadable line (Vincent, 2026-08-19). */}
@@ -2232,7 +2232,7 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
             <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 1280, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
               <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: `4px solid ${accent}`, padding: '16px 20px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{c.companyName}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{c.companyName}</div>
                   <button onClick={() => setExpanded(null)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -2336,7 +2336,7 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: `4px solid ${accent}`, padding: '16px 20px 14px', flexShrink: 0 }}>
           {/* Row 1: company name + close */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{r.entity_name}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{r.entity_name}</div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
               <button onClick={() => { const next = !showHistory; setShowHistory(next); if (next) void loadHistory(); }} title="Change history"
                 style={{ background: showHistory ? 'rgba(59,130,246,0.34)' : 'rgba(255,255,255,0.12)', border: 'none', color: '#dbeafe', borderRadius: 8, height: 32, padding: '0 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700 }}>
@@ -2370,12 +2370,12 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <ShieldCheck size={14} style={{ color: 'var(--accent-blue)' }} />
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#1e3a5f' }}>Service configuration</span>
-                  <span style={{ padding: '2px 6px', borderRadius: 999, background: 'var(--status-warning-tint)', color: 'var(--status-warning)', fontSize: 7.5, fontWeight: 700, letterSpacing: '0.35px' }}>REVIEW BEFORE BILLING</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#1e3a5f' }}>Service configuration</span>
+                  <span style={{ padding: '2px 6px', borderRadius: 999, background: 'var(--status-warning-tint)', color: 'var(--status-warning)', fontSize: 9, fontWeight: 700, letterSpacing: '0.35px' }}>REVIEW BEFORE BILLING</span>
                 </div>
-                <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 5, lineHeight: 1.5 }}>Click an adjustable service to override the system result. Click again to restore automatic detection.</div>
+                <div style={{ fontSize: 9, color: '#64748b', marginTop: 5, lineHeight: 1.5 }}>Click an adjustable service to override the system result. Click again to restore automatic detection.</div>
               </div>
-              <div style={{ display: 'flex', gap: 13, flexShrink: 0, fontSize: 8, fontWeight: 700, alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: 13, flexShrink: 0, fontSize: 9, fontWeight: 700, alignItems: 'center' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#475569' }}>
                   <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 2, background: SVC_SQUARE_COLOR.auto, flexShrink: 0 }} />Locked / Auto
                 </span>
@@ -2390,7 +2390,7 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
 
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(190px,0.7fr) minmax(500px,2fr)', gap: 20, alignItems: 'center' }}>
               <div style={{ padding: '4px 0' }}>
-                <div style={{ fontSize: 7.5, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.5px', marginBottom: 9 }}>SYSTEM MANAGED</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.5px', marginBottom: 9 }}>SYSTEM MANAGED</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {activeSvc.filter(k => !(OVERRIDABLE_SVC as readonly string[]).includes(k)).map(k => {
                     const svc = SVC[k];
@@ -2398,7 +2398,7 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
                       <span key={k} title={`${svc.label}: locked${['nd','address'].includes(k) ? ' (follows TeamWork)' : ''}`}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <ServiceSquare on color={SVC_SQUARE_COLOR.auto} />
-                        <span style={{ fontSize: 10.5, fontWeight: 700, color: '#475569' }}>{svc.label}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: '#475569' }}>{svc.label}</span>
                       </span>
                     );
                   })}
@@ -2406,7 +2406,7 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
               </div>
 
               <div style={{ borderLeft: '1px solid #e2e8f0', padding: '4px 0 4px 20px' }}>
-                <div style={{ fontSize: 7.5, fontWeight: 700, color: '#64748b', letterSpacing: '0.5px', marginBottom: 9 }}>ADJUSTABLE · CLICK TO CHANGE</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b', letterSpacing: '0.5px', marginBottom: 9 }}>ADJUSTABLE · CLICK TO CHANGE</div>
                 <div style={{ display: 'flex', gap: 10, rowGap: 9, flexWrap: 'wrap' }}>
                   {OVERRIDABLE_SVC.map(k => (
                     <OverrideChip key={k} svc={k}
@@ -3265,7 +3265,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
             {exporting ? 'Preparing Excel…' : 'Export Excel'}
             <Download size={13} />
           </button>
-          {exportError && <span style={{ fontSize: 9.5, color: '#b91c1c' }}>{exportError}</span>}
+          {exportError && <span style={{ fontSize: 9, color: '#b91c1c' }}>{exportError}</span>}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: isMobile ? 'wrap' : undefined }}>
           <MonthMultiSelect months={months} allMonths={FYE_MONTHS} onChange={setMonthsManually} triggerStyle={S} />
@@ -3287,7 +3287,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
         <div onClick={() => setShowAddForm(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
             <div style={{ background: '#1d3a5c', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Add Manual Entry — FYE {months[0]} {year}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Add Manual Entry — FYE {months[0]} {year}</div>
               <button onClick={() => setShowAddForm(false)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
@@ -3419,7 +3419,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                       </span>
                     ))}
                   </div>
-                  <div style={{ display: 'flex', gap: 10, marginTop: 7, fontSize: 10.5, color: '#64748b' }}>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 7, fontSize: 10, color: '#64748b' }}>
                     <span>Progress: <span style={{ fontWeight: 700, color: filed ? 'var(--status-success)' : r.stagesDone > 0 ? 'var(--status-warning)' : '#94a3b8' }}>{r.stagesDone}/5{filed ? ' · Filed' : ''}</span></span>
                     {r.pic && <span>PIC: {formatStaffName(r.pic)}</span>}
                   </div>
@@ -3453,7 +3453,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                       const state = svcStateOf(r.services, r.servicesManual, k);
                       return (
                         <span key={k} title={`${SVC[k].label} — ${state === 'auto-on' ? 'auto' : state === 'manual-on' ? 'manually on' : 'not provided / off'}`}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
                           <ServiceSquare on color={state === 'manual-on' ? SVC_SQUARE_COLOR.manual : SVC_SQUARE_COLOR.auto} />
                           {SVC_SHORT[k]}
                         </span>
@@ -3579,7 +3579,7 @@ function CombinedPage() {
                 transition: 'background .15s ease',
               }}>
                 <span>{label}</span>
-                <span style={{ fontSize: 10.5, color: active ? 'rgba(255,255,255,.7)' : '#7c8ba1', fontWeight: 500 }}>{desc}</span>
+                <span style={{ fontSize: 10, color: active ? 'rgba(255,255,255,.7)' : '#7c8ba1', fontWeight: 500 }}>{desc}</span>
               </button>
             );
           })}

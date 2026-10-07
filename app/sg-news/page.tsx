@@ -49,7 +49,7 @@ function ItemCard({ item }: { item: SgNewsDigestItem }) {
       {item.url
         ? <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 14, fontWeight: 700, color: COLORS.ink, textDecoration: 'none' }}>{item.title}</a>
         : <div style={{ fontSize: 14, fontWeight: 700, color: COLORS.ink }}>{item.title}</div>}
-      <div style={{ marginTop: 8, fontSize: 12.5, lineHeight: 1.7, color: '#334155' }}>{item.whatChanged}</div>
+      <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.7, color: '#334155' }}>{item.whatChanged}</div>
       <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 7, background: '#f8fafc', fontSize: 12, lineHeight: 1.6, color: '#64748b' }}>
         <strong style={{ color: '#475569' }}>为什么重要：</strong>{item.whyItMatters}
       </div>
@@ -58,17 +58,17 @@ function ItemCard({ item }: { item: SgNewsDigestItem }) {
       <div style={{ marginTop: 'auto', paddingTop: 12 }}>
         {item.url
           ? <a href={item.url} target="_blank" rel="noreferrer" title={item.url}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', fontSize: 11.5, fontWeight: 700, color: COLORS.teal, textDecoration: 'none' }}>
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', fontSize: 11, fontWeight: 700, color: COLORS.teal, textDecoration: 'none' }}>
               <ExternalLink size={12} style={{ flexShrink: 0 }} />
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>来源 · {sourceHost(item.url)}</span>
             </a>
           : item.sourcePageUrl
             ? <a href={item.sourcePageUrl} target="_blank" rel="noreferrer" title={item.sourcePageUrl}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', fontSize: 11.5, fontWeight: 600, color: '#64748b', textDecoration: 'none' }}>
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, maxWidth: '100%', fontSize: 11, fontWeight: 600, color: '#64748b', textDecoration: 'none' }}>
                 <ExternalLink size={12} style={{ flexShrink: 0 }} />
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>来源页 · {sourceHost(item.sourcePageUrl)}</span>
               </a>
-            : <span style={{ fontSize: 11.5, color: '#94a3b8' }}>来源：{item.source}</span>}
+            : <span style={{ fontSize: 11, color: '#94a3b8' }}>来源：{item.source}</span>}
       </div>
     </div>
   );
@@ -117,14 +117,14 @@ export default function SgNewsPage() {
           <p style={{ margin: '2px 0 0', fontSize: 12, color: '#8493a3' }}>ACRA / IRAS / MOM / ICA / ISCA / CSIS + Straits Times / Business Times / 联合早报 — daily digest. Development stage, visible to Vincent only.</p>
         </div>
         <button onClick={runNow} disabled={running}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: running ? '#94a3b8' : COLORS.teal, color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: running ? 'default' : 'pointer' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', borderRadius: 8, border: 'none', background: running ? '#94a3b8' : COLORS.teal, color: '#fff', fontSize: 12, fontWeight: 700, cursor: running ? 'default' : 'pointer' }}>
           <RefreshCw size={13} style={{ animation: running ? 'spin 1s linear infinite' : 'none' }} />
           {running ? '运行中…' : '手动运行一次'}
         </button>
       </div>
 
       {runMessage && (
-        <div style={{ padding: '10px 14px', borderRadius: 8, background: '#f0fdfa', border: '1px solid #99f6e4', fontSize: 12.5, color: '#0f766e' }}>{runMessage}</div>
+        <div style={{ padding: '10px 14px', borderRadius: 8, background: '#f0fdfa', border: '1px solid #99f6e4', fontSize: 12, color: '#0f766e' }}>{runMessage}</div>
       )}
 
       {data.syncState.length > 0 && (
@@ -144,7 +144,7 @@ export default function SgNewsPage() {
           {data.history.map(h => (
             <button key={h.report_date} onClick={() => setSelectedDate(h.report_date)}
               style={{
-                flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
                 border: `1px solid ${(selectedDate ?? data.today) === h.report_date ? COLORS.teal : '#e2e8f0'}`,
                 background: (selectedDate ?? data.today) === h.report_date ? '#edf4f3' : '#fff',
                 color: (selectedDate ?? data.today) === h.report_date ? COLORS.teal : '#64748b',
@@ -168,7 +168,7 @@ export default function SgNewsPage() {
             <div style={{ fontSize: 11, color: 'rgba(255,255,255,.6)', marginBottom: 6 }}>
               {report.report_date} · {report.new_items_count} 条新内容 · 生成于 {new Date(report.generated_at).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}
             </div>
-            <div style={{ fontSize: 13.5, lineHeight: 1.8 }}>{report.report.summary}</div>
+            <div style={{ fontSize: 13, lineHeight: 1.8 }}>{report.report.summary}</div>
             {report.sources_failed.length > 0 && (
               <div style={{ marginTop: 10, fontSize: 11, color: 'rgba(255,255,255,.6)' }}>
                 {report.sources_failed.length} 个来源本次未能成功检查：{report.sources_failed.map(f => f.source).join(', ')}
@@ -183,7 +183,7 @@ export default function SgNewsPage() {
             </div>
             {report.report.policyItems.length
               ? <div style={CARD_GRID}>{report.report.policyItems.map((it, i) => <ItemCard key={i} item={it} />)}</div>
-              : <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '10px 0' }}>今天政策类来源没有发现新内容。</div>}
+              : <div style={{ fontSize: 12, color: '#94a3b8', padding: '10px 0' }}>今天政策类来源没有发现新内容。</div>}
           </div>
 
           <div>
@@ -193,7 +193,7 @@ export default function SgNewsPage() {
             </div>
             {report.report.newsItems.length
               ? <div style={CARD_GRID}>{report.report.newsItems.map((it, i) => <ItemCard key={i} item={it} />)}</div>
-              : <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '10px 0' }}>今天新闻类来源没有发现新内容。</div>}
+              : <div style={{ fontSize: 12, color: '#94a3b8', padding: '10px 0' }}>今天新闻类来源没有发现新内容。</div>}
           </div>
         </>
       )}

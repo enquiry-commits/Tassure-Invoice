@@ -82,12 +82,12 @@ function Card({ title, eyebrow, icon, children, note }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
         <span style={{ width: 34, height: 34, borderRadius: 10, background: '#edf4f3', color: COLORS.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</span>
         <div>
-          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 2 }}>{eyebrow}</div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 2 }}>{eyebrow}</div>
           <h2 style={{ fontSize: 14, fontWeight: 700, color: COLORS.ink, margin: 0, letterSpacing: '-.01em' }}>{title}</h2>
         </div>
       </div>
       {children}
-      {note && <p style={{ margin: '14px 0 0', fontSize: 10.5, color: '#94a3b8', lineHeight: 1.5, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>{note}</p>}
+      {note && <p style={{ margin: '14px 0 0', fontSize: 10, color: '#94a3b8', lineHeight: 1.5, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>{note}</p>}
     </section>
   );
 }
@@ -108,19 +108,19 @@ function RevenuePerformanceCard({ yoy }: { yoy: ComparableRevenue }) {
     <Card title="Revenue Performance" eyebrow="Comparable Period" icon={<Wallet size={16} />}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22 }}>
         <div>
-          <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>
+          <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>
             {yoy.comparisonLabel ? `Same Period ${yoy.comparisonLabel.slice(0, 4)}` : 'Comparison Period'}
           </div>
           <div style={{ fontSize: 20, fontWeight: 700, color: '#64748b' }}>{yoy.priorRevenue != null ? formatCompactCurrency(yoy.priorRevenue) : '—'}</div>
         </div>
         <div>
-          <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>
+          <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>
             {yoy.periodLabel.slice(0, 4)} YTD
           </div>
-          <div style={{ fontSize: 26, fontWeight: 700, color: COLORS.ink }}>{formatCompactCurrency(yoy.currentRevenue)}</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: COLORS.ink }}>{formatCompactCurrency(yoy.currentRevenue)}</div>
         </div>
         <div>
-          <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>Change</div>
+          <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>Change</div>
           {yoy.comparable && yoy.revenuePctChange != null ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 20, fontWeight: 700, color: up ? '#0f766e' : '#b45f6b' }}>
               {up ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
@@ -131,7 +131,7 @@ function RevenuePerformanceCard({ yoy }: { yoy: ComparableRevenue }) {
           )}
         </div>
       </div>
-      <p style={{ margin: '16px 0 0', fontSize: 10.5, color: '#94a3b8', lineHeight: 1.5, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+      <p style={{ margin: '16px 0 0', fontSize: 10, color: '#94a3b8', lineHeight: 1.5, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
         {yoy.comparable
           ? `${yoy.periodLabel} compared against the SAME date range one year earlier (${yoy.comparisonLabel}) — both periods are the identical length, never a partial year against a full one.`
           : yoy.comparabilityReason}
@@ -151,13 +151,13 @@ function CustomerSourceQualityCard({ total, unknown }: { total: number; unknown:
   return (
     <Card title="Customer Source" eyebrow="Data Quality" icon={<Database size={16} />}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 34, fontWeight: 700, color: coveragePct === 0 ? '#b45f6b' : COLORS.ink }}>{coveragePct}%</span>
+        <span style={{ fontSize: 28, fontWeight: 700, color: coveragePct === 0 ? '#b45f6b' : COLORS.ink }}>{coveragePct}%</span>
         <span style={{ fontSize: 12, color: '#94a3b8' }}>coverage</span>
       </div>
-      <p style={{ margin: 0, fontSize: 12.5, color: '#475569', lineHeight: 1.6 }}>
+      <p style={{ margin: 0, fontSize: 12, color: '#475569', lineHeight: 1.6 }}>
         {unknown} of {total} active clients have no recorded customer source — a composition chart here would only ever show one 100% &ldquo;Unknown&rdquo; slice.
       </p>
-      <p style={{ margin: '10px 0 0', fontSize: 10.5, color: '#94a3b8', lineHeight: 1.5, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
+      <p style={{ margin: '10px 0 0', fontSize: 10, color: '#94a3b8', lineHeight: 1.5, borderTop: '1px solid #f1f5f9', paddingTop: 10 }}>
         Source tracking is a new field staff tag going forward from Company 360 — not backfilled from history. This card will show a real composition chart once enough new/updated clients carry it.
       </p>
     </Card>
@@ -254,7 +254,7 @@ const PRESETS: Preset[] = [
 ];
 const DEFAULT_PRESET = PRESETS[0];
 
-const TH: React.CSSProperties = { textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' };
+const TH: React.CSSProperties = { textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10, textTransform: 'uppercase' };
 const STEP_LABEL: React.CSSProperties = { fontSize: 11, color: '#64748b', fontWeight: 700 };
 const SELECT_STYLE: React.CSSProperties = { fontSize: 13, padding: '6px 8px', borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff' };
 const GUIDE_CARD: React.CSSProperties = {
@@ -278,7 +278,7 @@ const STEP_BADGE: React.CSSProperties = {
   flex: '0 0 auto',
 };
 const GUIDE_TITLE: React.CSSProperties = { fontSize: 14, fontWeight: 700, color: COLORS.ink };
-const GUIDE_COPY: React.CSSProperties = { fontSize: 12.5, color: '#64748b', lineHeight: 1.45 };
+const GUIDE_COPY: React.CSSProperties = { fontSize: 12, color: '#64748b', lineHeight: 1.45 };
 
 function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]; exportHref: string }) {
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
@@ -444,7 +444,7 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
     + (metric !== 'count' ? ` (${METRIC_LABELS[metric].toLowerCase()})` : '')
     + (view === 'summary' ? ` · grouped by ${activeDim.label}` : '');
   const tabStyle = (on: boolean): React.CSSProperties => ({
-    fontSize: 12.5, fontWeight: 700, padding: '7px 14px', cursor: 'pointer', background: 'none', border: 'none',
+    fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer', background: 'none', border: 'none',
     borderBottom: `2px solid ${on ? COLORS.teal : 'transparent'}`, color: on ? COLORS.ink : '#94a3b8',
   });
 
@@ -480,8 +480,8 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
                     color: on ? '#fff' : COLORS.ink,
                     boxShadow: on ? '0 8px 18px rgba(49, 138, 131, 0.18)' : 'none',
                   }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>{p.label}</div>
-                  <div style={{ fontSize: 11.5, lineHeight: 1.35, color: on ? 'rgba(255,255,255,0.82)' : '#64748b' }}>{p.hint}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>{p.label}</div>
+                  <div style={{ fontSize: 11, lineHeight: 1.35, color: on ? 'rgba(255,255,255,0.82)' : '#64748b' }}>{p.hint}</div>
                 </button>
               );
             })}
@@ -567,9 +567,9 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
         <button style={tabStyle(view === 'summary')} onClick={() => setView('summary')}>Summary by {activeDim.label}</button>
         <button style={tabStyle(view === 'list')} onClick={() => setView('list')}>Company list ({pivotTotal})</button>
         <span style={{ fontSize: 12, color: '#64748b' }}>{sentence}</span>
-        <button onClick={() => applyPreset(DEFAULT_PRESET)} style={{ marginLeft: 'auto', fontSize: 11.5, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Reset</button>
+        <button onClick={() => applyPreset(DEFAULT_PRESET)} style={{ marginLeft: 'auto', fontSize: 11, color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700 }}>Reset</button>
         <button onClick={exportShown} disabled={exporting || pivotTotal === 0} title="Downloads exactly the companies counted here"
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 700, color: '#fff', background: COLORS.teal, borderRadius: 7, padding: '6px 12px', border: 'none', cursor: pivotTotal === 0 ? 'not-allowed' : 'pointer', opacity: pivotTotal === 0 ? 0.5 : 1, marginBottom: 6 }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#fff', background: COLORS.teal, borderRadius: 7, padding: '6px 12px', border: 'none', cursor: pivotTotal === 0 ? 'not-allowed' : 'pointer', opacity: pivotTotal === 0 ? 0.5 : 1, marginBottom: 6 }}>
           <Download size={12} />{exporting ? 'Preparing…' : `Export these ${pivotTotal} (.xlsx)`}
         </button>
       </div>
@@ -583,7 +583,7 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
       ) : view === 'list' ? (
         <>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
                   {['Company', 'Client Since', 'Referred By', 'RM (Relationship Manager)', 'Customer Source'].map(h => <th key={h} style={TH}>{h}</th>)}
@@ -609,7 +609,7 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px,1fr) minmax(260px,1.3fr)', gap: 24, alignItems: 'start' }}>
             <div>{pivot.length <= 8 ? <Donut segments={chartData} size={160} thickness={24} /> : <HBars data={chartData} accent={COLORS.teal} labelWidth={140} />}</div>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
                     <th style={TH}>{activeDim.label}</th>
@@ -627,7 +627,7 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
                       <td style={{ padding: '6px 8px', color: '#334155' }}>{p.value}</td>
                       <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, color: COLORS.ink }}>{p.count}</td>
                       <td style={{ padding: '6px 8px', textAlign: 'right', color: '#94a3b8' }}>{pivotTotal ? Math.round((p.count / pivotTotal) * 100) : 0}%</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'right', color: COLORS.blue, fontSize: 11.5, whiteSpace: 'nowrap' }}>View companies →</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', color: COLORS.blue, fontSize: 11, whiteSpace: 'nowrap' }}>View companies →</td>
                     </tr>
                   ))}
                 </tbody>
@@ -638,13 +638,13 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
           {drilldown && (
             <div style={{ marginTop: 20, borderTop: '1px solid #f1f5f9', paddingTop: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: COLORS.ink }}>{drilldown.label} — {drilldown.rows.length} companies</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: COLORS.ink }}>{drilldown.label} — {drilldown.rows.length} companies</span>
                 <button onClick={() => setDrilldown(null)} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}>
                   <X size={12} />Close
                 </button>
               </div>
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
                       {['Company', 'UEN', 'Client Since', 'Referred By', 'RM (Relationship Manager)'].map(h => <th key={h} style={TH}>{h}</th>)}
@@ -847,7 +847,7 @@ export default function ReportsPage() {
             <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: 7, padding: 2 }}>
               {(['zh', 'en'] as const).map(l => (
                 <button key={l} onClick={() => setNarrativeLang(l)}
-                  style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                  style={{ fontSize: 10, fontWeight: 700, padding: '4px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
                     background: narrativeLang === l ? '#fff' : 'transparent', color: narrativeLang === l ? COLORS.ink : '#64748b',
                     boxShadow: narrativeLang === l ? '0 1px 3px rgba(28,52,73,.12)' : 'none' }}>
                   {l === 'zh' ? '中' : 'EN'}
@@ -872,13 +872,13 @@ export default function ReportsPage() {
           </div>
         </div>
         {!narrativeCollapsed && narrativeError && (
-          <div style={{ fontSize: 12.5, color: COLORS.rose, lineHeight: 1.6 }}>{narrativeError}</div>
+          <div style={{ fontSize: 12, color: COLORS.rose, lineHeight: 1.6 }}>{narrativeError}</div>
         )}
         {!narrativeCollapsed && !narrativeError && narrativeLoading && (
-          <div style={{ fontSize: 12.5, color: '#94a3b8' }}>{narrativeLang === 'zh' ? '加载中…' : 'Loading…'}</div>
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>{narrativeLang === 'zh' ? '加载中…' : 'Loading…'}</div>
         )}
         {!narrativeCollapsed && !narrativeError && !narrativeLoading && !narrative && (
-          <div style={{ fontSize: 12.5, color: '#94a3b8' }}>
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>
             {narrativeLang === 'zh' ? '分析将于下周一早上6点（新加坡时间）生成，请稍候。' : 'Analysis will be generated next Monday at 6am SGT.'}
           </div>
         )}
@@ -901,18 +901,18 @@ export default function ReportsPage() {
                         {/* Confidence is metadata, not a visual centerpiece —
                             dashboard-design skill's own "do not overuse
                             confidence badges visually" guidance. */}
-                        <span style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 999, padding: '1px 7px' }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8', border: '1px solid #e2e8f0', borderRadius: 999, padding: '1px 7px' }}>
                           {narrativeLang === 'zh' ? c.zh : c.en}
                         </span>
                       </div>
-                      <div style={{ fontSize: 12.5, lineHeight: 1.7, color: '#475569' }}>{narrativeLang === 'zh' ? ins.observedZh : ins.observedEn}</div>
+                      <div style={{ fontSize: 12, lineHeight: 1.7, color: '#475569' }}>{narrativeLang === 'zh' ? ins.observedZh : ins.observedEn}</div>
                       {driver && (
                         <div style={{ fontSize: 12, lineHeight: 1.7, color: '#64748b', marginTop: 5 }}>
                           <span style={{ fontWeight: 700, color: '#94a3b8' }}>{narrativeLang === 'zh' ? '推测 · ' : 'Driver · '}</span>{driver}
                         </div>
                       )}
                       {notYetProven.length > 0 && (
-                        <div style={{ fontSize: 11.5, lineHeight: 1.7, color: '#94a3b8', marginTop: 5 }}>
+                        <div style={{ fontSize: 11, lineHeight: 1.7, color: '#94a3b8', marginTop: 5 }}>
                           <span style={{ fontWeight: 700, color: '#94a3b8' }}>{narrativeLang === 'zh' ? '尚未证实 · ' : 'Not yet proven · '}</span>
                           {notYetProven.join(' / ')}
                         </div>
@@ -929,7 +929,7 @@ export default function ReportsPage() {
             <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #f1f5f9', fontSize: 11, lineHeight: 1.6, color: '#94a3b8' }}>
               {narrativeLang === 'zh' ? narrative.summaryZh : narrative.summaryEn}
             </div>
-            <div style={{ marginTop: 8, fontSize: 10.5, color: '#94a3b8' }}>
+            <div style={{ marginTop: 8, fontSize: 10, color: '#94a3b8' }}>
               {narrativeLang === 'zh' ? '生成于 ' : 'Generated '}{new Date(narrative.generatedAt).toLocaleString('en-SG', { dateStyle: 'medium', timeStyle: 'short' })}
               {narrativeLang === 'zh' ? ' · 每周一 6:00（新加坡时间）自动更新' : ' · Auto-updates every Monday 6am SGT'}
             </div>
@@ -955,11 +955,11 @@ export default function ReportsPage() {
         <Card title={flowDrilldown === 'new' ? 'New This Year' : 'Churned This Year'} eyebrow="Drill-down" icon={flowDrilldown === 'new' ? <UserPlus size={16} /> : <UserMinus size={16} />}
           note="Sourced from master_list, not companies — a struck-off company can be entirely removed from companies, so this list only shows what master_list actually has on file (no company type/SSIC for these rows).">
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
-                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>Company</th>
-                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10.5, textTransform: 'uppercase' }}>UEN</th>
+                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10, textTransform: 'uppercase' }}>Company</th>
+                  <th style={{ textAlign: 'left', padding: '5px 8px', color: '#94a3b8', fontSize: 10, textTransform: 'uppercase' }}>UEN</th>
                 </tr>
               </thead>
               <tbody>
@@ -1054,7 +1054,7 @@ export default function ReportsPage() {
       <ExploreSection companyRows={data.companyRows} exportHref="/api/reports/export" />
 
       <Card title="Potential Customer Direction" eyebrow="Coming later" icon={<Compass size={16} />}>
-        <div style={{ padding: '4px 0', color: '#64748b', fontSize: 12.5, lineHeight: 1.6 }}>
+        <div style={{ padding: '4px 0', color: '#64748b', fontSize: 12, lineHeight: 1.6 }}>
           No prospect/lead data exists anywhere in this system yet, so there is nothing real to show here.
           Now that SSIC and Customer Source have real data, this section can eventually show which
           industries and channels are under-represented in the current client base — a real,
