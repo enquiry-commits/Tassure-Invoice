@@ -11,7 +11,7 @@
 // Run: npx tsx test-soa-draft-resolution.ts
 import fs from 'fs';
 import path from 'path';
-import { findSoaDebtorCompany, resolveDraftCompany, soaBodyInvoices, soaBodyFuzzyKeys, customerBelongsToAnotherCompany, SOA_BOOKS } from './lib/soa-draft-resolution';
+import { findSoaDebtorCompany, resolveDraftCompany, soaBodyInvoices, soaBodyFuzzyKeys, customerBelongsToAnotherCompany, coverOnlyRefs, coverOnlyBooks, isCoverOnlyDebt, SOA_BOOKS, type SoaRowLike } from './lib/soa-draft-resolution';
 import { normalize, findUniqueBestMatch, matchScore } from './lib/company-name';
 import { isActiveCompany } from './lib/company-lifecycle';
 import type { CompanyRow } from './lib/client-comms-resolve';
@@ -178,6 +178,48 @@ console.log('\n--- 3. WHAT: the body lists what the attached statement shows ---
     soaBodyFuzzyKeys(yuAn, mYu, SOA_BOOKS).join(',') === `${bulk},${yuVariant}` && soaBodyFuzzyKeys(yuAn, m2, TAB_BOOK).length === 0 && soaBodyFuzzyKeys(soonCompany, m2, TAB_BOOK).length === 0);
 }
 
+console.log('\n--- 3b. WHAT, for a debt with no invoice behind it: the cover page alone, and the same items in the body ---');
+{
+  const item = (docNumber: string, txnType: string, amount: number) => ({ docNumber, dueDate: '2023-12-31', txnDate: '2023-12-31', txnType, amount, bucket: 'd91_plus' as const });
+  const inventa: SoaRowLike = { companyName: 'INVENTA TECHNOLOGIES PTE. LTD.', totalOutstanding: 1505.5, lineItems: [item('OPNG JE', 'Journal Entry', 1505.5)] };
+  const projects: SoaRowLike = { companyName: 'INVENTA PROJECTS PTE. LTD.', totalOutstanding: 1880, lineItems: [item('OPNG JE', 'Journal Entry', 2785.5), item('CN260014', 'Credit Note', -905.5)] };
+  const rows = [inventa, projects];
+  const refs = coverOnlyRefs(rows, 'INVENTA TECHNOLOGIES PTE. LTD.', 'TAB');
+  check('INVENTA TECHNOLOGIES (an opening-balance journal entry, no invoice): the body lists the row\'s own item, S$1,505.50',
+    refs.length === 1 && refs[0].invoiceNo === 'OPNG JE' && refs[0].amount === 1505.5 && refs[0].qbCompany === 'TAB' && refs[0].qbInvoiceId === null && refs[0].dueDate === '2023-12-31');
+  check('… every item of the row, credit notes negative, so the body adds up to the statement\'s balance',
+    coverOnlyRefs(rows, 'inventa projects pte ltd', 'TAB').reduce((t, r) => t + r.amount, 0) === 1880 && coverOnlyRefs(rows, 'INVENTA PROJECTS PTE. LTD.', 'TAO').every(r => r.qbCompany === 'TAO'));
+  check('only the row of EXACTLY this name: a look-alike\'s row is never used (no fuzzy match)', coverOnlyRefs(rows, 'INVENTA TECHNOLOGIES (S) PTE. LTD.', 'TAB').length === 0 && coverOnlyRefs(rows, 'INVENTA', 'TAB').length === 0);
+  check('nothing owed, or a credit: no statement of the cover alone and no items', coverOnlyRefs([{ ...inventa, totalOutstanding: 0 }], inventa.companyName, 'TAB').length === 0
+    && coverOnlyRefs([{ ...inventa, totalOutstanding: -20 }], inventa.companyName, 'TAB').length === 0);
+  const withInvoice: SoaRowLike = { companyName: 'LAGGING PTE. LTD.', totalOutstanding: 1100, lineItems: [item('OPNG JE', 'Journal Entry', 100), item('02611200', 'Invoice', 1000)] };
+  check('a debt that CONTAINS an invoice is not a cover-only debt (its invoice document should be there; until the sync catches up it is "not found")',
+    coverOnlyRefs([withInvoice], 'LAGGING PTE. LTD.', 'TAB').length === 0);
+  check('a blank name and an empty list give nothing', coverOnlyRefs(rows, '', 'TAB').length === 0 && coverOnlyRefs([], inventa.companyName, 'TAB').length === 0);
+  const before = JSON.stringify(rows);
+  coverOnlyRefs(rows, inventa.companyName, 'TAB');
+  check('the rows it is given are never modified', JSON.stringify(rows) === before);
+
+  check('ONE rule for "its statement is the cover page alone": something owed and no invoice among the items', isCoverOnlyDebt(inventa) && isCoverOnlyDebt(projects)
+    && !isCoverOnlyDebt(withInvoice) && !isCoverOnlyDebt({ ...inventa, totalOutstanding: 0 }) && !isCoverOnlyDebt({ ...inventa, totalOutstanding: -1 }));
+
+  // Which books are worth reading the SOA row for: only where such a debt can exist (a customer with open items but no invoice, named like the lookup).
+  type Book = 'TAB' | 'TAC' | 'TAO';
+  const r = (qbCompany: Book, invoiceNo: string, qbInvoiceId: string | null): InvoiceRef => ({ qbCompany, invoiceNo, amount: 10, qbInvoiceId });
+  const m = new Map<string, InvoiceRef[]>([
+    [normalize('Inventa Technologies (S) Pte Ltd'), [r('TAB', 'OPNG JE', null), r('TAO', "Trial Balance -Dec'23", null)]],
+    [normalize('Acme Trading Pte Ltd'), [r('TAB', '0261', '1')]],
+    [normalize('Inventa Projects Pte Ltd'), [r('TAB', 'OPNG JE', null)]],
+  ]);
+  check('a book is worth reading when a customer there has open items but no invoice and is named like the lookup (INVENTA TECHNOLOGIES: TAB and TAO)',
+    coverOnlyBooks('INVENTA TECHNOLOGIES PTE. LTD.', m, SOA_BOOKS).join(',') === 'TAB,TAO');
+  check('an ordinary company (invoices only, or nothing at all in the book) pays nothing for the check', coverOnlyBooks('ACME TRADING PTE. LTD.', m, SOA_BOOKS).length === 0
+    && coverOnlyBooks('NOBODY PTE. LTD.', m, SOA_BOOKS).length === 0 && coverOnlyBooks('', m, SOA_BOOKS).length === 0);
+  check('a customer that is not named like the lookup does not make a book worth reading (INVENTA PROJECTS is not INVENTA TECHNOLOGIES)',
+    coverOnlyBooks('INVENTA TECHNOLOGIES PTE. LTD.', new Map([[normalize('Inventa Projects Pte Ltd'), [r('TAB', 'OPNG JE', null)]]]), SOA_BOOKS).length === 0);
+  check('only the books asked about are looked at', coverOnlyBooks('INVENTA TECHNOLOGIES PTE. LTD.', m, ['TAO']).join(',') === 'TAO');
+}
+
 console.log('\n--- 4. wiring: who may see inactive companies, and the guard that refuses an empty body ---');
 {
   const route = read('app/api/client-communications/campaigns/preview/route.ts');
@@ -215,6 +257,10 @@ console.log('\n--- 4. wiring: who may see inactive companies, and the guard that
   check('a look-alike customer is refused through customerBelongsToAnotherCompany, and the company list is only loaded when the fuzzy step would take a customer',
     /soaBodyInvoices\(lookup, invoicesByCompany, draftBooks, belongsToOther\)/.test(route) && /if \(!everyone && soaBodyFuzzyKeys\(lookup, invoicesByCompany, draftBooks\)\.length\)/.test(route)
     && /customerBelongsToAnotherCompany\(customerKey, lookup, resolved, known\)/.test(route));
+  check('a book where the name still has nothing gets the SOA row\'s own items (cover-only debts), one SOA-row read per such book, failing safe',
+    /const bare = coverOnlyBooks\(lookup, invoicesByCompany, draftBooks\.filter\(book => !refs\.some\(r => r\.qbCompany === book\)\)\);/.test(route)
+    && /computeSoaRows\(book, \{ customerNamePrefilter: lookup \}\)\s*\n?\s*\.then\(rows => coverOnlyRefs\(rows, lookup, book\)\)\.catch\(\(\) => \[\]\)/.test(route)
+    && /refs\.push\(\.\.\.found\.flat\(\)\);/.test(route));
   check('it builds the row from the patched copy of the map and never mutates the loaded one', /new Map\(invoicesByCompany\)\.set\(key, refs\)/.test(route) && /buildRow\(company\.company_name, findCompany, invoicesForBody,/.test(route));
   check('a draft that already worked is not touched: the map is only copied when the body would differ', /if \(refs\.length !== own\.length \|\| refs\.some\(\(r, i\) => r !== own\[i\]\)\)/.test(route));
   check('"All" is forwarded from the Draft flow only (soaReminderScope === \'ALL\')', /opts\.soaReminderScope === 'ALL'/.test(draftClient) && /qs\.set\('allBooks', '1'\)/.test(draftClient));
@@ -222,6 +268,34 @@ console.log('\n--- 4. wiring: who may see inactive companies, and the guard that
     && draftClient.indexOf("!json.row.invoiceRefs?.length") < draftClient.indexOf("fetch('/api/client-communications/campaigns', {"));
   check('… with a message that is true on every path (it does not claim a statement was attached)', !/statement itself is fine/.test(draftClient) && /No open invoice could be matched to/.test(draftClient));
   check('the pure module reaches neither the database nor a server-only module (so this test can run it)', !/supabase|server-only|process\.env|fetch\(/.test(stripComments(pure)));
+}
+
+console.log('\n--- 5. wiring: the statement route (/api/billing/soa/pdf) ---');
+{
+  const pdf = read('app/api/billing/soa/pdf/route.ts');
+  check('a fuzzy customer is refused when it fits ANOTHER company at least as well — for invoices and for credit notes',
+    /import \{ customerBelongsToAnotherCompany, isCoverOnlyDebt \} from '@\/lib\/soa-draft-resolution';/.test(pdf)
+    && /matched = match\.value && !\(await fitsAnotherCompany\(match\.value\[0\]\)\) \? match\.value\[1\] : undefined;/.test(pdf)
+    && /matchedCredits = match\.value && !\(await fitsAnotherCompany\(match\.value\[0\]\)\) \? match\.value\[1\] : undefined;/.test(pdf));
+  check('… against the whole company list (any status, names only) read lazily — only a fuzzy match pays for it',
+    /pageAll<\{ company_name: string \}>\(\(\) => supabase\.from\('companies'\)\.select\('company_name'\)\)/.test(pdf) && /if \(!companyNames\) companyNames =/.test(pdf)
+    && !/is_active|tw_status/.test(stripComments(pdf)));
+  check('an exact customer name is never second-guessed (the guard sits only on the fuzzy branches)', /let matched = byName\.get\(target\);\s*\n\s*if \(!matched\) \{/.test(pdf) && /let matchedCredits = creditByName\.get\(target\);\s*\n\s*if \(!matchedCredits\) \{/.test(pdf));
+  check('no invoice and no credit note → the cover page alone, decided only after its row is found (no early 404)',
+    /const coverOnly = \(!matched \|\| !matched\.length\) && \(!matchedCredits \|\| !matchedCredits\.length\);/.test(pdf)
+    && !/if \(\(!matched \|\| !matched\.length\) && \(!matchedCredits \|\| !matchedCredits\.length\)\) \{\s*\n\s*return NextResponse\.json/.test(pdf));
+  check('… for the row of EXACTLY this name only, never a fuzzy neighbour\'s', /if \(coverOnly\) return undefined;/.test(pdf) && pdf.indexOf('if (coverOnly) return undefined;') > pdf.indexOf('const exact = soaRows.find(')
+    && pdf.indexOf('if (coverOnly) return undefined;') < pdf.indexOf('return findUniqueBestMatch(resolvedRawName, soaRows'));
+  check('… and only while something is owed and no invoice is among the items (a lagging sync stays "not found") — the one rule, isCoverOnlyDebt',
+    /if \(coverOnly && statementRow && !isCoverOnlyDebt\(statementRow\)\) statementRow = null;/.test(pdf) && /import \{ customerBelongsToAnotherCompany, isCoverOnlyDebt \} from '@\/lib\/soa-draft-resolution';/.test(pdf));
+  check('… with no QuickBooks address block: a cover-only statement is asked for by the company-list spelling, and the customer search is fuzzy (a look-alike\'s address)',
+    /coverOnly \? Promise\.resolve\(\{ companyName: null, billAddrLines: \[\] as string\[\] \}\) : resolveCustomerPrintDetails\(addrBook, resolvedRawName\)/.test(pdf));
+  check('the guard is asked about the name that was clicked, in the argument order the function documents (customer, lookup, own company, every company)',
+    /customerBelongsToAnotherCompany\(customerKey, companyName, \{ company_name: companyName \}, await companyNames\)/.test(pdf));
+  check('… with no row (or nothing owed) it is still "No outstanding invoices found" (404), a cover that fails to draw says so (500)',
+    /if \(coverOnly && !coverPageAdded\) \{/.test(pdf) && /status: 500 \}\)\s*\n\s*: NextResponse\.json\(\{ error: `No outstanding invoices found for "\$\{companyName\}"\.` \}, \{ status: 404 \}\)/.test(pdf));
+  check('… and the answer says it is a cover-only statement (X-Soa-Cover-Only)', /\.\.\.\(coverOnly \? \{ 'X-Soa-Cover-Only': '1' \} : \{\}\),/.test(pdf));
+  check('the mailing address of a cover-only "All" statement is read from the first book that has a row (not from "ALL")', /addrBookOverride = QB_COMPANIES\.find\(\(_, i\) => !!perBook\[i\]\);/.test(pdf) && /matchedCredits\[0\]\?\.qb_company \?\? addrBookOverride \?\? company/.test(pdf));
 }
 
 console.log(fail === 0 ? '\nALL OK' : `\n${fail} FAILED`);

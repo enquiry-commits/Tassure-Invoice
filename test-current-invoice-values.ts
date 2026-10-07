@@ -48,7 +48,8 @@ check('Billing chips for a generated invoice open it by QuickBooks Id', (page.ma
 const pdf = read('app/api/quickbooks/invoice-pdf/route.ts');
 check('opening by number refuses when two QuickBooks invoices share it (no "first match")', /rows\.length \?\? 0\) > 1/.test(pdf) && /status: 409/.test(pdf));
 const refresh = read('app/api/client-communications/drafts/refresh-amounts/route.ts');
-check('the pre-send check refreshes the number as well as the amount', /SELECT Id, DocNumber, TotalAmt FROM Invoice/.test(refresh) && /numberChanged/.test(refresh));
+// The live amount is TotalAmt for AR/letter emails and Balance for an SOA (lib/draft-refresh.ts, INV-MAIL-007); both are read, with the number.
+check('the pre-send check refreshes the number as well as the amount', /SELECT Id, DocNumber, TotalAmt, Balance, ExchangeRate FROM Invoice/.test(refresh) && /numberChanged/.test(refresh));
 const helper = read('lib/draft-helper-client.ts');
 check('no send path skips the pre-send check any more', !/skip_amount_refresh\s*\)/.test(helper) && !/skip_amount_refresh: true/.test(page) && !/skip_amount_refresh: true/.test(read('lib/campaign-draft-client.ts')));
 check('attachment names follow the refreshed number', /refreshed\.corrected\s*\n?\s*\?\s*fetchedAttachments\.map/.test(helper));

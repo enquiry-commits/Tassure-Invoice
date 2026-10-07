@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { qbQuery, type QbCompany } from '@/lib/quickbooks';
 import { mergeTemplate, formatInvoiceList, formatAmount, computeDaysOverdue, type InvoiceRef } from '@/lib/email-merge';
+import { refreshInvoiceRef, amountsAreRefreshable, type RefreshCampaignType } from '@/lib/draft-refresh';
 import { loadLastReminderSentAt } from '@/lib/client-comms-resolve';
 import { normalize } from '@/lib/company-name';
 import { fmtDate, currentMonthUpperSGT } from '@/lib/date';
@@ -14,6 +15,11 @@ import { fmtDate, currentMonthUpperSGT } from '@/lib/date';
 // one, a confusing mismatch sent to a real client. Only re-verifies
 // invoices already referenced with a qbInvoiceId; does not re-run
 // recipient/invoice-set resolution.
+//
+// WHICH live amount depends on the email (lib/draft-refresh.ts, INV-MAIL-007): an
+// SOA quotes what is still OWED on each invoice (QuickBooks' Balance), AR and
+// letters quote the whole invoice (TotalAmt). Reading TotalAmt for an SOA wrote
+// a partly paid invoice at its full total into the body (Vincent, 2026-10-07).
 export async function POST(req: NextRequest) {
   const { id } = await req.json();
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
@@ -34,21 +40,18 @@ export async function POST(req: NextRequest) {
   if (!template) return NextResponse.json({ error: 'Template for this draft was not found.' }, { status: 404 });
 
   const refs = (draft.invoice_refs ?? []) as InvoiceRef[];
+  // An SOA with a credit note / payment / journal entry among its lines keeps its amounts: those lines cannot be re-read, and
+  // re-pricing only the invoices would double count a credit applied since (lib/draft-refresh.ts amountsAreRefreshable).
+  const reprice = amountsAreRefreshable(refs, campaign.type as RefreshCampaignType);
   // Number AND amount: staff can renumber an invoice in QuickBooks as well as
   // re-price it, and the email must quote the invoice the client will
   // actually find (INV-QB-030; amounts were the only check before).
   const refreshedRefs = await Promise.all(refs.map(async (ref) => {
     if (!ref.qbInvoiceId) return ref;
     try {
-      const result = await qbQuery(`SELECT Id, DocNumber, TotalAmt FROM Invoice WHERE Id = '${ref.qbInvoiceId}'`, ref.qbCompany as QbCompany);
+      const result = await qbQuery(`SELECT Id, DocNumber, TotalAmt, Balance, ExchangeRate FROM Invoice WHERE Id = '${ref.qbInvoiceId}'`, ref.qbCompany as QbCompany);
       const row = result?.rows?.[0];
-      const liveAmount = row?.TotalAmt;
-      const liveNumber = row?.DocNumber;
-      return {
-        ...ref,
-        ...(typeof liveAmount === 'number' ? { amount: liveAmount } : {}),
-        ...(typeof liveNumber === 'string' && liveNumber.trim() ? { invoiceNo: liveNumber.trim() } : {}),
-      };
+      return refreshInvoiceRef(ref, row, campaign.type as RefreshCampaignType, reprice);
     } catch {
       return ref; // Keep the last-known values rather than failing the whole request.
     }

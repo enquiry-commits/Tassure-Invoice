@@ -833,12 +833,14 @@ again.
   BEFORE the usual live-roster match (exact, then unique fuzzy >= 70). Never a
   fuzzy match for a company that is not live: a similarly named ACTIVE company
   would otherwise receive another client's collections email with the wrong
-  statement. This is the ONLY place that reads inactive companies (one file, the
-  preview route, passes `includeInactive`; both calls are for an SOA): AR, letters
-  and Campaign Centre's BULK list stay on the live roster (INV-TW-024, INV-AR-017,
-  INV-AR-018 — one definition, `lib/company-lifecycle.ts`; the alive/dead split
-  uses `isActiveCompany()`). A company with no `companies` row has no email
-  address on file, and the route now says so instead of "no match": on
+  statement. This is the ONLY place that reads inactive companies with their
+  contact details (one file, the preview route, passes `includeInactive`; both
+  calls are for an SOA): AR, letters and Campaign Centre's BULK list stay on the
+  live roster (INV-TW-024, INV-AR-017, INV-AR-018 — one definition,
+  `lib/company-lifecycle.ts`; the alive/dead split uses `isActiveCompany()`). (The
+  statement route also reads every company's NAME, any status and nothing else,
+  for the look-alike check of INV-DOC-024.) A company with no `companies` row has
+  no email address on file, and the route now says so instead of "no match": on
   2026-10-07, 55 of the 400 Outstanding rows (TAB 10, TAC 7, TAO 38) — they need
   the company and a contact added first; 10 rows are inactive companies now
   reachable (TAB 9, TAO 1) and 7 rows have a company but no email (HAN KUN LLP,
@@ -864,29 +866,71 @@ again.
   independent review: "Yu An (SGP) Holding" and "Yu An Bulk Holding" are two
   clients that score 75 against each other, so in TAB — where only the second has
   an invoice (#02610643, S$800) — the statement's fuzzy step hands the first one
-  the second's invoice; the body no longer lists it. `resolveCampaignRow` refuses
-  an SOA draft whose body would still list no invoice (the row's own "No invoice
-  found" is ignored by draft creation). Result on the real data: every one of the
-  400 rows has a body except INVENTA TECHNOLOGIES (TAB S$1,505.50, Terminated),
-  whose whole debt is one opening journal entry — no statement can be built from
-  it (the statement route answers "No outstanding invoices found"), so its Draft
-  cannot be made, like EASYFLY's S$2; the one body that differs from its SOA row is
-  FAITH CAPITAL GLOBAL FUND VCC (TAB) — two QuickBooks customers, one spelled
-  "Glocal" (2,500 + 50) and one right (4 x 652.76): the statement and the body show
-  the right one, the SOA row adds both; accounting's data, not touched. **Still
-  open (Vincent's call):** the statement route has no such guard, so the "All"
-  Draft of Yu An (SGP) Holding still ATTACHES Yu An Bulk Holding's TAB statement
-  (1 of 77 companies with rows in two books or more; the body does not list it);
-  the live-roster fuzzy match can still address a debtor that has no company row to
-  a similarly named live company's contacts (0 of 400 rows today — Zhichuang
-  Startech reaches its company through its old name at score 100); the assistant's
-  own "draft an SOA email" lookup (`lib/email-draft-lookup.ts`) is still
-  active-only although its SOA card's Draft buttons work for an inactive debtor;
-  among duplicate rows with one name (3 pairs) the draft takes the live row, else
-  the lowest id, while the SOA list takes the last row it reads. Guarded by
-  `test-soa-draft-resolution.ts` (62 checks: the lookup, its order, the body, the
-  look-alike guard, the wiring — who may pass `includeInactive`, the empty-body
-  guard) and, with each safeguard removed on a copy, 37 negative controls that fail it.
+  the second's invoice; the body no longer lists it, and since the same day the
+  statement route refuses it too (INV-DOC-024). **A debt with no invoice behind
+  it** (an opening-balance journal entry: INVENTA TECHNOLOGIES TAB S$1,505.50,
+  EASYFLY S$2) has a cover-page-only statement (INV-DOC-024); for a book where the
+  name still has nothing, the body lists the SOA row's own items
+  (`coverOnlyRefs`, exact name, `isCoverOnlyDebt`) — read only where such a debt can
+  exist (`coverOnlyBooks`: a customer there with open items but no invoice, named like
+  the lookup), so an ordinary draft pays nothing for it.
+  `resolveCampaignRow` refuses an SOA draft whose body would still list no invoice
+  (the row's own "No invoice found" is ignored by draft creation). Result on the
+  real data: every one of the 400 rows has a body; the one body that differs from
+  its SOA row is FAITH CAPITAL GLOBAL FUND VCC (TAB) — two QuickBooks customers,
+  one spelled "Glocal" (2,500 + 50) and one right (4 x 652.76): the statement and
+  the body show the right one, the SOA row adds both; accounting's data, not
+  touched. **Still open (Vincent's call):** the live-roster fuzzy match can still
+  address a debtor that has no company row to a similarly named live company's
+  contacts (0 of 400 rows today — Zhichuang Startech reaches its company through
+  its old name at score 100; a stricter rule is a client-matching rule only he can
+  state); the assistant's own "draft an SOA email" lookup
+  (`lib/email-draft-lookup.ts`) is still active-only although its SOA card's Draft
+  buttons work for an inactive debtor; among duplicate rows with one name (3
+  pairs) the draft takes the live row, else the lowest id, while the SOA list
+  takes the last row it reads; Campaign Centre's bulk SOA list still offers only
+  active companies. Guarded by `test-soa-draft-resolution.ts` (86 checks: the
+  lookup, its order, the body, the look-alike guard, the cover-only items, the
+  wiring — who may pass `includeInactive`, the empty-body guard, the statement
+  route) and, with each safeguard removed on a copy, 37 + 41
+  negative controls that fail it.
+
+- **INV-MAIL-007** — Right before a draft opens or sends, its invoice amounts are
+  re-read from QuickBooks; an SOA email quotes what is still OWED on each invoice
+  (the invoice's `Balance`), AR renewal and letter emails quote the whole invoice
+  (`TotalAmt`) — `lib/draft-refresh.ts` `refreshInvoiceRef`, called by
+  `app/api/client-communications/drafts/refresh-amounts/route.ts` with the
+  campaign's own type. Vincent, 2026-10-07: "部分已付的发票金额会被写大：发送前的刷新会把
+  '未付余额'换成发票全额", and, asked whether to change it, "改成读未付余额". Real case:
+  Easybook Pay TAB #02510178 — invoice S$1,660, S$200 still owed: the statement said
+  200 and the email body after the refresh 1,660 (26 open invoices, TAB 20 and TAO
+  6, 17 SOA rows, on 2026-10-07). The reference keeps its place, book and
+  QuickBooks Id (`prepareDraftForSend` pairs the attachments with the references by
+  position); a renumbered invoice is still quoted under its new number
+  (INV-QB-030); a value QuickBooks did not return leaves the reference as it was; a
+  credit note or journal entry (no QuickBooks Id) is never refreshed; an invoice
+  paid in full since the draft was made reads S$0.00 and its line stays (the send
+  screen says "Amount corrected from S$X to S$0"). An SOA that has a credit note, a
+  payment or a journal entry among its lines — no QuickBooks Id, they cannot be
+  re-read — is NOT re-priced at all (`amountsAreRefreshable`; only a renumbered
+  invoice is renamed): re-pricing only its invoices double counts what accounting
+  applied to an invoice since (a credit note of -400 applied to a 1,000 invoice:
+  Balance 600, the frozen -400 stays, the body would say 200 for a debt of 600 —
+  found by the second independent review). **Currency:**
+  QuickBooks' `Balance` and `TotalAmt` are in the INVOICE's currency and the emails
+  say S$, so an invoice in another currency is converted at its own `ExchangeRate`
+  and rounded to cents (`HomeBalance`/`HomeTotalAmt` are not queryable): FAITH CAPITAL
+  GLOBAL FUND VCC's four TAB invoices are USD 507.55 each at 1.2861 = S$652.76, which
+  is what the AR aging and the statement hold — the old refresh turned them into
+  "S$507.55". Checked against ALL 576 open invoice references an SOA draft holds on
+  2026-10-07 (live QuickBooks, read-only; the route itself writes `email_drafts` and
+  was not called): the old rule would have rewritten 30 of them (26 partly paid, 4
+  USD), the new one rewrites none (all three books answered the query). Known, not
+  changed: an AR or letter draft takes its creation-time amount from
+  `quickbooks_invoices.total_amt`, which is in the invoice's own currency — an AR or
+  letter invoice in a foreign currency (none today) would be created at the foreign
+  figure and corrected to S$ only at the refresh. Guarded by `test-draft-refresh.ts`
+  (44 checks) and negative controls.
 
 ## Document / template generation (INV-DOC)
 
@@ -5611,6 +5655,48 @@ again.
   NOT what hid the Chinese-name outage — both books failed for those
   clients, so the draft already errored visibly — it closes the
   partial-failure path. Guarded by `test-soa-book-pdfs.ts`.
+
+- **INV-DOC-024** — The SOA statement route (`app/api/billing/soa/pdf/route.ts`)
+  never builds a client's statement from ANOTHER company's customer, and a debt
+  with no invoice document behind it still gets a statement. Vincent, 2026-10-07,
+  answering two questions: whether to add "像别家公司的客户就不取" to the statement
+  route → 加; and for the debts that have only an opening-balance journal entry (they
+  answered 404, so neither a download nor a Draft was possible) → "要，做成只有封面页的对账单".
+  (1) **Look-alike guard.** The route's fuzzy customer match (unique best >= 70, per
+  book, invoices and credit notes alike) is refused when the customer fits ANOTHER
+  company in the company list at least as well as the name asked for
+  (`customerBelongsToAnotherCompany`, `lib/soa-draft-resolution.ts`; a tie counts as
+  theirs; company NAMES only, any status, read lazily — only a fuzzy match pays for
+  it). "Yu An (SGP) Holding" and "Yu An Bulk Holding" score 75 against each other, so
+  the statement for Yu An (SGP) in TAB — where it has no row — was Yu An Bulk
+  Holding's (TAB #02610643 S$800) and the "All" Draft attached it (1 of 77 companies
+  with rows in two books or more, real data 2026-10-07); it now answers 404, which
+  "All" already drops (INV-DOC-023). An exact customer name is never second-guessed.
+  Over all 413 Outstanding rows the guard refuses none of the 10 fuzzy matches taken. A
+  refusal is the safe side of a mistake (the book's statement is "not found", never
+  another client's); the one way it could refuse a legitimate statement — the clicked
+  name is a QuickBooks spelling while the company list holds the same entity under
+  the spelling the customer has, which then scores closer — is not in today's data.
+  (2) **Cover-page-only statement.** With no invoice and no credit memo matched the
+  route no longer stops at 404: for the SOA row of EXACTLY this name (the list's own
+  mapping of customers to companies; never a fuzzy neighbour's row), with a positive
+  balance and NO 'Invoice' line item among its items (`isCoverOnlyDebt`, the one
+  rule), it draws the cover page alone — the letterhead, the client, the itemized table
+  (the journal entry) and the aging line — and answers with header
+  `X-Soa-Cover-Only: 1`. It carries no QuickBooks name/address block: it is asked for
+  by the company-list spelling and the customer search is fuzzy, so it could print a
+  look-alike customer's address (found by the second independent review).
+  An invoice among the items keeps it "not found": its document should be attached
+  and the QuickBooks sync can lag, and a cover page standing in for it would go out
+  unnoticed. No row, nothing owed, or an invoice among the items is still "No
+  outstanding invoices found" (404); a cover that fails to draw answers 500 with the
+  reason. 12 of 413 rows have no invoice or credit note behind them (opening-balance
+  and trial-balance journal entries: INVENTA TECHNOLOGIES TAB S$1,505.50 and TAO
+  S$2,050, EASYFLY S$2, Monster Game TAO S$4,670.08 …). The Draft's body lists the same
+  items (INV-MAIL-006). Checked with the real route on the real data: INVENTA
+  TECHNOLOGIES and EASYFLY → one page; INVENTA PROJECTS (journal entry + credit note)
+  and every statement that existed → as before; Yu An (SGP) TAB → 404. Guarded by
+  `test-soa-draft-resolution.ts` (§3b and §5) and negative controls.
 
 ## SOA Outstanding shared remarks
 

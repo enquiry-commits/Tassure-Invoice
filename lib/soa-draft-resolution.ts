@@ -7,6 +7,7 @@ import { isActiveCompany } from './company-lifecycle';
 import type { CompanyRow } from './client-comms-resolve';
 import type { InvoiceRef } from './email-merge';
 import type { QbCompany } from './quickbooks';
+import type { SoaCompanyRow } from './soa-data';
 
 export type CompanyFinder = (name: string) => CompanyRow | null;
 
@@ -112,4 +113,43 @@ export function soaBodyInvoices(
     out.push(...refsInBook(match[1], book));
   }
   return out;
+}
+
+export type SoaRowLike = Pick<SoaCompanyRow, 'companyName' | 'totalOutstanding' | 'lineItems'>;
+
+/**
+ * THE rule for a debt whose statement is the cover page alone (/api/billing/soa/pdf and the draft body both use it): something is owed and
+ * NO 'Invoice' is among its items. An invoice's document should be attached to its statement; until the QuickBooks sync has caught up it is
+ * "not found" — a cover page standing in for it would go out unnoticed.
+ */
+export function isCoverOnlyDebt(row: Pick<SoaRowLike, 'totalOutstanding' | 'lineItems'>): boolean {
+  return row.totalOutstanding > 0 && !row.lineItems.some(i => i.txnType === 'Invoice');
+}
+
+/**
+ * The books where a debt with no invoice behind it could exist for this name — the only books worth reading the SOA row for: some customer
+ * with open items there, NONE of them an invoice (an invoice customer is the statement's own business), is the lookup's exact name or fits
+ * it (>= 70). For an ordinary company this is empty, so a draft pays nothing for the check.
+ */
+export function coverOnlyBooks(lookup: string, invoicesByCompany: ReadonlyMap<string, InvoiceRef[]>, books: readonly QbCompany[]): QbCompany[] {
+  const wanted = normalize(lookup);
+  if (!wanted) return [];
+  return books.filter(book => [...invoicesByCompany.entries()].some(([key, refs]) => {
+    const inBook = refs.filter(r => r.qbCompany === book);
+    return inBook.length > 0 && !inBook.some(r => r.qbInvoiceId) && (key === wanted || matchScore(key, lookup) >= 70);
+  }));
+}
+
+/**
+ * The items of a debt that has NO invoice or credit-note document behind it — an opening-balance journal entry, a trial-balance row
+ * (INVENTA TECHNOLOGIES TAB: OPNG JE S$1,505.50). Its statement is the cover page alone (/api/billing/soa/pdf, Vincent 2026-10-07:
+ * "要，做成只有封面页的对账单"), whose table is the SOA row's own line items — so the email body lists the same items. Only the SOA row
+ * of EXACTLY this name — the list's own mapping of customers to companies, so a customer it attributes to this company counts — that
+ * isCoverOnlyDebt; never a fuzzy neighbour's row.
+ */
+export function coverOnlyRefs(rows: readonly SoaRowLike[], lookup: string, book: QbCompany): InvoiceRef[] {
+  const wanted = normalize(lookup);
+  const row = wanted ? rows.find(r => normalize(r.companyName) === wanted) : undefined;
+  if (!row || !isCoverOnlyDebt(row)) return [];
+  return row.lineItems.map(item => ({ qbCompany: book, invoiceNo: item.docNumber, amount: item.amount, qbInvoiceId: null, dueDate: item.dueDate }));
 }

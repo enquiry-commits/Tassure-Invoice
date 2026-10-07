@@ -11,6 +11,7 @@ import { computeSoaRows, type SoaCompanyRow } from '@/lib/soa-data';
 import { LEGAL_NAME } from '@/lib/soa-export';
 import { drawStatementCoverPage, combineStatementRows, type StatementRow } from '@/lib/statement-pdf';
 import { getClientInvoicePdf } from '@/lib/client-invoice-pdf';
+import { customerBelongsToAnotherCompany, isCoverOnlyDebt } from '@/lib/soa-draft-resolution';
 
 const QB_BASE = process.env.QB_ENVIRONMENT === 'sandbox'
   ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -139,6 +140,18 @@ const COMPANY_SELECTORS: CompanySelector[] = ['TAB', 'TAC', 'TAO', 'ALL'];
 // QuickBooks system (same `company` scoping as /api/billing/soa/detail, see
 // its comment) and merges every page into one PDF — or, in 'ALL' mode,
 // every unpaid invoice across ALL THREE systems for that one customer name.
+// A debt that has NO invoice or credit-note document behind it — an opening-balance
+// journal entry, a trial-balance row (INVENTA TECHNOLOGIES TAB S$1,505.50) — used to
+// answer 404, so it could be neither downloaded nor drafted; Vincent, 2026-10-07:
+// "要，做成只有封面页的对账单". It now gets the cover page alone (header X-Soa-Cover-Only),
+// but ONLY for the SOA row of exactly this name (the list's own mapping of customers
+// to companies) with a positive balance — never a fuzzy neighbour's — and without the
+// customer's QuickBooks address block. A customer that fits ANOTHER company in the company list at
+// least as well as the name asked for is that company's and is never taken
+// (lib/soa-draft-resolution.ts, INV-DOC-024): "Yu An (SGP) Holding" was handed
+// "Yu An Bulk Holding"'s TAB statement because they share 3 of 4 words. A refusal
+// is the safe side of a mistake: the book's statement is then "not found", never
+// another client's.
 // Any throw while the PDF is built answers as JSON so the page can show what
 // went wrong — a bare 500 only ever read "Unable to generate the combined
 // PDF" and gave staff nothing to report (the red badge of 2026-10-05).
@@ -204,19 +217,24 @@ async function buildSoaPdf(req: NextRequest): Promise<Response> {
     creditByName.get(key)!.push(cm);
   }
 
+  // Read lazily, once: only a fuzzy match needs to know whether the customer is really another company's.
+  let companyNames: Promise<Array<{ company_name: string }>> | undefined;
+  const fitsAnotherCompany = async (customerKey: string) => {
+    if (!companyNames) companyNames = pageAll<{ company_name: string }>(() => supabase.from('companies').select('company_name'));
+    return customerBelongsToAnotherCompany(customerKey, companyName, { company_name: companyName }, await companyNames);
+  };
   let matched = byName.get(target);
   if (!matched) {
     const match = findUniqueBestMatch(companyName, [...byName.entries()], entry => entry[0], 70);
-    matched = match.value?.[1];
+    matched = match.value && !(await fitsAnotherCompany(match.value[0])) ? match.value[1] : undefined;
   }
   let matchedCredits = creditByName.get(target);
   if (!matchedCredits) {
     const match = findUniqueBestMatch(companyName, [...creditByName.entries()], entry => entry[0], 70);
-    matchedCredits = match.value?.[1];
+    matchedCredits = match.value && !(await fitsAnotherCompany(match.value[0])) ? match.value[1] : undefined;
   }
-  if ((!matched || !matched.length) && (!matchedCredits || !matchedCredits.length)) {
-    return NextResponse.json({ error: `No outstanding invoices found for "${companyName}".` }, { status: 404 });
-  }
+  // No invoice and no credit note: the statement can still be its cover page alone (decided below, once its row is found).
+  const coverOnly = (!matched || !matched.length) && (!matchedCredits || !matchedCredits.length);
   matched = matched ?? [];
   matchedCredits = matchedCredits ?? [];
 
@@ -251,10 +269,16 @@ async function buildSoaPdf(req: NextRequest): Promise<Response> {
     const resolvedTarget = normalize(resolvedRawName);
     const exact = soaRows.find(r => normalize(r.companyName) === resolvedTarget);
     if (exact) return exact;
+    // A statement made of the cover alone is only ever for the row of exactly this name.
+    if (coverOnly) return undefined;
     return findUniqueBestMatch(resolvedRawName, soaRows, r => r.companyName, 70).value ?? undefined;
   };
   let coverPageAdded = false;
   let coverFontFailed = false;
+  let coverError: string | null = null;
+  // The book the customer's mailing address is read from: the book of the first document merged below, or — with no document at
+  // all (a cover-only statement) — the first book that has a row.
+  let addrBookOverride: QbCompany | undefined;
   const pageCountBeforeCover = merged.getPageCount();
   try {
     // "Tassure Group" for the combined letterhead — TAB/TAC/TAO are 3
@@ -264,13 +288,19 @@ async function buildSoaPdf(req: NextRequest): Promise<Response> {
     let statementRow: StatementRow | null;
     let legalName: string;
     if (combineAllBooks) {
-      const bookRows = (await Promise.all(QB_COMPANIES.map(resolveOneBookRow))).filter((r): r is SoaCompanyRow => !!r);
+      const perBook = await Promise.all(QB_COMPANIES.map(resolveOneBookRow));
+      const bookRows = perBook.filter((r): r is SoaCompanyRow => !!r);
+      addrBookOverride = QB_COMPANIES.find((_, i) => !!perBook[i]);
       statementRow = bookRows.length ? combineStatementRows(bookRows, resolvedRawName) : null;
       legalName = 'Tassure Group';
     } else {
       statementRow = (await resolveOneBookRow(company)) ?? null;
       legalName = LEGAL_NAME[company];
     }
+    // Nothing owed (or a credit): no statement made of the cover alone. Neither for a debt that CONTAINS an invoice: its invoice
+    // document should be here (the QuickBooks sync can lag a day) — a cover page standing in for it would go out unnoticed, so it
+    // stays "not found" and staff retry once the invoice has synced (isCoverOnlyDebt).
+    if (coverOnly && statementRow && !isCoverOnlyDebt(statementRow)) statementRow = null;
     if (statementRow) {
       // Whichever book actually produced resolvedRawName (matched[0]/
       // matchedCredits[0] above) is the real QuickBooks Customer record to
@@ -278,21 +308,32 @@ async function buildSoaPdf(req: NextRequest): Promise<Response> {
       // mode; in 'ALL' mode this is just whichever of TAB/TAC/TAO happened
       // to come first in the pooled invoice/credit-memo list, which is fine
       // since it's the same real-world company's address regardless of book.
-      const addrBook = (matched[0]?.qb_company ?? matchedCredits[0]?.qb_company ?? company) as QbCompany;
+      const addrBook = (matched[0]?.qb_company ?? matchedCredits[0]?.qb_company ?? addrBookOverride ?? company) as QbCompany;
+      // A cover-only statement has no QuickBooks document to take the customer's name from: it is asked for by the company-list
+      // spelling, and findCustomer's fuzzy fallback could print a LOOK-ALIKE customer's CompanyName and mailing address on this
+      // client's statement. So it carries none (the TO name and the items are enough) — INV-DOC-024.
       const [{ companyName: qbCompanyName, billAddrLines }, invoiceDetails] = await Promise.all([
-        resolveCustomerPrintDetails(addrBook, resolvedRawName),
+        coverOnly ? Promise.resolve({ companyName: null, billAddrLines: [] as string[] }) : resolveCustomerPrintDetails(addrBook, resolvedRawName),
         resolveInvoiceDetails(matched),
       ]);
       const cover = await drawStatementCoverPage(merged, legalName, statementRow, resolvedRawName, qbCompanyName, billAddrLines, invoiceDetails);
       coverFontFailed = cover.chineseFontFailed;
       coverPageAdded = true;
     }
-  } catch {
+  } catch (err) {
     // Remove any pages drawStatementCoverPage managed to add before
     // throwing (e.g. mid-draw) — this must never ship a half-drawn page
     // silently merged into a real client PDF, regardless of WHY it failed.
     for (let i = merged.getPageCount() - 1; i >= pageCountBeforeCover; i--) merged.removePage(i);
     coverPageAdded = false;
+    coverError = err instanceof Error ? err.message : String(err);
+  }
+  // With no invoice and no credit note the cover page IS the statement: no row of exactly this name (or nothing owed) is the old
+  // "nothing outstanding"; a cover that failed to draw says so instead.
+  if (coverOnly && !coverPageAdded) {
+    return coverError
+      ? NextResponse.json({ error: `The statement cover page for "${companyName}" could not be drawn: ${coverError}` }, { status: 500 })
+      : NextResponse.json({ error: `No outstanding invoices found for "${companyName}".` }, { status: 404 });
   }
 
   const errors: string[] = [];
@@ -365,6 +406,8 @@ async function buildSoaPdf(req: NextRequest): Promise<Response> {
       // The cover could not load its Chinese font (INV-DOC-011): a Chinese
       // client name on it fell back to safeText(). The page warns staff.
       ...(coverFontFailed ? { 'X-Soa-Cover-Font-Fallback': '1' } : {}),
+      // No invoice or credit note behind the debt: this PDF is the cover page alone.
+      ...(coverOnly ? { 'X-Soa-Cover-Only': '1' } : {}),
     },
   });
 }

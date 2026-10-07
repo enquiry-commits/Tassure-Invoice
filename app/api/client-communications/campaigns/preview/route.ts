@@ -7,7 +7,8 @@ import {
   loadCompanies, loadInvoicesByCompany, loadAutoTargetNames, loadAlreadySent, loadArPicByCompany, loadLastReminderSentAt, buildRow, makeCompanyFinder,
   type CompanyRow,
 } from '@/lib/client-comms-resolve';
-import { resolveDraftCompany, soaBodyInvoices, soaBodyFuzzyKeys, customerBelongsToAnotherCompany, SOA_BOOKS } from '@/lib/soa-draft-resolution';
+import { resolveDraftCompany, soaBodyInvoices, soaBodyFuzzyKeys, customerBelongsToAnotherCompany, coverOnlyBooks, coverOnlyRefs, SOA_BOOKS } from '@/lib/soa-draft-resolution';
+import { computeSoaRows } from '@/lib/soa-data';
 
 // Preview-before-generate: resolves the same candidate set Campaign Centre
 // would generate, WITHOUT writing anything, so a reviewer can check/uncheck
@@ -138,6 +139,16 @@ export async function GET(req: NextRequest) {
     const known = everyone;
     const belongsToOther = known ? (customerKey: string) => customerBelongsToAnotherCompany(customerKey, lookup, resolved, known) : undefined;
     const refs = soaBodyInvoices(lookup, invoicesByCompany, draftBooks, belongsToOther);
+    // A book where the name still has nothing may hold a debt with no invoice document behind it (an opening-balance journal entry):
+    // its statement is the cover page alone, so the body lists the SOA row's own items (INV-MAIL-006). Only a book where such a debt can
+    // exist is read (coverOnlyBooks: a customer there with open items but no invoice, named like the lookup) — an ordinary company
+    // owing on one book pays nothing for its other books.
+    const bare = coverOnlyBooks(lookup, invoicesByCompany, draftBooks.filter(book => !refs.some(r => r.qbCompany === book)));
+    if (bare.length) {
+      const found = await Promise.all(bare.map(book => computeSoaRows(book, { customerNamePrefilter: lookup })
+        .then(rows => coverOnlyRefs(rows, lookup, book)).catch(() => [])));
+      refs.push(...found.flat());
+    }
     const key = normalize(resolved.company_name);
     const own = invoicesByCompany.get(key) ?? [];
     if (refs.length !== own.length || refs.some((r, i) => r !== own[i])) invoicesForBody = new Map(invoicesByCompany).set(key, refs);
