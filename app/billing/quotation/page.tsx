@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileText, RefreshCw, X, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, Layers, Clock, Loader2, Plus, Send, Trash2 } from 'lucide-react';
+import { FileText, RefreshCw, X, ChevronDown, ChevronRight, CheckCircle2, AlertTriangle, Layers, Clock, Loader2, Plus, Send, Trash2, Archive, RotateCcw } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
 import { fmtDate, todaySGT } from '@/lib/date';
 import { QB_CATALOG } from '@/lib/invoice-templates';
 import type { QbCompany } from '@/lib/quickbooks';
-import type { QuotationData, QuotationRow, QuotationTraceInvoice } from '@/app/api/billing/quotation/route';
+import type { QuotationData, QuotationRow, QuotationRowView, QuotationTraceInvoice } from '@/app/api/billing/quotation/route';
 
 // Billing System › Quotation (Vincent, 2026-09-24). A quotation is a
 // QuickBooks Estimate ("PI…" numbers). Once one is Closed, this page shows
@@ -22,7 +22,7 @@ type StatusFilter = 'all' | 'open' | 'closed' | 'rejected' | 'split' | 'noinvoic
 const NOT_SET = '__not_set__';
 
 const BOOKS: QbCompany[] = ['TAB', 'TAC', 'TAO'];
-const listColumns = '28px 104px 96px minmax(210px,1.5fr) 128px 118px 66px 118px minmax(290px,2fr)';
+const listColumns = '28px 104px 96px minmax(210px,1.5fr) 128px 118px 66px 118px minmax(290px,2fr) 128px minmax(210px,1.3fr)';
 
 function money(n: number, currency?: string | null) {
   const body = n.toLocaleString('en-SG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -136,7 +136,7 @@ function TraceSummary({ row }: { row: QuotationRow }) {
   );
 }
 
-function Detail({ row, graceDays, onClose }: { row: QuotationRow; graceDays: number; onClose: () => void }) {
+function Detail({ row, graceDays, onClose }: { row: QuotationRowView; graceDays: number; onClose: () => void }) {
   const t = row.trace;
   const w = t.nameMatchWindow;
   const sectionTitle = { fontSize: 11, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.04em', margin: '18px 0 8px' } as const;
@@ -158,6 +158,11 @@ function Detail({ row, graceDays, onClose }: { row: QuotationRow; graceDays: num
         </div>
 
         <div style={{ padding: '4px 20px 20px' }}>
+          {row.review.completed && (
+            <div style={{ margin: '14px 0 0', padding: '9px 12px', borderRadius: 8, background: '#f1f5f9', border: '1px solid #e2e8f0', fontSize: 12, color: '#334155' }}>
+              <b>Completed</b> {row.review.completedAt ? fmtDate(row.review.completedAt.slice(0, 10)) : ''}{row.review.completedBy ? ` by ${row.review.completedBy.split('@')[0]}` : ''} — the invoices below are frozen as they were then; no new invoice is matched.
+            </div>
+          )}
           <div style={sectionTitle}>Invoices issued for this quotation</div>
           {t.status === 'not_applicable' && <div style={{ fontSize: 12.5, color: '#64748b' }}>Not closed yet — invoices are traced once the quotation is Closed.</div>}
           {t.status === 'none' && <div style={{ fontSize: 12.5, color: '#64748b' }}>Closed, but no invoice was found in TAB / TAC / TAO for this customer name in the window below. A quotation can be closed without being invoiced, or the customer may be spelled differently on the invoice.</div>}
@@ -412,6 +417,30 @@ function NewQuotationModal({ onClose, onCreated }: { onClose: () => void; onCrea
   );
 }
 
+// Remarks on a quotation (Vincent, 2026-10-07) — free text, writable on any PI at any time, completed or not; saved
+// when the box loses focus.
+function QuotationRemarks({ value, disabled, onSave }: { value: string | null; disabled: boolean; onSave: (text: string) => Promise<void> }) {
+  const [text, setText] = useState(value ?? '');
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const grow = useCallback(() => { const el = ref.current; if (el) { el.style.height = 'auto'; el.style.height = `${Math.max(el.scrollHeight, 32)}px`; } }, []);
+  useEffect(() => { if (document.activeElement !== ref.current) setText(value ?? ''); }, [value]);
+  useEffect(() => { grow(); }, [text, grow]);
+  const save = async () => {
+    if (text.trim() === (value ?? '').trim()) return;
+    setSaving(true); setFailed(false);
+    try { await onSave(text.trim()); } catch { setFailed(true); } finally { setSaving(false); }
+  };
+  return (
+    <textarea ref={ref} value={text} rows={1} disabled={disabled || saving} placeholder="Add remarks…" aria-label="Quotation remarks"
+      onChange={e => { setText(e.target.value); grow(); }} onBlur={() => void save()}
+      onKeyDown={e => { if (e.key === 'Escape') { setText(value ?? ''); e.currentTarget.blur(); } }}
+      title={failed ? 'Could not save — try again' : undefined}
+      style={{ width: '100%', boxSizing: 'border-box', border: `1px solid ${failed ? '#fecaca' : '#e2e8f0'}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#1e293b', resize: 'none', overflow: 'hidden', fontFamily: 'inherit', background: '#fff' }} />
+  );
+}
+
 export default function QuotationPage() {
   const [data, setData] = useState<QuotationData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -422,6 +451,10 @@ export default function QuotationPage() {
   const [creatorFilter, setCreatorFilter] = useState<string>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  // 'completed' = the hidden, finished PIs (the Completed card); 'active' = the working list
+  const [view, setView] = useState<'active' | 'completed'>('active');
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // No setState before the fetch starts — react-hooks/set-state-in-effect
   // rejects a synchronous set at the top of an effect body. The refresh
@@ -439,7 +472,10 @@ export default function QuotationPage() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const rows = useMemo(() => data?.rows ?? [], [data]);
+  const allRows = useMemo<QuotationRowView[]>(() => data?.rows ?? [], [data]);
+  // Completed PIs leave the working list (Vincent, 2026-10-07) — they only show under the Completed card
+  const rows = useMemo(() => allRows.filter(r => !r.review.completed), [allRows]);
+  const completedRows = useMemo(() => allRows.filter(r => r.review.completed), [allRows]);
   const creators = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of rows) if (r.createdBy) counts.set(r.createdBy.name, (counts.get(r.createdBy.name) ?? 0) + 1);
@@ -458,38 +494,88 @@ export default function QuotationPage() {
   }, [rows]);
 
   const filtered = useMemo(() => {
-    let list = rows;
-    if (filter === 'open' || filter === 'closed' || filter === 'rejected') list = list.filter(r => r.statusGroup === filter);
-    if (filter === 'split') list = list.filter(r => r.trace.sources.length > 1);
-    if (filter === 'noinvoice') list = list.filter(r => r.statusGroup === 'closed' && r.trace.status === 'none');
+    let list = view === 'completed' ? completedRows : rows;
+    if (view === 'active' && filter === 'open' || filter === 'closed' || filter === 'rejected') list = list.filter(r => r.statusGroup === filter);
+    if (view === 'active' && filter === 'split') list = list.filter(r => r.trace.sources.length > 1);
+    if (view === 'active' && filter === 'noinvoice') list = list.filter(r => r.statusGroup === 'closed' && r.trace.status === 'none');
     if (sourceFilter !== 'all') list = list.filter(r => r.source === sourceFilter);
     if (creatorFilter === NOT_SET) list = list.filter(r => !r.createdBy);
     else if (creatorFilter !== 'all') list = list.filter(r => r.createdBy?.name === creatorFilter);
     const q = search.trim().toLowerCase();
     if (q) list = list.filter(r => r.customerName.toLowerCase().includes(q) || (r.docNumber ?? '').toLowerCase().includes(q) || (r.createdBy?.name ?? '').toLowerCase().includes(q));
     return list;
-  }, [rows, filter, sourceFilter, creatorFilter, search]);
+  }, [rows, completedRows, view, filter, sourceFilter, creatorFilter, search]);
 
-  const { page, setPage, totalPages, pageItems, startIndex, total } = usePagination(filtered, `${filter}|${sourceFilter}|${creatorFilter}|${search}`);
+  const { page, setPage, totalPages, pageItems, startIndex, total } = usePagination(filtered, `${view}|${filter}|${sourceFilter}|${creatorFilter}|${search}`);
 
-  const detailRow = expanded ? rows.find(r => `${r.source}|${r.qbEstimateId}` === expanded) ?? null : null;
+  const detailRow = expanded ? allRows.find(r => `${r.source}|${r.qbEstimateId}` === expanded) ?? null : null;
+
+  // ── Remarks / Completed / Reopen (PATCH /api/billing/quotation) ────────────────────────────────
+  const patchReview = async (r: QuotationRowView, body: Record<string, unknown>) => {
+    const res = await fetch('/api/billing/quotation', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ book: r.source, estimateId: r.qbEstimateId, ...body }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error ?? 'Save failed');
+    return json as { completedAt?: string; completedBy?: string };
+  };
+  const updateReview = (r: QuotationRowView, patch: Partial<QuotationRowView['review']>) =>
+    setData(d => d ? { ...d, rows: d.rows.map(x => (x.source === r.source && x.qbEstimateId === r.qbEstimateId ? { ...x, review: { ...x.review, ...patch } } : x)) } : d);
+  const saveRemarks = async (r: QuotationRowView, text: string) => { await patchReview(r, { action: 'remarks', remarks: text }); updateReview(r, { remarks: text || null }); };
+  const markCompleted = async (r: QuotationRowView) => {
+    if (!window.confirm(`Mark ${r.docNumber ?? 'this quotation'} as Completed?\n\nIt leaves this list and its invoices are frozen exactly as shown now — no new invoice will be matched to it. You can find it under the Completed card.`)) return;
+    const key = `${r.source}|${r.qbEstimateId}`;
+    setBusyKey(key); setActionError(null);
+    try {
+      const out = await patchReview(r, { action: 'complete' });
+      updateReview(r, { completed: true, completedAt: out.completedAt ?? new Date().toISOString(), completedBy: out.completedBy ?? null });
+    } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); } finally { setBusyKey(null); }
+  };
+  const reopen = async (r: QuotationRowView) => {
+    if (!window.confirm(`Reopen ${r.docNumber ?? 'this quotation'}?\n\nIt returns to the main list and invoices are matched to it again.`)) return;
+    const key = `${r.source}|${r.qbEstimateId}`;
+    setBusyKey(key); setActionError(null);
+    try {
+      await patchReview(r, { action: 'reopen' });
+      updateReview(r, { completed: false, completedAt: null, completedBy: null });
+      setRefreshing(true); load(); // its trace was the frozen one — read the live match again
+    } catch (e) { setActionError(e instanceof Error ? e.message : String(e)); } finally { setBusyKey(null); }
+  };
 
   return (
     <div>
       {data !== null && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10, marginBottom: 16 }}>
-          <MetricCard onClick={() => setFilter(filter === 'open' ? 'all' : 'open')} active={filter === 'open'}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 10, marginBottom: 16 }}>
+          <MetricCard onClick={() => { setView('active'); setFilter(filter === 'open' ? 'all' : 'open'); }} active={view === 'active' && filter === 'open'}
             value={counts.open} label="Open Quotations" sub={counts.open ? `not closed yet · oldest ${counts.oldestOpen} days` : 'nothing waiting'}
             icon={<Clock size={16} />} color="#c2410c" ariaLabel="Show open quotations" />
-          <MetricCard onClick={() => setFilter(filter === 'closed' ? 'all' : 'closed')} active={filter === 'closed'}
+          <MetricCard onClick={() => { setView('active'); setFilter(filter === 'closed' ? 'all' : 'closed'); }} active={view === 'active' && filter === 'closed'}
             value={counts.closed} label="Closed" sub="converted to invoice(s)"
             icon={<CheckCircle2 size={16} />} color="var(--status-success)" ariaLabel="Show closed quotations" />
-          <MetricCard onClick={() => setFilter(filter === 'split' ? 'all' : 'split')} active={filter === 'split'}
+          <MetricCard onClick={() => { setView('active'); setFilter(filter === 'split' ? 'all' : 'split'); }} active={view === 'active' && filter === 'split'}
             value={counts.split} label="Invoiced in 2+ Books" sub="split across TAB / TAC / TAO"
             icon={<Layers size={16} />} color="#1d3a5c" ariaLabel="Show quotations invoiced in more than one book" />
-          <MetricCard onClick={() => setFilter(filter === 'noinvoice' ? 'all' : 'noinvoice')} active={filter === 'noinvoice'}
+          <MetricCard onClick={() => { setView('active'); setFilter(filter === 'noinvoice' ? 'all' : 'noinvoice'); }} active={view === 'active' && filter === 'noinvoice'}
             value={counts.noInvoice} label="Closed · No Invoice Found" sub="closed, nothing traced"
             icon={<AlertTriangle size={16} />} color="#b45309" ariaLabel="Show closed quotations with no invoice found" />
+          <MetricCard onClick={() => { setView(view === 'completed' ? 'active' : 'completed'); setFilter('all'); }} active={view === 'completed'}
+            value={completedRows.length} label="Completed" sub={view === 'completed' ? 'showing these · click to go back' : 'hidden from the list · click to view'}
+            icon={<Archive size={16} />} color="#1d3a5c" ariaLabel="Show completed quotations" />
+        </div>
+      )}
+
+      {data && !data.reviewsReady && (
+        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', color: '#92400e', fontSize: 12, marginBottom: 12 }}>
+          Completed and Remarks need one setup step: run <code>scripts/add-quotation-reviews.sql</code> in the Supabase SQL editor. Until then they cannot be saved.
+        </div>
+      )}
+      {actionError && (
+        <div style={{ background: 'var(--status-danger-tint)', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px', color: 'var(--status-danger)', fontSize: 12, marginBottom: 12 }}>{actionError}</div>
+      )}
+      {view === 'completed' && (
+        <div style={{ background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 8, padding: '9px 14px', color: '#334155', fontSize: 12, marginBottom: 12 }}>
+          <b>Completed quotations</b> — hidden from the main list, invoices frozen as they were when completed. Remarks can still be written. A completed quotation&apos;s record is deleted automatically one year after it was completed.
         </div>
       )}
 
@@ -556,13 +642,13 @@ export default function QuotationPage() {
           <span><span style={{ color: '#15803d' }}>●</span> confirmed by QuickBooks (same book)</span>
           <span>○ matched by customer name — check the amount</span>
           <span><span style={{ color: '#15803d', fontWeight: 800 }}>✓</span> amount equals the quotation</span>
-          {data && <span>Showing quotations dated from {fmtDate(data.windowStart)} (the synced invoice window)</span>}
+          {data && <span>Showing quotations dated from {fmtDate(data.windowStart)} (the last 12 months)</span>}
         </div>
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 470px)', minHeight: 400 }}>
-          <div style={{ minWidth: 1130 }}>
+          <div style={{ minWidth: 1500 }}>
             <div className="list-column-header-gray" style={{ position: 'sticky', top: 0, zIndex: 2, display: 'grid', gridTemplateColumns: listColumns, columnGap: 10, padding: '10px 14px', alignItems: 'center' }}>
-              {['', 'PI No.', 'Date', 'Customer', 'Created By', 'Amount', 'Source', 'Status', 'Invoice Source (traced)'].map((h, i) => (
-                <div key={i} style={{ padding: '0 6px', textAlign: i === 5 || i === 6 || i === 7 ? 'center' : 'left' }}>{h}</div>
+              {['', 'PI No.', 'Date', 'Customer', 'Created By', 'Amount', 'Source', 'Status', 'Invoice Source (traced)', 'Completed', 'Remarks'].map((h, i) => (
+                <div key={i} style={{ padding: '0 6px', textAlign: i === 5 || i === 6 || i === 7 || i === 9 ? 'center' : 'left' }}>{h}</div>
               ))}
             </div>
             {data === null && !loadError && (
@@ -590,6 +676,29 @@ export default function QuotationPage() {
                   <div style={{ display: 'flex', justifyContent: 'center' }}><StatusPill row={r} /></div>
                   {/* The chips are buttons that open a PDF — clicking one must not also toggle this row. */}
                   <div style={{ padding: '0 6px' }} onClick={e => e.stopPropagation()}><TraceSummary row={r} /></div>
+                  {/* Completed: the weekly check is done — the PI leaves the list and its invoices are frozen */}
+                  <div style={{ padding: '0 6px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                    {r.review.completed ? (
+                      <div style={{ display: 'grid', gap: 4, justifyItems: 'center' }}>
+                        <span style={{ fontSize: 10.5, color: '#475569', lineHeight: 1.4 }}>{r.review.completedAt ? fmtDate(r.review.completedAt.slice(0, 10)) : ''}<br />{r.review.completedBy ? r.review.completedBy.split('@')[0] : ''}</span>
+                        <button onClick={() => void reopen(r)} disabled={busyKey === key || !data?.reviewsReady} title="Put it back in the main list and match invoices again"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}>
+                          {busyKey === key ? <Loader2 size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <RotateCcw size={11} />}Reopen
+                        </button>
+                      </div>
+                    ) : r.statusGroup === 'closed' ? (
+                      <button onClick={() => void markCompleted(r)} disabled={busyKey === key || !data?.reviewsReady}
+                        title="The weekly check is done: leave the list and freeze the invoices shown"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 6, border: '1px solid #1d3a5c', background: '#1d3a5c', color: '#fff', fontSize: 11, fontWeight: 700, cursor: busyKey === key ? 'default' : 'pointer', opacity: data?.reviewsReady ? 1 : 0.5 }}>
+                        {busyKey === key ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <CheckCircle2 size={12} />}Completed
+                      </button>
+                    ) : (
+                      <span title="Only a Closed quotation can be marked Completed" style={{ color: '#cbd5e1' }}>—</span>
+                    )}
+                  </div>
+                  <div style={{ padding: '0 6px' }} onClick={e => e.stopPropagation()}>
+                    <QuotationRemarks value={r.review.remarks} disabled={!data?.reviewsReady} onSave={text => saveRemarks(r, text)} />
+                  </div>
                 </div>
               );
             })}

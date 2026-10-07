@@ -1,9 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createAdminClient } from './supabase';
 import { pageAll } from './page-all';
-import { thisYearSGT, todaySGT } from './date';
+import { todaySGT } from './date';
 import { fetchAllEstimates } from './quickbooks-estimates';
 import { traceQuotations, TRACE_GRACE_DAYS, type QuotationRow, type TraceInvoiceInput } from './quotation-trace';
+import { applyReviews, purgeCutoffIso, windowStart12Months, type QuotationRowView, type ReviewRecord } from './quotation-reviews';
 import type { QbCompany } from './quickbooks';
 import { getApprovedAccount } from './approved-accounts';
 
@@ -15,11 +16,14 @@ import { getApprovedAccount } from './approved-accounts';
 export type QuotationBookStatus = { book: QbCompany; ok: boolean; count: number; error: string | null };
 
 export type QuotationData = {
-  rows: QuotationRow[];
+  rows: QuotationRowView[];
   books: QuotationBookStatus[];
-  // Estimates dated before this are not shown: quickbooks_invoices only holds
-  // this year and the two before it, so an older Closed quotation's invoice
-  // could not be found and would read as a misleading "not found".
+  // False until scripts/add-quotation-reviews.sql has been run — the page then says so and
+  // does not offer Completed / Remarks (nothing could be saved).
+  reviewsReady: boolean;
+  // Estimates dated before this are not shown: the page lists the last 12 months only
+  // (Vincent, 2026-10-07 — a completed PI's record is deleted a year after it was completed,
+  // and by then the PI is older than this window, so it cannot come back into the list).
   windowStart: string;
   traceGraceDays: number;
   generatedAt: string;
@@ -111,8 +115,12 @@ async function loadSystemCreators(supabase: SupabaseClient): Promise<Map<string,
   return creators;
 }
 
-export async function loadQuotationData(): Promise<QuotationData> {
-  const windowStart = `${thisYearSGT() - 2}-01-01`;
+export type LiveQuotations = Omit<QuotationData, 'rows' | 'reviewsReady'> & { rows: QuotationRow[] };
+
+// Every estimate read live and matched to invoices — no review (Completed / Remarks) applied. The
+// "Completed" action freezes the trace of exactly THIS result, so it must be the live one.
+export async function loadLiveQuotations(): Promise<LiveQuotations> {
+  const windowStart = windowStart12Months(todaySGT());
   const supabase = createAdminClient();
 
   const [fetched, invoices, systemCreators] = await Promise.all([
@@ -130,4 +138,27 @@ export async function loadQuotationData(): Promise<QuotationData> {
     traceGraceDays: TRACE_GRACE_DAYS,
     generatedAt: new Date().toISOString(),
   };
+}
+
+const isMissingReviewsTable = (error: { code?: string; message?: string } | null | undefined) =>
+  error?.code === '42P01' || error?.code === 'PGRST205' || /quotation_reviews.*(does not exist|schema cache)/i.test(error?.message ?? '');
+
+export async function loadQuotationData(): Promise<QuotationData> {
+  const supabase = createAdminClient();
+  const [live, reviews] = await Promise.all([
+    loadLiveQuotations(),
+    supabase.from('quotation_reviews').select('qb_company, qb_estimate_id, remarks, completed_at, completed_by_email, completed_trace'),
+  ]);
+  if (reviews.error && !isMissingReviewsTable(reviews.error)) throw new QuotationDataError(`Could not read quotation reviews: ${reviews.error.message}`);
+  const reviewsReady = !reviews.error;
+
+  // A completed PI's record is kept one year after it was completed, then deleted (best effort — a failure here
+  // must never stop the page). The rows below are what was read BEFORE the delete; one already past the year is
+  // simply shown until the next load, which is harmless.
+  if (reviewsReady) {
+    const { error } = await supabase.from('quotation_reviews').delete().lt('completed_at', purgeCutoffIso(new Date()));
+    if (error) console.error('Quotation reviews clean-up failed:', error.message);
+  }
+
+  return { ...live, rows: applyReviews(live.rows, (reviews.data ?? []) as ReviewRecord[]), reviewsReady };
 }

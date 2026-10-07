@@ -5856,3 +5856,18 @@ again.
   (the single draft's send-time refresh does not apply). Live check
   2026-10-07: the Aquila group (3 companies) resolves, group total S$5,490 =
   the sum of the SOA list's nets. Guarded by `test-soa-group-email.ts`.
+
+- **INV-QB-039** — Quotation "Completed" + Remarks (Vincent, 2026-10-07; table
+  `quotation_reviews`, rules in `lib/quotation-reviews.ts`). (1) Only a CLOSED
+  quotation can be completed (server-checked, 409 otherwise); completing
+  stores a FROZEN copy of its trace (`completed_trace`) taken server-side from
+  the live read — a completed PI is never re-matched to later invoices, and
+  leaves the main list (shown only under the "Completed" card). (2) Reopen
+  clears completed_* and the live match applies again; remarks are kept.
+  (3) Remarks are writable on any PI, completed or not. (4) A record is
+  deleted 365 days after `completed_at` (lazy purge on each load). The page
+  lists only the last 12 months of PIs (`windowStart12Months`), so a purged PI
+  cannot reappear: it is always completed after its own date, hence already
+  older than the window when purged. Key = (book, QB estimate id) — TAB #100
+  is not TAC #100. Missing table → page still loads, buttons disabled, PATCH
+  answers 503. Guarded by `test-quotation-reviews.ts`.

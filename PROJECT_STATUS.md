@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-07 (NEW: Quotation page gets "Completed" + "Remarks" columns and a clickable "Completed" card — Vincent: a Closed PI kept matching new invoices; weekly the person checks it is matched to the right invoice(s) and presses Completed).
+
+**What changed (INV-QB-039, REG-050).** Completed (Closed PIs only, confirm dialog, Reopen to undo) freezes the PI's traced invoices and hides it from the list; the 5th card "Completed" shows them, remarks stay editable everywhere (saved on blur). Completed records are deleted a year after completion; the list now shows only the last 12 months so a purged PI cannot reappear. New table `quotation_reviews` — **Vincent must run `scripts/add-quotation-reviews.sql` in Supabase**; until then the page loads and shows a notice, buttons disabled.
+
+**Verification.** `tsc` 0; `test-quotation-reviews.ts` ALL OK (15 checks). **Not verified:** the UI in a browser, and the PATCH against the real table (not created yet; no production writes made).
+
 Last updated: 2026-10-07 (NEW: "Group" on the SOA page — one email for several companies of the same group, with all their SOA and invoices; plus the people filter now reads "PIC" — Chelsea / Vincent: "有一些公司其实是一个 Group 来的，几个公司的 SOA invoice 全部一起出，标题 Chelsea 会自己写").
 
 **What changed (INV-MAIL-009, REG-049).** A navy "Group" button beside Export Full Workbook opens a picker (search + tick 2+ companies that owe money, any book; a subject box the person fills in). "Create draft" resolves each company like a single "All" Draft Email, attaches every company's per-book SOA PDFs, merges the recipients (union, CC never repeating To), writes the body in the layout of Chelsea's real Aquila email (total across the group, "1. Company (S$…)" sections of "TAB02410930 - S$100" lines), then opens the usual Outlook-style review window — nothing is sent from the picker. Decided by Vincent (AskUserQuestion): ticked fresh each time (no saved groups, so no SQL), one PDF per company per book, recipients auto-filled and editable. It is a "letter" campaign so it never advances a company's 1st/2nd/3rd Reminder sequence. If any ticked company can't be resolved nothing is created and each is named. `fetchAllBookSoaPdfs` was extracted from `buildSoaDraft` (same behaviour).
