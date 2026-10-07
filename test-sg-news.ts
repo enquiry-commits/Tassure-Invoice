@@ -72,5 +72,24 @@ const attached = attachLinks(items, momLinks, MOM);
 check('attachLinks fills a missing url and never overwrites one already stored', attached[0].url?.endsWith('scaffold-fire-safety-requirements') === true && attached[1].url === 'https://example.sg/already-set');
 check('the shared normalisation is unchanged (it is also the de-dup hash)', normalizeNewsTitle("Singapore firms’ payment delays — Q3: SCCB") === 'singapore firms payment delays q3 sccb');
 
+// ── rule 3: a second run on the same day adds to the report, it never replaces it ──────────
+import { mergeDailyReport } from './lib/sg-news-report';
+import type { SgNewsDailyReport, SgNewsDigestItem } from './lib/sg-news-digest';
+
+console.log('\n--- rule 3: the 「手动运行一次」 button must not wipe the day\'s report ---');
+const di = (title: string, source = 'The Business Times'): SgNewsDigestItem => ({ source, category: 'news', title, url: null, publishedLabel: null, whatChanged: 'w', whyItMatters: 'm' });
+const morning: SgNewsDailyReport = { summary: '今天的概述', policyItems: [{ ...di('Multi-Agency Enforcement Operations at Various Checkpoints', 'ICA'), category: 'policy' }], newsItems: [di('Retrenched PMETs who return on lower pay see median 25% wage cut'), di('North-South Corridor delay: Higher costs likely')] };
+const nothingNew: SgNewsDailyReport = { summary: '今天9个来源都没有发现新的、之前没见过的条目。', policyItems: [], newsItems: [] };
+const stored = { report: morning, new_items_count: 3 };
+const kept = mergeDailyReport(stored, nothingNew, 0);
+check('a run that finds nothing new leaves the day\'s report exactly as it was (the case that wiped Vincent\'s cards)', kept.report === morning && kept.changed === false && kept.newItemsCount === 3);
+const added = mergeDailyReport(stored, { summary: 'later', policyItems: [], newsItems: [di('Singapore PMI ticks up to 51.7 on continued AI-related demand'), di('Retrenched PMETs who return on lower pay see median 25% wage cut')] }, 2);
+check('a run with new items ADDS them: the morning\'s 3 items stay, the new one is appended, and a repeated headline is not duplicated', added.report.newsItems.length === 3 && added.report.policyItems.length === 1 && added.report.newsItems[2].title.startsWith('Singapore PMI') && added.changed === true);
+check('the stored summary is kept (it cannot be rewritten without another AI call) and the count adds up', added.report.summary === '今天的概述' && added.newItemsCount === 5);
+check('no report stored yet: the fresh digest is used as is', (() => { const r = mergeDailyReport(null, morning, 3); return r.report === morning && r.changed && r.newItemsCount === 3; })());
+check('a stored item is never lost, whatever the new run found', morning.newsItems.every(i => added.report.newsItems.some(j => j.title === i.title)));
+const syncSrc = readFileSync('app/api/sg-news/sync/route.ts', 'utf8');
+check('the sync route reads today\'s stored report and saves only the merged one (no direct upsert of the fresh digest)', /mergeDailyReport\(stored as/.test(syncSrc) && /report: merged\.report/.test(syncSrc) && !/report, new_items_count: totalNew/.test(syncSrc));
+
 console.log(fail === 0 ? '\nALL OK' : `\n${fail} FAILED`);
 process.exit(fail === 0 ? 0 : 1);

@@ -4607,6 +4607,13 @@ again.
   `auto-fit` collapses empty tracks, so 2 cards stretched to half the row each
   (827px at a 1668px container) — `auto-fill` keeps them at the 4-column width
   (407px) with the right-hand slots empty. Pinned by `test-sg-news.ts`.
+  (4) **A second run on the same day never replaces the day's report.** The
+  page has an always-visible 「手动运行一次」 button that runs the full sync again,
+  and a run only sees what is NEW since the previous one; its digest used to be
+  upserted over the day's `sg_news_daily_reports` row, so with nothing new the
+  day's cards became "今天9个来源都没有发现新的…". `mergeDailyReport()`
+  (`lib/sg-news-report.ts`) keeps the stored report when nothing is new and
+  appends new items (deduplicated by headline, stored summary kept) otherwise.
   Open: items stored before 2026-10-07 whose headline is no longer on the
   listing page can never be matched and keep the 「来源页」 fallback.
 

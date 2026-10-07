@@ -1,5 +1,13 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-07 (FIXED: SG Latest News — pressing 「手动运行一次」 can no longer wipe the day's report. Found while checking why Vincent saw front-page links: the obvious way to get fresh links is that button, and it re-ran the whole sync, whose digest only covers items NEW since the morning run — so with nothing new it replaced the day's cards with "今天9个来源都没有发现新的…".)
+
+**What changed (INV-DATA-077 point 4).** New pure `lib/sg-news-report.ts` `mergeDailyReport()`; `app/api/sg-news/sync/route.ts` now reads today's stored report and saves only the merged one: nothing new → the stored report is left exactly as it is (the response says `reportKept: true`); new items → they are appended to the stored ones (a repeated headline is not duplicated, the stored summary is kept because rewriting it would need another AI call, so it may not mention late additions); no report yet → the fresh digest as before. `test-sg-news.ts` is now 25 checks; the negative control (replace again) fails the "nothing new keeps the report" check. `tsc` 0, eslint clean.
+
+**What this means for Vincent now.** The page's links for today's cards will be filled in by the nightly run (22:30 UTC = 06:30 SGT tomorrow) or by one press of 「手动运行一次」 AFTER this deploy — which is now safe, costs a few cents of AI (it re-reads every source), and fills in `url` for stored items whose headline is still on the listing page. **Not verified:** a real sync run on production (needs the deploy; the route can't run locally without the browser stack).
+
+Previous entry follows.
+
 Last updated: 2026-10-07 (FIXED: SG Latest News 「来源页」 links — the matcher no longer links a card to a MOM menu / section page, and the real reason Vincent saw the front page is now written down. Asked: Vincent — a screenshot of The Business Times card "Retrenched PMETs who return on lower pay see median 25% wage cut" with 「来源页 · businesstimes.com.sg」: "我要看到的是原始文章页，而不是平台的首页".)
 
 **Why he saw the front page.** All 222 stored `sg_news_items` had `url` NULL (6 sources) — the extractor reads page text, which has no hrefs — so every card fell back to the source's listing page. The other session's change earlier today (`2202d9d`) collects the page's anchors and matches headlines to them, and the nightly sync fills the `url` of an already-stored item when the page still lists it; `GET /api/sg-news` reads `url` from the table at read time. That change had not yet run against production when he looked (next cron 22:30 UTC = 06:30 SGT), so the stored items still had no url.

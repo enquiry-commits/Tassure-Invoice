@@ -5,7 +5,8 @@ import { withAutomationRun, type AutomationRun } from '@/lib/automation-sync';
 import { getRequestAccount } from '@/lib/request-account';
 import { SG_NEWS_SOURCES } from '@/lib/sg-news-sources';
 import { fetchAndExtractSource, type ExtractedNewsItem } from '@/lib/sg-news-fetch';
-import { generateDailyDigest } from '@/lib/sg-news-digest';
+import { generateDailyDigest, type SgNewsDailyReport } from '@/lib/sg-news-digest';
+import { mergeDailyReport } from '@/lib/sg-news-report';
 import { todaySGT } from '@/lib/date';
 import { scheduledJobUsage } from '@/lib/ai/job-usage';
 import type { AiUsageTag } from '@/lib/ai/usage';
@@ -88,18 +89,26 @@ async function syncSgNews(run: AutomationRun, usage: AiUsageTag): Promise<NextRe
   }
 
   const totalNew = newItemsBySource.reduce((s, si) => s + si.items.length, 0);
-  const report = await generateDailyDigest(newItemsBySource, usage);
+  const fresh = await generateDailyDigest(newItemsBySource, usage);
   await run.heartbeat();
 
-  const { error: reportErr } = await supabase.from('sg_news_daily_reports').upsert({
-    report_date: today, report, new_items_count: totalNew,
-    sources_checked: sourcesChecked, sources_failed: sourcesFailed, generated_at: new Date().toISOString(),
-  }, { onConflict: 'report_date' });
-  if (reportErr) return NextResponse.json({ error: `Report save failed: ${reportErr.message}` }, { status: 503 });
+  // A later run on the same day (the page's 「手动运行一次」 button) only sees what is new since the
+  // first one, so it must ADD to the day's report, never replace it — see lib/sg-news-report.ts.
+  const { data: stored, error: storedErr } = await supabase.from('sg_news_daily_reports').select('report, new_items_count').eq('report_date', today).maybeSingle();
+  if (storedErr) return NextResponse.json({ error: `Could not read today's report: ${storedErr.message}` }, { status: 503 });
+  const merged = mergeDailyReport(stored as { report: SgNewsDailyReport; new_items_count: number } | null, fresh, totalNew);
+
+  if (merged.changed) {
+    const { error: reportErr } = await supabase.from('sg_news_daily_reports').upsert({
+      report_date: today, report: merged.report, new_items_count: merged.newItemsCount,
+      sources_checked: sourcesChecked, sources_failed: sourcesFailed, generated_at: new Date().toISOString(),
+    }, { onConflict: 'report_date' });
+    if (reportErr) return NextResponse.json({ error: `Report save failed: ${reportErr.message}` }, { status: 503 });
+  }
 
   return NextResponse.json({
     ok: true, date: today, sourcesChecked: sourcesChecked.length, sourcesFailed: sourcesFailed.length,
-    newItems: totalNew, failures: sourcesFailed,
+    newItems: totalNew, failures: sourcesFailed, reportKept: !merged.changed,
   });
 }
 
