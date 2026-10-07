@@ -25,6 +25,8 @@ function union<T extends Titled>(existing: T[] = [], fresh: T[] = []): T[] {
  * What to store for a day's report after a run.
  * - nothing stored yet: the fresh digest as is;
  * - already stored and this run found nothing new: keep the stored report untouched;
+ * - already stored but with no cards (the "nothing new" placeholder) and this run found something: the
+ *   fresh digest replaces it, summary included;
  * - already stored and this run found new items: the stored report plus the new items. The stored
  *   summary is kept as it was (it cannot be rewritten without another AI call), so it may not
  *   mention the late additions.
@@ -36,6 +38,12 @@ export function mergeDailyReport(
 ): { report: SgNewsDailyReport; newItemsCount: number; changed: boolean } {
   if (!existing?.report) return { report: fresh, newItemsCount: freshCount, changed: true };
   if (freshCount === 0) return { report: existing.report, newItemsCount: existing.new_items_count ?? 0, changed: false };
+  // A stored report with no cards at all is the "nothing new today" placeholder (a quiet morning, or a first
+  // read of a new source that is stored silently). Keeping ITS summary above later cards would say "nothing
+  // new" over a page of news: the fresh digest, whose summary describes the cards, replaces it.
+  if (!existing.report.policyItems?.length && !existing.report.newsItems?.length) {
+    return { report: fresh, newItemsCount: (existing.new_items_count ?? 0) + freshCount, changed: true };
+  }
   return {
     report: {
       ...existing.report,

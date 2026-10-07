@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { normalizeNewsTitle } from '@/lib/sg-news-links';
 import { createAdminClient } from '@/lib/supabase';
-import { withAutomationRun, type AutomationRun } from '@/lib/automation-sync';
+import { withAutomationRun, replaceAutomationExceptions, type AutomationRun } from '@/lib/automation-sync';
 import { getRequestAccount } from '@/lib/request-account';
 import { SG_NEWS_SOURCES } from '@/lib/sg-news-sources';
-import { fetchAndExtractSource, type ExtractedNewsItem } from '@/lib/sg-news-fetch';
-import { generateDailyDigest, type SgNewsDailyReport } from '@/lib/sg-news-digest';
-import { mergeDailyReport } from '@/lib/sg-news-report';
+import { fetchAndExtractSource } from '@/lib/sg-news-fetch';
+import { generateDailyDigest } from '@/lib/sg-news-digest';
+import { runSgNewsSync } from '@/lib/sg-news-run';
 import { todaySGT } from '@/lib/date';
 import { scheduledJobUsage } from '@/lib/ai/job-usage';
 import type { AiUsageTag } from '@/lib/ai/usage';
@@ -15,6 +14,10 @@ import type { AiUsageTag } from '@/lib/ai/usage';
 // 2026-09-23: "每天早上走一轮...每天要写出一份报告出来给我"). Cron-only in
 // practice (see proxy.ts's CRON_PATHS + vercel.json), same
 // withAutomationRun wrapper every other daily job in this app uses.
+//
+// The work itself — fetch each source, decide what is new, write the day's report, THEN store the new
+// items, raise silent sources — is lib/sg-news-run.ts, so its order and its failure paths are tested
+// with fakes (test-sg-news.ts). This file only wires in the real collaborators.
 //
 // Real work budget: 9 sources x (Playwright render + 1 Claude extraction
 // call) + 1 Claude digest call. Each Playwright fetch alone can take
@@ -28,88 +31,18 @@ export const maxDuration = 280;
 export const dynamic = 'force-dynamic';
 export const preferredRegion = 'sin1';
 
-// Lowercased, punctuation-collapsed — the de-dup key. Deliberately NOT
-// lib/company-name.ts's normalize(): that function strips "Pte Ltd"/"Sdn
-// Bhd"/FKA-clauses, which is company-name-specific and irrelevant (and
-// could even wrongly collide two different real headlines) for arbitrary
-// news titles from 9 unrelated sites.
-const normalizeTitle = normalizeNewsTitle;
-
 async function syncSgNews(run: AutomationRun, usage: AiUsageTag): Promise<NextResponse> {
-  const supabase = createAdminClient();
-  const today = todaySGT();
-  const sourcesChecked: string[] = [];
-  const sourcesFailed: { source: string; error: string }[] = [];
-  const newItemsBySource: { source: typeof SG_NEWS_SOURCES[number]; items: ExtractedNewsItem[] }[] = [];
-
-  for (const source of SG_NEWS_SOURCES) {
-    const result = await fetchAndExtractSource(source, usage);
-    await run.heartbeat();
-
-    if ('error' in result) {
-      sourcesFailed.push({ source: source.key, error: result.error });
-      await supabase.from('sg_news_sync_state').upsert({
-        source: source.key, last_status: 'error', last_synced_at: new Date().toISOString(), last_error: result.error,
-      }, { onConflict: 'source' });
-      continue;
-    }
-    sourcesChecked.push(source.key);
-
-    // Existing hashes for THIS source only — a title colliding across two
-    // different sources is not a real duplicate.
-    const { data: existing } = await supabase.from('sg_news_items').select('item_hash, url').eq('source', source.key);
-    const knownHashes = new Set((existing ?? []).map(r => r.item_hash));
-    const hashesMissingUrl = new Set((existing ?? []).filter(r => !r.url).map(r => r.item_hash));
-
-    const freshItems: ExtractedNewsItem[] = [];
-    const now = new Date().toISOString();
-    for (const item of result.items) {
-      const hash = normalizeTitle(item.title);
-      if (!hash) continue;
-      if (knownHashes.has(hash)) {
-        // Seen before — just touch last_seen_at, not a new item for today's digest.
-        // An item stored before links were collected has no url — fill it in now that the page's
-        // anchors give one (this is what gives older reports their source links).
-        await supabase.from('sg_news_items').update(hashesMissingUrl.has(hash) && item.url ? { last_seen_at: now, url: item.url } : { last_seen_at: now }).eq('source', source.key).eq('item_hash', hash);
-        continue;
-      }
-      freshItems.push(item);
-      knownHashes.add(hash); // guards against the same item appearing twice in one page's own extraction
-      await supabase.from('sg_news_items').insert({
-        source: source.key, category: source.category, title: item.title, url: item.url ?? null,
-        published_label: item.publishedLabel ?? null, teaser: item.teaser ?? null,
-        item_hash: hash, first_seen_at: now, last_seen_at: now,
-      });
-    }
-    if (freshItems.length) newItemsBySource.push({ source, items: freshItems });
-
-    await supabase.from('sg_news_sync_state').upsert({
-      source: source.key, last_status: 'success', last_synced_at: now, last_item_count: result.items.length, last_error: null,
-    }, { onConflict: 'source' });
-  }
-
-  const totalNew = newItemsBySource.reduce((s, si) => s + si.items.length, 0);
-  const fresh = await generateDailyDigest(newItemsBySource, usage);
-  await run.heartbeat();
-
-  // A later run on the same day (the page's 「手动运行一次」 button) only sees what is new since the
-  // first one, so it must ADD to the day's report, never replace it — see lib/sg-news-report.ts.
-  const { data: stored, error: storedErr } = await supabase.from('sg_news_daily_reports').select('report, new_items_count').eq('report_date', today).maybeSingle();
-  if (storedErr) return NextResponse.json({ error: `Could not read today's report: ${storedErr.message}` }, { status: 503 });
-  const merged = mergeDailyReport(stored as { report: SgNewsDailyReport; new_items_count: number } | null, fresh, totalNew);
-
-  if (merged.changed) {
-    const { error: reportErr } = await supabase.from('sg_news_daily_reports').upsert({
-      report_date: today, report: merged.report, new_items_count: merged.newItemsCount,
-      sources_checked: sourcesChecked, sources_failed: sourcesFailed, generated_at: new Date().toISOString(),
-    }, { onConflict: 'report_date' });
-    if (reportErr) return NextResponse.json({ error: `Report save failed: ${reportErr.message}` }, { status: 503 });
-  }
-
-  return NextResponse.json({
-    ok: true, date: today, sourcesChecked: sourcesChecked.length, sourcesFailed: sourcesFailed.length,
-    newItems: totalNew, failures: sourcesFailed, reportKept: !merged.changed,
+  const result = await runSgNewsSync({
+    db: createAdminClient(),
+    sources: SG_NEWS_SOURCES,
+    today: todaySGT(),
+    now: Date.now,
+    heartbeat: () => run.heartbeat(),
+    fetchSource: source => fetchAndExtractSource(source, usage),
+    digest: items => generateDailyDigest(items, usage),
+    raiseExceptions: (type, items) => replaceAutomationExceptions('sg_news_sync', type, items),
   });
+  return NextResponse.json(result.body, { status: result.status });
 }
 
 // proxy.ts lets a request with the exact CRON_SECRET bearer straight through

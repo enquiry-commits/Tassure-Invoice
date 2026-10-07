@@ -1,5 +1,5 @@
 import 'server-only';
-import type { SgNewsSource } from './sg-news-sources';
+import { findSourceByLabel, type SgNewsSource } from './sg-news-sources';
 import type { ExtractedNewsItem } from './sg-news-fetch';
 import { claudeMessages } from './ai/anthropic';
 import type { AiUsageTag } from './ai/usage';
@@ -32,6 +32,8 @@ export type SgNewsDailyReport = {
 };
 
 type SourceItems = { source: SgNewsSource; items: ExtractedNewsItem[] };
+
+const DIGEST_MAX_TOKENS = 8000;
 
 const DIGEST_TOOL = {
   name: 'submit_report',
@@ -87,7 +89,9 @@ export async function generateDailyDigest(sourceItems: SourceItems[], usage: AiU
 
   const res = await claudeMessages({ ...usage, step: 'digest' }, {
     model: process.env.ASSISTANT_MODEL || 'claude-sonnet-5',
-    max_tokens: 4000,
+    // The largest real reports so far (13 items, ~4,400 characters of JSON) came close to the old
+    // 4,000-token ceiling. Only what the model actually writes is billed or takes time.
+    max_tokens: DIGEST_MAX_TOKENS,
     system,
     tools: [DIGEST_TOOL],
     tool_choice: { type: 'tool', name: 'submit_report' },
@@ -95,6 +99,9 @@ export async function generateDailyDigest(sourceItems: SourceItems[], usage: AiU
   });
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = await res.json();
+  // A forced tool call that hit the ceiling is cut off mid-JSON: say so, rather than the vaguer
+  // "did not return a structured report" (or, worse, a report that quietly lost its tail).
+  if (json.stop_reason === 'max_tokens') throw new Error(`The daily report was cut off at ${DIGEST_MAX_TOKENS} tokens.`);
   const toolUse = (json.content as Array<{ type: string; input?: unknown }>).find(b => b.type === 'tool_use');
   const result = toolUse?.input as { summary?: string; items?: (Omit<SgNewsDigestItem, 'url' | 'publishedLabel'> & { url?: string; publishedLabel?: string })[] } | undefined;
   if (!result?.summary) throw new Error('Claude did not return a structured report.');
@@ -106,10 +113,30 @@ export async function generateDailyDigest(sourceItems: SourceItems[], usage: AiU
   // was a real silent-data-loss risk: a near-miss like "ACRA" vs "The
   // Straits Times" not matching what evidence.source was set to would
   // silently drop a real url/publishedLabel down to null with no error.
-  const byTitle = new Map(sourceItems.flatMap(si => si.items.map(i => [i.title, i])));
+  // The source name and category are re-attached the same way: they are configuration, not something the
+  // model should be trusted to echo (1 of 60 stored cards said "Straits Times" for "The Straits Times",
+  // and a card whose source name does not match found neither its article link nor its source page).
+  // The same title from TWO sources (a wire story both newspapers run) is ambiguous: the source the model
+  // wrote then picks the entry, and if that cannot tell either, the card keeps the model's own wording and
+  // gets no link rather than another source's.
+  const bySourceTitle = new Map<string, { item: ExtractedNewsItem; source: SgNewsSource }>();
+  const byTitle = new Map<string, { item: ExtractedNewsItem; source: SgNewsSource } | null>();
+  for (const si of sourceItems) {
+    for (const i of si.items) {
+      bySourceTitle.set(`${si.source.key}|${i.title}`, { item: i, source: si.source });
+      byTitle.set(i.title, byTitle.has(i.title) ? null : { item: i, source: si.source });
+    }
+  }
   const items = (result.items ?? []).map(it => {
-    const orig = byTitle.get(it.title);
-    return { ...it, url: orig?.url ?? null, publishedLabel: orig?.publishedLabel ?? null } as SgNewsDigestItem;
+    const labelled = findSourceByLabel(it.source);
+    const orig = (labelled ? bySourceTitle.get(`${labelled.key}|${it.title}`) : undefined) ?? byTitle.get(it.title) ?? undefined;
+    return {
+      ...it,
+      source: orig?.source.name ?? it.source,
+      category: orig?.source.category ?? it.category,
+      url: orig?.item.url ?? null,
+      publishedLabel: orig?.item.publishedLabel ?? null,
+    } as SgNewsDigestItem;
   });
 
   return {

@@ -1461,7 +1461,13 @@ again.
   `sg_news_sync_state` and `sources_failed` and moves on to the next
   source. Do not chase CSIS's 403 with stealth/evasion techniques — it is
   documented as an expected, tolerated per-source failure in
-  `lib/sg-news-sources.ts`, not a bug.
+  `lib/sg-news-sources.ts`, not a bug. **Corrected 2026-10-07 (INV-CRON-019):**
+  that 403 was not bot protection. The fetch declared itself as "Chrome/124"
+  while running Chromium 149 and csis.org.sg answers that outdated string with
+  403 (the real version, or no override, gets the full page); it also never
+  landed in the per-source failure path, because `page.goto` does not throw on
+  an HTTP error — the run was recorded "success, 0 items". Vincent agreed to
+  declare the real version (`browser.version()`); that is not evasion.
 - **INV-CRON-017** — A new Playwright-launching route is NOT automatically
   safe on Vercel just because its `launchBrowser()` copies an existing,
   proven working pattern (per INV-CRON-004's "duplicate, don't share"
@@ -1507,6 +1513,67 @@ again.
   2026-10-05 (exact secret, else `account.admin`; `test-ai-quality-judge.ts`
   checks it comes before `withAutomationRun`); `narrative-cron`'s check is
   still open.
+- **INV-CRON-019** — A nightly job that reads external pages must RECORD what it
+  saw, and must never let "I read nothing" pass as "nothing happened". Found
+  2026-10-07 reading SG Latest News's stored history (15 daily reports,
+  2026-09-23 → 10-07) after Vincent asked how to verify the server run:
+  (1) `page.goto` does not throw on an HTTP error, so CSIS's "403 - Forbidden"
+  page (50 characters) went to the extractor and the run was recorded `success, 0
+  items`. The fetch now keeps the page's HTTP status and final address; ≥ 400 or
+  under 300 characters is a failed source (`pageProblem`, no model call), a 5xx is
+  retried by `withPlaywrightRetry`, a 4xx is not. (2) The 403 itself was our own
+  hard-coded "Chrome/124" (see INV-CRON-016); the fetch declares the real
+  `browser.version()`. (3) A source with nothing to report must not look like a
+  healthy one: every healthy source refreshes `last_seen_at` on its stored items
+  every night (the extractor lists everything relevant on the page, not only what is
+  new), so a source whose newest `last_seen_at` is empty or older than 3 days is
+  raised as `sg_news_sync/source_silent` on Automation Health (self-clearing;
+  `mayBeEmpty` exempts CSIS). `sg_news_sync_state.last_status` is CHECK
+  ('success','error') and the route never read that upsert's error, so a third
+  status word would have been lost silently — use `error` and the exception.
+  (4) Every run reports each source's facts — HTTP status, final address, text and
+  link counts, links with a heading, items extracted / linked / new / reported,
+  time, launch attempts, free `/tmp`, memory — in the reply that `withAutomationRun`
+  saves in `automation_sync_runs.summary`; Vercel Hobby keeps runtime logs for ONE
+  hour, so this is the only record that survives to the next morning and it lets a
+  real run be verified read-only, without triggering anything (REG-042).
+  (5) Stored-before-reported: new items were inserted BEFORE the digest ran, so a
+  failed digest (the call had a 4,000-token ceiling; real 13-item reports already
+  used ~4,400 characters) or a run killed at 280 s left them "seen" but in no report,
+  lost for good. They are now stored after the report is saved (a repeat is harmless:
+  `ignoreDuplicates`), the ceiling is 8,000 tokens and a cut-off says so, and no new
+  source is started after 170 s so the digest and the report always fit before the
+  limit. Every way out of the run carries the sources' facts — including a failed digest
+  and the two 503 returns, which are the runs whose facts matter most — and items that
+  cannot be stored FAIL the run (the report is saved, but they would be reported again
+  every night under a green status). (6) A newly watched source's first run is a
+  backlog, not news: its page is stored, none of it is reported
+  (`FIRST_RUN_REPORT_LIMIT = 0`, Vincent 2026-10-07 — IRAS's newest 20 run back to Nov
+  2025, ISCA's newest is 04 Sep). Only a source whose stored items were READ
+  successfully and found empty counts as a first run — a failed read fails the source
+  instead — and a source marked `mayBeEmpty` (CSIS) is exempt: anything it ever shows
+  is news. A health check that cannot read its data raises nothing: an unreadable
+  table must not read as "every source is silent". (7) Server failures, not yet explained: in 6 of
+  the 9 reports from 2026-09-29 to 10-07 at least one source failed with
+  `net::ERR_INSUFFICIENT_RESOURCES` or "browser has been closed", mostly the LAST
+  sources of the sequential loop (the three newspapers), and only 3 days were clean.
+  It is NOT overlap with another Playwright job (read from `automation_sync_runs`: the
+  run always started at 22:44 UTC and nothing else launching Chromium overlapped it on
+  any day) and it does not reproduce locally (all nine fetch fine). The launch line has
+  `--single-process --no-zygote` and a 32 MB disk cache per launch. The mitigation
+  applied is the likely one, not a proven one: image / media / font requests are blocked
+  (never CSS or scripts — innerText depends on CSS) — except on the LAST retry, because
+  request interception has never run under the Vercel build's single-process
+  Chromium and must not be able to make a source worse than it was — and the Vercel
+  launcher got the same no-cache flags as `lib/teamwork-agm.ts`'s. A page still almost
+  empty after the render settle gets one more look before it is called empty (a slow
+  Vercel CPU), and the extraction call now fails the source when it is cut off at its
+  token ceiling instead of reading as "0 items". Reusing one browser across sources was
+  deliberately NOT done (with `--single-process` one crash would take every later
+  source with it, and `withPlaywrightRetry` already retries the whole fetch 3 times),
+  and the cron hour was not moved (no overlap found). Read the first real runs'
+  per-source `tmpFreeMB` / `attempts` / `status` (REG-042) before changing the browser
+  lifecycle or the hour.
 
 ## QuickBooks / invoice (INV-QB)
 
@@ -4683,7 +4750,8 @@ again.
   the site's own cut-short link text (a prefix carrying at least 70% of the
   headline). A link text that is merely a PIECE of the headline never counts, and
   neither does a link to the site's front page, the listing page, or a parent of
-  it; with the same headline linked twice, the deepest URL wins. The first
+  it; with the same headline linked twice to ONE page, the deepest / shortest
+  address of it is used, and to DIFFERENT pages no link is given (see (8)). The first
   version also matched any link text of 20+ characters that sat inside the
   headline, and on MOM the menu link "Workplace safety and health" matched
   "Opening Address at Workplace Safety and Health Awards 2026", so that card
@@ -4699,6 +4767,73 @@ again.
   day's cards became "今天9个来源都没有发现新的…". `mergeDailyReport()`
   (`lib/sg-news-report.ts`) keeps the stored report when nothing is new and
   appends new items (deduplicated by headline, stored summary kept) otherwise.
+  (5) **Card links: the heading is the headline.** Run against every source on the
+  live pages (2026-10-07): ICA 9 of 9 listed headlines matched; ACRA only 1 of 11,
+  because each ACRA card is ONE `<a>` wrapping a date, an `<h2>`, audience tags and
+  an excerpt (175–424 characters of link text), which rule (2) rightly refuses. The
+  fetcher now also passes an anchor's heading when the anchor holds exactly ONE
+  `h1`–`h6` (`PageLink.heading`), and an exact match on it counts like an exact
+  link text: ACRA 9 of 11 (the other 2 are no longer on the page), every address
+  agrees with its headline, all 9 distinct. ISCA's cards have the same shape (their
+  article address is `/content-item?id=…`). Nothing else was loosened — a long link
+  text with no heading still never matches. `scripts/check-sg-news-sources.ts`
+  (REG-042) repeats this check with the app's real fetch code.
+  (6) **A source URL must be the page that LISTS items, not the menu above it.**
+  IRAS was pointed at `/news-events` (four blurbs: Newsroom, Events, Budget,
+  Announcements) and ISCA at `/about-us/newsroom` (a menu linking to Speeches and
+  Media Releases), so the extractor correctly found nothing and `sg_news_sync_state`
+  said "success, 0 items" every night — no item from either was ever stored, and a
+  quiet source looks exactly the same. Now IRAS `/news-events/newsroom` (headlines
+  with dates, newest first) and ISCA `/about-us/newsroom/media-releases` (10 per page
+  of 181). CSIS has nothing to monitor (its home page is navigation, banners and one
+  job advert; its events page is empty). **Lesson:** "success, 0 items" from a source
+  that has NEVER stored an item is a configuration question, not a quiet day. The
+  first read after such a fix is stored SILENTLY — its page is a backlog, not today's
+  news (Vincent's decision, INV-CRON-019 (6)): IRAS's newest 20 run back to Nov 2025.
+  (7) **A card finds its source by tolerant comparison; the stored links are read
+  paged.** The card's `source` text is written by the model: 1 of 60 stored cards
+  said "Straits Times", and the exact-name lookup gave it neither its link nor the
+  source-page fallback. `findSourceByLabel()` (`lib/sg-news-sources.ts`) accepts case,
+  punctuation, the short key and a unique prefix ("CSIS"), and finds nothing for an
+  ambiguous label. `GET /api/sg-news` also read every url-bearing `sg_news_items`
+  row with one plain select, which stops at 1000 rows (INV-DATA-066) — about a
+  month of growth away from silently dropping links — and now uses `pageAll`. The
+  digest also re-attaches the CONFIGURED source name and category by title (like
+  the url), so a card can no longer carry the model's wording of either.
+  (8) **A wrong link is worse than a missing one** (council review, same day; each
+  checked against the 9 live pages, which had none of these cases today): (a) the
+  model is no longer asked for an address and whatever it returns is dropped —
+  the text it reads has no hrefs, so any address would be recalled or invented, a
+  stored address is never re-checked and is copied into the report; (b) ONE
+  headline, ONE page: candidates that point at different pages (after ignoring
+  `?ref=` / `utm_*`, a trailing slash, "www." and the fragment) give no link — the
+  old "deepest address wins" would have preferred a deeper same-titled featured
+  tile over ISCA's single-segment `/content-item?id=…` article; (c) ONE page, ONE
+  headline: an address two different headlines both matched is a section tile or a
+  carousel — neither gets it (`attachLinks`, `planLinkBackfill`); (d) a tag / topic /
+  category / author / search page is never an article (The Straits Times links
+  "Vaping crisis" to `/tags/e-cigarettesvaping` with the tag as link text); (e) the
+  listing page is excluded under BOTH its configured and its final address — zaobao
+  (`/realtime/singapore` → `/news/singapore`) and ICA (`/media-releases` →
+  `/newsroom?…`) redirect; (f) the link list keeps 2,500 distinct links, not 800
+  (IRAS's page has 731 with its 20 articles at positions 698–717). Stored items
+  with no link now get theirs by matching their STORED headline against the page
+  (`planLinkBackfill`, only ever filling a missing url, written with `url IS NULL`),
+  independent of whether the model picked the item again today: of the 10 cards of
+  the 2026-10-07 report, 8 are linkable from the live pages right now (the other 2
+  Straits Times headlines have rolled off its page). An independent review of the
+  same day found and reproduced three flaws in the first version of this, all fixed:
+  (g) "one page, one headline" was only checked inside each list, so an older url-less
+  headline that matched INSIDE a new headline's link text was backfilled with the new
+  headline's article, and `url IS NULL` meant nothing could ever correct it — it is now
+  checked across the stored links, the links being filled in and the new items
+  together (`planSourceSync`); (h) the backfill covers only items first seen in the
+  last 7 days (the page lists 7 days of reports), so a recurring headline cannot hand
+  last month's card today's article; (i) the links are prepared once per page — 1,000
+  stored headlines against 2,500 links took 17 s per source per night when every
+  headline re-processed them. Known and accepted: a headline that is a SUBSTRING of
+  another headline's link text (up to twice as long) still takes that article when
+  the longer headline is neither extracted nor stored.
   Open: items stored before 2026-10-07 whose headline is no longer on the
   listing page can never be matched and keep the 「来源页」 fallback.
 

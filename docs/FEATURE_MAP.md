@@ -91,6 +91,9 @@ What actually runs daily and what depends on what completing first. See
 19:30        quickbooks/sync
 20:00        ar-reminder/sync-workflow   → depends on ar_reminder rows existing (runs after 19:00 generate)
 21:00        late-filing/sync            → depends on ar_reminder + sync-workflow's date corrections (runs after 20:00)
+22:30        sg-news/sync                → Playwright, 9 sources one after another (really starts ~22:44, takes 80–155 s); shares UTC hour 22 with
+                                           teamwork/sync-secretary's 22:45 run — read from automation_sync_runs (2026-10-07) they never overlapped;
+                                           what each source saw is saved in automation_sync_runs.summary (docs/INVARIANTS.md INV-CRON-019, REG-042)
 ```
 
 2026-09-16: the Outstanding/SOA total's `quickbooks_ar_aging_detail` snapshot
