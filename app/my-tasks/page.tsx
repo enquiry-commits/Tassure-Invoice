@@ -6,6 +6,8 @@ import {
   Plus, Pin, Trash2, Send, MessageSquare, Activity, Paperclip,
 } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
+import { SoaReminderStatus } from '@/components/billing/SoaReminderStatus';
+import type { SoaReminderProgress } from '@/lib/soa-reminder-progress';
 import { RichText } from '@/components/assistant/ChatRichText';
 import {
   InvoiceDraftCard, LateFilingResolveCard, ArUpdateCard, InvoiceEditCard, PostIncorporateCard, ListExportCard, SoaCard, EmailDraftCard, CompanyUpdateCard, TaoBillingCard,
@@ -28,7 +30,7 @@ type LateFilingTask = {
 };
 // Added 2026-09-22 alongside lib/my-tasks-data.ts's own scope widening —
 // see that file's own comment for why SOA/Trademark could be added safely.
-type SoaTask = { companyName: string; qbCompany: 'TAB' | 'TAC' | 'TAO'; totalOutstanding: number; owner: string | null };
+type SoaTask = { companyName: string; qbCompany: 'TAB' | 'TAC' | 'TAO'; totalOutstanding: number; owner: string | null; reminderProgress: SoaReminderProgress; remarks: string | null };
 type TrademarkTask = { companyName: string; applicationNumber: string | null; markExpiredDate: string; daysUntilDue: number };
 // Vincent, 2026-09-08, on the View-As-Chelsea screen showing 0 tasks
 // despite her using the system daily: "没有真正了解到...我们的员工在做什
@@ -165,15 +167,19 @@ function SoaTaskTable({ rows }: { rows: SoaTask[] }) {
       <div className="system-list-title-bar px-4 py-3">
         <h2 className="system-list-title">SOA Collections <span style={{ opacity: 0.7, fontWeight: 500 }}>({rows.length})</span></h2>
       </div>
-      <table className="system-list-table" style={{ width: '100%' }}>
-        <thead><tr className="list-column-header-gray"><th>Company</th><th>Book</th><th>Outstanding</th><th>Owner</th></tr></thead>
+      {/* Six equal columns (Vincent, 2026-10-07): Company, Source, Reminder, Outstanding, PIC, Remarks. */}
+      <table className="system-list-table" style={{ width: '100%', tableLayout: 'fixed' }}>
+        <colgroup>{[0, 1, 2, 3, 4, 5].map(i => <col key={i} style={{ width: `${100 / 6}%` }} />)}</colgroup>
+        <thead><tr className="list-column-header-gray"><th>Company</th><th>Source</th><th>Reminder</th><th>Outstanding</th><th>PIC</th><th>Remarks</th></tr></thead>
         <tbody>
           {rows.map(r => (
             <tr key={`${r.qbCompany}-${r.companyName}`} className="system-list-row">
               <td style={{ padding: '6px 10px' }}><span className="company-name-text">{r.companyName}</span></td>
               <td style={{ padding: '6px 10px' }}>{r.qbCompany}</td>
+              <td style={{ padding: '6px 10px' }}><SoaReminderStatus progress={r.reminderProgress} /></td>
               <td style={{ padding: '6px 10px', fontWeight: 700, color: '#b45309' }}>{money(r.totalOutstanding)}</td>
               <td style={{ padding: '6px 10px' }}>{r.owner || '—'}</td>
+              <td style={{ padding: '6px 10px', fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.remarks ?? ''}>{r.remarks || '—'}</td>
             </tr>
           ))}
         </tbody>

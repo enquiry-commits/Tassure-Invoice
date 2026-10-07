@@ -7548,3 +7548,11 @@ a reviewer can check it before anything is created.
 - test-ai-usage.ts passes; month boundaries checked in Singapore time (a call at
   30 Sep 17:00Z lands in October); grouping order checked on real October rows.
   Not seen in a browser.
+
+## 2026-10-07 — My Tasks › SOA Collections: six equal columns
+- Columns now Company / Source / Reminder / Outstanding / PIC / Remarks (was Company /
+  Book / Outstanding / Owner), `table-layout: fixed`, six equal widths. Reminder reuses
+  the SOA page's `SoaReminderStatus` badge; Remarks is the shared per-company
+  `soa_remarks` note (ellipsis + hover). `lib/my-tasks-data.ts` `SoaTask` carries
+  `reminderProgress` + `remarks` (same `resolveSoaReminderProgress` /
+  `soaRemarksForCompany` the SOA API uses). Checked on Jay Tay's real 12 rows.

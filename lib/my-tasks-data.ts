@@ -5,6 +5,8 @@ import { todaySGT, thisYearSGT } from './date';
 import { findStaffEmails } from './staff-directory';
 import { normalize } from './company-name';
 import { computeAllSoaRows, effectiveOwner } from './soa-data';
+import { loadSoaReminderHistory, resolveSoaReminderProgress, type SoaReminderProgress } from './soa-reminder-progress';
+import { loadSoaRemarks, soaRemarksForCompany } from './soa-remarks';
 import { getTrademarkSummary } from './trademark-lookup';
 import { canAccountOpen, type ApprovedAccount } from './approved-accounts';
 import type { QbCompany } from './quickbooks';
@@ -71,7 +73,9 @@ function matchedAs(row: { pic: string | null; acc_pic: string | null; tax_pic: s
   return fields;
 }
 
-export type SoaTask = { companyName: string; qbCompany: QbCompany; totalOutstanding: number; owner: string | null };
+// reminderProgress / remarks: the same Reminder status and shared Remarks note the SOA Outstanding
+// pages show for this company (2026-10-07: My Tasks' SOA table now lists them too).
+export type SoaTask = { companyName: string; qbCompany: QbCompany; totalOutstanding: number; owner: string | null; reminderProgress: SoaReminderProgress; remarks: string | null };
 export type TrademarkTask = { companyName: string; applicationNumber: string | null; markExpiredDate: string; daysUntilDue: number };
 
 export type MyTasksData = {
@@ -197,10 +201,14 @@ export async function computeMyTasks(account: ApprovedAccount): Promise<MyTasksD
   // silently disagree with what the SOA/Outstanding pages themselves show.
   let soaCollections: SoaTask[] | null = null;
   if (showSoa) {
-    const allSoaRows = await computeAllSoaRows();
+    const [allSoaRows, reminderHistory, soaRemarks] = await Promise.all([computeAllSoaRows(), loadSoaReminderHistory(supabase), loadSoaRemarks(supabase)]);
     soaCollections = allSoaRows
       .filter(row => row.totalOutstanding > 0 && findStaffEmails(effectiveOwner(row)).includes(account.email))
-      .map(row => ({ companyName: row.companyName, qbCompany: row.qbCompany, totalOutstanding: row.totalOutstanding, owner: effectiveOwner(row) }))
+      .map(row => ({
+        companyName: row.companyName, qbCompany: row.qbCompany, totalOutstanding: row.totalOutstanding, owner: effectiveOwner(row),
+        reminderProgress: resolveSoaReminderProgress(reminderHistory, row, row.qbCompany),
+        remarks: soaRemarksForCompany(soaRemarks, row.companyName),
+      }))
       .sort((a, b) => b.totalOutstanding - a.totalOutstanding);
     if (soaCollections.length) everAssigned = true;
   }
