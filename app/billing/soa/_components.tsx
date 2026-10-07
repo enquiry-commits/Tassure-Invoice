@@ -48,7 +48,7 @@ const isOverpaid = (net: number) => net < 0;
 function WeOweBadge({ amount }: { amount: number }) {
   return (
     <span title={`This client has paid S$${fmtNum(-amount)} more than it was billed — we owe it money`}
-      style={{ display: 'inline-block', padding: '3px 7px', borderRadius: 6, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 10.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
+      style={{ display: 'inline-block', padding: '3px 7px', borderRadius: 6, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
       We owe client
     </span>
   );
@@ -181,7 +181,7 @@ function SoaRemarksInput({ value, onSave, badDebtLabel, onBadDebtChange }: {
   return (
     <div>
       {badDebtLabel && (
-        <div style={{ display: 'inline-block', marginBottom: 3, padding: '1px 7px', borderRadius: 5, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 10, fontWeight: 800 }}>
+        <div style={{ display: 'inline-block', marginBottom: 3, padding: '1px 7px', borderRadius: 5, background: 'var(--status-danger-tint)', border: '1px solid #fecaca', color: 'var(--status-danger)', fontSize: 10, fontWeight: 700 }}>
           {badDebtLabel}
         </div>
       )}
@@ -392,7 +392,7 @@ function SoaDraftPopover({
           position: 'fixed', zIndex: 9999, background: '#fff', ...pos,
           border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 260, padding: 12,
         }}>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#1e3a5f', marginBottom: 8 }}>
             Draft Email — {company.companyName}
             {qbCompany === 'ALL' && <span style={{ color: '#0f766e', fontWeight: 700 }}> (all available sources combined)</span>}
           </div>
@@ -1075,7 +1075,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                 onClick={event => { event.stopPropagation(); if (!(isOverpaid(c.totalOutstanding) && !opts.child)) void downloadSourceBadge(badgeKey, c.companyName, rowCompany(c)); }}
                 disabled={isDownloading || (isOverpaid(c.totalOutstanding) && !opts.child)}
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
+                  display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 700, letterSpacing: '0.02em',
                   padding: '2px 7px', borderRadius: 5, border: 'none', cursor: isDownloading ? 'default' : 'pointer',
                   background: badgeError ? 'var(--status-danger-tint)' : '#eef2f7', color: badgeError ? 'var(--status-danger)' : '#1e3a5f',
                 }}>
@@ -1087,7 +1087,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
         {AGING_BUCKETS.map(bucket => {
           const items = c.lineItems.filter(item => item.bucket === bucket.key);
           return (
-            <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif' }}>
+            <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontWeight: 400, fontVariantNumeric: 'tabular-nums' }}>
               {items.length ? items.map((item, index) => {
                 const isNegative = item.amount < 0;
                 const tag = isNegative ? (TXN_TYPE_TAGS[item.txnType] ?? item.txnType) : null;
@@ -1101,7 +1101,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             </div>
           );
         })}
-        <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 400, fontFamily: 'Arial, Helvetica, sans-serif', color: c.totalOutstanding < 0 ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
+        <div style={{ textAlign: 'center', fontSize: 12, fontWeight: 400, fontVariantNumeric: 'tabular-nums', color: c.totalOutstanding < 0 ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(c.totalOutstanding)}</div>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
           {/* QuickBooks' own PIC (invoice Classes), else TeamWork's — INV-PIC-008 */}
           {c.picShown.length ? c.picShown.map(name => <div key={name}>{name}</div>) : '—'}
@@ -1383,7 +1383,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                             const badgeError = badgeDownloadErrors[key];
                             return (
                               <span key={source} style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 3, flex: '0 0 auto', fontSize: 9.5, fontWeight: 800,
+                                display: 'inline-flex', alignItems: 'center', gap: 3, flex: '0 0 auto', fontSize: 9.5, fontWeight: 700,
                                 color: badgeError ? 'var(--status-danger)' : '#1e3a5f',
                               }}>
                                 {isDownloading ? <Loader2 size={9} style={{ animation: 'spin 1s linear infinite' }} /> : source}
@@ -1394,9 +1394,9 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
                       </div>
                       {AGING_BUCKETS.map(bucket => {
                         const value = combined.aging[bucket.key];
-                        return <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontFamily: 'Arial, Helvetica, sans-serif', color: value < 0 ? 'var(--status-danger)' : value ? '#64748b' : '#cbd5e1' }}>{value ? fmtNum(value) : '—'}</div>;
+                        return <div key={bucket.key} style={{ textAlign: 'center', fontSize: 11.5, fontVariantNumeric: 'tabular-nums', color: value < 0 ? 'var(--status-danger)' : value ? '#64748b' : '#cbd5e1' }}>{value ? fmtNum(value) : '—'}</div>;
                       })}
-                      <div style={{ textAlign: 'center', fontSize: 12, fontFamily: 'Arial, Helvetica, sans-serif', color: isOverpaid(combined.totalOutstanding) ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
+                      <div style={{ textAlign: 'center', fontSize: 12, fontVariantNumeric: 'tabular-nums', color: isOverpaid(combined.totalOutstanding) ? 'var(--status-danger)' : '#1e3a5f' }}>{fmtNum(combined.totalOutstanding)}</div>
                       <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b', lineHeight: 1.5 }}>
                         {combined.picShown.length ? combined.picShown.map(name => <div key={name}>{name}</div>) : '—'}
                       </div>
@@ -1496,7 +1496,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 780, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
               <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: '4px solid #ea580c', padding: '16px 20px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{c.companyName.toUpperCase()}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{c.companyName.toUpperCase()}</div>
                   <button onClick={closeDetail} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>

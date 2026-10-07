@@ -59,7 +59,7 @@ export default function MobileNav({ title, ready, canOpen }: { title: string; re
           <Menu size={22} />
         </button>
         <Image src="/logo.png" alt="Tassure" height={30} width={30} className="object-contain rounded" />
-        <span style={{ fontSize: 14, fontWeight: 800, color: '#1e3a5f', letterSpacing: '-0.2px' }}>{title}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#1e3a5f', letterSpacing: '-0.2px' }}>{title}</span>
       </header>
 
       {open && (

@@ -45,7 +45,7 @@ export function Inline({ text, onNav }: { text: string; onNav: (href: string) =>
           );
         }
         const bold = part.match(/^\*\*([^*]+)\*\*$/);
-        if (bold) return <strong key={index} style={{ color: '#12233b', fontWeight: 750 }}>{bold[1]}</strong>;
+        if (bold) return <strong key={index} style={{ color: '#12233b', fontWeight: 700 }}>{bold[1]}</strong>;
         return <span key={index}>{part}</span>;
       })}
     </>
@@ -188,7 +188,7 @@ export function RichText({ text, onNav }: { text: string; onNav: (href: string) 
           key={i}
           style={{
             fontSize: 13.5,
-            fontWeight: 750,
+            fontWeight: 700,
             color: '#12233b',
             margin: elements.length === 0 ? '0 0 6px' : '16px 0 6px',
             paddingBottom: 5,

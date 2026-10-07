@@ -320,7 +320,7 @@ function BillToFields({ company, value, onChange, parentName }: {
         style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: 'none', background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', marginBottom: open ? 8 : 0 }}
       >
         <ChevronRight size={12} color="#94a3b8" style={{ flexShrink: 0, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 120ms' }} />
-        <span style={{ fontSize: 10.5, fontWeight: 800, color: '#31506f' }}>Bill To (optional)</span>
+        <span style={{ fontSize: 10.5, fontWeight: 700, color: '#31506f' }}>Bill To (optional)</span>
         {summary
           ? <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: 999, padding: '1px 8px' }}>{summary}</span>
           : <span style={{ fontSize: 10, color: '#94a3b8' }}>{open ? "Leave empty and QuickBooks uses the customer's own address, exactly as today" : "Not set — QuickBooks uses the customer's own address"}</span>}
@@ -1114,7 +1114,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
     return (
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px 4px 9px', borderRadius: 8, background: bg, border: `1px solid ${border}` }}>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-          <span style={{ fontSize: 8, fontWeight: 800, color: manuallyChanged ? 'var(--status-warning)' : isTac ? '#9a3412' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
+          <span style={{ fontSize: 8, fontWeight: 700, color: manuallyChanged ? 'var(--status-warning)' : isTac ? '#9a3412' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '.45px' }}>{manuallyChanged ? 'Manual number' : 'Estimated QB number'}</span>
           <span style={{ fontSize: 8.5, color: isTac ? '#c2703d' : '#94a3b8' }}>{numberLoading ? 'Checking live…' : 'QB confirms when created'}</span>
         </div>
         <input
@@ -1122,7 +1122,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           onChange={event => { setInvoiceNumbers(current => ({ ...current, [company]: event.target.value.trim() })); setNumberWarning(''); }}
           placeholder={numberLoading ? 'Loading…' : 'Unavailable'}
           aria-label={`${company} invoice number`}
-          style={{ width: 92, border: 0, borderBottom: `1px solid ${manuallyChanged ? '#f59e0b' : isTac ? '#fdba74' : '#94a3b8'}`, outline: 'none', background: 'transparent', color: numberColor, fontFamily: 'monospace', fontSize: 11.5, fontWeight: 800, padding: '2px 1px', textAlign: 'center' }}
+          style={{ width: 92, border: 0, borderBottom: `1px solid ${manuallyChanged ? '#f59e0b' : isTac ? '#fdba74' : '#94a3b8'}`, outline: 'none', background: 'transparent', color: numberColor, fontVariantNumeric: 'tabular-nums', fontSize: 11.5, fontWeight: 700, padding: '2px 1px', textAlign: 'center' }}
         />
         <button type="button" onClick={() => setNumberRefreshKey(key => key + 1)} title="Refresh from QuickBooks" style={{ border: 0, background: 'transparent', color: isTac ? '#c2703d' : '#64748b', padding: 2, cursor: 'pointer', display: 'flex' }}>
           <RefreshCw size={12} style={{ animation: numberLoading ? 'spin 1s linear infinite' : 'none' }} />
@@ -1313,7 +1313,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           Layout mirrors the TAC section: badge header first, then the
           "based on last invoice" provenance note. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent-blue)', background: 'var(--status-info-tint)', border: '1px solid #dbeafe', borderRadius: 5, padding: '2px 8px' }}>TAB</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent-blue)', background: 'var(--status-info-tint)', border: '1px solid #dbeafe', borderRadius: 5, padding: '2px 8px' }}>TAB</span>
         <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Basic Services</span>
         <span style={{ fontSize: 10, color: '#94a3b8' }}>· default QuickBooks company</span>
         {renderEditHeader('TAB', tabInvoice)}
@@ -1325,7 +1325,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           : c.priorInvoiceDate
           ? <span>
               Based on last invoice
-              {c.priorInvoiceNo && <strong style={{ color: 'var(--accent-blue)', fontFamily: 'monospace', margin: '0 5px', background: 'var(--status-info-tint)', border: '1px solid #dbeafe', padding: '1px 7px', borderRadius: 4 }}>#{c.priorInvoiceNo}</strong>}
+              {c.priorInvoiceNo && <strong style={{ color: 'var(--accent-blue)', fontVariantNumeric: 'tabular-nums', margin: '0 5px', background: 'var(--status-info-tint)', border: '1px solid #dbeafe', padding: '1px 7px', borderRadius: 4 }}>#{c.priorInvoiceNo}</strong>}
               {' '}dated <strong style={{ color: '#334155' }}>{fmtDate(c.priorInvoiceDate)}</strong> — items & amounts carried forward, period rolled to this cycle. Verify discount still applies.
             </span>
           : <span style={{ color: 'var(--status-warning)' }}>No prior renewal invoice found — draft built from standard template. Confirm each line.</span>}
@@ -1363,7 +1363,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
           </div>
           <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, fontWeight: 800, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 5, padding: '2px 8px' }}>TAC</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#9a3412', background: '#ffedd5', border: '1px solid #fed7aa', borderRadius: 5, padding: '2px 8px' }}>TAC</span>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>Nominee Director</span>
             <span style={{ fontSize: 10, color: '#94a3b8' }}>· invoiced separately under the TAC company</span>
             {c.ndPic && (
@@ -1395,7 +1395,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
                 {ndPrior?.invoice_no
                   ? <span>
                       Based on last invoice
-                      <strong style={{ color: '#9a3412', fontFamily: 'monospace', margin: '0 5px', background: '#ffedd5', border: '1px solid #fed7aa', padding: '1px 7px', borderRadius: 4 }}>#{displayInvoiceNo(ndPrior.invoice_no)}</strong>
+                      <strong style={{ color: '#9a3412', fontVariantNumeric: 'tabular-nums', margin: '0 5px', background: '#ffedd5', border: '1px solid #fed7aa', padding: '1px 7px', borderRadius: 4 }}>#{displayInvoiceNo(ndPrior.invoice_no)}</strong>
                       {ndPrior.txn_date && <> dated <strong style={{ color: '#334155' }}>{fmtDate(ndPrior.txn_date)}</strong></>}
                       {' '}— ND fee &amp; director item carried forward, period rolled to this cycle.
                     </span>
@@ -1511,7 +1511,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       </div>
 
       {numberWarning && (
-        <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 7, padding: '9px 11px', borderRadius: 8, background: 'var(--status-warning-tint)', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 11, fontWeight: 650 }}>
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'flex-start', gap: 7, padding: '9px 11px', borderRadius: 8, background: 'var(--status-warning-tint)', border: '1px solid #fed7aa', color: '#9a3412', fontSize: 11, fontWeight: 600 }}>
           <AlertTriangle size={13} style={{ marginTop: 1, flexShrink: 0 }} />
           <span>{numberWarning}</span>
         </div>
@@ -1536,13 +1536,13 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       {generatedPdfs.length > 0 && (
         <div style={{ marginTop: 12, padding: '12px 13px', borderRadius: 9, border: '1px solid #bfdbfe', background: '#f8fbff', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 800, color: '#1e3a5f' }}>Invoice PDF ready</div>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: '#1e3a5f' }}>Invoice PDF ready</div>
             <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>
               {generatedPdfs.map(pdf => `#${displayInvoiceNo(pdf.invoiceNo)}`).join(' · ')} · Windows Save As, without granting access to the whole folder
             </div>
           </div>
           {generatedPdfs.map(pdf => (
-            <button key={`${pdf.company}-${pdf.qbId}`} type="button" onClick={() => saveInvoicePdf(pdf)} disabled={savingPdfs} style={{ border: '1px solid #93c5fd', borderRadius: 7, background: savingPdfs ? '#dbeafe' : 'var(--status-info-tint)', color: 'var(--accent-blue)', padding: '8px 12px', fontSize: 11.5, fontWeight: 800, cursor: savingPdfs ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button key={`${pdf.company}-${pdf.qbId}`} type="button" onClick={() => saveInvoicePdf(pdf)} disabled={savingPdfs} style={{ border: '1px solid #93c5fd', borderRadius: 7, background: savingPdfs ? '#dbeafe' : 'var(--status-info-tint)', color: 'var(--accent-blue)', padding: '8px 12px', fontSize: 11.5, fontWeight: 700, cursor: savingPdfs ? 'wait' : 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
               <FileText size={13} /> {savingPdfs ? 'Preparing PDF…' : `Save ${pdf.company} PDF`}
             </button>
           ))}
@@ -1550,7 +1550,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
       )}
 
       {pdfResult && (
-        <div style={{ marginTop: 8, fontSize: 11, fontWeight: 650, color: pdfResult.ok ? '#15803d' : 'var(--status-warning)' }}>{pdfResult.msg}</div>
+        <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, color: pdfResult.ok ? '#15803d' : 'var(--status-warning)' }}>{pdfResult.msg}</div>
       )}
 
       <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 16, marginTop: 24, fontSize: 10, color: '#94a3b8' }}>
@@ -1564,7 +1564,7 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--status-warning-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <AlertTriangle size={20} style={{ color: 'var(--status-warning)' }} />
             </div>
-            <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b' }}>This period overlaps an existing invoice</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>This period overlaps an existing invoice</div>
           </div>
           <div style={{ fontSize: 13, color: '#475569', marginBottom: 12, lineHeight: 1.5 }}>
             {overlapConfirmModal.map((msg, i) => <div key={i} style={{ marginBottom: 4 }}>{msg}</div>)}

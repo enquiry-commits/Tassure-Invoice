@@ -128,12 +128,12 @@ function LineItemRow({ item, gstEnabled, columns, busy, onPatch, onToggle }: {
       </div>
       <input type="date" value={txnDate ?? ''} onChange={e => setTxnDate(e.target.value)} onBlur={save} disabled={ignored || busy} style={cellInputStyle({ color: '#475569' })} {...focusBorder} />
       <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} onBlur={save} onKeyDown={commitOnEnter} disabled={ignored || busy}
-        style={cellInputStyle({ textAlign: 'right', fontFamily: 'monospace' })} {...focusBorder} />
+        style={cellInputStyle({ textAlign: 'right', fontVariantNumeric: 'tabular-nums' })} {...focusBorder} />
       <input value={currency} onChange={e => setCurrency(e.target.value.toUpperCase())} onBlur={save} onKeyDown={commitOnEnter} disabled={ignored || busy}
         style={cellInputStyle({ textTransform: 'uppercase' })} {...focusBorder} />
       {gstEnabled && (
         <input type="number" step="0.01" value={gst} onChange={e => setGst(e.target.value)} onBlur={save} onKeyDown={commitOnEnter} disabled={ignored || busy} placeholder="—"
-          style={cellInputStyle({ textAlign: 'right', fontFamily: 'monospace', color: '#64748b' })} {...focusBorder} />
+          style={cellInputStyle({ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: '#64748b' })} {...focusBorder} />
       )}
       <div><ConfidencePill c={item.confidence} /></div>
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
@@ -324,13 +324,13 @@ export default function TurnoverProjectPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <input autoFocus value={nameDraft} onChange={e => setNameDraft(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') renameProject(); if (e.key === 'Escape') setRenaming(false); }}
-                style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', border: '1px solid #0f766e', borderRadius: 6, padding: '2px 6px', outline: 'none' }} />
+                style={{ fontSize: 22, fontWeight: 700, color: '#0f172a', border: '1px solid #0f766e', borderRadius: 6, padding: '2px 6px', outline: 'none' }} />
               <button onClick={renameProject} disabled={busy} title="Save" style={{ border: 'none', background: 'none', color: '#15803d', cursor: 'pointer', display: 'flex' }}><Check size={18} /></button>
               <button onClick={() => setRenaming(false)} title="Cancel" style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex' }}><X size={18} /></button>
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0f172a' }}>{detail.project.name}</h1>
+              <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#0f172a' }}>{detail.project.name}</h1>
               <button onClick={() => { setNameDraft(detail.project.name); setRenaming(true); }} title="Rename project"
                 style={{ border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex' }}><Pencil size={14} /></button>
             </div>
@@ -354,14 +354,14 @@ export default function TurnoverProjectPage() {
         {detail.totals.map(t => (
           <div key={t.currency} style={{ flex: 1, minWidth: 200, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px' }}>
             <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>{t.currency} total</div>
-            <div style={{ fontFamily: 'monospace', fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{money(t.total, t.currency)}</div>
+            <div style={{ fontVariantNumeric: 'tabular-nums', fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{money(t.total, t.currency)}</div>
             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{t.count} receipt{t.count === 1 ? '' : 's'}</div>
           </div>
         ))}
         {rejectedCount > 0 && (
           <div style={{ flex: 1, minWidth: 200, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px' }}>
             <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>Ignored</div>
-            <div style={{ fontFamily: 'monospace', fontSize: 24, fontWeight: 700, color: '#94a3b8' }}>{rejectedCount}</div>
+            <div style={{ fontVariantNumeric: 'tabular-nums', fontSize: 24, fontWeight: 700, color: '#94a3b8' }}>{rejectedCount}</div>
             <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>excluded from the total</div>
           </div>
         )}

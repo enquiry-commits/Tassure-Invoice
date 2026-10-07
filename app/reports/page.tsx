@@ -82,8 +82,8 @@ function Card({ title, eyebrow, icon, children, note }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
         <span style={{ width: 34, height: 34, borderRadius: 10, background: '#edf4f3', color: COLORS.teal, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</span>
         <div>
-          <div style={{ fontSize: 9.5, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 2 }}>{eyebrow}</div>
-          <h2 style={{ fontSize: 14, fontWeight: 750, color: COLORS.ink, margin: 0, letterSpacing: '-.01em' }}>{title}</h2>
+          <div style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 2 }}>{eyebrow}</div>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: COLORS.ink, margin: 0, letterSpacing: '-.01em' }}>{title}</h2>
         </div>
       </div>
       {children}
@@ -111,18 +111,18 @@ function RevenuePerformanceCard({ yoy }: { yoy: ComparableRevenue }) {
           <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>
             {yoy.comparisonLabel ? `Same Period ${yoy.comparisonLabel.slice(0, 4)}` : 'Comparison Period'}
           </div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#64748b' }}>{yoy.priorRevenue != null ? formatCompactCurrency(yoy.priorRevenue) : '—'}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: '#64748b' }}>{yoy.priorRevenue != null ? formatCompactCurrency(yoy.priorRevenue) : '—'}</div>
         </div>
         <div>
           <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>
             {yoy.periodLabel.slice(0, 4)} YTD
           </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: COLORS.ink }}>{formatCompactCurrency(yoy.currentRevenue)}</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: COLORS.ink }}>{formatCompactCurrency(yoy.currentRevenue)}</div>
         </div>
         <div>
           <div style={{ fontSize: 10.5, color: '#94a3b8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 3 }}>Change</div>
           {yoy.comparable && yoy.revenuePctChange != null ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 20, fontWeight: 800, color: up ? '#0f766e' : '#b45f6b' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 20, fontWeight: 700, color: up ? '#0f766e' : '#b45f6b' }}>
               {up ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
               {up ? '+' : ''}{yoy.revenuePctChange.toFixed(1)}%
             </div>
@@ -151,7 +151,7 @@ function CustomerSourceQualityCard({ total, unknown }: { total: number; unknown:
   return (
     <Card title="Customer Source" eyebrow="Data Quality" icon={<Database size={16} />}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 34, fontWeight: 800, color: coveragePct === 0 ? '#b45f6b' : COLORS.ink }}>{coveragePct}%</span>
+        <span style={{ fontSize: 34, fontWeight: 700, color: coveragePct === 0 ? '#b45f6b' : COLORS.ink }}>{coveragePct}%</span>
         <span style={{ fontSize: 12, color: '#94a3b8' }}>coverage</span>
       </div>
       <p style={{ margin: 0, fontSize: 12.5, color: '#475569', lineHeight: 1.6 }}>
@@ -274,10 +274,10 @@ const STEP_BADGE: React.CSSProperties = {
   background: '#d9f0ec',
   color: COLORS.teal,
   fontSize: 12,
-  fontWeight: 900,
+  fontWeight: 700,
   flex: '0 0 auto',
 };
-const GUIDE_TITLE: React.CSSProperties = { fontSize: 14, fontWeight: 900, color: COLORS.ink };
+const GUIDE_TITLE: React.CSSProperties = { fontSize: 14, fontWeight: 700, color: COLORS.ink };
 const GUIDE_COPY: React.CSSProperties = { fontSize: 12.5, color: '#64748b', lineHeight: 1.45 };
 
 function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]; exportHref: string }) {
@@ -480,7 +480,7 @@ function ExploreSection({ companyRows, exportHref }: { companyRows: CompanyRow[]
                     color: on ? '#fff' : COLORS.ink,
                     boxShadow: on ? '0 8px 18px rgba(49, 138, 131, 0.18)' : 'none',
                   }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 900, marginBottom: 4 }}>{p.label}</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 4 }}>{p.label}</div>
                   <div style={{ fontSize: 11.5, lineHeight: 1.35, color: on ? 'rgba(255,255,255,0.82)' : '#64748b' }}>{p.hint}</div>
                 </button>
               );
@@ -820,7 +820,7 @@ export default function ReportsPage() {
           <BarChart3 size={18} />
         </span>
         <div>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: COLORS.ink, letterSpacing: '-.02em' }}>Reports</h1>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: COLORS.ink, letterSpacing: '-.02em' }}>Reports</h1>
           <p style={{ margin: '2px 0 0', fontSize: 12, color: '#8493a3' }}>Customer profile analytics — generated {data.generatedAt}. Visible to a small, named group only.</p>
         </div>
       </div>
@@ -836,7 +836,7 @@ export default function ReportsPage() {
             <Sparkles size={15} />
           </span>
           <button onClick={() => setNarrativeCollapsed(v => !v)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 750, letterSpacing: '-.01em', color: COLORS.ink, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, letterSpacing: '-.01em', color: COLORS.ink, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
             {narrativeLang === 'zh' ? 'AI 分析 — 本期观察' : 'AI Analysis — This Period'}
             {narrativeCollapsed ? <ChevronDown size={14} style={{ color: '#94a3b8' }} /> : <ChevronUp size={14} style={{ color: '#94a3b8' }} />}
           </button>
@@ -892,7 +892,7 @@ export default function ReportsPage() {
                 const notYetProven = narrativeLang === 'zh' ? ins.notYetProvenZh : ins.notYetProvenEn;
                 return (
                   <div key={i} style={{ display: 'flex', gap: 12, padding: '12px 14px', borderRadius: 10, background: '#f8fafc', borderLeft: `3px solid ${s.color}` }}>
-                    <span style={{ flexShrink: 0, height: 20, padding: '0 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', letterSpacing: '.02em' }}>
+                    <span style={{ flexShrink: 0, height: 20, padding: '0 8px', borderRadius: 999, background: s.bg, color: s.color, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', letterSpacing: '.02em' }}>
                       {narrativeLang === 'zh' ? s.labelZh : s.labelEn}
                     </span>
                     <div style={{ minWidth: 0, flex: 1 }}>

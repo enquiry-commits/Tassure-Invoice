@@ -5871,3 +5871,18 @@ again.
   older than the window when purged. Key = (book, QB estimate id) — TAB #100
   is not TAC #100. Missing table → page still loads, buttons disabled, PATCH
   answers 503. Guarded by `test-quotation-reviews.ts`.
+
+- **INV-UI-001** — One font look across the system (Vincent, 2026-10-07).
+  (1) `app/globals.css` makes `button/input/select/textarea` inherit the page
+  font (browsers do not by default — they showed Arial next to the app font).
+  (2) Every font stack ends with Chinese fallbacks (PingFang SC, Microsoft
+  YaHei, Noto Sans SC) — the loaded Google fonts are latin-only. (3) Default
+  font token is Inter (`lib/theme-tokens.ts`); the Appearance picker stays
+  (Appearance is ONE global setting in `app_theme_tokens`, not per user; no
+  saved override existed on 2026-10-07). (4) No hard-coded `fontFamily` /
+  `monospace` in pages: numbers that must line up use
+  `fontVariantNumeric: 'tabular-nums'`. Exceptions on purpose: the Outlook
+  email body box (mimics the client's Outlook) and the Appearance code input;
+  PDFs/documents are a separate system (INV-DOC-011). (5) Weights are only
+  400/500/600/700 (the loaded fonts have no 750/800/900). Font SIZES are not
+  yet unified (35 values; planned step 2).

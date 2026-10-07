@@ -1,5 +1,11 @@
 # TASSURE Invoice - Shared Project Status
 
+Last updated: 2026-10-07 (NEW: typography step 1 — one font look across the system; Vincent: "整个系统都在用着很多种的字体…很杂乱"; council of 4 recommended fonts first, sizes later).
+
+**What changed (INV-UI-001, REG-051).** Buttons/inputs/dropdowns now inherit the app font (they showed Arial); Chinese fallback fonts added to every stack; default font token = Inter (Appearance picker kept; it is one global setting and none was saved); hard-coded Arial/monospace replaced by tabular-nums (Outlook email box and Appearance code input kept); font weights 650/750/760/800/850/900 folded into 600/700. **Not done:** font sizes (35 values) — step 2 awaits Vincent's look at step 1; guard test = step 3.
+
+**Verification.** `tsc` 0. **Not verified in a browser** (no login in the pane): bold text is slightly lighter where it was 800, and number columns should be re-checked on SOA/billing.
+
 Last updated: 2026-10-07 (NEW: Quotation page gets "Completed" + "Remarks" columns and a clickable "Completed" card — Vincent: a Closed PI kept matching new invoices; weekly the person checks it is matched to the right invoice(s) and presses Completed).
 
 **What changed (INV-QB-039, REG-050).** Completed (Closed PIs only, confirm dialog, Reopen to undo) freezes the PI's traced invoices and hides it from the list; the 5th card "Completed" shows them, remarks stay editable everywhere (saved on blur). Completed records are deleted a year after completion; the list now shows only the last 12 months so a purged PI cannot reappear. New table `quotation_reviews` — **Vincent must run `scripts/add-quotation-reviews.sql` in Supabase**; until then the page loads and shows a notice, buttons disabled.

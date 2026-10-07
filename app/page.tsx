@@ -95,8 +95,8 @@ function Card({ title, eyebrow, icon, children, action, style }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
         <span style={{ width: 34, height: 34, borderRadius: 10, background: '#edf4f3', color: DASHBOARD_COLORS.teal, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</span>
         <div>
-          {eyebrow && <div style={{ fontSize: 9.5, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 2 }}>{eyebrow}</div>}
-          <h2 style={{ fontSize: 14, fontWeight: 750, color: DASHBOARD_COLORS.ink, margin: 0, letterSpacing: '-.01em' }}>{title}</h2>
+          {eyebrow && <div style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 2 }}>{eyebrow}</div>}
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: DASHBOARD_COLORS.ink, margin: 0, letterSpacing: '-.01em' }}>{title}</h2>
         </div>
         <span style={{ marginLeft: 'auto' }}>{action}</span>
       </div>
@@ -136,7 +136,7 @@ function ActionItem({ title, description, value, href, color, background, Icon }
     <>
       <span style={{ width: 38, height: 38, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', color, background }}><Icon size={17} /></span>
       <span>
-        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 750, color: DASHBOARD_COLORS.ink }}>{title}</span>
+        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: DASHBOARD_COLORS.ink }}>{title}</span>
         <span style={{ display: 'block', fontSize: 10.5, color: '#94a3b8', marginTop: 2 }}>{description}</span>
       </span>
       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -160,8 +160,8 @@ function SectionLabel({ eyebrow, title, description }: { eyebrow: string; title:
   return (
     <div style={{ margin: '30px 0 14px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
       <div>
-        <div style={{ fontSize: 9.5, fontWeight: 800, color: DASHBOARD_COLORS.teal, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 4 }}>{eyebrow}</div>
-        <h2 style={{ margin: 0, color: DASHBOARD_COLORS.ink, fontSize: 18, fontWeight: 800, letterSpacing: '-.025em' }}>{title}</h2>
+        <div style={{ fontSize: 9.5, fontWeight: 700, color: DASHBOARD_COLORS.teal, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 4 }}>{eyebrow}</div>
+        <h2 style={{ margin: 0, color: DASHBOARD_COLORS.ink, fontSize: 18, fontWeight: 700, letterSpacing: '-.025em' }}>{title}</h2>
       </div>
       <p style={{ margin: 0, color: '#8493a3', fontSize: 11.5, maxWidth: 460, textAlign: 'right', lineHeight: 1.5 }}>{description}</p>
     </div>
@@ -240,7 +240,7 @@ function ExceptionStatus({ value }: { value: string | null | undefined }) {
   const paid = normalized.toLowerCase() === 'paid';
   const open = normalized.toLowerCase() === 'open';
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '3px 7px', fontSize: 9, fontWeight: 800, color: paid ? '#047857' : open ? '#b45309' : '#64748b', background: paid ? '#ecfdf5' : open ? '#fff7ed' : '#f1f5f9', border: `1px solid ${paid ? '#a7f3d0' : open ? '#fed7aa' : '#e2e8f0'}` }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '3px 7px', fontSize: 9, fontWeight: 700, color: paid ? '#047857' : open ? '#b45309' : '#64748b', background: paid ? '#ecfdf5' : open ? '#fff7ed' : '#f1f5f9', border: `1px solid ${paid ? '#a7f3d0' : open ? '#fed7aa' : '#e2e8f0'}` }}>
       {normalized}
     </span>
   );
@@ -261,7 +261,7 @@ function UnknownPicDetails({ items }: { items: AutomationExceptionItem[] }) {
       </div>
       {picGroups.map(([picId, picItems]) => (
         <details key={picId} style={{ background: '#fff', border: '1px solid #e5eaf0', borderRadius: 10, overflow: 'hidden' }}>
-          <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 9, color: DASHBOARD_COLORS.ink, fontSize: 10.5, fontWeight: 800 }}>
+          <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 9, color: DASHBOARD_COLORS.ink, fontSize: 10.5, fontWeight: 700 }}>
             <ChevronDown size={13} style={{ color: '#94a3b8' }} />
             TeamWork PIC ID {picId}
             <span style={{ marginLeft: 'auto', color: '#a6530a', background: '#fff7ed', border: '1px solid #fed7aa', padding: '2px 7px', borderRadius: 999, fontSize: 9 }}>{picItems.length} companies</span>
@@ -279,7 +279,7 @@ function UnknownPicDetails({ items }: { items: AutomationExceptionItem[] }) {
                     <td style={{ padding: '8px 10px', color: '#94a3b8' }}>{index + 1}</td>
                     <td className="company-name-text" style={{ padding: '8px 10px' }}>{item.company?.name ?? item.name ?? '—'}</td>
                     <td className="company-registration-text" style={{ padding: '8px 10px' }}>{item.company?.uen ?? '—'}</td>
-                    <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{item.company?.internalId ?? item.key}</td>
+                    <td style={{ padding: '8px 10px', fontVariantNumeric: 'tabular-nums' }}>{item.company?.internalId ?? item.key}</td>
                     <td style={{ padding: '8px 10px' }}><ExceptionStatus value={item.company?.teamworkStatus ?? (item.company?.active ? 'Active' : 'Inactive')} /></td>
                     <td style={{ padding: '8px 10px' }}>{item.company?.companyType ?? '—'}</td>
                     <td style={{ padding: '8px 10px' }}>{item.company?.email ?? '—'}</td>
@@ -305,8 +305,8 @@ function DuplicateInvoiceDetails({ items }: { items: AutomationExceptionItem[] }
         <div key={item.id} style={{ background: '#fff', border: '1px solid #e1e7ee', borderRadius: 11, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: '#f8fafc', borderBottom: '1px solid #e8edf2' }}>
             <span style={{ fontSize: 10, color: '#64748b' }}>Invoice Number</span>
-            <strong style={{ color: DASHBOARD_COLORS.ink, fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{item.name ?? item.key}</strong>
-            <span style={{ marginLeft: 'auto', color: '#9a5a13', fontSize: 9.5, fontWeight: 750 }}>{item.invoices.length} QB records · detected {formatSgtTime(item.lastSeenAt)}</span>
+            <strong style={{ color: DASHBOARD_COLORS.ink, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{item.name ?? item.key}</strong>
+            <span style={{ marginLeft: 'auto', color: '#9a5a13', fontSize: 9.5, fontWeight: 700 }}>{item.invoices.length} QB records · detected {formatSgtTime(item.lastSeenAt)}</span>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table className="system-list-table system-list-table--compact" style={{ minWidth: 850, fontSize: 10 }}>
@@ -318,8 +318,8 @@ function DuplicateInvoiceDetails({ items }: { items: AutomationExceptionItem[] }
               <tbody>
                 {item.invoices.map(invoice => (
                   <tr key={`${invoice.qb_company}-${invoice.qb_invoice_id}`} className="system-list-row">
-                    <td style={{ padding: '8px 10px', fontWeight: 800 }}>{invoice.qb_company}</td>
-                    <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{invoice.qb_invoice_id}</td>
+                    <td style={{ padding: '8px 10px', fontWeight: 700 }}>{invoice.qb_company}</td>
+                    <td style={{ padding: '8px 10px', fontVariantNumeric: 'tabular-nums' }}>{invoice.qb_invoice_id}</td>
                     <td style={{ padding: '8px 10px', color: invoice.customer_name.includes('DO NOT USE') ? '#b45309' : DASHBOARD_COLORS.ink, fontWeight: 700 }}>{invoice.customer_name}</td>
                     <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{invoice.txn_date}</td>
                     <td style={{ padding: '8px 10px' }}><ExceptionStatus value={invoice.status} /></td>
@@ -348,8 +348,8 @@ function GenericExceptionDetails({ items }: { items: AutomationExceptionItem[] }
         <tbody>
           {items.map(item => (
             <tr key={item.id} className="system-list-row">
-              <td style={{ padding: '8px 10px', color: DASHBOARD_COLORS.ink, fontWeight: 750 }}>{item.name ?? '—'}</td>
-              <td style={{ padding: '8px 10px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>{item.key}</td>
+              <td style={{ padding: '8px 10px', color: DASHBOARD_COLORS.ink, fontWeight: 700 }}>{item.name ?? '—'}</td>
+              <td style={{ padding: '8px 10px', fontVariantNumeric: 'tabular-nums' }}>{item.key}</td>
               <td style={{ padding: '8px 10px', maxWidth: 480, wordBreak: 'break-word' }}>{Object.entries(item.details).map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`).join(' · ') || '—'}</td>
               <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{formatSgtTime(item.firstSeenAt)}</td>
               <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>{formatSgtTime(item.lastSeenAt)}</td>
@@ -367,10 +367,10 @@ function AutomationExceptionPanel({ health }: { health: AutomationHealth }) {
     <div style={{ borderTop: '1px solid #fde68a', padding: '14px 2px 14px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 12, flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 800, color: DASHBOARD_COLORS.ink }}>Integration exception register</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: DASHBOARD_COLORS.ink }}>Integration exception register</div>
           <div style={{ fontSize: 10, color: '#718096', marginTop: 3 }}>Every open case is listed below with its source record and the information needed for review.</div>
         </div>
-        <span style={{ borderRadius: 999, padding: '5px 9px', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 9.5, fontWeight: 800 }}>{health.anomalies.openIntegrationExceptions} open cases</span>
+        <span style={{ borderRadius: 999, padding: '5px 9px', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 9.5, fontWeight: 700 }}>{health.anomalies.openIntegrationExceptions} open cases</span>
       </div>
 
       {failedJobs.length > 0 && (
@@ -390,9 +390,9 @@ function AutomationExceptionPanel({ health }: { health: AutomationHealth }) {
           <details key={`${group.source}-${group.type}`} style={{ background: '#fff', border: '1px solid #e3eaf1', borderRadius: 11, overflow: 'hidden' }}>
             <summary style={{ cursor: 'pointer', listStyle: 'none', padding: '11px 13px', display: 'flex', alignItems: 'center', gap: 9 }}>
               <ChevronDown size={14} style={{ color: '#718096' }} />
-              <span style={{ color: '#526b85', fontSize: 9, fontWeight: 850, textTransform: 'uppercase', letterSpacing: '.6px' }}>{EXCEPTION_SOURCE_LABELS[group.source] ?? group.source}</span>
+              <span style={{ color: '#526b85', fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px' }}>{EXCEPTION_SOURCE_LABELS[group.source] ?? group.source}</span>
               <strong style={{ color: DASHBOARD_COLORS.ink, fontSize: 10.5 }}>{exceptionTitle(group)}</strong>
-              <span style={{ marginLeft: 'auto', borderRadius: 999, padding: '3px 7px', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 9, fontWeight: 800 }}>{group.count}</span>
+              <span style={{ marginLeft: 'auto', borderRadius: 999, padding: '3px 7px', background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', fontSize: 9, fontWeight: 700 }}>{group.count}</span>
             </summary>
             <div style={{ padding: '10px 11px 11px', borderTop: '1px solid #e8edf2', background: '#f8fafc' }}>
               {group.type === 'unknown_pic_id'
@@ -419,7 +419,7 @@ function AutomationHealthBar({ health }: { health: AutomationHealth }) {
             {attention ? <AlertTriangle size={15} /> : <ShieldCheck size={15} />}
           </span>
           <span>
-            <strong style={{ display: 'block', fontSize: 13, fontWeight: 800, color: DASHBOARD_COLORS.ink }}>Automation health</strong>
+            <strong style={{ display: 'block', fontSize: 13, fontWeight: 700, color: DASHBOARD_COLORS.ink }}>Automation health</strong>
             <span style={{ display: 'block', fontSize: 11, color: '#78716c', marginTop: 1 }}>{attention ? `${health.attentionCount} item(s) need attention` : 'All scheduled data flows are healthy'}</span>
           </span>
         </div>
@@ -427,7 +427,7 @@ function AutomationHealthBar({ health }: { health: AutomationHealth }) {
           {health.jobs.map(job => {
             const ok = job.status !== 'attention';
             return (
-              <span key={job.source} title={job.error ?? undefined} style={{ padding: '5px 8px', borderRadius: 999, border: `1px solid ${ok ? '#cde8df' : '#fde68a'}`, background: '#fff', color: ok ? '#176b5b' : '#92400e', fontSize: 9.5, fontWeight: 750 }}>
+              <span key={job.source} title={job.error ?? undefined} style={{ padding: '5px 8px', borderRadius: 999, border: `1px solid ${ok ? '#cde8df' : '#fde68a'}`, background: '#fff', color: ok ? '#176b5b' : '#92400e', fontSize: 9.5, fontWeight: 700 }}>
                 <span style={{ marginRight: 5 }}>{ok ? '●' : '!'}</span>{AUTOMATION_LABELS[job.source] ?? job.source}
                 <span style={{ color: '#94a3b8', fontWeight: 600, marginLeft: 5 }}>{job.successAgeHours == null ? 'never' : `${job.successAgeHours}h`}</span>
               </span>
@@ -435,7 +435,7 @@ function AutomationHealthBar({ health }: { health: AutomationHealth }) {
           })}
         </div>
         {(health.anomalies.numericPics > 0 || health.anomalies.invoiceRequestsNeedingReconciliation > 0 || health.anomalies.openIntegrationExceptions > 0) && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 9.5, color: '#92400e', fontWeight: 750 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 9.5, color: '#92400e', fontWeight: 700 }}>
             {health.anomalies.numericPics > 0 && `${health.anomalies.numericPics} numeric PIC`}
             {health.anomalies.invoiceRequestsNeedingReconciliation > 0 && `${health.anomalies.invoiceRequestsNeedingReconciliation} invoice reconciliation`}
             {health.anomalies.openIntegrationExceptions > 0 && `${health.anomalies.openIntegrationExceptions} integration exceptions`}
@@ -494,9 +494,9 @@ export default function DashboardPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
             <Activity size={12} style={{ color: DASHBOARD_COLORS.teal }} />
-            <span style={{ fontSize: 10, fontWeight: 800, color: DASHBOARD_COLORS.teal, textTransform: 'uppercase', letterSpacing: '.9px' }}>Live operations</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: DASHBOARD_COLORS.teal, textTransform: 'uppercase', letterSpacing: '.9px' }}>Live operations</span>
           </div>
-          <h1 style={{ fontSize: 23, fontWeight: 800, color: DASHBOARD_COLORS.ink, margin: 0, letterSpacing: '-.03em' }}>Portfolio Overview</h1>
+          <h1 style={{ fontSize: 23, fontWeight: 700, color: DASHBOARD_COLORS.ink, margin: 0, letterSpacing: '-.03em' }}>Portfolio Overview</h1>
           <p style={{ fontSize: 12.5, color: '#64748b', margin: '4px 0 0' }}>Corporate-services performance, obligations and operational priorities.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -505,7 +505,7 @@ export default function DashboardPage() {
               onClick={exportCompanyData}
               disabled={exporting}
               title="Download the latest Active Clients and AR Reminder data in one Excel workbook"
-              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 750, color: '#fff', background: exporting ? '#769a95' : DASHBOARD_COLORS.teal, border: '1px solid rgba(21,94,89,.2)', borderRadius: 9, padding: '8px 12px', cursor: exporting ? 'wait' : 'pointer', boxShadow: '0 5px 14px rgba(57,127,120,.14)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, color: '#fff', background: exporting ? '#769a95' : DASHBOARD_COLORS.teal, border: '1px solid rgba(21,94,89,.2)', borderRadius: 9, padding: '8px 12px', cursor: exporting ? 'wait' : 'pointer', boxShadow: '0 5px 14px rgba(57,127,120,.14)' }}
             >
               <FileSpreadsheet size={15} />
               {exporting ? 'Preparing Excel…' : 'Export Company Data'}
@@ -513,7 +513,7 @@ export default function DashboardPage() {
             </button>
             {exportError && <span style={{ fontSize: 9.5, color: '#b91c1c' }}>{exportError}</span>}
           </div>
-          <button onClick={load} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 650, color: '#475569', background: '#fff', border: '1px solid #dfe6ee', borderRadius: 9, padding: '7px 11px', cursor: 'pointer' }}>
+          <button onClick={load} disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: '#475569', background: '#fff', border: '1px solid #dfe6ee', borderRadius: 9, padding: '7px 11px', cursor: 'pointer' }}>
             <RefreshCw size={13} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> Refresh
           </button>
           <QBConnectButton />
@@ -532,8 +532,8 @@ export default function DashboardPage() {
               <div style={{ position: 'absolute', width: 160, height: 160, borderRadius: '50%', right: 100, bottom: -125, border: '28px solid rgba(255,255,255,.035)' }} />
               <div className="dashboard-hero-grid" style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10, fontWeight: 800, color: '#c8ded5', textTransform: 'uppercase', letterSpacing: '.9px', marginBottom: 12 }}><Sparkles size={12} /> Portfolio command centre</div>
-                  <div style={{ fontSize: 27, fontWeight: 760, letterSpacing: '-.035em', lineHeight: 1.18, maxWidth: 600 }}>Your operational picture,<br />beautifully focused.</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 10, fontWeight: 700, color: '#c8ded5', textTransform: 'uppercase', letterSpacing: '.9px', marginBottom: 12 }}><Sparkles size={12} /> Portfolio command centre</div>
+                  <div style={{ fontSize: 27, fontWeight: 700, letterSpacing: '-.035em', lineHeight: 1.18, maxWidth: 600 }}>Your operational picture,<br />beautifully focused.</div>
                   <div style={{ fontSize: 12, color: '#c6d8e8', marginTop: 10, maxWidth: 570, lineHeight: 1.6 }}>Prioritise upcoming annual returns, resolve filing risks and understand service coverage before billing begins.</div>
                 </div>
                 <div className="dashboard-hero-metrics" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 18, marginTop: 28, paddingTop: 22, borderTop: '1px solid rgba(255,255,255,.15)' }}>
@@ -543,7 +543,7 @@ export default function DashboardPage() {
                     { label: 'Needs attention', value: data.kpis.lateFiling, note: 'late-filing flags' },
                   ].map(item => (
                     <div key={item.label}>
-                      <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-.04em' }}>{item.value}</div>
+                      <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-.04em' }}>{item.value}</div>
                       <div style={{ fontSize: 10.5, fontWeight: 700, color: '#fff', marginTop: 3 }}>{item.label}</div>
                       <div style={{ fontSize: 9.5, color: '#a9c1d5', marginTop: 3 }}>{item.note}</div>
                     </div>

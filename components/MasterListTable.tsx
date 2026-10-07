@@ -249,7 +249,7 @@ function ServiceChip({ name, active, onToggleActive, onSaveName }: {
           onBlur={() => { const next = val.trim(); if (next !== formatStaffName(name).trim()) onSaveName(next); }}
           onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) (e.target as HTMLInputElement).blur(); }}
           placeholder="Not assigned"
-          style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', padding: 0, fontSize: 13, fontWeight: 650, color: val ? '#1e293b' : '#94a3b8', boxSizing: 'border-box' }} />
+          style={{ width: '100%', border: 'none', outline: 'none', background: 'transparent', padding: 0, fontSize: 13, fontWeight: 600, color: val ? '#1e293b' : '#94a3b8', boxSizing: 'border-box' }} />
       </div>
     </div>
   );
@@ -589,8 +589,8 @@ const EditCell = memo(function EditCell({ id, field, value, onSave, compactFyeMi
         title={`FYE mismatch — manual: ${value || '—'} · TeamWork: ${compactFyeMismatch}. Click to edit manual FYE.`}
         style={{ width: '100%', minHeight: 36, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2,
           padding: '4px 2px', borderRadius: 7, background: '#fff7f7', border: '1px solid #fecaca', cursor: 'text', boxShadow: '0 1px 2px rgba(220,38,38,.04)' }}>
-        <span style={{ fontSize: 9, lineHeight: 1, fontWeight: 800, color: '#7f1d1d', whiteSpace: 'nowrap' }}>FYE {manualMonth ? monthNames[manualMonth - 1] : '—'}</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 8, lineHeight: 1, fontWeight: 750, color: '#dc2626', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 9, lineHeight: 1, fontWeight: 700, color: '#7f1d1d', whiteSpace: 'nowrap' }}>FYE {manualMonth ? monthNames[manualMonth - 1] : '—'}</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 8, lineHeight: 1, fontWeight: 700, color: '#dc2626', whiteSpace: 'nowrap' }}>
           <AlertTriangle size={8} />TW {teamworkMonth ? monthNames[teamworkMonth - 1] : String(compactFyeMismatch).slice(0, 3).toUpperCase()}
         </span>
         {statusDot}
@@ -975,7 +975,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
             <div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{row.company_name}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{row.company_name}</div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
               <button onClick={() => { const next = !showHistory; setShowHistory(next); if (next) void loadHistory(); }} title="Change history"
@@ -1018,7 +1018,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
             <div style={{ marginBottom: 16, border: '1px solid #dbe3ee', borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
               <div style={{ padding: '10px 13px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f' }}>Change history</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#1e3a5f' }}>Change history</div>
                   <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>Every saved change records who changed it.</div>
                 </div>
                 <button onClick={() => void loadHistory()} disabled={historyLoading} style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 6, padding: '4px 7px', cursor: 'pointer', display: 'flex' }}><RefreshCw size={11} /></button>
@@ -1031,7 +1031,7 @@ function CompanyDetailModal({ row, fieldColumns, onClose, onSave, onToggleActive
                 <div style={{ maxHeight: 220, overflowY: 'auto' }}>
                   {historyEntries.map((entry, index) => (
                     <div key={entry.id} style={{ padding: '9px 13px', borderBottom: index < historyEntries.length - 1 ? '1px solid #f1f5f9' : 'none', display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) 150px', gap: 10, alignItems: 'center' }}>
-                      <div style={{ fontSize: 9, fontWeight: 800, color: '#475569' }}>{entry.field}</div>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#475569' }}>{entry.field}</div>
                       <div style={{ minWidth: 0, fontSize: 10, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.old_value ?? 'Empty'}</span>
                         <span style={{ color: '#cbd5e1' }}>→</span>
@@ -1646,8 +1646,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             </span>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, fontWeight: 800, color: '#1e293b' }}>Missing from Active Client</span>
-                <span style={{ borderRadius: 999, background: '#fff', border: '1px solid #fde68a', color: '#92400e', padding: '3px 9px', fontSize: 10.5, fontWeight: 800 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Missing from Active Client</span>
+                <span style={{ borderRadius: 999, background: '#fff', border: '1px solid #fde68a', color: '#92400e', padding: '3px 9px', fontSize: 10.5, fontWeight: 700 }}>
                   {missingCssClients.length} TeamWork CSS Client{missingCssClients.length === 1 ? '' : 's'}
                 </span>
               </div>
@@ -1683,8 +1683,8 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
             </span>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 13, fontWeight: 800, color: '#1e293b' }}>Inactive in TeamWork</span>
-                <span style={{ borderRadius: 999, background: '#fff', border: '1px solid #fde68a', color: '#92400e', padding: '3px 9px', fontSize: 10.5, fontWeight: 800 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Inactive in TeamWork</span>
+                <span style={{ borderRadius: 999, background: '#fff', border: '1px solid #fde68a', color: '#92400e', padding: '3px 9px', fontSize: 10.5, fontWeight: 700 }}>
                   {inactiveCssClients.length} row{inactiveCssClients.length === 1 ? '' : 's'}
                 </span>
               </div>
@@ -1758,7 +1758,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
         <div onClick={cancelAdd} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
             <div style={{ background: accentColor, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add Manual Entry</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Add Manual Entry</div>
               <button onClick={cancelAdd} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
@@ -1805,7 +1805,7 @@ export default function MasterListTable({ listType, title, accentColor = '#1d3a5
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={saveNew} disabled={saving || missingAddRequired}
-                  style={{ padding: '7px 16px', borderRadius: 9, border: listType === 'strike_off' ? 'none' : '1px solid rgba(21,94,89,.2)', background: listType === 'strike_off' ? accentColor : '#397f78', color: '#fff', fontWeight: 750, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: listType === 'strike_off' ? 'none' : '0 5px 14px rgba(57,127,120,.14)', opacity: saving || missingAddRequired ? 0.6 : 1 }}>
+                  style={{ padding: '7px 16px', borderRadius: 9, border: listType === 'strike_off' ? 'none' : '1px solid rgba(21,94,89,.2)', background: listType === 'strike_off' ? accentColor : '#397f78', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: listType === 'strike_off' ? 'none' : '0 5px 14px rgba(57,127,120,.14)', opacity: saving || missingAddRequired ? 0.6 : 1 }}>
                   <Check size={14} />{saving ? 'Saving…' : 'Save'}
                 </button>
                 <button onClick={cancelAdd}

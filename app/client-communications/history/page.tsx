@@ -314,7 +314,7 @@ export default function DeliveryHistoryPage() {
       <CommsTabs />
 
       <div style={{ marginBottom: 14 }}>
-        <h1 style={{ margin: 0, color: '#102f50', fontSize: 22, fontWeight: 800 }}>Email Activity</h1>
+        <h1 style={{ margin: 0, color: '#102f50', fontSize: 22, fontWeight: 700 }}>Email Activity</h1>
         <div style={{ color: '#718399', fontSize: 12, marginTop: 3 }}>
           Select any record to review the full email or reopen a prepared draft in Outlook.
         </div>
@@ -391,7 +391,7 @@ export default function DeliveryHistoryPage() {
                     type="button"
                     onClick={() => openDetails(row)}
                     className="system-list-action"
-                    style={{ fontSize: 10.5, fontWeight: 800 }}
+                    style={{ fontSize: 10.5, fontWeight: 700 }}
                   >
                     View
                   </button>
@@ -426,12 +426,12 @@ export default function DeliveryHistoryPage() {
           >
             <header style={{ position: 'sticky', top: 0, zIndex: 2, display: 'flex', alignItems: 'flex-start', gap: 12, padding: '16px 18px', background: '#21466f', color: '#fff', borderRadius: '14px 14px 0 0' }}>
               <div>
-                <h2 id="email-draft-detail-title" style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{selected.company_name}</h2>
+                <h2 id="email-draft-detail-title" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>{selected.company_name}</h2>
                 <div style={{ marginTop: 5, display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap', color: '#dbeafe', fontSize: 11 }}>
                   <span>{TYPE_LABEL[selected.email_campaigns?.type] ?? selected.email_campaigns?.type}</span>
                   <span>•</span>
                   <span>{selected.email_campaigns?.name}</span>
-                  <span style={{ padding: '2px 7px', borderRadius: 4, color: '#fff', background: 'rgba(255,255,255,0.13)', fontWeight: 800 }}>
+                  <span style={{ padding: '2px 7px', borderRadius: 4, color: '#fff', background: 'rgba(255,255,255,0.13)', fontWeight: 700 }}>
                     {STATUS_LABEL[selected.status]}
                   </span>
                 </div>
@@ -498,17 +498,17 @@ export default function DeliveryHistoryPage() {
               </section>
 
               <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14 }}>
-                <div style={{ marginBottom: 8, color: '#64748b', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase' }}>Email Body</div>
+                <div style={{ marginBottom: 8, color: '#64748b', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase' }}>Email Body</div>
                 <div style={{ maxHeight: 280, overflowY: 'auto', whiteSpace: 'pre-wrap', color: '#1e3a5f', fontSize: 12.5, lineHeight: 1.65 }}>{selected.body}</div>
               </section>
 
               <section style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 9, color: '#64748b', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 9, color: '#64748b', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase' }}>
                   <Paperclip size={13} /> Invoice & Attachments
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
                   {(selected.invoice_refs ?? []).map((invoice, index) => (
-                    <span key={`${invoice.qbCompany}-${invoice.invoiceNo}-${index}`} style={{ padding: '5px 8px', border: '1px solid #bfdbfe', borderRadius: 6, background: '#eff6ff', color: '#1d4ed8', fontSize: 10.5, fontWeight: 800 }}>
+                    <span key={`${invoice.qbCompany}-${invoice.invoiceNo}-${index}`} style={{ padding: '5px 8px', border: '1px solid #bfdbfe', borderRadius: 6, background: '#eff6ff', color: '#1d4ed8', fontSize: 10.5, fontWeight: 700 }}>
                       {invoice.qbCompany} {invoice.invoiceNo} · {formatMoney(invoice.amount)}
                       {/* TAO no longer special-cased as always-manual (2026-09-04)
                           — same criterion as TAB/TAC, see campaigns/page.tsx's
@@ -523,7 +523,7 @@ export default function DeliveryHistoryPage() {
 
                 {selected.status !== 'sent' && selected.status !== 'skipped' && (
                   <div style={{ marginTop: 12 }}>
-                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#526b85', fontSize: 11, fontWeight: 800 }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#526b85', fontSize: 11, fontWeight: 700 }}>
                       <FilePlus2 size={14} />
                       {manualFiles.length ? `${manualFiles.length} additional file(s) selected` : 'Add manual attachment before reopening'}
                       <input
@@ -558,7 +558,7 @@ export default function DeliveryHistoryPage() {
                   type="button"
                   onClick={closeDetails}
                   disabled={Boolean(working)}
-                  style={{ border: '1px solid #cbd5e1', borderRadius: 7, padding: '8px 12px', background: '#fff', color: '#526b85', fontSize: 11.5, fontWeight: 800, cursor: working ? 'not-allowed' : 'pointer' }}
+                  style={{ border: '1px solid #cbd5e1', borderRadius: 7, padding: '8px 12px', background: '#fff', color: '#526b85', fontSize: 11.5, fontWeight: 700, cursor: working ? 'not-allowed' : 'pointer' }}
                 >
                   Close
                 </button>
@@ -569,7 +569,7 @@ export default function DeliveryHistoryPage() {
                       type="button"
                       onClick={skipDraft}
                       disabled={Boolean(working)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #cbd5e1', borderRadius: 7, padding: '8px 12px', background: '#fff', color: '#64748b', fontSize: 11.5, fontWeight: 800, cursor: working ? 'wait' : 'pointer' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #cbd5e1', borderRadius: 7, padding: '8px 12px', background: '#fff', color: '#64748b', fontSize: 11.5, fontWeight: 700, cursor: working ? 'wait' : 'pointer' }}
                     >
                       {working === 'skip' ? <Loader2 size={13} className="spin" /> : <SkipForward size={13} />}
                       Skip
@@ -578,7 +578,7 @@ export default function DeliveryHistoryPage() {
                       type="button"
                       onClick={markAsSent}
                       disabled={Boolean(working)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #86efac', borderRadius: 7, padding: '8px 12px', background: '#f0fdf4', color: '#15803d', fontSize: 11.5, fontWeight: 800, cursor: working ? 'wait' : 'pointer' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, border: '1px solid #86efac', borderRadius: 7, padding: '8px 12px', background: '#f0fdf4', color: '#15803d', fontSize: 11.5, fontWeight: 700, cursor: working ? 'wait' : 'pointer' }}
                     >
                       {working === 'sent' ? <Loader2 size={13} className="spin" /> : <Check size={13} />}
                       Mark as Sent
@@ -587,7 +587,7 @@ export default function DeliveryHistoryPage() {
                       type="button"
                       onClick={reopenInOutlook}
                       disabled={Boolean(working)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 7, padding: '8px 14px', background: '#0f766e', color: '#fff', fontSize: 11.5, fontWeight: 800, cursor: working ? 'wait' : 'pointer' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 7, padding: '8px 14px', background: '#0f766e', color: '#fff', fontSize: 11.5, fontWeight: 700, cursor: working ? 'wait' : 'pointer' }}
                     >
                       {working === 'open' ? <Loader2 size={13} className="spin" /> : <Mail size={13} />}
                       Open Again in Outlook

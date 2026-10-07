@@ -454,7 +454,7 @@ export default function AssistantWidget() {
               <Bot size={17} />
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#fff' }}>Tassure 系统助手</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: '#fff' }}>Tassure 系统助手</div>
               <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,.72)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 正在协助：{guide.label}
               </div>
@@ -493,7 +493,7 @@ export default function AssistantWidget() {
                     type="button"
                     key={suggestion}
                     onClick={() => void sendChatMessage(suggestion)}
-                    style={{ textAlign: 'left', border: '1px solid #d7e1eb', borderRadius: 8, background: '#fff', color: '#31506f', padding: '8px 11px', fontSize: 12, fontWeight: 650, cursor: 'pointer' }}
+                    style={{ textAlign: 'left', border: '1px solid #d7e1eb', borderRadius: 8, background: '#fff', color: '#31506f', padding: '8px 11px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
                   >
                     {suggestion}
                   </button>

@@ -92,7 +92,7 @@ export default function ExploreAssistant({ options, dimensionLabels, metricLabel
 
   return (
     <div style={BOX}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 800, color: '#1d3a5c', marginBottom: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, fontWeight: 700, color: '#1d3a5c', marginBottom: 4 }}>
         <Sparkles size={14} />Ask in your own words
       </div>
       <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, lineHeight: 1.5 }}>

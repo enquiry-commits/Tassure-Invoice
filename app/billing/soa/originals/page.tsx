@@ -43,7 +43,7 @@ const WAITING: Record<QueueRow['state'], { label: string; color: string; border:
 function Pill({ state }: { state: QueueRow['state'] }) {
   const p = WAITING[state];
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, background: '#fff', border: `1px solid ${p.border}`, color: p.color, fontSize: 10.5, fontWeight: 750, whiteSpace: 'nowrap' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 9px', borderRadius: 999, background: '#fff', border: `1px solid ${p.border}`, color: p.color, fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: p.color }} />{p.label}
     </span>
   );
@@ -71,7 +71,7 @@ function Detail({ row }: { row: QueueRow }) {
     <div style={{ display: 'grid', gap: 4 }}>
       {row.tried.map(f => (
         <div key={f.id} style={small}>
-          <span style={{ color: '#b91c1c', fontWeight: 800 }}>✗</span>{' '}
+          <span style={{ color: '#b91c1c', fontWeight: 700 }}>✗</span>{' '}
           <span style={{ fontWeight: 600, color: '#334155' }}>{f.fileName}</span>
           <span style={{ color: '#94a3b8' }}> ({who(f.bySystem)}{f.createdAt ? `, ${fmtDate(f.createdAt)}` : ''})</span>
           <div style={{ paddingLeft: 14 }}>{f.reason}</div>

@@ -13,7 +13,7 @@ export function SoaReminderStatus({ progress }: { progress: SoaReminderProgress 
       <span style={{
         display: 'inline-block', padding: '3px 7px', borderRadius: 6,
         background: '#ecfdf5', border: '1px solid #bbf7d0', color: '#15803d',
-        fontSize: 10.5, fontWeight: 800, whiteSpace: 'nowrap',
+        fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap',
       }}>
         {progress.completedLabel}
       </span>
@@ -44,7 +44,7 @@ export function SoaReminderGroupStatus({ items }: {
       <span style={{
         display: 'inline-block', padding: '3px 7px', borderRadius: 6,
         background: '#fffbeb', border: '1px solid #fde68a', color: '#a16207',
-        fontSize: 10.5, fontWeight: 800,
+        fontSize: 10.5, fontWeight: 700,
       }}>
         Mixed
       </span>

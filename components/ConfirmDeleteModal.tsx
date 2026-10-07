@@ -32,7 +32,7 @@ export default function ConfirmDeleteModal({
           <div style={{ width: 40, height: 40, borderRadius: '50%', background: danger ? '#fee2e2' : '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             {danger ? <AlertTriangle size={20} style={{ color: '#dc2626' }} /> : <MinusCircle size={20} style={{ color: '#0369a1' }} />}
           </div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#1e293b' }}>{title}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#1e293b' }}>{title}</div>
         </div>
         <div style={{ fontSize: 13, color: '#64748b', marginBottom: 20, lineHeight: 1.5 }}>
           {body ?? <>You are about to permanently remove <strong style={{ color: '#1e293b' }}>{label}</strong>. This action cannot be undone.</>}

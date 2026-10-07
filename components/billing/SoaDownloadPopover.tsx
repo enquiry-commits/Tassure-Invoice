@@ -200,7 +200,7 @@ export function SoaSourceBadgeButton({ companyName, book }: { companyName: strin
   return (
     <button onClick={onClick} disabled={downloading} title={error ?? `Download ${book} SOA PDF`}
       style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 800, letterSpacing: '0.02em',
+        display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, fontWeight: 700, letterSpacing: '0.02em',
         padding: '2px 7px', borderRadius: 5, border: '1px solid #b8c7d6', background: error ? 'var(--status-danger-tint)' : '#fff',
         color: error ? 'var(--status-danger)' : '#1e3a5f', cursor: downloading ? 'default' : 'pointer',
       }}>

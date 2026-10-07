@@ -101,7 +101,7 @@ export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'inv
         // changed.
         background: status === 'error' ? '#fee2e2' : fallback ? '#fffbeb' : '#fff',
         color: status === 'error' ? '#b91c1c' : fallback ? '#92400e' : '#31506f',
-        fontSize: 9.5, fontWeight: 800, lineHeight: 1.25, whiteSpace: 'nowrap',
+        fontSize: 9.5, fontWeight: 700, lineHeight: 1.25, whiteSpace: 'nowrap',
         opacity: muted ? 0.72 : 1,
         // Visible border, 2026-09-23 — Vincent, after seeing the new
         // Source-badge outline on Company 360's Outstanding table: "那个按

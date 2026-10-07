@@ -110,8 +110,8 @@ export default function AiQualityPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <ShieldAlert size={21} color="#1e3a5f" />
-            <h1 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: '#1e293b' }}>AI 回复质量抽查</h1>
-            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 750 }}>自动抽查</span>
+            <h1 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#1e293b' }}>AI 回复质量抽查</h1>
+            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 700 }}>自动抽查</span>
           </div>
           <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: 12, maxWidth: 720 }}>
             每天随机抽查最近的真实 My Tasks/助手回复，由 Claude 按固定标准判断是否有虚假否认能力、无据妄断等行为问题。
@@ -123,7 +123,7 @@ export default function AiQualityPage() {
             <input type="checkbox" checked={onlyOpen} onChange={event => setOnlyOpen(event.target.checked)} />
             只看待处理
           </label>
-          <button type="button" onClick={() => void runNow()} disabled={running} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 8, padding: '8px 12px', background: '#1e3a5f', color: '#fff', fontSize: 12, fontWeight: 750, cursor: running ? 'wait' : 'pointer', opacity: running ? 0.65 : 1 }}>
+          <button type="button" onClick={() => void runNow()} disabled={running} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 8, padding: '8px 12px', background: '#1e3a5f', color: '#fff', fontSize: 12, fontWeight: 700, cursor: running ? 'wait' : 'pointer', opacity: running ? 0.65 : 1 }}>
             <RefreshCcw size={13} /> {running ? '抽查中…' : '立即抽查'}
           </button>
         </div>
@@ -161,8 +161,8 @@ export default function AiQualityPage() {
                   ) : (
                     <span style={{ fontSize: 10, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '1px 7px' }}>本轮没调用任何工具</span>
                   )}
-                  {row.human_verdict === 'confirmed_issue' && <span style={{ fontSize: 10, fontWeight: 800, color: '#b91c1c', background: '#fff7f7', border: '1px solid #fecaca', borderRadius: 999, padding: '1px 7px' }}>已确认为真实问题</span>}
-                  {row.human_verdict === 'false_positive' && <span style={{ fontSize: 10, fontWeight: 800, color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 999, padding: '1px 7px' }}>已判定为误报</span>}
+                  {row.human_verdict === 'confirmed_issue' && <span style={{ fontSize: 10, fontWeight: 700, color: '#b91c1c', background: '#fff7f7', border: '1px solid #fecaca', borderRadius: 999, padding: '1px 7px' }}>已确认为真实问题</span>}
+                  {row.human_verdict === 'false_positive' && <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 999, padding: '1px 7px' }}>已判定为误报</span>}
                 </div>
                 <div style={{ fontSize: 12, color: '#475569', marginBottom: 6 }}><strong style={{ color: '#173b61' }}>问：</strong>{row.user_question.slice(0, 300)}</div>
                 <div style={{ fontSize: 12, color: '#334155', background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 8, padding: '8px 10px', marginBottom: 8, whiteSpace: 'pre-wrap' }}>{row.assistant_reply.slice(0, 800)}</div>

@@ -541,7 +541,7 @@ export default function EmailDraftWorkbenchPage() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <div>
-          <h1 style={{ margin: 0, color: '#102f50', fontSize: 22, fontWeight: 800 }}>Email Drafts</h1>
+          <h1 style={{ margin: 0, color: '#102f50', fontSize: 22, fontWeight: 700 }}>Email Drafts</h1>
           <div style={{ color: '#718399', fontSize: 12, marginTop: 3 }}>
             Prepare a batch here, then complete the final review and sending in Outlook.
           </div>
@@ -576,7 +576,7 @@ export default function EmailDraftWorkbenchPage() {
               {typeTemplates.map(template => (
                 <button key={template.id} onClick={() => setTemplateId(template.id)}
                   title={template.name}
-                  style={{ border: `1px solid ${templateId === template.id ? '#173b63' : '#d9e2ec'}`, borderRadius: 6, padding: '7px 10px', background: templateId === template.id ? '#eef4fa' : '#fff', color: templateId === template.id ? '#173b63' : '#526b85', fontSize: 11.5, fontWeight: 800, cursor: 'pointer' }}>
+                  style={{ border: `1px solid ${templateId === template.id ? '#173b63' : '#d9e2ec'}`, borderRadius: 6, padding: '7px 10px', background: templateId === template.id ? '#eef4fa' : '#fff', color: templateId === template.id ? '#173b63' : '#526b85', fontSize: 11.5, fontWeight: 700, cursor: 'pointer' }}>
                   {templateShortName(template)}
                 </button>
               ))}
@@ -625,7 +625,7 @@ export default function EmailDraftWorkbenchPage() {
           </div>
 
           <button onClick={loadCompanies} disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 34, border: 0, borderRadius: 7, padding: '0 15px', background: '#173b63', color: '#fff', fontSize: 12, fontWeight: 800, cursor: loading ? 'wait' : 'pointer' }}>
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 34, border: 0, borderRadius: 7, padding: '0 15px', background: '#173b63', color: '#fff', fontSize: 12, fontWeight: 700, cursor: loading ? 'wait' : 'pointer' }}>
             {loading ? <Loader2 size={14} className="spin" /> : <RefreshCw size={14} />}
             {rows.length ? 'Reload' : 'Load Companies'}
           </button>
@@ -654,7 +654,7 @@ export default function EmailDraftWorkbenchPage() {
                   <span>Complete only the rows that need attention, then select the ready rows.</span>
                 </div>
               </div>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#18324f' }}>{rows.length} companies</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#18324f' }}>{rows.length} companies</div>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
                 <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#15803d', flexShrink: 0 }} />{readyCount} ready
               </span>
@@ -713,7 +713,7 @@ export default function EmailDraftWorkbenchPage() {
                             ? { label: 'FALLBACK — REVIEW', bg: '#fffaf0', color: '#9a6700', border: '#f2dfaf' }
                             : { label: 'NO RECIPIENT SOURCE', bg: '#f5f7f9', color: '#66788a', border: '#dfe7ef' };
                           return (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 8px', borderRadius: 999, background: src.bg, color: src.color, border: `1px solid ${src.border}`, fontSize: 9.5, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 4, padding: '2px 8px', borderRadius: 999, background: src.bg, color: src.color, border: `1px solid ${src.border}`, fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
                               <span style={{ width: 4, height: 4, borderRadius: '50%', background: src.color, flexShrink: 0 }} />{src.label}
                             </span>
                           );
@@ -734,7 +734,7 @@ export default function EmailDraftWorkbenchPage() {
                           {row.invoiceRefs.map((ref, refIndex) => (
                             <span key={`${ref.qbCompany}-${ref.invoiceNo}-${refIndex}`}
                               title={`S$${ref.amount.toLocaleString()}${ref.qbInvoiceId ? ' — PDF available' : ' — add file manually'}`}
-                              style={{ padding: '2px 5px', borderRadius: 4, background: ref.qbInvoiceId ? '#f2f6f8' : '#fffaf0', color: ref.qbInvoiceId ? '#31506f' : '#9a6700', fontSize: 9.5, fontWeight: 800 }}>
+                              style={{ padding: '2px 5px', borderRadius: 4, background: ref.qbInvoiceId ? '#f2f6f8' : '#fffaf0', color: ref.qbInvoiceId ? '#31506f' : '#9a6700', fontSize: 9.5, fontWeight: 700 }}>
                               {invoiceLabel(ref)}
                             </span>
                           ))}
@@ -745,7 +745,7 @@ export default function EmailDraftWorkbenchPage() {
                           <input type="file" multiple hidden onChange={e => setRowAttachmentFiles(row, e.target.files)} />
                         </label>
                       </div>
-                      <div style={{ textAlign: 'right', paddingTop: 6, color: '#18324f', fontSize: 11.5, fontWeight: 800 }}>
+                      <div style={{ textAlign: 'right', paddingTop: 6, color: '#18324f', fontSize: 11.5, fontWeight: 700 }}>
                         {row.totalAmount ? `S$${row.totalAmount.toLocaleString()}` : '—'}
                       </div>
                       <div style={{ paddingTop: 3 }}>
@@ -788,7 +788,7 @@ export default function EmailDraftWorkbenchPage() {
                 {helperAvailable ? 'Helper ready' : helperAvailable === null ? 'Checking Helper' : 'Helper required above'}
               </span>
               <button onClick={createAndOpen} disabled={creating || !includedRows.length || !helperAvailable}
-                style={{ display: 'flex', alignItems: 'center', gap: 7, border: 0, borderRadius: 8, padding: '9px 16px', background: '#173b63', color: '#fff', fontSize: 12.5, fontWeight: 800, cursor: creating ? 'wait' : 'pointer', opacity: creating || !includedRows.length || !helperAvailable ? 0.55 : 1 }}>
+                style={{ display: 'flex', alignItems: 'center', gap: 7, border: 0, borderRadius: 8, padding: '9px 16px', background: '#173b63', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: creating ? 'wait' : 'pointer', opacity: creating || !includedRows.length || !helperAvailable ? 0.55 : 1 }}>
                 {creating ? <Loader2 size={14} className="spin" /> : <Mail size={14} />}
                 {creating
                   ? 'Preparing & Opening…'
@@ -808,7 +808,7 @@ export default function EmailDraftWorkbenchPage() {
           {message.text}
           {lastOpenResults.some(result => result && !result.ok) && (
             <button onClick={retryFailed} disabled={creating}
-              style={{ marginLeft: 10, border: '1px solid currentColor', background: '#fff', borderRadius: 5, padding: '3px 8px', color: 'inherit', fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}>
+              style={{ marginLeft: 10, border: '1px solid currentColor', background: '#fff', borderRadius: 5, padding: '3px 8px', color: 'inherit', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}>
               Retry failed drafts
             </button>
           )}

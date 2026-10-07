@@ -72,7 +72,7 @@ const STATUS_COLOR: Record<CandidateStatus, string> = {
 function statusPill(status: CandidateStatus) {
   const color = STATUS_COLOR[status];
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${color}35`, color, background: `${color}0c`, borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 750 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${color}35`, color, background: `${color}0c`, borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 700 }}>
       {STATUS_LABEL[status]}
     </span>
   );
@@ -209,8 +209,8 @@ export default function AiLearningPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <BrainCircuit size={21} color="#1e3a5f" />
-            <h1 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: '#1e293b' }}>AI 学习复核</h1>
-            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 750 }}>受控学习</span>
+            <h1 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#1e293b' }}>AI 学习复核</h1>
+            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 700 }}>受控学习</span>
           </div>
           <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: 12 }}>
             每天自动分析页面操作与 My Tasks 对话。重复偏好、稳定工作方式、纠正和长期决定会形成候选记忆；只有 ≥90% 置信度且在至少 5 个不同日子出现的内容才会自动采纳，其余留在这里复核。业务数据永远不会被改动。
@@ -222,11 +222,11 @@ export default function AiLearningPage() {
               {staff.map(person => <option key={person.email} value={person.email}>{person.name}</option>)}
             </select>
           )}
-          <button type="button" onClick={() => void analyze()} disabled={analyzing || !selectedEmail} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 8, padding: '8px 12px', background: '#1e3a5f', color: '#fff', fontSize: 12, fontWeight: 750, cursor: analyzing ? 'wait' : 'pointer', opacity: analyzing ? 0.65 : 1 }}>
+          <button type="button" onClick={() => void analyze()} disabled={analyzing || !selectedEmail} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 8, padding: '8px 12px', background: '#1e3a5f', color: '#fff', fontSize: 12, fontWeight: 700, cursor: analyzing ? 'wait' : 'pointer', opacity: analyzing ? 0.65 : 1 }}>
             <RefreshCcw size={13} /> {analyzing ? '分析中…' : '分析最近 30 天'}
           </button>
           {counts.ready > 0 && (
-            <button type="button" onClick={() => void bulkApproveReady()} disabled={bulkApproving} title="一键采纳所有已经处于「待复核」的候选项，不用逐个打开" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #bbdfc7', borderRadius: 8, padding: '8px 12px', background: '#f3fbf6', color: '#15803d', fontSize: 12, fontWeight: 750, cursor: bulkApproving ? 'wait' : 'pointer', opacity: bulkApproving ? 0.65 : 1 }}>
+            <button type="button" onClick={() => void bulkApproveReady()} disabled={bulkApproving} title="一键采纳所有已经处于「待复核」的候选项，不用逐个打开" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #bbdfc7', borderRadius: 8, padding: '8px 12px', background: '#f3fbf6', color: '#15803d', fontSize: 12, fontWeight: 700, cursor: bulkApproving ? 'wait' : 'pointer', opacity: bulkApproving ? 0.65 : 1 }}>
               <Check size={13} /> {bulkApproving ? '采纳中…' : `采纳所有待复核（${counts.ready}）`}
             </button>
           )}
@@ -262,11 +262,11 @@ export default function AiLearningPage() {
                 {candidates.map(candidate => (
                   <tr key={candidate.id} className="system-list-row">
                     <td style={{ padding: '12px 14px', maxWidth: 480 }}>
-                      <div style={{ color: '#173b61', fontWeight: 750, fontSize: 12.5 }}>{zhContent(candidate.approved_content ?? candidate.proposed_content)}</div>
+                      <div style={{ color: '#173b61', fontWeight: 700, fontSize: 12.5 }}>{zhContent(candidate.approved_content ?? candidate.proposed_content)}</div>
                       <div style={{ color: '#94a3b8', fontSize: 10.5, marginTop: 4 }}>{PATTERN_KIND_LABEL[candidate.pattern_kind]} · {candidate.pattern_key}</div>
                     </td>
                     <td style={{ padding: '12px 14px', color: '#475569', fontSize: 11.5 }}>{candidate.source_count} 次观察<br/><span style={{ color: '#94a3b8' }}>横跨 {candidate.distinct_days} 天</span></td>
-                    <td style={{ padding: '12px 14px', color: '#334155', fontWeight: 750 }}>{Math.round(candidate.confidence * 100)}%</td>
+                    <td style={{ padding: '12px 14px', color: '#334155', fontWeight: 700 }}>{Math.round(candidate.confidence * 100)}%</td>
                     <td style={{ padding: '12px 14px' }}>{statusPill(candidate.status)}</td>
                     <td style={{ padding: '12px 14px' }}>
                       {mayReview(candidate) ? (

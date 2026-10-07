@@ -363,7 +363,7 @@ export function OutstandingSection({ outstanding }: { outstanding: Company360['o
                   that's actually a severity signal reads as one at a
                   glance. */}
               {oldestLabel ? (
-                <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em', padding: '2px 7px', borderRadius: 5, background: '#fef9c3', color: '#854d0e' }}>{oldestLabel}</span>
+                <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, letterSpacing: '0.02em', padding: '2px 7px', borderRadius: 5, background: '#fef9c3', color: '#854d0e' }}>{oldestLabel}</span>
               ) : '—'}
             </div>
             {/* Vincent: "Total Balance 列的格式要参考 Amount 列的字体格式" —

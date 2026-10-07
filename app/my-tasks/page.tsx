@@ -86,7 +86,7 @@ function DailyBriefBanner({ brief }: { brief: string | null }) {
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 16px', borderRadius: 10, background: '#eff6ff', border: '1px solid #bfdbfe', marginBottom: 16 }}>
       <Sparkles size={16} color="#1d4ed8" style={{ flexShrink: 0, marginTop: 1 }} />
       <div>
-        <div style={{ fontSize: 10, fontWeight: 800, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 3 }}>Today's Priority</div>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 3 }}>Today's Priority</div>
         <div style={{ fontSize: 13, color: '#1e3a5f', lineHeight: 1.5 }}>{brief}</div>
       </div>
     </div>
@@ -626,7 +626,7 @@ export default function MyTasksPage() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
         <ListChecks size={20} color="#1e3a5f" />
-        <h1 style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', margin: 0 }}>My Tasks</h1>
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', margin: 0 }}>My Tasks</h1>
         {user && <span style={{ fontSize: 12, color: '#94a3b8' }}>{user.name}</span>}
         {data?.viewableAccounts && (
           <select
@@ -690,7 +690,7 @@ export default function MyTasksPage() {
             <ListChecks size={14} />
             Tasks
             {!!counts?.total && (
-              <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 800, color: '#fff', background: counts.total > 0 ? '#dc2626' : '#94a3b8', borderRadius: 999, padding: '1px 6px' }}>{counts.total}</span>
+              <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: '#fff', background: counts.total > 0 ? '#dc2626' : '#94a3b8', borderRadius: 999, padding: '1px 6px' }}>{counts.total}</span>
             )}
           </button>
           <button
@@ -708,7 +708,7 @@ export default function MyTasksPage() {
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px 6px' }}>
             {pinnedConversations.length > 0 && (
               <>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '4px 8px' }}>Pinned</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '4px 8px' }}>Pinned</div>
                 {pinnedConversations.map(c => (
                   <ConversationRow key={c.id} conversation={c} active={activeView === 'chat' && activeConversationId === c.id}
                     onOpen={() => openConversation(c.id)} onTogglePin={() => togglePin(c)} onDelete={() => deleteConversationRow(c)} />
@@ -717,7 +717,7 @@ export default function MyTasksPage() {
             )}
             {recentConversations.length > 0 && (
               <>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '4px 8px', marginTop: pinnedConversations.length ? 6 : 0 }}>Recent</div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '4px 8px', marginTop: pinnedConversations.length ? 6 : 0 }}>Recent</div>
                 {recentConversations.map(c => (
                   <ConversationRow key={c.id} conversation={c} active={activeView === 'chat' && activeConversationId === c.id}
                     onOpen={() => openConversation(c.id)} onTogglePin={() => togglePin(c)} onDelete={() => deleteConversationRow(c)} />
@@ -785,7 +785,7 @@ export default function MyTasksPage() {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/my-tasks-robot.gif" alt="" width={160} height={96} style={{ display: 'block', objectFit: 'contain' }} />
                   </picture>
-                  <div style={{ fontSize: 15, fontWeight: 750, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#12233b', marginBottom: 6 }}>My Tasks</div>
                   <div style={{ fontSize: 12.5, color: '#64748b', marginBottom: 20 }}>Ready when you are.</div>
                   <div style={{ width: '100%', maxWidth: 560 }}>
                     <AttachmentChips attachments={pendingAttachments} onRemove={removeAttachment} onView={handleViewAttachment} />
@@ -828,7 +828,7 @@ export default function MyTasksPage() {
                         next to it rather than leaving that headline a dead end. */}
                     {['What should I prioritize today?', "What needs the firm's attention today?", "Which of my clients haven't paid?", 'What can you help me with?'].map(s => (
                       <button key={s} onClick={() => void sendChatMessage(s)} disabled={chatBusy}
-                        style={{ border: '1px solid #d7e1eb', borderRadius: 999, background: '#fff', color: '#31506f', padding: '6px 12px', fontSize: 12, fontWeight: 650, cursor: chatBusy ? 'wait' : 'pointer' }}>
+                        style={{ border: '1px solid #d7e1eb', borderRadius: 999, background: '#fff', color: '#31506f', padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: chatBusy ? 'wait' : 'pointer' }}>
                         {s}
                       </button>
                     ))}

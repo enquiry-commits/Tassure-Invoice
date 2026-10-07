@@ -74,7 +74,7 @@ function RenewalCard({ r }: { r: RenewalStatus }) {
         <span style={{ background: statusBg, color: statusColor, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>{statusLabel}</span>
       </div>
       {r.periodNeedsReview && (
-        <div style={{ marginBottom: 8, border: '1px solid #fed7aa', background: 'var(--status-warning-tint)', color: '#9a3412', borderRadius: 6, padding: '6px 7px', fontSize: 9.5, fontWeight: 650 }}>
+        <div style={{ marginBottom: 8, border: '1px solid #fed7aa', background: 'var(--status-warning-tint)', color: '#9a3412', borderRadius: 6, padding: '6px 7px', fontSize: 9.5, fontWeight: 600 }}>
           {r.periodWarning}
         </div>
       )}
@@ -93,7 +93,7 @@ function RenewalCard({ r }: { r: RenewalStatus }) {
           {r.lastRate != null && (
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', marginBottom: 1 }}>Last Rate</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#1e3a5f' }}>S${r.lastRate.toLocaleString()}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#1e3a5f' }}>S${r.lastRate.toLocaleString()}</div>
             </div>
           )}
           {r.history.length > 0 && (
@@ -102,7 +102,7 @@ function RenewalCard({ r }: { r: RenewalStatus }) {
               {r.history.map((h, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: 10, color: '#64748b' }}>
                   <span>{fmtPeriod(h.period_start, h.period_end)}</span>
-                  <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{displayInvoiceNo(h.invoice_no)}</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', color: '#94a3b8' }}>{displayInvoiceNo(h.invoice_no)}</span>
                 </div>
               ))}
             </div>
@@ -155,7 +155,7 @@ function AnnualCard({ a }: { a: AnnualStatus }) {
           {a.lastAmount != null && (
             <div style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 9, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', marginBottom: 1 }}>Last Amount</div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#1e3a5f' }}>S${a.lastAmount.toLocaleString()}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#1e3a5f' }}>S${a.lastAmount.toLocaleString()}</div>
             </div>
           )}
           {a.history.length > 0 && (
@@ -164,7 +164,7 @@ function AnnualCard({ a }: { a: AnnualStatus }) {
               {a.history.map((h, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: 10, color: '#64748b' }}>
                   <span>{fmtDate(h.txn_date)}</span>
-                  <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{displayInvoiceNo(h.invoice_no)}</span>
+                  <span style={{ fontVariantNumeric: 'tabular-nums', color: '#94a3b8' }}>{displayInvoiceNo(h.invoice_no)}</span>
                 </div>
               ))}
             </div>
@@ -190,7 +190,7 @@ function ServiceMini({ label, status, applicable }: { label: string; status: str
   const on = applicable && (status === 'active' || status === 'billed');
   return (
     <span title={`${label}: ${!applicable ? 'not applicable' : status.replace(/_/g, ' ')}`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 750, color: '#475569', whiteSpace: 'nowrap' }}>
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>
       <ServiceSquare on={on} color={color} grey={color === '#94a3b8'} />
       {label}
     </span>
@@ -204,7 +204,7 @@ function BillingStatusPill({ label, color, background, border, title, muted = fa
     <span title={title} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
       width: 'fit-content', maxWidth: '100%', padding: '4px 8px', borderRadius: 999,
       background: background === '#f8fafc' ? '#f8fafc' : '#fff', color,
-      border: `1px solid ${border === '#e2e8f0' ? border : '#dbe3ec'}`, fontSize: 9.5, fontWeight: 750, lineHeight: 1, whiteSpace: 'nowrap',
+      border: `1px solid ${border === '#e2e8f0' ? border : '#dbe3ec'}`, fontSize: 9.5, fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap',
       opacity: muted ? 0.78 : 1 }}>
       <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: color, flexShrink: 0 }} />
       {label}
@@ -1125,7 +1125,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
               <div style={{ background: 'var(--status-success-tint)', border: '1px solid #bbf7d0', borderTop: 'none', borderRadius: ndStrikeOff || ndPending ? '0' : '0 0 8px 8px', padding: '9px 11px', display: 'flex', alignItems: 'center', gap: 9 }}>
                 <UserCheck size={14} color="var(--status-success)" />
                 <div>
-                  <div style={{ fontSize: 8, color: '#65a30d', fontWeight: 800, letterSpacing: '0.45px', marginBottom: 2 }}>ASSIGNED DIRECTOR · FROM TEAMWORK</div>
+                  <div style={{ fontSize: 8, color: '#65a30d', fontWeight: 700, letterSpacing: '0.45px', marginBottom: 2 }}>ASSIGNED DIRECTOR · FROM TEAMWORK</div>
                   {hasNdName
                     ? <span style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>{info!.ndName}</span>
                     : <span style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>No director name found in TeamWork</span>
@@ -1142,7 +1142,7 @@ function ServicePeriodList({ servicePeriods, ndStrikeOff = false, ndPending = fa
                 border: '1px solid #e2e8f0', borderTop: 'none',
                 borderRadius: '0 0 8px 8px',
               }}>
-                <div style={{ fontSize: 8, fontWeight: 800, color: '#64748b', letterSpacing: '0.45px', marginBottom: 7 }}>ND WORKFLOW FLAGS · CLICK TO UPDATE</div>
+                <div style={{ fontSize: 8, fontWeight: 700, color: '#64748b', letterSpacing: '0.45px', marginBottom: 7 }}>ND WORKFLOW FLAGS · CLICK TO UPDATE</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {/* Strike Off toggle */}
                 <button
@@ -1330,7 +1330,7 @@ function DetailPanel({ r, onSave }: { r: ARRecord; onSave: (id: number, field: s
               <div style={{ border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
                 {r.invoices.slice(0, 5).map((inv, i) => (
                   <div key={inv.invoice_no} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', background: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: i < r.invoices.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-                    <span style={{ fontSize: 10, fontFamily: 'monospace', color: '#475569' }}>{displayInvoiceNo(inv.invoice_no)}</span>
+                    <span style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums', color: '#475569' }}>{displayInvoiceNo(inv.invoice_no)}</span>
                     <span style={{ fontSize: 10, color: '#64748b' }}>{fmtDate(inv.txn_date)}</span>
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#1e3a5f' }}>S${(inv.total_amt ?? 0).toLocaleString()}</span>
                     <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 3, padding: '1px 5px',
@@ -2147,7 +2147,7 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                         position: 'fixed', zIndex: 9999, background: '#fff', ...draftPopoverPos,
                         border: '1px solid #e2e8f0', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)', width: 260, padding: 12,
                       }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f', marginBottom: 8 }}>Email Drafts — {c.companyName}</div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#1e3a5f', marginBottom: 8 }}>Email Drafts — {c.companyName}</div>
                         <>
                             <select value={senderId ?? ''} onChange={e => setSenderId(Number(e.target.value))}
                               style={{ width: '100%', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', fontSize: 12, marginBottom: 8, boxSizing: 'border-box' }}>
@@ -2182,7 +2182,7 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
                             {helperAvailable && helperOutdated && (
                               <div style={{ fontSize: 10, color: 'var(--status-warning)', marginBottom: 8 }}>
                                 A newer Draft Helper is available.{' '}
-                                <a href="/downloads/TassureDraftHelper.exe" download style={{ color: 'var(--status-warning)', fontWeight: 800 }}>Update it</a>.
+                                <a href="/downloads/TassureDraftHelper.exe" download style={{ color: 'var(--status-warning)', fontWeight: 700 }}>Update it</a>.
                               </div>
                             )}
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
@@ -2232,7 +2232,7 @@ function BillingTab({ month, year, setMonth, setYear, openCompany }: { month: st
             <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 1280, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
               <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: `4px solid ${accent}`, padding: '16px 20px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{c.companyName}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{c.companyName}</div>
                   <button onClick={() => setExpanded(null)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -2336,7 +2336,7 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: `4px solid ${accent}`, padding: '16px 20px 14px', flexShrink: 0 }}>
           {/* Row 1: company name + close */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{r.entity_name}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{r.entity_name}</div>
             <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 16 }}>
               <button onClick={() => { const next = !showHistory; setShowHistory(next); if (next) void loadHistory(); }} title="Change history"
                 style={{ background: showHistory ? 'rgba(59,130,246,0.34)' : 'rgba(255,255,255,0.12)', border: 'none', color: '#dbeafe', borderRadius: 8, height: 32, padding: '0 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700 }}>
@@ -2370,8 +2370,8 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                   <ShieldCheck size={14} style={{ color: 'var(--accent-blue)' }} />
-                  <span style={{ fontSize: 11.5, fontWeight: 800, color: '#1e3a5f' }}>Service configuration</span>
-                  <span style={{ padding: '2px 6px', borderRadius: 999, background: 'var(--status-warning-tint)', color: 'var(--status-warning)', fontSize: 7.5, fontWeight: 800, letterSpacing: '0.35px' }}>REVIEW BEFORE BILLING</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 700, color: '#1e3a5f' }}>Service configuration</span>
+                  <span style={{ padding: '2px 6px', borderRadius: 999, background: 'var(--status-warning-tint)', color: 'var(--status-warning)', fontSize: 7.5, fontWeight: 700, letterSpacing: '0.35px' }}>REVIEW BEFORE BILLING</span>
                 </div>
                 <div style={{ fontSize: 9.5, color: '#64748b', marginTop: 5, lineHeight: 1.5 }}>Click an adjustable service to override the system result. Click again to restore automatic detection.</div>
               </div>
@@ -2390,7 +2390,7 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
 
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(190px,0.7fr) minmax(500px,2fr)', gap: 20, alignItems: 'center' }}>
               <div style={{ padding: '4px 0' }}>
-                <div style={{ fontSize: 7.5, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.5px', marginBottom: 9 }}>SYSTEM MANAGED</div>
+                <div style={{ fontSize: 7.5, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.5px', marginBottom: 9 }}>SYSTEM MANAGED</div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   {activeSvc.filter(k => !(OVERRIDABLE_SVC as readonly string[]).includes(k)).map(k => {
                     const svc = SVC[k];
@@ -2406,7 +2406,7 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
               </div>
 
               <div style={{ borderLeft: '1px solid #e2e8f0', padding: '4px 0 4px 20px' }}>
-                <div style={{ fontSize: 7.5, fontWeight: 800, color: '#64748b', letterSpacing: '0.5px', marginBottom: 9 }}>ADJUSTABLE · CLICK TO CHANGE</div>
+                <div style={{ fontSize: 7.5, fontWeight: 700, color: '#64748b', letterSpacing: '0.5px', marginBottom: 9 }}>ADJUSTABLE · CLICK TO CHANGE</div>
                 <div style={{ display: 'flex', gap: 10, rowGap: 9, flexWrap: 'wrap' }}>
                   {OVERRIDABLE_SVC.map(k => (
                     <OverrideChip key={k} svc={k}
@@ -2427,7 +2427,7 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
             <div style={{ margin: '16px 24px 20px', border: '1px solid #dbe3ee', borderRadius: 10, background: '#fff', overflow: 'hidden' }}>
               <div style={{ padding: '10px 13px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#1e3a5f' }}>Change history</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#1e3a5f' }}>Change history</div>
                   <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2 }}>Every saved change records who changed it. Restore is protected against newer edits.</div>
                 </div>
                 <button onClick={() => void loadHistory()} disabled={historyLoading} style={{ border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 6, padding: '4px 7px', cursor: 'pointer', display: 'flex' }}><RefreshCw size={11} /></button>
@@ -2441,7 +2441,7 @@ export function ARDetailModal({ r, onSave, onClose, onDelete, onServices }: { r:
                 <div style={{ maxHeight: 220, overflowY: 'auto' }}>
                   {historyRows.map((entry, index) => (
                     <div key={entry.id} style={{ padding: '9px 13px', borderBottom: index < historyRows.length - 1 ? '1px solid #f1f5f9' : 'none', display: 'grid', gridTemplateColumns: '110px minmax(0,1fr) 150px 66px', gap: 10, alignItems: 'center' }}>
-                      <div style={{ fontSize: 9, fontWeight: 800, color: '#475569' }}>{AR_FIELD_LABELS[entry.field_name] ?? entry.field_name}</div>
+                      <div style={{ fontSize: 9, fontWeight: 700, color: '#475569' }}>{AR_FIELD_LABELS[entry.field_name] ?? entry.field_name}</div>
                       <div style={{ minWidth: 0, fontSize: 10, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{historyValue(entry.old_value)}</span>
                         <span style={{ color: '#cbd5e1' }}>→</span>
@@ -3259,7 +3259,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
             onClick={exportAr}
             disabled={exporting}
             title="Download this month's AR Reminder table as an Excel file"
-            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 750, color: '#fff', background: exporting ? '#769a95' : '#397f78', border: '1px solid rgba(21,94,89,.2)', borderRadius: 9, padding: '8px 12px', cursor: exporting ? 'wait' : 'pointer', boxShadow: '0 5px 14px rgba(57,127,120,.14)' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, color: '#fff', background: exporting ? '#769a95' : '#397f78', border: '1px solid rgba(21,94,89,.2)', borderRadius: 9, padding: '8px 12px', cursor: exporting ? 'wait' : 'pointer', boxShadow: '0 5px 14px rgba(57,127,120,.14)' }}
           >
             <FileSpreadsheet size={15} />
             {exporting ? 'Preparing Excel…' : 'Export Excel'}
@@ -3287,7 +3287,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
         <div onClick={() => setShowAddForm(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
             <div style={{ background: '#1d3a5c', padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>Add Manual Entry — FYE {months[0]} {year}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>Add Manual Entry — FYE {months[0]} {year}</div>
               <button onClick={() => setShowAddForm(false)} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
             </div>
             <div style={{ padding: '16px 20px', background: '#f8fafc' }}>
@@ -3307,7 +3307,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={saveNewEntity} disabled={adding || !newEntity.trim()}
-                  style={{ padding: '7px 16px', borderRadius: 9, border: '1px solid rgba(21,94,89,.2)', background: '#397f78', color: '#fff', fontWeight: 750, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 5px 14px rgba(57,127,120,.14)', opacity: adding || !newEntity.trim() ? 0.6 : 1 }}>
+                  style={{ padding: '7px 16px', borderRadius: 9, border: '1px solid rgba(21,94,89,.2)', background: '#397f78', color: '#fff', fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 5px 14px rgba(57,127,120,.14)', opacity: adding || !newEntity.trim() ? 0.6 : 1 }}>
                   <Check size={14} />{adding ? 'Saving…' : 'Save'}
                 </button>
                 <button onClick={() => setShowAddForm(false)}
@@ -3382,7 +3382,7 @@ function ARTab({ month, year, setMonth, setYear }: { month: string; year: string
                 {h}
                 {h === 'Due Date' && (
                   <span title={'Filed = the Annual Return for this FYE cycle has already been filed with ACRA.\n"Xd left" = X days remain until the AR filing deadline.\n"Xd overdue" = the deadline has passed by X days and it is not yet filed.'}
-                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 13, height: 13, borderRadius: '50%', background: '#cbd5e1', color: '#fff', fontSize: 9, fontWeight: 800, fontStyle: 'normal', textTransform: 'none', letterSpacing: 'normal', cursor: 'help' }}>?</span>
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 13, height: 13, borderRadius: '50%', background: '#cbd5e1', color: '#fff', fontSize: 9, fontWeight: 700, fontStyle: 'normal', textTransform: 'none', letterSpacing: 'normal', cursor: 'help' }}>?</span>
                 )}
               </div>
             ))}

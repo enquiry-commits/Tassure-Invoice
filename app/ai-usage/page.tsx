@@ -70,7 +70,7 @@ function TotalsCell({ t, muted }: { t: UsageTotals; muted?: boolean }) {
   if (!t.calls) return <span style={{ color: '#cbd5e1' }}>—</span>;
   return (
     <div style={{ lineHeight: 1.35 }}>
-      <div style={{ fontWeight: 800, color: muted ? '#64748b' : '#173b61', fontSize: 13 }}>{usd(t.costUsd)}{t.unpricedCalls > 0 && <span title="部分调用的模型价格未确认，未计入金额" style={{ color: '#b45309' }}> +?</span>}</div>
+      <div style={{ fontWeight: 700, color: muted ? '#64748b' : '#173b61', fontSize: 13 }}>{usd(t.costUsd)}{t.unpricedCalls > 0 && <span title="部分调用的模型价格未确认，未计入金额" style={{ color: '#b45309' }}> +?</span>}</div>
       <div style={{ fontSize: 10.5, color: '#94a3b8' }}>{tokens(t.tokens)} tokens · {t.calls} 次</div>
     </div>
   );
@@ -129,15 +129,15 @@ export default function AiUsagePage() {
         <div style={{ minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
             <Bot size={21} color="#1e3a5f" />
-            <h1 style={{ margin: 0, fontSize: 19, fontWeight: 800, color: '#1e293b' }}>AI 用量</h1>
-            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 750 }}>实时 · 每 30 秒刷新</span>
+            <h1 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#1e293b' }}>AI 用量</h1>
+            <span style={{ border: '1px solid #bae6d3', background: '#f0fdf7', color: '#08745f', borderRadius: 999, padding: '3px 8px', fontSize: 10.5, fontWeight: 700 }}>实时 · 每 30 秒刷新</span>
           </div>
           <p style={{ margin: '5px 0 0', color: '#64748b', fontSize: 12, maxWidth: 760 }}>
             每一次 AI 调用（助手聊天、Turnover AI 读单据、My Tasks 今日提醒、定时任务…）都会记一笔：谁、哪个功能、哪个模型、多少 token、按官网价格估算多少美元。
             用 View As 时算真正操作的人；My Tasks 今日提醒一律算系统；聊天后的自动学习算本人，但单独列为「自动」。
           </p>
         </div>
-        <button type="button" onClick={refreshNow} disabled={refreshing} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 8, padding: '8px 12px', background: '#1e3a5f', color: '#fff', fontSize: 12, fontWeight: 750, cursor: refreshing ? 'wait' : 'pointer', opacity: refreshing ? 0.65 : 1, flexShrink: 0 }}>
+        <button type="button" onClick={refreshNow} disabled={refreshing} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 0, borderRadius: 8, padding: '8px 12px', background: '#1e3a5f', color: '#fff', fontSize: 12, fontWeight: 700, cursor: refreshing ? 'wait' : 'pointer', opacity: refreshing ? 0.65 : 1, flexShrink: 0 }}>
           <RefreshCcw size={13} /> {refreshing ? '刷新中…' : '立即刷新'}
         </button>
       </div>
@@ -218,7 +218,7 @@ export default function AiUsagePage() {
                           <td style={CELL}>
                             {m.calls ? (
                               <div style={{ lineHeight: 1.35 }}>
-                                <div style={{ fontWeight: 800, color: '#173b61', fontSize: 13 }}>{share >= 1 ? `${Math.round(share)}%` : share > 0 ? '<1%' : '0%'}</div>
+                                <div style={{ fontWeight: 700, color: '#173b61', fontSize: 13 }}>{share >= 1 ? `${Math.round(share)}%` : share > 0 ? '<1%' : '0%'}</div>
                                 <div style={{ marginTop: 3, height: 4, borderRadius: 999, background: '#e2e8f0', overflow: 'hidden' }}>
                                   <div style={{ width: `${Math.min(100, share)}%`, height: '100%', background: '#1e3a5f' }} />
                                 </div>
@@ -271,7 +271,7 @@ export default function AiUsagePage() {
                         <Fragment key={g.key}>
                           <tr className="system-list-row" onClick={() => toggle(g.key)} aria-expanded={isOpen}
                             style={{ cursor: 'pointer', background: g.kind === 'person' ? '#fff' : '#f8fafc' }}>
-                            <td style={{ ...CELL, fontWeight: 800, color: g.kind === 'person' ? '#1e293b' : '#64748b' }}>
+                            <td style={{ ...CELL, fontWeight: 700, color: g.kind === 'person' ? '#1e293b' : '#64748b' }}>
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                                 {isOpen ? <ChevronDown size={14} color="#64748b" /> : <ChevronRight size={14} color="#64748b" />}
                                 {personLabel(g)}
@@ -282,7 +282,7 @@ export default function AiUsagePage() {
                             <td style={{ ...CELL, fontSize: 11.5, color: '#64748b' }} title={g.models.join(', ')}>
                               {g.models.length === 0 ? '—' : g.models.length === 1 ? g.models[0] : `${g.models.length} 个模型`}
                             </td>
-                            <td style={{ ...CELL, textAlign: 'right', fontWeight: 800, color: '#173b61' }}><Cost value={g.totals.costUsd} unpriced={g.totals.unpricedCalls} /></td>
+                            <td style={{ ...CELL, textAlign: 'right', fontWeight: 700, color: '#173b61' }}><Cost value={g.totals.costUsd} unpriced={g.totals.unpricedCalls} /></td>
                           </tr>
                           {isOpen && g.calls.map(r => (
                             <tr key={r.id} className="system-list-row" style={{ background: '#fbfdff' }}>

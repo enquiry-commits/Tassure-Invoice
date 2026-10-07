@@ -43,7 +43,7 @@ function ItemCard({ item }: { item: SgNewsDigestItem }) {
   return (
     <div style={{ padding: '14px 16px', borderRadius: 10, border: '1px solid #e2e8f0', background: '#fff', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10, fontWeight: 800, color: COLORS.teal, background: '#edf4f3', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '.03em' }}>{item.source}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color: COLORS.teal, background: '#edf4f3', padding: '2px 8px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '.03em' }}>{item.source}</span>
         {item.publishedLabel && <span style={{ fontSize: 11, color: '#94a3b8' }}>{item.publishedLabel}</span>}
       </div>
       {item.url
@@ -113,7 +113,7 @@ export default function SgNewsPage() {
           <Newspaper size={18} />
         </span>
         <div style={{ flex: 1 }}>
-          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: COLORS.ink, letterSpacing: '-.02em' }}>SG Latest News</h1>
+          <h1 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: COLORS.ink, letterSpacing: '-.02em' }}>SG Latest News</h1>
           <p style={{ margin: '2px 0 0', fontSize: 12, color: '#8493a3' }}>ACRA / IRAS / MOM / ICA / ISCA / CSIS + Straits Times / Business Times / 联合早报 — daily digest. Development stage, visible to Vincent only.</p>
         </div>
         <button onClick={runNow} disabled={running}
@@ -179,7 +179,7 @@ export default function SgNewsPage() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <Scale size={15} color={COLORS.blue} />
-              <h2 style={{ fontSize: 14, fontWeight: 750, color: COLORS.ink, margin: 0 }}>政策层面变化 — ACRA / IRAS / MOM / ICA / ISCA / CSIS</h2>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: COLORS.ink, margin: 0 }}>政策层面变化 — ACRA / IRAS / MOM / ICA / ISCA / CSIS</h2>
             </div>
             {report.report.policyItems.length
               ? <div style={CARD_GRID}>{report.report.policyItems.map((it, i) => <ItemCard key={i} item={it} />)}</div>
@@ -189,7 +189,7 @@ export default function SgNewsPage() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <Globe2 size={15} color={COLORS.gold} />
-              <h2 style={{ fontSize: 14, fontWeight: 750, color: COLORS.ink, margin: 0 }}>新闻层面变化 — Straits Times / Business Times / 联合早报</h2>
+              <h2 style={{ fontSize: 14, fontWeight: 700, color: COLORS.ink, margin: 0 }}>新闻层面变化 — Straits Times / Business Times / 联合早报</h2>
             </div>
             {report.report.newsItems.length
               ? <div style={CARD_GRID}>{report.report.newsItems.map((it, i) => <ItemCard key={i} item={it} />)}</div>

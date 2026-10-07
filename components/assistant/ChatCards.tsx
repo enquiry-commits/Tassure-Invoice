@@ -150,11 +150,11 @@ export function InvoiceDraftCard({ preview, conversationId }: { preview: Invoice
       <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
         <FileCheck2 size={14} color="#1e3a5f" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
           <div style={{ fontSize: 10.5, color: '#94a3b8' }}>UEN {preview.uen ?? '—'} · FYE {preview.fyeCycle || preview.fyeMonth || '—'}</div>
         </div>
         {preview.alreadyInvoicedThisCycle && (
-          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>ALREADY INVOICED</span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>ALREADY INVOICED</span>
         )}
       </div>
 
@@ -181,8 +181,8 @@ export function InvoiceDraftCard({ preview, conversationId }: { preview: Invoice
         </tbody>
         {included.length > 0 && (
           <tfoot>
-            {totalTab > 0 && <tr style={{ borderTop: '1px solid #eef2f7' }}><td style={{ padding: '7px 14px', fontWeight: 750, color: '#173b61' }}>TAB Total</td><td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 800, color: '#173b61' }}>S${totalTab.toLocaleString()}</td></tr>}
-            {totalTac > 0 && <tr><td style={{ padding: '7px 14px', fontWeight: 750, color: '#173b61' }}>TAC Total</td><td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 800, color: '#173b61' }}>S${totalTac.toLocaleString()}</td></tr>}
+            {totalTab > 0 && <tr style={{ borderTop: '1px solid #eef2f7' }}><td style={{ padding: '7px 14px', fontWeight: 700, color: '#173b61' }}>TAB Total</td><td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 700, color: '#173b61' }}>S${totalTab.toLocaleString()}</td></tr>}
+            {totalTac > 0 && <tr><td style={{ padding: '7px 14px', fontWeight: 700, color: '#173b61' }}>TAC Total</td><td style={{ padding: '7px 14px', textAlign: 'right', fontWeight: 700, color: '#173b61' }}>S${totalTac.toLocaleString()}</td></tr>}
           </tfoot>
         )}
       </table>
@@ -219,7 +219,7 @@ export function InvoiceDraftCard({ preview, conversationId }: { preview: Invoice
           title={preview.alreadyInvoicedThisCycle ? '本周期已开单 — 打开可查看/编辑那张发票' : included.length === 0 ? 'Nothing due this cycle' : undefined}
           style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+            width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 700,
             cursor: blocked ? 'not-allowed' : 'pointer',
             background: blocked ? '#e2e8f0' : '#0f766e',
             color: blocked ? '#94a3b8' : '#fff',
@@ -288,11 +288,11 @@ export function LateFilingResolveCard({ preview, onGenerated, conversationId }: 
       <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
         <AlertTriangle size={14} color="#b45309" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
           <div style={{ fontSize: 10.5, color: '#94a3b8' }}>UEN {preview.uen || '—'} · FYE {preview.financialYearEnd} {preview.lateFy || ''}</div>
         </div>
         {preview.alreadyResolved && (
-          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#15803d', background: '#f0fdf7', border: '1px solid #bae6d3', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>ALREADY RESOLVED</span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: '#15803d', background: '#f0fdf7', border: '1px solid #bae6d3', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>ALREADY RESOLVED</span>
         )}
       </div>
 
@@ -313,7 +313,7 @@ export function LateFilingResolveCard({ preview, onGenerated, conversationId }: 
             disabled={preview.alreadyResolved}
             title={preview.alreadyResolved ? 'Already resolved' : undefined}
             style={{
-              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 700,
               cursor: preview.alreadyResolved ? 'not-allowed' : 'pointer',
               background: preview.alreadyResolved ? '#e2e8f0' : '#0f766e',
               color: preview.alreadyResolved ? '#94a3b8' : '#fff',
@@ -348,7 +348,7 @@ function LateFilingConfirmModal({ preview, outcome, onCancel, onConfirm }: {
       <div style={{ background: '#fff', borderRadius: 12, width: 400, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={16} color="#b45309" />
-          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b', flex: 1 }}>Confirm mark as resolved</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#12233b', flex: 1 }}>Confirm mark as resolved</div>
           {!submitting && <button onClick={onCancel} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={16} /></button>}
         </div>
         <div style={{ padding: '14px 18px' }}>
@@ -366,7 +366,7 @@ function LateFilingConfirmModal({ preview, outcome, onCancel, onConfirm }: {
         </div>
         <div style={{ display: 'flex', gap: 8, padding: '12px 18px', borderTop: '1px solid #eef2f7' }}>
           <button onClick={onCancel} disabled={submitting} style={{ flex: 1, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer' }}>Cancel</button>
-          <button onClick={onConfirm} disabled={submitting} style={{ flex: 1, border: 'none', background: submitting ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 750, cursor: submitting ? 'wait' : 'pointer' }}>
+          <button onClick={onConfirm} disabled={submitting} style={{ flex: 1, border: 'none', background: submitting ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: submitting ? 'wait' : 'pointer' }}>
             {submitting ? 'Saving…' : 'Confirm & Mark Resolved'}
           </button>
         </div>
@@ -428,7 +428,7 @@ export function InvoiceEditCard({ preview, onGenerated, conversationId }: { prev
       <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
         <FileCheck2 size={14} color="#1e3a5f" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName} — {preview.qbCompany} #{preview.docNumber}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName} — {preview.qbCompany} #{preview.docNumber}</div>
           <div style={{ fontSize: 10.5, color: '#94a3b8' }}>Editing a real, already-generated invoice</div>
         </div>
       </div>
@@ -443,7 +443,7 @@ export function InvoiceEditCard({ preview, onGenerated, conversationId }: { prev
         {preview.changesSummary.length > 0 && (
           <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between' }}>
             <span style={{ color: '#64748b' }}>Total</span>
-            <span style={{ fontWeight: 800, color: '#173b61' }}>
+            <span style={{ fontWeight: 700, color: '#173b61' }}>
               S${preview.currentTotal.toLocaleString()} {preview.currentTotal !== preview.proposedTotal && <>→ S${preview.proposedTotal.toLocaleString()}</>}
             </span>
           </div>
@@ -460,7 +460,7 @@ export function InvoiceEditCard({ preview, onGenerated, conversationId }: { prev
             disabled={blocked}
             title={blocked ? 'No real change to save' : undefined}
             style={{
-              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 700,
               cursor: blocked ? 'not-allowed' : 'pointer',
               background: blocked ? '#e2e8f0' : '#0f766e',
               color: blocked ? '#94a3b8' : '#fff',
@@ -495,7 +495,7 @@ function InvoiceEditConfirmModal({ preview, outcome, onCancel, onConfirm }: {
       <div style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
           <FileCheck2 size={16} color="#1e3a5f" />
-          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b', flex: 1 }}>Confirm invoice change</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#12233b', flex: 1 }}>Confirm invoice change</div>
           {!submitting && <button onClick={onCancel} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={16} /></button>}
         </div>
         <div style={{ padding: '14px 18px' }}>
@@ -515,7 +515,7 @@ function InvoiceEditConfirmModal({ preview, outcome, onCancel, onConfirm }: {
         </div>
         <div style={{ display: 'flex', gap: 8, padding: '12px 18px', borderTop: '1px solid #eef2f7' }}>
           <button onClick={onCancel} disabled={submitting} style={{ flex: 1, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer' }}>Cancel</button>
-          <button onClick={onConfirm} disabled={submitting} style={{ flex: 1, border: 'none', background: submitting ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 750, cursor: submitting ? 'wait' : 'pointer' }}>
+          <button onClick={onConfirm} disabled={submitting} style={{ flex: 1, border: 'none', background: submitting ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: submitting ? 'wait' : 'pointer' }}>
             {submitting ? 'Saving…' : 'Confirm & Save'}
           </button>
         </div>
@@ -580,7 +580,7 @@ export function PostIncorporateCard({ preview, onGenerated, conversationId }: { 
       <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
         <FileCheck2 size={14} color="#1e3a5f" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.company} — {preview.uen}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.company} — {preview.uen}</div>
           <div style={{ fontSize: 10.5, color: '#94a3b8' }}>Post Incorporate document set — ready to generate</div>
         </div>
       </div>
@@ -598,7 +598,7 @@ export function PostIncorporateCard({ preview, onGenerated, conversationId }: { 
           <button
             type="button"
             onClick={() => setOutcome({ state: 'confirming' })}
-            style={{ width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750, cursor: 'pointer', background: '#0f766e', color: '#fff' }}
+            style={{ width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer', background: '#0f766e', color: '#fff' }}
           >
             Generate &amp; Download
           </button>
@@ -624,7 +624,7 @@ function PostIncorporateConfirmModal({ preview, outcome, onCancel, onConfirm }: 
       <div style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
           <FileCheck2 size={16} color="#1e3a5f" />
-          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b', flex: 1 }}>Confirm document generation</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#12233b', flex: 1 }}>Confirm document generation</div>
           {!submitting && <button onClick={onCancel} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={16} /></button>}
         </div>
         <div style={{ padding: '14px 18px' }}>
@@ -644,7 +644,7 @@ function PostIncorporateConfirmModal({ preview, outcome, onCancel, onConfirm }: 
         </div>
         <div style={{ display: 'flex', gap: 8, padding: '12px 18px', borderTop: '1px solid #eef2f7' }}>
           <button onClick={onCancel} disabled={submitting} style={{ flex: 1, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: submitting ? 'not-allowed' : 'pointer' }}>Cancel</button>
-          <button onClick={onConfirm} disabled={submitting} style={{ flex: 1, border: 'none', background: submitting ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 750, cursor: submitting ? 'wait' : 'pointer' }}>
+          <button onClick={onConfirm} disabled={submitting} style={{ flex: 1, border: 'none', background: submitting ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: submitting ? 'wait' : 'pointer' }}>
             {submitting ? 'Generating…' : 'Confirm & Generate'}
           </button>
         </div>
@@ -781,11 +781,11 @@ export function ArUpdateCard({ preview, onGenerated, conversationId }: { preview
       <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
         <FileCheck2 size={14} color="#1d4ed8" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
           <div style={{ fontSize: 10.5, color: '#94a3b8' }}>{cycle}{preview.uen ? ` · UEN ${preview.uen}` : ''}</div>
         </div>
         {preview.cycleAlreadyFiled && (
-          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#15803d', background: '#f0fdf7', border: '1px solid #bae6d3', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>FILED</span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: '#15803d', background: '#f0fdf7', border: '1px solid #bae6d3', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>FILED</span>
         )}
       </div>
 
@@ -814,7 +814,7 @@ export function ArUpdateCard({ preview, onGenerated, conversationId }: { preview
             onClick={() => setOutcome({ state: 'confirming' })}
             disabled={preview.alreadyThatValue}
             style={{
-              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 700,
               cursor: preview.alreadyThatValue ? 'not-allowed' : 'pointer',
               background: preview.alreadyThatValue ? '#e2e8f0' : '#1d4ed8',
               color: preview.alreadyThatValue ? '#94a3b8' : '#fff',
@@ -859,7 +859,7 @@ function ArUpdateConfirmModal({ preview, outcome, onCancel, onConfirm }: {
       <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 400, overflow: 'hidden', boxShadow: '0 20px 50px rgba(15,23,42,0.3)' }}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={16} color="#b45309" />
-          <div style={{ fontSize: 13.5, fontWeight: 800, color: '#173b61' }}>确认更新 AR Reminder</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#173b61' }}>确认更新 AR Reminder</div>
           <button type="button" onClick={onCancel} disabled={busy} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: busy ? 'default' : 'pointer', color: '#94a3b8' }}><X size={16} /></button>
         </div>
         <div style={{ padding: '14px 18px', fontSize: 12, color: '#475569', lineHeight: 1.7 }}>
@@ -879,7 +879,7 @@ function ArUpdateConfirmModal({ preview, outcome, onCancel, onConfirm }: {
         </div>
         <div style={{ padding: '12px 18px', borderTop: '1px solid #eef2f7', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" onClick={onCancel} disabled={busy} style={{ border: '1px solid #dbe3ec', background: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 12, fontWeight: 700, color: '#475569', cursor: busy ? 'default' : 'pointer' }}>取消</button>
-          <button type="button" onClick={onConfirm} disabled={busy} style={{ border: 'none', background: busy ? '#93b4f5' : '#1d4ed8', color: '#fff', borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 750, cursor: busy ? 'default' : 'pointer' }}>
+          <button type="button" onClick={onConfirm} disabled={busy} style={{ border: 'none', background: busy ? '#93b4f5' : '#1d4ed8', color: '#fff', borderRadius: 8, padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: busy ? 'default' : 'pointer' }}>
             {busy ? '更新中…' : '确认更新'}
           </button>
         </div>
@@ -952,7 +952,7 @@ export function ListExportCard({ offer, conversationId }: { offer: ChatExportOff
         disabled={state === 'working'}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-          border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, fontWeight: 750,
+          border: '1px solid #cbd5e1', borderRadius: 8, padding: '8px 12px', fontSize: 11.5, fontWeight: 700,
           background: state === 'working' ? '#f1f5f9' : '#fff', color: '#173b61',
           cursor: state === 'working' ? 'wait' : 'pointer',
         }}
@@ -1001,7 +1001,7 @@ export function SoaCard({ preview, conversationId }: { preview: SoaPreview; conv
   return (
     <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 460 }}>
       <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7' }}>
-        <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
         <div style={{ fontSize: 10.5, color: '#94a3b8' }}>Statement of Account · 欠款合计 {money(preview.totalOutstanding)}</div>
       </div>
 
@@ -1021,8 +1021,8 @@ export function SoaCard({ preview, conversationId }: { preview: SoaPreview; conv
       {preview.lines.length > 1 && (
         <div style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9', background: '#f0fdfa' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 7, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, fontWeight: 800, color: '#0f766e', background: '#fff', border: '1px solid #ccfbf1', borderRadius: 4, padding: '1px 5px' }}>ALL</span>
-            <span style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61' }}>{money(preview.totalOutstanding)}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#fff', border: '1px solid #ccfbf1', borderRadius: 4, padding: '1px 5px' }}>ALL</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61' }}>{money(preview.totalOutstanding)}</span>
             <span style={{ fontSize: 10.5, color: '#94a3b8' }}>{preview.lines.map(l => l.qbCompany).join('+')} 合并</span>
           </div>
           <div style={{ display: 'flex', gap: 7 }}>
@@ -1067,8 +1067,8 @@ export function SoaCard({ preview, conversationId }: { preview: SoaPreview; conv
       {preview.lines.map(line => (
         <div key={line.qbCompany} style={{ padding: '10px 14px', borderBottom: '1px solid #f1f5f9' }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 2, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, fontWeight: 800, color: '#0f766e', background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: 4, padding: '1px 5px' }}>{line.qbCompany}</span>
-            <span style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61' }}>{money(line.totalOutstanding)}</span>
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#f0fdfa', border: '1px solid #ccfbf1', borderRadius: 4, padding: '1px 5px' }}>{line.qbCompany}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61' }}>{money(line.totalOutstanding)}</span>
             <span style={{ fontSize: 10.5, color: '#94a3b8' }}>
               {line.invoiceCount} 张未付{line.oldestAgingBucketLabel ? ` · 最老 ${line.oldestAgingBucketLabel}` : ''}{line.owner ? ` · ${line.owner}` : ''}
             </span>
@@ -1119,7 +1119,7 @@ export function SoaCard({ preview, conversationId }: { preview: SoaPreview; conv
       ))}
 
       {(error || done) && (
-        <div style={{ padding: '8px 14px', fontSize: 10.5, color: error ? '#b91c1c' : '#15803d', fontWeight: 650 }}>
+        <div style={{ padding: '8px 14px', fontSize: 10.5, color: error ? '#b91c1c' : '#15803d', fontWeight: 600 }}>
           {error ?? done}
         </div>
       )}
@@ -1197,7 +1197,7 @@ function BillingDraftsModal({ companyName, cycleFye, onClose }: { companyName: s
         <div style={{ padding: '13px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
           <FileCheck2 size={16} color="#1e3a5f" />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b' }}>Billing Drafts — {companyName}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#12233b' }}>Billing Drafts — {companyName}</div>
             <div style={{ fontSize: 10.5, color: '#94a3b8' }}>与 Billing Drafts 页面完全相同的编辑器{cycleFye ? ` · FYE ${cycleFye}` : ''}</div>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={17} /></button>
@@ -1258,7 +1258,7 @@ export function EmailDraftCard({ preview, conversationId }: { preview: EmailDraf
   return (
     <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 460 }}>
       <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7' }}>
-        <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
         <div style={{ fontSize: 10.5, color: '#94a3b8' }}>
           {TYPE_LABEL[preview.type] ?? preview.type}
           {preview.fyeMonth ? ` · FYE ${preview.fyeMonth} ${preview.fyeYear ?? ''}` : ''}
@@ -1268,7 +1268,7 @@ export function EmailDraftCard({ preview, conversationId }: { preview: EmailDraf
 
       <div style={{ padding: '10px 14px', fontSize: 11.5 }}>
         <div style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, marginBottom: 2 }}>TO</div>
-        <div style={{ color: preview.toEmail ? '#173b61' : '#b91c1c', fontWeight: 650, marginBottom: 7, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
+        <div style={{ color: preview.toEmail ? '#173b61' : '#b91c1c', fontWeight: 600, marginBottom: 7, wordBreak: 'break-all', whiteSpace: 'pre-wrap' }}>
           {preview.toEmail ?? '（没有可用的收件邮箱）'}
         </div>
         {preview.ccEmail && (
@@ -1303,7 +1303,7 @@ export function EmailDraftCard({ preview, conversationId }: { preview: EmailDraf
           title={preview.blockedReason ?? undefined}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+            border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 700,
             background: !preview.canDraft ? '#e2e8f0' : busy ? '#94a3b8' : '#0f766e',
             color: !preview.canDraft ? '#94a3b8' : '#fff',
             cursor: !preview.canDraft ? 'not-allowed' : busy ? 'wait' : 'pointer',
@@ -1316,7 +1316,7 @@ export function EmailDraftCard({ preview, conversationId }: { preview: EmailDraf
           <div style={{ marginTop: 6, fontSize: 10.5, color: '#b91c1c' }}>{preview.blockedReason}</div>
         )}
         {error && <div style={{ marginTop: 6, fontSize: 10.5, color: '#b91c1c' }}>{error}</div>}
-        {done && <div style={{ marginTop: 6, fontSize: 10.5, color: '#15803d', fontWeight: 650 }}>{done}</div>}
+        {done && <div style={{ marginTop: 6, fontSize: 10.5, color: '#15803d', fontWeight: 600 }}>{done}</div>}
       </div>
 
       {draft && (
@@ -1390,11 +1390,11 @@ export function CompanyUpdateCard({ preview, onDone, conversationId }: { preview
       <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Pencil size={14} color="#1e3a5f" style={{ flexShrink: 0 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+          <div style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
           <div style={{ fontSize: 10.5, color: '#94a3b8' }}>{preview.fieldLabel}</div>
         </div>
         {preview.alreadyThatValue && (
-          <span style={{ fontSize: 9.5, fontWeight: 800, color: '#15803d', background: '#f0fdf7', border: '1px solid #bae6d3', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>已经是这个值</span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: '#15803d', background: '#f0fdf7', border: '1px solid #bae6d3', borderRadius: 999, padding: '2px 7px', flexShrink: 0 }}>已经是这个值</span>
         )}
       </div>
 
@@ -1420,7 +1420,7 @@ export function CompanyUpdateCard({ preview, onDone, conversationId }: { preview
             disabled={preview.alreadyThatValue}
             title={preview.alreadyThatValue ? '当前已经是这个值' : undefined}
             style={{
-              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+              width: '100%', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 700,
               cursor: preview.alreadyThatValue ? 'not-allowed' : 'pointer',
               background: preview.alreadyThatValue ? '#e2e8f0' : '#0f766e',
               color: preview.alreadyThatValue ? '#94a3b8' : '#fff',
@@ -1437,14 +1437,14 @@ export function CompanyUpdateCard({ preview, onDone, conversationId }: { preview
           <div style={{ background: '#fff', borderRadius: 12, width: 420, maxWidth: '92vw', boxShadow: '0 20px 60px rgba(15,23,42,0.25)' }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
               <Pencil size={16} color="#1e3a5f" />
-              <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b', flex: 1 }}>确认修改公司设定</div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: '#12233b', flex: 1 }}>确认修改公司设定</div>
               {state !== 'saving' && <button onClick={() => setState('idle')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={16} /></button>}
             </div>
             <div style={{ padding: '14px 18px', fontSize: 12.5, color: '#334155' }}>
               这会真正修改 <strong>{preview.companyName}</strong> 的<strong>{preview.fieldLabel}</strong>。
               <div style={{ marginTop: 10, border: '1px solid #eef2f7', borderRadius: 8, padding: '9px 11px', fontSize: 11.5 }}>
                 <div style={{ color: '#64748b' }}>{preview.currentDisplay}</div>
-                <div style={{ color: '#0f766e', fontWeight: 750, marginTop: 4 }}>↓ {preview.proposedDisplay}</div>
+                <div style={{ color: '#0f766e', fontWeight: 700, marginTop: 4 }}>↓ {preview.proposedDisplay}</div>
               </div>
               {preview.warning && (
                 <div style={{ marginTop: 10, padding: '9px 11px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 11.5, color: '#92400e' }}>
@@ -1459,7 +1459,7 @@ export function CompanyUpdateCard({ preview, onDone, conversationId }: { preview
               <button onClick={() => setState('idle')} disabled={state === 'saving'}
                 style={{ flex: 1, border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: state === 'saving' ? 'not-allowed' : 'pointer' }}>取消</button>
               <button onClick={() => void submit()} disabled={state === 'saving'}
-                style={{ flex: 1, border: 'none', background: state === 'saving' ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 750, cursor: state === 'saving' ? 'wait' : 'pointer' }}>
+                style={{ flex: 1, border: 'none', background: state === 'saving' ? '#94a3b8' : '#0f766e', color: '#fff', borderRadius: 8, padding: '9px 12px', fontSize: 12.5, fontWeight: 700, cursor: state === 'saving' ? 'wait' : 'pointer' }}>
                 {state === 'saving' ? '保存中…' : '确认修改'}
               </button>
             </div>
@@ -1487,7 +1487,7 @@ function TaoBuilderModal({ company, onClose }: { company: TaoCompanyRow; onClose
         <div style={{ padding: '13px 18px', borderBottom: '1px solid #eef2f7', display: 'flex', alignItems: 'center', gap: 8 }}>
           <FileCheck2 size={16} color="#1e3a5f" />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 800, color: '#12233b' }}>TAO 开单 — {company.companyName}</div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#12233b' }}>TAO 开单 — {company.companyName}</div>
             <div style={{ fontSize: 10.5, color: '#94a3b8' }}>与 Billing Drafts › TAO 页面完全相同的建单器</div>
           </div>
           <button onClick={onClose} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex' }}><X size={17} /></button>
@@ -1508,7 +1508,7 @@ export function TaoBillingCard({ preview, conversationId }: { preview: TaoPrevie
   return (
     <div style={{ marginTop: 8, border: '1px solid #dbe3ec', borderRadius: 10, overflow: 'hidden', background: '#fff', width: '100%', maxWidth: 460 }}>
       <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #eef2f7' }}>
-        <div style={{ fontSize: 12.5, fontWeight: 750, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: '#173b61', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preview.companyName}</div>
         <div style={{ fontSize: 10.5, color: '#94a3b8' }}>
           TAO (ACC) 开单记录
           {preview.lastInvoice ? ` · 最近 #${preview.lastInvoice.invoiceNo} ${preview.lastInvoice.txnDate ?? ''}` : ' · 尚无 TAO 发票'}
@@ -1550,7 +1550,7 @@ export function TaoBillingCard({ preview, conversationId }: { preview: TaoPrevie
       {preview.priorServices.length > 0 && (
         <div style={{ padding: '8px 14px', borderTop: '1px solid #eef2f7', fontSize: 11 }}>
           <span style={{ color: '#64748b' }}>全部重开合计 </span>
-          <span style={{ fontWeight: 800, color: '#173b61' }}>{money(preview.totalIfAllRepeated)}</span>
+          <span style={{ fontWeight: 700, color: '#173b61' }}>{money(preview.totalIfAllRepeated)}</span>
           {preview.servicesWithoutRate > 0 && (
             <span style={{ color: '#92400e' }}>（不含 {preview.servicesWithoutRate} 项没有记录金额的，实际更高）</span>
           )}
@@ -1569,7 +1569,7 @@ export function TaoBillingCard({ preview, conversationId }: { preview: TaoPrevie
           }}
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 750,
+            border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 700,
             background: '#0f766e', color: '#fff', cursor: 'pointer',
           }}
         >

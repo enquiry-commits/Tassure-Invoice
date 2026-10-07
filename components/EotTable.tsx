@@ -183,7 +183,7 @@ export default function EotTable() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 26 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Calendar size={22} style={{ color: '#b45309' }} />
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: '#1e3a5f', margin: 0 }}>EOT</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#1e3a5f', margin: 0 }}>EOT</h1>
           <span style={{ fontSize: 12, color: '#64748b', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 6, padding: '2px 8px' }}>
             Auto-detected from TeamWork records
           </span>

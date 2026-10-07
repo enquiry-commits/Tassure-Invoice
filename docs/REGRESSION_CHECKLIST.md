@@ -590,3 +590,8 @@ Run `npx tsx test-soa-group-email.ts` (`ALL OK`). Then on the DEPLOYED site, sig
 **Trigger:** any change to `app/billing/quotation/page.tsx`, `lib/quotation-data.ts`, `lib/quotation-reviews.ts`, `app/api/billing/quotation/route.ts`.
 **Run:** `npx tsx test-quotation-reviews.ts` (`ALL OK`). After `scripts/add-quotation-reviews.sql` is run, on the DEPLOYED site: (1) Billing › Quotation shows Completed and Remarks columns and a 5th "Completed" card; (2) type a remark, click elsewhere, reload: it persists; (3) an Open PI shows "—" (cannot complete); on a Closed PI press Completed, confirm: the row leaves the list, the Completed card count rises, clicking the card shows it with date/person and its remarks still editable; (4) Reopen returns it to the list; (5) the list starts 12 months back.
 **Guards:** `docs/INVARIANTS.md` INV-QB-039.
+
+## REG-051 — Typography: one font, weights
+**Trigger:** any change to `app/globals.css` font rules, `lib/theme-tokens.ts` FONT_OPTIONS, or adding `fontFamily`/`fontWeight` in pages.
+**Run:** `grep -rn "fontFamily" app components --include=*.tsx | grep -v inherit` should list only OutlookStyleSendModal and the Appearance code input; no `fontWeight` 750/800/850/900/650. On the DEPLOYED site: buttons, inputs and dropdowns look the same font as the text beside them; Chinese company names sit in one font; SOA aging numbers and invoice numbers still line up.
+**Guards:** `docs/INVARIANTS.md` INV-UI-001.

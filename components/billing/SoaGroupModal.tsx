@@ -76,7 +76,7 @@ export default function SoaGroupModal({ me, sender, onClose, onDrafted }: {
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 680, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,.3)', overflow: 'hidden' }}>
         <div style={{ background: NAVY, color: '#fff', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>Group SOA email</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>Group SOA email</div>
             <div style={{ fontSize: 11.5, opacity: 0.75, marginTop: 2 }}>Tick the companies of one group — their SOA and invoices go out together in one email.</div>
           </div>
           <button onClick={onClose} disabled={busy} aria-label="Close" style={{ background: 'none', border: 'none', color: '#fff', cursor: busy ? 'default' : 'pointer' }}><X size={18} /></button>

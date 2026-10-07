@@ -93,7 +93,7 @@ export default function ActivityInsightsPage() {
       <div className="mb-4 text-sm text-slate-500">Dashboard › Activity Insights</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
         <Activity size={20} color="#1e3a5f" />
-        <h1 style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', margin: 0 }}>Activity Insights</h1>
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', margin: 0 }}>Activity Insights</h1>
         <select
           value={selectedEmail}
           onChange={e => setSelectedEmail(e.target.value)}

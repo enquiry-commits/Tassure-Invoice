@@ -91,7 +91,7 @@ export default function AppearanceSettingsPage() {
           <Palette size={18} color="#fff" />
         </div>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#1e3a5f' }}>Appearance Settings</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#1e3a5f' }}>Appearance Settings</div>
           <div style={{ fontSize: 12, color: '#64748b' }}>颜色和字体保存后，会对所有登录用户全局生效。</div>
         </div>
       </div>

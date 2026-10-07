@@ -111,7 +111,7 @@ function NewProjectModal({ files, projects, onClose, onCreated, onUseExisting }:
     <div onClick={files ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 480, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>{files ? 'Which client are these files for?' : 'New Project'}</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{files ? 'Which client are these files for?' : 'New Project'}</div>
           <button onClick={onClose} disabled={creating} title={files ? 'Cancel — nothing is created or read' : 'Close'} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
         </div>
         <div style={{ padding: '18px 20px', display: 'grid', gap: 14 }}>
@@ -172,7 +172,7 @@ function ProjectCard({ project, onDelete }: { project: TurnoverProject; onDelete
         <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {project.totals.length === 0 && <div style={{ fontSize: 12, color: '#cbd5e1' }}>No total yet</div>}
           {project.totals.map(t => (
-            <div key={t.currency} style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{money(t.total, t.currency)}</div>
+            <div key={t.currency} style={{ fontVariantNumeric: 'tabular-nums', fontSize: 16, fontWeight: 700, color: '#0f172a' }}>{money(t.total, t.currency)}</div>
           ))}
         </div>
       </Link>
@@ -306,7 +306,7 @@ export default function TurnoverAiProjectsPage() {
     <div onDragEnter={onPageDragEnter} onDragOver={onPageDragOver} onDragLeave={onPageDragLeave} onDrop={onPageDrop} style={{ minHeight: '70vh' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
         <div>
-          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 800, color: '#0f172a' }}>Turnover AI</h1>
+          <h1 style={{ margin: '0 0 6px', fontSize: 22, fontWeight: 700, color: '#0f172a' }}>Turnover AI</h1>
           <p style={{ margin: 0, fontSize: 12.5, color: '#64748b', maxWidth: 560, lineHeight: 1.6 }}>
             One project per client — drop its receipts here, name the client, and AI reads them straight into a running total; fix any value directly if it looks off. Originals and per-receipt detail are kept for 3 days; the total stays in the folder after that.
           </p>

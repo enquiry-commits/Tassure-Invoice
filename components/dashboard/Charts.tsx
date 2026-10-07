@@ -48,7 +48,7 @@ function ChartTooltip({ active, payload, label, valueFormatter }: {
   if (!active || !payload?.length) return null;
   return (
     <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 11px', boxShadow: '0 8px 24px rgba(15,23,42,.12)', fontSize: 12 }}>
-      {label && <div style={{ fontWeight: 750, color: '#1e3a5f', marginBottom: payload.length > 1 ? 4 : 2 }}>{label}</div>}
+      {label && <div style={{ fontWeight: 700, color: '#1e3a5f', marginBottom: payload.length > 1 ? 4 : 2 }}>{label}</div>}
       {payload.map((p, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#475569' }}>
           {p.color && <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color, flexShrink: 0 }} />}
@@ -109,7 +109,7 @@ export function Donut({ segments: rawSegments, size = 168, thickness = 26 }: { s
           </PieChart>
         </ResponsiveContainer>
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-          <span style={{ fontSize: 26, fontWeight: 800, color: '#1e3a5f', lineHeight: 1 }}>{formatCompactNumber(total)}</span>
+          <span style={{ fontSize: 26, fontWeight: 700, color: '#1e3a5f', lineHeight: 1 }}>{formatCompactNumber(total)}</span>
           <span style={{ fontSize: 10.5, color: '#94a3b8', marginTop: 3 }}>total</span>
         </div>
       </div>

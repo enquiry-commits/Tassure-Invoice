@@ -31,7 +31,7 @@ function money(n: number, currency?: string | null) {
 
 // Same neutral look as the Source badges elsewhere in Billing System —
 // per-book colours were deliberately removed there.
-const chipStyle = { display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 800, letterSpacing: '0.02em', padding: '2px 7px', borderRadius: 5, border: '1px solid #b8c7d6', background: '#fff', color: '#1e3a5f' } as const;
+const chipStyle = { display: 'inline-flex', alignItems: 'center', fontSize: 10, fontWeight: 700, letterSpacing: '0.02em', padding: '2px 7px', borderRadius: 5, border: '1px solid #b8c7d6', background: '#fff', color: '#1e3a5f' } as const;
 
 function StatusPill({ row }: { row: QuotationRow }) {
   const tone = row.statusGroup === 'closed'
@@ -41,7 +41,7 @@ function StatusPill({ row }: { row: QuotationRow }) {
       : { border: '#fed7aa', color: '#c2410c' };
   const label = row.txnStatus ?? 'Unknown';
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, background: '#fff', border: `1px solid ${tone.border}`, color: tone.color, fontSize: 9.5, fontWeight: 750, whiteSpace: 'nowrap' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 8px', borderRadius: 999, background: '#fff', border: `1px solid ${tone.border}`, color: tone.color, fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: tone.color }} />
       {label}{row.daysOpen !== null ? ` · ${row.daysOpen}d` : ''}
     </span>
@@ -86,13 +86,13 @@ function TracedInvoice({ inv, currency }: { inv: QuotationTraceInvoice; currency
         style={{ fontSize: 9, lineHeight: 1, color: confirmed ? '#15803d' : '#94a3b8' }}>{confirmed ? '●' : '○'}</span>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
         <BillingInvoiceReference company={inv.source} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} muted={voided} />
-        {voided && <span style={{ fontSize: 9, fontWeight: 800, color: '#b91c1c', letterSpacing: '.03em' }}>VOID</span>}
+        {voided && <span style={{ fontSize: 9, fontWeight: 700, color: '#b91c1c', letterSpacing: '.03em' }}>VOID</span>}
       </span>
       <span style={{ textAlign: 'right', fontSize: 11, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontWeight: inv.amountMatches ? 700 : 500, color: voided ? '#94a3b8' : inv.amountMatches ? '#15803d' : '#475569', textDecoration: voided ? 'line-through' : undefined }}>
         {money(inv.totalAmt, currency)}
       </span>
       <span title={inv.amountMatches ? 'This invoice alone equals the quotation' : undefined}
-        style={{ fontSize: 11, fontWeight: 800, color: '#15803d', textAlign: 'center' }}>{inv.amountMatches ? '✓' : ''}</span>
+        style={{ fontSize: 11, fontWeight: 700, color: '#15803d', textAlign: 'center' }}>{inv.amountMatches ? '✓' : ''}</span>
     </>
   );
 }
@@ -129,7 +129,7 @@ function TraceSummary({ row }: { row: QuotationRow }) {
           <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', fontWeight: 700, color: t.sumMatchesTotal ? '#15803d' : '#b45309' }}>
             {money(t.tracedTotal, row.currency)}
           </span>
-          <span style={{ fontWeight: 800, color: '#15803d', textAlign: 'center' }}>{t.sumMatchesTotal ? '✓' : ''}</span>
+          <span style={{ fontWeight: 700, color: '#15803d', textAlign: 'center' }}>{t.sumMatchesTotal ? '✓' : ''}</span>
         </div>
       )}
     </div>
@@ -139,13 +139,13 @@ function TraceSummary({ row }: { row: QuotationRow }) {
 function Detail({ row, graceDays, onClose }: { row: QuotationRowView; graceDays: number; onClose: () => void }) {
   const t = row.trace;
   const w = t.nameMatchWindow;
-  const sectionTitle = { fontSize: 11, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.04em', margin: '18px 0 8px' } as const;
+  const sectionTitle = { fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.04em', margin: '18px 0 8px' } as const;
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 100, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 820, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', borderLeft: '4px solid #397f78', padding: '16px 20px 14px' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>{row.customerName || '(no customer)'}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{row.customerName || '(no customer)'}</div>
             <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 16 }}><X size={18} /></button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 11, color: '#fff' }}>
@@ -313,7 +313,7 @@ function NewQuotationModal({ onClose, onCreated }: { onClose: () => void; onCrea
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 200, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '32px 20px', overflowY: 'auto' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 640, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
         <div style={{ background: 'linear-gradient(135deg,#1d3a5c,#1e4976)', padding: '16px 20px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#fff' }}>New Quotation</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>New Quotation</div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.12)', border: 'none', color: '#fff', borderRadius: 8, width: 32, height: 32, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
         </div>
 
@@ -641,7 +641,7 @@ export default function QuotationPage() {
         <div style={{ padding: '6px 16px', fontSize: 10.5, color: '#94a3b8', borderTop: '1px solid #f1f5f9', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
           <span><span style={{ color: '#15803d' }}>●</span> confirmed by QuickBooks (same book)</span>
           <span>○ matched by customer name — check the amount</span>
-          <span><span style={{ color: '#15803d', fontWeight: 800 }}>✓</span> amount equals the quotation</span>
+          <span><span style={{ color: '#15803d', fontWeight: 700 }}>✓</span> amount equals the quotation</span>
           {data && <span>Showing quotations dated from {fmtDate(data.windowStart)} (the last 12 months)</span>}
         </div>
         <div className="system-list-scroll" style={{ maxHeight: 'calc(100vh - 470px)', minHeight: 400 }}>

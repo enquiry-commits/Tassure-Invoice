@@ -115,7 +115,7 @@ export const THEME_TOKENS: ThemeTokenDef[] = [
     scope: 'Billing Drafts —— 快捷菜单里一处警示按钮文字颜色' },
 
   // Font
-  { key: 'font-family', cssVar: '--font-family', label: '基础字体', group: '字体', type: 'font', default: 'system', live: true,
+  { key: 'font-family', cssVar: '--font-family', label: '基础字体', group: '字体', type: 'font', default: 'inter', live: true,
     scope: '全站所有页面的正文字体' },
 ];
 
@@ -131,12 +131,12 @@ export interface FontOption {
 // <body> in app/layout.tsx (variable: '--font-inter', etc.) — self-hosted,
 // no runtime fetch. "System Default" needs no font loaded at all.
 export const FONT_OPTIONS: FontOption[] = [
-  { key: 'system', label: '系统默认', cssValue: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
-  { key: 'inter', label: 'Inter', cssValue: 'var(--font-inter)' },
-  { key: 'lato', label: 'Lato', cssValue: 'var(--font-lato)' },
-  { key: 'poppins', label: 'Poppins', cssValue: 'var(--font-poppins)' },
-  { key: 'source-sans', label: 'Source Sans 3', cssValue: 'var(--font-source-sans)' },
-  { key: 'work-sans', label: 'Work Sans', cssValue: 'var(--font-work-sans)' },
+  { key: 'system', label: '系统默认', cssValue: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif" },
+  { key: 'inter', label: 'Inter', cssValue: "var(--font-inter), 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif" },
+  { key: 'lato', label: 'Lato', cssValue: "var(--font-lato), 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif" },
+  { key: 'poppins', label: 'Poppins', cssValue: "var(--font-poppins), 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif" },
+  { key: 'source-sans', label: 'Source Sans 3', cssValue: "var(--font-source-sans), 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif" },
+  { key: 'work-sans', label: 'Work Sans', cssValue: "var(--font-work-sans), 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif" },
 ];
 
 export function resolveFontValue(key: string): string {
