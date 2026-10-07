@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
-import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Mail, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { Receipt, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, X, Download, Send, Mail, Loader2, CheckCircle2, AlertCircle, FileSpreadsheet, Users } from 'lucide-react';
 import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { allStaffNames, staffByTeam } from '@/lib/staff-directory';
@@ -11,6 +11,7 @@ import { findUniqueBestMatch, normalize } from '@/lib/company-name';
 import { responsiblePeople, isBadDebt } from '@/lib/soa-main-pic';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import OutlookHelperReadiness from '@/components/client-communications/OutlookHelperReadiness';
+import SoaGroupModal from '@/components/billing/SoaGroupModal';
 import type { DraftLike } from '@/lib/draft-helper-client';
 import { loadSoaActor, downloadSoaPdf, buildSoaDraft, type SoaActor, type SoaSender, type SoaCompanySelector } from '@/lib/soa-actions-client';
 import { BillingInvoiceReference } from '@/components/billing/BillingInvoiceReference';
@@ -602,6 +603,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // `expanded`, since a bare companyId isn't unique in "All" mode.
   const draftPickers = useSoaDraftPickers();
   const [draftPopoverFor, setDraftPopoverFor] = useState<string | null>(null);
+  const [groupOpen, setGroupOpen] = useState(false); // the Group SOA email picker
   const [sendModalDraft, setSendModalDraft] = useState<DraftLike | null>(null);
   const [sendModalSender, setSendModalSender] = useState<SoaSender>(null);
 
@@ -1175,6 +1177,11 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
             {exportingAll ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FileSpreadsheet size={14} />}
             {exportingAll ? 'Exporting…' : 'Export Full Workbook'}
           </button>
+          {/* Group (Chelsea, 2026-10-07): several companies of one group, one email with all their SOA + invoices. */}
+          <button onClick={() => setGroupOpen(true)} title="One email for several companies of the same group — all their SOA and invoices together"
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1e3a5f', color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+            <Users size={14} />Group
+          </button>
         </div>
         <button onClick={() => load()}
           style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, border: 'none', background: '#1e3a5f', color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
@@ -1457,6 +1464,15 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           </div>
         </div>
       </div>
+
+      {groupOpen && (
+        <SoaGroupModal
+          me={draftPickers.me}
+          sender={draftPickers.senders.find(sd => sd.id === draftPickers.senderId) ?? null}
+          onClose={() => setGroupOpen(false)}
+          onDrafted={draft => { setSendModalDraft(draft); setSendModalSender(draftPickers.senders.find(sd => sd.id === draftPickers.senderId) ?? null); }}
+        />
+      )}
 
       {sendModalDraft && (
         <OutlookStyleSendModal

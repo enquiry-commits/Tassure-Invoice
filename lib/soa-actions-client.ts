@@ -120,6 +120,18 @@ async function fetchBookSoaPdf(companyName: string, book: QbCompany): Promise<Fi
   return new File([blob], `SOA (${book}) - ${safeFileLabel(companyName)}.pdf`, { type: 'application/pdf' });
 }
 
+/**
+ * Every book's own SOA PDF for one company (TAB / TAC / TAO), keeping only the books that have one — a 404 is "nothing
+ * outstanding in that book", anything else stops with a message naming the book (lib/soa-book-pdfs.ts). The same fetch the
+ * "All" Draft Email uses (buildSoaDraft below) and the Group email (lib/soa-group-draft-client.ts) reuses per company.
+ */
+export async function fetchAllBookSoaPdfs(companyName: string): Promise<File[]> {
+  const attempts = await Promise.all((['TAB', 'TAC', 'TAO'] as QbCompany[]).map(async (book): Promise<BookPdfAttempt<File>> => {
+    try { return { book, file: await fetchBookSoaPdf(companyName, book) }; } catch (error) { return { book, error }; }
+  }));
+  return settleBookPdfs(attempts);
+}
+
 export async function buildSoaDraft(
   companyName: string,
   qbCompany: SoaCompanySelector,
@@ -153,15 +165,7 @@ export async function buildSoaDraft(
   // standalone Download PDF button should still let you pick one book, or
   // the existing single merged PDF for 'ALL') — this only changes what the
   // DRAFT attaches.
-  let files: File[];
-  if (qbCompany === 'ALL') {
-    const attempts = await Promise.all((['TAB', 'TAC', 'TAO'] as QbCompany[]).map(async (book): Promise<BookPdfAttempt<File>> => {
-      try { return { book, file: await fetchBookSoaPdf(companyName, book) }; } catch (error) { return { book, error }; }
-    }));
-    files = settleBookPdfs(attempts);
-  } else {
-    files = [await fetchBookSoaPdf(companyName, qbCompany)];
-  }
+  const files: File[] = qbCompany === 'ALL' ? await fetchAllBookSoaPdfs(companyName) : [await fetchBookSoaPdf(companyName, qbCompany)];
 
   return buildCampaignDraft({
     companyName, type: 'soa', me, sender, templateId,

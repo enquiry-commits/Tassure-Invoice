@@ -5830,3 +5830,29 @@ again.
   else the PIC options) keeping the person's whole client card — every
   source, even ones someone else owns. The single-sheet export is unchanged.
   Guarded by `test-soa-person-book.ts`.
+
+- **INV-MAIL-009** — The Group SOA email: ONE draft for several companies of the same
+  group (Vincent / Chelsea, 2026-10-07: "有一些公司其实是一个 Group…几个公司的
+  SOA invoice 全部一起出，标题 Chelsea 会自己写"). Opened by the navy "Group"
+  button beside Export Full Workbook; the person ticks 2+ companies that owe
+  money (any book), types the SUBJECT herself, and the draft opens in
+  OutlookStyleSendModal — nothing is ever sent from the picker (INV-DATA-033).
+  Built by `lib/soa-group-draft-client.ts` + the pure `lib/soa-group-email.ts`:
+  (1) each company is resolved exactly like a single "All" Draft Email
+  (`resolveCampaignRow(name, 'soa', …, allBooks)` — recipients, open invoices);
+  if ANY company can't be resolved (no email on file, no open invoice, not in
+  the company list) NO draft is made and every failing company is named, so
+  nothing is silently left out of a collections email; (2) attachments = each
+  company's per-book SOA PDFs (`fetchAllBookSoaPdfs`, the same code the "All"
+  Draft Email uses; a book with nothing outstanding is skipped, any other
+  failure stops with the book named); (3) To / CC = the union of every
+  company's own, de-duplicated, a CC never repeating someone in To; (4) body
+  = the layout of Chelsea's real Aquila email: "Dear All," / total across the
+  group / "1. Company (S$subtotal)" with "TAB02410930 - S$100" lines; (5) it is
+  a "letter" campaign, NOT an "soa" one — an soa campaign ticks ONE company's
+  1st/2nd/3rd Reminder sequence when its send is verified, and a group email
+  must not tick that off for just the first company; its Email Activity row
+  sits under the first company's name. Amounts in the body are as of creation
+  (the single draft's send-time refresh does not apply). Live check
+  2026-10-07: the Aquila group (3 companies) resolves, group total S$5,490 =
+  the sum of the SOA list's nets. Guarded by `test-soa-group-email.ts`.
