@@ -1193,9 +1193,9 @@ export default function ExpandedBillingRow({ c, cycleFye }: { c: CompanyBilling;
         return (
           <div key={`${l.productService}-${i}`} style={{ display: 'grid', gridTemplateColumns: LINE_GRID, gap: 0, alignItems: 'start', padding: '16px 10px', borderTop: '1px solid #f1f5f9', background: l.periodNeedsReview ? '#fffaf0' : l.include ? '#fff' : '#fafbfc', opacity: l.include || l.periodNeedsReview ? 1 : 0.55 }}>
             <input type="checkbox" checked={l.include} disabled={l.lockedDeferred} title={l.lockedDeferred ? "Accounting's Deferred Revenue line — kept exactly as in QuickBooks" : undefined} onChange={e => setLine(i, { include: e.target.checked })} style={{ width: 15, height: 15, cursor: l.lockedDeferred ? 'not-allowed' : 'pointer', accentColor: '#0f766e' }} />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }} title={l.productService}>
-              {cfg && <cfg.Icon size={13} style={{ color: cfg.color }} />}
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{svcLabel}</span>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5, minWidth: 0 }} title={l.productService}>
+              {cfg && <cfg.Icon size={13} style={{ color: cfg.color, flexShrink: 0, marginTop: 2 }} />}
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', lineHeight: 1.35, overflowWrap: 'anywhere', minWidth: 0 }}>{svcLabel}</span>
             </div>
             {l.lockedDeferred
               ? <div style={{ fontSize: 12, color: '#94a3b8', padding: '7px 4px' }}>{l.description || '—'}</div>

@@ -620,7 +620,7 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
             <input type="checkbox" checked={l.include} onChange={e => updateLine(l.key, { include: e.target.checked })}
               style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#0f766e', marginTop: 6 }} />
             <div style={{ paddingTop: 6 }} title={l.productService || undefined}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.label}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#334155', lineHeight: 1.35, overflowWrap: 'anywhere' }}>{l.label}</div>
               {/* Last real invoice date this service was billed — reference
                   only ("目的是为了让用户知道上一次开单是什么时候，这次还要
                   不要开单"), never used to gate or auto-check anything. */}
