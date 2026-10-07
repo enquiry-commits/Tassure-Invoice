@@ -2635,9 +2635,10 @@ one focused Git commit.
   line, 500, -100 = 1,000), the redraw for British Sports and Minyotech #02610789, and for Co-Operate QuickBooks'
   PDF with the split-fallback warning. Verification: `test-original-decisions.ts` (new), `test-original-status.ts`,
   `test-original-upload.ts`, `test-original-copy.ts`, `test-account-access.ts`, `test-assistant-pages.ts`; 59
-  negative controls on a copy; tsc, eslint, `next build`. **Not live:** the push is still pending (the
-  permission layer refused it), so Vercel runs the old code — the 4 attachments sit in QuickBooks and the SOA on
-  Vercel keeps redrawing until the push. **Still open (his call):** whether an invoice with no payment terms may
+  negative controls on a copy; tsc, eslint, `next build`. **Pushed:** Vincent pushed the four commits
+  himself on 2026-10-07 (0402863..745b61a; this session's own push was refused by the permission layer), so Vercel
+  deploys them automatically. Not yet looked at on the deployed site — REG-040 is the check (the Invoice Originals
+  page lists only Co-Operate; the SOA of EVOP, Nova Golden, Soon & Guan and Minyotech carries the originals). **Still open (his call):** whether an invoice with no payment terms may
   take them from its due date so Co-Operate is redrawn. **Independent review (a
   read-only reviewer, same day):** no way found to get a wrong file accepted or a decision
   applied to another invoice. Fixed what it found: a "leave as it is" decision was bound
