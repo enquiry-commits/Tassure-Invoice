@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase';
 import { normalize } from '@/lib/company-name';
 import type { QbCompany } from '@/lib/quickbooks';
-import { onlyActiveCompanies } from '@/lib/company-lifecycle';
+import { onlyActiveCompanies, isActiveCompany } from '@/lib/company-lifecycle';
 import {
   loadCompanies, loadInvoicesByCompany, loadAutoTargetNames, loadAlreadySent, loadArPicByCompany, loadLastReminderSentAt, buildRow, makeCompanyFinder,
   type CompanyRow,
 } from '@/lib/client-comms-resolve';
+import { resolveDraftCompany, soaBodyInvoices, SOA_BOOKS } from '@/lib/soa-draft-resolution';
 
 // Preview-before-generate: resolves the same candidate set Campaign Centre
 // would generate, WITHOUT writing anything, so a reviewer can check/uncheck
@@ -71,6 +72,8 @@ export async function GET(req: NextRequest) {
   const qbCompanyParam = sp.get('qbCompany');
   const qbCompany = qbCompanyParam && (['TAB', 'TAC', 'TAO'] as const).includes(qbCompanyParam as QbCompany)
     ? (qbCompanyParam as QbCompany) : undefined;
+  // The "All" mode of that same SOA Draft flow (its statements are attached per book): the body then covers every book.
+  const allBooks = sp.get('allBooks') === '1';
   if (!lookup || !type) return NextResponse.json({ error: 'lookup and type are required' }, { status: 400 });
   if (!['letter', 'ar', 'soa'].includes(type)) return NextResponse.json({ error: 'invalid type' }, { status: 400 });
 
@@ -102,12 +105,35 @@ export async function GET(req: NextRequest) {
   let company: CompanyRow | null = exactMatch;
   let findCompany: (name: string) => CompanyRow | null = () => company;
   if (!company) {
-    const companyList = await loadCompanies(supabase);
-    findCompany = makeCompanyFinder(companyList);
+    // An SOA chases a debt, and a debt outlives the client relationship (Vincent, 2026-10-07: "我们还是需要发SOA 去追债"):
+    // for type 'soa' a company that is inactive, Terminated, Striking Off or no longer in TeamWork is still found — by EXACT
+    // name, before the fuzzy match over the live roster could hand it to a similarly named active company. AR, letters and
+    // Campaign Centre's bulk list keep the active-only rule (INV-TW-024 / INV-AR-017 / INV-AR-018). INV-MAIL-006.
+    const everyCompany = type === 'soa' ? await loadCompanies(supabase, { includeInactive: true }) : undefined;
+    const findActive = makeCompanyFinder(everyCompany ? everyCompany.filter(isActiveCompany) : await loadCompanies(supabase));
+    findCompany = name => resolveDraftCompany(name, findActive, everyCompany);
     company = findCompany(lookup);
   }
-  if (!company) return NextResponse.json({ error: `No matching company found for "${lookup}".` }, { status: 404 });
+  if (!company) {
+    return NextResponse.json({
+      error: type === 'soa'
+        ? `"${lookup}" is not in the company list, so there is no email address on file for it — add the company and its contact first.`
+        : `No matching company found for "${lookup}".`,
+    }, { status: 404 });
+  }
 
-  const row = buildRow(company.company_name, findCompany, invoicesByCompany, alreadySent, type, arPicByCompany, lastReminderSentAtByCompany, qbCompany);
+  // An SOA Draft's body must list what its attached statement(s) show. The statement finds the QuickBooks customer with a fuzzy
+  // match when the company list spells the name differently; buildRow only knows the company's own name, which left the email
+  // saying "(no invoices)" and S$0.00 next to a statement with a balance (INV-MAIL-006). Only the Draft flow asks for this
+  // (single book: `qbCompany`; "All": `allBooks`), and only for the books where the company's own name found nothing.
+  const draftBooks = qbCompany ? [qbCompany] : allBooks ? SOA_BOOKS : null;
+  let invoicesForBody = invoicesByCompany;
+  if (type === 'soa' && draftBooks) {
+    const key = normalize(company.company_name);
+    const refs = soaBodyInvoices(lookup, key, invoicesByCompany, draftBooks);
+    if (refs.length > (invoicesByCompany.get(key) ?? []).length) invoicesForBody = new Map(invoicesByCompany).set(key, refs);
+  }
+
+  const row = buildRow(company.company_name, findCompany, invoicesForBody, alreadySent, type, arPicByCompany, lastReminderSentAtByCompany, qbCompany);
   return NextResponse.json({ row });
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { displayInvoiceNo } from './ExpandedBillingRow';
 import type { QbCompany } from '@/lib/quickbooks';
+import { invoicePdfRequest, type InvoiceChipView } from '@/lib/invoice-pdf-request';
 
 /**
  * A small clickable "TAB #02610938"-style chip that opens the real QuickBooks
@@ -30,11 +31,29 @@ import type { QbCompany } from '@/lib/quickbooks';
  * - `company` widened from 'TAB' | 'TAC' to the full QbCompany (adds 'TAO')
  *   — the PDF route itself already supported all three; Billing Drafts
  *   just never had a TAO caller yet.
+ *
+ * `view` (added 2026-10-07, INV-QB-029): which copy of the invoice the chip
+ * opens. 'quickbooks' (the default, every existing caller) is QuickBooks' own
+ * PDF — accounting's split lines included. 'client' is what the CLIENT gets
+ * (/api/billing/client-invoice-pdf: each service once at its full amount; the
+ * original when one is attached): the SOA detail uses it, because a statement
+ * is a client document — Vincent, after testing it live: the merged statement
+ * was right, but the invoices opened from the SOA still showed the split. It
+ * only applies to an invoice whose QuickBooks Id is known (a credit note, or a
+ * chip given only a number, still opens QuickBooks' own PDF), and when the
+ * client copy could not be drawn and QuickBooks' own PDF came back instead the
+ * chip turns amber and says why (the route's X-Client-Invoice-Fallback) — it
+ * never opens a split invoice silently.
  */
-export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'invoice', title, muted = false }: {
+export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'invoice', title, muted = false, view = 'quickbooks' }: {
   company: QbCompany; invoiceNo?: string | null; id?: string | null; docType?: 'invoice' | 'credit'; title?: string; muted?: boolean;
+  view?: InvoiceChipView;
 }) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
+  const [fallback, setFallback] = useState<string | null>(null);
+  // Which request this chip sends is decided in lib/invoice-pdf-request.ts (pure, pinned by test-soa-invoice-chip.ts).
+  const request = invoicePdfRequest({ company, id, lookupNo: invoiceNo ? displayInvoiceNo(invoiceNo) : null, docType, view });
+  const clientView = request.client;
   if (!invoiceNo && !id) {
     return <span style={{ color: '#94a3b8', fontSize: 10, whiteSpace: 'nowrap' }}>No system invoice</span>;
   }
@@ -47,14 +66,15 @@ export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'inv
     const tab = window.open('', '_blank');
     setStatus('loading');
     try {
-      const params = new URLSearchParams({ company });
-      if (id) params.set('id', id); else params.set('invoiceNo', displayInvoiceNo(invoiceNo));
-      if (docType === 'credit') params.set('docType', 'creditmemo');
-      const res = await fetch(`/api/quickbooks/invoice-pdf?${params.toString()}`);
+      const res = await fetch(request.url);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error ?? `Unable to open ${company} ${docType === 'credit' ? 'credit note' : 'invoice'} ${invoiceNo ?? id}`);
       }
+      const detail = clientView ? res.headers.get('X-Client-Invoice-Fallback') : null;
+      let reason: string | null = null;
+      if (detail) { try { reason = decodeURIComponent(detail); } catch { reason = detail; } }
+      setFallback(reason);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       if (tab) tab.location.href = url; else window.open(url, '_blank');
@@ -67,7 +87,9 @@ export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'inv
   };
   return (
     <button type="button" onClick={openPdf} disabled={status === 'loading'}
-      title={status === 'error' ? 'Could not open the PDF — click to retry' : (title ?? 'Click to open the PDF')}
+      title={status === 'error' ? 'Could not open the PDF — click to retry'
+        : fallback ? `Opened as QuickBooks' own PDF, which shows accounting's split lines — the client's copy could not be drawn: ${fallback}`
+        : (title ?? (clientView ? 'Click to open the invoice as the client receives it' : 'Click to open the PDF'))}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 3, width: 'fit-content', maxWidth: '100%',
         padding: '2px 5px', borderRadius: 4,
@@ -77,8 +99,8 @@ export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'inv
         // to white) — matches the Source badges' own white fill exactly.
         // Error state's red tint is untouched — only the default fill
         // changed.
-        background: status === 'error' ? '#fee2e2' : '#fff',
-        color: status === 'error' ? '#b91c1c' : '#31506f',
+        background: status === 'error' ? '#fee2e2' : fallback ? '#fffbeb' : '#fff',
+        color: status === 'error' ? '#b91c1c' : fallback ? '#92400e' : '#31506f',
         fontSize: 9.5, fontWeight: 800, lineHeight: 1.25, whiteSpace: 'nowrap',
         opacity: muted ? 0.72 : 1,
         // Visible border, 2026-09-23 — Vincent, after seeing the new
@@ -90,7 +112,7 @@ export function BillingInvoiceReference({ company, invoiceNo, id, docType = 'inv
         // component every one of those pages already renders (see this
         // file's own header comment), so a single change here reaches all
         // of them — no separate edit needed per page.
-        border: `1px solid ${status === 'error' ? '#fca5a5' : '#b8c7d6'}`,
+        border: `1px solid ${status === 'error' ? '#fca5a5' : fallback ? '#f59e0b' : '#b8c7d6'}`,
         cursor: status === 'loading' ? 'wait' : 'pointer',
         fontFamily: 'inherit',
       }}>

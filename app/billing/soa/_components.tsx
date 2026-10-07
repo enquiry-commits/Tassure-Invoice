@@ -1544,7 +1544,11 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
             里面的可点击式INVOICE 号码UI格式能不能设计成和 Billing Drafts的
             那个INVOICE 格式那样灰色的"), passed the real internal `id` this
             page already has from the AgedReceivableDetail report so it can
-            skip the DocNumber lookup Billing Drafts' own callers need. */}
+            skip the DocNumber lookup Billing Drafts' own callers need.
+            2026-10-07: view="client" — an invoice opens as the CLIENT
+            receives it (each service once; the original when attached), the
+            same copy the merged statement uses, not QuickBooks' own split
+            one (INV-QB-029). Credit notes still open QuickBooks' own PDF. */}
         {invoices !== null && invoices.map(inv => {
           const canOpenPdf = inv.type !== 'other' && !!inv.qbInvoiceId;
           return (
@@ -1553,7 +1557,8 @@ function SoaDetail({ company, qbCompany, onSent }: { company: SoaCompanyRow; qbC
             <div style={{ fontSize: 11, fontWeight: 700, color: '#31506f' }}>{inv.qbCompany}</div>
             <div>
               {canOpenPdf
-                ? <BillingInvoiceReference company={inv.qbCompany as QbCompany} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} docType={inv.type === 'credit' ? 'credit' : 'invoice'} title={`View ${inv.rawType} PDF`} />
+                ? <BillingInvoiceReference company={inv.qbCompany as QbCompany} invoiceNo={inv.invoiceNo} id={inv.qbInvoiceId} docType={inv.type === 'credit' ? 'credit' : 'invoice'} view="client"
+                    title={inv.type === 'credit' ? `View ${inv.rawType} PDF` : `View ${inv.rawType} PDF — as the client receives it`} />
                 : <span title={`No PDF document exists for a ${inv.rawType} in QuickBooks`} style={{ fontSize: 12, fontWeight: 600, color: '#334155' }}>#{inv.invoiceNo}</span>}
             </div>
             <div style={{ textAlign: 'center', fontSize: 11, color: '#64748b' }}>{fmtDate(inv.txnDate)}</div>

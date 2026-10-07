@@ -7,6 +7,7 @@ import { computeAllSoaRows, loadArAgingSnapshot } from '@/lib/soa-data';
 import type { QbCompany } from '@/lib/quickbooks';
 import { onlyActiveCompanies } from '@/lib/company-lifecycle';
 import { loadCurrentQbValues, withCurrentQbValues } from '@/lib/current-invoice-values';
+import { pageAll } from '@/lib/page-all';
 
 /**
  * Shared company/invoice resolution for Client Communications, used by both
@@ -25,6 +26,8 @@ export interface CompanyRow {
   tw_to_emails: string[] | null; tw_cc_emails: string[] | null;
   tw_recipient_source: string | null; tw_recipient_synced_at: string | null;
   pic: string | null;
+  // Only present on rows loadCompanies() read with `includeInactive` — read through isActiveCompany(), never directly.
+  is_active?: boolean | null;
 }
 
 export interface ResolvedRow {
@@ -86,7 +89,15 @@ export function pickContact(company: CompanyRow | null, extraPicValues: (string 
   };
 }
 
-export async function loadCompanies(supabase: SupabaseClient): Promise<CompanyRow[]> {
+// The live roster (INV-TW-024) — unless `includeInactive`, which ONLY the SOA single-company draft lookup passes (a debt
+// outlives the client relationship: lib/soa-draft-resolution.ts, INV-MAIL-006). Every row then carries `is_active`, so the
+// caller can still tell the live roster from the rest, and it is paged so the whole table is never cut at the 1,000-row cap.
+export async function loadCompanies(supabase: SupabaseClient, opts: { includeInactive?: boolean } = {}): Promise<CompanyRow[]> {
+  if (opts.includeInactive) {
+    return pageAll<CompanyRow>(() => supabase
+      .from('companies')
+      .select('id, company_name, best_email, primary_contact, tw_to_emails, tw_cc_emails, tw_recipient_source, tw_recipient_synced_at, pic, is_active'));
+  }
   const { data } = await onlyActiveCompanies(supabase
     .from('companies')
     .select('id, company_name, best_email, primary_contact, tw_to_emails, tw_cc_emails, tw_recipient_source, tw_recipient_synced_at, pic'));

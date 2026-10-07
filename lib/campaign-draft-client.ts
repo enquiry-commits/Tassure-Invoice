@@ -38,20 +38,26 @@ export async function loadCampaignActor(): Promise<{ me: CampaignActor; sender: 
   return { me, sender };
 }
 
-export async function resolveCampaignRow(companyName: string, type: CampaignType, fyeMonth?: string, fyeYear?: number, qbCompany?: QbCompany) {
+export async function resolveCampaignRow(companyName: string, type: CampaignType, fyeMonth?: string, fyeYear?: number, qbCompany?: QbCompany, allBooks = false) {
   const qs = new URLSearchParams({ lookup: companyName, type });
   if (fyeMonth) qs.set('fyeMonth', fyeMonth);
   if (fyeYear) qs.set('fyeYear', String(fyeYear));
   if (qbCompany) qs.set('qbCompany', qbCompany);
+  if (allBooks) qs.set('allBooks', '1');
   const res = await fetch(`/api/client-communications/campaigns/preview?${qs.toString()}`);
   const json = await res.json();
   if (!res.ok || !json.row) throw new Error(json.error ?? 'Could not resolve a recipient for this company.');
   if (!json.row.toEmail) throw new Error('No valid recipient email on file for this company — resolve it in Campaign Centre first.');
+  // An SOA email whose body lists no invoice ("(no invoices)", S$0.00) is never right — least of all next to a statement that
+  // shows a balance. The row only notes "No invoice found" in `included`/`reason`, which draft creation ignores, so refuse here.
+  if (type === 'soa' && !json.row.invoiceRefs?.length) {
+    throw new Error(`The email for "${companyName}" would list no invoice, so no draft was made (the statement itself is fine). Its QuickBooks customer name does not match the company's name closely enough — correct one of the two.`);
+  }
   // oldestDueDate/lastReminderSentAt (added 2026-09-17, lib/client-comms-
   // resolve.ts's buildRow()) ride along on this same object all the way
   // into the campaigns POST body below (companies: [row]) — this type just
   // needs to admit they exist so TypeScript doesn't flag reading them.
-  return json.row as { companyName: string; toEmail: string; ccEmail: string | null; oldestDueDate?: string | null; lastReminderSentAt?: string | null };
+  return json.row as { companyName: string; toEmail: string; ccEmail: string | null; oldestDueDate?: string | null; lastReminderSentAt?: string | null; invoiceRefs?: unknown[] };
 }
 
 export async function pickCampaignTemplate(type: CampaignType): Promise<{ id: string; name: string }> {
@@ -100,7 +106,7 @@ export async function buildCampaignDraft(opts: {
   soaReminderScope?: QbCompany | 'ALL';
 }): Promise<DraftLike> {
   const { companyName, type, fyeMonth, fyeYear, me, sender, attachments } = opts;
-  const row = await resolveCampaignRow(companyName, type, fyeMonth, fyeYear, opts.qbCompany);
+  const row = await resolveCampaignRow(companyName, type, fyeMonth, fyeYear, opts.qbCompany, opts.soaReminderScope === 'ALL');
   const template = opts.templateId ? { id: opts.templateId } : await pickCampaignTemplate(type);
 
   const createRes = await fetch('/api/client-communications/campaigns', {

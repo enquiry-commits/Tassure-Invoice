@@ -776,6 +776,53 @@ again.
   **empty** email field — never override an existing value from another
   source, even if the two disagree (staff-curated data can be more accurate
   than TeamWork's own report).
+- **INV-MAIL-006** — An SOA email draft is allowed for any company that still
+  owes, whether or not it is still a client, and its body lists what the
+  attached statement shows. Vincent, 2026-10-07, after the first live test —
+  EVOP (SINGAPORE) INTERNATIONAL (S$1,800 open on TAB #02610547; inactive, blank
+  in TeamWork) answered "No matching company found" — asked whether to allow it
+  and decided: "这个还是需要，就算已经不在TW了， 不是我们也会了，我们还是需要发SOA
+  去追债". **WHO:** the single-company SOA draft lookup
+  (`GET /api/client-communications/campaigns/preview`, type 'soa': the Draft Email
+  buttons and Campaign Centre's "add a company") finds a company that is inactive,
+  Terminated, Striking Off or blank in TeamWork by its EXACT normalized name among
+  every company (`lib/soa-draft-resolution.ts`: `resolveDraftCompany`,
+  `findSoaDebtorCompany`; a live row of the same name wins over a dead one), tried
+  BEFORE the usual live-roster match (exact, then unique fuzzy >= 70). Never a
+  fuzzy match for a company that is not live: a similarly named ACTIVE company
+  would otherwise receive another client's collections email with the wrong
+  statement. This is the ONLY place that reads inactive companies
+  (`loadCompanies(…, { includeInactive: true })` has exactly one caller): AR,
+  letters and Campaign Centre's BULK list stay on the live roster (INV-TW-024,
+  INV-AR-017, INV-AR-018 — one definition, `lib/company-lifecycle.ts`; the alive/dead
+  split uses `isActiveCompany()`). A company with no `companies` row has no
+  email address on file, and the route now says so instead of "no match": on
+  2026-10-07, 53 of the 397 Outstanding rows (TAB 10, TAC 7, TAO 36) — they need
+  the company and a contact added first; 10 rows are inactive companies now
+  reachable (TAB 9, TAO 1) and 7 rows have a company but no email (HAN KUN LLP,
+  SATORISYS, WORLD PRECISION MACHINERY …). **WHAT:** the BODY lists the invoices
+  the attached statement shows. The statement finds the QuickBooks customer by
+  exact normalized name, else the unique best fuzzy match (>= 70) among that
+  book's customers with an open invoice; the body used only the company's own
+  exact name, so where the two are spelled differently (company list "SOON &
+  GUAN MANPOWER TRAINING PTE. LTD." / QuickBooks "Soon & Guan Manpower Trading")
+  it listed "(no invoices)" and S$0.00 beside a statement with a balance — 12 of
+  the 397 rows on 2026-10-07 (ACG Interior, Soon & Guan, INVENTA TECHNOLOGIES, Yu An
+  (SGP) Holding on TAC and TAO, WQW Capital, Zhichuang Startech, First Noodle …). `soaBodyInvoices` adds, for each book in which the
+  company's own name has nothing, that same customer's invoices of that book —
+  only for the Drafts flow (single book: `qbCompany`; "All": `allBooks`); what the
+  company's own name already has is untouched, a tie picks nothing, and Campaign
+  Centre's bulk list and hand-add bodies are unchanged. `resolveCampaignRow`
+  refuses an SOA draft whose body would still list no invoice (the row's own "No
+  invoice found" is ignored by draft creation). Result on the real data: 0 of 397
+  rows empty (12 reached through the fuzzy step, each body total = the SOA's); the
+  one body that differs from its SOA row is FAITH CAPITAL GLOBAL FUND VCC (TAB) —
+  two QuickBooks customers, one spelled "Glocal" (2,500 + 50) and one right
+  (4 x 652.76): the statement and the body show the right one, the SOA row adds
+  both; accounting's data, not touched. Guarded by `test-soa-draft-resolution.ts`
+  (41 checks: the lookup, its order, the body, the wiring — who may pass
+  `includeInactive`, the guard) and, with each safeguard removed on a copy, 25
+  negative controls that fail it.
 
 ## Document / template generation (INV-DOC)
 
@@ -2746,6 +2793,22 @@ again.
   cover, the register's data); with each safeguard removed one at a time on a copy
   (59 of them for the queue, the upload, the decisions, the routes and the page, on
   top of the proof's own), the tests fail.
+
+- **INV-QB-038** — The invoice numbers in the SOA detail open the invoice as the
+  CLIENT receives it, not QuickBooks' own PDF. Vincent, 2026-10-07, after testing
+  the deployed SOA: "SOA合并是对的，但是 Source 那边的不对（显示的还是拆开的）". The merged
+  statement already used `getClientInvoicePdf` (INV-QB-029, INV-QB-037), but the
+  invoice-number chips in the detail list opened `/api/quickbooks/invoice-pdf` —
+  accounting's split lines included. He did not say which control "Source" is (the
+  Source badge downloads the same merged PDF, which was right), so this reading is
+  an assumption to confirm. `BillingInvoiceReference` takes `view`; only the SOA
+  detail passes 'client' → `/api/billing/client-invoice-pdf?company=&id=`, and only
+  for an invoice with a QuickBooks Id (`lib/invoice-pdf-request.ts`). Credit notes,
+  chips without an Id and every other chip (Billing Drafts, AR, Company 360, TAO —
+  staff-facing, INV-QB-029) keep QuickBooks' own PDF, byte for byte. When the
+  client copy could not be drawn and QuickBooks' own PDF comes back
+  (`X-Client-Invoice-Fallback`), the chip turns amber and says why — never silent.
+  Guarded by `test-soa-invoice-chip.ts` (14 checks) and 12 negative controls.
 
 ## Data integrity, concurrency & manual-override (INV-DATA)
 
