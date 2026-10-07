@@ -7674,3 +7674,20 @@ a reviewer can check it before anything is created.
   `soa_remarks` note (ellipsis + hover). `lib/my-tasks-data.ts` `SoaTask` carries
   `reminderProgress` + `remarks` (same `resolveSoaReminderProgress` /
   `soaRemarksForCompany` the SOA API uses). Checked on Jay Tay's real 12 rows.
+
+## 2026-10-07 — TAO pre-filled history rows: one-click "Use QuickBooks standard text" (+ correction of the 10-05 claim)
+- **Correction.** The 10-05 entry (INV-QB-032) said TAO descriptions are "as QuickBooks has them". That is only true for a
+  NEWLY ADDED line (`newLine()` uses the item's own description). A pre-filled HISTORY row (`lineFromHistory()`) still
+  copies the client's last invoice line and rolls the year forward — so a client whose last invoice was worded briefly
+  (Swiss Fiduciary: both lines "Tax YA 2025" in QuickBooks, #2560654) gets "Tax YA 2026". Three paths decide a line's
+  description (Add line / TAO history / TAB-TAC hard-coded `lib/invoice-templates.ts`); 10-05 fixed one.
+- Vincent chose (AskUserQuestion, after a 4-member council — Architect 1.5 > Skeptic 1.75 > Pragmatist 2.75 > Researcher 4):
+  **last invoice's text stays the default** ("上次文字为主"); added under each such row a link-button
+  **"Use QuickBooks standard text"** (shows the text, fills it as-is — no year change, per 10-05) with an amber note when
+  that text carries a fixed year (35 of 129 TAO standard texts do). Rejected by the council and not built: a "too short →
+  replace" rule (invented rule).
+- Checked read-only against the real TAO catalog: Corporate Tax Services → "Being professional fee for preparation of Tax
+  computation and Form C-S (YA2026)"; Reimbursement - OPE → "Stationery/Photocopying/Courier/IT support charges (OPE)".
+  Not seen in a browser.
+- NOT done / open: TAB/TAC pre-filled renewal rows still use the hard-coded templates and were never compared with the
+  live QuickBooks item descriptions — a read-only comparison is the next step before any decision.

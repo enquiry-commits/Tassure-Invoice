@@ -84,6 +84,10 @@ function fetchTaoCatalog(): Promise<CatalogEntry[]> {
 
 type Line = {
   key: number;
+  // The QuickBooks item's own standard description, kept on a pre-filled HISTORY row so staff can
+  // switch to it with one click (2026-10-07). The row's default text is still the last invoice's
+  // (Vincent: "上次文字为主") — a client's last invoice may have been worded on purpose.
+  catalogDescription?: string | null;
   label: string;
   productService: string;
   service: string;
@@ -127,6 +131,7 @@ function lineFromHistory(h: TaoServiceHistoryItem, catalog: CatalogEntry[]): Lin
     productService: opt ? opt.productService : (h.productService ?? ''),
     service: opt ? opt.service : (h.service || custom.service),
     description: rollRecurringDescriptionForward(baseDescription),
+    catalogDescription: opt?.description?.trim() || null,
     rate: h.rate != null ? String(h.rate) : '',
     qty: h.qty != null ? String(h.qty) : '1',
     include: false,
@@ -626,8 +631,23 @@ export default function TaoInvoiceBuilder({ company, onGenerated }: { company: T
                   不要开单"), never used to gate or auto-check anything. */}
               <div style={{ fontSize: 9.5, color: '#94a3b8', marginTop: 2, whiteSpace: 'nowrap' }}>{l.lastBilled ? `Last: ${fmtDate(l.lastBilled)}` : 'New service'}</div>
             </div>
-            <AutoTextarea value={l.description} onChange={v => updateLine(l.key, { description: v })}
-              style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
+            <div>
+              <AutoTextarea value={l.description} onChange={v => updateLine(l.key, { description: v })}
+                style={{ ...inputStyle, width: '95%', fontFamily: 'inherit', lineHeight: 1.4 }} />
+              {l.catalogDescription && l.catalogDescription !== l.description.trim() && (
+                <div style={{ width: '95%', marginTop: 4, fontSize: 10.5, lineHeight: 1.4, color: '#64748b' }}>
+                  <button type="button" onClick={() => updateLine(l.key, { description: l.catalogDescription ?? l.description })}
+                    title={l.catalogDescription}
+                    style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: '#1d3a5c', fontWeight: 700, fontSize: 10.5, textDecoration: 'underline' }}>
+                    Use QuickBooks standard text
+                  </button>
+                  <span> · “{l.catalogDescription.length > 70 ? `${l.catalogDescription.slice(0, 70)}…` : l.catalogDescription}”</span>
+                  {/\b(?:YA\s?)?20\d{2}\b/i.test(l.catalogDescription) && (
+                    <span style={{ color: '#b45309' }}> · ⚠ it has a fixed year — check it before sending</span>
+                  )}
+                </div>
+              )}
+            </div>
             {renderPicCell(l)}
             <input type="number" min={1} value={l.qty} onChange={e => updateLine(l.key, { qty: e.target.value })}
               style={{ ...inputStyle, width: 44, textAlign: 'center', justifySelf: 'center' }} />
