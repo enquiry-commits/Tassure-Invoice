@@ -689,7 +689,7 @@ export default function QuotationPage() {
                     ) : r.statusGroup === 'closed' ? (
                       <button onClick={() => void markCompleted(r)} disabled={busyKey === key || !data?.reviewsReady}
                         title="The weekly check is done: leave the list and freeze the invoices shown"
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 6, border: '1px solid #1d3a5c', background: '#1d3a5c', color: '#fff', fontSize: 11, fontWeight: 700, cursor: busyKey === key ? 'default' : 'pointer', opacity: data?.reviewsReady ? 1 : 0.5 }}>
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 6, border: '1px solid #15803d', background: '#15803d', color: '#fff', fontSize: 11, fontWeight: 700, cursor: busyKey === key ? 'default' : 'pointer', opacity: data?.reviewsReady ? 1 : 0.5 }}>
                         {busyKey === key ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : <CheckCircle2 size={12} />}Completed
                       </button>
                     ) : (
