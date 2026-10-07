@@ -11,8 +11,8 @@
 // Run: npx tsx test-soa-draft-resolution.ts
 import fs from 'fs';
 import path from 'path';
-import { findSoaDebtorCompany, resolveDraftCompany, soaBodyInvoices, SOA_BOOKS } from './lib/soa-draft-resolution';
-import { normalize, findUniqueBestMatch } from './lib/company-name';
+import { findSoaDebtorCompany, resolveDraftCompany, soaBodyInvoices, soaBodyFuzzyKeys, customerBelongsToAnotherCompany, SOA_BOOKS } from './lib/soa-draft-resolution';
+import { normalize, findUniqueBestMatch, matchScore } from './lib/company-name';
 import { isActiveCompany } from './lib/company-lifecycle';
 import type { CompanyRow } from './lib/client-comms-resolve';
 import type { InvoiceRef } from './lib/email-merge';
@@ -86,53 +86,96 @@ console.log('\n--- 2. WHO: the exact match over everyone comes BEFORE the fuzzy 
 
 console.log('\n--- 3. WHAT: the body lists what the attached statement shows ---');
 {
-  const ref = (qbCompany: 'TAB' | 'TAC' | 'TAO', invoiceNo: string, amount: number): InvoiceRef => ({ qbCompany, invoiceNo, amount, qbInvoiceId: invoiceNo });
+  type Book = 'TAB' | 'TAC' | 'TAO';
+  const ref = (qbCompany: Book, invoiceNo: string, amount: number, qbInvoiceId: string | null = invoiceNo): InvoiceRef => ({ qbCompany, invoiceNo, amount, qbInvoiceId });
   const mapOf = (entries: Array<[string, InvoiceRef[]]>) => new Map(entries.map(([name, refs]) => [normalize(name), refs] as [string, InvoiceRef[]]));
   const TAB_BOOK = ['TAB'] as const;
   const soonRefs = [ref('TAB', '02611000', 400), ref('TAB', '02611001', 60), ref('TAB', '02611002', 1000)];
   const soonCompany = 'SOON & GUAN MANPOWER TRAINING', soonQb = 'Soon & Guan Manpower Trading';
-  const ownKey = normalize(soonCompany);
-
-  const soonBodyKey = (m: Map<string, InvoiceRef[]>, lookup: string, key: string, books: readonly ('TAB' | 'TAC' | 'TAO')[]) =>
-    soaBodyInvoices(lookup, key, m, books).map(r => r.invoiceNo).join(',');
+  const ids = (m: Map<string, InvoiceRef[]>, lookup: string, books: readonly Book[], belongs?: (k: string) => boolean) =>
+    soaBodyInvoices(lookup, m, books, belongs).map(r => r.invoiceNo).join(',');
 
   const m1 = mapOf([[soonQb, soonRefs], ['ALPHA PTE. LTD.', [ref('TAB', '1', 5)]]]);
   check('the company list and QuickBooks spell the name differently: the body finds the same customer the statement does',
-    soonBodyKey(m1, soonCompany, ownKey, TAB_BOOK) === soonRefs.map(r => r.invoiceNo).join(','));
+    ids(m1, soonCompany, TAB_BOOK) === soonRefs.map(r => r.invoiceNo).join(','));
 
   const own = [ref('TAB', 'OWN-1', 10)];
   const m2 = mapOf([[soonCompany, own], [soonQb, soonRefs]]);
-  check('a company whose own name already has invoices in the book is left EXACTLY as it was (a draft that worked does not change)',
-    soonBodyKey(m2, soonCompany, ownKey, TAB_BOOK) === 'OWN-1');
+  check('a name that already has invoices in the book is left EXACTLY as it was (a draft that worked does not change)', ids(m2, soonCompany, TAB_BOOK) === 'OWN-1');
+  check('… down to the very same objects, in the same order', soaBodyInvoices(soonCompany, m2, TAB_BOOK).every((r, i) => r === own[i]) && soaBodyInvoices(soonCompany, m2, TAB_BOOK).length === own.length);
+  const multi = [ref('TAC', 'C-1', 1), ref('TAB', 'B-1', 2), ref('TAO', 'O-1', 3)];
+  check('… including a cross-book list kept in the order it had (the "All" body was never re-sorted)', ids(mapOf([[soonCompany, multi]]), soonCompany, SOA_BOOKS) === 'C-1,B-1,O-1');
 
   const m3 = mapOf([[soonQb, [ref('TAC', 'TAC-1', 50)]]]);
-  check('only customers with something open in THIS book are candidates: a TAC-only look-alike adds nothing to a TAB draft', soonBodyKey(m3, soonCompany, ownKey, TAB_BOOK) === '');
+  check('only customers with something open in THIS book are candidates: a TAC-only look-alike adds nothing to a TAB draft', ids(m3, soonCompany, TAB_BOOK) === '');
   const m3b = mapOf([[soonQb, soonRefs], ['Soon & Guan Manpower Training Services', [ref('TAC', 'TAC-9', 9)]]]);
   check('… even when that TAC-only customer is the closer name (it has nothing open in TAB, so it is not who the TAB statement is about)',
-    soonBodyKey(m3b, soonCompany, ownKey, TAB_BOOK) === soonRefs.map(r => r.invoiceNo).join(','));
+    ids(m3b, soonCompany, TAB_BOOK) === soonRefs.map(r => r.invoiceNo).join(','));
   const m4 = mapOf([[soonQb, [ref('TAB', 'TAB-1', 5), ref('TAC', 'TAC-1', 50)]]]);
-  check('… and from a look-alike that has both, only the invoices of the draft\'s own book come across', soonBodyKey(m4, soonCompany, ownKey, TAB_BOOK) === 'TAB-1');
+  check('… and from a look-alike that has both, only the invoices of the draft\'s own book come across', ids(m4, soonCompany, TAB_BOOK) === 'TAB-1');
+
+  // The statement route's candidates are customers with an open INVOICE; a journal entry / payment / credit note alone is no candidate.
+  const je = [ref('TAB', 'OPNG JE', 900, null)];
+  const m4b = mapOf([['Soon & Guan Manpower Training Svc', je], [soonQb, soonRefs]]);
+  const jeScore = findUniqueBestMatch(soonCompany, [...m4b.entries()], e => e[0], 70);
+  check('precondition: with the journal-entry-only customer counted, it would be the closer name', matchScore(soonCompany, 'Soon & Guan Manpower Training Svc') > matchScore(soonCompany, soonQb) && jeScore.value?.[0] === normalize('Soon & Guan Manpower Training Svc'));
+  check('a customer that has only a journal entry / payment / credit note in the book is not a candidate (the statement cannot be built from it)',
+    ids(m4b, soonCompany, TAB_BOOK) === soonRefs.map(r => r.invoiceNo).join(','));
 
   const m5 = mapOf([['Soon & Guan Manpower Trading', [ref('TAB', 'A-1', 5)]], ['Soon & Guan Manpower Tracing', [ref('TAB', 'B-1', 6)]]]);
   const tie = findUniqueBestMatch(soonCompany, [...m5.entries()], e => e[0], 70);
   check('precondition: two customers tie for the name', tie.ambiguous && tie.value === null);
-  check('a tie picks NOTHING (never the first row) — the draft then refuses instead of guessing a client\'s invoices', soonBodyKey(m5, soonCompany, ownKey, TAB_BOOK) === '');
+  check('a tie picks NOTHING (never the first row) — the draft then refuses instead of guessing a client\'s invoices', ids(m5, soonCompany, TAB_BOOK) === '');
 
   const m6 = mapOf([['Beta Holdings Pte Ltd', [ref('TAB', 'B-9', 9)]], ['Soon & Guan Consulting Services', [ref('TAB', 'B-10', 10)]]]);
-  check('a customer whose name is not close (below the 70 the statement itself uses) is not taken', soonBodyKey(m6, soonCompany, ownKey, TAB_BOOK) === '');
+  check('a customer whose name is not close (below the 70 the statement itself uses) is not taken', ids(m6, soonCompany, TAB_BOOK) === '');
+
+  // The company list's spelling is not the name that was clicked: the statement is built from the CLICKED name, so is the body.
+  const m6b = mapOf([['SMART INNOVA STARTECH', [ref('TAB', 'S-1', 7)]], ['Zhichuang Startech Pte. Ltd.', [ref('TAB', 'Z-1', 8)]]]);
+  check('the body follows the name that was clicked (the statement does), never the company row\'s own invoices under another name', ids(m6b, 'Zhichuang Startech Pte. Ltd.', TAB_BOOK) === 'Z-1');
 
   // "All": each book is matched on its own, exactly as each book's own statement is.
   const allOwn = [ref('TAB', 'TAB-OWN', 100)];
   const m7 = mapOf([[soonCompany, allOwn], ['SOON & GUAN MANPOWER TRADING', [ref('TAO', 'TAO-1', 30), ref('TAB', 'TAB-X', 1)]]]);
-  check('"All": books the company\'s own name already covers keep exactly those; a book it does not cover gets the look-alike\'s invoices of that book',
-    soonBodyKey(m7, soonCompany, ownKey, SOA_BOOKS) === 'TAB-OWN,TAO-1');
-  check('"All": a company that owes nowhere under its own name and has no look-alike stays empty', soaBodyInvoices('NOBODY PTE. LTD.', normalize('NOBODY PTE. LTD.'), m7, SOA_BOOKS).length === 0);
+  check('"All": books the name already covers keep exactly those; a book it does not cover gets the look-alike\'s invoices of that book', ids(m7, soonCompany, SOA_BOOKS) === 'TAB-OWN,TAO-1');
+  check('"All": a company that owes nowhere under its own name and has no look-alike stays empty', soaBodyInvoices('NOBODY PTE. LTD.', m7, SOA_BOOKS).length === 0);
 
   const m8 = mapOf([[soonQb, soonRefs]]);
   const before = JSON.stringify([...m8.entries()]);
-  soaBodyInvoices(soonCompany, ownKey, m8, SOA_BOOKS);
+  soaBodyInvoices(soonCompany, m8, SOA_BOOKS);
   check('the map it is given is never modified (the caller decides what to do with the result)', JSON.stringify([...m8.entries()]) === before);
   check('SOA_BOOKS is the three books', SOA_BOOKS.join(',') === 'TAB,TAC,TAO');
+
+  // ── the look-alike: a customer that is another company's, not ours ────────
+  const yuAn = 'YU AN (SGP) HOLDING PTE. LTD.';
+  const yuRows = [company(1, yuAn, true), company(2, 'YU AN BULK HOLDING PTE LTD', true), company(3, 'YU AN SHIPPING PTE. LTD.', true), company(4, 'ALPHA PTE. LTD.', true)];
+  const bulk = normalize('Yu An Bulk Holding Pte Ltd');
+  const yuVariant = normalize('Yu An (SGP) Holdings Pte. Ltd.');
+  const mYu = mapOf([['Yu An (SGP) Holdings Pte. Ltd.', [ref('TAC', 'YU-C2', 6)]], ['Yu An Bulk Holding Pte Ltd', [ref('TAB', '02610643', 800)]]]);
+  check('precondition: the statement\'s fuzzy step WOULD hand Yu An (SGP) Holding the invoice of Yu An Bulk Holding in TAB (real data, TAB #02610643 S$800)',
+    ids(mYu, yuAn, ['TAB']) === '02610643' && matchScore(bulk, yuAn) >= 70);
+  check('a customer that fits ANOTHER company better is that company\'s (Yu An Bulk Holding is not Yu An (SGP) Holding)', customerBelongsToAnotherCompany(bulk, yuAn, yuRows[0], yuRows));
+  const belongs = (k: string) => customerBelongsToAnotherCompany(k, yuAn, yuRows[0], yuRows);
+  check('so the body takes nothing from it, in "All" too — while the books where the real customer exists still fill',
+    ids(mYu, yuAn, SOA_BOOKS, belongs) === 'YU-C2' && ids(mYu, yuAn, ['TAB'], belongs) === '');
+  check('a spelling variant of OUR customer is not "another company\'s"', !customerBelongsToAnotherCompany(yuVariant, yuAn, yuRows[0], yuRows));
+  check('… nor is Soon & Guan\'s customer (the company list has no better home for it)', !customerBelongsToAnotherCompany(normalize(soonQb), soonCompany, company(11, 'SOON & GUAN MANPOWER TRAINING PTE. LTD.', true), [company(11, 'SOON & GUAN MANPOWER TRAINING PTE. LTD.', true), ...yuRows]));
+  const startech = company(21, 'SMART INNOVA STARTECH PTE. LTD. (F.K.A. ZHICHUANG STARTECH PTE. LTD.)', true);
+  const zhichuang = normalize('Zhichuang Startech Pte. Ltd.');
+  check('precondition: spelled the way the name was clicked, the look-alike company fits the customer better than the click does',
+    matchScore(zhichuang, 'SMART INNOVA STARTECH PTE. LTD.') < matchScore(zhichuang, 'INNOSMART STARTECH PTE. LTD.'));
+  check('… nor a customer reached through the company\'s old name (F.K.A.): the company\'s own alias scores 100 against it, though the name that was clicked is spelled differently',
+    !customerBelongsToAnotherCompany(zhichuang, 'SMART INNOVA STARTECH PTE. LTD.', startech, [startech, company(22, 'INNOSMART STARTECH PTE. LTD.', true), ...yuRows]));
+  // a tie: the customer fits our company and another one EQUALLY well (3 of 4 words each)
+  const abg = company(31, 'ALPHA BETA GAMMA TRADING PTE. LTD.', true), abgTwin = company(32, 'ALPHA BETA GAMMA SERVICES PTE. LTD.', true), abgKey = normalize('Alpha Beta Gamma Holdings');
+  check('precondition: the customer scores the same against both companies', matchScore(abgKey, abg.company_name) === matchScore(abgKey, abgTwin.company_name) && matchScore(abgKey, abg.company_name) >= 70);
+  check('a tie with another company counts as theirs (a draft that refuses is safe; one that lists another client\'s invoice is not)',
+    customerBelongsToAnotherCompany(abgKey, abg.company_name, abg, [abg, abgTwin]));
+  check('… and with no other company at all it is ours', !customerBelongsToAnotherCompany(abgKey, abg.company_name, abg, [abg]));
+  check('a duplicate row with the same name as ours (3 real pairs) is never "another company"', !customerBelongsToAnotherCompany(yuVariant, yuAn, yuRows[0], [...yuRows, company(9, 'Yu An (SGP) Holding Pte Ltd', false)]));
+  check('a dead look-alike counts too (an inactive sibling is still another client)', customerBelongsToAnotherCompany(bulk, yuAn, yuRows[0], [yuRows[0], company(2, 'YU AN BULK HOLDING PTE LTD', false)]));
+  check('the fuzzy keys the body would take are reported per book (so the route loads the company list only when needed)',
+    soaBodyFuzzyKeys(yuAn, mYu, SOA_BOOKS).join(',') === `${bulk},${yuVariant}` && soaBodyFuzzyKeys(yuAn, m2, TAB_BOOK).length === 0 && soaBodyFuzzyKeys(soonCompany, m2, TAB_BOOK).length === 0);
 }
 
 console.log('\n--- 4. wiring: who may see inactive companies, and the guard that refuses an empty body ---');
@@ -153,9 +196,12 @@ console.log('\n--- 4. wiring: who may see inactive companies, and the guard that
   };
   sourceDirs.forEach(walk);
   const users = files.filter(f => /includeInactive\s*:\s*true/.test(read(f)));
-  check('exactly ONE caller opts in to every company: the preview route\'s single-company lookup (AR, letters, Campaign Centre\'s bulk list never do)',
+  check('exactly ONE file opts in to every company: the preview route\'s single-company lookup (AR, letters, Campaign Centre\'s bulk list never do)',
     users.length === 1 && users[0] === 'app/api/client-communications/campaigns/preview/route.ts', users.join(', '));
-  check('… and it asks for them ONLY for an SOA (`type === \'soa\'`)', /type === 'soa' \? await loadCompanies\(supabase, \{ includeInactive: true \}\) : undefined/.test(route));
+  const opts = route.match(/includeInactive\s*:\s*true/g) ?? [];
+  check('… in two places, both for an SOA: the company lookup and the look-alike check of the body',
+    opts.length === 2 && /type === 'soa' \? await loadCompanies\(supabase, \{ includeInactive: true \}\) : undefined/.test(route)
+    && /if \(type === 'soa' && draftBooks\) \{[\s\S]*?everyone = await loadCompanies\(supabase, \{ includeInactive: true \}\);/.test(route));
   check('the bulk POST (Campaign Centre\'s auto list) still loads the live roster only', /loadCompanies\(supabase\),\s*\n\s*loadInvoicesByCompany\(supabase, type, fyeMonth, fyeYear\)/.test(route));
   check('the route resolves through resolveDraftCompany (exact-over-everyone first), not a private rule', /resolveDraftCompany\(name, findActive, everyCompany\)/.test(route));
   check('the live roster is told apart with isActiveCompany() — no second definition of "active" here', /everyCompany\.filter\(isActiveCompany\)/.test(route) && /isActiveCompany/.test(pure)
@@ -166,10 +212,15 @@ console.log('\n--- 4. wiring: who may see inactive companies, and the guard that
 
   check('the body fallback only runs for an SOA Draft (single book: qbCompany; "All": allBooks) — Campaign Centre\'s hand-add is untouched',
     /const draftBooks = qbCompany \? \[qbCompany\] : allBooks \? SOA_BOOKS : null;/.test(route) && /if \(type === 'soa' && draftBooks\)/.test(route));
+  check('a look-alike customer is refused through customerBelongsToAnotherCompany, and the company list is only loaded when the fuzzy step would take a customer',
+    /soaBodyInvoices\(lookup, invoicesByCompany, draftBooks, belongsToOther\)/.test(route) && /if \(!everyone && soaBodyFuzzyKeys\(lookup, invoicesByCompany, draftBooks\)\.length\)/.test(route)
+    && /customerBelongsToAnotherCompany\(customerKey, lookup, resolved, known\)/.test(route));
   check('it builds the row from the patched copy of the map and never mutates the loaded one', /new Map\(invoicesByCompany\)\.set\(key, refs\)/.test(route) && /buildRow\(company\.company_name, findCompany, invoicesForBody,/.test(route));
+  check('a draft that already worked is not touched: the map is only copied when the body would differ', /if \(refs\.length !== own\.length \|\| refs\.some\(\(r, i\) => r !== own\[i\]\)\)/.test(route));
   check('"All" is forwarded from the Draft flow only (soaReminderScope === \'ALL\')', /opts\.soaReminderScope === 'ALL'/.test(draftClient) && /qs\.set\('allBooks', '1'\)/.test(draftClient));
   check('an SOA draft whose body would list no invoice is refused before anything is created', /type === 'soa' && !json\.row\.invoiceRefs\?\.length/.test(draftClient)
     && draftClient.indexOf("!json.row.invoiceRefs?.length") < draftClient.indexOf("fetch('/api/client-communications/campaigns', {"));
+  check('… with a message that is true on every path (it does not claim a statement was attached)', !/statement itself is fine/.test(draftClient) && /No open invoice could be matched to/.test(draftClient));
   check('the pure module reaches neither the database nor a server-only module (so this test can run it)', !/supabase|server-only|process\.env|fetch\(/.test(stripComments(pure)));
 }
 

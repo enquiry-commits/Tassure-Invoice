@@ -51,7 +51,7 @@ export async function resolveCampaignRow(companyName: string, type: CampaignType
   // An SOA email whose body lists no invoice ("(no invoices)", S$0.00) is never right — least of all next to a statement that
   // shows a balance. The row only notes "No invoice found" in `included`/`reason`, which draft creation ignores, so refuse here.
   if (type === 'soa' && !json.row.invoiceRefs?.length) {
-    throw new Error(`The email for "${companyName}" would list no invoice, so no draft was made (the statement itself is fine). Its QuickBooks customer name does not match the company's name closely enough — correct one of the two.`);
+    throw new Error(`No open invoice could be matched to "${companyName}" for the email, so no draft was made. Its QuickBooks customer name and the company's name are not close enough to match — correct one of the two.`);
   }
   // oldestDueDate/lastReminderSentAt (added 2026-09-17, lib/client-comms-
   // resolve.ts's buildRow()) ride along on this same object all the way

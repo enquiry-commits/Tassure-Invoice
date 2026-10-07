@@ -7,7 +7,7 @@ import {
   loadCompanies, loadInvoicesByCompany, loadAutoTargetNames, loadAlreadySent, loadArPicByCompany, loadLastReminderSentAt, buildRow, makeCompanyFinder,
   type CompanyRow,
 } from '@/lib/client-comms-resolve';
-import { resolveDraftCompany, soaBodyInvoices, SOA_BOOKS } from '@/lib/soa-draft-resolution';
+import { resolveDraftCompany, soaBodyInvoices, soaBodyFuzzyKeys, customerBelongsToAnotherCompany, SOA_BOOKS } from '@/lib/soa-draft-resolution';
 
 // Preview-before-generate: resolves the same candidate set Campaign Centre
 // would generate, WITHOUT writing anything, so a reviewer can check/uncheck
@@ -103,13 +103,14 @@ export async function GET(req: NextRequest) {
   ]);
 
   let company: CompanyRow | null = exactMatch;
+  let everyCompany: CompanyRow[] | undefined;
   let findCompany: (name: string) => CompanyRow | null = () => company;
   if (!company) {
     // An SOA chases a debt, and a debt outlives the client relationship (Vincent, 2026-10-07: "我们还是需要发SOA 去追债"):
     // for type 'soa' a company that is inactive, Terminated, Striking Off or no longer in TeamWork is still found — by EXACT
     // name, before the fuzzy match over the live roster could hand it to a similarly named active company. AR, letters and
     // Campaign Centre's bulk list keep the active-only rule (INV-TW-024 / INV-AR-017 / INV-AR-018). INV-MAIL-006.
-    const everyCompany = type === 'soa' ? await loadCompanies(supabase, { includeInactive: true }) : undefined;
+    everyCompany = type === 'soa' ? await loadCompanies(supabase, { includeInactive: true }) : undefined;
     const findActive = makeCompanyFinder(everyCompany ? everyCompany.filter(isActiveCompany) : await loadCompanies(supabase));
     findCompany = name => resolveDraftCompany(name, findActive, everyCompany);
     company = findCompany(lookup);
@@ -122,16 +123,24 @@ export async function GET(req: NextRequest) {
     }, { status: 404 });
   }
 
-  // An SOA Draft's body must list what its attached statement(s) show. The statement finds the QuickBooks customer with a fuzzy
-  // match when the company list spells the name differently; buildRow only knows the company's own name, which left the email
-  // saying "(no invoices)" and S$0.00 next to a statement with a balance (INV-MAIL-006). Only the Draft flow asks for this
-  // (single book: `qbCompany`; "All": `allBooks`), and only for the books where the company's own name found nothing.
+  // An SOA Draft's body must list what its attached statement(s) show. The statement finds the QuickBooks customer for the name that
+  // was clicked, with a fuzzy match when the company list spells it differently; buildRow only knows the company's own name, which
+  // left the email saying "(no invoices)" and S$0.00 next to a statement with a balance (INV-MAIL-006). Only the Draft flow asks
+  // for this (single book: `qbCompany`; "All": `allBooks`), and only for the books where the name found nothing exactly. A
+  // customer that fits ANOTHER company in the list better (a look-alike: Yu An Bulk Holding for Yu An (SGP) Holding) is never
+  // taken, so the company list is loaded for it — but only when the fuzzy step would actually take a customer.
   const draftBooks = qbCompany ? [qbCompany] : allBooks ? SOA_BOOKS : null;
   let invoicesForBody = invoicesByCompany;
   if (type === 'soa' && draftBooks) {
-    const key = normalize(company.company_name);
-    const refs = soaBodyInvoices(lookup, key, invoicesByCompany, draftBooks);
-    if (refs.length > (invoicesByCompany.get(key) ?? []).length) invoicesForBody = new Map(invoicesByCompany).set(key, refs);
+    const resolved = company;
+    let everyone = everyCompany;
+    if (!everyone && soaBodyFuzzyKeys(lookup, invoicesByCompany, draftBooks).length) everyone = await loadCompanies(supabase, { includeInactive: true });
+    const known = everyone;
+    const belongsToOther = known ? (customerKey: string) => customerBelongsToAnotherCompany(customerKey, lookup, resolved, known) : undefined;
+    const refs = soaBodyInvoices(lookup, invoicesByCompany, draftBooks, belongsToOther);
+    const key = normalize(resolved.company_name);
+    const own = invoicesByCompany.get(key) ?? [];
+    if (refs.length !== own.length || refs.some((r, i) => r !== own[i])) invoicesForBody = new Map(invoicesByCompany).set(key, refs);
   }
 
   const row = buildRow(company.company_name, findCompany, invoicesForBody, alreadySent, type, arPicByCompany, lastReminderSentAtByCompany, qbCompany);

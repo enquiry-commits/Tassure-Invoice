@@ -791,38 +791,60 @@ again.
   BEFORE the usual live-roster match (exact, then unique fuzzy >= 70). Never a
   fuzzy match for a company that is not live: a similarly named ACTIVE company
   would otherwise receive another client's collections email with the wrong
-  statement. This is the ONLY place that reads inactive companies
-  (`loadCompanies(…, { includeInactive: true })` has exactly one caller): AR,
-  letters and Campaign Centre's BULK list stay on the live roster (INV-TW-024,
-  INV-AR-017, INV-AR-018 — one definition, `lib/company-lifecycle.ts`; the alive/dead
-  split uses `isActiveCompany()`). A company with no `companies` row has no
-  email address on file, and the route now says so instead of "no match": on
-  2026-10-07, 53 of the 397 Outstanding rows (TAB 10, TAC 7, TAO 36) — they need
+  statement. This is the ONLY place that reads inactive companies (one file, the
+  preview route, passes `includeInactive`; both calls are for an SOA): AR, letters
+  and Campaign Centre's BULK list stay on the live roster (INV-TW-024, INV-AR-017,
+  INV-AR-018 — one definition, `lib/company-lifecycle.ts`; the alive/dead split
+  uses `isActiveCompany()`). A company with no `companies` row has no email
+  address on file, and the route now says so instead of "no match": on
+  2026-10-07, 55 of the 400 Outstanding rows (TAB 10, TAC 7, TAO 38) — they need
   the company and a contact added first; 10 rows are inactive companies now
   reachable (TAB 9, TAO 1) and 7 rows have a company but no email (HAN KUN LLP,
   SATORISYS, WORLD PRECISION MACHINERY …). **WHAT:** the BODY lists the invoices
-  the attached statement shows. The statement finds the QuickBooks customer by
-  exact normalized name, else the unique best fuzzy match (>= 70) among that
-  book's customers with an open invoice; the body used only the company's own
-  exact name, so where the two are spelled differently (company list "SOON &
-  GUAN MANPOWER TRAINING PTE. LTD." / QuickBooks "Soon & Guan Manpower Trading")
-  it listed "(no invoices)" and S$0.00 beside a statement with a balance — 12 of
-  the 397 rows on 2026-10-07 (ACG Interior, Soon & Guan, INVENTA TECHNOLOGIES, Yu An
-  (SGP) Holding on TAC and TAO, WQW Capital, Zhichuang Startech, First Noodle …). `soaBodyInvoices` adds, for each book in which the
-  company's own name has nothing, that same customer's invoices of that book —
-  only for the Drafts flow (single book: `qbCompany`; "All": `allBooks`); what the
-  company's own name already has is untouched, a tie picks nothing, and Campaign
-  Centre's bulk list and hand-add bodies are unchanged. `resolveCampaignRow`
-  refuses an SOA draft whose body would still list no invoice (the row's own "No
-  invoice found" is ignored by draft creation). Result on the real data: 0 of 397
-  rows empty (12 reached through the fuzzy step, each body total = the SOA's); the
-  one body that differs from its SOA row is FAITH CAPITAL GLOBAL FUND VCC (TAB) —
-  two QuickBooks customers, one spelled "Glocal" (2,500 + 50) and one right
-  (4 x 652.76): the statement and the body show the right one, the SOA row adds
-  both; accounting's data, not touched. Guarded by `test-soa-draft-resolution.ts`
-  (41 checks: the lookup, its order, the body, the wiring — who may pass
-  `includeInactive`, the guard) and, with each safeguard removed on a copy, 25
-  negative controls that fail it.
+  the attached statement shows. The statement is built from the QuickBooks
+  customer found for the name that was clicked — exact normalized name, else the
+  unique best fuzzy match (>= 70) among that book's customers with an open
+  INVOICE; the body used only the company's own exact name, so where the two are
+  spelled differently (company list "SOON & GUAN MANPOWER TRAINING PTE. LTD." /
+  QuickBooks "Soon & Guan Manpower Trading") it listed "(no invoices)" and S$0.00
+  beside a statement with a balance — 11 of the 400 rows on 2026-10-07 (ACG
+  Interior, Soon & Guan, Yu An (SGP) Holding on TAC and TAO, WQW Capital,
+  Zhichuang Startech, First Noodle, Terracool, China Shipbuilding, Grand Chen,
+  Target Capital). `soaBodyInvoices` mirrors the statement: what the clicked name
+  already has is kept exactly as it was; for each book where it has nothing, the
+  statement's fuzzy customer's invoices of that book are added — only for the
+  Drafts flow (single book: `qbCompany`; "All": `allBooks`); Campaign Centre's
+  bulk list and hand-add bodies are unchanged. **The look-alike guard:** a
+  customer that fits ANOTHER company in the company list at least as well as this
+  one is that company's, not ours, and is never taken
+  (`customerBelongsToAnotherCompany`; a tie counts as theirs; the company list is
+  loaded only when the fuzzy step would take a customer). Real case, found by the
+  independent review: "Yu An (SGP) Holding" and "Yu An Bulk Holding" are two
+  clients that score 75 against each other, so in TAB — where only the second has
+  an invoice (#02610643, S$800) — the statement's fuzzy step hands the first one
+  the second's invoice; the body no longer lists it. `resolveCampaignRow` refuses
+  an SOA draft whose body would still list no invoice (the row's own "No invoice
+  found" is ignored by draft creation). Result on the real data: every one of the
+  400 rows has a body except INVENTA TECHNOLOGIES (TAB S$1,505.50, Terminated),
+  whose whole debt is one opening journal entry — no statement can be built from
+  it (the statement route answers "No outstanding invoices found"), so its Draft
+  cannot be made, like EASYFLY's S$2; the one body that differs from its SOA row is
+  FAITH CAPITAL GLOBAL FUND VCC (TAB) — two QuickBooks customers, one spelled
+  "Glocal" (2,500 + 50) and one right (4 x 652.76): the statement and the body show
+  the right one, the SOA row adds both; accounting's data, not touched. **Still
+  open (Vincent's call):** the statement route has no such guard, so the "All"
+  Draft of Yu An (SGP) Holding still ATTACHES Yu An Bulk Holding's TAB statement
+  (1 of 77 companies with rows in two books or more; the body does not list it);
+  the live-roster fuzzy match can still address a debtor that has no company row to
+  a similarly named live company's contacts (0 of 400 rows today — Zhichuang
+  Startech reaches its company through its old name at score 100); the assistant's
+  own "draft an SOA email" lookup (`lib/email-draft-lookup.ts`) is still
+  active-only although its SOA card's Draft buttons work for an inactive debtor;
+  among duplicate rows with one name (3 pairs) the draft takes the live row, else
+  the lowest id, while the SOA list takes the last row it reads. Guarded by
+  `test-soa-draft-resolution.ts` (62 checks: the lookup, its order, the body, the
+  look-alike guard, the wiring — who may pass `includeInactive`, the empty-body
+  guard) and, with each safeguard removed on a copy, 37 negative controls that fail it.
 
 ## Document / template generation (INV-DOC)
 
