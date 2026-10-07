@@ -1211,7 +1211,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
           <input type="text" placeholder="Search company name…" value={search} onChange={e => setSearch(e.target.value)}
             style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: 7, padding: '5px 10px', fontSize: 13, outline: 'none' }} />
           <div style={{ width: 1, height: 20, background: '#e2e8f0' }} />
-          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>My book:</span>
+          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600, whiteSpace: 'nowrap' }}>PIC:</span>
           <PicMultiSelect options={picFilterOptions} groups={picFilterGroups} selected={picFilters} onChange={setPicFilters} />
           {picFilters.length > 0 && (
             <button onClick={() => setPicFilters([])} title="Clear filter"
