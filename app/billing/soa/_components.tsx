@@ -8,6 +8,7 @@ import MetricCard from '@/components/MetricCard';
 import { usePagination, PaginationBar } from '@/components/Pagination';
 import { allStaffNames, staffByTeam } from '@/lib/staff-directory';
 import { findUniqueBestMatch, normalize } from '@/lib/company-name';
+import { effectiveOwner as mainPicFor, derivedOwner, personPick } from '@/lib/soa-main-pic';
 import OutlookStyleSendModal from '@/components/client-communications/OutlookStyleSendModal';
 import OutlookHelperReadiness from '@/components/client-communications/OutlookHelperReadiness';
 import type { DraftLike } from '@/lib/draft-helper-client';
@@ -56,7 +57,9 @@ function mergeSameSourceRows(rows: Row[]): Row {
   const mostAdvancedReminder = [...rows].sort((a, b) =>
     (b.reminderProgress.completedStage ?? 0) - (a.reminderProgress.completedStage ?? 0)
       || (b.reminderProgress.completedAt ?? '').localeCompare(a.reminderProgress.completedAt ?? ''))[0];
-  const confirmedOwners = [...new Set(rows.map(row => row.soaPic).filter((owner): owner is string => !!owner))];
+  // Only picks a person made in the app count as confirmed (INV-PIC-009).
+  const confirmedOwners = [...new Set(rows.map(row => personPick(row)).filter((owner): owner is string => !!owner))];
+  const classOwners = [...new Set(rows.map(row => row.classOwner).filter((owner): owner is string => !!owner))];
   const suggestedOwners = [...new Set(rows.map(row => row.suggestedOwner).filter((owner): owner is string => !!owner))];
 
   return {
@@ -64,6 +67,8 @@ function mergeSameSourceRows(rows: Row[]): Row {
     picOptions: [...new Set(rows.flatMap(row => row.picOptions))],
     picShown: [...new Set(rows.flatMap(row => row.picShown))],
     soaPic: confirmedOwners.length === 1 ? confirmedOwners[0] : null,
+    soaPicSource: confirmedOwners.length === 1 ? 'person' : null,
+    classOwner: classOwners.length === 1 ? classOwners[0] : null,
     suggestedOwner: suggestedOwners.length === 1 ? suggestedOwners[0] : null,
     invoiceCount: rows.reduce((sum, row) => sum + row.invoiceCount, 0),
     totalOutstanding: rows.reduce((sum, row) => sum + row.totalOutstanding, 0),
@@ -117,9 +122,9 @@ const PLACEHOLDER_LABEL_BY_CODE = new Map(PLACEHOLDER_OWNER_CODES.map(p => [p.co
 const ownerOptionLabel = (value: string) => PLACEHOLDER_LABEL_BY_CODE.get(value) ?? value;
 
 function SoaOwnerSelect({ row, onChange }: { row: Row; onChange: (value: string) => void }) {
-  const singlePicFallback = row.picOptions.length === 1 ? row.picOptions[0] : null;
-  const displayedOwner = row.soaPic ?? row.suggestedOwner ?? singlePicFallback;
-  const isConfirmed = !!row.soaPic;
+  // The shared Main PIC rule (lib/soa-main-pic.ts, INV-PIC-009).
+  const displayedOwner = mainPicFor(row);
+  const isConfirmed = !!personPick(row);
   const likely = displayedOwner && !row.picOptions.includes(displayedOwner)
     ? [displayedOwner, ...row.picOptions] : row.picOptions;
   const likelySet = new Set(likely);
@@ -717,7 +722,7 @@ function SoaBillingViewInner({ qbCompany }: { qbCompany: QbCompany | 'ALL' }) {
   // real default the moment QuickBooks itself carries the signal, no manual
   // pick required first. A confirmed soa_owners pick (soaPic) still wins
   // when one exists — it's a human override, not just a smarter guess.
-  const effectiveOwner = (c: SoaCompanyRow): string | null => c.soaPic ?? c.suggestedOwner;
+  const effectiveOwner = (c: SoaCompanyRow): string | null => derivedOwner(c); // shared rule, INV-PIC-009
 
   // Vincent, 2026-09-06: "我选择某个PIC,她就能看到和自己相关的所有欠款公司" —
   // a person's own book is everything where she's the confirmed Owner, the

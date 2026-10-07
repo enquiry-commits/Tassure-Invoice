@@ -561,3 +561,7 @@ rest are deliberately manual for now.
 ### REG-043 — SOA PIC column = QuickBooks' own PIC (after ANY change to `picShownFor` / `picShown` in lib/soa-data.ts or the SOA page's PIC column / PIC filter)
 Run `npx tsx test-soa-pic-column.ts` (`ALL OK`). Then signed in, Billing System › Outstanding › ALL: ACN CONSULTANTS' TAB row shows only Ang Shi Ming, its TAO row Tee Yu Heng, the combined row both; the owner dropdown still offers Chin Kah Ye; a TAC company whose invoices carry no Class still shows its TeamWork PIC; filtering by Chin Kah Ye no longer lists ACN's TAB row unless she is its chosen owner.
 **Guards:** `docs/INVARIANTS.md` INV-PIC-008, INV-PIC-007.
+
+### REG-044 — SOA Main PIC follows the system; only people's picks and BD override it (after ANY change to `lib/soa-main-pic.ts`, `soaPicSource` / `classOwner` in lib/soa-data.ts, the SOA page's owner dropdown/filters, or the soa-owners audit)
+Run `npx tsx test-soa-main-pic.ts` (`ALL OK`). Then signed in, Outstanding: FINSIGHTS MEDIA TAB and 1X EXCHANGE show Main PIC Jenny Lai (= the PIC column); Quantum Marine / RTG Projects / Monster Game still show Bad Debt; picking someone in the dropdown sticks (navy, bold) and survives a reload; My Tasks shows the same owner as the page.
+**Guards:** `docs/INVARIANTS.md` INV-PIC-009, INV-PIC-008, INV-PIC-007.

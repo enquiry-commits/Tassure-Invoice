@@ -765,6 +765,27 @@ again.
   (INV-PIC-007, soa_owners) are untouched. Live check: TAB 129 of 225 owing
   rows narrower (ACN → Ang Shi Ming), TAC 13 of 52, TAO 0; no row newly
   empty. `test-soa-pic-column.ts`.
+- **INV-PIC-009** — SOA Main PIC follows the system, not the 2026-09-07
+  Google-Sheet import. ONE rule, `lib/soa-main-pic.ts` (server re-exports
+  `effectiveOwner`; the SOA page's dropdown and filters import it — they
+  had their own copies): (1) a pick a PERSON made in the app, or a stored
+  status code "BD" (Bad Debt — Vincent: "BD就先继续放 MAIN PIC 是 BD");
+  (2) the person QuickBooks' Classes name; (3) the PIC column's only person
+  (INV-PIC-008); (4) the Class/Location suggestion — who keyed the invoice —
+  only when the PIC column can't decide; (5) a lone TeamWork PIC. Found
+  2026-10-07: FINSIGHTS MEDIA's TAB PIC column said Jenny Lai (Class) while
+  Main PIC kept "Chin Kah Ye" from a `soa_owners` row written by
+  `backfill@internal` — 305 of the table's 308 rows came from that import.
+  Vincent: "Main PIC 也应该是默认是 Jenny" then "最新一轮的直接按照系统逻辑走了，
+  以后要手动才手动". Nothing in `soa_owners` was changed or deleted; the
+  import rows are simply no longer read as an owner, and the daily
+  soa-owners audit now checks only picks people made. A plain "Class/
+  Location first" order was rejected after a live check: TAC invoices rarely
+  carry a Class, so it named the person who KEYED the invoice (e.g. Chelsea
+  Ang) instead of the PIC column's person. Live result: Main PIC changes on
+  TAB 20 / TAC 23 / TAO 4 owing rows; 2 become empty (no Class, no TeamWork
+  PIC); every BD kept; My Tasks, exports, Company 360 and the assistant
+  follow via `effectiveOwner`. `test-soa-main-pic.ts`.
 ## Recipient / CC / email address (INV-MAIL)
 
 - **INV-MAIL-001** — Canonical recipient policy (`lib/campaign-recipients.ts`):

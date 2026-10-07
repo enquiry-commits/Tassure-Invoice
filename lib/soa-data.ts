@@ -7,6 +7,7 @@ import { formatStaffNameList } from './staff-directory';
 import type { QbCompany } from './quickbooks';
 import { agingBucket, dueDate, emptyAgingTotals, type AgingBucket, type AgingTotals } from './soa';
 import { computeSuggestedOwner, collectInvolvedStaff, picAllowedForCompany, type OwnerInvoiceSignal } from './soa-owner';
+import { storedOwnerSource, classOwnerFor } from './soa-main-pic';
 
 // Shared by GET /api/billing/soa (the on-screen list) and
 // GET /api/billing/soa/export (the Excel download) so the two can never
@@ -61,6 +62,16 @@ export interface SoaCompanyRow {
   // genuinely have a DIFFERENT real person on each tab, so this can never
   // be one global value per customer name).
   soaPic: string | null;
+  // Who stored soaPic: 'person' = picked in this app by a real login (always
+  // wins); 'import' = the one-off 2026-09-07 Google-Sheet backfill
+  // (updated_by_email 'backfill@internal') — QuickBooks' own Class beats it
+  // (INV-PIC-009). null when nothing is stored.
+  soaPicSource: 'person' | 'import' | null;
+  // The person QuickBooks itself names in these unpaid invoices' Classes —
+  // the PIC column's own source (INV-PIC-008): the auto-suggestion when it is
+  // one of them, else the only one; null when no Class names anyone (or
+  // several do and none is the suggestion).
+  classOwner: string | null;
   // Chelsea's real rule, computed automatically from THIS company's own
   // unpaid invoices — line Class first, that invoice's own Location as
   // fallback (see lib/soa-owner.ts) — so a default no longer has to wait on
@@ -263,10 +274,8 @@ export function picShownFor(fromInvoices: readonly string[], fromCompanies: read
   return fromInvoices.length ? [...fromInvoices] : [...fromCompanies];
 }
 
-export function effectiveOwner(row: Pick<SoaCompanyRow, 'soaPic' | 'suggestedOwner' | 'picOptions'>): string | null {
-  const singlePicFallback = row.picOptions.length === 1 ? row.picOptions[0] : null;
-  return row.soaPic ?? row.suggestedOwner ?? singlePicFallback;
-}
+// Main PIC rule: lib/soa-main-pic.ts (one copy, shared with the SOA page — INV-PIC-009).
+export { effectiveOwner } from './soa-main-pic';
 
 // `customerNamePrefilter`: narrows the initial unpaid-invoices query down
 // to one company's own rows — used by lib/company-360.ts's Outstanding
@@ -309,7 +318,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
       return query;
     }) as Promise<Array<Pick<UnpaidInvoice, 'customer_name' | 'qb_company' | 'qb_invoice_id' | 'txn_date' | 'balance' | 'location_name'>>>,
     supabase.from('companies').select('id, company_name, pic'),
-    supabase.from('soa_owners').select('customer_name_norm, soa_pic').eq('qb_company', company),
+    supabase.from('soa_owners').select('customer_name_norm, soa_pic, updated_by_email').eq('qb_company', company),
   ]);
   if (companiesRes.error) throw new Error(companiesRes.error.message);
   if (ownersRes.error) throw new Error(ownersRes.error.message);
@@ -347,7 +356,7 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
     const match = findUniqueBestMatch(name, [...companyByNormName.entries()], entry => entry[0], 70);
     return match.value?.[1] ?? null;
   };
-  const ownerByNormName = new Map((ownersRes.data ?? []).map(o => [o.customer_name_norm, o.soa_pic]));
+  const ownerByNormName = new Map((ownersRes.data ?? []).map(o => [o.customer_name_norm, { pic: o.soa_pic as string | null, source: storedOwnerSource(o.updated_by_email) }]));
 
   const byCompany = new Map<string, {
     displayName: string; invoiceCount: number; total: number; aging: AgingTotals; signals: OwnerInvoiceSignal[];
@@ -398,14 +407,18 @@ export async function computeSoaRows(company: QbCompany, opts?: { customerNamePr
     const companyMatch = companyByNormName.get(key) ?? wordMatch(key);
     const picFromCompanies = formatStaffNameList(companyMatch?.pic ?? null).filter(name => picAllowedForCompany(name, company));
     const picFromInvoices = collectInvolvedStaff(entry.signals, classNamesByInvoice, company);
+    const suggestedOwner = computeSuggestedOwner(entry.signals, classNamesByInvoice, company);
+    const stored = ownerByNormName.get(key);
     return {
       companyName: companyMatch?.company_name ?? entry.displayName,
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
       picShown: picShownFor(picFromInvoices, picFromCompanies),
-      soaPic: ownerByNormName.get(key) ?? null,
-      suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice, company),
+      soaPic: stored?.pic ?? null,
+      soaPicSource: stored?.pic ? stored.source : null,
+      classOwner: classOwnerFor(suggestedOwner, picFromInvoices),
+      suggestedOwner,
       invoiceCount: entry.invoiceCount,
       totalOutstanding: Math.round(entry.total * 100) / 100,
       aging: entry.aging,
@@ -450,7 +463,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
       return query;
     }) as Promise<UnappliedCreditMemo[]>,
     supabase.from('companies').select('id, company_name, pic'),
-    supabase.from('soa_owners').select('customer_name_norm, soa_pic').eq('qb_company', company),
+    supabase.from('soa_owners').select('customer_name_norm, soa_pic, updated_by_email').eq('qb_company', company),
   ]);
   if (companiesRes.error) throw new Error(companiesRes.error.message);
   if (ownersRes.error) throw new Error(ownersRes.error.message);
@@ -492,7 +505,7 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
     const match = findUniqueBestMatch(name, [...companyByNormName.entries()], entry => entry[0], 70);
     return match.value?.[1] ?? null;
   };
-  const ownerByNormName = new Map((ownersRes.data ?? []).map(o => [o.customer_name_norm, o.soa_pic]));
+  const ownerByNormName = new Map((ownersRes.data ?? []).map(o => [o.customer_name_norm, { pic: o.soa_pic as string | null, source: storedOwnerSource(o.updated_by_email) }]));
 
   const today = new Date();
   const byCompany = new Map<string, {
@@ -543,14 +556,18 @@ async function legacyComputeSoaRows(company: QbCompany, opts?: { customerNamePre
     const companyMatch = companyByNormName.get(key) ?? wordMatch(key);
     const picFromCompanies = formatStaffNameList(companyMatch?.pic ?? null).filter(name => picAllowedForCompany(name, company));
     const picFromInvoices = collectInvolvedStaff(entry.signals, classNamesByInvoice, company);
+    const suggestedOwner = computeSuggestedOwner(entry.signals, classNamesByInvoice, company);
+    const stored = ownerByNormName.get(key);
     return {
       companyName: companyMatch?.company_name ?? entry.displayName,
       companyId: companyMatch?.id ?? null,
       pic: companyMatch?.pic ?? null,
       picOptions: [...new Set([...picFromCompanies, ...picFromInvoices])],
       picShown: picShownFor(picFromInvoices, picFromCompanies),
-      soaPic: ownerByNormName.get(key) ?? null,
-      suggestedOwner: computeSuggestedOwner(entry.signals, classNamesByInvoice, company),
+      soaPic: stored?.pic ?? null,
+      soaPicSource: stored?.pic ? stored.source : null,
+      classOwner: classOwnerFor(suggestedOwner, picFromInvoices),
+      suggestedOwner,
       invoiceCount: entry.invoiceCount,
       totalOutstanding: Math.round(entry.total * 100) / 100,
       aging: entry.aging,

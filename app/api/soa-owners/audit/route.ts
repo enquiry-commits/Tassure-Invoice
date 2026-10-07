@@ -51,7 +51,10 @@ async function auditSoaOwners(run: AutomationRun): Promise<NextResponse> {
 
   for (const book of AUDITED_BOOKS) {
     const [{ data: owners, error: ownersError }, rows] = await Promise.all([
-      supabase.from('soa_owners').select('id, customer_name, customer_name_norm, soa_pic').eq('qb_company', book),
+      // Only picks a person made in the app: the 2026-09-07 Google-Sheet
+      // import is no longer read as an owner at all (INV-PIC-009), so
+      // auditing it would only report rows nothing uses.
+      supabase.from('soa_owners').select('id, customer_name, customer_name_norm, soa_pic').eq('qb_company', book).neq('updated_by_email', 'backfill@internal'),
       computeSoaRows(book),
     ]);
     if (ownersError) throw new Error(`soa_owners read failed for ${book}: ${ownersError.message}`);
